@@ -79,7 +79,8 @@
           <tbody>
             <tr><td><code>frontend/</code></td><td>All QML files, assets, fonts</td><td>Excludes <code>-src</code> directories (source design files)</td></tr>
             <tr><td><code>backend/</code></td><td>JSON and TXT data files</td><td>Excludes <code>__pycache__</code>, <code>temp</code>, <code>media</code>, dotfiles</td></tr>
-            <tr><td><code>tools/scrcpy/</code></td><td>Bundled scrcpy executable</td><td>For phone mirroring, if present</td></tr>
+            <tr><td><code>tools/scrcpy-server/</code></td><td>Bundled scrcpy server jar (Apache-2.0)</td><td>Embedded in the C++ binary as a Qt resource; pushed to the phone by the built-in mirror client</td></tr>
+            <tr><td><code>tools/platform-tools/</code></td><td>Google adb (fetched by <code>scripts/fetch_platform_tools.py</code>)</td><td>Shipped next to the binary by CI</td></tr>
             <tr><td>PySide6 QML</td><td>Qt Quick modules</td><td>Collected via <code>collect_data_files('PySide6')</code></td></tr>
           </tbody>
         </table>
@@ -175,7 +176,7 @@ LSMinimumSystemVersion: <span class="str">'10.14.0'</span>
         <h3>Output</h3>
         <ul>
           <li><code>dist/OCTAVE/octave</code> - Standalone executable</li>
-          <li><code>dist/OCTAVE-x86_64.AppImage</code> - Portable single-file AppImage</li>
+          <li><code>dist/OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code> / <code>-linux-aarch64.AppImage</code> - Portable single-file AppImages (the aarch64 one is built by the <code>cpp-build-linux-arm64</code> job for Orange Pi / Raspberry Pi class hardware)</li>
         </ul>
 
         <h3>AppImage Structure</h3>
@@ -221,11 +222,13 @@ LSMinimumSystemVersion: <span class="str">'10.14.0'</span>
         <h3>Release Job</h3>
         <p>The release job runs only on version tags. It downloads all artifacts, zips them, and creates a GitHub Release with auto-generated release notes using <code>softprops/action-gh-release@v2</code>.</p>
 
-        <h3>scrcpy Bundling</h3>
-        <ul>
-          <li><strong>Windows/Linux:</strong> Downloads via <code>scripts/download_scrcpy.py</code></li>
-          <li><strong>macOS:</strong> Installs via Homebrew and copies binaries to <code>tools/scrcpy/</code></li>
-        </ul>
+        <h3>Phone mirror bundling</h3>
+        <p>
+          No scrcpy binary is bundled or required. The C++ binary embeds the scrcpy <em>server</em> jar
+          (<code>tools/scrcpy-server/</code>) as a Qt resource and CI ships Google's <code>adb</code> next to the executable
+          (<code>python scripts/fetch_platform_tools.py</code>, pinned and SHA-256 verified). libavcodec is an optional
+          build dependency for the H.264 decoder; without it <code>phoneMirrorManager.nativeAvailable</code> is false.
+        </p>
 
         <!-- Android -->
         <h2 id="android">Android APK Build</h2>

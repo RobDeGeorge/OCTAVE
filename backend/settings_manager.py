@@ -200,11 +200,8 @@ class SettingsManager(QObject):
     returnToLibraryAfterSelectionChanged = Signal(bool)
     androidAutoEnabledChanged = Signal(bool)
     phoneMirrorEnabledChanged = Signal(bool)
-    scrcpyPathChanged = Signal(str)
     scrcpyAudioEnabledChanged = Signal(bool)
-    scrcpyVideoDeviceChanged = Signal(str)
     scrcpyDisplaySizeChanged = Signal(str)
-    phoneMirrorNativeChanged = Signal(bool)
     albumArtColorsChanged = Signal(str)  # JSON string with album art theme colors
 
     # Settings menu visibility signals
@@ -403,11 +400,8 @@ class SettingsManager(QObject):
             "returnToLibraryAfterSelection": False,  # If True, return to MediaPlayer after song selection
             "androidAutoEnabled": False,  # If True, show Android Auto button in bottom bar
             "phoneMirrorEnabled": False,  # If True, show Phone Mirror button in bottom bar
-            "scrcpyPath": "",  # Custom path to scrcpy executable
             "scrcpyAudioEnabled": False,  # If True, forward audio from phone
-            "scrcpyVideoDevice": "/dev/video10",  # Linux v4l2loopback node scrcpy streams into
             "scrcpyDisplaySize": "1280x800",  # Virtual display WxH (--new-display); "" = phone screen
-            "phoneMirrorNative": True,  # Built-in scrcpy-protocol client (default); scrcpy binary is the fallback
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
                 "deviceSettings": True,
@@ -555,11 +549,8 @@ class SettingsManager(QObject):
 
         # Phone Mirror settings
         self._phone_mirror_enabled = self._settings.get("phoneMirrorEnabled", False)
-        self._scrcpy_path = self._settings.get("scrcpyPath", "")
         self._scrcpy_audio_enabled = self._settings.get("scrcpyAudioEnabled", False)
-        self._scrcpy_video_device = self._settings.get("scrcpyVideoDevice", "/dev/video10")
         self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "1280x800")
-        self._phone_mirror_native = self._settings.get("phoneMirrorNative", True)
 
         # Settings menu visibility
         self._settings_menu_visibility = self._settings.get(
@@ -1626,23 +1617,6 @@ class SettingsManager(QObject):
         self._phone_mirror_enabled = enabled
         self.update_setting("phoneMirrorEnabled", enabled, self.phoneMirrorEnabledChanged)
 
-    @Property(str, notify=scrcpyPathChanged)
-    def scrcpyPath(self):
-        """Get the custom scrcpy path"""
-        return self._scrcpy_path
-
-    @Slot(result=str)
-    def get_scrcpy_path(self):
-        """Get the custom scrcpy path"""
-        return self._scrcpy_path
-
-    @Slot(str)
-    def save_scrcpy_path(self, path):
-        """Save the custom scrcpy path"""
-        logger.debug(f"Saving scrcpy path: {path}")
-        self._scrcpy_path = path
-        self.update_setting("scrcpyPath", path, self.scrcpyPathChanged)
-
     @Property(bool, notify=scrcpyAudioEnabledChanged)
     def scrcpyAudioEnabled(self):
         """Get whether scrcpy audio forwarding is enabled"""
@@ -1660,23 +1634,6 @@ class SettingsManager(QObject):
         self._scrcpy_audio_enabled = enabled
         self.update_setting("scrcpyAudioEnabled", enabled, self.scrcpyAudioEnabledChanged)
 
-    @Property(str, notify=scrcpyVideoDeviceChanged)
-    def scrcpyVideoDevice(self):
-        """Get the v4l2loopback device scrcpy streams into (Linux)"""
-        return self._scrcpy_video_device
-
-    @Slot(result=str)
-    def get_scrcpy_video_device(self):
-        """Get the v4l2loopback device scrcpy streams into (Linux)"""
-        return self._scrcpy_video_device
-
-    @Slot(str)
-    def save_scrcpy_video_device(self, device):
-        """Save the v4l2loopback device scrcpy streams into (Linux)"""
-        logger.debug(f"Saving scrcpy video device: {device}")
-        self._scrcpy_video_device = device
-        self.update_setting("scrcpyVideoDevice", device, self.scrcpyVideoDeviceChanged)
-
     @Property(str, notify=scrcpyDisplaySizeChanged)
     def scrcpyDisplaySize(self):
         """Get the scrcpy virtual display size ("WxH", "" = mirror phone screen)"""
@@ -1693,23 +1650,6 @@ class SettingsManager(QObject):
         logger.debug(f"Saving scrcpy display size: {size}")
         self._scrcpy_display_size = size
         self.update_setting("scrcpyDisplaySize", size, self.scrcpyDisplaySizeChanged)
-
-    @Property(bool, notify=phoneMirrorNativeChanged)
-    def phoneMirrorNative(self):
-        """Use OCTAVE's built-in scrcpy-protocol client instead of the scrcpy binary"""
-        return self._phone_mirror_native
-
-    @Slot(result=bool)
-    def get_phone_mirror_native(self):
-        return self._phone_mirror_native
-
-    @Slot(bool)
-    def save_phone_mirror_native(self, enabled):
-        logger.debug(f"Saving phone mirror native: {enabled}")
-        self._phone_mirror_native = enabled
-        self.update_setting("phoneMirrorNative", enabled, self.phoneMirrorNativeChanged)
-
-    # ==================== ESP32 Volume Knob Settings ====================
 
     @Property(bool, notify=esp32VolumeEnabledChanged)
     def esp32VolumeEnabled(self):
@@ -2306,20 +2246,11 @@ class SettingsManager(QObject):
         self._phone_mirror_enabled = self._default_settings["phoneMirrorEnabled"]
         self.phoneMirrorEnabledChanged.emit(self._phone_mirror_enabled)
 
-        self._scrcpy_path = self._default_settings["scrcpyPath"]
-        self.scrcpyPathChanged.emit(self._scrcpy_path)
-
         self._scrcpy_audio_enabled = self._default_settings["scrcpyAudioEnabled"]
         self.scrcpyAudioEnabledChanged.emit(self._scrcpy_audio_enabled)
 
-        self._scrcpy_video_device = self._default_settings["scrcpyVideoDevice"]
-        self.scrcpyVideoDeviceChanged.emit(self._scrcpy_video_device)
-
         self._scrcpy_display_size = self._default_settings["scrcpyDisplaySize"]
         self.scrcpyDisplaySizeChanged.emit(self._scrcpy_display_size)
-
-        self._phone_mirror_native = self._default_settings["phoneMirrorNative"]
-        self.phoneMirrorNativeChanged.emit(self._phone_mirror_native)
 
         self._settings_menu_visibility = self._default_settings["settingsMenuVisibility"].copy()
         self.settingsMenuVisibilityChanged.emit()

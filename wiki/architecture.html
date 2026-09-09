@@ -77,7 +77,7 @@
 │  │  │ GestureManager   │ │    ┌───────────────────────────────┐ │
 │  │  │ AndroidAutoMgr   │ │    │      Image Providers          │ │
 │  │  │ PhoneMirrorMgr   │ │    │  dhuframe (Android Auto)      │ │
-│  │  │ AudioAnalyzer    │ │    │  scrcpyframe (Phone Mirror)   │ │
+│  │  │ AudioAnalyzer    │ │    │  QVideoSink (Phone Mirror)   │ │
 │  │  │ Clock            │ │    └───────────────────────────────┘ │
 │  │  └─────────────────┘ │                                      │
 │  └──────────────────────┘                                      │
@@ -180,7 +180,6 @@
             <tr><td>SpotifyManager</td><td><code>spotify_manager.py</code></td><td><code>spotifyManager</code></td><td>Spotify API</td></tr>
             <tr><td>AndroidAutoManager</td><td><code>android_auto/manager.py</code></td><td><code>androidAutoManager</code></td><td>Android Auto DHU</td></tr>
             <tr><td>PhoneMirrorManager</td><td><code>phone_mirror/manager.py</code></td><td><code>phoneMirrorManager</code></td><td>Phone screen mirroring</td></tr>
-            <tr><td>ScrcpyCapture</td><td><code>phone_mirror/scrcpy_capture.py</code></td><td><code>scrcpyCapture</code></td><td>Frame streaming</td></tr>
             <tr><td>ESP32VolumeManager</td><td><code>esp32_volume_manager.py</code></td><td><code>esp32VolumeManager</code></td><td>Wireless volume knob</td></tr>
             <tr><td>BerryIMUManager</td><td><code>berryimu_manager.py</code></td><td><code>berryIMU</code></td><td>IMU sensor fusion</td></tr>
             <tr><td>GestureManager</td><td><code>gesture_manager.py</code></td><td><code>gestureSensor</code></td><td>Gesture recognition</td></tr>
@@ -264,8 +263,6 @@ Text {
 
         <pre><code><span class="cmt"># Python (main.py)</span>
 qmlRegisterType(EmbeddedDhuItem, <span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>)
-qmlRegisterType(EmbeddedScrcpyItem, <span class="str">"OCTAVE.PhoneMirror"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedScrcpyItem"</span>)
-qmlRegisterType(ScrcpyCaptureItem, <span class="str">"OCTAVE.PhoneMirror"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"ScrcpyCaptureItem"</span>)</code></pre>
 
         <pre><code><span class="cmt">// QML — use as a component</span>
 <span class="kw">import</span> OCTAVE.AndroidAuto <span class="num">1.0</span>
@@ -478,7 +475,7 @@ _volume_accumulator += delta
 
         <pre><code><span class="cmt"># Registration (main.py)</span>
 engine.addImageProvider(<span class="str">"dhuframe"</span>, android_auto_manager._dhu_capture.frame_provider)
-engine.addImageProvider(<span class="str">"scrcpyframe"</span>, scrcpy_capture.frame_provider)</code></pre>
+</code></pre>
 
         <pre><code><span class="cmt">// QML — request frames via image:// protocol</span>
 Image {
@@ -578,7 +575,6 @@ IS_ANDROID = <span class="fn">hasattr</span>(sys, <span class="str">'getandroida
             <tr><td><code>backend.media_manager</code></td><td><code>octave.media</code></td></tr>
             <tr><td><code>backend.spotify_manager</code></td><td><code>octave.spotify</code></td></tr>
             <tr><td><code>backend.settings_manager</code></td><td><code>octave.settings</code></td></tr>
-            <tr><td><code>backend.phone_mirror.scrcpy_host</code></td><td><code>octave.phone_mirror.host</code></td></tr>
             <tr><td><code>__main__</code></td><td><code>octave.app</code></td></tr>
           </tbody>
         </table>

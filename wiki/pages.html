@@ -277,24 +277,13 @@
         <!-- PhoneMirrorView -->
         <h2 id="phonemirror">PhoneMirrorView.qml</h2>
 
-        <p><span class="file-path">frontend/PhoneMirrorView.qml</span> displays a mirrored phone screen via scrcpy frame capture.</p>
-
-        <h3>Key Features</h3>
-        <ul>
-          <li><strong>Custom QML type registration</strong> &mdash; Imports <code>OCTAVE.PhoneMirror 1.0</code> for the frame capture component</li>
-          <li><strong>Image provider frames</strong> &mdash; Phone frames are streamed via a custom <code>QQuickImageProvider</code> at URL <code>image://scrcpyframe/frame?{counter}</code></li>
-          <li><strong>Frame counter refresh</strong> &mdash; A <code>frameCounter</code> property is appended to the image URL query string and incremented to force QML to reload the image each frame</li>
-          <li><strong>Lifecycle management</strong> &mdash; <code>StackView.onActivated</code> resumes capture, <code>StackView.onDeactivated</code> pauses it to save resources</li>
-          <li><strong>Error handling</strong> &mdash; Launch failures show an error message overlay</li>
-        </ul>
-
-        <pre><code><span class="cls">Image</span> {
-    <span class="prop">id</span>: phoneFrame
-    <span class="prop">source</span>: mirrorRunning
-        ? <span class="str">"image://scrcpyframe/frame?"</span> + frameCounter : <span class="str">""</span>
-    <span class="prop">cache</span>: <span class="kw">false</span>
-    <span class="prop">asynchronous</span>: <span class="kw">false</span>
-}</code></pre>
+        <p><span class="file-path">frontend/PhoneMirrorView.qml</span> displays a mirrored phone screen using OCTAVE's
+        built-in scrcpy-protocol client. A <code>VideoOutput</code> binds its <code>videoSink</code> to
+        <code>phoneMirrorManager.videoSink</code> and decoded frames land on it directly; a
+        <code>MultiPointTouchArea</code> forwards every touch point through
+        <code>phoneMirrorManager.injectTouch(id, action, relX, relY)</code> (real multitouch); Back/Home/Recents buttons
+        overlay the bottom edge. The manager reports specific errors (unauthorized, offline, unplugged) and the view
+        polls <code>getDeviceState()</code> every 2&nbsp;s on a phone-side error and restarts on its own.</p>
 
         <h3>Backend Managers Used</h3>
         <p><code>phoneMirrorManager</code></p>

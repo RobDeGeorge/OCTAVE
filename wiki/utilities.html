@@ -125,7 +125,6 @@ logger.info(<span class="str">"Application started"</span>)</code></pre>
             <tr><td><code>backend.clock</code></td><td><code>octave.clock</code></td></tr>
             <tr><td><code>backend.android_auto.manager</code></td><td><code>octave.android_auto</code></td></tr>
             <tr><td><code>backend.phone_mirror.manager</code></td><td><code>octave.phone_mirror</code></td></tr>
-            <tr><td><code>backend.phone_mirror.scrcpy_host</code></td><td><code>octave.phone_mirror.host</code></td></tr>
             <tr><td><code>__main__</code></td><td><code>octave.app</code></td></tr>
             <tr><td>Other <code>backend.*</code></td><td><code>octave.&lt;rest&gt;</code></td></tr>
           </tbody>
@@ -290,7 +289,6 @@ PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
             <tr><td><code>StubESP32VolumeManager</code></td><td>ESP32VolumeManager</td><td>5 signals</td><td>No serial connection, all properties empty</td></tr>
             <tr><td><code>StubPhoneMirrorManager</code></td><td>PhoneMirrorManager</td><td>4 signals</td><td>scrcpy not installed, no device</td></tr>
             <tr><td><code>StubAndroidAutoManager</code></td><td>AndroidAutoManager</td><td>4 signals</td><td>DHU not installed</td></tr>
-            <tr><td><code>StubScrcpyCapture</code></td><td>ScrcpyCapture</td><td>4 signals</td><td>Not capturing, 0x0 frame size</td></tr>
             <tr><td><code>StubImageProvider</code></td><td>QQuickImageProvider</td><td>-</td><td>Returns 1x1 transparent ARGB32 image for any request</td></tr>
           </tbody>
         </table>
@@ -299,8 +297,6 @@ PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
         <p>For QML types registered via <code>qmlRegisterType</code>, empty QQuickItem subclasses are provided:</p>
         <ul>
           <li><code>StubEmbeddedDhuItem</code> - Replaces EmbeddedDhuItem (Android Auto video)</li>
-          <li><code>StubEmbeddedScrcpyItem</code> - Replaces EmbeddedScrcpyItem (Phone Mirror embedded)</li>
-          <li><code>StubScrcpyCaptureItem</code> - Replaces ScrcpyCaptureItem (Phone Mirror capture). Has <code>frameCounter</code>, <code>frameWidth</code>, <code>frameHeight</code>, <code>isStreaming</code> properties and <code>connectToManager</code>, <code>detach</code>, <code>reattach</code> slots.</li>
         </ul>
 
         <h3>Usage in main.py</h3>
@@ -312,7 +308,7 @@ PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
         StubGestureManager, StubESP32VolumeManager,
         StubPhoneMirrorManager, StubAndroidAutoManager,
         StubImageProvider, StubEmbeddedDhuItem,
-        StubEmbeddedScrcpyItem, StubScrcpyCaptureItem,
+        
     )
     obd_manager = StubOBDManager(settings_manager)
     <span class="cmt"># ... etc.</span>

@@ -316,6 +316,59 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  # ---------------------------------------------------------------------------
+  # Linux aarch64 (Orange Pi / Raspberry Pi class boards, the actual vehicle
+  # hardware). Same Qt 6.7.3 as every other target, built on an arm64 runner.
+  # ---------------------------------------------------------------------------
+  cpp-build-linux-arm64:
+    needs: [lint, test]
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            libtag1-dev libavcodec-dev libavutil-dev libgl1-mesa-dev libegl1-mesa-dev \
+            libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
+            libpulse-dev libfuse2 libssl-dev wget file
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'linux_arm64'
+          target: 'desktop'
+          # qt5compat — frontend imports Qt5Compat.GraphicalEffects (drop-shadow,
+          # blur, etc.). qtquick3d / qtshadertools — frontend imports QtQuick3D
+          # and QtQuick.Effects, both of which pull qtshadertools transitively.
+          # Without these, linuxdeploy-plugin-qt can't bundle the modules and
+          # Main.qml fails with `module "..." is not installed` at runtime.
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools'
+
+      - name: Build AppImage
+        env:
+          # install-qt-action puts qmake6 in $QT_ROOT_DIR/bin; point linuxdeploy-plugin-qt at it
+          # so it picks up Qt 6 modules instead of any system Qt 5 stub.
+          QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake6
+          OCTAVE_VERSION: ${{ github.ref_name }}
+        run: |
+          # Google publishes no aarch64 platform-tools; the build falls back to
+          # the distro adb on PATH (see BUILD.md). Skip the fetch.
+          bash packaging/linux/build-appimage.sh
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: OCTAVE-Linux-arm64-cpp-AppImage
+          path: dist/OCTAVE-*-linux-aarch64.AppImage
+          retention-days: 30
+          if-no-files-found: error
+
   cpp-build-android:
     needs: [lint, test]
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -538,6 +591,7 @@ jobs:
       - cpp-build-windows
       - cpp-build-macos
       - cpp-build-linux
+      - cpp-build-linux-arm64
       - cpp-build-android
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
@@ -553,7 +607,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          # Four installers, one per platform. The macOS .app.zip is produced
+          # Five installers, one per platform/arch. The macOS .app.zip is produced
           # by the build job as a workflow artifact (downloadable from the run
           # page) but is not attached to the public Release — keeps the
           # Releases page tidy.
@@ -561,5 +615,6 @@ jobs:
             artifacts/OCTAVE-Windows-cpp/OCTAVE-*-windows-x86_64.exe
             artifacts/OCTAVE-macOS-cpp-DMG/OCTAVE-*-macos.dmg
             artifacts/OCTAVE-Linux-cpp-AppImage/OCTAVE-*-linux-x86_64.AppImage
+            artifacts/OCTAVE-Linux-arm64-cpp-AppImage/OCTAVE-*-linux-aarch64.AppImage
             artifacts/OCTAVE-Android-APK/OCTAVE-*-android-arm64-v8a.apk
           generate_release_notes: true

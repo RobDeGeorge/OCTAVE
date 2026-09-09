@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build an OCTAVE AppImage for x86_64 Linux.
+# Build an OCTAVE AppImage for Linux (x86_64 or aarch64, detected from uname -m).
 #
 # Layout matches the binary's runtime asset lookup in src/main.cpp:
 #   applicationDirPath() -> AppDir/usr/bin
@@ -8,7 +8,7 @@
 # the lookup and the app exits silently with no window.
 #
 # Inputs:  none (run from the repo root or any cwd; script resolves its own paths)
-# Output:  dist/OCTAVE-${VERSION}-linux-x86_64.AppImage
+# Output:  dist/OCTAVE-${VERSION}-linux-<arch>.AppImage
 #
 # Required system packages (Ubuntu 22.04): build-essential cmake ninja-build
 #   pkg-config qt6-base-dev qt6-declarative-dev qt6-multimedia-dev
@@ -120,8 +120,10 @@ chmod +x "$APPDIR/AppRun"
 mkdir -p "$TOOLS_DIR"
 cd "$TOOLS_DIR"
 
-LD_BIN="linuxdeploy-x86_64.AppImage"
-LDQT_BIN="linuxdeploy-plugin-qt-x86_64.AppImage"
+# linuxdeploy publishes x86_64 and aarch64 builds under the same "continuous" tag.
+ARCH="$(uname -m)"
+LD_BIN="linuxdeploy-${ARCH}.AppImage"
+LDQT_BIN="linuxdeploy-plugin-qt-${ARCH}.AppImage"
 LD_URL="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/${LD_BIN}"
 LDQT_URL="https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/${LDQT_BIN}"
 
@@ -176,7 +178,7 @@ export QML_SOURCES_PATHS="$APPDIR/usr/frontend"
 # Skip linuxdeploy's auto-AppRun (we wrote our own with the right QML paths).
 export DEPLOY_PLATFORM_THEMES=1
 
-OUTPUT_NAME="OCTAVE-${VERSION}-linux-x86_64.AppImage"
+OUTPUT_NAME="OCTAVE-${VERSION}-linux-${ARCH}.AppImage"
 
 echo "==> Running linuxdeploy"
 "$TOOLS_DIR/$LD_BIN" \

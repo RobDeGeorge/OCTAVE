@@ -104,6 +104,10 @@ Outputs: `build/octave.app`. CI runs `macdeployqt` and `hdiutil` to produce the 
 
 CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7.3 via `jurplel/install-qt-action`.
 
+> **Linux aarch64:** CI builds an `OCTAVE-<v>-linux-aarch64.AppImage` on an arm64 runner against the same
+> Qt 6.7.3 (`cpp-build-linux-arm64`), for Orange Pi / Raspberry Pi class dash hardware. Google ships no
+> aarch64 `adb`, so that build uses the distro `adb` on PATH (`sudo apt install adb`).
+>
 > **Qt modules the QML frontend needs at runtime:** `QtQuick.Effects` (Qt ≥ 6.5) and
 > `Qt5Compat.GraphicalEffects` (`qt5compat`), both imported by `frontend/MainMenu.qml`. A build
 > against a Qt without them links fine and then fails at `Main.qml` load. Distro Qt 6.2 (Ubuntu

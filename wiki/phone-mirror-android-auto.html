@@ -23,13 +23,9 @@
             <li><a href="#phone-mirror">Phone Mirror</a>
               <ul class="toc-list">
                 <li><a href="#pm-manager">PhoneMirrorManager</a></li>
-                <li><a href="#pm-scrcpy-discovery">scrcpy &amp; ADB Discovery</a></li>
-                <li><a href="#pm-device-management">ADB Device Management</a></li>
-                <li><a href="#pm-process">scrcpy Process Lifecycle</a></li>
-                <li><a href="#pm-capture">ScrcpyCapture &amp; Frame Streaming</a></li>
-                <li><a href="#pm-input">Touch Input Forwarding</a></li>
-                <li><a href="#pm-embedded">EmbeddedScrcpyItem</a></li>
-                <li><a href="#pm-imageprovider">ScrcpyFrameProvider</a></li>
+                <li><a href="#pm-client">ScrcpyClient: session and protocol</a></li>
+                <li><a href="#pm-input">Touch and navigation</a></li>
+                <li><a href="#pm-recovery">Errors and recovery</a></li>
               </ul>
             </li>
             <li><a href="#android-auto">Android Auto</a>
@@ -54,7 +50,7 @@
             OCTAVE supports two methods of integrating a connected Android phone into the infotainment display:
           </p>
           <ul>
-            <li><strong>Phone Mirror</strong> -- Mirrors the entire phone screen using <a href="https://github.com/Genymobile/scrcpy">scrcpy</a>, providing full access to all phone apps</li>
+            <li><strong>Phone Mirror</strong> -- Mirrors the phone (or a virtual display on it) with OCTAVE's built-in scrcpy-protocol client -- nothing to install, real multitouch</li>
             <li><strong>Android Auto</strong> -- Runs Google's Desktop Head Unit (DHU) to provide the standard Android Auto car experience</li>
           </ul>
           <p>
@@ -76,7 +72,7 @@
 |  Android Phone   | <--------------> |     OCTAVE       |
 +------------------+                  |                  |
                                       |  +-----------+   |
-                          scrcpy <----|  | Phone     |   |
+                     scrcpy server <-|  | Phone     |   |
                           process     |  | Mirror    |   |
                                       |  | Manager   |   |
                           DHU    <----|  +-----------+   |
@@ -87,7 +83,7 @@
                                       |  +-----------+   |
                                       |       |          |
                                       |  QML Image       |
-                                      |  (scrcpyframe:/) |
+                                      |  (QVideoSink)    |
                                       |  (dhuframe:/)    |
                                       +------------------+
           </div>
@@ -97,409 +93,113 @@
         <section id="phone-mirror">
           <h2>Phone Mirror</h2>
           <p>
-            The phone mirror subsystem consists of four files in
-            <span class="file-path">backend/phone_mirror/</span>:
+            Phone Mirror shows an Android phone inside OCTAVE and lets the user drive it from the dash with real
+            multitouch. OCTAVE is its own <strong>scrcpy-protocol client</strong>: it pushes the bundled scrcpy
+            <em>server</em> jar (<span class="file-path">tools/scrcpy-server/</span>, Apache-2.0, pinned to 3.3.4) to
+            the phone with <code>adb</code>, starts it, decodes the H.264 stream itself and injects input over the
+            control socket. <strong>Nothing has to be installed by the user</strong>: <code>adb</code> is shipped next to the
+            binary (<code>scripts/fetch_platform_tools.py</code>; on ARM boards the distro's <code>adb</code> on PATH is used),
+            the decoder is PyAV in the Python backend and libavcodec in C++. There is no scrcpy binary, no
+            v4l2loopback, no ffmpeg subprocess and no <code>adb shell input</code> any more.
           </p>
           <table>
-            <thead><tr><th>File</th><th>Class</th><th>Purpose</th></tr></thead>
+            <thead><tr><th>File</th><th>Class</th><th>Role</th></tr></thead>
             <tbody>
-              <tr>
-                <td><span class="file-path">manager.py</span></td>
-                <td><code>PhoneMirrorManager</code></td>
-                <td>Process lifecycle, ADB device management, scrcpy discovery</td>
-              </tr>
-              <tr>
-                <td><span class="file-path">scrcpy_capture.py</span></td>
-                <td><code>ScrcpyCapture</code>, <code>ScrcpyFrameProvider</code>, <code>ScrcpyCaptureItem</code></td>
-                <td>Window capture, frame streaming, touch input</td>
-              </tr>
-              <tr>
-                <td><span class="file-path">embedded_widget.py</span></td>
-                <td><code>EmbeddedScrcpyItem</code></td>
-                <td>QQuickItem for direct window embedding via SetParent</td>
-              </tr>
-              <tr>
-                <td><span class="file-path">scrcpy_container.py</span></td>
-                <td>Container widget</td>
-                <td>Layout container for the embedded widget</td>
-              </tr>
+              <tr><td><span class="file-path">backend/phone_mirror/manager.py</span> / <span class="file-path">src/managers/phonemirrormanager.{h,cpp}</span></td>
+                  <td><code>PhoneMirrorManager</code></td><td>adb discovery, device probes, settings, session lifecycle; QML context property <code>phoneMirrorManager</code></td></tr>
+              <tr><td><span class="file-path">backend/phone_mirror/scrcpy_client.py</span> / <span class="file-path">src/phone_mirror/scrcpyclient.{h,cpp}</span></td>
+                  <td><code>ScrcpyClient</code></td><td>One session: server push/launch, video + control sockets, demux, decode, frame delivery, touch/key messages</td></tr>
+              <tr><td><span class="file-path">frontend/PhoneMirrorView.qml</span></td><td>--</td><td><code>VideoOutput</code> + <code>MultiPointTouchArea</code> + nav buttons, error/retry screen</td></tr>
             </tbody>
           </table>
+          <p>Measured on the Orange Pi 5 Plus with a Galaxy S22 Ultra (Android 16): first frame 0.4–0.8 s after opening
+            the view regardless of the phone's idle state, tap visible in the stream after ~0.4 s, ~25 % of one core while
+            scrolling (Python), similar in C++. Design history and protocol reference:
+            <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>.</p>
         </section>
 
         <section id="pm-manager">
           <h3>PhoneMirrorManager</h3>
-          <p>
-            The <code>PhoneMirrorManager</code> in <span class="file-path">backend/phone_mirror/manager.py</span>
-            is the central orchestrator. It owns the singleton scrcpy process (only one instance allowed at a time)
-            and handles executable discovery, device detection, and process lifecycle.
-          </p>
-
-          <h4>Signals</h4>
-          <table>
-            <thead><tr><th>Signal</th><th>Parameters</th><th>Description</th></tr></thead>
-            <tbody>
-              <tr><td><code>scrcpyPathChanged</code></td><td>--</td><td>Effective scrcpy path changed</td></tr>
-              <tr><td><code>error</code></td><td><code>str</code></td><td>Error message</td></tr>
-              <tr><td><code>scrcpyStarted</code></td><td><code>int</code></td><td>scrcpy is ready: native window handle (Windows) or process id (Linux v4l2 mode)</td></tr>
-              <tr><td><code>scrcpyStopped</code></td><td>--</td><td>scrcpy process ended</td></tr>
-              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>scrcpy-specific error (too-old version, device unauthorized/offline/absent, scrcpy's own <code>ERROR</code> lines on exit)</td></tr>
-              <tr><td><code>isRunningChanged</code></td><td>--</td><td><code>isRunning</code> changed</td></tr>
-              <tr><td><code>videoDeviceChanged</code></td><td>--</td><td>v4l2 loopback node changed</td></tr>
-              <tr><td><code>displaySizeChanged</code></td><td>--</td><td>Requested virtual display size changed</td></tr>
-              <tr><td><code>displayIdChanged</code></td><td>--</td><td>Android display id / active display size of the running mirror changed</td></tr>
-            </tbody>
-          </table>
-
           <h4>Properties</h4>
           <table>
             <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>isScrcpyInstalled</code></td><td><code>bool</code></td><td>Whether scrcpy is found</td></tr>
-              <tr><td><code>scrcpyPath</code></td><td><code>str</code></td><td>Path to scrcpy executable</td></tr>
-              <tr><td><code>adbPath</code></td><td><code>str</code></td><td>Path to ADB executable</td></tr>
-              <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>Whether scrcpy process is active</td></tr>
-              <tr><td><code>scrcpyWindowHandle</code></td><td><code>int</code></td><td>Native window handle of scrcpy (Windows) or its pid (Linux)</td></tr>
-              <tr><td><code>scrcpyVersion</code></td><td><code>str</code></td><td>Version of the effective scrcpy binary, e.g. <code>"3.3.4"</code>; <code>""</code> if unknown. Versions below <strong>2.0</strong> are rejected at <code>startScrcpy()</code></td></tr>
-              <tr><td><code>captureMode</code></td><td><code>str</code></td><td><code>"window"</code> (Windows: screen-grab), <code>"v4l2"</code> (Linux: headless scrcpy into a v4l2loopback node rendered by QtMultimedia), <code>"unsupported"</code> (macOS, mobile)</td></tr>
-              <tr><td><code>videoDevice</code></td><td><code>str</code></td><td>v4l2loopback node used in v4l2 mode (default <code>/dev/video10</code>, setting <code>scrcpyVideoDevice</code>)</td></tr>
-              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> passed as <code>--new-display</code> (default <code>1280x800</code>, setting <code>scrcpyDisplaySize</code>); <code>""</code> mirrors the phone's own screen. Dimensions are snapped down to multiples of 8</td></tr>
-              <tr><td><code>displayId</code></td><td><code>int</code></td><td>Android display id of the running mirror, <code>-1</code> for the phone's main display. Touch injection targets it via <code>adb shell input -d ID</code></td></tr>
-              <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td><code>"WxH"</code> of the virtual display actually in use, <code>""</code> when mirroring the phone screen</td></tr>
+              <tr><td><code>adbPath</code></td><td><code>str</code></td><td>adb in use (bundled platform-tools, PATH, or common locations)</td></tr>
+              <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>Decoder present (PyAV / libavcodec), server jar found, adb found</td></tr>
+              <tr><td><code>serverVersion</code></td><td><code>str</code></td><td>Bundled scrcpy server version ("3.3.4")</td></tr>
+              <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>A session is connected</td></tr>
+              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> (setting <code>scrcpyDisplaySize</code>, default 1280x800, snapped to multiples of 8); <code>""</code> mirrors the phone's own screen</td></tr>
+              <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td>Size actually in use, <code>""</code> when mirroring the phone screen</td></tr>
+              <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>QML assigns <code>VideoOutput.videoSink</code>; decoded frames go straight to it</td></tr>
+              <tr><td><code>frameWidth</code>, <code>frameHeight</code></td><td><code>int</code></td><td>Decoded frame size</td></tr>
             </tbody>
           </table>
-
-          <h4>Slots</h4>
-          <table>
-            <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
-            <tbody>
-              <tr><td><code>setScrcpyPath(str)</code>, <code>setAudioEnabled(bool)</code>, <code>setVideoDevice(str)</code>, <code>setDisplaySize(str)</code></td><td>--</td><td>Configuration; restart scrcpy if it is running</td></tr>
-              <tr><td><code>hasConnectedDevice()</code></td><td><code>bool</code></td><td>An authorized device is attached</td></tr>
-              <tr><td><code>getDeviceState()</code></td><td><code>str</code></td><td><code>"device"</code> / <code>"unauthorized"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code> -- lets the UI say <em>why</em> mirroring cannot start</td></tr>
-              <tr><td><code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td><code>str</code>/<code>int</code></td><td>ADB probes</td></tr>
-              <tr><td><code>videoDeviceExists()</code></td><td><code>bool</code></td><td>The loopback node exists on disk (module loaded)</td></tr>
-              <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>scrcpy present and new enough, and (Linux) the video node exists -- a failure is about the phone, not the setup</td></tr>
-              <tr><td><code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>cleanup()</code></td><td>--</td><td>Process lifecycle</td></tr>
-              <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Platform-specific install text</td></tr>
-            </tbody>
-          </table>
-        </section>
-
-        <section id="pm-scrcpy-discovery">
-          <h3>scrcpy &amp; ADB Discovery</h3>
-          <p>
-            Both executables are discovered using a priority-based search:
-          </p>
-          <ol class="steps">
-            <li><strong>Bundled platform-tools</strong> (adb only) -- <code>tools/platform-tools/&lt;os&gt;/adb</code> in a checkout, <code>platform-tools/adb</code> next to a shipped binary (fetched by <code>scripts/fetch_platform_tools.py</code>, pinned and SHA-256 verified)</li>
-            <li><strong>Bundled scrcpy package</strong> -- Check <code>tools/scrcpy/</code> relative to the project root (or PyInstaller <code>_MEIPASS</code>)</li>
-            <li><strong>System PATH</strong> -- <code>shutil.which("scrcpy")</code> / <code>shutil.which("adb")</code></li>
-            <li><strong>Common install locations</strong> -- Platform-specific paths (e.g., <code>C:\scrcpy\</code>, <code>/usr/bin/scrcpy</code>, Android SDK paths)</li>
-          </ol>
-          <p>
-            Every candidate (bundled, PATH, common locations) is validated by running <code>scrcpy --version</code>;
-            the parsed version is exposed as <code>scrcpyVersion</code>. A candidate that does not run is skipped.
-            A version below <strong>2.0</strong> is still <em>found</em> (so the settings page can show it) but
-            <code>startScrcpy()</code> refuses it with <em>"scrcpy 1.21 at /usr/bin/scrcpy is too old (need &gt;= 2.0)"</em>
-            -- distro packages are frequently that old (Ubuntu 22.04 ships 1.21, which also cannot mirror
-            Android 14+ at all). A custom path can be set via <code>setScrcpyPath(path)</code>.
-          </p>
-        </section>
-
-        <section id="pm-device-management">
-          <h3>ADB Device Management</h3>
-          <p>
-            The manager provides several ADB-based device information slots:
-          </p>
-          <table>
-            <thead><tr><th>Slot</th><th>Returns</th><th>ADB Command</th></tr></thead>
-            <tbody>
-              <tr><td><code>hasConnectedDevice()</code></td><td><code>bool</code></td><td><code>adb devices</code> -- parses for "device" lines</td></tr>
-              <tr><td><code>getDeviceSerial()</code></td><td><code>str</code></td><td><code>adb devices</code> -- extracts first serial</td></tr>
-              <tr><td><code>getDeviceName()</code></td><td><code>str</code></td><td><code>adb shell getprop ro.product.model</code></td></tr>
-              <tr><td><code>getDeviceResolution()</code></td><td><code>str</code></td><td><code>adb shell wm size</code> -- parses "Physical size: WxH"</td></tr>
-            </tbody>
-          </table>
-          <p>
-            All ADB commands use <code>subprocess.CREATE_NO_WINDOW</code> on Windows to prevent console flicker,
-            and have a 10-second timeout.
-          </p>
-        </section>
-
-        <section id="pm-process">
-          <h3>scrcpy Process Lifecycle</h3>
-          <h4>Launch</h4>
-          <p>
-            The <code>startScrcpy()</code> slot launches scrcpy with these arguments:
-          </p>
-          <pre><code>scrcpy
-    --video-codec=h264
-    --video-bit-rate=8M
-    --max-fps=60
-    --stay-awake
-    --new-display=1280x800   <span class="cmt"># displaySize, if set and the phone is Android 11+ (SDK 30)</span>
-    --window-borderless      <span class="cmt"># captureMode "window" (Windows)</span>
-    --no-window --v4l2-sink=/dev/video10   <span class="cmt"># captureMode "v4l2" (Linux)</span>
-    --no-audio               <span class="cmt"># unless audio forwarding is enabled</span>
-    -s DEVICE_SERIAL         <span class="cmt"># if a specific device serial is known</span></code></pre>
-          <p>
-            Before launching, the manager checks the scrcpy version, then <code>getDeviceState()</code>, and
-            emits a specific <code>scrcpyError</code> for each failure. It also runs
-            <code>adb shell pkill -f com.genymobile.scrcpy</code> so a stale device-side server (they can
-            outlive a crashed client) cannot conflict with the new session; the same kill runs after
-            <code>stopScrcpy()</code>.
-          </p>
-          <p>
-            scrcpy's stderr is drained line by line into the log (prefix <code>scrcpy:</code>, warnings for
-            <code>ERROR</code>/<code>WARN</code> lines). Readiness depends on the capture mode:
-          </p>
-          <ul>
-            <li><strong>window (Windows)</strong> -- a background thread polls for the scrcpy window (up to 10 s,
-              every 100 ms) by enumerating windows and matching the process id via <code>GetWindowThreadProcessId</code>.</li>
-            <li><strong>v4l2 (Linux)</strong> -- <code>scrcpyStarted(pid)</code> fires when stderr shows
-              <code>v4l2 sink started</code>, or after 8 s alive as a fallback. A <em>New display ... id N</em>
-              line sets <code>displayId</code>; if scrcpy did not print one, <code>adb shell dumpsys display</code>
-              is searched for the logical display named <code>scrcpy</code>. If the process exits before that,
-              <code>scrcpyError</code> carries scrcpy's own <code>ERROR</code> lines.</li>
-          </ul>
-
-          <h4>Built-in client (native mode — default in both backends)</h4>
-          <p>
-            By default (setting <code>phoneMirrorNative</code>, on) OCTAVE no longer runs the scrcpy binary at all;
-            the binary paths below are used only when the built-in client is unavailable. <span class="file-path">backend/phone_mirror/scrcpy_client.py</span> pushes the
-            bundled server jar (<span class="file-path">tools/scrcpy-server/</span>, Apache-2.0) to the phone with adb,
-            starts it with <code>app_process</code>, and speaks the scrcpy protocol itself: an H.264 stream on one socket,
-            decoded with PyAV into YUV420P <code>QVideoFrame</code>s delivered to the <code>QVideoSink</code> that
-            <code>PhoneMirrorView.qml</code>'s <code>VideoOutput</code> exposes through
-            <code>phoneMirrorManager.videoSink</code>; touch and keys on a second socket
-            (<code>injectTouch(pointerId, action, relX, relY)</code>, <code>injectKey()</code>, <code>pressBack/Home/AppSwitch()</code>),
-            which gives real multitouch with socket latency. No v4l2loopback, no ffmpeg, no <code>adb shell input</code>.
-            Measured on the Orange Pi: first frame 0.4–1.3 s after launch regardless of phone idle state, touch visible
-            in the stream after ~0.17 s. Design and protocol reference: <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>.
-            The C++ backend has the same client in <span class="file-path">src/phone_mirror/scrcpyclient.{h,cpp}</span>
-            (QTcpSocket + libavcodec, the server jar embedded as a Qt resource under <code>:/scrcpy/</code>); it is
-            compiled in when CMake finds libavcodec/libavutil (<code>OCTAVE_HAVE_FFMPEG</code>), otherwise
-            <code>nativeAvailable</code> is false. Both clients are verified against a fake server that reproduces the
-            handshake ordering (the real server sends device/codec meta only after every socket is connected). The
-            scrcpy-binary paths above remain the fallback in both backends until phase 3 removes them.
-          </p>
-
-          <h4>Disconnects and recovery</h4>
-          <p>
-            When scrcpy reports <code>Device disconnected</code> the manager emits a plain
-            <em>"Phone disconnected. Reconnect the USB cable."</em> (scrcpy's <code>INFO</code> chatter is filtered out of
-            error text). The view then polls <code>getDeviceState()</code> every 2 s while it is active and restarts
-            mirroring on its own once the phone is back and authorized; install instructions are shown only when
-            <code>environmentOk()</code> says the setup itself (scrcpy version, video node) is broken.
-          </p>
-
-          <h4>Virtual display (<code>--new-display</code>)</h4>
-          <p>
-            By default OCTAVE does not mirror the phone's own screen. It asks scrcpy to create a separate
-            <strong>landscape 1280x800 virtual display</strong> on the phone (Android 11+), which suits a dash
-            screen and leaves the handset usable. <code>setDisplaySize()</code> snaps the dimensions down to multiples of 8,
-            which is what scrcpy does to a <code>--new-display</code> size anyway (1080x2316 becomes 1080x2312), and the
-            reader always probes the node for the size actually on the wire before parsing frames -- trusting the
-            requested size instead made the picture roll by four rows per frame. The raw-BGRA reader carries an explicit
-            stride, so any width renders correctly. A new virtual display is static from birth, so on capture start the reader sends an
-            8&nbsp;px horizontal swipe to it (<code>nudgeDisplay()</code>) to make it draw a first frame immediately.
-            Touch injection maps to the virtual display's geometry (no portrait/landscape swap) and targets it with
-            <code>adb shell input -d &lt;displayId&gt;</code>.
-          </p>
-
-          <h4>Singleton Guard</h4>
-          <p>
-            The manager prevents duplicate scrcpy instances. If <code>startScrcpy()</code> is called while
-            already running, it re-emits the existing window handle. An <code>_is_starting</code> flag
-            prevents race conditions during the window-finding phase.
-          </p>
-
-          <h4>Stop</h4>
-          <p>
-            <code>stopScrcpy()</code> terminates the process with <code>SIGTERM</code>, waits 2 seconds,
-            then falls back to <code>SIGKILL</code> if still running.
-          </p>
-        </section>
-
-        <section id="pm-capture">
-          <h3>ScrcpyCapture &amp; Frame Streaming</h3>
-          <p>
-            The <code>ScrcpyCapture</code> class in <span class="file-path">backend/phone_mirror/scrcpy_capture.py</span>
-            captures the scrcpy window at <strong>60 FPS</strong> and provides frames to QML via an image provider.
-          </p>
-
-          <h4>Linux: v4l2 mode</h4>
-          <p>
-            On Linux there is no window to grab: scrcpy runs headless and writes decoded frames into a
-            <a href="https://github.com/umlaeute/v4l2loopback">v4l2loopback</a> node, and
-            <code>ScrcpyCapture</code> reads that node back with an <strong>ffmpeg subprocess</strong>
-            (<code>ffmpeg -f v4l2 -i /dev/video10 -f rawvideo -pix_fmt bgra -</code>), wrapping each raw frame in a
-            <code>QImage</code> and pushing it into the same <code>ScrcpyFrameProvider</code> the Windows path uses,
-            so <span class="file-path">frontend/PhoneMirrorView.qml</span> is identical on both platforms.
-            The frame size comes from the virtual display when one is active, otherwise from
-            <code>v4l2-ctl --get-fmt-video</code> / <code>ffprobe</code>; if ffmpeg exits (format change, rotation)
-            the reader restarts it, and gives up with a clear <code>error</code> after 20 s without a frame.
-            A path that does not start with <code>/dev/</code> is treated as a media file and looped, which lets
-            developers without a phone test the view with a synthetic clip.
-          </p>
-          <p>
-            Two behaviours learned the hard way: Android emits <em>no</em> buffers for a virtual display whose
-            content is not changing, so the continuous stream can legitimately deliver zero frames on an idle phone --
-            the reader therefore <strong>seeds</strong> the first frame with a one-shot <code>ffmpeg -frames:v 1</code>
-            grab that runs concurrently with the stream and never treats "no new frames" as an error. Note that a
-            cold reader only receives a frame when the producer writes one, and a bare home screen repaints only when
-            its status-bar clock ticks -- so the first picture can take up to a minute on an untouched phone (the seed
-            waits 90 s). The reader therefore also nudges the virtual display with a tiny swipe so it draws at once. And both
-            scrcpy and ffmpeg are spawned with <code>PR_SET_PDEATHSIG</code> on Linux (SIGTERM for scrcpy so it tears
-            down its virtual display, SIGKILL for ffmpeg, which ignores SIGTERM while blocked in the v4l2 driver on
-            an idle device), so they die with OCTAVE even when it is killed without running cleanup; the Python entry point additionally routes SIGTERM/SIGINT
-            through <code>app.quit()</code> so <code>aboutToQuit</code> cleanup runs from launcher scripts.
-          </p>
-          <p>
-            QtMultimedia's <code>Camera</code>/<code>MediaDevices</code> is deliberately <em>not</em> used: Qt snapshots the
-            V4L2 device list on first use per process and never refreshes it, and a loopback node is only visible
-            while a producer is streaming -- so an app that touched Qt Multimedia at startup (OCTAVE does, for audio)
-            could never see the device. Requirements learned on real hardware (Orange Pi 5 Plus, Ubuntu 22.04):
-          </p>
-          <ul>
-            <li>Load the module with <code>exclusive_caps=0</code>: <code>sudo modprobe v4l2loopback exclusive_caps=0 card_label=OCTAVE video_nr=10</code>.</li>
-            <li>ffmpeg (and ideally <code>v4l-utils</code>) installed; scrcpy 2.0 or newer (3.3+ for Android 16 phones) --
-              build it from source on distros that ship 1.x.</li>
-          </ul>
-
-          <h4>Windows: capture strategy</h4>
-          <p>
-            The scrcpy window is kept <strong>off-screen</strong> at coordinates (-3000, -3000) to hide it
-            from the user. Its content is captured using the Windows GDI API:
-          </p>
-          <ol class="steps">
-            <li><strong>Hide from taskbar</strong> -- Set <code>WS_EX_TOOLWINDOW</code> style, remove <code>WS_EX_APPWINDOW</code></li>
-            <li><strong>Position off-screen</strong> -- <code>SetWindowPos(hwnd, 0, -3000, -3000, ...)</code></li>
-            <li><strong>Show (required for capture)</strong> -- <code>ShowWindow(hwnd, SW_SHOWNOACTIVATE)</code></li>
-            <li><strong>Capture loop</strong> -- QTimer at 60 FPS calls <code>_capture_frame()</code></li>
-          </ol>
-
-          <h4>Frame Capture (Windows GDI)</h4>
-          <pre><code><span class="cmt"># Each frame:</span>
-<span class="num">1.</span> GetClientRect(hwnd)          <span class="cmt"># Get window dimensions</span>
-<span class="num">2.</span> GetDC(hwnd)                  <span class="cmt"># Get device context</span>
-<span class="num">3.</span> CreateCompatibleDC/Bitmap    <span class="cmt"># Memory DC for capture</span>
-<span class="num">4.</span> PrintWindow(hwnd, memDC,     <span class="cmt"># Capture (PW_RENDERFULLCONTENT</span>
-              PW_RENDERFULLCONTENT) <span class="cmt">#   for hardware-accelerated)</span>
-<span class="num">5.</span> GetDIBits()                  <span class="cmt"># Extract BGRA pixel data</span>
-<span class="num">6.</span> QImage(buffer, Format_ARGB32) <span class="cmt"># Create Qt image</span>
-<span class="num">7.</span> frame_provider.update_frame() <span class="cmt"># Push to image provider</span>
-<span class="num">8.</span> frameReady.emit()            <span class="cmt"># Trigger QML refresh</span></code></pre>
-          <p>
-            If <code>PrintWindow</code> fails (some GPU-accelerated windows), it falls back to
-            <code>BitBlt</code> with <code>SRCCOPY</code>.
-          </p>
-
           <h4>Signals</h4>
           <table>
             <thead><tr><th>Signal</th><th>Parameters</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>frameReady</code></td><td>--</td><td>New frame available in provider</td></tr>
-              <tr><td><code>captureStarted</code></td><td>--</td><td>Capture loop started</td></tr>
-              <tr><td><code>captureStopped</code></td><td>--</td><td>Capture loop stopped</td></tr>
-              <tr><td><code>error</code></td><td><code>str</code></td><td>Capture error</td></tr>
-              <tr><td><code>frameSizeChanged</code></td><td><code>int, int</code></td><td>Frame dimensions changed (width, height)</td></tr>
+              <tr><td><code>scrcpyStarted</code></td><td><code>int</code></td><td>Stream is up (handle is always 1; the name predates the built-in client)</td></tr>
+              <tr><td><code>scrcpyStopped</code></td><td>--</td><td>Session ended normally</td></tr>
+              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>Specific failure text: unauthorized / offline / unplugged phone, missing prerequisites, or the client's own reason</td></tr>
+              <tr><td><code>isRunningChanged</code>, <code>displaySizeChanged</code>, <code>videoSinkChanged</code></td><td>--</td><td>Property notifications</td></tr>
+              <tr><td><code>frameSizeChanged</code></td><td><code>int, int</code></td><td>Frame size (also fires when the virtual display size is confirmed)</td></tr>
+              <tr><td><code>frameReady</code></td><td>--</td><td>A frame reached the sink (the view uses it as proof of life)</td></tr>
+            </tbody>
+          </table>
+          <h4>Slots</h4>
+          <table>
+            <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>cleanup()</code></td><td>--</td><td>Session lifecycle (singleton; a stale device-side server is killed before starting)</td></tr>
+              <tr><td><code>getDeviceState()</code></td><td><code>str</code></td><td><code>"device"</code> / <code>"unauthorized"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code></td></tr>
+              <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>various</td><td>adb probes</td></tr>
+              <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Same as <code>nativeAvailable</code>; the view shows setup text only when false</td></tr>
+              <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing, or the USB-debugging steps</td></tr>
+              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code></td><td>--</td><td>Settings; a size change restarts the session. Audio forwarding is not implemented yet</td></tr>
+              <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>--</td><td>Touch on the mirrored display: action 0 down / 1 up / 2 move, coordinates 0..1 of the frame</td></tr>
+              <tr><td><code>injectKey(keycode)</code>, <code>pressBack()</code>, <code>pressHome()</code>, <code>pressAppSwitch()</code></td><td>--</td><td>Android key events</td></tr>
             </tbody>
           </table>
         </section>
 
+        <section id="pm-client">
+          <h3>ScrcpyClient: session and protocol</h3>
+          <ol class="steps">
+            <li><strong>Push</strong> the server jar to <code>/data/local/tmp/scrcpy-server.jar</code> (every session: the server deletes it on exit).</li>
+            <li><strong>Tunnel</strong>: remove any stale <code>localabstract:scrcpy_*</code> forward for the device (a hard-killed OCTAVE leaves one in the adb server), then <code>adb forward tcp:PORT localabstract:scrcpy_SCID</code> with a random 31-bit scid.</li>
+            <li><strong>Start</strong> <code>app_process … com.genymobile.scrcpy.Server 3.3.4 scid=… tunnel_forward=true video=true audio=false control=true video_codec=h264 max_fps=60 stay_awake=true cleanup=true send_device_meta=true send_frame_meta=true send_codec_meta=true send_dummy_byte=true [new_display=WxH]</code>. On Linux the child gets <code>PR_SET_PDEATHSIG</code> so it dies with OCTAVE.</li>
+            <li><strong>Connect</strong>: the tunnel accepts before the server listens, so connect until the dummy byte arrives (video socket), then open the control socket. <em>The server sends device/codec meta only once every socket is connected</em> -- reading before opening control deadlocks.</li>
+            <li><strong>Meta</strong>: 64-byte device name, then codec id (u32) + width + height (u32 each, big-endian).</li>
+            <li><strong>Frames</strong>: <code>[u64 pts|flags][u32 size][data]</code>; bit 63 = config packet (SPS/PPS, prepended to the next packet), bit 62 = key frame. Decoded YUV420P planes are copied into a <code>QVideoFrame</code> and handed to the sink on the GUI thread, coalescing if it falls behind.</li>
+            <li><strong>Control</strong>: 32-byte <code>INJECT_TOUCH_EVENT</code> (type 2) with pointer id, x/y in frame pixels, screen size, pressure; 14-byte <code>INJECT_KEYCODE</code> (type 0). Coordinates are relative to the mirrored display, so a virtual display needs no display-id routing.</li>
+            <li><strong>Teardown</strong>: close sockets, terminate the child, remove the forward. The server destroys the virtual display itself (<code>cleanup=true</code>). The Python entry point routes SIGTERM/SIGINT through <code>app.quit()</code> and the C++ one installs a self-pipe signal handler, so launcher scripts get a clean exit too.</li>
+          </ol>
+          <p>Byte layouts were verified against the scrcpy v3.3.4 source. Upgrading the server is a deliberate step:
+            bump the jar, re-check <code>app/src/demuxer.c</code> and <code>app/src/control_msg.c</code>.</p>
+        </section>
+
         <section id="pm-input">
-          <h3>Touch Input Forwarding</h3>
-          <p>
-            Touch events from the QML display are forwarded to the phone using <strong>ADB shell input</strong>
-            commands. This approach bypasses all window manipulation issues that arise with off-screen windows.
-          </p>
-
-          <h4>Coordinate Mapping</h4>
-          <p>
-            QML sends relative coordinates (0.0-1.0) which are converted to device pixel coordinates.
-            The system handles orientation correctly:
-          </p>
-          <pre><code><span class="kw">def</span> <span class="fn">_convert_to_device_coords</span>(<span class="prop">self</span>, rel_x, rel_y):
-    is_landscape = <span class="prop">self</span>._last_width > <span class="prop">self</span>._last_height
-    <span class="kw">if</span> is_landscape:
-        <span class="cmt"># Landscape: effective resolution is height x width</span>
-        device_x = <span class="fn">int</span>(rel_x * <span class="prop">self</span>._device_height)
-        device_y = <span class="fn">int</span>(rel_y * <span class="prop">self</span>._device_width)
-    <span class="kw">else</span>:
-        <span class="cmt"># Portrait: direct mapping</span>
-        device_x = <span class="fn">int</span>(rel_x * <span class="prop">self</span>._device_width)
-        device_y = <span class="fn">int</span>(rel_y * <span class="prop">self</span>._device_height)</code></pre>
-
-          <h4>Tap vs Swipe Detection</h4>
-          <p>
-            The <code>sendTouchEvent</code> slot tracks press and release positions. If the finger moved
-            more than 5% of the screen in either axis, it is classified as a swipe; otherwise it is a tap.
-          </p>
-          <pre><code><span class="cmt"># Tap threshold: 5% of screen in either axis</span>
-<span class="kw">if</span> <span class="prop">self</span>._touch_moved <span class="kw">and</span> (dx > <span class="num">0.05</span> <span class="kw">or</span> dy > <span class="num">0.05</span>):
-    <span class="prop">self</span>.sendSwipe(start_x, start_y, end_x, end_y, <span class="num">200</span>)
-<span class="kw">else</span>:
-    <span class="prop">self</span>.sendTap(start_x, start_y)</code></pre>
-          <p>
-            ADB commands run in background threads to avoid blocking the UI:
-          </p>
-          <pre><code><span class="cmt"># Tap:</span>  adb -s SERIAL shell input tap X Y
-<span class="cmt"># Swipe:</span> adb -s SERIAL shell input swipe X1 Y1 X2 Y2 DURATION_MS</code></pre>
+          <h3>Touch and navigation</h3>
+          <p><code>PhoneMirrorView.qml</code> uses a <code>MultiPointTouchArea</code> (mouse arrives as one point) and forwards
+            every point's down/move/up through <code>injectTouch()</code>, mapped through <code>VideoOutput.contentRect</code>
+            so letterboxing is accounted for. Tap, drag, scroll and long-press are verified on hardware; multi-finger
+            gestures are implemented but untested (the test rig has no touchscreen). Back / Home / Recents buttons sit at
+            the bottom of the view because a virtual display has no reachable gesture nav bar.</p>
         </section>
 
-        <section id="pm-embedded">
-          <h3>EmbeddedScrcpyItem</h3>
-          <p>
-            The <code>EmbeddedScrcpyItem</code> in <span class="file-path">backend/phone_mirror/embedded_widget.py</span>
-            provides an alternative display method: directly embedding the scrcpy window as a child of the
-            OCTAVE Qt window using <code>SetParent</code>.
-          </p>
-          <pre><code><span class="cmt"># Embedding steps:</span>
-<span class="num">1.</span> ShowWindow(hwnd, SW_HIDE)           <span class="cmt"># Hide to prevent flicker</span>
-<span class="num">2.</span> SetWindowLongW(hwnd, GWL_STYLE,     <span class="cmt"># Remove decorations,</span>
-     WS_CHILD | WS_VISIBLE)             <span class="cmt">#   make child window</span>
-<span class="num">3.</span> SetWindowLongW(hwnd, GWL_EXSTYLE,   <span class="cmt"># Hide from taskbar</span>
-     WS_EX_TOOLWINDOW)
-<span class="num">4.</span> SetParent(hwnd, qt_window_handle)    <span class="cmt"># Reparent into OCTAVE</span>
-<span class="num">5.</span> MoveWindow(hwnd, x, y, w, h, True)  <span class="cmt"># Position within layout</span>
-<span class="num">6.</span> ShowWindow(hwnd, SW_SHOW)            <span class="cmt"># Show embedded</span></code></pre>
-          <p>
-            A 16ms update timer (~60 FPS) continuously repositions the embedded window to track QML layout
-            changes. The item connects to geometry change signals (<code>widthChanged</code>, <code>heightChanged</code>,
-            <code>xChanged</code>, <code>yChanged</code>) for immediate updates.
-          </p>
-
-          <h4>Detach / Reattach</h4>
-          <p>
-            When the user navigates away from the phone mirror view, <code>detach()</code> hides the embedded
-            window and stops the update timer. When returning, <code>reattach()</code> re-embeds and shows it.
-            This prevents the embedded window from being visible over other QML pages.
-          </p>
+        <section id="pm-recovery">
+          <h3>Errors and recovery</h3>
+          <p>A missing prerequisite is reported with <code>getInstallInstructions()</code> naming it. Phone-side failures
+            (unplugged, offline, USB debugging not authorized) get a one-line message and the view polls
+            <code>getDeviceState()</code> every 2&nbsp;s while it is open, restarting on its own when the phone is back --
+            a nudged cable in a vehicle is the normal case. A cable pull mid-session surfaces as
+            <em>"Phone disconnected. Reconnect the USB cable."</em>.</p>
+          <p><strong>Why not QtMultimedia's Camera?</strong> An earlier design streamed scrcpy into a v4l2loopback node and
+            read it with <code>QCamera</code>. Qt snapshots the V4L2 device list on first use per process and never
+            refreshes it, the loopback only appears while a producer streams, and Qt's V4L2 path sheared frames whose
+            width was not a multiple of 64 -- all irrelevant now, but the reasons the built-in client exists.</p>
         </section>
 
-        <section id="pm-imageprovider">
-          <h3>ScrcpyFrameProvider</h3>
-          <p>
-            The <code>ScrcpyFrameProvider</code> extends <code>QQuickImageProvider</code> to serve captured
-            frames directly to QML without file I/O:
-          </p>
-          <pre><code><span class="kw">class</span> <span class="cls">ScrcpyFrameProvider</span>(QQuickImageProvider):
-    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="prop">self</span>):
-        <span class="fn">super</span>().__init__(QQuickImageProvider.Image)
-        <span class="prop">self</span>._current_image = <span class="num">None</span>
-        <span class="prop">self</span>._lock = threading.Lock()
-
-    <span class="kw">def</span> <span class="fn">requestImage</span>(<span class="prop">self</span>, id, size, requestedSize):
-        <span class="kw">with</span> <span class="prop">self</span>._lock:
-            <span class="kw">if</span> <span class="prop">self</span>._current_image:
-                <span class="kw">return</span> <span class="prop">self</span>._current_image
-            <span class="kw">return</span> QImage(<span class="num">720</span>, <span class="num">1280</span>, QImage.Format_RGB32)</code></pre>
-          <p>
-            QML accesses frames via the <code>image://scrcpyframe/</code> URI scheme. A frame counter is
-            appended to force cache invalidation on each new frame.
-          </p>
-        </section>
 
         <!-- ===================== ANDROID AUTO ===================== -->
         <section id="android-auto">
@@ -615,7 +315,7 @@ dpi = 160</code></pre>
           <p>
             The <code>DhuCapture</code> class in <span class="file-path">backend/android_auto/dhu_capture.py</span>
             captures the DHU window at <strong>30 FPS</strong> using the same Windows GDI approach as
-            ScrcpyCapture, with <code>PrintWindow(hwnd, memDC, PW_CLIENTONLY)</code>.
+            the former phone-mirror screen grab, with <code>PrintWindow(hwnd, memDC, PW_CLIENTONLY)</code>.
           </p>
 
           <h4>DhuFrameProvider</h4>
@@ -671,7 +371,7 @@ SetWindowPos(hwnd, <span class="num">0</span>, <span class="num">-3000</span>, <
           <h3>EmbeddedDhuItem</h3>
           <p>
             The <code>EmbeddedDhuItem</code> in <span class="file-path">backend/android_auto/embedded_dhu.py</span>
-            mirrors the <code>EmbeddedScrcpyItem</code> pattern -- it embeds the DHU window as a child of
+            embeds the DHU window as a child of
             the OCTAVE Qt window. The embedding removes decorations (caption, border, system menu,
             minimize/maximize boxes) and continuously repositions at ~60 FPS.
           </p>
@@ -690,8 +390,6 @@ SetWindowPos(hwnd, <span class="num">0</span>, <span class="num">-3000</span>, <
             <span class="file-path">main.py</span>:
           </p>
           <pre><code><span class="cmt"># Phone Mirror</span>
-qmlRegisterType(EmbeddedScrcpyItem, <span class="str">"OCTAVE.PhoneMirror"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedScrcpyItem"</span>)
-qmlRegisterType(ScrcpyCaptureItem,  <span class="str">"OCTAVE.PhoneMirror"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"ScrcpyCaptureItem"</span>)
 
 <span class="cmt"># Android Auto</span>
 qmlRegisterType(EmbeddedDhuItem,    <span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>)</code></pre>
@@ -712,13 +410,6 @@ qmlRegisterType(EmbeddedDhuItem,    <span class="str">"OCTAVE.AndroidAuto"</span
             <thead><tr><th>Provider</th><th>URI Scheme</th><th>Class</th><th>Default Size</th><th>FPS</th></tr></thead>
             <tbody>
               <tr>
-                <td>Phone Mirror</td>
-                <td><code>image://scrcpyframe/</code></td>
-                <td><code>ScrcpyFrameProvider</code></td>
-                <td>720x1280 (portrait)</td>
-                <td>60</td>
-              </tr>
-              <tr>
                 <td>Android Auto</td>
                 <td><code>image://dhuframe/</code></td>
                 <td><code>DhuFrameProvider</code></td>
@@ -735,7 +426,7 @@ qmlRegisterType(EmbeddedDhuItem,    <span class="str">"OCTAVE.AndroidAuto"</span
           <h3>QML Usage Pattern</h3>
           <pre><code><span class="cmt">// In QML, refresh the image by changing the source URL</span>
 Image {
-    source: <span class="str">"image://scrcpyframe/"</span> + captureItem.frameCounter
+    source: <span class="str">"image://dhuframe/"</span> + frameCounter
     cache: <span class="num">false</span>
 }</code></pre>
         </section>

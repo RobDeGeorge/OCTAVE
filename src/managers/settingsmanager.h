@@ -91,11 +91,8 @@ class SettingsManager : public QObject
     // --- Android Auto / Phone Mirror ---
     Q_PROPERTY(bool androidAutoEnabled READ androidAutoEnabled NOTIFY androidAutoEnabledChanged)
     Q_PROPERTY(bool phoneMirrorEnabled READ phoneMirrorEnabled NOTIFY phoneMirrorEnabledChanged)
-    Q_PROPERTY(QString scrcpyPath READ scrcpyPath NOTIFY scrcpyPathChanged)
     Q_PROPERTY(bool scrcpyAudioEnabled READ scrcpyAudioEnabled NOTIFY scrcpyAudioEnabledChanged)
-    Q_PROPERTY(QString scrcpyVideoDevice READ scrcpyVideoDevice NOTIFY scrcpyVideoDeviceChanged)
     Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize NOTIFY scrcpyDisplaySizeChanged)
-    Q_PROPERTY(bool phoneMirrorNative READ phoneMirrorNative NOTIFY phoneMirrorNativeChanged)
 
     // --- ESP32 Volume Knob ---
     Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled NOTIFY esp32VolumeEnabledChanged)
@@ -196,11 +193,8 @@ public:
     // Android Auto / Phone Mirror
     bool androidAutoEnabled() const;
     bool phoneMirrorEnabled() const;
-    QString scrcpyPath() const;
     bool scrcpyAudioEnabled() const;
-    QString scrcpyVideoDevice() const;
     QString scrcpyDisplaySize() const;
-    bool phoneMirrorNative() const;
 
     // ESP32
     bool esp32VolumeEnabled() const;
@@ -305,11 +299,8 @@ signals:
     // Android Auto / Phone Mirror
     void androidAutoEnabledChanged(bool value);
     void phoneMirrorEnabledChanged(bool value);
-    void scrcpyPathChanged(const QString &value);
     void scrcpyAudioEnabledChanged(bool value);
-    void scrcpyVideoDeviceChanged(const QString &value);
     void scrcpyDisplaySizeChanged(const QString &value);
-    void phoneMirrorNativeChanged(bool value);
 
     // ESP32
     void esp32VolumeEnabledChanged(bool value);
@@ -427,11 +418,8 @@ public slots:
     // Android Auto / Phone Mirror
     void save_android_auto_enabled(bool enabled);
     void save_phone_mirror_enabled(bool enabled);
-    void save_scrcpy_path(const QString &path);
     void save_scrcpy_audio_enabled(bool enabled);
-    void save_scrcpy_video_device(const QString &device);
     void save_scrcpy_display_size(const QString &size);
-    void save_phone_mirror_native(bool enabled);
 
     // ESP32
     void save_esp32_volume_enabled(bool enabled);
@@ -489,11 +477,8 @@ public slots:
     Q_INVOKABLE bool get_return_to_library_after_selection();
     Q_INVOKABLE bool get_android_auto_enabled();
     Q_INVOKABLE bool get_phone_mirror_enabled();
-    Q_INVOKABLE QString get_scrcpy_path();
     Q_INVOKABLE bool get_scrcpy_audio_enabled();
-    Q_INVOKABLE QString get_scrcpy_video_device();
     Q_INVOKABLE QString get_scrcpy_display_size();
-    Q_INVOKABLE bool get_phone_mirror_native();
     Q_INVOKABLE bool get_esp32_volume_enabled();
     Q_INVOKABLE QString get_esp32_volume_port();
     Q_INVOKABLE double get_esp32_volume_step_size();
@@ -611,11 +596,8 @@ private:
     // Android Auto / Phone Mirror
     bool m_androidAutoEnabled = false;
     bool m_phoneMirrorEnabled = false;
-    QString m_scrcpyPath;
     bool m_scrcpyAudioEnabled = false;
-    QString m_scrcpyVideoDevice;
     QString m_scrcpyDisplaySize;
-    bool m_phoneMirrorNative = false;
 
     // Settings menu visibility
     QVariantMap m_settingsMenuVisibility;

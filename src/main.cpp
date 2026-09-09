@@ -45,8 +45,6 @@
 #include <unistd.h>
 #endif
 #include "managers/androidautomanager.h"
-#include "items/scrcpycapture.h"
-#include "items/embeddedscrcpyitem.h"
 #include "items/embeddeddhuitem.h"
 
 // Phase 6 — dashboards feature (see TODO/dashboards-roadmap.md)
@@ -209,27 +207,14 @@ int main(int argc, char *argv[])
     PhoneMirrorManager phoneMirrorManager;
     ctx->setContextProperty("phoneMirrorManager", &phoneMirrorManager);
 
-    ScrcpyCapture scrcpyCapture;
-    scrcpyCapture.setPhoneMirrorManager(&phoneMirrorManager);
-    ctx->setContextProperty("scrcpyCapture", &scrcpyCapture);
-    engine.addImageProvider(QStringLiteral("scrcpyframe"),
-                            scrcpyCapture.frameProvider());
-
 #ifndef Q_OS_MOBILE
     // Phone mirror settings from saved config (desktop-only accessors)
-    QString savedScrcpyPath = settingsManager.get_scrcpy_path();
-    if (!savedScrcpyPath.isEmpty())
-        phoneMirrorManager.setScrcpyPath(savedScrcpyPath);
     phoneMirrorManager.setAudioEnabled(settingsManager.get_scrcpy_audio_enabled());
-    phoneMirrorManager.setVideoDevice(settingsManager.get_scrcpy_video_device());
     phoneMirrorManager.setDisplaySize(settingsManager.get_scrcpy_display_size());
-    phoneMirrorManager.setNativeMode(settingsManager.get_phone_mirror_native());
 #endif
 
     // Register custom QML types for video embedding (stub types on mobile)
     qmlRegisterType<EmbeddedDhuItem>("OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem");
-    qmlRegisterType<EmbeddedScrcpyItem>("OCTAVE.PhoneMirror", 1, 0, "EmbeddedScrcpyItem");
-    qmlRegisterType<ScrcpyCaptureItem>("OCTAVE.PhoneMirror", 1, 0, "ScrcpyCaptureItem");
 
     // Download Manager — music search & download via yt-dlp
     DownloadManager downloadManager;
@@ -374,7 +359,6 @@ int main(int argc, char *argv[])
     // Cleanup on quit (stubs make all calls no-op on mobile)
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
         androidAutoManager.cleanup();
-        scrcpyCapture.stopCapture();   // kill the ffmpeg reader before scrcpy
         phoneMirrorManager.cleanup();
         esp32VolumeManager.cleanup();
         berryIMU.cleanup();

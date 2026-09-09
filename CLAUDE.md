@@ -88,7 +88,7 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `berryimumanager` — I²C sensor hub
 - `gesturemanager` — PAJ7620U2 gesture sensor
 - `audioanalyzer` — FFT waveform visualization
-- `androidautomanager`, `phonemirrormanager` — Android Auto / scrcpy phone mirroring
+- `androidautomanager`, `phonemirrormanager` — Android Auto / phone mirroring (built-in scrcpy-protocol client in `src/phone_mirror/`, no external scrcpy)
 - `downloadmanager` — yt-dlp wrapper, compiled out for app-store builds via `OCTAVE_ENABLE_DOWNLOADS` CMake option
 - `clock`, `networkmanager`, `volumecontroller` — self-explanatory
 
@@ -108,7 +108,7 @@ Key managers:
 - `gesture_manager.py` — PAJ7620U2 I2C gesture sensor for touchless control
 - `audio_analyzer.py` — FFT waveform visualization from audio files
 - `android_auto/` — Android Auto via Google Desktop Head Unit (DHU)
-- `phone_mirror/` — Phone screen mirroring via scrcpy
+- `phone_mirror/` — Phone screen mirroring via the built-in scrcpy-protocol client (`scrcpy_client.py`); bundled server jar + adb, nothing to install
 
 When adding a new manager: add `foo.py` to `backend/`, import + instantiate it in `main.py`, register as a QML context property with the **same name** the C++ side uses. Mirror every `Q_PROPERTY` / `Q_INVOKABLE` / slot / signal from the C++ header as a PySide6 `Property` / `Slot` / `Signal`. Use `get_app_data_dir()` from `backend/settings_manager.py` for storage paths (matches C++ `SettingsManager::getAppDataDir()`).
 
@@ -173,7 +173,7 @@ Heavy I/O runs on worker threads to avoid blocking the UI:
 
 ### Image Providers
 
-Custom `QQuickImageProvider` subclasses stream video frames directly to QML for Android Auto (`dhuframe`) and phone mirror (`scrcpyframe`), avoiding file I/O.
+A custom `QQuickImageProvider` streams video frames directly to QML for Android Auto (`dhuframe`), avoiding file I/O. Phone mirror decodes H.264 itself (PyAV / libavcodec) and pushes `QVideoFrame`s to the `QVideoSink` of the QML `VideoOutput`.
 
 ### Settings Persistence
 
@@ -195,7 +195,7 @@ Rotating log files in `logs/` subdirectory of the config path:
 
 **Python:** No build pipeline — Python is a developer-only backend that runs from a venv (`pip install -r requirements.txt && python main.py`). The PyInstaller pipeline was removed; do not reintroduce `build_scripts/build.py`, `octave.spec`, `requirements-build.txt`, or per-platform `build_*.{sh,bat}` shell wrappers. Mobile (Android `.apk` / iOS `.ipa`) always goes through the C++ / Qt for Mobile pipeline.
 
-GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff, Python only — keeps the dev backend honest), `test` (headless pytest smoke suite), and `cpp-compile-check` (Linux CMake configure + build of the C++ tree plus a `qmllint` error pass over `frontend/`) on every push and PR to `main` — so a C++ or QML break cannot land unnoticed between release tags. On version tags (`v*`) or manual dispatch, the C++ matrix runs (`cpp-build-windows`, `cpp-build-macos`, `cpp-build-linux`, `cpp-build-android`) and the `release` job attaches every produced artifact (`.exe` zip, `.app` zip, `.dmg`, AppImage, `.deb`, `.apk`) to a single GitHub Release. Build jobs depend on lint + test passing.
+GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff, Python only — keeps the dev backend honest), `test` (headless pytest smoke suite), and `cpp-compile-check` (Linux CMake configure + build of the C++ tree plus a `qmllint` error pass over `frontend/`) on every push and PR to `main` — so a C++ or QML break cannot land unnoticed between release tags. On version tags (`v*`) or manual dispatch, the C++ matrix runs (`cpp-build-windows`, `cpp-build-macos`, `cpp-build-linux`, `cpp-build-linux-arm64`, `cpp-build-android`) and the `release` job attaches every produced artifact (`.exe`, `.dmg`, x86_64 and aarch64 AppImages, `.apk`) to a single GitHub Release. Build jobs depend on lint + test passing.
 
 ## Key Conventions
 

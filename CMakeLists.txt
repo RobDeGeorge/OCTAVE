@@ -109,12 +109,8 @@ qt_add_executable(octave
     src/managers/androidautomanager.cpp
     src/managers/dashboardmanager.h
     src/managers/dashboardmanager.cpp
-    src/items/scrcpycapture.h
-    src/items/scrcpycapture.cpp
     src/phone_mirror/scrcpyclient.h
     src/phone_mirror/scrcpyclient.cpp
-    src/items/embeddedscrcpyitem.h
-    src/items/embeddedscrcpyitem.cpp
     src/items/embeddeddhuitem.h
     src/items/embeddeddhuitem.cpp
     # Android-only platform headers: fully guarded by #ifdef Q_OS_ANDROID

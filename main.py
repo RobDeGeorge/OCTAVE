@@ -42,7 +42,7 @@ from backend.settings_manager import get_app_data_dir
 from backend.obd_manager import OBDManager
 from backend.spotify_manager import SpotifyManager
 from backend.android_auto import AndroidAutoManager, EmbeddedDhuItem
-from backend.phone_mirror import PhoneMirrorManager, EmbeddedScrcpyItem, ScrcpyCapture, ScrcpyCaptureItem
+from backend.phone_mirror import PhoneMirrorManager
 from backend.esp32_volume_manager import ESP32VolumeManager
 from backend.berryimu_manager import BerryIMUManager
 from backend.gesture_manager import GestureManager
@@ -67,8 +67,6 @@ engine.rootContext().setContextProperty("screenAutoScale", auto_scale)
 
 # Register custom QML types
 qmlRegisterType(EmbeddedDhuItem, "OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem")
-qmlRegisterType(EmbeddedScrcpyItem, "OCTAVE.PhoneMirror", 1, 0, "EmbeddedScrcpyItem")
-qmlRegisterType(ScrcpyCaptureItem, "OCTAVE.PhoneMirror", 1, 0, "ScrcpyCaptureItem")
 
 engine.addImportPath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend"))
 
@@ -122,20 +120,9 @@ engine.addImageProvider("dhuframe", android_auto_manager._dhu_capture.frame_prov
 phone_mirror_manager = PhoneMirrorManager()
 engine.rootContext().setContextProperty("phoneMirrorManager", phone_mirror_manager)
 
-# Scrcpy Capture for frame-based phone mirroring (works around SDL resize issues)
-scrcpy_capture = ScrcpyCapture()
-scrcpy_capture.setPhoneMirrorManager(phone_mirror_manager)  # Link to manager for ADB access
-engine.rootContext().setContextProperty("scrcpyCapture", scrcpy_capture)
-engine.addImageProvider("scrcpyframe", scrcpy_capture.frame_provider)
-
 # Phone mirror settings
-saved_scrcpy_path = settings_manager.get_scrcpy_path()
-if saved_scrcpy_path:
-    phone_mirror_manager.setScrcpyPath(saved_scrcpy_path)
 phone_mirror_manager.setAudioEnabled(settings_manager.get_scrcpy_audio_enabled())
-phone_mirror_manager.setVideoDevice(settings_manager.get_scrcpy_video_device())
 phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
-phone_mirror_manager.setNativeMode(settings_manager.get_phone_mirror_native())
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
 settings_manager.scrcpyAudioEnabledChanged.connect(
@@ -312,7 +299,6 @@ def cleanup_on_quit():
     media_manager._clear_temp_files()
     spotify_manager.cleanup()
     android_auto_manager.cleanup()  # Full cleanup: stops DHU, ADB, and head unit server
-    scrcpy_capture.stopCapture()  # Kill the ffmpeg reader before scrcpy
     phone_mirror_manager.cleanup()  # Stop phone mirror if running
     esp32_volume_manager.cleanup()  # Disconnect ESP32 volume controller
     berryimu_manager.cleanup()  # Stop BerryIMU sensor reading
@@ -385,7 +371,6 @@ def setup_perf_profiling():
         obd_manager=obd_manager,
         berryimu_manager=berryimu_manager,
         gesture_manager=gesture_manager,
-        scrcpy_capture=scrcpy_capture,
         esp32_volume_manager=esp32_volume_manager,
         settings_manager=settings_manager,
     )

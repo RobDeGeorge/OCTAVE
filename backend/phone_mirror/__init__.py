@@ -1,21 +1,10 @@
 """
 Phone Mirror module for OCTAVE.
 
-Provides phone screen mirroring via scrcpy.
+Mirrors an Android phone using OCTAVE's built-in scrcpy-protocol client.
 """
 
 from .manager import PhoneMirrorManager
-from .scrcpy_host import ScrcpyHostItem
-from .scrcpy_capture import ScrcpyCapture, ScrcpyCaptureItem, ScrcpyFrameProvider
+from .scrcpy_client import ScrcpyClient
 
-# Legacy export for backwards compatibility
-EmbeddedScrcpyItem = ScrcpyHostItem
-
-__all__ = [
-    'PhoneMirrorManager',
-    'ScrcpyHostItem',
-    'EmbeddedScrcpyItem',
-    'ScrcpyCapture',
-    'ScrcpyCaptureItem',
-    'ScrcpyFrameProvider',
-]
+__all__ = ['PhoneMirrorManager', 'ScrcpyClient']

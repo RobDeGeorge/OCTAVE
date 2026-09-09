@@ -53,27 +53,6 @@ Flickable {
         { cardId: "accessories_phone_dock",  title: "Phone Dock",     iconSource: App.Style.assetBase + "tile_phone_dock.svg",  component: phoneDockContent }
     ]
 
-    // Phone Dock — scrcpy executable picker (Windows-style backslash path).
-    FileDialog {
-        id: scrcpyFileDialog
-        title: "Select scrcpy executable"
-        nameFilters: ["Executable files (*.exe)", "All files (*)"]
-        onAccepted: {
-            var path = selectedFile.toString()
-            if (path.startsWith("file:///")) {
-                path = path.substring(8)
-            }
-            path = path.replace(/\//g, "\\")
-
-            if (settingsManager) {
-                settingsManager.save_scrcpy_path(path)
-                if (phoneMirrorManager) {
-                    phoneMirrorManager.setScrcpyPath(path)
-                }
-            }
-        }
-    }
-
     contentWidth: width
     contentHeight: settingsContent.implicitHeight
     flickableDirection: Flickable.VerticalFlick
@@ -1567,7 +1546,7 @@ Flickable {
             // ── Phone Mirror ──
             SettingCategory {
                 title: "Phone Mirror"
-                description: "Mirror your phone screen via scrcpy. Requires scrcpy and USB debugging enabled."
+                description: "Mirror your phone over USB. Nothing to install: enable USB debugging on the phone and plug it in."
 
                 SettingsToggle {
                     id: phoneMirrorEnabledToggle
@@ -1595,130 +1574,6 @@ Flickable {
                     Layout.fillWidth: true
                     spacing: App.Spacing.rowSpacing
 
-                    SettingLabel {
-                        text: "Scrcpy Path"
-                    }
-
-                    SettingDescription {
-                        text: "Leave empty to auto-detect from PATH"
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: pageRoot.dp(10)
-
-                        SettingsTextField {
-                            id: scrcpyPathField
-                            Layout.fillWidth: true
-                            text: settingsManager ? settingsManager.scrcpyPath : ""
-                            placeholderText: "Auto-detect"
-
-                            onEditingFinished: {
-                                if (settingsManager) {
-                                    settingsManager.save_scrcpy_path(text)
-                                    if (phoneMirrorManager) {
-                                        phoneMirrorManager.setScrcpyPath(text)
-                                    }
-                                }
-                            }
-
-                            Connections {
-                                target: settingsManager
-                                function onScrcpyPathChanged() {
-                                    scrcpyPathField.text = settingsManager.scrcpyPath
-                                }
-                            }
-                        }
-
-                        SettingsButton {
-                            text: "Browse"
-                            Layout.preferredHeight: scrcpyPathField.height
-                            tooltipText: "Browse for scrcpy executable"
-                            onClicked: scrcpyFileDialog.open()
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    // Linux only: scrcpy streams headless into a v4l2loopback node
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.rowSpacing
-                        visible: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager
-                                  && phoneMirrorManager.captureMode === "v4l2")
-
-                    SettingLabel {
-                        text: "Video Device"
-                    }
-
-                    SettingDescription {
-                        text: "v4l2loopback node scrcpy streams into. Load it with:\n"
-                              + "sudo modprobe v4l2loopback exclusive_caps=0 card_label=OCTAVE video_nr=10"
-                    }
-
-                    SettingsTextField {
-                        id: scrcpyVideoDeviceField
-                        Layout.fillWidth: true
-                        text: settingsManager ? settingsManager.scrcpyVideoDevice : "/dev/video10"
-                        placeholderText: "/dev/video10"
-
-                        onEditingFinished: {
-                            if (settingsManager) {
-                                settingsManager.save_scrcpy_video_device(text)
-                                if (phoneMirrorManager) {
-                                    phoneMirrorManager.setVideoDevice(text)
-                                }
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyVideoDeviceChanged() {
-                                scrcpyVideoDeviceField.text = settingsManager.scrcpyVideoDevice
-                            }
-                        }
-                    }
-                    } // Linux-only column
-
-                    SettingLabel {
-                        text: "Built-in Mirror Client"
-                    }
-
-                    SettingDescription {
-                        text: (phoneMirrorManager && phoneMirrorManager.nativeAvailable)
-                              ? "OCTAVE talks to the phone directly using its bundled scrcpy server "
-                                + (phoneMirrorManager.serverVersion || "") + ". No scrcpy install, no kernel module, touch works over USB."
-                              : "Not available in this build (needs the bundled server and the 'av' Python package)."
-                    }
-
-                    SettingsToggle {
-                        id: phoneMirrorNativeToggle
-                        Layout.fillWidth: true
-                        text: "Use built-in client (recommended)"
-                        enabled: phoneMirrorManager ? phoneMirrorManager.nativeAvailable : false
-                        checked: settingsManager ? settingsManager.phoneMirrorNative : true
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-
-                        onToggled: function(checked) {
-                            if (settingsManager) {
-                                settingsManager.save_phone_mirror_native(checked)
-                                if (phoneMirrorManager) {
-                                    phoneMirrorManager.setNativeMode(checked)
-                                }
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onPhoneMirrorNativeChanged() {
-                                phoneMirrorNativeToggle.checked = settingsManager.phoneMirrorNative
-                            }
-                        }
-                    }
 
                     SettingLabel {
                         text: "Virtual Display Size"
@@ -1755,12 +1610,6 @@ Flickable {
                             }
                         }
                     }
-
-                    SettingDescription {
-                        text: (phoneMirrorManager && phoneMirrorManager.scrcpyVersion)
-                              ? "Detected scrcpy " + phoneMirrorManager.scrcpyVersion + " at " + phoneMirrorManager.scrcpyPath
-                              : "scrcpy not detected"
-                    }
                 }
 
                 ColumnLayout {
@@ -1769,6 +1618,10 @@ Flickable {
 
                     SettingLabel {
                         text: "Audio Forwarding"
+                    }
+
+                    SettingDescription {
+                        text: "Not supported by the built-in mirror client yet; the setting is kept for a future release."
                     }
 
                     SettingsToggle {
@@ -1807,10 +1660,10 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: phoneMirrorManager && phoneMirrorManager.isScrcpyInstalled
-                            ? "scrcpy found: " + phoneMirrorManager.scrcpyPath
-                            : "scrcpy not found. Set the path above or download from github.com/Genymobile/scrcpy"
-                        color: phoneMirrorManager && phoneMirrorManager.isScrcpyInstalled
+                        text: phoneMirrorManager && phoneMirrorManager.nativeAvailable
+                            ? "Built-in mirror client ready (scrcpy server " + phoneMirrorManager.serverVersion + ", adb: " + phoneMirrorManager.adbPath + ")"
+                            : (phoneMirrorManager ? phoneMirrorManager.getInstallInstructions() : "Phone mirror manager not available")
+                        color: phoneMirrorManager && phoneMirrorManager.nativeAvailable
                             ? App.Style.statusConnected
                             : App.Style.statusError
                     }

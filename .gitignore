@@ -33,11 +33,9 @@ android/assets/python-packages/ytmusic-bundle.zip
 backend/settingsConfigure.json
 backend/.spotify_token_cache
 
-# Bundled scrcpy binaries (downloaded via scripts/download_scrcpy.py)
-tools/scrcpy/*
-tools/scrcpy-*/
-!tools/scrcpy-server/
-!tools/scrcpy/LICENSE
+# Old bundled scrcpy binaries (no longer used; the server jar in tools/scrcpy-server/ is tracked)
+tools/scrcpy/
+tools/scrcpy-win64-*/
 
 # Google platform-tools (adb) fetched by scripts/fetch_platform_tools.py
 tools/platform-tools/

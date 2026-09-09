@@ -1,6 +1,6 @@
 # Native phone mirror: OCTAVE as a scrcpy-protocol client
 
-**Status:** active (approved 2026-09-09)
+**Status:** phases 0–3 complete (2026-09-09); phase 4 hardware validation done except the cable-pull test
 **Owner:** OCTAVE dev agent + Orange Pi hardware agent
 **Goal:** phone mirroring with **no user-installed dependencies**. No scrcpy binary, no
 v4l2loopback, no ffmpeg on PATH, no `adb shell input` for touch. OCTAVE talks to the
@@ -174,7 +174,10 @@ FFmpeg on all three desktop targets. Verified against the fake server; hardware 
 Original estimate: Same classes in C++, CMake for the decoder choice,
 Windows and macOS builds in CI (`cpp-build-*` jobs) proving the bundled adb + jar load.
 
-**Phase 3 — bundle and remove.** adb bundling DONE (`scripts/fetch_platform_tools.py`, pinned
+**Phase 3 — bundle and remove. DONE:** old scrcpy-binary / v4l2loopback / window-grab paths, `ScrcpyCapture`,
+`EmbeddedScrcpyItem`, `ScrcpyHostItem`, the `scrcpyframe` image provider and the `scrcpyPath` /
+`scrcpyVideoDevice` / `phoneMirrorNative` settings are removed; the built-in client is the only path.
+adb bundling DONE (`scripts/fetch_platform_tools.py`, pinned
 platform-tools 37.0.1 with SHA-256, shipped by all three CI packagers; finders prefer it). The
 removals wait for hardware validation of phases 1–2. Original scope: Add `tools/platform-tools/<platform>/adb` and
 `tools/scrcpy-server` with their LICENSE files to the repo (or a CI download step with
