@@ -61,7 +61,7 @@ sudo apt install -y build-essential cmake ninja-build pkg-config \
 # Qt 6.7.3 — install via the Qt online installer or aqtinstall:
 pipx install aqtinstall
 aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 
 export PATH="$HOME/Qt/6.7.3/gcc_64/bin:$PATH"
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -91,7 +91,7 @@ xcode-select --install
 # Qt 6.7.3 (Apple Silicon and Intel both supported)
 pipx install aqtinstall
 aqt install-qt mac desktop 6.7.3 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 
 export PATH="$HOME/Qt/6.7.3/macos/bin:$PATH"
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -175,11 +175,11 @@ pipx install aqtinstall
 
 # Android target build (~1 GB)
 aqt install-qt linux android 6.7.3 android_arm64_v8a -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 
 # Desktop host tools Qt (needed for cross-compile, ~1 GB)
 aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 ```
 
 Verify:

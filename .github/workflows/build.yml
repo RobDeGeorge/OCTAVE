@@ -184,7 +184,8 @@ jobs:
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2019_64'
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d qt5compat qtshadertools'
+          # qtquicktimeline: QtQuick3D depends on it; windeployqt/macdeployqt fail without the module
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d qt5compat qtshadertools qtquicktimeline'
 
       - name: Fetch platform-tools (adb) for bundling
         shell: bash
@@ -268,7 +269,8 @@ jobs:
           version: '6.7.3'
           host: 'mac'
           target: 'desktop'
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d qt5compat qtshadertools'
+          # qtquicktimeline: QtQuick3D depends on it; windeployqt/macdeployqt fail without the module
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d qt5compat qtshadertools qtquicktimeline'
 
       - name: Install TagLib and FFmpeg
         run: brew install taglib ffmpeg pkg-config
@@ -378,6 +380,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config \
             libtag1-dev libavcodec-dev libavutil-dev libavformat-dev libswresample-dev libswscale-dev \
+            libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libgstreamer-plugins-bad1.0-0 \
             libgl1-mesa-dev libegl1-mesa-dev \
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
             libpulse-dev libfuse2 libssl-dev wget file
@@ -393,7 +396,7 @@ jobs:
           # and QtQuick.Effects, both of which pull qtshadertools transitively.
           # Without these, linuxdeploy-plugin-qt can't bundle the modules and
           # Main.qml fails with `module "..." is not installed` at runtime.
-          # + libavformat/swresample/swscale and qtquicktimeline: the arm64 Qt
+          # + ffmpeg and GStreamer runtime libs and qtquicktimeline: the arm64 Qt
           # package does not bundle ffmpeg libs, and linuxdeploy-plugin-qt resolves
           # the multimedia plugin's and QtQuick3D's dependencies at deploy time.
           modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline'
