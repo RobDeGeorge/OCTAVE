@@ -1703,7 +1703,7 @@ Flickable {
                                 settingsManager.save_scrcpy_display_size(text)
                                 if (phoneMirrorManager) {
                                     phoneMirrorManager.setDisplaySize(text)
-                                    // Manager may have snapped the dimensions to even numbers
+                                    // Manager may have snapped the dimensions to multiples of 8
                                     if (phoneMirrorManager.displaySize !== text) {
                                         settingsManager.save_scrcpy_display_size(phoneMirrorManager.displaySize)
                                     }

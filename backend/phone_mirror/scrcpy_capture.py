@@ -339,10 +339,12 @@ class ScrcpyCapture(QObject):
     # ── v4l2 reader (Linux) ─────────────────────────────────────────────
 
     def _probe_v4l2_size(self, device: str) -> tuple:
-        """Ask the node for its current WxH (0,0 if unknown)."""
-        # Virtual display: geometry is known and fixed
-        if self._fixed_display and self._device_width > 0:
-            return self._device_width, self._device_height
+        """Ask the node for its current WxH (0,0 if unknown).
+
+        The node is authoritative even for a virtual display: scrcpy rounds
+        the requested --new-display size (e.g. 1080x2316 -> 1080x2312), and
+        parsing frames with the wrong size makes the picture roll.
+        """
         v4l2ctl = shutil.which("v4l2-ctl")
         if v4l2ctl:
             try:
@@ -431,6 +433,10 @@ class ScrcpyCapture(QObject):
                     return
                 time.sleep(0.5)
                 continue
+            if self._fixed_display and (w, h) != (self._device_width, self._device_height):
+                logger.warning(f"v4l2 capture: requested virtual display {self._device_width}x{self._device_height} "
+                               f"but the stream is {w}x{h}; using the stream size for frames and touch")
+                self._device_width, self._device_height = w, h
             frame_bytes = w * h * 4
             if device.startswith("/dev/"):
                 input_args = ["-f", "v4l2", "-i", device]

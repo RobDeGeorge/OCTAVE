@@ -53,7 +53,8 @@ public:
     int displayId() const;
     QString activeDisplaySize() const;
 
-    // Validate "WxH": dimensions snapped down to even numbers, "" for invalid input.
+    // Validate "WxH": dimensions snapped down to multiples of 8 (scrcpy does the
+    // same to a --new-display size), "" for invalid input.
     static QString normalizeDisplaySize(const QString &value);
 
     static constexpr int kNewDisplayMinSdk = 30;  // Android 11

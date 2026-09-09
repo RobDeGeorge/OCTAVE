@@ -21,9 +21,9 @@ Q_LOGGING_CATEGORY(lcPhoneMirror, "octave.phonemirror")
 // Default v4l2loopback node on Linux
 // (modprobe v4l2loopback exclusive_caps=0 card_label=OCTAVE video_nr=10)
 static const QString kDefaultVideoDevice = QStringLiteral("/dev/video10");
-// Landscape virtual display for the dash. Dimensions only need to be even
-// (H.264 encoders want that); the raw-BGRA ffmpeg reader carries an
-// explicit stride, so any width renders correctly.
+// Landscape virtual display for the dash. scrcpy rounds each dimension down
+// to a multiple of 8 (1080x2316 becomes 1080x2312), so the setting is snapped
+// the same way; the reader still probes the node for the real size.
 static const QString kDefaultDisplaySize = QStringLiteral("1280x800");
 
 static QString defaultCaptureMode()
@@ -176,8 +176,8 @@ QString PhoneMirrorManager::normalizeDisplaySize(const QString &value)
         return {};
     int w = m.captured(1).toInt();
     int h = m.captured(2).toInt();
-    w = qMax(2, (w / 2) * 2);
-    h = qMax(2, (h / 2) * 2);
+    w = qMax(8, (w / 8) * 8);
+    h = qMax(8, (h / 8) * 8);
     return QStringLiteral("%1x%2").arg(w).arg(h);
 }
 
@@ -186,7 +186,7 @@ void PhoneMirrorManager::setDisplaySize(const QString &size)
     const QString norm = normalizeDisplaySize(size);
     if (norm != size.trimmed())
         qCInfo(lcPhoneMirror) << "Display size" << size << "normalized to" << norm
-                              << "(dimensions must be even)";
+                              << "(scrcpy rounds to multiples of 8)";
     if (norm == m_displaySize)
         return;
     m_displaySize = norm;

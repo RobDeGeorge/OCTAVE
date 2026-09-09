@@ -218,10 +218,9 @@ void ScrcpyCapture::captureFrame()
 
 QSize ScrcpyCapture::probeV4l2Size(const QString &device) const
 {
-    // Virtual display: geometry is known and fixed
-    if (m_fixedDisplay && m_deviceWidth > 0)
-        return {m_deviceWidth, m_deviceHeight};
-
+    // The node is authoritative even for a virtual display: scrcpy rounds the
+    // requested --new-display size (1080x2316 -> 1080x2312), and parsing
+    // frames with the wrong size makes the picture roll.
     const QString v4l2ctl = QStandardPaths::findExecutable(QStringLiteral("v4l2-ctl"));
     if (!v4l2ctl.isEmpty()) {
         QProcess p;
@@ -275,6 +274,13 @@ void ScrcpyCapture::startV4l2Reader()
 
     m_v4l2Width = size.width();
     m_v4l2Height = size.height();
+    if (m_fixedDisplay && (m_deviceWidth != m_v4l2Width || m_deviceHeight != m_v4l2Height)) {
+        qCWarning(lcScrcpyCapture) << "v4l2 capture: requested virtual display" << m_deviceWidth << "x" << m_deviceHeight
+                                   << "but the stream is" << m_v4l2Width << "x" << m_v4l2Height
+                                   << "; using the stream size for frames and touch";
+        m_deviceWidth = m_v4l2Width;
+        m_deviceHeight = m_v4l2Height;
+    }
     if (m_v4l2Width != m_lastWidth || m_v4l2Height != m_lastHeight) {
         m_lastWidth = m_v4l2Width;
         m_lastHeight = m_v4l2Height;
