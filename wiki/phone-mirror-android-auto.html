@@ -311,7 +311,10 @@
             Two behaviours learned the hard way: Android emits <em>no</em> buffers for a virtual display whose
             content is not changing, so the continuous stream can legitimately deliver zero frames on an idle phone --
             the reader therefore <strong>seeds</strong> the first frame with a one-shot <code>ffmpeg -frames:v 1</code>
-            grab of the held buffer (which always succeeds) and never treats "no new frames" as an error. And both
+            grab that runs concurrently with the stream and never treats "no new frames" as an error. Note that a
+            cold reader only receives a frame when the producer writes one, and a bare home screen repaints only when
+            its status-bar clock ticks -- so the first picture can take up to a minute on an untouched phone (the seed
+            waits 90 s); touching the phone makes it appear immediately, and the view says so. And both
             scrcpy and ffmpeg are spawned with <code>PR_SET_PDEATHSIG</code> on Linux (SIGTERM for scrcpy so it tears
             down its virtual display, SIGKILL for ffmpeg, which ignores SIGTERM while blocked in the v4l2 driver on
             an idle device), so they die with OCTAVE even when it is killed without running cleanup; the Python entry point additionally routes SIGTERM/SIGINT

@@ -94,6 +94,8 @@ private:
     void stopV4l2Reader();
     void onV4l2ReadyRead();
     void onV4l2Finished(int exitCode, QProcess::ExitStatus status);
+    void startSeedGrab(const QString &device);
+    void onSeedFinished(int exitCode, QProcess::ExitStatus status);
     QSize probeV4l2Size(const QString &device) const;
 
     // Coordinate mapping
@@ -130,6 +132,9 @@ private:
     bool m_v4l2GotFrame = false;
     QTimer *m_v4l2RetryTimer = nullptr;
     qint64 m_v4l2Deadline = 0;
+    QProcess *m_seedProc = nullptr;   // one-shot grab racing the stream for the first frame
+    bool m_seedPending = false;
+    qint64 m_seedStartedMs = 0;
 
     // Touch tracking for tap/swipe detection
     float m_touchStartX = 0.0f;

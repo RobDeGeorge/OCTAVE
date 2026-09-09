@@ -282,36 +282,9 @@ void ScrcpyCapture::startV4l2Reader()
     }
     m_v4l2Buffer.clear();
 
-    // Android stops producing buffers for a virtual display whose content is
-    // not changing, so the continuous stream can sit at zero frames on a
-    // healthy idle phone. A one-shot grab still returns the held frame, so
-    // seed the provider with it and let the stream take over on motion.
-    {
-        QProcess seed;
-        QStringList seedArgs{QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-nostdin")};
-        if (device.startsWith(QLatin1String("/dev/")))
-            seedArgs << QStringLiteral("-f") << QStringLiteral("v4l2");
-        seedArgs << QStringLiteral("-i") << device
-                 << QStringLiteral("-frames:v") << QStringLiteral("1")
-                 << QStringLiteral("-f") << QStringLiteral("rawvideo")
-                 << QStringLiteral("-pix_fmt") << QStringLiteral("bgra") << QStringLiteral("-");
-        seed.start(QStandardPaths::findExecutable(QStringLiteral("ffmpeg")), seedArgs);
-        const qsizetype frameBytes = qsizetype(m_v4l2Width) * m_v4l2Height * 4;
-        if (seed.waitForFinished(5000)) {
-            const QByteArray out = seed.readAllStandardOutput();
-            if (out.size() >= frameBytes) {
-                QImage image(reinterpret_cast<const uchar *>(out.constData()),
-                             m_v4l2Width, m_v4l2Height, m_v4l2Width * 4, QImage::Format_ARGB32);
-                m_frameProvider->updateFrame(image.copy());
-                ++m_frameCount;
-                m_v4l2GotFrame = true;  // proves the node is readable
-                emit frameReady();
-                qCInfo(lcScrcpyCapture) << "v4l2 capture: seeded first frame from the held buffer";
-            }
-        } else {
-            seed.kill();
-        }
-    }
+    // First frame: race a one-shot grab against the stream (see startSeedGrab).
+    if (m_frameCount == 0 && !m_seedPending)
+        startSeedGrab(device);
 
     m_v4l2Proc = new QProcess(this);
     m_v4l2Proc->setReadChannel(QProcess::StandardOutput);
@@ -339,10 +312,85 @@ void ScrcpyCapture::startV4l2Reader()
                             << "via ffmpeg";
 }
 
+// A bare Android home screen only repaints when its status-bar clock ticks
+// (once a minute), and a cold reader of the loopback node only gets a frame
+// when the producer writes one, so the first frame can take up to ~60 s to
+// arrive however it is read. The seed grab therefore waits well past a
+// minute boundary, runs concurrently with the stream (whichever delivers
+// first wins), and "no frame yet" is never treated as an error.
+static constexpr int kSeedTimeoutMs = 90000;
+
+void ScrcpyCapture::startSeedGrab(const QString &device)
+{
+    QStringList args{QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-nostdin")};
+    if (device.startsWith(QLatin1String("/dev/")))
+        args << QStringLiteral("-f") << QStringLiteral("v4l2");
+    args << QStringLiteral("-i") << device
+         << QStringLiteral("-frames:v") << QStringLiteral("1")
+         << QStringLiteral("-f") << QStringLiteral("rawvideo")
+         << QStringLiteral("-pix_fmt") << QStringLiteral("bgra") << QStringLiteral("-");
+
+    m_seedProc = new QProcess(this);
+#ifdef Q_OS_LINUX
+    m_seedProc->setChildProcessModifier([] { prctl(PR_SET_PDEATHSIG, SIGKILL); });
+#endif
+    connect(m_seedProc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &ScrcpyCapture::onSeedFinished);
+    m_seedPending = true;
+    m_seedStartedMs = QDateTime::currentMSecsSinceEpoch();
+    m_seedProc->start(QStandardPaths::findExecutable(QStringLiteral("ffmpeg")), args);
+    QTimer::singleShot(kSeedTimeoutMs, m_seedProc, [this, p = m_seedProc]() {
+        if (m_seedProc == p && p->state() != QProcess::NotRunning) {
+            qCWarning(lcScrcpyCapture) << "v4l2 capture: seed grab produced no frame in"
+                                       << kSeedTimeoutMs / 1000 << "s";
+            p->kill();
+        }
+    });
+}
+
+void ScrcpyCapture::onSeedFinished(int exitCode, QProcess::ExitStatus)
+{
+    QProcess *p = m_seedProc;
+    m_seedProc = nullptr;
+    m_seedPending = false;
+    if (!p)
+        return;
+    const QByteArray out = p->readAllStandardOutput();
+    const QString err = QString::fromUtf8(p->readAllStandardError()).trimmed().right(200);
+    p->deleteLater();
+    if (!m_capturing)
+        return;
+    const qsizetype frameBytes = qsizetype(m_v4l2Width) * m_v4l2Height * 4;
+    if (frameBytes <= 0 || out.size() < frameBytes) {
+        qCWarning(lcScrcpyCapture) << "v4l2 capture: seed grab returned" << out.size()
+                                   << "bytes, exit" << exitCode << err;
+        return;
+    }
+    if (m_frameCount == 0) {
+        QImage image(reinterpret_cast<const uchar *>(out.constData()),
+                     m_v4l2Width, m_v4l2Height, m_v4l2Width * 4, QImage::Format_ARGB32);
+        m_frameProvider->updateFrame(image.copy());
+        ++m_frameCount;
+        emit frameReady();
+        qCInfo(lcScrcpyCapture) << "v4l2 capture: seeded first frame from the held buffer after"
+                                << (QDateTime::currentMSecsSinceEpoch() - m_seedStartedMs) / 1000.0 << "s";
+    }
+    m_v4l2GotFrame = true;
+}
+
 void ScrcpyCapture::stopV4l2Reader()
 {
     if (m_v4l2RetryTimer)
         m_v4l2RetryTimer->stop();
+    if (m_seedProc) {
+        QProcess *sp = m_seedProc;
+        m_seedProc = nullptr;
+        m_seedPending = false;
+        sp->disconnect(this);
+        sp->kill();
+        sp->waitForFinished(1000);
+        sp->deleteLater();
+    }
     if (m_v4l2Proc) {
         QProcess *p = m_v4l2Proc;
         m_v4l2Proc = nullptr;
@@ -385,7 +433,11 @@ void ScrcpyCapture::onV4l2Finished(int exitCode, QProcess::ExitStatus)
     m_v4l2Proc = nullptr;
     if (!m_capturing)
         return;
-    const bool giveUp = !m_v4l2GotFrame && QDateTime::currentMSecsSinceEpoch() > m_v4l2Deadline;
+    // Give up only if ffmpeg keeps dying without ever streaming AND the seed
+    // has also finished without a frame. An idle phone legitimately yields
+    // nothing for up to a minute.
+    const bool giveUp = !m_v4l2GotFrame && m_frameCount == 0 && !m_seedPending
+                        && QDateTime::currentMSecsSinceEpoch() > m_v4l2Deadline;
     qCWarning(lcScrcpyCapture) << "v4l2 capture: ffmpeg exited" << exitCode << err
                                << (giveUp ? "(giving up)" : "(restarting)");
     if (giveUp) {

@@ -215,6 +215,8 @@ class ScrcpyCapture(QObject):
         self._fixed_display: bool = False  # virtual display: geometry never rotates
         self._manager = None
         self._v4l2_proc: Optional[subprocess.Popen] = None
+        self._seed_proc: Optional[subprocess.Popen] = None
+        self._v4l2_token = None
         self._v4l2_thread: Optional[threading.Thread] = None
         self._warned_no_geometry = False
 
@@ -364,35 +366,53 @@ class ScrcpyCapture(QObject):
                 pass
         return 0, 0
 
-    def _seed_frame(self, device: str, ffmpeg: str, w: int, h: int) -> bool:
-        """Grab the frame the loopback node currently holds with a one-shot
-        ffmpeg run and push it to the provider.
+    # A bare Android home screen only repaints when the status-bar clock
+    # ticks, i.e. once a minute, and a cold reader of the loopback node only
+    # gets a frame when the producer writes one. So the first frame can take
+    # up to ~60 s to arrive no matter how it is read. The seed grab therefore
+    # waits well past a minute boundary, runs concurrently with the stream
+    # (whichever delivers first wins), and "no frame yet" is never an error.
+    SEED_TIMEOUT_S = 90.0
 
-        Android stops producing buffers for a virtual display whose content
-        is not changing, so the continuous stream can sit at zero frames on
-        a perfectly healthy idle phone. A fresh one-shot reader still gets the
-        held frame, so the user sees the screen immediately; the streaming
-        reader takes over as soon as anything moves.
-        """
+    def _seed_frame(self, device: str, ffmpeg: str, w: int, h: int, proc_token) -> bool:
+        """Grab the frame the loopback node currently holds (or the next one
+        written) with a one-shot ffmpeg run and push it to the provider."""
         if device.startswith("/dev/"):
             input_args = ["-f", "v4l2", "-i", device]
         else:
             input_args = ["-i", device]
         cmd = [ffmpeg, "-loglevel", "error", "-nostdin", *input_args,
                "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "bgra", "-"]
+        t0 = time.monotonic()
         try:
-            out = subprocess.run(cmd, capture_output=True, timeout=5,
-                                 preexec_fn=die_with_parent_kill).stdout
+            self._seed_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                               preexec_fn=die_with_parent_kill)
+            out, err = self._seed_proc.communicate(timeout=self.SEED_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            try:
+                self._seed_proc.kill()
+            except OSError:
+                pass
+            if self._capturing and proc_token is self._v4l2_token:
+                logger.warning(f"v4l2 capture: seed grab produced no frame in {self.SEED_TIMEOUT_S:.0f} s")
+            return False
         except (subprocess.SubprocessError, OSError) as e:
-            logger.debug(f" seed grab failed: {e}")
+            logger.warning(f"v4l2 capture: seed grab failed: {e}")
             return False
+        finally:
+            self._seed_proc = None
+        if not self._capturing or proc_token is not self._v4l2_token:
+            return False  # capture stopped/restarted meanwhile
         if len(out) < w * h * 4:
+            logger.warning(f"v4l2 capture: seed grab returned {len(out)} bytes: "
+                           f"{err.decode(errors='replace').strip()[-200:]}")
             return False
-        image = QImage(bytes(out[:w * h * 4]), w, h, w * 4, QImage.Format_ARGB32)
-        self._frame_provider.update_frame(image)
-        self._frame_count += 1
-        self.frameReady.emit()
-        logger.info("v4l2 capture: seeded first frame from the held buffer")
+        if self._frame_count == 0:
+            image = QImage(bytes(out[:w * h * 4]), w, h, w * 4, QImage.Format_ARGB32)
+            self._frame_provider.update_frame(image)
+            self._frame_count += 1
+            self.frameReady.emit()
+            logger.info(f"v4l2 capture: seeded first frame from the held buffer after {time.monotonic() - t0:.1f} s")
         return True
 
     def _v4l2_reader(self, device: str, ffmpeg: str):
@@ -400,6 +420,7 @@ class ScrcpyCapture(QObject):
         wrap each frame in a QImage and hand it to the provider. Restarts
         ffmpeg if it exits (e.g. the stream format changed) while capturing."""
         deadline = time.monotonic() + 20.0
+        seed_thread = None
         while self._capturing:
             w, h = self._probe_v4l2_size(device)
             if w <= 0 or h <= 0:
@@ -420,7 +441,12 @@ class ScrcpyCapture(QObject):
                    "-fflags", "nobuffer", "-flags", "low_delay",
                    *input_args,
                    "-f", "rawvideo", "-pix_fmt", "bgra", "-"]
-            seeded = self._seed_frame(device, ffmpeg, w, h)
+            token = object()
+            self._v4l2_token = token
+            if self._frame_count == 0 and (seed_thread is None or not seed_thread.is_alive()):
+                seed_thread = threading.Thread(target=self._seed_frame, args=(device, ffmpeg, w, h, token),
+                                               daemon=True, name="scrcpy-v4l2-seed")
+                seed_thread.start()
             try:
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         bufsize=frame_bytes * 2, preexec_fn=die_with_parent_kill)
@@ -435,7 +461,7 @@ class ScrcpyCapture(QObject):
                 self.frameSizeChanged.emit(w, h)
             buf = bytearray(frame_bytes)
             view = memoryview(buf)
-            got_frame = seeded  # a seeded frame proves the node is readable
+            streamed = 0
             while self._capturing:
                 filled = 0
                 while filled < frame_bytes and self._capturing:
@@ -448,7 +474,7 @@ class ScrcpyCapture(QObject):
                 image = QImage(bytes(buf), w, h, w * 4, QImage.Format_ARGB32)
                 self._frame_provider.update_frame(image)
                 self._frame_count += 1
-                got_frame = True
+                streamed += 1
                 self.frameReady.emit()
             # ffmpeg ended
             try:
@@ -459,9 +485,15 @@ class ScrcpyCapture(QObject):
             self._v4l2_proc = None
             if not self._capturing:
                 return
+            # Give up only if ffmpeg keeps dying without ever streaming AND the
+            # seed has also finished without producing a frame. An idle phone
+            # legitimately yields nothing for up to a minute.
+            seed_pending = seed_thread is not None and seed_thread.is_alive()
+            give_up = (streamed == 0 and self._frame_count == 0 and not seed_pending
+                       and time.monotonic() > deadline)
             logger.warning(f"v4l2 capture: ffmpeg exited ({err[-200:] or 'no output'}), "
-                           f"{'restarting' if got_frame or time.monotonic() < deadline else 'giving up'}")
-            if not got_frame and time.monotonic() > deadline:
+                           f"{'giving up' if give_up else 'restarting'}")
+            if give_up:
                 self._capturing = False
                 self.error.emit(f"Could not read video from {device}: {err[-200:] or 'ffmpeg produced no frames'}")
                 return
@@ -476,13 +508,15 @@ class ScrcpyCapture(QObject):
         logger.debug(f" Stopping capture (captured {self._frame_count} frames)")
         self._capturing = False
 
-        proc = getattr(self, "_v4l2_proc", None)
-        if proc is not None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
-            self._v4l2_proc = None
+        for attr in ("_v4l2_proc", "_seed_proc"):
+            proc = getattr(self, attr, None)
+            if proc is not None:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+                setattr(self, attr, None)
+        self._v4l2_token = None
 
         if self._capture_timer:
             self._capture_timer.stop()

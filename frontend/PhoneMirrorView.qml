@@ -195,10 +195,12 @@ Item {
             }
         }
 
-        // Loading indicator (show briefly while frames start)
+        // Loading indicator (show while frames start). On Linux an idle phone
+        // may not draw anything for up to a minute (its clock ticks once a
+        // minute), so tell the user what would speed it up.
         Text {
             anchors.centerIn: parent
-            text: "Connecting..."
+            text: v4l2Mode ? "Connecting... (touch the phone to wake its screen)" : "Connecting..."
             font.pixelSize: dp(24)
             font.family: phoneMirrorView.globalFont
             color: "white"
