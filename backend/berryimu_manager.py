@@ -36,11 +36,15 @@ GYRO_DEADBAND = 0.4
 # Signal emission interval — ~60Hz
 EMIT_INTERVAL = 0.016
 
-# Sensor sample interval — ~200Hz. The read loop sleeps for whatever is left
-# of this period after the I2C reads instead of spinning on a 1ms sleep. 200Hz
-# stays under the LSM6DSL's 416Hz ODR (no duplicate samples) and gives the
-# Madgwick filter 3+ samples per 60Hz emit; the old spin kept the I2C bus
-# saturated and cost ~9% CPU in D-state on the Orange Pi for no benefit.
+# Sensor sample interval — ~200Hz target. The read loop sleeps for whatever is
+# left of this period after the I2C reads, so it never busy-spins. Measured on
+# the Orange Pi 5 Plus: the three I2C block reads cost ~4.3ms per iteration,
+# so the loop is bus-bound and settles at ~172Hz with ~8% CPU on the worker
+# thread — that CPU is the cost of reading the sensor, not a bug. Do NOT set
+# this below the read cost (~0.005 here): `remaining` goes negative, the sleep
+# is skipped, and the loop spins. Raising it to 0.01 (100Hz) roughly halves
+# bus traffic and CPU while still giving the Madgwick filter ~1.7 samples per
+# 60Hz emit; below ~100Hz the filter starts to starve.
 SAMPLE_INTERVAL = 0.005
 
 # Barometer read interval — ~5Hz, time-based so it doesn't drift with loop rate
@@ -440,7 +444,8 @@ class BerryIMUManager(QObject):
         self._calibrate_gyro()
         self._last_time = time.monotonic()
         last_emit = 0.0
-        last_baro = 0.0
+        last_baro = 0.0      # 0 => first baro read happens on the first iteration
+        baro_logged = False
         read_count = 0
 
         while self._running:
@@ -547,7 +552,8 @@ class BerryIMUManager(QObject):
                         _, baro_temp, altitude = self._read_baro()
                         self.altitudeChanged.emit(altitude)
                         self.baroTempChanged.emit(baro_temp)
-                        if read_count <= 80:
+                        if not baro_logged:
+                            baro_logged = True
                             logger.info(f"BerryIMU: baro — alt={altitude:.1f}m temp={baro_temp:.1f}C")
                     except Exception as e:
                         logger.debug(f"BerryIMU: baro read error: {e}")

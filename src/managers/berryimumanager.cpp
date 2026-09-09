@@ -47,11 +47,15 @@ static constexpr double MADGWICK_BETA = 0.03;
 static constexpr double GYRO_DEADBAND = 0.4;
 static constexpr double EMIT_INTERVAL = 0.016; // ~60Hz
 
-// Sensor sample interval — ~200Hz. The read loop sleeps for whatever is left
-// of this period after the I2C reads instead of spinning on a 1ms sleep. 200Hz
-// stays under the LSM6DSL's 416Hz ODR (no duplicate samples) and gives the
-// Madgwick filter 3+ samples per 60Hz emit; the old spin kept the I2C bus
-// saturated and cost ~9% CPU in D-state on the Orange Pi for no benefit.
+// Sensor sample interval — ~200Hz target. The read loop sleeps for whatever is
+// left of this period after the I2C reads, so it never busy-spins. Measured on
+// the Orange Pi 5 Plus: the three I2C block reads cost ~4.3ms per iteration,
+// so the loop is bus-bound and settles at ~172Hz with ~8% CPU on the worker
+// thread — that CPU is the cost of reading the sensor, not a bug. Do NOT set
+// this below the read cost (~0.005 here): `remaining` goes negative, the sleep
+// is skipped, and the loop spins. Raising it to 0.01 (100Hz) roughly halves
+// bus traffic and CPU while still giving the Madgwick filter ~1.7 samples per
+// 60Hz emit; below ~100Hz the filter starts to starve.
 static constexpr double SAMPLE_INTERVAL = 0.005;
 
 // Barometer read interval — ~5Hz, time-based so it doesn't drift with loop rate
@@ -552,7 +556,8 @@ void BerryIMUWorker::run()
 
     double lastTime = getTime();
     double lastEmit = 0.0;
-    double lastBaro = 0.0;
+    double lastBaro = 0.0;      // 0 => first baro read happens on the first iteration
+    bool baroLogged = false;
     int readCount = 0;
 
     while (m_running) {
@@ -695,7 +700,8 @@ void BerryIMUWorker::run()
             if (bPressure > 0.0) {
                 emit altitudeChanged(static_cast<float>(bAlt));
                 emit baroTempChanged(static_cast<float>(bTemp));
-                if (readCount <= 80) {
+                if (!baroLogged) {
+                    baroLogged = true;
                     qCInfo(lcImu) << "baro - alt=" << bAlt << "m temp=" << bTemp << "C";
                 }
             }

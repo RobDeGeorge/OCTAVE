@@ -353,7 +353,7 @@
               <tr><td><code>MADGWICK_BETA</code></td><td><code>0.03</code></td><td>Filter gain. Lower = smoother/less jitter, higher = more responsive</td></tr>
               <tr><td><code>GYRO_DEADBAND</code></td><td><code>0.4</code> deg/s</td><td>Zero out small gyro readings to prevent stationary drift</td></tr>
               <tr><td><code>EMIT_INTERVAL</code></td><td><code>0.016</code>s (~60 Hz)</td><td>Signal emission rate to QML</td></tr>
-              <tr><td><code>SAMPLE_INTERVAL</code></td><td><code>0.005</code>s (~200 Hz)</td><td>Sensor read-loop period; the thread sleeps out the remainder after each I2C round</td></tr>
+              <tr><td><code>SAMPLE_INTERVAL</code></td><td><code>0.005</code>s (~200 Hz target)</td><td>Sensor read-loop period; the thread sleeps out the remainder after each I2C round. Must stay above the I2C read cost (~4.3 ms on Orange Pi 5 Plus) or the loop spins</td></tr>
               <tr><td><code>BARO_INTERVAL</code></td><td><code>0.2</code>s (~5 Hz)</td><td>Barometer read cadence (time-based)</td></tr>
             </tbody>
           </table>
@@ -423,9 +423,12 @@ yz = qz / yaw_norm
         <section id="imu-readloop">
           <h3>Read Loop</h3>
           <p>
-            The background thread samples all sensors at ~200 Hz (<code>SAMPLE_INTERVAL</code> = 5 ms).
-            After each round of I2C reads it sleeps for the remainder of the period rather than spinning,
-            so the bus is not saturated and the thread stays out of D-state. Key behaviors:
+            The background thread targets a ~200 Hz sample rate (<code>SAMPLE_INTERVAL</code> = 5 ms).
+            After each round of I2C reads it sleeps for the remainder of the period rather than spinning.
+            In practice the loop is I2C-bound: on the Orange Pi 5 Plus the three block reads take ~4.3 ms,
+            so it settles around 172 Hz and the worker thread costs ~8% CPU, which is simply the price of
+            reading the sensor. Raising <code>SAMPLE_INTERVAL</code> to 10 ms (100 Hz) roughly halves that;
+            lowering it below the read cost makes the loop spin. Key behaviors:
           </p>
           <ul>
             <li><strong>Deadband gating</strong> -- Gyro readings below <code>GYRO_DEADBAND</code> (0.4 deg/s) are zeroed. The Madgwick filter is only updated when there is actual motion, freezing the quaternion when stationary to prevent visible settling.</li>
