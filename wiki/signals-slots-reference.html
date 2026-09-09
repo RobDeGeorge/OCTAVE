@@ -212,6 +212,10 @@
             <tr><td><code>connect_to_adapter(str)</code></td><td>identifier</td><td>-</td><td>Single entry point used by the OBD settings page. Accepts a MAC, <code>/dev</code> path, or COM port; on Linux runs <code>rfcomm bind</code> when given a MAC, then calls <code>force_connect</code>.</td></tr>
             <tr><td><code>platform_hint()</code></td><td>-</td><td>str</td><td>Returns <code>"linux"</code> / <code>"macos"</code> / <code>"windows"</code> / <code>"android"</code> / <code>"ios"</code>. Drives the per-OS hint copy under the entry field — never structural branching.</td></tr>
             <tr><td><code>availableAdapters</code></td><td>property</td><td>list</td><td>Rich <code>[{name, identifier, kind}, ...]</code> form of <code>availablePorts</code>. Bound directly by the OBD settings page list.</td></tr>
+            <tr><td><code>connectionDetail</code></td><td>property</td><td>str</td><td>Last <code>connectionStatusDetailChanged</code> message. Bound by the OBD settings Connection card.</td></tr>
+            <tr><td><code>connectionProgress</code></td><td>property</td><td>int</td><td>Last <code>connectionProgressChanged</code> percent (0&ndash;100). Drives the Connection card progress bar.</td></tr>
+            <tr><td><code>refresh_values()</code></td><td>-</td><td>-</td><td>Re-emit the current value of every watched PID (no-op when disconnected). Called by the home screen after <code>homeOBDParametersChanged</code>.</td></tr>
+            <tr><td><code>set_target_address(str)</code></td><td>identifier</td><td>-</td><td>Persist the adapter identifier as the OBD port (desktop) / BLE address (Android). The saved-port watcher then reconnects.</td></tr>
           </tbody>
         </table>
 
@@ -328,6 +332,15 @@
           </tbody>
         </table>
 
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>connected</code></td><td>bool</td><td>Whether the sensor read loop is running</td></tr>
+            <tr><td><code>hasTemperature</code></td><td>bool</td><td>Whether a barometric temperature reading is available. Always <code>true</code> on desktop (BMP280); on Android it flips to <code>true</code> once Qt Sensors reports a non-zero value. Gates the temperature card in <span class="file-path">SensorMenu.qml</span>.</td></tr>
+          </tbody>
+        </table>
+
         <!-- GestureManager -->
         <h2 id="gesture">GestureManager</h2>
         <p><span class="file-path">backend/gesture_manager.py</span> &mdash; QML name: <code>gestureManager</code></p>
@@ -352,6 +365,15 @@
             <tr><td><code>setEnabled(bool)</code></td><td>bool</td><td>-</td><td>Enable/disable gesture sensor</td></tr>
             <tr><td><code>setCooldown(int)</code></td><td>int (ms)</td><td>-</td><td>Set minimum time between gestures</td></tr>
             <tr><td><code>isEnabled()</code></td><td>-</td><td>bool</td><td>Check if enabled</td></tr>
+            <tr><td><code>getConnectionStatus()</code></td><td>-</td><td>str</td><td>"Connected" / "Disconnected" ("Disabled on mobile" in the Android stub)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>connectionStatus</code></td><td>str</td><td>Same value as <code>getConnectionStatus()</code>, bindable. Read by the Accessories settings widget.</td></tr>
           </tbody>
         </table>
 

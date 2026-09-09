@@ -1961,6 +1961,7 @@ class SettingsManager(QObject):
     def get_gesture_mapping(self):
         return json.dumps(self._gesture_mapping)
 
+    @Slot(result="QVariantMap")
     def get_gesture_mapping_dict(self):
         return self._gesture_mapping.copy()
 
@@ -1973,8 +1974,9 @@ class SettingsManager(QObject):
         self.save_settings(settings)
         self.gestureMappingChanged.emit()
 
+    @Slot("QVariantMap")
     def save_gesture_mapping(self, mapping):
-        self._gesture_mapping = mapping.copy()
+        self._gesture_mapping = dict(mapping)
         settings = self.load_settings()
         settings["gestureMapping"] = self._gesture_mapping
         self.save_settings(settings)

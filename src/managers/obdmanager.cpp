@@ -29,6 +29,13 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
 {
     buildSignalDispatch();
 
+    // Cache the latest detail / progress so the Q_PROPERTY readers reflect
+    // whatever was last emitted (emit sites are numerous; hook once here).
+    connect(this, &OBDManager::connectionStatusDetailChanged, this,
+            [this](const QString &detail) { m_connectionDetail = detail; });
+    connect(this, &OBDManager::connectionProgressChanged, this,
+            [this](int progress) { m_connectionProgress = progress; });
+
     // --- Timers ---
 
     // Startup timer -- defer initial connection from constructor

@@ -39,6 +39,10 @@ class OBDManager : public QObject
     // Expose connection state as QML-readable properties
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectionStatusChanged)
     Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
+    // Last detail message / progress percent, so the OBD settings connection
+    // card can bind declaratively instead of tracking the signals by hand.
+    Q_PROPERTY(QString connectionDetail READ connectionDetail NOTIFY connectionStatusDetailChanged)
+    Q_PROPERTY(int connectionProgress READ connectionProgress NOTIFY connectionProgressChanged)
 
     // Unified adapter list — list of {name, identifier, kind} on every OS.
     // QML binds to this directly so the OBD settings page renders identically
@@ -186,6 +190,8 @@ public:
 
     // --- Property getters (Q_INVOKABLE so QML can call them) ---
     Q_INVOKABLE bool isConnected() const;
+    QString connectionDetail() const { return m_connectionDetail; }
+    int connectionProgress() const { return m_connectionProgress; }
     // snake_case alias — the shared QML (OBDHome.qml etc.) calls is_connected()
     // to match the Python backend's @Slot name. Keep both in lockstep.
     Q_INVOKABLE bool is_connected() const { return isConnected(); }
@@ -386,6 +392,7 @@ private:
     int m_connectionAttempts = 0;
     QString m_connectionStatus;
     QString m_connectionDetail;
+    int m_connectionProgress = 0;
     int m_connectionTimeout = 5;  // seconds
     bool m_forceStopReconnect = false;
 

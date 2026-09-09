@@ -391,6 +391,11 @@ class GestureManager(QObject):
     def getConnectionStatus(self):
         return "Connected" if self._running else "Disconnected"
 
+    @Property(str, notify=connectionStatusChanged)
+    def connectionStatus(self):
+        # Mirrors C++ Q_PROPERTY(connectionStatus) — read by AccessoriesWidget.qml.
+        return self.getConnectionStatus()
+
     @Slot(str, str)
     def setGestureAction(self, gesture, action):
         self._gesture_mapping[gesture] = action

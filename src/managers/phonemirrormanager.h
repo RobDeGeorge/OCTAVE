@@ -118,6 +118,7 @@ public slots:
 signals:
     void scrcpyPathChanged();
     void error(const QString &);
+    void scrcpyError(const QString &);  // PhoneMirrorView.qml onScrcpyError
     void scrcpyStarted(int);
     void scrcpyStopped();
 };

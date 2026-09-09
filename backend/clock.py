@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, QTimer
 from datetime import datetime
 
 class Clock(QObject):
@@ -11,6 +11,7 @@ class Clock(QObject):
         self.timer.timeout.connect(self.update_time)
         self.timer.start(1000)  # Update every second
         
+    @Slot()
     def update_time(self):
         if not self._settings_manager.showClock:
             self.timeChanged.emit("")

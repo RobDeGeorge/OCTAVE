@@ -153,6 +153,10 @@ signals:
     void muteToggleRequested();
     void availablePortsChanged(const QVariantList &);
     void connectionStateChanged();
+    // Mirrored from the desktop class so QML `Connections` handlers
+    // (SettingsHubLayout, AccessoriesSettingsPage) resolve on mobile.
+    void connectionStatusChanged(const QString &);
+    void connectionDetailChanged(const QString &);
 };
 
 #endif // Q_OS_MOBILE

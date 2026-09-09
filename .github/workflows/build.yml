@@ -69,6 +69,62 @@ jobs:
         run: pytest tests/ -v
 
   # ---------------------------------------------------------------------------
+  # C++ compile check — runs on EVERY push/PR so a C++ break can't land on
+  # main unnoticed between release tags. Configure + build only, no packaging.
+  # ---------------------------------------------------------------------------
+
+  cpp-compile-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            libtag1-dev libgl1-mesa-dev libegl1-mesa-dev \
+            libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
+            libpulse-dev libssl-dev
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: 'linux'
+          target: 'desktop'
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools'
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Lint QML (errors only)
+        # qmllint exits non-zero for plain warnings too, so parse its JSON and
+        # fail only on "critical" entries (syntax errors, unresolvable imports).
+        # Warnings stay advisory until the legacy noise is cleaned up.
+        run: |
+          # -exec ... + (not xargs): qmllint exits 255 on warnings, which makes
+          # xargs abort before later batches run.
+          find frontend -name '*.qml' \
+            -exec "$QT_ROOT_DIR/bin/qmllint" -I frontend --json qmllint.json {} + || true
+          python3 - <<'PY'
+          import json, sys
+          report = json.load(open("qmllint.json"))
+          critical = [(f["filename"], w.get("line", 0), w["message"])
+                      for f in report["files"] for w in f.get("warnings", [])
+                      if w.get("type") == "critical"]
+          for path, line, msg in critical:
+              print(f"{path}:{line}: {msg}")
+          print(f"qmllint: {len(report['files'])} files, {len(critical)} critical")
+          sys.exit(1 if critical else 0)
+          PY
+
+  # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)
   # ---------------------------------------------------------------------------
 

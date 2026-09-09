@@ -201,6 +201,9 @@ public slots:
 
 signals:
     void dhuEmbeddedChanged(bool);
+    // Mirrored from the desktop class for AndroidAutoView.qml handlers.
+    void error(const QString &);
+    void dhuWindowReady(int);
 
 private:
     DhuFrameProvider *m_provider;

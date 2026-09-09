@@ -195,7 +195,7 @@ Rotating log files in `logs/` subdirectory of the config path:
 
 **Python:** No build pipeline — Python is a developer-only backend that runs from a venv (`pip install -r requirements.txt && python main.py`). The PyInstaller pipeline was removed; do not reintroduce `build_scripts/build.py`, `octave.spec`, `requirements-build.txt`, or per-platform `build_*.{sh,bat}` shell wrappers. Mobile (Android `.apk` / iOS `.ipa`) always goes through the C++ / Qt for Mobile pipeline.
 
-GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff, Python only — keeps the dev backend honest) and `test` (headless pytest smoke suite) on every push and PR to `main`. On version tags (`v*`) or manual dispatch, the C++ matrix runs (`cpp-build-windows`, `cpp-build-macos`, `cpp-build-linux`, `cpp-build-android`) and the `release` job attaches every produced artifact (`.exe` zip, `.app` zip, `.dmg`, AppImage, `.deb`, `.apk`) to a single GitHub Release. Build jobs depend on lint + test passing.
+GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff, Python only — keeps the dev backend honest), `test` (headless pytest smoke suite), and `cpp-compile-check` (Linux CMake configure + build of the C++ tree plus a `qmllint` error pass over `frontend/`) on every push and PR to `main` — so a C++ or QML break cannot land unnoticed between release tags. On version tags (`v*`) or manual dispatch, the C++ matrix runs (`cpp-build-windows`, `cpp-build-macos`, `cpp-build-linux`, `cpp-build-android`) and the `release` job attaches every produced artifact (`.exe` zip, `.app` zip, `.dmg`, AppImage, `.deb`, `.apk`) to a single GitHub Release. Build jobs depend on lint + test passing.
 
 ## Key Conventions
 

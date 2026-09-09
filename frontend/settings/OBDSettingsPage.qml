@@ -89,7 +89,7 @@ Item {
                     (obdManager.get_connection_status() === "Connecting") : false
                 property real pulseOpacity: 0.7
                 property real connectionProgress: obdManager ?
-                    (obdManager._connectionProgress || 0) : 0
+                    (obdManager.connectionProgress || 0) : 0
 
                 // Progress indicator
                 Rectangle {
@@ -214,8 +214,8 @@ Item {
                     Text {
                         id: detailText
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: obdManager && obdManager._connectionDetail ?
-                            obdManager._connectionDetail : ""
+                        text: obdManager && obdManager.connectionDetail ?
+                            obdManager.connectionDetail : ""
                         color: "white"
                         font.pixelSize: App.Spacing.overallText * 0.7
                         font.family: App.Style.fontFamily

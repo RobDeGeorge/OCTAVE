@@ -320,6 +320,11 @@ class OBDManager(QObject):
         self._connection_attempts = 0
         self._connection_status = "Not Connected"
         self._connection_detail = "Waiting for startup..."
+        self._connection_progress = 0
+        # Keep the Q_PROPERTY-style readers (connectionDetail / connectionProgress)
+        # in sync with whatever was last emitted — mirrors the C++ constructor hook.
+        self.connectionStatusDetailChanged.connect(self._cache_connection_detail)
+        self.connectionProgressChanged.connect(self._cache_connection_progress)
         self._is_connecting = False
         self._last_reconnect_time = 0
         self._last_successful_protocol = None  # Cache last working protocol for faster reconnects
@@ -1532,6 +1537,53 @@ class OBDManager(QObject):
         self._connection_attempts = 0
         self._cleanup_connection()
         self._start_connection()
+
+    @Slot()
+    def refresh_values(self):
+        """Re-emit the current value of every watched PID (C++ parity).
+
+        The home screen calls this after homeOBDParametersChanged so tiles that
+        were just enabled get a value immediately instead of waiting for the
+        next change-driven callback. python-OBD's Async.query() is non-blocking
+        and returns the cached response, so this never touches the adapter.
+        """
+        conn = self._connection
+        if not conn or not getattr(conn, "running", False):
+            return
+        try:
+            commands = self._get_all_commands()
+        except Exception as e:
+            logger.debug(f"[OBD] refresh_values: could not build command map: {e}")
+            return
+        for param, (command, callback) in commands.items():
+            try:
+                response = conn.query(command)
+                if response is not None and not response.is_null():
+                    callback(response)
+            except Exception as e:
+                logger.debug(f"[OBD] refresh_values: {param}: {e}")
+
+    @Slot(str)
+    def set_target_address(self, address):
+        """Desktop: persist the adapter identifier as the OBD port (C++ parity).
+        The port-change watcher in the settings manager then triggers a reconnect."""
+        logger.info(f"[OBD] set_target_address: {address}")
+        if self._settings_manager:
+            self._settings_manager.save_obd_bluetooth_port(address)
+
+    def _cache_connection_detail(self, detail):
+        self._connection_detail = detail
+
+    def _cache_connection_progress(self, progress):
+        self._connection_progress = progress
+
+    @Property(str, notify=connectionStatusDetailChanged)
+    def connectionDetail(self):
+        return self._connection_detail
+
+    @Property(int, notify=connectionProgressChanged)
+    def connectionProgress(self):
+        return self._connection_progress
 
     def _cleanup_connection(self):
         """Clean up existing connection before reconnecting"""

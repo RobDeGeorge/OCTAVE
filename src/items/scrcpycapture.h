@@ -202,6 +202,7 @@ signals:
     void frameReady();
     void captureStarted();
     void captureStopped();
+    void error(const QString &);  // PhoneMirrorView.qml onError
 
 private:
     ScrcpyFrameProvider *m_provider;

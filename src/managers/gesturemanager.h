@@ -73,6 +73,8 @@ private:
 class GestureManager : public QObject
 {
     Q_OBJECT
+    // Read by AccessoriesWidget.qml; mirrors the mobile stub's property.
+    Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
 
 public:
     explicit GestureManager(QObject *parent = nullptr);

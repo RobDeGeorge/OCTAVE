@@ -355,12 +355,13 @@ cap.capture(<span class="str">"media_view"</span>, <span class="str">"Media play
 <span class="ev">QT_QPA_PLATFORM</span>=offscreen <span class="fn">pytest</span> tests/ -v</code></pre>
 
         <h3>Continuous Integration</h3>
-        <p>The <span class="file-path">.github/workflows/build.yml</span> workflow has four jobs:</p>
+        <p>The <span class="file-path">.github/workflows/build.yml</span> workflow has three always-on jobs and a tag-gated release matrix:</p>
         <ul>
           <li><code>lint</code> — runs ruff on Ubuntu 22.04 (Python 3.11). Triggered on every push/PR to <code>main</code>.</li>
           <li><code>test</code> — runs the headless pytest smoke suite on Ubuntu 22.04. Triggered on every push/PR to <code>main</code>.</li>
-          <li><code>build-windows</code> / <code>build-macos</code> / <code>build-linux</code> — PyInstaller builds. Gated on <code>lint</code> + <code>test</code> passing, and only run on version tags (<code>v*</code>) or manual <code>workflow_dispatch</code>.</li>
-          <li><code>release</code> — publishes artifacts to GitHub Releases when the trigger is a version tag.</li>
+          <li><code>cpp-compile-check</code> — configures and builds the C++ tree with Qt 6.7.3 on Ubuntu 22.04, then runs <code>qmllint</code> over <span class="file-path">frontend/</span> and fails on any QML error. Triggered on every push/PR to <code>main</code>, so a C++ or QML break cannot sit on <code>main</code> until the next release tag.</li>
+          <li><code>cpp-build-windows</code> / <code>cpp-build-macos</code> / <code>cpp-build-linux</code> / <code>cpp-build-android</code> — CMake + Qt 6 release builds (<code>.exe</code> zip, <code>.dmg</code>, AppImage, <code>.apk</code>). Gated on <code>lint</code> + <code>test</code> passing, and only run on version tags (<code>v*</code>) or manual <code>workflow_dispatch</code>.</li>
+          <li><code>release</code> — publishes every artifact to a single GitHub Release when the trigger is a version tag.</li>
         </ul>
 
         <h3>Manual Testing Workflow</h3>

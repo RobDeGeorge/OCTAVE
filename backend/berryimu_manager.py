@@ -199,6 +199,7 @@ class BerryIMUManager(QObject):
     longitudinalGChanged = Signal(float)
     baroTempChanged = Signal(float)
     connectionStatusChanged = Signal(str)
+    hasTemperatureChanged = Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -559,6 +560,13 @@ class BerryIMUManager(QObject):
     @Property(bool, notify=connectionStatusChanged)
     def connected(self):
         return self._running
+
+    @Property(bool, notify=hasTemperatureChanged)
+    def hasTemperature(self):
+        # Desktop BerryIMU always carries the BMP280 barometer/thermometer.
+        # Mirrors the C++ desktop branch (`return true`); the Android build
+        # flips this at runtime from Qt sensors, which Python never targets.
+        return True
 
     @Slot(result=str)
     def getConnectionStatus(self):
