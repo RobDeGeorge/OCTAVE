@@ -1647,7 +1647,7 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "Requires scrcpy 2.0+ and Android 11+"
+                        text: "Will apply once audio forwarding is implemented (Android 11+)"
                     }
                 }
 
