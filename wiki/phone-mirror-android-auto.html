@@ -141,9 +141,13 @@
             <tbody>
               <tr><td><code>scrcpyPathChanged</code></td><td>--</td><td>Effective scrcpy path changed</td></tr>
               <tr><td><code>error</code></td><td><code>str</code></td><td>Error message</td></tr>
-              <tr><td><code>scrcpyStarted</code></td><td><code>int</code></td><td>Window handle when scrcpy is ready</td></tr>
+              <tr><td><code>scrcpyStarted</code></td><td><code>int</code></td><td>scrcpy is ready: native window handle (Windows) or process id (Linux v4l2 mode)</td></tr>
               <tr><td><code>scrcpyStopped</code></td><td>--</td><td>scrcpy process ended</td></tr>
-              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>scrcpy-specific error</td></tr>
+              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>scrcpy-specific error (too-old version, device unauthorized/offline/absent, scrcpy's own <code>ERROR</code> lines on exit)</td></tr>
+              <tr><td><code>isRunningChanged</code></td><td>--</td><td><code>isRunning</code> changed</td></tr>
+              <tr><td><code>videoDeviceChanged</code></td><td>--</td><td>v4l2 loopback node changed</td></tr>
+              <tr><td><code>displaySizeChanged</code></td><td>--</td><td>Requested virtual display size changed</td></tr>
+              <tr><td><code>displayIdChanged</code></td><td>--</td><td>Android display id / active display size of the running mirror changed</td></tr>
             </tbody>
           </table>
 
@@ -155,7 +159,27 @@
               <tr><td><code>scrcpyPath</code></td><td><code>str</code></td><td>Path to scrcpy executable</td></tr>
               <tr><td><code>adbPath</code></td><td><code>str</code></td><td>Path to ADB executable</td></tr>
               <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>Whether scrcpy process is active</td></tr>
-              <tr><td><code>scrcpyWindowHandle</code></td><td><code>int</code></td><td>Native window handle of scrcpy</td></tr>
+              <tr><td><code>scrcpyWindowHandle</code></td><td><code>int</code></td><td>Native window handle of scrcpy (Windows) or its pid (Linux)</td></tr>
+              <tr><td><code>scrcpyVersion</code></td><td><code>str</code></td><td>Version of the effective scrcpy binary, e.g. <code>"3.3.4"</code>; <code>""</code> if unknown. Versions below <strong>2.0</strong> are rejected at <code>startScrcpy()</code></td></tr>
+              <tr><td><code>captureMode</code></td><td><code>str</code></td><td><code>"window"</code> (Windows: screen-grab), <code>"v4l2"</code> (Linux: headless scrcpy into a v4l2loopback node rendered by QtMultimedia), <code>"unsupported"</code> (macOS, mobile)</td></tr>
+              <tr><td><code>videoDevice</code></td><td><code>str</code></td><td>v4l2loopback node used in v4l2 mode (default <code>/dev/video10</code>, setting <code>scrcpyVideoDevice</code>)</td></tr>
+              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> passed as <code>--new-display</code> (default <code>1280x800</code>, setting <code>scrcpyDisplaySize</code>); <code>""</code> mirrors the phone's own screen. Width is snapped down to a multiple of 64</td></tr>
+              <tr><td><code>displayId</code></td><td><code>int</code></td><td>Android display id of the running mirror, <code>-1</code> for the phone's main display. Touch injection targets it via <code>adb shell input -d ID</code></td></tr>
+              <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td><code>"WxH"</code> of the virtual display actually in use, <code>""</code> when mirroring the phone screen</td></tr>
+            </tbody>
+          </table>
+
+          <h4>Slots</h4>
+          <table>
+            <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>setScrcpyPath(str)</code>, <code>setAudioEnabled(bool)</code>, <code>setVideoDevice(str)</code>, <code>setDisplaySize(str)</code></td><td>--</td><td>Configuration; restart scrcpy if it is running</td></tr>
+              <tr><td><code>hasConnectedDevice()</code></td><td><code>bool</code></td><td>An authorized device is attached</td></tr>
+              <tr><td><code>getDeviceState()</code></td><td><code>str</code></td><td><code>"device"</code> / <code>"unauthorized"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code> -- lets the UI say <em>why</em> mirroring cannot start</td></tr>
+              <tr><td><code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td><code>str</code>/<code>int</code></td><td>ADB probes</td></tr>
+              <tr><td><code>videoDeviceExists()</code></td><td><code>bool</code></td><td>The loopback node exists on disk (module loaded)</td></tr>
+              <tr><td><code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>cleanup()</code></td><td>--</td><td>Process lifecycle</td></tr>
+              <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Platform-specific install text</td></tr>
             </tbody>
           </table>
         </section>
@@ -171,8 +195,12 @@
             <li><strong>Common install locations</strong> -- Platform-specific paths (e.g., <code>C:\scrcpy\</code>, <code>/usr/bin/scrcpy</code>, Android SDK paths)</li>
           </ol>
           <p>
-            scrcpy is validated by running <code>scrcpy --version</code>. A custom path can be set via
-            <code>setScrcpyPath(path)</code>.
+            Every candidate (bundled, PATH, common locations) is validated by running <code>scrcpy --version</code>;
+            the parsed version is exposed as <code>scrcpyVersion</code>. A candidate that does not run is skipped.
+            A version below <strong>2.0</strong> is still <em>found</em> (so the settings page can show it) but
+            <code>startScrcpy()</code> refuses it with <em>"scrcpy 1.21 at /usr/bin/scrcpy is too old (need &gt;= 2.0)"</em>
+            -- distro packages are frequently that old (Ubuntu 22.04 ships 1.21, which also cannot mirror
+            Android 14+ at all). A custom path can be set via <code>setScrcpyPath(path)</code>.
           </p>
         </section>
 
@@ -206,14 +234,42 @@
     --video-codec=h264
     --video-bit-rate=8M
     --max-fps=60
-    --window-borderless
     --stay-awake
-    --no-audio           <span class="cmt"># unless audio forwarding is enabled</span>
-    -s DEVICE_SERIAL     <span class="cmt"># if a specific device serial is known</span></code></pre>
+    --new-display=1280x800   <span class="cmt"># displaySize, if set and the phone is Android 11+ (SDK 30)</span>
+    --window-borderless      <span class="cmt"># captureMode "window" (Windows)</span>
+    --no-window --v4l2-sink=/dev/video10   <span class="cmt"># captureMode "v4l2" (Linux)</span>
+    --no-audio               <span class="cmt"># unless audio forwarding is enabled</span>
+    -s DEVICE_SERIAL         <span class="cmt"># if a specific device serial is known</span></code></pre>
           <p>
-            After launching, a background thread polls for the scrcpy window to appear (up to 10 seconds,
-            checking every 100ms). On Windows, the window is found by enumerating all windows and matching
-            the process ID via <code>GetWindowThreadProcessId</code>.
+            Before launching, the manager checks the scrcpy version, then <code>getDeviceState()</code>, and
+            emits a specific <code>scrcpyError</code> for each failure. It also runs
+            <code>adb shell pkill -f com.genymobile.scrcpy</code> so a stale device-side server (they can
+            outlive a crashed client) cannot conflict with the new session; the same kill runs after
+            <code>stopScrcpy()</code>.
+          </p>
+          <p>
+            scrcpy's stderr is drained line by line into the log (prefix <code>scrcpy:</code>, warnings for
+            <code>ERROR</code>/<code>WARN</code> lines). Readiness depends on the capture mode:
+          </p>
+          <ul>
+            <li><strong>window (Windows)</strong> -- a background thread polls for the scrcpy window (up to 10 s,
+              every 100 ms) by enumerating windows and matching the process id via <code>GetWindowThreadProcessId</code>.</li>
+            <li><strong>v4l2 (Linux)</strong> -- <code>scrcpyStarted(pid)</code> fires when stderr shows
+              <code>v4l2 sink started</code>, or after 8 s alive as a fallback. A <em>New display ... id N</em>
+              line sets <code>displayId</code>; if scrcpy did not print one, <code>adb shell dumpsys display</code>
+              is searched for the logical display named <code>scrcpy</code>. If the process exits before that,
+              <code>scrcpyError</code> carries scrcpy's own <code>ERROR</code> lines.</li>
+          </ul>
+
+          <h4>Virtual display (<code>--new-display</code>)</h4>
+          <p>
+            By default OCTAVE does not mirror the phone's own screen. It asks scrcpy to create a separate
+            <strong>landscape 1280x800 virtual display</strong> on the phone (Android 11+), which suits a dash
+            screen, leaves the handset usable, and -- critically -- has a width that is a multiple of 64.
+            Qt 6's FFmpeg V4L2 camera path mishandles the row stride for other widths and renders a diagonally
+            sheared image, so <code>setDisplaySize()</code> snaps any requested width down to a multiple of 64.
+            Touch injection maps to the virtual display's geometry (no portrait/landscape swap) and targets it with
+            <code>adb shell input -d &lt;displayId&gt;</code>.
           </p>
 
           <h4>Singleton Guard</h4>
@@ -237,7 +293,43 @@
             captures the scrcpy window at <strong>60 FPS</strong> and provides frames to QML via an image provider.
           </p>
 
-          <h4>Capture Strategy</h4>
+          <h4>Linux: v4l2 mode</h4>
+          <p>
+            On Linux there is no window to grab: scrcpy runs headless and writes decoded frames into a
+            <a href="https://github.com/umlaeute/v4l2loopback">v4l2loopback</a> node, and
+            <code>ScrcpyCapture</code> reads that node back with an <strong>ffmpeg subprocess</strong>
+            (<code>ffmpeg -f v4l2 -i /dev/video10 -f rawvideo -pix_fmt bgra -</code>), wrapping each raw frame in a
+            <code>QImage</code> and pushing it into the same <code>ScrcpyFrameProvider</code> the Windows path uses,
+            so <span class="file-path">frontend/PhoneMirrorView.qml</span> is identical on both platforms.
+            The frame size comes from the virtual display when one is active, otherwise from
+            <code>v4l2-ctl --get-fmt-video</code> / <code>ffprobe</code>; if ffmpeg exits (format change, rotation)
+            the reader restarts it, and gives up with a clear <code>error</code> after 20 s without a frame.
+            A path that does not start with <code>/dev/</code> is treated as a media file and looped, which lets
+            developers without a phone test the view with a synthetic clip.
+          </p>
+          <p>
+            Two behaviours learned the hard way: Android emits <em>no</em> buffers for a virtual display whose
+            content is not changing, so the continuous stream can legitimately deliver zero frames on an idle phone --
+            the reader therefore <strong>seeds</strong> the first frame with a one-shot <code>ffmpeg -frames:v 1</code>
+            grab of the held buffer (which always succeeds) and never treats "no new frames" as an error. And both
+            scrcpy and ffmpeg are spawned with <code>PR_SET_PDEATHSIG</code> on Linux (SIGTERM for scrcpy so it tears
+            down its virtual display, SIGKILL for ffmpeg, which ignores SIGTERM while blocked in the v4l2 driver on
+            an idle device), so they die with OCTAVE even when it is killed without running cleanup; the Python entry point additionally routes SIGTERM/SIGINT
+            through <code>app.quit()</code> so <code>aboutToQuit</code> cleanup runs from launcher scripts.
+          </p>
+          <p>
+            QtMultimedia's <code>Camera</code>/<code>MediaDevices</code> is deliberately <em>not</em> used: Qt snapshots the
+            V4L2 device list on first use per process and never refreshes it, and a loopback node is only visible
+            while a producer is streaming -- so an app that touched Qt Multimedia at startup (OCTAVE does, for audio)
+            could never see the device. Requirements learned on real hardware (Orange Pi 5 Plus, Ubuntu 22.04):
+          </p>
+          <ul>
+            <li>Load the module with <code>exclusive_caps=0</code>: <code>sudo modprobe v4l2loopback exclusive_caps=0 card_label=OCTAVE video_nr=10</code>.</li>
+            <li>ffmpeg (and ideally <code>v4l-utils</code>) installed; scrcpy 2.0 or newer (3.3+ for Android 16 phones) --
+              build it from source on distros that ship 1.x.</li>
+          </ul>
+
+          <h4>Windows: capture strategy</h4>
           <p>
             The scrcpy window is kept <strong>off-screen</strong> at coordinates (-3000, -3000) to hide it
             from the user. Its content is captured using the Windows GDI API:

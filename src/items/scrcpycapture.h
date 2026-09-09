@@ -67,6 +67,9 @@ signals:
 
 public slots:
     void setWindowHandle(int hwnd);
+    // v4l2 mode: QML reports the size of frames it is rendering so touch
+    // coordinate mapping knows the orientation
+    void setFrameSize(int width, int height);
     void startCapture();
     void stopCapture();
 
@@ -85,6 +88,14 @@ private slots:
     void captureFrame();
 
 private:
+    // v4l2 mode (Linux): ffmpeg subprocess decodes the loopback node to raw
+    // BGRA on stdout; frames are pushed into the provider from readyRead.
+    void startV4l2Reader();
+    void stopV4l2Reader();
+    void onV4l2ReadyRead();
+    void onV4l2Finished(int exitCode, QProcess::ExitStatus status);
+    QSize probeV4l2Size(const QString &device) const;
+
     // Coordinate mapping
     bool isLandscape() const;
     QPair<int, int> convertToDeviceCoords(float relX, float relY) const;
@@ -106,7 +117,19 @@ private:
     QString m_deviceSerial;
     int m_deviceWidth = 0;
     int m_deviceHeight = 0;
+    int m_displayId = -1;          // target display for `input -d`
+    bool m_fixedDisplay = false;   // virtual display: geometry never rotates
     PhoneMirrorManager *m_manager = nullptr;
+    bool m_warnedNoGeometry = false;
+
+    // v4l2 reader state
+    QProcess *m_v4l2Proc = nullptr;
+    QByteArray m_v4l2Buffer;
+    int m_v4l2Width = 0;
+    int m_v4l2Height = 0;
+    bool m_v4l2GotFrame = false;
+    QTimer *m_v4l2RetryTimer = nullptr;
+    qint64 m_v4l2Deadline = 0;
 
     // Touch tracking for tap/swipe detection
     float m_touchStartX = 0.0f;
@@ -193,6 +216,7 @@ public:
 
 public slots:
     void setWindowHandle(int) {}
+    void setFrameSize(int, int) {}
     void startCapture() {}
     void stopCapture() {}
     void sendTouchEvent(float, float, bool) {}

@@ -215,6 +215,8 @@ int main(int argc, char *argv[])
     if (!savedScrcpyPath.isEmpty())
         phoneMirrorManager.setScrcpyPath(savedScrcpyPath);
     phoneMirrorManager.setAudioEnabled(settingsManager.get_scrcpy_audio_enabled());
+    phoneMirrorManager.setVideoDevice(settingsManager.get_scrcpy_video_device());
+    phoneMirrorManager.setDisplaySize(settingsManager.get_scrcpy_display_size());
 #endif
 
     // Register custom QML types for video embedding (stub types on mobile)
@@ -346,6 +348,7 @@ int main(int argc, char *argv[])
     // Cleanup on quit (stubs make all calls no-op on mobile)
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
         androidAutoManager.cleanup();
+        scrcpyCapture.stopCapture();   // kill the ffmpeg reader before scrcpy
         phoneMirrorManager.cleanup();
         esp32VolumeManager.cleanup();
         berryIMU.cleanup();

@@ -93,6 +93,8 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool phoneMirrorEnabled READ phoneMirrorEnabled NOTIFY phoneMirrorEnabledChanged)
     Q_PROPERTY(QString scrcpyPath READ scrcpyPath NOTIFY scrcpyPathChanged)
     Q_PROPERTY(bool scrcpyAudioEnabled READ scrcpyAudioEnabled NOTIFY scrcpyAudioEnabledChanged)
+    Q_PROPERTY(QString scrcpyVideoDevice READ scrcpyVideoDevice NOTIFY scrcpyVideoDeviceChanged)
+    Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize NOTIFY scrcpyDisplaySizeChanged)
 
     // --- ESP32 Volume Knob ---
     Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled NOTIFY esp32VolumeEnabledChanged)
@@ -195,6 +197,8 @@ public:
     bool phoneMirrorEnabled() const;
     QString scrcpyPath() const;
     bool scrcpyAudioEnabled() const;
+    QString scrcpyVideoDevice() const;
+    QString scrcpyDisplaySize() const;
 
     // ESP32
     bool esp32VolumeEnabled() const;
@@ -301,6 +305,8 @@ signals:
     void phoneMirrorEnabledChanged(bool value);
     void scrcpyPathChanged(const QString &value);
     void scrcpyAudioEnabledChanged(bool value);
+    void scrcpyVideoDeviceChanged(const QString &value);
+    void scrcpyDisplaySizeChanged(const QString &value);
 
     // ESP32
     void esp32VolumeEnabledChanged(bool value);
@@ -420,6 +426,8 @@ public slots:
     void save_phone_mirror_enabled(bool enabled);
     void save_scrcpy_path(const QString &path);
     void save_scrcpy_audio_enabled(bool enabled);
+    void save_scrcpy_video_device(const QString &device);
+    void save_scrcpy_display_size(const QString &size);
 
     // ESP32
     void save_esp32_volume_enabled(bool enabled);
@@ -479,6 +487,8 @@ public slots:
     Q_INVOKABLE bool get_phone_mirror_enabled();
     Q_INVOKABLE QString get_scrcpy_path();
     Q_INVOKABLE bool get_scrcpy_audio_enabled();
+    Q_INVOKABLE QString get_scrcpy_video_device();
+    Q_INVOKABLE QString get_scrcpy_display_size();
     Q_INVOKABLE bool get_esp32_volume_enabled();
     Q_INVOKABLE QString get_esp32_volume_port();
     Q_INVOKABLE double get_esp32_volume_step_size();
@@ -598,6 +608,8 @@ private:
     bool m_phoneMirrorEnabled = false;
     QString m_scrcpyPath;
     bool m_scrcpyAudioEnabled = false;
+    QString m_scrcpyVideoDevice;
+    QString m_scrcpyDisplaySize;
 
     // Settings menu visibility
     QVariantMap m_settingsMenuVisibility;

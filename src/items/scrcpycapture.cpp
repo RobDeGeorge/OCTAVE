@@ -3,8 +3,15 @@
 #include "scrcpycapture.h"
 #include "../managers/phonemirrormanager.h"
 
+#include <QDateTime>
+#ifdef Q_OS_LINUX
+#include <sys/prctl.h>
+#include <signal.h>
+#endif
 #include <QGuiApplication>
+#include <QRegularExpression>
 #include <QScreen>
+#include <QStandardPaths>
 #include <QThread>
 
 #include <cmath>
@@ -79,6 +86,16 @@ void ScrcpyCapture::setWindowHandle(int hwnd)
 
 // ─── Start / Stop ─────────────────────────────────────────────────────
 
+void ScrcpyCapture::setFrameSize(int width, int height)
+{
+    if (width == m_lastWidth && height == m_lastHeight)
+        return;
+    m_lastWidth = width;
+    m_lastHeight = height;
+    qCDebug(lcScrcpyCapture) << "Frame size (external):" << width << "x" << height;
+    emit frameSizeChanged(width, height);
+}
+
 void ScrcpyCapture::startCapture()
 {
     if (m_capturing)
@@ -88,6 +105,32 @@ void ScrcpyCapture::startCapture()
         emit error(QStringLiteral("No window handle set"));
         return;
     }
+
+    if (m_manager && m_manager->captureMode() == QLatin1String("v4l2")) {
+        // Read the loopback node ourselves through ffmpeg and push frames into
+        // the image provider — the same QML path the Windows grab uses.
+        // QtMultimedia's camera enumeration is deliberately avoided: it
+        // snapshots the device list at first use per process and never
+        // refreshes, so a node that only appears once scrcpy streams is
+        // never found.
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()) {
+            emit error(QStringLiteral("ffmpeg not found — install it (apt install ffmpeg) for Linux phone mirroring"));
+            return;
+        }
+        m_capturing = true;
+        m_frameCount = 0;
+        fetchDeviceInfo();
+        m_v4l2Deadline = QDateTime::currentMSecsSinceEpoch() + 20000;
+        m_v4l2GotFrame = false;
+        startV4l2Reader();
+        emit captureStarted();
+        return;
+    }
+
+#ifndef Q_OS_WIN
+    emit error(QStringLiteral("Screen capture only supported on Windows"));
+    return;
+#endif
 
     qCDebug(lcScrcpyCapture) << "Starting capture of window" << m_hwnd
                               << "at" << m_targetFps << "FPS";
@@ -115,6 +158,8 @@ void ScrcpyCapture::stopCapture()
 
     qCDebug(lcScrcpyCapture) << "Stopping capture (captured" << m_frameCount << "frames)";
     m_capturing = false;
+
+    stopV4l2Reader();
 
     if (m_captureTimer) {
         m_captureTimer->stop();
@@ -169,6 +214,195 @@ void ScrcpyCapture::captureFrame()
     emit frameReady();
 }
 
+// ─── v4l2 reader (Linux) ─────────────────────────────────────────────
+
+QSize ScrcpyCapture::probeV4l2Size(const QString &device) const
+{
+    // Virtual display: geometry is known and fixed
+    if (m_fixedDisplay && m_deviceWidth > 0)
+        return {m_deviceWidth, m_deviceHeight};
+
+    const QString v4l2ctl = QStandardPaths::findExecutable(QStringLiteral("v4l2-ctl"));
+    if (!v4l2ctl.isEmpty()) {
+        QProcess p;
+        p.start(v4l2ctl, {QStringLiteral("-d"), device, QStringLiteral("--get-fmt-video")});
+        if (p.waitForFinished(5000)) {
+            static const QRegularExpression re(QStringLiteral("Width/Height\\s*:\\s*(\\d+)/(\\d+)"));
+            const auto m = re.match(QString::fromUtf8(p.readAllStandardOutput()));
+            if (m.hasMatch())
+                return {m.captured(1).toInt(), m.captured(2).toInt()};
+        }
+    }
+    const QString ffprobe = QStandardPaths::findExecutable(QStringLiteral("ffprobe"));
+    if (!ffprobe.isEmpty()) {
+        QProcess p;
+        p.start(ffprobe, {QStringLiteral("-v"), QStringLiteral("error"),
+                          QStringLiteral("-select_streams"), QStringLiteral("v:0"),
+                          QStringLiteral("-show_entries"), QStringLiteral("stream=width,height"),
+                          QStringLiteral("-of"), QStringLiteral("csv=p=0"), device});
+        if (p.waitForFinished(10000)) {
+            static const QRegularExpression re(QStringLiteral("(\\d+),(\\d+)"));
+            const auto m = re.match(QString::fromUtf8(p.readAllStandardOutput()));
+            if (m.hasMatch())
+                return {m.captured(1).toInt(), m.captured(2).toInt()};
+        }
+    }
+    return {};
+}
+
+void ScrcpyCapture::startV4l2Reader()
+{
+    if (!m_capturing || !m_manager)
+        return;
+
+    const QString device = m_manager->videoDevice();
+    const QSize size = probeV4l2Size(device);
+    if (size.isEmpty()) {
+        if (QDateTime::currentMSecsSinceEpoch() > m_v4l2Deadline) {
+            m_capturing = false;
+            emit error(QStringLiteral("No video stream on %1 after 20 s. Is v4l2loopback loaded "
+                                      "(exclusive_caps=0) and scrcpy streaming into it?").arg(device));
+            return;
+        }
+        if (!m_v4l2RetryTimer) {
+            m_v4l2RetryTimer = new QTimer(this);
+            m_v4l2RetryTimer->setSingleShot(true);
+            connect(m_v4l2RetryTimer, &QTimer::timeout, this, &ScrcpyCapture::startV4l2Reader);
+        }
+        m_v4l2RetryTimer->start(500);
+        return;
+    }
+
+    m_v4l2Width = size.width();
+    m_v4l2Height = size.height();
+    if (m_v4l2Width != m_lastWidth || m_v4l2Height != m_lastHeight) {
+        m_lastWidth = m_v4l2Width;
+        m_lastHeight = m_v4l2Height;
+        emit frameSizeChanged(m_lastWidth, m_lastHeight);
+    }
+    m_v4l2Buffer.clear();
+
+    // Android stops producing buffers for a virtual display whose content is
+    // not changing, so the continuous stream can sit at zero frames on a
+    // healthy idle phone. A one-shot grab still returns the held frame, so
+    // seed the provider with it and let the stream take over on motion.
+    {
+        QProcess seed;
+        QStringList seedArgs{QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-nostdin")};
+        if (device.startsWith(QLatin1String("/dev/")))
+            seedArgs << QStringLiteral("-f") << QStringLiteral("v4l2");
+        seedArgs << QStringLiteral("-i") << device
+                 << QStringLiteral("-frames:v") << QStringLiteral("1")
+                 << QStringLiteral("-f") << QStringLiteral("rawvideo")
+                 << QStringLiteral("-pix_fmt") << QStringLiteral("bgra") << QStringLiteral("-");
+        seed.start(QStandardPaths::findExecutable(QStringLiteral("ffmpeg")), seedArgs);
+        const qsizetype frameBytes = qsizetype(m_v4l2Width) * m_v4l2Height * 4;
+        if (seed.waitForFinished(5000)) {
+            const QByteArray out = seed.readAllStandardOutput();
+            if (out.size() >= frameBytes) {
+                QImage image(reinterpret_cast<const uchar *>(out.constData()),
+                             m_v4l2Width, m_v4l2Height, m_v4l2Width * 4, QImage::Format_ARGB32);
+                m_frameProvider->updateFrame(image.copy());
+                ++m_frameCount;
+                m_v4l2GotFrame = true;  // proves the node is readable
+                emit frameReady();
+                qCInfo(lcScrcpyCapture) << "v4l2 capture: seeded first frame from the held buffer";
+            }
+        } else {
+            seed.kill();
+        }
+    }
+
+    m_v4l2Proc = new QProcess(this);
+    m_v4l2Proc->setReadChannel(QProcess::StandardOutput);
+#ifdef Q_OS_LINUX
+    // SIGKILL, not SIGTERM: blocked in the v4l2 driver on a starved device,
+    // ffmpeg ignores SIGTERM entirely.
+    m_v4l2Proc->setChildProcessModifier([] { prctl(PR_SET_PDEATHSIG, SIGKILL); });
+#endif
+    connect(m_v4l2Proc, &QProcess::readyReadStandardOutput, this, &ScrcpyCapture::onV4l2ReadyRead);
+    connect(m_v4l2Proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &ScrcpyCapture::onV4l2Finished);
+    const QString ffmpeg = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    QStringList args{QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-nostdin"),
+                     QStringLiteral("-fflags"), QStringLiteral("nobuffer"),
+                     QStringLiteral("-flags"), QStringLiteral("low_delay")};
+    if (device.startsWith(QLatin1String("/dev/")))
+        args << QStringLiteral("-f") << QStringLiteral("v4l2") << QStringLiteral("-i") << device;
+    else  // developer convenience: a media file loops as a fake phone feed
+        args << QStringLiteral("-re") << QStringLiteral("-stream_loop") << QStringLiteral("-1")
+             << QStringLiteral("-i") << device;
+    args << QStringLiteral("-f") << QStringLiteral("rawvideo")
+         << QStringLiteral("-pix_fmt") << QStringLiteral("bgra") << QStringLiteral("-");
+    m_v4l2Proc->start(ffmpeg, args);
+    qCInfo(lcScrcpyCapture) << "v4l2 capture:" << device << m_v4l2Width << "x" << m_v4l2Height
+                            << "via ffmpeg";
+}
+
+void ScrcpyCapture::stopV4l2Reader()
+{
+    if (m_v4l2RetryTimer)
+        m_v4l2RetryTimer->stop();
+    if (m_v4l2Proc) {
+        QProcess *p = m_v4l2Proc;
+        m_v4l2Proc = nullptr;
+        p->disconnect(this);
+        p->kill();
+        p->waitForFinished(1000);
+        p->deleteLater();
+    }
+    m_v4l2Buffer.clear();
+}
+
+void ScrcpyCapture::onV4l2ReadyRead()
+{
+    if (!m_v4l2Proc || !m_capturing)
+        return;
+    const qsizetype frameBytes = qsizetype(m_v4l2Width) * m_v4l2Height * 4;
+    if (frameBytes <= 0)
+        return;
+    m_v4l2Buffer += m_v4l2Proc->readAllStandardOutput();
+    if (m_v4l2Buffer.size() < frameBytes)
+        return;
+    // Keep only the newest complete frame if we fell behind
+    const qsizetype complete = m_v4l2Buffer.size() / frameBytes;
+    const qsizetype offset = (complete - 1) * frameBytes;
+    QImage image(reinterpret_cast<const uchar *>(m_v4l2Buffer.constData()) + offset,
+                 m_v4l2Width, m_v4l2Height, m_v4l2Width * 4, QImage::Format_ARGB32);
+    m_frameProvider->updateFrame(image.copy());
+    m_v4l2Buffer.remove(0, complete * frameBytes);
+    ++m_frameCount;
+    m_v4l2GotFrame = true;
+    emit frameReady();
+}
+
+void ScrcpyCapture::onV4l2Finished(int exitCode, QProcess::ExitStatus)
+{
+    if (!m_v4l2Proc)
+        return;
+    const QString err = QString::fromUtf8(m_v4l2Proc->readAllStandardError()).trimmed().right(200);
+    m_v4l2Proc->deleteLater();
+    m_v4l2Proc = nullptr;
+    if (!m_capturing)
+        return;
+    const bool giveUp = !m_v4l2GotFrame && QDateTime::currentMSecsSinceEpoch() > m_v4l2Deadline;
+    qCWarning(lcScrcpyCapture) << "v4l2 capture: ffmpeg exited" << exitCode << err
+                               << (giveUp ? "(giving up)" : "(restarting)");
+    if (giveUp) {
+        m_capturing = false;
+        emit error(QStringLiteral("Could not read video from %1: %2")
+                       .arg(m_manager ? m_manager->videoDevice() : QString(),
+                            err.isEmpty() ? QStringLiteral("ffmpeg produced no frames") : err));
+        return;
+    }
+    if (!m_v4l2RetryTimer) {
+        m_v4l2RetryTimer = new QTimer(this);
+        m_v4l2RetryTimer->setSingleShot(true);
+        connect(m_v4l2RetryTimer, &QTimer::timeout, this, &ScrcpyCapture::startV4l2Reader);
+    }
+    m_v4l2RetryTimer->start(500);
+}
+
 // ─── Manager linkage ──────────────────────────────────────────────────
 
 void ScrcpyCapture::setPhoneMirrorManager(QObject *manager)
@@ -187,6 +421,21 @@ void ScrcpyCapture::fetchDeviceInfo()
 
     m_deviceSerial = m_manager->getDeviceSerial();
     qCDebug(lcScrcpyCapture) << "Device serial:" << m_deviceSerial;
+
+    // Virtual display (--new-display): its geometry IS the frame geometry,
+    // never rotates, and input must be addressed to its display id.
+    m_displayId = m_manager->displayId();
+    const QString active = m_manager->activeDisplaySize();
+    if (active.contains(QLatin1Char('x'))) {
+        const QStringList wh = active.split(QLatin1Char('x'));
+        m_deviceWidth  = wh.value(0).toInt();
+        m_deviceHeight = wh.value(1).toInt();
+        m_fixedDisplay = true;
+        qCDebug(lcScrcpyCapture) << "Virtual display" << m_deviceWidth << "x" << m_deviceHeight
+                                 << "id" << m_displayId;
+        return;
+    }
+    m_fixedDisplay = false;
 
     const QString resStr = m_manager->getDeviceResolution();
     if (!resStr.isEmpty() && resStr.contains(QLatin1Char('x'))) {
@@ -208,6 +457,8 @@ void ScrcpyCapture::fetchDeviceInfo()
 
 bool ScrcpyCapture::isLandscape() const
 {
+    if (m_fixedDisplay)
+        return false;  // virtual display geometry already matches the frame
     return m_lastWidth > m_lastHeight;
 }
 
@@ -243,6 +494,14 @@ void ScrcpyCapture::runAdbAsync(const QStringList &args)
     if (!m_deviceSerial.isEmpty())
         fullArgs << QStringLiteral("-s") << m_deviceSerial;
     fullArgs << args;
+    // `input -d <id>` routes the event to scrcpy's virtual display
+    if (m_displayId >= 0) {
+        const int idx = fullArgs.indexOf(QStringLiteral("input"));
+        if (idx >= 0)
+            fullArgs.insert(idx + 1, QStringLiteral("-d"));
+        if (idx >= 0)
+            fullArgs.insert(idx + 2, QString::number(m_displayId));
+    }
 
     // Fire-and-forget process (auto-deletes on finish)
     auto *proc = new QProcess(this);
@@ -256,8 +515,13 @@ void ScrcpyCapture::runAdbAsync(const QStringList &args)
 
 void ScrcpyCapture::sendTap(float relX, float relY)
 {
-    if (m_adbPath.isEmpty() || m_deviceWidth <= 0)
+    if (m_adbPath.isEmpty() || m_deviceWidth <= 0) {
+        if (!m_warnedNoGeometry) {
+            m_warnedNoGeometry = true;
+            qCWarning(lcScrcpyCapture) << "Touch dropped: adb path or device geometry unknown";
+        }
         return;
+    }
 
     const auto [dx, dy] = convertToDeviceCoords(relX, relY);
 
@@ -276,8 +540,13 @@ void ScrcpyCapture::sendSwipe(float relX1, float relY1,
                                float relX2, float relY2,
                                int durationMs)
 {
-    if (m_adbPath.isEmpty() || m_deviceWidth <= 0)
+    if (m_adbPath.isEmpty() || m_deviceWidth <= 0) {
+        if (!m_warnedNoGeometry) {
+            m_warnedNoGeometry = true;
+            qCWarning(lcScrcpyCapture) << "Touch dropped: adb path or device geometry unknown";
+        }
         return;
+    }
 
     const auto [x1, y1] = convertToDeviceCoords(relX1, relY1);
     const auto [x2, y2] = convertToDeviceCoords(relX2, relY2);

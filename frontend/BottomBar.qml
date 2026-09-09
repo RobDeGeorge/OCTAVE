@@ -732,11 +732,28 @@ Rectangle {
                     property bool mediaControlsVisible: settingsManager ? settingsManager.showBottomBarMediaControls : true
                     Layout.fillWidth: true // Fill remaining space (centers content properly)
                     Layout.fillHeight: true
-                    
+                    // With many nav buttons enabled the row can be wider than this
+                    // section; keep it above the neighbouring sections so the
+                    // outermost buttons (e.g. Phone Mirror) still receive clicks.
+                    z: 1
+
                     RowLayout {
                         id: navigationBar
                         anchors.centerIn: parent
-                        spacing: App.Spacing.bottomBarBetweenButtonMargin * 6
+                        // Shrink the gap between buttons when they would not fit,
+                        // instead of overflowing under the clock / media controls.
+                        readonly property real preferredSpacing: App.Spacing.bottomBarBetweenButtonMargin * 6
+                        readonly property real fitSpacing: {
+                            var n = 0, w = 0
+                            for (var i = 0; i < children.length; ++i) {
+                                var c = children[i]
+                                if (c.visible && c.implicitWidth > 0) { n++; w += c.implicitWidth }
+                            }
+                            if (n < 2) return preferredSpacing
+                            var avail = parent.width - w
+                            return Math.max(dp(4), Math.min(preferredSpacing, avail / (n - 1)))
+                        }
+                        spacing: fitSpacing
                         
                         // Home Button (Main Menu)
                         Control {

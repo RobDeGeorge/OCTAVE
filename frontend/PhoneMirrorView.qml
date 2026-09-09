@@ -18,11 +18,22 @@ Item {
 
     property string globalFont: App.Style.fontFamily
 
-    // Mirror state - uses frame capture approach
+    // Mirror state
+    // Both video paths feed the same image provider (image://scrcpyframe):
+    //   "window" (Windows) - ScrcpyCapture screen-grabs the scrcpy window
+    //   "v4l2"   (Linux)   - scrcpy streams headless into a v4l2loopback node
+    //                        that ScrcpyCapture reads back through ffmpeg
     property bool mirrorRunning: false
-    property int frameCounter: 0  // Used to refresh the image
+    property int frameCounter: 0  // Bumped on every frame to refresh the Image
     property bool launchFailed: false
     property string errorMessage: ""
+    readonly property string captureMode: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager
+                                           && phoneMirrorManager.captureMode) ? phoneMirrorManager.captureMode : "window"
+    readonly property bool v4l2Mode: captureMode === "v4l2"
+    // True once the capture has produced a real frame. In v4l2 mode the first
+    // frame is seeded from the held buffer and a static phone emits no more
+    // until something moves, so one frame is proof of life.
+    readonly property bool hasVideo: v4l2Mode ? frameCounter >= 1 : frameCounter >= 10
 
     // Handle when this view becomes active again
     StackView.onActivated: {
@@ -191,7 +202,7 @@ Item {
             font.pixelSize: dp(24)
             font.family: phoneMirrorView.globalFont
             color: "white"
-            visible: mirrorRunning && frameCounter < 10
+            visible: mirrorRunning && !hasVideo
         }
     }
 
@@ -386,14 +397,10 @@ Item {
             return
         }
 
-        if (!phoneMirrorManager.hasConnectedDevice()) {
-            launchFailed = true
-            errorMessage = "No Android device connected. Connect via USB and enable USB debugging."
-            return
-        }
-
-        // Start scrcpy - the scrcpyStarted signal will trigger capture
-        console.log("Starting scrcpy via manager")
+        // Start scrcpy - the manager validates the scrcpy version and device
+        // state itself and reports specific errors (unauthorized, offline,
+        // too old, ...) through scrcpyError.
+        console.log("Starting scrcpy via manager, mode", captureMode)
         phoneMirrorManager.startScrcpy()
     }
 
@@ -402,7 +409,7 @@ Item {
         target: phoneMirrorManager
 
         function onScrcpyStarted(hwnd) {
-            console.log("Phone Mirror: scrcpy started with hwnd", hwnd)
+            console.log("Phone Mirror: scrcpy started with handle", hwnd, "mode", captureMode)
             if (scrcpyCapture) {
                 scrcpyCapture.setWindowHandle(hwnd)
                 scrcpyCapture.startCapture()
@@ -448,12 +455,14 @@ Item {
         }
     }
 
-    // Initial frame refresh timer (ensures smooth startup)
+    // Initial frame refresh timer (ensures smooth startup in window mode).
+    // In v4l2 mode frames arrive from the reader thread and drive frameCounter
+    // through onFrameReady; the capture reports its own timeout via onError.
     Timer {
         id: initialRefreshTimer
         interval: 50
         repeat: true
-        running: mirrorRunning && frameCounter < 100
+        running: mirrorRunning && !v4l2Mode && frameCounter < 100
         onTriggered: {
             phoneMirrorView.frameCounter++
         }
@@ -466,7 +475,8 @@ Item {
 
         if (phoneMirrorManager) {
             console.log("scrcpy installed:", phoneMirrorManager.isScrcpyInstalled)
-            console.log("scrcpy path:", phoneMirrorManager.scrcpyPath)
+            console.log("scrcpy path:", phoneMirrorManager.scrcpyPath, "version:", phoneMirrorManager.scrcpyVersion)
+            console.log("capture mode:", captureMode, v4l2Mode ? ("device " + phoneMirrorManager.videoDevice) : "")
             console.log("scrcpy already running:", phoneMirrorManager.isRunning)
 
             // Start mirror

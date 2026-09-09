@@ -8,7 +8,11 @@ is captured and displayed via QML Image element.
 """
 
 import platform
+import re
+import shutil
+import subprocess
 import threading
+import time
 from typing import Optional
 
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QPointF, Qt
@@ -16,6 +20,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtQuick import QQuickImageProvider, QQuickItem
 
 from backend.logging_config import get_logger
+from backend.phone_mirror.manager import die_with_parent_kill
 
 logger = get_logger(__name__)
 
@@ -206,7 +211,12 @@ class ScrcpyCapture(QObject):
         self._device_serial: str = ""
         self._device_width: int = 0
         self._device_height: int = 0
+        self._display_id: int = -1        # target display for `input -d`
+        self._fixed_display: bool = False  # virtual display: geometry never rotates
         self._manager = None
+        self._v4l2_proc: Optional[subprocess.Popen] = None
+        self._v4l2_thread: Optional[threading.Thread] = None
+        self._warned_no_geometry = False
 
     @property
     def frame_provider(self) -> ScrcpyFrameProvider:
@@ -228,6 +238,20 @@ class ScrcpyCapture(QObject):
     @Property(int)
     def frameHeight(self) -> int:
         return self._last_height
+
+    @Slot(int, int)
+    def setFrameSize(self, width: int, height: int):
+        """Tell the input mapper the size of the frames QML is showing.
+
+        Used in v4l2 mode where no frames pass through this object; the
+        orientation (landscape vs portrait) drives touch coordinate mapping.
+        """
+        if width == self._last_width and height == self._last_height:
+            return
+        self._last_width = width
+        self._last_height = height
+        logger.debug(f" Frame size (external): {width}x{height}")
+        self.frameSizeChanged.emit(width, height)
 
     @Slot(int)
     def setWindowHandle(self, hwnd: int):
@@ -268,7 +292,29 @@ class ScrcpyCapture(QObject):
             return
 
         if platform.system() != "Windows":
-            self.error.emit("Screen capture only supported on Windows")
+            mode = getattr(self._manager, "captureMode", "unsupported") if self._manager else "unsupported"
+            if mode != "v4l2":
+                self.error.emit("Screen capture only supported on Windows")
+                return
+            # v4l2 mode: read the loopback node ourselves with an ffmpeg
+            # subprocess and push RGB frames into the image provider — the
+            # same QML path the Windows grab uses. QtMultimedia's camera
+            # enumeration is deliberately avoided: it snapshots the device
+            # list at first use per process and never refreshes, so a node
+            # that only becomes visible once scrcpy streams is never found.
+            device = str(getattr(self._manager, "videoDevice", "") or "")
+            ffmpeg = shutil.which("ffmpeg")
+            if not ffmpeg:
+                self.error.emit("ffmpeg not found — install it (apt install ffmpeg) for Linux phone mirroring")
+                return
+            logger.info(f"v4l2 capture: {device} via {ffmpeg}")
+            self._capturing = True
+            self._frame_count = 0
+            self._fetchDeviceInfo()
+            self._v4l2_thread = threading.Thread(target=self._v4l2_reader, args=(device, ffmpeg),
+                                                 daemon=True, name="scrcpy-v4l2")
+            self._v4l2_thread.start()
+            self.captureStarted.emit()
             return
 
         logger.debug(f" Starting capture of window {self._hwnd} at {self._target_fps} FPS")
@@ -288,6 +334,139 @@ class ScrcpyCapture(QObject):
 
         self.captureStarted.emit()
 
+    # ── v4l2 reader (Linux) ─────────────────────────────────────────────
+
+    def _probe_v4l2_size(self, device: str) -> tuple:
+        """Ask the node for its current WxH (0,0 if unknown)."""
+        # Virtual display: geometry is known and fixed
+        if self._fixed_display and self._device_width > 0:
+            return self._device_width, self._device_height
+        v4l2ctl = shutil.which("v4l2-ctl")
+        if v4l2ctl:
+            try:
+                out = subprocess.run([v4l2ctl, "-d", device, "--get-fmt-video"],
+                                     capture_output=True, text=True, timeout=5).stdout
+                m = re.search(r"Width/Height\s*:\s*(\d+)/(\d+)", out)
+                if m:
+                    return int(m.group(1)), int(m.group(2))
+            except (subprocess.SubprocessError, OSError):
+                pass
+        ffprobe = shutil.which("ffprobe")
+        if ffprobe:
+            try:
+                out = subprocess.run([ffprobe, "-v", "error", "-select_streams", "v:0",
+                                      "-show_entries", "stream=width,height", "-of", "csv=p=0", device],
+                                     capture_output=True, text=True, timeout=10).stdout
+                m = re.search(r"(\d+),(\d+)", out)
+                if m:
+                    return int(m.group(1)), int(m.group(2))
+            except (subprocess.SubprocessError, OSError):
+                pass
+        return 0, 0
+
+    def _seed_frame(self, device: str, ffmpeg: str, w: int, h: int) -> bool:
+        """Grab the frame the loopback node currently holds with a one-shot
+        ffmpeg run and push it to the provider.
+
+        Android stops producing buffers for a virtual display whose content
+        is not changing, so the continuous stream can sit at zero frames on
+        a perfectly healthy idle phone. A fresh one-shot reader still gets the
+        held frame, so the user sees the screen immediately; the streaming
+        reader takes over as soon as anything moves.
+        """
+        if device.startswith("/dev/"):
+            input_args = ["-f", "v4l2", "-i", device]
+        else:
+            input_args = ["-i", device]
+        cmd = [ffmpeg, "-loglevel", "error", "-nostdin", *input_args,
+               "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "bgra", "-"]
+        try:
+            out = subprocess.run(cmd, capture_output=True, timeout=5,
+                                 preexec_fn=die_with_parent_kill).stdout
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.debug(f" seed grab failed: {e}")
+            return False
+        if len(out) < w * h * 4:
+            return False
+        image = QImage(bytes(out[:w * h * 4]), w, h, w * 4, QImage.Format_ARGB32)
+        self._frame_provider.update_frame(image)
+        self._frame_count += 1
+        self.frameReady.emit()
+        logger.info("v4l2 capture: seeded first frame from the held buffer")
+        return True
+
+    def _v4l2_reader(self, device: str, ffmpeg: str):
+        """Background loop: ffmpeg decodes the node to raw BGRA on stdout; we
+        wrap each frame in a QImage and hand it to the provider. Restarts
+        ffmpeg if it exits (e.g. the stream format changed) while capturing."""
+        deadline = time.monotonic() + 20.0
+        while self._capturing:
+            w, h = self._probe_v4l2_size(device)
+            if w <= 0 or h <= 0:
+                if time.monotonic() > deadline:
+                    self._capturing = False
+                    self.error.emit(f"No video stream on {device} after 20 s. Is v4l2loopback loaded "
+                                    f"(exclusive_caps=0) and scrcpy streaming into it?")
+                    return
+                time.sleep(0.5)
+                continue
+            frame_bytes = w * h * 4
+            if device.startswith("/dev/"):
+                input_args = ["-f", "v4l2", "-i", device]
+            else:
+                # Developer convenience: a media file loops as a fake phone feed
+                input_args = ["-re", "-stream_loop", "-1", "-i", device]
+            cmd = [ffmpeg, "-loglevel", "error", "-nostdin",
+                   "-fflags", "nobuffer", "-flags", "low_delay",
+                   *input_args,
+                   "-f", "rawvideo", "-pix_fmt", "bgra", "-"]
+            seeded = self._seed_frame(device, ffmpeg, w, h)
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        bufsize=frame_bytes * 2, preexec_fn=die_with_parent_kill)
+            except OSError as e:
+                self._capturing = False
+                self.error.emit(f"ffmpeg failed to start: {e}")
+                return
+            self._v4l2_proc = proc
+            logger.info(f"v4l2 capture: ffmpeg pid {proc.pid}, {w}x{h}")
+            if (w, h) != (self._last_width, self._last_height):
+                self._last_width, self._last_height = w, h
+                self.frameSizeChanged.emit(w, h)
+            buf = bytearray(frame_bytes)
+            view = memoryview(buf)
+            got_frame = seeded  # a seeded frame proves the node is readable
+            while self._capturing:
+                filled = 0
+                while filled < frame_bytes and self._capturing:
+                    n = proc.stdout.readinto(view[filled:])
+                    if not n:
+                        break
+                    filled += n
+                if filled < frame_bytes:
+                    break  # ffmpeg exited / EOF
+                image = QImage(bytes(buf), w, h, w * 4, QImage.Format_ARGB32)
+                self._frame_provider.update_frame(image)
+                self._frame_count += 1
+                got_frame = True
+                self.frameReady.emit()
+            # ffmpeg ended
+            try:
+                proc.kill()
+                err = proc.stderr.read().decode(errors="replace").strip()
+            except Exception:
+                err = ""
+            self._v4l2_proc = None
+            if not self._capturing:
+                return
+            logger.warning(f"v4l2 capture: ffmpeg exited ({err[-200:] or 'no output'}), "
+                           f"{'restarting' if got_frame or time.monotonic() < deadline else 'giving up'}")
+            if not got_frame and time.monotonic() > deadline:
+                self._capturing = False
+                self.error.emit(f"Could not read video from {device}: {err[-200:] or 'ffmpeg produced no frames'}")
+                return
+            time.sleep(0.5)
+
     @Slot()
     def stopCapture(self):
         """Stop capturing."""
@@ -296,6 +475,14 @@ class ScrcpyCapture(QObject):
 
         logger.debug(f" Stopping capture (captured {self._frame_count} frames)")
         self._capturing = False
+
+        proc = getattr(self, "_v4l2_proc", None)
+        if proc is not None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+            self._v4l2_proc = None
 
         if self._capture_timer:
             self._capture_timer.stop()
@@ -430,6 +617,18 @@ class ScrcpyCapture(QObject):
         self._device_serial = self._manager.getDeviceSerial()
         logger.debug(f" Device serial: {self._device_serial}")
 
+        # Virtual display (--new-display): its geometry IS the frame geometry,
+        # never rotates, and input must be addressed to its display id.
+        self._display_id = int(getattr(self._manager, "displayId", -1) or -1)
+        active = str(getattr(self._manager, "activeDisplaySize", "") or "")
+        if active and 'x' in active:
+            w, h = active.split('x')
+            self._device_width, self._device_height = int(w), int(h)
+            self._fixed_display = True
+            logger.debug(f" Virtual display {self._device_width}x{self._device_height}, id {self._display_id}")
+            return
+        self._fixed_display = False
+
         # Get device resolution
         resolution_str = self._manager.getDeviceResolution()
         if resolution_str and 'x' in resolution_str:
@@ -460,6 +659,8 @@ class ScrcpyCapture(QObject):
     def _is_landscape(self) -> bool:
         """Check if the current capture is in landscape mode."""
         # Compare frame dimensions - landscape if wider than tall
+        if self._fixed_display:
+            return False  # virtual display geometry already matches the frame
         return self._last_width > self._last_height
 
     def _convert_to_device_coords(self, rel_x: float, rel_y: float) -> tuple:
@@ -492,6 +693,10 @@ class ScrcpyCapture(QObject):
 
         return device_x, device_y
 
+    def _display_args(self) -> list:
+        """`input -d <id>` routes the event to scrcpy's virtual display."""
+        return ['-d', str(self._display_id)] if self._display_id >= 0 else []
+
     @Slot(float, float)
     def sendTap(self, rel_x: float, rel_y: float):
         """
@@ -506,6 +711,10 @@ class ScrcpyCapture(QObject):
             return
 
         if not hasattr(self, '_device_width') or self._device_width <= 0:
+            if not self._warned_no_geometry:
+                self._warned_no_geometry = True
+                logger.warning("Touch dropped: device geometry unknown (adb 'wm size' failed?) — "
+                               "further drops logged at debug level")
             logger.debug("No device resolution set")
             return
 
@@ -516,7 +725,7 @@ class ScrcpyCapture(QObject):
         cmd = [self._adb_path]
         if hasattr(self, '_device_serial') and self._device_serial:
             cmd.extend(['-s', self._device_serial])
-        cmd.extend(['shell', 'input', 'tap', str(device_x), str(device_y)])
+        cmd.extend(['shell', 'input'] + self._display_args() + ['tap', str(device_x), str(device_y)])
 
         is_landscape = self._is_landscape()
         logger.debug(f" ADB tap: rel({rel_x:.3f},{rel_y:.3f}) -> device({device_x},{device_y}) [{'landscape' if is_landscape else 'portrait'}]")
@@ -550,6 +759,9 @@ class ScrcpyCapture(QObject):
             return
 
         if not hasattr(self, '_device_width') or self._device_width <= 0:
+            if not self._warned_no_geometry:
+                self._warned_no_geometry = True
+                logger.warning("Touch dropped: device geometry unknown (adb 'wm size' failed?)")
             return
 
         # Convert relative positions to device pixels (handles orientation)
@@ -560,7 +772,7 @@ class ScrcpyCapture(QObject):
         cmd = [self._adb_path]
         if hasattr(self, '_device_serial') and self._device_serial:
             cmd.extend(['-s', self._device_serial])
-        cmd.extend(['shell', 'input', 'swipe', str(x1), str(y1), str(x2), str(y2), str(duration_ms)])
+        cmd.extend(['shell', 'input'] + self._display_args() + ['swipe', str(x1), str(y1), str(x2), str(y2), str(duration_ms)])
 
         is_landscape = self._is_landscape()
         logger.debug(f" ADB swipe: ({x1},{y1}) -> ({x2},{y2}) duration={duration_ms}ms [{'landscape' if is_landscape else 'portrait'}]")

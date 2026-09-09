@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 system_name = platform.system()
 logger.info(f"Detected operating system: {system_name}")
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, qmlRegisterType
 from PySide6.QtCore import QResource
@@ -133,6 +133,8 @@ saved_scrcpy_path = settings_manager.get_scrcpy_path()
 if saved_scrcpy_path:
     phone_mirror_manager.setScrcpyPath(saved_scrcpy_path)
 phone_mirror_manager.setAudioEnabled(settings_manager.get_scrcpy_audio_enabled())
+phone_mirror_manager.setVideoDevice(settings_manager.get_scrcpy_video_device())
+phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
 settings_manager.scrcpyAudioEnabledChanged.connect(
@@ -309,6 +311,7 @@ def cleanup_on_quit():
     media_manager._clear_temp_files()
     spotify_manager.cleanup()
     android_auto_manager.cleanup()  # Full cleanup: stops DHU, ADB, and head unit server
+    scrcpy_capture.stopCapture()  # Kill the ffmpeg reader before scrcpy
     phone_mirror_manager.cleanup()  # Stop phone mirror if running
     esp32_volume_manager.cleanup()  # Disconnect ESP32 volume controller
     berryimu_manager.cleanup()  # Stop BerryIMU sensor reading
@@ -317,6 +320,18 @@ def cleanup_on_quit():
     download_manager.cleanup()  # Clean up download engine
 
 app.aboutToQuit.connect(cleanup_on_quit)
+
+# SIGTERM/SIGINT (launcher scripts, systemd, Ctrl-C) must run cleanup_on_quit
+# too, otherwise child processes (scrcpy, ffmpeg, DHU) are orphaned. Python
+# only services signal handlers while running bytecode, so a periodic no-op
+# timer gives the interpreter a chance to see the signal inside app.exec().
+import signal
+signal.signal(signal.SIGTERM, lambda *_: app.quit())
+signal.signal(signal.SIGINT, lambda *_: app.quit())
+_signal_pump = QTimer()
+_signal_pump.setInterval(500)
+_signal_pump.timeout.connect(lambda: None)
+_signal_pump.start()
 
 
 def load_main_qml():

@@ -1643,6 +1643,93 @@ Flickable {
                     Layout.fillWidth: true
                     spacing: App.Spacing.rowSpacing
 
+                    // Linux only: scrcpy streams headless into a v4l2loopback node
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.rowSpacing
+                        visible: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager
+                                  && phoneMirrorManager.captureMode === "v4l2")
+
+                    SettingLabel {
+                        text: "Video Device"
+                    }
+
+                    SettingDescription {
+                        text: "v4l2loopback node scrcpy streams into. Load it with:\n"
+                              + "sudo modprobe v4l2loopback exclusive_caps=0 card_label=OCTAVE video_nr=10"
+                    }
+
+                    SettingsTextField {
+                        id: scrcpyVideoDeviceField
+                        Layout.fillWidth: true
+                        text: settingsManager ? settingsManager.scrcpyVideoDevice : "/dev/video10"
+                        placeholderText: "/dev/video10"
+
+                        onEditingFinished: {
+                            if (settingsManager) {
+                                settingsManager.save_scrcpy_video_device(text)
+                                if (phoneMirrorManager) {
+                                    phoneMirrorManager.setVideoDevice(text)
+                                }
+                            }
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onScrcpyVideoDeviceChanged() {
+                                scrcpyVideoDeviceField.text = settingsManager.scrcpyVideoDevice
+                            }
+                        }
+                    }
+                    } // Linux-only column
+
+                    SettingLabel {
+                        text: "Virtual Display Size"
+                    }
+
+                    SettingDescription {
+                        text: "scrcpy creates a separate landscape display on the phone (Android 11+). "
+                              + "Width must be a multiple of 64. Leave empty to mirror the phone's own screen."
+                    }
+
+                    SettingsTextField {
+                        id: scrcpyDisplaySizeField
+                        Layout.fillWidth: true
+                        text: settingsManager ? settingsManager.scrcpyDisplaySize : "1280x800"
+                        placeholderText: "1280x800"
+
+                        onEditingFinished: {
+                            if (settingsManager) {
+                                settingsManager.save_scrcpy_display_size(text)
+                                if (phoneMirrorManager) {
+                                    phoneMirrorManager.setDisplaySize(text)
+                                    // Manager may have snapped the width to a multiple of 64
+                                    if (phoneMirrorManager.displaySize !== text) {
+                                        settingsManager.save_scrcpy_display_size(phoneMirrorManager.displaySize)
+                                    }
+                                }
+                            }
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onScrcpyDisplaySizeChanged() {
+                                scrcpyDisplaySizeField.text = settingsManager.scrcpyDisplaySize
+                            }
+                        }
+                    }
+
+                    SettingDescription {
+                        text: (phoneMirrorManager && phoneMirrorManager.scrcpyVersion)
+                              ? "Detected scrcpy " + phoneMirrorManager.scrcpyVersion + " at " + phoneMirrorManager.scrcpyPath
+                              : "scrcpy not detected"
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
                     SettingLabel {
                         text: "Audio Forwarding"
                     }
