@@ -1673,7 +1673,9 @@ void OBDConnectionWorker::doConnect()
                      this, &OBDConnectionWorker::onSerialError);
 
     if (!m_serial->open(QIODevice::ReadWrite)) {
-        emit initComplete(false, QStringLiteral("Failed to open port: %1").arg(m_serial->errorString()));
+        const QString err = m_serial->errorString();
+        releasePort();
+        emit initComplete(false, QStringLiteral("Failed to open port: %1").arg(err));
         return;
     }
 
@@ -1682,7 +1684,7 @@ void OBDConnectionWorker::doConnect()
 
     // Run ELM327 init sequence
     if (!sendInitSequence()) {
-        m_serial->close();
+        releasePort();
         emit initComplete(false, QStringLiteral("ELM327 init failed -- adapter not responding"));
         return;
     }
@@ -1692,7 +1694,14 @@ void OBDConnectionWorker::doConnect()
     QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), 3000);
     if (response.isEmpty() || response.toUpper().contains(QStringLiteral("NO DATA")) ||
         response.toUpper().contains(QStringLiteral("UNABLE"))) {
-        // Adapter is connected but no vehicle
+        // Adapter is connected but no vehicle. Release the port: an open
+        // QSerialPort keeps a read notifier in this thread's event loop, and
+        // an rfcomm node with no remote reports readable-with-zero-bytes
+        // forever, which spins that loop at 100 % of a core between
+        // commands (gdb on the Pi: the whole stack was QSerialPort inside
+        // QThread::exec, no OCTAVE frame). Nothing may hold the port open
+        // while we are not actively talking to a live adapter.
+        releasePort();
         emit initComplete(false, QStringLiteral("Connected to adapter, no vehicle response"));
         return;
     }
@@ -1701,17 +1710,22 @@ void OBDConnectionWorker::doConnect()
     emit initComplete(true, QStringLiteral("Connected"));
 }
 
-void OBDConnectionWorker::doDisconnect()
+void OBDConnectionWorker::releasePort()
 {
-    stopPolling();
     if (m_serial) {
         if (m_serial->isOpen())
             m_serial->close();
         m_serial->deleteLater();
         m_serial = nullptr;
     }
-    m_initialized = false;
     m_responseBuffer.clear();
+}
+
+void OBDConnectionWorker::doDisconnect()
+{
+    stopPolling();
+    releasePort();
+    m_initialized = false;
 }
 
 bool OBDConnectionWorker::sendInitSequence()
@@ -1755,11 +1769,16 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
                 if (resp.has_value())
                     return resp.value();
             } else if (++emptyReads >= 50) {
-                // Readable-but-empty on every poll (measured: ~20k ppoll+read
-                // pairs per second): an rfcomm node with no remote never
-                // clears this on its own. Treat it as a dead port.
-                qWarning() << "[OBD Worker] Port reports readable but delivers no data; giving up on this command";
-                break;
+                // Readable-but-empty on every poll: an rfcomm node whose
+                // remote went away never clears this on its own. Treat it
+                // as a lost connection and release the port so its read
+                // notifier stops spinning the event loop.
+                qWarning() << "[OBD Worker] Port reports readable but delivers no data; treating as disconnected";
+                stopPolling();
+                releasePort();
+                m_initialized = false;
+                emit connectionLost(QStringLiteral("Adapter stopped responding"));
+                return QString();
             }
         } else {
             const auto err = m_serial->error();

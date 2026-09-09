@@ -602,6 +602,7 @@ public slots:
     // Called from OBDManager (via queued connection)
     void doConnect();
     void doDisconnect();
+    void releasePort();   // close + delete the QSerialPort; nothing may hold it open while idle
     void startPolling();
     void stopPolling();
     void doReadDtc();
