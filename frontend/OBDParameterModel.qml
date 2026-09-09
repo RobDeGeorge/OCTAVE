@@ -161,14 +161,35 @@ QtObject {
     }
 
     // ── Live parameter values (updated via signal connections) ────────
-    // Using a plain object that gets replaced to trigger QML bindings
+    // Using a plain object that gets replaced to trigger QML bindings.
+    //
+    // Writes are coalesced: incoming values land in _pendingValues and are
+    // folded into paramValues by _flushTimer at most ~30x/sec. Replacing
+    // paramValues re-evaluates every gauge binding that reads it, and the
+    // IMU alone fires ~440 updates/sec (7 signals at 60 Hz). Copying the
+    // whole dict and rebinding on each one pegged the QML thread at 100%
+    // CPU while idle on the Orange Pi (V4 string-alloc + GC churn), so the
+    // per-write path must stay allocation-free.
     property var paramValues: ({})
+    property var _pendingValues: ({})
 
     function updateParamValue(paramId, value) {
         if (simulationActive) return;   // demo mode owns paramValues
-        var newValues = Object.assign({}, paramValues);
-        newValues[paramId] = value;
-        paramValues = newValues;
+        _pendingValues[paramId] = value;
+        if (!_flushTimer.running) _flushTimer.start();
+    }
+
+    function _flushPendingValues() {
+        if (simulationActive) { _pendingValues = ({}); return; }
+        var newValues = Object.assign({}, paramValues, _pendingValues);
+        _pendingValues = ({});
+        paramValues = newValues;   // fresh object so bindings re-evaluate
+    }
+
+    property var _flushTimer: Timer {
+        interval: 33            // ~30 Hz; plenty for needle animation
+        repeat: false           // re-armed by the next write, idle otherwise
+        onTriggered: root._flushPendingValues()
     }
 
     function getParamValue(paramId) {
@@ -189,6 +210,7 @@ QtObject {
             _simEpoch = Date.now();
             _simTick();
         } else {
+            _pendingValues = ({});
             paramValues = ({});
         }
     }
