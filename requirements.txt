@@ -9,6 +9,6 @@ requests>=2.25.0
 pyserial>=3.5
 smbus2>=0.4.3; sys_platform == "linux"  # I2C interface for BerryIMU sensors
 # Music download engine (music_dl) dependencies
-yt-dlp==2026.2.21
+yt-dlp==2026.8.19
 ytmusicapi==1.11.5
 rapidfuzz>=3.0.0
