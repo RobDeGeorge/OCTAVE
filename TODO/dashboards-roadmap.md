@@ -1,7 +1,7 @@
 # Dashboards Roadmap — "Tony Hawk Create-A-Park for OBD Dashboards"
 
-**Status:** Phases 1–2 complete. **Phase 3 editor code-complete (Milestones A–D landed 2026-06-10)** — tap-to-place + drag-to-move canvas, palette, PID picker, properties panel with curated props, and chooser New/Edit/Copy/Delete affordances all shipped; docs + wiki updated. Awaiting on-device verification (qmllint unavailable in the WSL env used to write it — venv built on another machine). Remaining work: the deferred Phase 2 fast-follow (renderer validation + user-dir hot-reload).
-**Last updated:** 2026-06-10
+**Status:** Phases 1–3 complete and **verified on desktop 2026-09-08** — `dev/tests/drive_dashboard_editor.py` runs ~45 assertions against the live app (place / bind / drag / resize / options / save / edit / duplicate / delete / draft rescue / hot reload), all passing with a clean QML log. The Phase 2 fast-follow (renderer validation + user-dir hot reload) also landed 2026-09-08. Bugs fixed during verification: deleting the active dashboard left it selected (delegate context died mid-handler → moved into a page-level function + registry-level fallback), StackView anchors warning on the editor page, clipped option labels. **Only remaining item: a ten-minute on-device pass on the Android tablet** (touch drag feel, palette/picker sizing) — delete this file once that's done.
+**Last updated:** 2026-09-08
 
 ---
 

@@ -17,6 +17,11 @@ Q_LOGGING_CATEGORY(lcDashboards, "octave.dashboards")
 DashboardManager::DashboardManager(QObject *parent)
     : QObject(parent)
 {
+    m_rescanDebounce.setSingleShot(true);
+    m_rescanDebounce.setInterval(300);
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this,
+            [this](const QString &) { m_rescanDebounce.start(); });
+    connect(&m_rescanDebounce, &QTimer::timeout, this, &DashboardManager::onUserDirChanged);
 }
 
 void DashboardManager::setPresetsDir(const QString &absolutePath)
@@ -28,6 +33,44 @@ void DashboardManager::setUserDir(const QString &absolutePath)
 {
     m_userDir = absolutePath;
     rescanAll();
+    watchUserDir();
+}
+
+void DashboardManager::watchUserDir()
+{
+    const QStringList watched = m_watcher.directories();
+    if (!watched.isEmpty())
+        m_watcher.removePaths(watched);
+    if (!m_userDir.isEmpty() && QDir(m_userDir).exists())
+        m_watcher.addPath(m_userDir);
+}
+
+QString DashboardManager::userDirSignatureNow() const
+{
+    if (m_userDir.isEmpty()) return {};
+    QDir u(m_userDir);
+    if (!u.exists()) return {};
+    QStringList parts;
+    const auto files = u.entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    for (const QFileInfo &fi : files) {
+        parts << QStringLiteral("%1:%2:%3")
+                     .arg(fi.fileName())
+                     .arg(fi.lastModified().toSecsSinceEpoch())
+                     .arg(fi.size());
+    }
+    return parts.join(QLatin1Char('|'));
+}
+
+void DashboardManager::onUserDirChanged()
+{
+    const QString sig = userDirSignatureNow();
+    if (sig == m_userDirSignature)
+        return;
+    qCInfo(lcDashboards) << "Dashboard user dir changed on disk -- rescanning";
+    rescanAll();
+    // A recreated directory drops the watch; re-arm.
+    if (!m_watcher.directories().contains(m_userDir))
+        watchUserDir();
 }
 
 void DashboardManager::refresh()
@@ -147,6 +190,7 @@ void DashboardManager::rescanAll()
 
     qCInfo(lcDashboards) << "Scanned dashboards:"
                          << m_dashboards.size() << "total";
+    m_userDirSignature = userDirSignatureNow();
     emit dashboardsChanged();
 }
 

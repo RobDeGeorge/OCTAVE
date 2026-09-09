@@ -61,12 +61,35 @@ Item {
         ignoreUnknownSignals: true
         function onDashboardsChanged() {
             obdPage.dashboardRegistry = obdPage._rebuildRegistry()
+            // If the active dashboard vanished (deleted in-app, or its JSON
+            // was removed externally and refresh() ran), fall back to the
+            // built-in Parameter Cards rather than rendering nothing.
+            var stillExists = false
+            for (var i = 0; i < obdPage.dashboardRegistry.length; i++) {
+                if (obdPage.dashboardRegistry[i].id === obdPage.activeDashboardId) {
+                    stillExists = true
+                    break
+                }
+            }
+            if (!stillExists)
+                obdPage.setActiveDashboard("grid")
         }
     }
 
     function setActiveDashboard(id) {
         activeDashboardId = id
         if (settingsManager) settingsManager.save_setting("activeDashboard", id)
+    }
+
+    // Delete a user dashboard from the chooser. Lives on the page (not in the
+    // card delegate) because dashboardsChanged rebuilds the registry
+    // synchronously inside deleteDashboard(), which destroys the delegate that
+    // tapped Delete — any code after the call in the delegate context throws
+    // "obdPage is not defined". Active-dashboard fallback happens in the
+    // onDashboardsChanged handler.
+    function deleteUserDashboard(id) {
+        if (typeof dashboardManager === "undefined" || !dashboardManager) return false
+        return dashboardManager.deleteDashboard(id)
     }
 
     // Unsaved editor work rescued by DashboardEditor's Component.onDestruction
@@ -193,6 +216,7 @@ Item {
         // margins + same button size = exact X/Y match across pages.
         Control {
             id: dashboardsButton
+            objectName: "dashboardsButton"
             width: App.Spacing.bottomBarNavButtonWidth
             height: App.Spacing.bottomBarNavButtonHeight
             z: 3
@@ -642,6 +666,7 @@ Item {
             // live as per-card action buttons below.
             Rectangle {
                 id: newDashboardButton
+                objectName: "newDashboardButton"
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.topMargin: App.Spacing.mediaRoomMargin
@@ -684,6 +709,7 @@ Item {
             // Resume an editor draft rescued from a mid-build menu switch.
             Rectangle {
                 id: resumeDraftButton
+                objectName: "resumeDraftButton"
                 visible: obdPage._editorDraft.length > 0
                 anchors.top: parent.top
                 anchors.left: newDashboardButton.right
@@ -703,7 +729,7 @@ Item {
                 Text {
                     id: resumeDraftLabel
                     anchors.centerIn: parent
-                    text: "▲ Resume draft"
+                    text: "▲ Draft"
                     color: App.Style.accent
                     font.pixelSize: App.Spacing.overallText
                     font.bold: true
@@ -789,6 +815,7 @@ Item {
 
             Flickable {
                 id: chooserScroll
+                objectName: "chooserScroll"
                 anchors {
                     top: chooserHeader.bottom
                     bottom: parent.bottom
@@ -819,6 +846,7 @@ Item {
                         model: obdPage.dashboardRegistry
                         delegate: Rectangle {
                             id: card
+                            objectName: "dashCard_" + modelData.id
 
                             // The dashboard entry — aliased so the nested
                             // action-button Repeater (whose own modelData
@@ -851,9 +879,7 @@ Item {
                                         return
                                     }
                                     card.confirmingDelete = false
-                                    var wasActive = obdPage.activeDashboardId === card.dash.id
-                                    if (dashboardManager.deleteDashboard(card.dash.id) && wasActive)
-                                        obdPage.setActiveDashboard("grid")
+                                    obdPage.deleteUserDashboard(card.dash.id)
                                 }
                             }
 
@@ -1019,6 +1045,7 @@ Item {
                                         { "action": "delete",    "label": "Delete", "danger": true,  "show": card.dash.builtIn === false }
                                     ]
                                     delegate: Rectangle {
+                                        objectName: "dashCard_" + card.dash.id + "_" + modelData.action
                                         visible: modelData.show
                                         width: actionLabel.implicitWidth + dp(16)
                                         height: actionLabel.implicitHeight + dp(10)

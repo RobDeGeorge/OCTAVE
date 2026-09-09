@@ -23,6 +23,7 @@ import "../.." as App
 
 Item {
     id: editor
+    objectName: "dashboardEditor"
 
     // Local dp/dpMin wrappers — mirror OBDMenu's Android singleton-function bug
     // workaround so this page scales identically to the one that pushes it.
@@ -136,9 +137,14 @@ Item {
             var row = Math.max(0, Math.min(gridRows - 1, c.row !== undefined ? c.row : 0))
             var cs = Math.max(1, Math.min(gridColumns - col, c.colSpan !== undefined ? c.colSpan : 1))
             var rs = Math.max(1, Math.min(gridRows - row, c.rowSpan !== undefined ? c.rowSpan : 1))
+            var pid = c.paramId !== undefined ? c.paramId : ""
+            if (pid !== "" && !App.OBDParameterModel.hasParameter(pid)) {
+                console.warn("DashboardEditor: dropping unknown paramId:", pid)
+                pid = ""
+            }
             out.push({
                 "type": c.type,
-                "paramId": c.paramId !== undefined ? c.paramId : "",
+                "paramId": pid,
                 "col": col, "row": row,
                 "colSpan": cs, "rowSpan": rs,
                 "props": c.props || {}
@@ -341,7 +347,8 @@ Item {
         errorTimer.restart()
     }
 
-    anchors.fill: parent
+    // No anchors here on purpose: StackView sizes pushed items itself and
+    // warns ("conflicting anchors") if the page anchors to its parent.
 
     Rectangle {
         anchors.fill: parent
@@ -364,6 +371,7 @@ Item {
             spacing: dp(12)
 
             Button {
+                objectName: "editorCancelButton"
                 text: editor.confirmingCancel ? "Discard?" : "Cancel"
                 font.family: App.Style.fontFamily
                 onClicked: editor.cancel()
@@ -371,6 +379,7 @@ Item {
 
             TextField {
                 id: nameField
+                objectName: "editorNameField"
                 Layout.fillWidth: true
                 placeholderText: "Dashboard name"
                 font.family: App.Style.fontFamily
@@ -382,6 +391,7 @@ Item {
             // sized without a real OBD connection. Editor-scoped: force-disabled
             // when this page is destroyed.
             Button {
+                objectName: "editorDemoButton"
                 text: checked ? "Demo data: ON" : "Demo data"
                 checkable: true
                 checked: App.OBDParameterModel.simulationActive
@@ -390,6 +400,7 @@ Item {
             }
 
             Button {
+                objectName: "editorSaveButton"
                 text: "Save"
                 font.family: App.Style.fontFamily
                 enabled: nameField.text.trim().length > 0
@@ -414,6 +425,7 @@ Item {
 
         EditorCanvas {
             id: editorCanvas
+            objectName: "editorCanvas"
             anchors.fill: parent
             gridColumns: editor.gridColumns
             gridRows: editor.gridRows
@@ -451,6 +463,7 @@ Item {
     // configured stays visible.
     PropertiesPanel {
         id: sidePanel
+        objectName: "editorPanel"
         parent: canvasFrame
         z: 20
         anchors.top: parent.top
@@ -498,6 +511,7 @@ Item {
     // ── Error banner ────────────────────────────────────────────────────
     Rectangle {
         id: errorBanner
+        objectName: "editorErrorBanner"
         visible: false
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter

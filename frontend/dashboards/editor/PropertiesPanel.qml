@@ -76,6 +76,7 @@ Rectangle {
         }
 
         Rectangle {
+            objectName: "stepper_" + stepper.label + "_dec"
             Layout.preferredWidth: panel.dp(38)
             Layout.preferredHeight: panel.dp(38)
             radius: panel.dpMin(6, 2)
@@ -104,6 +105,7 @@ Rectangle {
         }
 
         Rectangle {
+            objectName: "stepper_" + stepper.label + "_inc"
             Layout.preferredWidth: panel.dp(38)
             Layout.preferredHeight: panel.dp(38)
             radius: panel.dpMin(6, 2)
@@ -197,6 +199,7 @@ Rectangle {
             }
 
             Rectangle {
+                objectName: "panelPidButton"
                 visible: panel.meta !== null && panel.meta.supportedKinds.length > 0
                 Layout.fillWidth: true
                 Layout.preferredHeight: panel.dp(44)
@@ -274,12 +277,14 @@ Rectangle {
                     Text {
                         Layout.fillWidth: true
                         text: modelData.label
+                        elide: Text.ElideRight
                         color: App.Style.obdLabelColor
                         font.family: App.Style.fontFamily
                         font.pixelSize: App.Spacing.overallText * 0.9
                     }
 
                     Switch {
+                        objectName: "panelOpt_" + modelData.key
                         visible: modelData.kind === "bool"
                         checked: panel.propValue(modelData.key, modelData.def) === true
                         onToggled: panel.editorPage.setCellProp(panel.cellIndex, modelData.key, checked)
@@ -292,6 +297,7 @@ Rectangle {
                     }
 
                     TextField {
+                        objectName: "panelOptField_" + modelData.key
                         visible: modelData.kind !== "bool"
                         Layout.preferredWidth: panel.dp(90)
                         horizontalAlignment: TextInput.AlignRight
@@ -328,6 +334,7 @@ Rectangle {
 
             // ── Delete ──────────────────────────────────────────────────
             Rectangle {
+                objectName: "panelRemoveButton"
                 Layout.fillWidth: true
                 Layout.preferredHeight: panel.dp(44)
                 Layout.topMargin: panel.dp(12)

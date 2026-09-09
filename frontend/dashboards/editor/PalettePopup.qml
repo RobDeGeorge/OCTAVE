@@ -54,6 +54,7 @@ Popup {
             Repeater {
                 model: App.WidgetCatalog.widgets
                 delegate: Rectangle {
+                    objectName: "paletteCard_" + modelData.type
                     Layout.fillWidth: true
                     Layout.preferredHeight: palette.dp(110)
                     radius: palette.dpMin(8, 2)

@@ -23,6 +23,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QSet>
+#include <QFileSystemWatcher>
+#include <QTimer>
 
 class DashboardManager : public QObject
 {
@@ -77,6 +79,18 @@ private:
     QString m_presetsDir;
     QString m_userDir;
     QVariantList m_dashboards;
+
+    // User-dir hot reload: a JSON dropped into / removed from the user
+    // dashboards folder while the app runs shows up in the chooser without
+    // a restart. Directory events are debounced and only trigger a rescan
+    // when the (name, mtime, size) signature actually changed — our own
+    // atomic saves already rescanned, so they don't double-fire.
+    QFileSystemWatcher m_watcher;
+    QTimer m_rescanDebounce;
+    QString m_userDirSignature;
+    void watchUserDir();
+    QString userDirSignatureNow() const;
+    void onUserDirChanged();
 
     void rescanAll();
     void ensureUserDir() const;

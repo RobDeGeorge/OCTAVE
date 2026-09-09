@@ -108,6 +108,7 @@ Popup {
 
         TextField {
             id: searchField
+            objectName: "pidSearchField"
             Layout.fillWidth: true
             placeholderText: "Search…"
             font.family: App.Style.fontFamily
@@ -125,6 +126,7 @@ Popup {
             ScrollBar.vertical: ScrollBar {}
 
             delegate: Item {
+                objectName: modelData.header ? "" : "pidRow_" + modelData.pid
                 width: pidList.width
                 height: modelData.header ? picker.dp(34) : picker.dp(52)
 

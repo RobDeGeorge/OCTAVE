@@ -17,7 +17,7 @@ import re
 import tempfile
 import time
 
-from PySide6.QtCore import QObject, Property, Signal, Slot
+from PySide6.QtCore import QObject, Property, Signal, Slot, QFileSystemWatcher, QTimer
 
 from backend.logging_config import get_logger
 
@@ -33,6 +33,19 @@ class DashboardManager(QObject):
         self._user_dir = ""
         self._dashboards = []
 
+        # User-dir hot reload: a JSON dropped into / removed from the user
+        # dashboards folder while the app runs shows up in the chooser without
+        # a restart. Directory events are debounced, and a rescan only happens
+        # when the (name, mtime, size) signature actually changed — our own
+        # atomic saves already rescanned, so they don't double-fire.
+        self._user_dir_signature = ""
+        self._watcher = QFileSystemWatcher(self)
+        self._watcher.directoryChanged.connect(self._schedule_user_dir_rescan)
+        self._rescan_debounce = QTimer(self)
+        self._rescan_debounce.setSingleShot(True)
+        self._rescan_debounce.setInterval(300)
+        self._rescan_debounce.timeout.connect(self._on_user_dir_changed)
+
     # ------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------
@@ -43,6 +56,41 @@ class DashboardManager(QObject):
     def setUserDir(self, absolute_path: str):
         self._user_dir = absolute_path or ""
         self._rescan_all()
+        self._watch_user_dir()
+
+    def _watch_user_dir(self):
+        for d in self._watcher.directories():
+            self._watcher.removePath(d)
+        if self._user_dir and os.path.isdir(self._user_dir):
+            self._watcher.addPath(self._user_dir)
+
+    def _user_dir_signature_now(self) -> str:
+        if not self._user_dir or not os.path.isdir(self._user_dir):
+            return ""
+        parts = []
+        for fname in sorted(os.listdir(self._user_dir)):
+            if not fname.endswith(".json"):
+                continue
+            try:
+                st = os.stat(os.path.join(self._user_dir, fname))
+                parts.append(f"{fname}:{int(st.st_mtime)}:{st.st_size}")
+            except OSError:
+                continue
+        return "|".join(parts)
+
+    def _schedule_user_dir_rescan(self, _path=""):
+        self._rescan_debounce.start()
+
+    def _on_user_dir_changed(self):
+        sig = self._user_dir_signature_now()
+        if sig == self._user_dir_signature:
+            return
+        logger.info("Dashboard user dir changed on disk — rescanning")
+        self._rescan_all()
+        # A freshly created dir (or an editor that replaced it) may have
+        # dropped the watch; re-arm.
+        if self._user_dir not in self._watcher.directories():
+            self._watch_user_dir()
 
     # ------------------------------------------------------------------
     # QML-visible API
@@ -211,6 +259,7 @@ class DashboardManager(QObject):
                 taken_ids.add(dashboard_id)
 
         logger.info("Scanned dashboards: %d total", len(self._dashboards))
+        self._user_dir_signature = self._user_dir_signature_now()
         self.dashboardsChanged.emit()
 
     def _read_header(self, absolute_path: str) -> dict:

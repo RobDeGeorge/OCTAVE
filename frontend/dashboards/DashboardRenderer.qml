@@ -97,11 +97,31 @@ Item {
             // cell, however small the user sizes it.
             clip: true
 
+            // Spec validation: an unknown `type` (typo, or a widget removed
+            // from WidgetCatalog) is logged and skipped; an unknown `paramId`
+            // is logged and left unbound so the widget shows its placeholder
+            // instead of binding to nothing.
+            readonly property bool _knownType: App.WidgetCatalog.isKnownType(modelData.type)
+            readonly property bool _knownParam:
+                modelData.paramId === undefined || modelData.paramId === ""
+                || App.OBDParameterModel.hasParameter(modelData.paramId)
+            Component.onCompleted: {
+                if (!_knownType)
+                    console.warn("DashboardRenderer: unknown widget type \"" + modelData.type
+                                 + "\" in dashboard \"" + (root.spec && root.spec.id ? root.spec.id : "?")
+                                 + "\" — cell skipped")
+                else if (!_knownParam)
+                    console.warn("DashboardRenderer: unknown paramId \"" + modelData.paramId
+                                 + "\" for " + modelData.type + " in dashboard \""
+                                 + (root.spec && root.spec.id ? root.spec.id : "?") + "\" — left unbound")
+            }
+
             Loader {
                 id: widgetLoader
                 anchors.fill: parent
                 asynchronous: true
-                source: root.sourceForType(modelData.type)
+                active: cell._knownType
+                source: cell._knownType ? root.sourceForType(modelData.type) : ""
 
                 onLoaded: {
                     if (!item) {
@@ -121,7 +141,7 @@ Item {
                     // Skipped for empty ids and for self-binding widgets
                     // that have no paramId property (Now Playing, G-Force…).
                     if (modelData.paramId !== undefined && modelData.paramId !== ""
-                            && item.paramId !== undefined) {
+                            && item.paramId !== undefined && cell._knownParam) {
                         item.paramId = modelData.paramId
                     }
 

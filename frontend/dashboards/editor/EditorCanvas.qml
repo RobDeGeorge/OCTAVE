@@ -115,6 +115,7 @@ Item {
         delegate: Rectangle {
             readonly property int _c: index % canvas.gridColumns
             readonly property int _r: Math.floor(index / canvas.gridColumns)
+            objectName: "editorEmptyCell_" + _c + "_" + _r
 
             visible: !canvas._occupied[index]
             x: canvas._cellX(_c)
@@ -166,6 +167,7 @@ Item {
         model: canvas.cells
         delegate: Item {
             id: cellRoot
+            objectName: "editorCell_" + index
 
             readonly property int cellIndex: index
             readonly property int _c:  modelData.col     !== undefined ? modelData.col     : 0

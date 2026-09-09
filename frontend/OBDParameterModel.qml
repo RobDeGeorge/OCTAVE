@@ -226,6 +226,13 @@ QtObject {
         return parameterInfo[paramId] || { title: paramId, unit: "", minValue: 0, maxValue: 100 };
     }
 
+    // True if `paramId` is one of the declared parameters. getParamInfo()
+    // returns a permissive fallback for unknown ids, so validation callers
+    // (DashboardRenderer, the editor) use this instead.
+    function hasParameter(paramId) {
+        return parameterInfo[paramId] !== undefined;
+    }
+
     // ── Signal connections to berryIMU for the sensor parameters ─────
     // Same pattern as _obdConnections below; guarded because the IMU
     // manager may legitimately be absent (e.g. stripped-down builds).

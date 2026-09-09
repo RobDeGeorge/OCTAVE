@@ -251,7 +251,9 @@ PerfMonitor.end(t, <span class="str">"my_section"</span>)</code></pre>
           <li><strong>Spotify:</strong> <code>spotify_toggle_play</code>, <code>spotify_next</code>, <code>spotify_previous</code>, <code>spotify_status</code></li>
           <li><strong>OBD:</strong> <code>obd_status</code>, <code>obd_reconnect</code></li>
           <li><strong>Settings:</strong> <code>get_all_settings</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>, and <code>list_*</code> variants</li>
+          <li><strong>UI driving:</strong> <code>find_item</code> (geometry + effective visibility of any QML item by <code>objectName</code>, popups included), <code>list_items</code> (prefix match), <code>get_prop</code> / <code>set_prop</code>, <code>call</code> (invoke a no-arg method such as <code>forceActiveFocus</code>), <code>click</code> (x, y) and <code>drag</code> (x1, y1, x2, y2, steps) — synthetic mouse events delivered through the window's normal event path, so MouseArea drag thresholds and Flickable behave as they would for a finger. Closed popups leave the item tree, and pages pushed via <code>navigate</code> are not destroyed on <code>go_home</code>, so tests should prefer the visible instance (the server does) and scroll targets into view before clicking.</li>
         </ul>
+        <p>Example consumer: <span class="file-path">dev/tests/drive_dashboard_editor.py</span> drives the whole dashboard editor (place, bind, drag, resize, options, save, edit, duplicate, delete, draft rescue, hot reload) under Xvfb and exits non-zero on any failed assertion.</p>
 
         <h3>Navigation Bridge</h3>
         <p>The <code>NavigationBridge</code> class provides thread-safe QML navigation. Commands from the TCP handler thread are dispatched to the GUI thread via <code>QMetaObject.invokeMethod</code> with <code>QueuedConnection</code>.</p>
