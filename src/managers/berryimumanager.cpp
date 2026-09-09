@@ -47,6 +47,16 @@ static constexpr double MADGWICK_BETA = 0.03;
 static constexpr double GYRO_DEADBAND = 0.4;
 static constexpr double EMIT_INTERVAL = 0.016; // ~60Hz
 
+// Sensor sample interval — ~200Hz. The read loop sleeps for whatever is left
+// of this period after the I2C reads instead of spinning on a 1ms sleep. 200Hz
+// stays under the LSM6DSL's 416Hz ODR (no duplicate samples) and gives the
+// Madgwick filter 3+ samples per 60Hz emit; the old spin kept the I2C bus
+// saturated and cost ~9% CPU in D-state on the Orange Pi for no benefit.
+static constexpr double SAMPLE_INTERVAL = 0.005;
+
+// Barometer read interval — ~5Hz, time-based so it doesn't drift with loop rate
+static constexpr double BARO_INTERVAL = 0.2;
+
 // ==================== Madgwick AHRS ====================
 
 MadgwickAHRS::MadgwickAHRS(double b)
@@ -542,7 +552,7 @@ void BerryIMUWorker::run()
 
     double lastTime = getTime();
     double lastEmit = 0.0;
-    int baroCounter = 0;
+    double lastBaro = 0.0;
     int readCount = 0;
 
     while (m_running) {
@@ -678,9 +688,8 @@ void BerryIMUWorker::run()
         }
 
         // Baro at ~5Hz
-        baroCounter++;
-        if (baroCounter >= 80) {
-            baroCounter = 0;
+        if (now - lastBaro >= BARO_INTERVAL) {
+            lastBaro = now;
             double bPressure, bTemp, bAlt;
             readBaro(bPressure, bTemp, bAlt);
             if (bPressure > 0.0) {
@@ -692,7 +701,10 @@ void BerryIMUWorker::run()
             }
         }
 
-        QThread::usleep(1000); // 1ms sleep
+        // Sleep out the rest of the sample period (never spin)
+        double remaining = SAMPLE_INTERVAL - (getTime() - now);
+        if (remaining > 0.0)
+            QThread::usleep(static_cast<unsigned long>(remaining * 1e6));
     }
 
     closeBus();

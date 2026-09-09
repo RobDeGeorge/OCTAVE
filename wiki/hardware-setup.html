@@ -119,6 +119,7 @@
         <ul>
           <li><strong>Beta (gain):</strong> 0.03 (lower = smoother, higher = more responsive)</li>
           <li><strong>Gyro deadband:</strong> 0.4 deg/s (zeros out noise when stationary)</li>
+          <li><strong>Sample interval:</strong> ~200 Hz (5ms read-loop period; sleeps out the remainder, never spins)</li>
           <li><strong>Emit interval:</strong> ~60 Hz (16ms between signal emissions)</li>
         </ul>
 

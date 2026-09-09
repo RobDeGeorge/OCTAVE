@@ -36,6 +36,16 @@ GYRO_DEADBAND = 0.4
 # Signal emission interval — ~60Hz
 EMIT_INTERVAL = 0.016
 
+# Sensor sample interval — ~200Hz. The read loop sleeps for whatever is left
+# of this period after the I2C reads instead of spinning on a 1ms sleep. 200Hz
+# stays under the LSM6DSL's 416Hz ODR (no duplicate samples) and gives the
+# Madgwick filter 3+ samples per 60Hz emit; the old spin kept the I2C bus
+# saturated and cost ~9% CPU in D-state on the Orange Pi for no benefit.
+SAMPLE_INTERVAL = 0.005
+
+# Barometer read interval — ~5Hz, time-based so it doesn't drift with loop rate
+BARO_INTERVAL = 0.2
+
 
 # ==================== Madgwick AHRS Filter ====================
 
@@ -425,12 +435,12 @@ class BerryIMUManager(QObject):
     # ==================== Read Loop ====================
 
     def _read_loop(self):
-        """Read sensors flat out, feed Madgwick filter, emit quaternion at ~60Hz."""
+        """Read sensors at ~200Hz, feed Madgwick filter, emit quaternion at ~60Hz."""
 
         self._calibrate_gyro()
         self._last_time = time.monotonic()
         last_emit = 0.0
-        baro_counter = 0
+        last_baro = 0.0
         read_count = 0
 
         while self._running:
@@ -531,9 +541,8 @@ class BerryIMUManager(QObject):
                         )
 
                 # Baro at ~5Hz
-                baro_counter += 1
-                if baro_counter >= 80:
-                    baro_counter = 0
+                if now - last_baro >= BARO_INTERVAL:
+                    last_baro = now
                     try:
                         _, baro_temp, altitude = self._read_baro()
                         self.altitudeChanged.emit(altitude)
@@ -543,7 +552,10 @@ class BerryIMUManager(QObject):
                     except Exception as e:
                         logger.debug(f"BerryIMU: baro read error: {e}")
 
-                time.sleep(0.001)
+                # Sleep out the rest of the sample period (never spin)
+                remaining = SAMPLE_INTERVAL - (time.monotonic() - now)
+                if remaining > 0:
+                    time.sleep(remaining)
 
             except Exception as e:
                 logger.error(f"BerryIMU: read loop error: {e}")
