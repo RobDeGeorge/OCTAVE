@@ -1,6 +1,6 @@
 # Native phone mirror: OCTAVE as a scrcpy-protocol client
 
-**Status:** phases 0–3 complete (2026-09-09); phase 4 hardware validation done except the cable-pull test
+**Status:** phases 0–3 complete and the server forked (`phone_server/`, 2026-09-09); hardware validation of Python and C++ on the fork done; only the cable-pull / unplugged-start tests remain
 **Owner:** OCTAVE dev agent + Orange Pi hardware agent
 **Goal:** phone mirroring with **no user-installed dependencies**. No scrcpy binary, no
 v4l2loopback, no ffmpeg on PATH, no `adb shell input` for touch. OCTAVE talks to the
@@ -18,7 +18,9 @@ OCTAVE (`adb` and the scrcpy server jar).
 - **Control socket:** 32-byte touch message opens an app; change visible in the stream at +0.17 s
   (adb `input` path: ~0.13 s just to spawn, plus no multitouch).
 - **Byte layouts below verified against the v3.3.4 source** (`server.h`, `demuxer.c`, `control_msg.c`): no discrepancies.
-- **Gotchas:** `cleanup=true` deletes the jar on exit, so push it every session; with `tunnel_forward`
+- **Gotchas:** `cleanup=true` starts a CleanUp helper that unlinks the pushed jar as soon as the
+  server is up (it is gone from `/data/local/tmp` *during* the session, not just after), so push it
+  every session and never re-read it mid-session; with `tunnel_forward`
   the local TCP connect succeeds before the server listens and then EOFs — retry until the dummy
   byte arrives; the first decoded frame can precede the launcher drawing its icons.
 - Bundled server: originally upstream `scrcpy-server-v3.3.4`; since the fork it is
