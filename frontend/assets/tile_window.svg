@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+    <!-- Window frame with a solid title bar, dots knocked through it -->
+    <path fill-rule="evenodd" d="M60,90 h480 v420 h-480 Z M100,190 h400 v280 h-400 Z
+      M410,140 a17,17 0 1 0 0.1,0 Z M458,140 a17,17 0 1 0 0.1,0 Z M506,140 a17,17 0 1 0 0.1,0 Z"/>
+  </g>
+</svg>

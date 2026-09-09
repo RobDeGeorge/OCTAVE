@@ -18,24 +18,30 @@ Item {
     // Central page model — single source of truth for all pages
     // NOTE: `source` paths are relative to frontend/ (consumed by layout Loaders in frontend/)
     //       `widget` paths are relative to frontend/settings/ (consumed by SettingsDashboardCard Loader)
+    // `subSections` entries must match the corresponding page's tileModel
+    // titles exactly \u2014 SettingsMenu.findChildByObjectName() looks cards up by
+    // objectName, which the pages set from modelData.title.
+    //
+    // `icon` is the legacy Unicode glyph, kept only as a fallback; `iconSource`
+    // is the theme-tinted SVG that actually renders.
     readonly property var pageModel: [
-        { name: "Display",     section: "displaySettings",     source: "settings/DisplaySettingsPage.qml",     widget: "widgets/DisplayWidget.qml",     icon: "\u263C",
+        { name: "Display",     section: "displaySettings",     source: "settings/DisplaySettingsPage.qml",     widget: "widgets/DisplayWidget.qml",     icon: "\u263C", iconSource: Style.assetBase + "cat_display.svg",
           group: "Appearance",
           subSections: ["Layout", "Window", "Appearance", "Clock"] },
-        { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml",       widget: "widgets/MediaWidget.qml",       icon: "\u266B",
+        { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml",       widget: "widgets/MediaWidget.qml",       icon: "\u266B", iconSource: Style.assetBase + "media_button.svg",
           group: "Appearance",
-          subSections: ["Library", "Playback", "Album Art", "Background", "Effects", "Spotify"] },
-        { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml",         widget: "widgets/OBDWidget.qml",         icon: "\u26A1",
+          subSections: ["Library", "Playback", "Now Playing", "Spotify"] },
+        { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml",         widget: "widgets/OBDWidget.qml",         icon: "\u26A1", iconSource: Style.assetBase + "obd_button.svg",
           group: "Connectivity",
-          subSections: ["Connection", "Parameters"] },
-        { name: "Accessories", section: "accessoriesSettings", source: "settings/AccessoriesSettingsPage.qml", widget: "widgets/AccessoriesWidget.qml", icon: "\u2388",
+          subSections: ["Connection", "Adapters", "Tuning", "Parameters"] },
+        { name: "Accessories", section: "accessoriesSettings", source: "settings/AccessoriesSettingsPage.qml", widget: "widgets/AccessoriesWidget.qml", icon: "\u2388", iconSource: Style.assetBase + "sensor_button.svg",
           group: "Connectivity",
           desktopOnly: true,
           subSections: ["Volume Knob", "IMU Sensor", "Gesture Sensor", "Phone Dock"] },
-        { name: "Device",      section: "deviceSettings",      source: "settings/DeviceSettingsPage.qml",      widget: "widgets/DeviceWidget.qml",      icon: "\u2699",
+        { name: "Device",      section: "deviceSettings",      source: "settings/DeviceSettingsPage.qml",      widget: "widgets/DeviceWidget.qml",      icon: "\u2699", iconSource: Style.assetBase + "settings_button.svg",
           group: "System",
-          subSections: [] },
-        { name: "About",       section: "about",               source: "settings/AboutPage.qml",               widget: "widgets/AboutWidget.qml",       icon: "\u2139",
+          subSections: ["Device Name", "Network", "Power"] },
+        { name: "About",       section: "about",               source: "settings/AboutPage.qml",               widget: "widgets/AboutWidget.qml",       icon: "\u2139", iconSource: Style.assetBase + "cat_about.svg",
           group: "System",
           subSections: [] }
     ]
@@ -112,6 +118,7 @@ Item {
                 section: page.section,
                 source: page.source,
                 icon: page.icon,
+                iconSource: page.iconSource || "",
                 group: page.group || "",
                 widget: page.widget || ""
             })

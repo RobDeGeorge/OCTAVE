@@ -48,7 +48,7 @@ its own directory — running it from the repo root wipes the index to 0 pages).
 
 ## Cross-references
 
-- Companion to `TODO/settings-icons-svg.md` (same 2026-05-24 cohesion/cleanup pass).
+- Companion to the settings-icon conversion (same 2026-05-24 cohesion/cleanup pass), which shipped 2026-08-08 — `TODO/settings-icons-svg.md` was deleted then.
 - Enforces the CLAUDE.md "mobile is C++-only / Python is desktop-only" rule at the docs layer.
 
 Delete this file when all six items are done.

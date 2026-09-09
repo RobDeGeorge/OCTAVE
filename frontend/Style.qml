@@ -3,6 +3,14 @@ pragma Singleton
 import QtQuick 2.15
 
 QtObject {
+    // Base URL for frontend/assets/. Resolved here, in frontend/, so callers in
+    // any subdirectory can build an icon path without guessing how many "../"
+    // segments they need — settings/ pages and frontend/ layouts both consume
+    // the tile icons. Deliberately a property rather than a function: singleton
+    // *functions* are unreliable on Android (same Qt bug the local dp() wrappers
+    // scattered through the QML work around).
+    readonly property url assetBase: Qt.resolvedUrl("assets/")
+
     property string currentTheme: "SolarizedLight"
     property string currentFont: "System Default"
 

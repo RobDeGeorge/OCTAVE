@@ -10,9 +10,16 @@ Rectangle {
 
     property string cardId: ""
     property string title: ""
+    // Unicode glyph fallback. Kept so a tile that has no SVG yet still renders
+    // something rather than a blank square.
     property string icon: ""
+    // Preferred: a theme-tinted SVG from frontend/assets/, e.g.
+    // App.Style.assetBase + "tile_layout.svg".
+    property url iconSource: ""
     property color statusColor: "transparent"
     property bool statusVisible: false
+
+    readonly property bool _hasSvg: String(iconSource) !== ""
 
     signal tileClicked(string cardId)
 
@@ -72,12 +79,27 @@ Rectangle {
             Layout.fillHeight: true
             Layout.minimumHeight: tile.dp(28)
 
+            // Preferred path: theme-tinted SVG. ThemedIcon carries the same
+            // offset drop shadow the glyphs below fake, so the two render
+            // paths have matching weight.
+            App.ThemedIcon {
+                anchors.centerIn: parent
+                visible: tile._hasSvg
+                width: Math.max(tile.dp(24), parent.height * 0.62)
+                height: width
+                source: tile.iconSource
+                color: App.Style.accent
+                shadowOffsetX: tile.dp(1)
+                shadowOffsetY: tile.dp(2)
+            }
+
             // Static drop-shadow glyph behind the main icon — gives the
             // symbol weight without any animation or graphical effect.
             Text {
                 anchors.centerIn: parent
                 anchors.horizontalCenterOffset: tile.dp(1)
                 anchors.verticalCenterOffset: tile.dp(2)
+                visible: !tile._hasSvg
                 text: tile.icon
                 color: Qt.rgba(0, 0, 0, 0.40)
                 font.pixelSize: Math.max(tile.dp(20), parent.height * 0.55)
@@ -86,6 +108,7 @@ Rectangle {
 
             Text {
                 anchors.centerIn: parent
+                visible: !tile._hasSvg
                 text: tile.icon
                 color: App.Style.accent
                 font.pixelSize: Math.max(tile.dp(20), parent.height * 0.55)

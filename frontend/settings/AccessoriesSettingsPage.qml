@@ -47,10 +47,10 @@ Flickable {
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
     property var tileModel: [
-        { cardId: "accessories_volume_knob", title: "Volume Knob",    icon: "◉", component: volumeKnobContent },
-        { cardId: "accessories_imu",         title: "IMU Sensor",     icon: "◈", component: imuContent },
-        { cardId: "accessories_gesture",     title: "Gesture Sensor", icon: "☛", component: gestureContent },
-        { cardId: "accessories_phone_dock",  title: "Phone Dock",     icon: "☎", component: phoneDockContent }
+        { cardId: "accessories_volume_knob", title: "Volume Knob",    iconSource: App.Style.assetBase + "tile_volume_knob.svg", component: volumeKnobContent },
+        { cardId: "accessories_imu",         title: "IMU Sensor",     iconSource: App.Style.assetBase + "tile_imu.svg",         component: imuContent },
+        { cardId: "accessories_gesture",     title: "Gesture Sensor", iconSource: App.Style.assetBase + "tile_gesture.svg",     component: gestureContent },
+        { cardId: "accessories_phone_dock",  title: "Phone Dock",     iconSource: App.Style.assetBase + "tile_phone_dock.svg",  component: phoneDockContent }
     ]
 
     // Phone Dock — scrcpy executable picker (Windows-style backslash path).

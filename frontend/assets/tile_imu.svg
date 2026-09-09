@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+  <g transform="translate(1,-29)">
+    <!-- Isometric cube -->
+    <path fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linejoin="round" d="M300,90 L510,210 L510,450 L300,570 L90,450 L90,210 Z"/>
+    <!-- Axes from centroid -->
+    <path fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" d="M300,330 L300,570 M300,330 L90,210 M300,330 L510,210"/>
+  </g>
+  </g>
+</svg>

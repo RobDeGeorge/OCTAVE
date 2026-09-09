@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+    <!-- Fader tracks -->
+    <rect x="110" y="182" width="380" height="18" rx="9"/>
+    <rect x="110" y="292" width="380" height="18" rx="9"/>
+    <rect x="110" y="402" width="380" height="18" rx="9"/>
+    <!-- Knobs -->
+    <circle cx="400" cy="191" r="46"/>
+    <circle cx="238" cy="301" r="46"/>
+    <circle cx="330" cy="411" r="46"/>
+  </g>
+</svg>

@@ -62,6 +62,7 @@
       <span class="prop">source</span>: <span class="str">"settings/DisplaySettingsPage.qml"</span>,
       <span class="prop">widget</span>: <span class="str">"widgets/DisplayWidget.qml"</span>,
       <span class="prop">icon</span>: <span class="str">"\u263C"</span>,
+      <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_display.svg"</span>,
       <span class="prop">group</span>: <span class="str">"Appearance"</span>,
       <span class="prop">subSections</span>: [<span class="str">"Layout"</span>, <span class="str">"Window"</span>, <span class="str">"Appearance"</span>, <span class="str">"Clock"</span>] },
     { <span class="prop">name</span>: <span class="str">"Media"</span>,
@@ -69,8 +70,9 @@
       <span class="prop">source</span>: <span class="str">"settings/MediaSettingsPage.qml"</span>,
       <span class="prop">widget</span>: <span class="str">"widgets/MediaWidget.qml"</span>,
       <span class="prop">icon</span>: <span class="str">"\u266B"</span>,
+      <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"media_button.svg"</span>,
       <span class="prop">group</span>: <span class="str">"Appearance"</span>,
-      <span class="prop">subSections</span>: [<span class="str">"Library"</span>, <span class="str">"Playback"</span>, <span class="str">"Album Art"</span>, ...] },
+      <span class="prop">subSections</span>: [<span class="str">"Library"</span>, <span class="str">"Playback"</span>, <span class="str">"Now Playing"</span>, <span class="str">"Spotify"</span>] },
     <span class="cmt">// ... 5 more pages</span>
 ]</code></pre>
 
@@ -82,9 +84,10 @@
             <tr><td><code>section</code></td><td>Internal identifier used for navigation and persistence</td></tr>
             <tr><td><code>source</code></td><td>QML file path (relative to <code>frontend/</code>)</td></tr>
             <tr><td><code>widget</code></td><td>Widget QML file for Dashboard layout (relative to <code>frontend/settings/</code>)</td></tr>
-            <tr><td><code>icon</code></td><td>Unicode character used as icon</td></tr>
+            <tr><td><code>icon</code></td><td>Legacy Unicode character; kept only as a fallback</td></tr>
+            <tr><td><code>iconSource</code></td><td>Theme-tinted SVG in <span class="file-path">frontend/assets/</span>, built from <code>Style.assetBase</code>. This is what actually renders.</td></tr>
             <tr><td><code>group</code></td><td>Category grouping: Appearance, Connectivity, System</td></tr>
-            <tr><td><code>subSections</code></td><td>Named anchors within the page for sub-navigation</td></tr>
+            <tr><td><code>subSections</code></td><td>Named anchors within the page for sub-navigation. <strong>Must match the page's <code>tileModel</code> titles exactly</strong> &mdash; lookup goes through <code>findChildByObjectName()</code>, and pages set each card's <code>objectName</code> from <code>modelData.title</code>.</td></tr>
           </tbody>
         </table>
 
@@ -94,9 +97,9 @@
           <tbody>
             <tr><td>Display</td><td><span class="file-path">settings/DisplaySettingsPage.qml</span></td><td>Theme, environment, layout, window size, clock, UI scale, fonts</td></tr>
             <tr><td>Media</td><td><span class="file-path">settings/MediaSettingsPage.qml</span></td><td>Library paths, playback, album art transitions, blur, visualizer, Spotify</td></tr>
-            <tr><td>OBD</td><td><span class="file-path">settings/OBDSettingsPage.qml</span></td><td>Connection, port, fast mode, parameter visibility</td></tr>
+            <tr><td>OBD</td><td><span class="file-path">settings/OBDSettingsPage.qml</span></td><td>Connection (status + live log), Adapters (scan/port/manual entry), Tuning (fast mode, retries, gauge style), Parameters (PID visibility)</td></tr>
             <tr><td>Accessories</td><td><span class="file-path">settings/AccessoriesSettingsPage.qml</span></td><td>Volume Knob, IMU sensor, gesture sensor, Phone Dock (Android Auto + Phone Mirror)</td></tr>
-            <tr><td>Device</td><td><span class="file-path">settings/DeviceSettingsPage.qml</span></td><td>Device name, updates, data management</td></tr>
+            <tr><td>Device</td><td><span class="file-path">settings/DeviceSettingsPage.qml</span></td><td>Device Name, Network, Power</td></tr>
             <tr><td>About</td><td><span class="file-path">settings/AboutPage.qml</span></td><td>Version info, credits, licenses</td></tr>
           </tbody>
         </table>
@@ -234,12 +237,12 @@
           <li><strong>Track:</strong> Active fill portion uses the <code>activeColor</code>; background uses <code>secondaryTextColor</code></li>
         </ul>
 
-        <h3>SettingsDropdown</h3>
-        <p><span class="file-path">settings/SettingsDropdown.qml</span> &mdash; A button-based dropdown selector.</p>
+        <h3>SettingsTile</h3>
+        <p><span class="file-path">settings/SettingsTile.qml</span> &mdash; A large touch target in the settings tile grid. Every top-level settings page is a 2&times;2-ish grid of these; tapping one opens its content in a <code>SettingsCardPopup</code>.</p>
         <ul>
-          <li><strong>Properties:</strong> <code>displayText</code>, <code>options</code> (array), <code>onSelected</code> (callback)</li>
-          <li><strong>Styling:</strong> Environment-aware border radius with corner marks (Spacecraft), hover states</li>
-          <li><strong>Popup:</strong> Opens a scrollable list of options in a themed popup overlay</li>
+          <li><strong>Properties:</strong> <code>cardId</code>, <code>title</code>, <code>iconSource</code> (theme-tinted SVG), <code>icon</code> (legacy Unicode glyph fallback), <code>statusColor</code>, <code>statusVisible</code></li>
+          <li><strong>Signal:</strong> <code>tileClicked(string cardId)</code></li>
+          <li><strong>Icons:</strong> Prefer <code>iconSource</code>. Build the path from the <code>Style.assetBase</code> URL, e.g. <code>App.Style.assetBase + "tile_layout.svg"</code> &mdash; that resolves correctly from both <span class="file-path">frontend/</span> and <span class="file-path">frontend/settings/</span>.</li>
         </ul>
 
         <h3>SettingsButton</h3>
@@ -268,8 +271,8 @@
         <table>
           <thead><tr><th>Component</th><th>File</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td>SettingsCheckBox</td><td><span class="file-path">settings/SettingsCheckBox.qml</span></td><td>Themed checkbox with environment-aware radius</td></tr>
-            <tr><td>SettingsRadio</td><td><span class="file-path">settings/SettingsRadio.qml</span></td><td>Radio buttons (can be square in Spacecraft)</td></tr>
+            <tr><td>ThemedIcon</td><td><span class="file-path">ThemedIcon.qml</span></td><td>Theme-tinted SVG icon (Image + ColorOverlay) with an optional static drop shadow</td></tr>
+            <tr><td>SettingsTilePage</td><td><span class="file-path">settings/SettingsTilePage.qml</span></td><td>Grid of <code>SettingsTile</code>s driven by a page's <code>tileModel</code></td></tr>
             <tr><td>SettingsSegmentedControl</td><td><span class="file-path">settings/SettingsSegmentedControl.qml</span></td><td>Multi-option segmented control with glow bar</td></tr>
             <tr><td>SettingsCollapsibleSection</td><td><span class="file-path">settings/SettingsCollapsibleSection.qml</span></td><td>Expandable/collapsible section within a card</td></tr>
             <tr><td>SettingsDivider</td><td><span class="file-path">settings/SettingsDivider.qml</span></td><td>Horizontal divider with gradient/animation options</td></tr>
@@ -304,18 +307,53 @@
         <h2 id="adding-page">Adding a New Settings Page</h2>
 
         <ol class="steps">
-          <li><strong>Create the page QML file</strong> in <span class="file-path">frontend/settings/</span>. Name it <code>MySettingsPage.qml</code>. It receives <code>settingsManager</code> as a context property and should use <code>SettingsCard</code> components for grouping.</li>
+          <li><strong>Create the page QML file</strong> in <span class="file-path">frontend/settings/</span>. Name it <code>MySettingsPage.qml</code>. It receives <code>settingsManager</code> as a context property.
+            <p>Follow the <strong>tile pattern</strong> every settings page uses &mdash; declare a <code>tileModel</code>, put each card's body in its own <code>Component</code>, and render the fallback with a <code>Repeater</code>:</p>
+            <pre><code><span class="kw">property var</span> tileModel: [
+    { <span class="prop">cardId</span>: <span class="str">"my_first"</span>,  <span class="prop">title</span>: <span class="str">"First"</span>,
+      <span class="prop">iconSource</span>: App.Style.assetBase + <span class="str">"tile_first.svg"</span>,
+      <span class="prop">component</span>: firstContent },
+    <span class="cmt">// ... aim for 4 tiles so the grid reads as 2x2</span>
+]
+
+<span class="cls">Component</span> {
+    <span class="prop">id</span>: firstContent
+    <span class="cls">ColumnLayout</span> {
+        <span class="prop">width</span>: parent ? parent.width : <span class="num">0</span>
+        <span class="cmt">// ... card body</span>
+    }
+}
+
+<span class="cmt">// Default rendering for Carousel/Hub/Dashboard; the Sidebar
+// layout hides this and renders the tile grid + popup instead.</span>
+<span class="cls">Repeater</span> {
+    <span class="prop">model</span>: pageRoot.tileModel
+    <span class="cls">SettingsCard</span> {
+        <span class="prop">Layout.fillWidth</span>: <span class="kw">true</span>
+        <span class="prop">objectName</span>: modelData.title
+        <span class="prop">cardId</span>: modelData.cardId
+        <span class="prop">title</span>: modelData.title
+        <span class="cls">Loader</span> {
+            <span class="prop">Layout.fillWidth</span>: <span class="kw">true</span>
+            <span class="prop">sourceComponent</span>: modelData.component
+        }
+    }
+}</code></pre>
+          </li>
+
+          <li><strong>Draw the tile icons</strong> &mdash; Add one 600&times;600 SVG per tile to <span class="file-path">frontend/assets/</span>, following the house style: a single <code>&lt;g fill="#FFFFFF"&gt;</code> of filled primitives (see <span class="file-path">tile_layout.svg</span> or <span class="file-path">sensor_button.svg</span>). They are recoloured at runtime by <code>ThemedIcon</code>, so use one flat fill &mdash; a second colour will collapse into the tint. Keep the artwork centred in the viewBox; anything off-centre renders visibly offset in the tile.</li>
 
           <li><strong>Create an optional widget</strong> in <span class="file-path">frontend/settings/widgets/MyWidget.qml</span> for the Dashboard layout preview.</li>
 
-          <li><strong>Register in pageModel</strong> &mdash; Add an entry to the <code>pageModel</code> array in <span class="file-path">frontend/SettingsMenu.qml</span>:
+          <li><strong>Register in pageModel</strong> &mdash; Add an entry to the <code>pageModel</code> array in <span class="file-path">frontend/SettingsMenu.qml</span>. <code>subSections</code> must list the same titles as <code>tileModel</code>:
             <pre><code>{ <span class="prop">name</span>: <span class="str">"My Page"</span>,
   <span class="prop">section</span>: <span class="str">"mySettings"</span>,
   <span class="prop">source</span>: <span class="str">"settings/MySettingsPage.qml"</span>,
   <span class="prop">widget</span>: <span class="str">"widgets/MyWidget.qml"</span>,
   <span class="prop">icon</span>: <span class="str">"\u2605"</span>,
+  <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_mypage.svg"</span>,
   <span class="prop">group</span>: <span class="str">"System"</span>,
-  <span class="prop">subSections</span>: [] }</code></pre>
+  <span class="prop">subSections</span>: [<span class="str">"First"</span>] }</code></pre>
           </li>
 
           <li><strong>Add visibility default</strong> &mdash; Ensure <code>settingsManager.is_settings_section_visible("mySettings")</code> returns <code>true</code> by default in both backends (C++ and Python).</li>

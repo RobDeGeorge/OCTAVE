@@ -50,7 +50,7 @@ If scaling is correct → the bug is fixed → safe to consolidate.
 
 ## Cross-references
 
-- Same 2026-05-24 cohesion pass as `TODO/settings-icons-svg.md` and `TODO/wiki-purge-removed-python-android-docs.md`.
+- Same 2026-05-24 cohesion pass as `TODO/wiki-purge-removed-python-android-docs.md` (the settings-icon conversion from that pass shipped 2026-08-08).
 - Touches the same god-files as `TODO/god-object-splits.md`; either can go first.
 
 Delete this file when all local copies are gone.

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+    <!-- Sidebar pane -->
+    <rect x="60" y="100" width="140" height="400" rx="24"/>
+    <!-- Content panes -->
+    <rect x="230" y="100" width="310" height="180" rx="24"/>
+    <rect x="230" y="310" width="145" height="190" rx="24"/>
+    <rect x="395" y="310" width="145" height="190" rx="24"/>
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+  <g transform="translate(-50,-99)">
+    <!-- Adapter body -->
+    <path fill-rule="evenodd" d="M90,300 h210 v230 h-210 Z M134,344 h122 v142 h-122 Z"/>
+    <!-- Signal arcs -->
+    <path fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round" d="M330,410 A120,120 0 0 1 450,530"/>
+    <path fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round" d="M330,340 A190,190 0 0 1 520,530"/>
+    <path fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round" d="M330,270 A260,260 0 0 1 590,530"/>
+  </g>
+  </g>
+</svg>

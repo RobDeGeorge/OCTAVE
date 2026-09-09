@@ -40,6 +40,7 @@ Item {
                 cardId: modelData && modelData.cardId !== undefined ? modelData.cardId : ""
                 title: modelData && modelData.title !== undefined ? modelData.title : ""
                 icon: modelData && modelData.icon !== undefined ? modelData.icon : ""
+                iconSource: modelData && modelData.iconSource !== undefined ? modelData.iconSource : ""
                 statusColor: modelData && modelData.statusColor !== undefined
                     ? modelData.statusColor : "transparent"
                 statusVisible: modelData && modelData.statusVisible === true

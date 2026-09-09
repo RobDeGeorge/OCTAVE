@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Rebuild search-index.js from all wiki HTML pages. Run after adding/editing pages."""
-import re, html, json, glob
+import re, html, json, glob, os
+
+# Work from the wiki directory regardless of where this is invoked. The globs
+# below are relative, so running it from the repo root used to silently emit an
+# empty index into the repo root instead of updating wiki/search-index.js.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 pages = []
 for f in sorted(glob.glob("*.html")):

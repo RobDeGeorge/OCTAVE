@@ -21,10 +21,10 @@ Flickable {
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
     property var tileModel: [
-        { cardId: "media_library",     title: "Library",     icon: "♪", component: libraryContent },
-        { cardId: "media_playback",    title: "Playback",    icon: "▶", component: playbackContent },
-        { cardId: "media_now_playing", title: "Now Playing", icon: "❒", component: nowPlayingContent },
-        { cardId: "media_spotify",     title: "Spotify",     icon: "♫", component: spotifyContent }
+        { cardId: "media_library",     title: "Library",     iconSource: App.Style.assetBase + "tile_library.svg",     component: libraryContent },
+        { cardId: "media_playback",    title: "Playback",    iconSource: App.Style.assetBase + "tile_playback.svg",    component: playbackContent },
+        { cardId: "media_now_playing", title: "Now Playing", iconSource: App.Style.assetBase + "tile_now_playing.svg", component: nowPlayingContent },
+        { cardId: "media_spotify",     title: "Spotify",     iconSource: App.Style.assetBase + "tile_spotify.svg",     component: spotifyContent }
     ]
 
     // Refresh Spotify devices when navigating to media settings

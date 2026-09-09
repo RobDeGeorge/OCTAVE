@@ -56,20 +56,37 @@ Item {
 
                 Behavior on color { ColorAnimation { duration: 150 } }
 
-                Text {
+                // Icon + name. The glyph used to be concatenated into the label
+                // text; it is a tinted SVG now, so it needs its own item.
+                Row {
                     id: tabLabel
                     anchors.centerIn: parent
-                    text: (hubModel[index] ? hubModel[index].icon + "  " + hubModel[index].name : "")
-                    color: isCurrent ? App.Style.accent : App.Style.secondaryTextColor
-                    font.pixelSize: App.Spacing.overallText * 0.8
-                    font.family: App.Style.fontFamily
-                    font.bold: isCurrent
-                    font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
-                    font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
+                    spacing: dp(6)
                     opacity: isCurrent ? 1.0 : 0.6
 
-                    Behavior on color { ColorAnimation { duration: 150 } }
                     Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                    App.ThemedIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: App.Spacing.overallText * 0.9
+                        height: width
+                        shadow: false
+                        source: hubModel[index] ? (hubModel[index].iconSource || "") : ""
+                        color: isCurrent ? App.Style.accent : App.Style.secondaryTextColor
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: (hubModel[index] ? hubModel[index].name : "")
+                        color: isCurrent ? App.Style.accent : App.Style.secondaryTextColor
+                        font.pixelSize: App.Spacing.overallText * 0.8
+                        font.family: App.Style.fontFamily
+                        font.bold: isCurrent
+                        font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
+                        font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
+
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
                 }
 
                 // Update notification dot

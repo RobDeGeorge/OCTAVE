@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+  <g transform="translate(50,-32)">
+    <!-- Palm -->
+    <rect x="228" y="300" width="212" height="196" rx="64"/>
+    <!-- Fingers -->
+    <rect x="240" y="190" width="40" height="160" rx="20"/>
+    <rect x="292" y="168" width="40" height="182" rx="20"/>
+    <rect x="344" y="178" width="40" height="172" rx="20"/>
+    <rect x="396" y="206" width="40" height="144" rx="20"/>
+    <!-- Motion cues -->
+    <rect x="96" y="250" width="96" height="36" rx="18"/>
+    <rect x="60" y="342" width="132" height="36" rx="18"/>
+    <rect x="96" y="434" width="96" height="36" rx="18"/>
+  </g>
+  </g>
+</svg>

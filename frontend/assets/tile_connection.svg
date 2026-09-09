@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+  <g transform="translate(1,-49)">
+    <!-- OBD-II connector shell with the pin field knocked out -->
+    <path fill-rule="evenodd" d="M110,190 h380 l-44,200 h-292 Z
+      M180,234 a16,16 0 1 0 0.1,0 Z M230,234 a16,16 0 1 0 0.1,0 Z M280,234 a16,16 0 1 0 0.1,0 Z
+      M330,234 a16,16 0 1 0 0.1,0 Z M380,234 a16,16 0 1 0 0.1,0 Z M430,234 a16,16 0 1 0 0.1,0 Z
+      M205,310 a16,16 0 1 0 0.1,0 Z M255,310 a16,16 0 1 0 0.1,0 Z M305,310 a16,16 0 1 0 0.1,0 Z
+      M355,310 a16,16 0 1 0 0.1,0 Z M405,310 a16,16 0 1 0 0.1,0 Z"/>
+    <!-- Cable -->
+    <rect x="272" y="390" width="56" height="120" rx="20"/>
+  </g>
+  </g>
+</svg>

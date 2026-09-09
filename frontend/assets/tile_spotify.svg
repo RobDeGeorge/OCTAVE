@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+    <!-- Ring -->
+    <path fill-rule="evenodd" d="M300,70 A230,230 0 1 1 299.9,70 Z M300,115 A185,185 0 1 0 300.1,115 Z"/>
+    <!-- Broadcast waves -->
+    <path fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" d="M186,238 C260,206 372,214 438,254"/>
+    <path fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" d="M198,318 C266,290 358,297 416,330"/>
+    <path fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" d="M214,394 C270,375 340,381 388,406"/>
+  </g>
+</svg>

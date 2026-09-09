@@ -35,577 +35,572 @@ Item {
         }
     }
 
-    Flickable {
-        id: rootFlickable
-        anchors.fill: parent
-        contentWidth: width
-        contentHeight: settingsContent.implicitHeight
-        flickableDirection: Flickable.VerticalFlick
-        clip: true
-        interactive: true  // Card MouseAreas disable this on press to prevent steal
-        boundsBehavior: Flickable.DragAndOvershootBounds
-        flickDeceleration: 1200
-        maximumFlickVelocity: 4000
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOff }
+    // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
+    // Each entry: { cardId, title, iconSource, component }. Other layouts ignore
+    // this and use the Repeater rendering below.
+    //
+    // The old single "Connection" card bundled four unrelated concerns in ~650
+    // lines; it is split here so the page reads as a 2x2 tile grid like every
+    // other settings page.
+    property var tileModel: [
+        { cardId: "obd_connection", title: "Connection", iconSource: App.Style.assetBase + "tile_connection.svg", component: connectionContent },
+        { cardId: "obd_adapters",   title: "Adapters",   iconSource: App.Style.assetBase + "tile_adapters.svg",   component: adaptersContent },
+        { cardId: "obd_tuning",     title: "Tuning",     iconSource: App.Style.assetBase + "tile_tuning.svg",     component: tuningContent },
+        { cardId: "obd_parameters", title: "Parameters", iconSource: App.Style.assetBase + "tile_parameters.svg", component: parametersContent }
+    ]
 
+    // ── Card body components — shared between the Flickable rendering (below)
+    //    and the SettingsCardPopup in the Sidebar layout.
+
+    Component {
+        id: connectionContent
         ColumnLayout {
-            id: settingsContent
-            width: parent.width
-            spacing: App.Spacing.sectionSpacing
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
 
-        // ── Card 1: Connection ──────────────────────────────────
-        SettingsCard {
-            objectName: "Connection"
-            cardId: "obd_connection"
-            title: "Connection"
-
-            // OBD Connection Status
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingLabel {
-                    text: "Connection Status"
-                }
-
-                Rectangle {
-                    id: connectionStatusRect
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: dp(40)
-
-                    // Use more diverse status colors
-                    property var statusColors: {
-                        "Connected": App.Style.accent,
-                        "Connecting": App.Style.statusWarning,
-                        "Device Not Found": App.Style.statusError,
-                        "Error": App.Style.statusError,
-                        "Disconnected": App.Style.statusDisconnected,
-                        "Device Lost": App.Style.statusWarning,
-                        "No Vehicle": App.Style.statusInfo
-                    }
-
-                    // Default to error color if status not in our map
-                    color: obdManager ?
-                        (statusColors[obdManager.get_connection_status()] || App.Style.statusError) :
-                        App.Style.statusError
-                    radius: 4
-
-                    // Properties for animations
-                    property bool connecting: obdManager ?
-                        (obdManager.get_connection_status() === "Connecting") : false
-                    property real pulseOpacity: 0.7
-                    property real connectionProgress: obdManager ?
-                        (obdManager._connectionProgress || 0) : 0
-
-                    // Progress indicator
-                    Rectangle {
-                        anchors {
-                            left: parent.left
-                            top: parent.top
-                            bottom: parent.bottom
-                        }
-                        width: parent.width * (connectionStatusRect.connectionProgress / 100)
-                        color: Qt.rgba(1, 1, 1, 0.2)
-                        radius: parent.radius
-                        visible: connectionStatusRect.connecting
-                    }
-
-                    // Pulse animation
-                    SequentialAnimation {
-                        id: pulseAnimation
-                        running: connectionStatusRect.connecting
-                        loops: Animation.Infinite
-
-                        NumberAnimation {
-                            target: connectionStatusRect
-                            property: "pulseOpacity"
-                            from: 0.7
-                            to: 1.0
-                            duration: 500
-                            easing.type: Easing.InOutQuad
-                        }
-
-                        NumberAnimation {
-                            target: connectionStatusRect
-                            property: "pulseOpacity"
-                            from: 1.0
-                            to: 0.7
-                            duration: 500
-                            easing.type: Easing.InOutQuad
-                        }
-                    }
-
-                    // Click animation
-                    SequentialAnimation {
-                        id: clickAnimation
-
-                        NumberAnimation {
-                            target: connectionStatusRect
-                            property: "scale"
-                            from: 1.0
-                            to: 0.95
-                            duration: 100
-                            easing.type: Easing.InOutQuad
-                        }
-
-                        NumberAnimation {
-                            target: connectionStatusRect
-                            property: "scale"
-                            from: 0.95
-                            to: 1.0
-                            duration: 100
-                            easing.type: Easing.InOutQuad
-                        }
-                    }
-
-                    // Text and spinner layout
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: dp(2)
-
-                        // Main status row
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: dp(10)
-
-                            // Simple spinner using Rectangle animation
-                            Rectangle {
-                                id: spinner
-                                width: dp(20)
-                                height: dp(20)
-                                radius: dpMin(10, 2)
-                                color: "transparent"
-                                border.width: 2
-                                border.color: "white"
-                                visible: connectionStatusRect.connecting
-
-                                // Spinner dot that rotates around
-                                Rectangle {
-                                    id: spinnerDot
-                                    width: dp(6)
-                                    height: dp(6)
-                                    radius: 3
-                                    color: "white"
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    anchors.top: parent.top
-                                    anchors.topMargin: -3
-
-                                    // Animation
-                                    RotationAnimation {
-                                        target: spinner
-                                        property: "rotation"
-                                        from: 0
-                                        to: 360
-                                        duration: 1200
-                                        loops: Animation.Infinite
-                                        running: connectionStatusRect.connecting
-                                    }
-                                }
-                            }
-
-                            // Status text
-                            Text {
-                                id: statusText
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: obdManager ? obdManager.get_connection_status() : "Not Connected"
-                                color: "white"
-                                font.pixelSize: App.Spacing.overallText
-                                font.family: App.Style.fontFamily
-                                font.bold: true
-                                opacity: connectionStatusRect.connecting ? connectionStatusRect.pulseOpacity : 1.0
-                            }
-                        }
-
-                        // Detailed status text - only shown when available
-                        Text {
-                            id: detailText
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: obdManager && obdManager._connectionDetail ?
-                                obdManager._connectionDetail : ""
-                            color: "white"
-                            font.pixelSize: App.Spacing.overallText * 0.7
-                            font.family: App.Style.fontFamily
-                            visible: text !== ""
-                            opacity: 0.9
-                        }
-                    }
-
-                    // Click handling
-                    MouseArea {
-                        id: connectionClickArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-
-                        // Change cursor on hover
-                        cursorShape: Qt.PointingHandCursor
-
-                        onClicked: {
-                            if (obdManager) {
-                                // Pop up the connection menu
-                                connectionMenu.popup()
-                            }
-                        }
-                    }
-
-                    // Connection menu with options
-                    Menu {
-                        id: connectionMenu
-
-                        MenuItem {
-                            text: "Reset Connection"
-                            onTriggered: {
-                                if (obdManager) {
-                                    clickAnimation.start()
-                                    obdManager.reset_connection()
-                                }
-                            }
-                        }
-                    }
-
-                    // Connections to OBD manager
-                    Connections {
-                        target: obdManager
-
-                        function onConnectionStatusChanged(status) {
-                            connectionStatusRect.connecting = (status === "Connecting")
-                        }
-
-                        function onConnectionProgressChanged(progress) {
-                            connectionStatusRect.connectionProgress = progress
-                        }
-
-                        function onDevicePresenceChanged(present) {
-                            if (!present) {
-                                deviceNotFoundNotification.open()
-                            }
-                        }
-                    }
-                }
-
-                // ── Live OBD log ──────────────────────────────────
-                SettingLabel {
-                    text: "Connection Log"
-                    visible: pageRoot.connectionLog.length > 0
-                }
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: dp(180)
-                    visible: pageRoot.connectionLog.length > 0
-                    radius: dpMin(6, 2)
-                    color: "#0d0d10"
-                    border.color: "#22ff88"
-                    border.width: 1
-
-                    ListView {
-                        id: settingsLogList
-                        anchors.fill: parent
-                        anchors.margins: dp(8)
-                        clip: true
-                        model: pageRoot.connectionLog
-                        delegate: Text {
-                            text: modelData
-                            color: "#88ffaa"
-                            font.pixelSize: App.Spacing.overallText * 0.7
-                            font.family: "Monospace"
-                            wrapMode: Text.Wrap
-                            width: settingsLogList.width
-                        }
-                        onCountChanged: positionViewAtEnd()
-                    }
-                }
-
-                // Add notification popups
-                Popup {
-                    id: deviceNotFoundNotification
-                    x: (parent.width - width) / 2
-                    y: parent.height - height - dp(20)
-                    width: dp(300)
-                    height: dp(60)
-                    modal: false
-                    focus: true
-                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-                    background: Rectangle {
-                        color: App.Style.statusError
-                        radius: 4
-                    }
-
-                    contentItem: Text {
-                        text: "OBD device not found. Check connections."
-                        color: "white"
-                        wrapMode: Text.WordWrap
-                        font.pixelSize: App.Spacing.overallText
-                        font.family: App.Style.fontFamily
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-
-                    enter: Transition {
-                        NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 200 }
-                    }
-
-                    exit: Transition {
-                        NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 200 }
-                    }
-
-                    Timer {
-                        interval: 3000
-                        running: deviceNotFoundNotification.visible
-                        onTriggered: deviceNotFoundNotification.close()
-                    }
-                }
-
-                SettingDescription {
-                    text: "Tap status bar to reconnect"
-                }
+            SettingLabel {
+                text: "Connection Status"
             }
 
-            SettingsDivider {}
-
-            // OBD Adapter — single universal layout. The manager hides every
-            // platform-specific detail (BLE on Android, rfcomm bind on Linux,
-            // COM enumeration on Windows, paired-list on macOS) behind a
-            // uniform availableAdapters / scan() / connect_to_adapter() API.
-            // The QML below renders pixel-identically on every OS.
-            ColumnLayout {
+            Rectangle {
+                id: connectionStatusRect
                 Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
+                Layout.preferredHeight: dp(40)
 
-                SettingLabel {
-                    text: "OBD Adapter"
+                // Use more diverse status colors
+                property var statusColors: {
+                    "Connected": App.Style.accent,
+                    "Connecting": App.Style.statusWarning,
+                    "Device Not Found": App.Style.statusError,
+                    "Error": App.Style.statusError,
+                    "Disconnected": App.Style.statusDisconnected,
+                    "Device Lost": App.Style.statusWarning,
+                    "No Vehicle": App.Style.statusInfo
                 }
 
-                // Discovered adapters — bound to obdManager.availableAdapters
-                // ({name, identifier, kind} on every OS). The "kind" tag tells
-                // the user what flavour each row is so they can pick.
-                Repeater {
-                    id: adaptersRepeater
-                    model: obdManager && obdManager.availableAdapters
-                        ? obdManager.availableAdapters
-                        : []
-                    delegate: Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: dp(44)
-                        radius: dpMin(4, 2)
-                        color: adapterItemMouse.pressed
-                            ? Qt.darker(App.Style.cardBackground, 1.2)
-                            : App.Style.cardBackground
-                        border.width: 1
-                        border.color: App.Style.accent
+                // Default to error color if status not in our map
+                color: obdManager ?
+                    (statusColors[obdManager.get_connection_status()] || App.Style.statusError) :
+                    App.Style.statusError
+                radius: 4
 
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: dp(10)
-                            anchors.rightMargin: dp(10)
-                            spacing: dp(8)
+                // Properties for animations
+                property bool connecting: obdManager ?
+                    (obdManager.get_connection_status() === "Connecting") : false
+                property real pulseOpacity: 0.7
+                property real connectionProgress: obdManager ?
+                    (obdManager._connectionProgress || 0) : 0
 
-                            Text {
-                                Layout.fillWidth: true
-                                text: modelData.name || ""
-                                color: App.Style.textColor
-                                font.pixelSize: App.Spacing.overallText * 0.9
-                                font.family: App.Style.fontFamily
-                                elide: Text.ElideRight
-                            }
+                // Progress indicator
+                Rectangle {
+                    anchors {
+                        left: parent.left
+                        top: parent.top
+                        bottom: parent.bottom
+                    }
+                    width: parent.width * (connectionStatusRect.connectionProgress / 100)
+                    color: Qt.rgba(1, 1, 1, 0.2)
+                    radius: parent.radius
+                    visible: connectionStatusRect.connecting
+                }
 
+                // Pulse animation
+                SequentialAnimation {
+                    id: pulseAnimation
+                    running: connectionStatusRect.connecting
+                    loops: Animation.Infinite
+
+                    NumberAnimation {
+                        target: connectionStatusRect
+                        property: "pulseOpacity"
+                        from: 0.7
+                        to: 1.0
+                        duration: 500
+                        easing.type: Easing.InOutQuad
+                    }
+
+                    NumberAnimation {
+                        target: connectionStatusRect
+                        property: "pulseOpacity"
+                        from: 1.0
+                        to: 0.7
+                        duration: 500
+                        easing.type: Easing.InOutQuad
+                    }
+                }
+
+                // Click animation
+                SequentialAnimation {
+                    id: clickAnimation
+
+                    NumberAnimation {
+                        target: connectionStatusRect
+                        property: "scale"
+                        from: 1.0
+                        to: 0.95
+                        duration: 100
+                        easing.type: Easing.InOutQuad
+                    }
+
+                    NumberAnimation {
+                        target: connectionStatusRect
+                        property: "scale"
+                        from: 0.95
+                        to: 1.0
+                        duration: 100
+                        easing.type: Easing.InOutQuad
+                    }
+                }
+
+                // Text and spinner layout
+                Column {
+                    anchors.centerIn: parent
+                    spacing: dp(2)
+
+                    // Main status row
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: dp(10)
+
+                        // Simple spinner using Rectangle animation
+                        Rectangle {
+                            id: spinner
+                            width: dp(20)
+                            height: dp(20)
+                            radius: dpMin(10, 2)
+                            color: "transparent"
+                            border.width: 2
+                            border.color: "white"
+                            visible: connectionStatusRect.connecting
+
+                            // Spinner dot that rotates around
                             Rectangle {
-                                Layout.preferredWidth: kindLabel.implicitWidth + dp(10)
-                                Layout.preferredHeight: dp(20)
-                                radius: dpMin(10, 2)
-                                color: Qt.rgba(App.Style.accent.r,
-                                               App.Style.accent.g,
-                                               App.Style.accent.b, 0.22)
-                                Text {
-                                    id: kindLabel
-                                    anchors.centerIn: parent
-                                    text: (modelData.kind || "").toUpperCase()
-                                    color: App.Style.primaryTextColor
-                                    font.pixelSize: App.Spacing.overallText * 0.7
-                                    font.family: App.Style.fontFamily
-                                    font.bold: true
+                                id: spinnerDot
+                                width: dp(6)
+                                height: dp(6)
+                                radius: 3
+                                color: "white"
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.top: parent.top
+                                anchors.topMargin: -3
+
+                                // Animation
+                                RotationAnimation {
+                                    target: spinner
+                                    property: "rotation"
+                                    from: 0
+                                    to: 360
+                                    duration: 1200
+                                    loops: Animation.Infinite
+                                    running: connectionStatusRect.connecting
                                 }
                             }
                         }
 
-                        MouseArea {
-                            id: adapterItemMouse
-                            anchors.fill: parent
-                            onClicked: {
-                                var ident = modelData.identifier || ""
-                                if (!ident) return
-                                manualMacField.text = ident
-                                if (obdManager
-                                    && typeof obdManager.connect_to_adapter === "function") {
-                                    obdManager.connect_to_adapter(ident)
-                                } else if (obdManager) {
-                                    if (typeof obdManager.set_target_address === "function")
-                                        obdManager.set_target_address(ident)
-                                    obdManager.force_connect()
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Manual entry — universal escape hatch. Accepts a MAC, a
-                // /dev/... path, or a COM port. The manager classifies and
-                // dispatches accordingly.
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: dp(8)
-
-                    SettingsTextField {
-                        id: manualMacField
-                        Layout.fillWidth: true
-                        placeholderText: "MAC address, /dev path, or COM port"
-                        text: settingsManager ? settingsManager.obdBluetoothPort : ""
-                    }
-
-                    Rectangle {
-                        Layout.preferredWidth: dp(80)
-                        Layout.preferredHeight: dp(40)
-                        radius: dpMin(6, 2)
-                        color: manualConnectMouse.pressed ? Qt.darker("#27ae60", 1.3) : "#27ae60"
-
+                        // Status text
                         Text {
-                            anchors.centerIn: parent
-                            text: "Go"
+                            id: statusText
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: obdManager ? obdManager.get_connection_status() : "Not Connected"
                             color: "white"
                             font.pixelSize: App.Spacing.overallText
                             font.family: App.Style.fontFamily
                             font.bold: true
+                            opacity: connectionStatusRect.connecting ? connectionStatusRect.pulseOpacity : 1.0
+                        }
+                    }
+
+                    // Detailed status text - only shown when available
+                    Text {
+                        id: detailText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: obdManager && obdManager._connectionDetail ?
+                            obdManager._connectionDetail : ""
+                        color: "white"
+                        font.pixelSize: App.Spacing.overallText * 0.7
+                        font.family: App.Style.fontFamily
+                        visible: text !== ""
+                        opacity: 0.9
+                    }
+                }
+
+                // Click handling
+                MouseArea {
+                    id: connectionClickArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+
+                    // Change cursor on hover
+                    cursorShape: Qt.PointingHandCursor
+
+                    onClicked: {
+                        if (obdManager) {
+                            // Pop up the connection menu
+                            connectionMenu.popup()
+                        }
+                    }
+                }
+
+                // Connection menu with options
+                Menu {
+                    id: connectionMenu
+
+                    MenuItem {
+                        text: "Reset Connection"
+                        onTriggered: {
+                            if (obdManager) {
+                                clickAnimation.start()
+                                obdManager.reset_connection()
+                            }
+                        }
+                    }
+                }
+
+                // Connections to OBD manager
+                Connections {
+                    target: obdManager
+
+                    function onConnectionStatusChanged(status) {
+                        connectionStatusRect.connecting = (status === "Connecting")
+                    }
+
+                    function onConnectionProgressChanged(progress) {
+                        connectionStatusRect.connectionProgress = progress
+                    }
+
+                    function onDevicePresenceChanged(present) {
+                        if (!present) {
+                            deviceNotFoundNotification.open()
+                        }
+                    }
+                }
+            }
+
+            // ── Live OBD log ──────────────────────────────────
+            SettingLabel {
+                text: "Connection Log"
+                visible: pageRoot.connectionLog.length > 0
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: dp(180)
+                visible: pageRoot.connectionLog.length > 0
+                radius: dpMin(6, 2)
+                color: "#0d0d10"
+                border.color: "#22ff88"
+                border.width: 1
+
+                ListView {
+                    id: settingsLogList
+                    anchors.fill: parent
+                    anchors.margins: dp(8)
+                    clip: true
+                    model: pageRoot.connectionLog
+                    delegate: Text {
+                        text: modelData
+                        color: "#88ffaa"
+                        font.pixelSize: App.Spacing.overallText * 0.7
+                        font.family: "Monospace"
+                        wrapMode: Text.Wrap
+                        width: settingsLogList.width
+                    }
+                    onCountChanged: positionViewAtEnd()
+                }
+            }
+
+            // Add notification popups
+            Popup {
+                id: deviceNotFoundNotification
+                x: (parent.width - width) / 2
+                y: parent.height - height - dp(20)
+                width: dp(300)
+                height: dp(60)
+                modal: false
+                focus: true
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                background: Rectangle {
+                    color: App.Style.statusError
+                    radius: 4
+                }
+
+                contentItem: Text {
+                    text: "OBD device not found. Check connections."
+                    color: "white"
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: App.Spacing.overallText
+                    font.family: App.Style.fontFamily
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                enter: Transition {
+                    NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 200 }
+                }
+
+                exit: Transition {
+                    NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 200 }
+                }
+
+                Timer {
+                    interval: 3000
+                    running: deviceNotFoundNotification.visible
+                    onTriggered: deviceNotFoundNotification.close()
+                }
+            }
+
+            SettingDescription {
+                text: "Tap status bar to reconnect"
+            }
+        }
+    }
+
+    Component {
+        id: adaptersContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+
+            SettingLabel {
+                text: "OBD Adapter"
+            }
+
+            // Discovered adapters — bound to obdManager.availableAdapters
+            // ({name, identifier, kind} on every OS). The "kind" tag tells
+            // the user what flavour each row is so they can pick.
+            Repeater {
+                id: adaptersRepeater
+                model: obdManager && obdManager.availableAdapters
+                    ? obdManager.availableAdapters
+                    : []
+                delegate: Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: dp(44)
+                    radius: dpMin(4, 2)
+                    color: adapterItemMouse.pressed
+                        ? Qt.darker(App.Style.cardBackground, 1.2)
+                        : App.Style.cardBackground
+                    border.width: 1
+                    border.color: App.Style.accent
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: dp(10)
+                        anchors.rightMargin: dp(10)
+                        spacing: dp(8)
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.name || ""
+                            color: App.Style.textColor
+                            font.pixelSize: App.Spacing.overallText * 0.9
+                            font.family: App.Style.fontFamily
+                            elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: kindLabel.implicitWidth + dp(10)
+                            Layout.preferredHeight: dp(20)
+                            radius: dpMin(10, 2)
+                            color: Qt.rgba(App.Style.accent.r,
+                                           App.Style.accent.g,
+                                           App.Style.accent.b, 0.22)
+                            Text {
+                                id: kindLabel
+                                anchors.centerIn: parent
+                                text: (modelData.kind || "").toUpperCase()
+                                color: App.Style.primaryTextColor
+                                font.pixelSize: App.Spacing.overallText * 0.7
+                                font.family: App.Style.fontFamily
+                                font.bold: true
+                            }
+                        }
+                    }
+
+                    MouseArea {
+                        id: adapterItemMouse
+                        anchors.fill: parent
+                        onClicked: {
+                            var ident = modelData.identifier || ""
+                            if (!ident) return
+                            manualMacField.text = ident
+                            if (obdManager
+                                && typeof obdManager.connect_to_adapter === "function") {
+                                obdManager.connect_to_adapter(ident)
+                            } else if (obdManager) {
+                                if (typeof obdManager.set_target_address === "function")
+                                    obdManager.set_target_address(ident)
+                                obdManager.force_connect()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Manual entry — universal escape hatch. Accepts a MAC, a
+            // /dev/... path, or a COM port. The manager classifies and
+            // dispatches accordingly.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: dp(8)
+
+                SettingsTextField {
+                    id: manualMacField
+                    Layout.fillWidth: true
+                    placeholderText: "MAC address, /dev path, or COM port"
+                    text: settingsManager ? settingsManager.obdBluetoothPort : ""
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: dp(80)
+                    Layout.preferredHeight: dp(40)
+                    radius: dpMin(6, 2)
+                    color: manualConnectMouse.pressed ? Qt.darker("#27ae60", 1.3) : "#27ae60"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Go"
+                        color: "white"
+                        font.pixelSize: App.Spacing.overallText
+                        font.family: App.Style.fontFamily
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: manualConnectMouse
+                        anchors.fill: parent
+                        onClicked: {
+                            var entered = manualMacField.text.trim()
+                            if (!entered) return
+                            if (obdManager
+                                && typeof obdManager.connect_to_adapter === "function") {
+                                obdManager.connect_to_adapter(entered)
+                            } else if (obdManager) {
+                                // Fallback for any backend that hasn't been
+                                // updated yet — keeps the UI working.
+                                if (settingsManager)
+                                    settingsManager.save_obd_bluetooth_port(entered)
+                                if (typeof obdManager.set_target_address === "function")
+                                    obdManager.set_target_address(entered)
+                                obdManager.force_connect()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Saved-adapter chips — tap to reuse a previous connection.
+            Flow {
+                Layout.fillWidth: true
+                spacing: dp(6)
+                visible: savedAdaptersRepeater.count > 0
+
+                Repeater {
+                    id: savedAdaptersRepeater
+                    model: {
+                        if (!settingsManager) return []
+                        try {
+                            var raw = settingsManager.obdSavedAdapters || "[]"
+                            var arr = JSON.parse(raw)
+                            return Array.isArray(arr) ? arr : []
+                        } catch (e) {
+                            return []
+                        }
+                    }
+
+                    delegate: Rectangle {
+                        height: dp(32)
+                        width: chipLayout.implicitWidth + dp(20)
+                        radius: dpMin(16, 2)
+                        color: chipMouse.pressed
+                            ? Qt.darker(App.Style.cardBackground, 1.3)
+                            : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
+                        border.width: 1
+                        border.color: App.Style.accent
+
+                        RowLayout {
+                            id: chipLayout
+                            anchors.centerIn: parent
+                            spacing: dp(6)
+
+                            Text {
+                                text: (modelData.name && modelData.name !== modelData.mac)
+                                    ? (modelData.name + " · " + modelData.mac)
+                                    : (modelData.mac || "")
+                                color: App.Style.primaryTextColor
+                                font.pixelSize: App.Spacing.overallText * 0.8
+                                font.family: App.Style.fontFamily
+                            }
+
+                            Text {
+                                text: "✕"
+                                color: App.Style.secondaryTextColor
+                                font.pixelSize: App.Spacing.overallText * 0.8
+                                font.family: App.Style.fontFamily
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -dp(4)
+                                    onClicked: {
+                                        if (settingsManager && modelData.mac) {
+                                            settingsManager.remove_obd_saved_adapter(modelData.mac)
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         MouseArea {
-                            id: manualConnectMouse
+                            id: chipMouse
                             anchors.fill: parent
                             onClicked: {
-                                var entered = manualMacField.text.trim()
-                                if (!entered) return
+                                var mac = modelData.mac || ""
+                                if (!mac) return
+                                manualMacField.text = mac
                                 if (obdManager
                                     && typeof obdManager.connect_to_adapter === "function") {
-                                    obdManager.connect_to_adapter(entered)
+                                    obdManager.connect_to_adapter(mac)
                                 } else if (obdManager) {
-                                    // Fallback for any backend that hasn't been
-                                    // updated yet — keeps the UI working.
                                     if (settingsManager)
-                                        settingsManager.save_obd_bluetooth_port(entered)
+                                        settingsManager.save_obd_bluetooth_port(mac)
                                     if (typeof obdManager.set_target_address === "function")
-                                        obdManager.set_target_address(entered)
+                                        obdManager.set_target_address(mac)
                                     obdManager.force_connect()
                                 }
                             }
                         }
                     }
                 }
-
-                // Saved-adapter chips — tap to reuse a previous connection.
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: dp(6)
-                    visible: savedAdaptersRepeater.count > 0
-
-                    Repeater {
-                        id: savedAdaptersRepeater
-                        model: {
-                            if (!settingsManager) return []
-                            try {
-                                var raw = settingsManager.obdSavedAdapters || "[]"
-                                var arr = JSON.parse(raw)
-                                return Array.isArray(arr) ? arr : []
-                            } catch (e) {
-                                return []
-                            }
-                        }
-
-                        delegate: Rectangle {
-                            height: dp(32)
-                            width: chipLayout.implicitWidth + dp(20)
-                            radius: dpMin(16, 2)
-                            color: chipMouse.pressed
-                                ? Qt.darker(App.Style.cardBackground, 1.3)
-                                : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
-                            border.width: 1
-                            border.color: App.Style.accent
-
-                            RowLayout {
-                                id: chipLayout
-                                anchors.centerIn: parent
-                                spacing: dp(6)
-
-                                Text {
-                                    text: (modelData.name && modelData.name !== modelData.mac)
-                                        ? (modelData.name + " · " + modelData.mac)
-                                        : (modelData.mac || "")
-                                    color: App.Style.primaryTextColor
-                                    font.pixelSize: App.Spacing.overallText * 0.8
-                                    font.family: App.Style.fontFamily
-                                }
-
-                                Text {
-                                    text: "✕"
-                                    color: App.Style.secondaryTextColor
-                                    font.pixelSize: App.Spacing.overallText * 0.8
-                                    font.family: App.Style.fontFamily
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        anchors.margins: -dp(4)
-                                        onClicked: {
-                                            if (settingsManager && modelData.mac) {
-                                                settingsManager.remove_obd_saved_adapter(modelData.mac)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: chipMouse
-                                anchors.fill: parent
-                                onClicked: {
-                                    var mac = modelData.mac || ""
-                                    if (!mac) return
-                                    manualMacField.text = mac
-                                    if (obdManager
-                                        && typeof obdManager.connect_to_adapter === "function") {
-                                        obdManager.connect_to_adapter(mac)
-                                    } else if (obdManager) {
-                                        if (settingsManager)
-                                            settingsManager.save_obd_bluetooth_port(mac)
-                                        if (typeof obdManager.set_target_address === "function")
-                                            obdManager.set_target_address(mac)
-                                        obdManager.force_connect()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Per-OS hint — the *only* place this page knows about
-                // platform variation. Drives copy, never structure.
-                SettingDescription {
-                    text: {
-                        var hint = (obdManager && typeof obdManager.platform_hint === "function")
-                            ? obdManager.platform_hint() : ""
-                        if (hint === "android")
-                            return "Pair your ELM327 in Android Settings first, then enter its MAC here and press Go."
-                        if (hint === "linux")
-                            return "Enter MAC (auto-binds rfcomm) or /dev/rfcomm0. " +
-                                   "USB ELM327 also works (/dev/ttyUSB0). See Connection Log for rfcomm errors."
-                        if (hint === "windows")
-                            return "Enter the COM port assigned to your paired ELM327 (e.g. COM5), or its MAC."
-                        if (hint === "macos")
-                            return "Enter MAC for Classic BT, or the /dev/tty.* path."
-                        if (hint === "ios")
-                            return "iOS only exposes BLE devices by UUID — MAC entry is not supported by iOS."
-                        return "Enter your adapter's MAC, /dev path, or COM port and press Go."
-                    }
-                }
             }
 
-            SettingsDivider {}
+            // Per-OS hint — the *only* place this page knows about
+            // platform variation. Drives copy, never structure.
+            SettingDescription {
+                text: {
+                    var hint = (obdManager && typeof obdManager.platform_hint === "function")
+                        ? obdManager.platform_hint() : ""
+                    if (hint === "android")
+                        return "Pair your ELM327 in Android Settings first, then enter its MAC here and press Go."
+                    if (hint === "linux")
+                        return "Enter MAC (auto-binds rfcomm) or /dev/rfcomm0. " +
+                               "USB ELM327 also works (/dev/ttyUSB0). See Connection Log for rfcomm errors."
+                    if (hint === "windows")
+                        return "Enter the COM port assigned to your paired ELM327 (e.g. COM5), or its MAC."
+                    if (hint === "macos")
+                        return "Enter MAC for Classic BT, or the /dev/tty.* path."
+                    if (hint === "ios")
+                        return "iOS only exposes BLE devices by UUID — MAC entry is not supported by iOS."
+                    return "Enter your adapter's MAC, /dev path, or COM port and press Go."
+                }
+            }
+        }
+    }
+
+    Component {
+        id: tuningContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.sectionSpacing
 
             // Fast Mode Toggle
             ColumnLayout {
@@ -704,13 +699,14 @@ Item {
                 }
             }
         }
+    }
 
-        // ── Card 2: Parameters (two-panel drag-and-drop) ─────────────
-        SettingsCard {
+    Component {
+        id: parametersContent
+        ColumnLayout {
             id: parametersCard
-            objectName: "Parameters"
-            cardId: "obd_parameters"
-            title: "Parameters"
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
 
             // Version counter to force re-evaluation when scan results change
             property int supportedParamsVersion: 0
@@ -1670,6 +1666,43 @@ Item {
                 }
             }
         }
+    }
+
+    Flickable {
+        id: rootFlickable
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: settingsContent.implicitHeight
+        flickableDirection: Flickable.VerticalFlick
+        clip: true
+        interactive: true  // Card MouseAreas disable this on press to prevent steal
+        boundsBehavior: Flickable.DragAndOvershootBounds
+        flickDeceleration: 1200
+        maximumFlickVelocity: 4000
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOff }
+
+        ColumnLayout {
+            id: settingsContent
+            width: parent.width
+            spacing: App.Spacing.sectionSpacing
+
+            // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard).
+            //    Sidebar layout hides this and renders the tile grid + popup.
+            Repeater {
+                model: pageRoot.tileModel
+
+                SettingsCard {
+                    Layout.fillWidth: true
+                    objectName: modelData.title
+                    cardId: modelData.cardId
+                    title: modelData.title
+
+                    Loader {
+                        Layout.fillWidth: true
+                        sourceComponent: modelData.component
+                    }
+                }
+            }
 
         // Bottom spacer
         Item {

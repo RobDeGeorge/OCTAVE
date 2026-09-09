@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+    <!-- Nameplate -->
+    <path fill-rule="evenodd" d="M70,180 h460 v240 h-460 Z M114,224 h372 v152 h-372 Z"/>
+    <!-- Name lines -->
+    <rect x="152" y="256" width="296" height="30" rx="15"/>
+    <rect x="152" y="314" width="188" height="30" rx="15"/>
+  </g>
+</svg>

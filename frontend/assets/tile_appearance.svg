@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="#FFFFFF">
+    <!-- Four-diamond rosette, spaced so the petals stay distinct -->
+    <polygon points="300,127 368,195 300,263 232,195"/>
+    <polygon points="300,337 368,405 300,473 232,405"/>
+    <polygon points="195,232 263,300 195,368 127,300"/>
+    <polygon points="405,232 473,300 405,368 337,300"/>
+  </g>
+</svg>

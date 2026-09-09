@@ -16,13 +16,13 @@ Flickable {
     property string currentSection: ""
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
-    // Each entry: { cardId, title, icon, component }. Other layouts ignore this
-    // and use the Repeater rendering below.
+    // Each entry: { cardId, title, iconSource, component }. Other layouts ignore
+    // this and use the Repeater rendering below.
     property var tileModel: [
-        { cardId: "display_layout",     title: "Layout",     icon: "▦", component: layoutContent },
-        { cardId: "display_window",     title: "Window",     icon: "▣", component: windowContent },
-        { cardId: "display_appearance", title: "Appearance", icon: "❖", component: appearanceContent },
-        { cardId: "display_clock",      title: "Clock",      icon: "◐", component: clockContent }
+        { cardId: "display_layout",     title: "Layout",     iconSource: App.Style.assetBase + "tile_layout.svg",     component: layoutContent },
+        { cardId: "display_window",     title: "Window",     iconSource: App.Style.assetBase + "tile_window.svg",     component: windowContent },
+        { cardId: "display_appearance", title: "Appearance", iconSource: App.Style.assetBase + "tile_appearance.svg", component: appearanceContent },
+        { cardId: "display_clock",      title: "Clock",      iconSource: App.Style.assetBase + "tile_clock.svg",      component: clockContent }
     ]
 
     function buildThemeChipColors() {
