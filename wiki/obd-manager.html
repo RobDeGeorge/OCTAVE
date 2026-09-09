@@ -142,6 +142,22 @@ self._worker_thread.started.connect(self._worker.do_connect)
 self._worker_thread.start()</code></pre>
 
         <!-- Speed Optimizations -->
+        <h3>Port lifecycle (C++): never leave a dead port open</h3>
+        <p>
+          On Linux an rfcomm node whose remote is gone (adapter unpaired, engine off) keeps <code>POLLIN</code>
+          set while <code>read()</code> returns 0 bytes. <code>QSerialPort</code> has no "readable but empty ⇒
+          disconnected" handling, so an open port leaves a read notifier armed in the worker thread's event loop
+          that spins at 100&nbsp;% of a core between commands -- with no OCTAVE frame on the stack, which is why
+          guards inside <code>sendCommand()</code> cannot fix it (measured on the Orange Pi: ~20,000 ppoll+read
+          pairs per second; fixed in <code>0404f7b</code>). The C++ worker therefore calls
+          <code>releasePort()</code> (close + delete) on every init-failure path, including
+          <em>"Connected to adapter, no vehicle response"</em>, and treats 50 consecutive empty reads during polling as
+          a lost connection. The passive scanner reopens the port only every 10&nbsp;s. If <code>obd-worker</code>
+          ever shows up hot in <code>top -H</code> again, check whether an rfcomm fd is still held
+          (<code>ls -l /proc/&lt;pid&gt;/fd | grep rfcomm</code>) before reading any loop. The Python backend
+          (pyserial, blocking reads with its own timeouts) does not have this failure mode.
+        </p>
+
         <h2 id="speed-optimizations">Speed Optimizations</h2>
         <p>
           OCTAVE applies several optimizations for faster OBD communication:

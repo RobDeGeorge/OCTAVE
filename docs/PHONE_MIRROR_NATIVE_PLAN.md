@@ -41,7 +41,8 @@ OCTAVE (`adb` and the scrcpy server jar).
   scrcpy-binary paths remain only as an automatic fallback when the client is unavailable.
 - Side findings: Windows/macOS CI lacked the `qt5compat` QML module the main menu imports
   (fixed); the C++ app idles at ~100 % of a core on the Pi in the OBD worker when
-  `/dev/rfcomm0` exists with no peer (`waitForReadyRead` returns at once; fixed to sleep).
+  `/dev/rfcomm0` exists with no peer: the port was left open after a failed init and QSerialPort's
+  read notifier spun the event loop (fixed in 0404f7b by releasing the port; idle draw 112 % → 11–18 %).
 
 ## Why
 
