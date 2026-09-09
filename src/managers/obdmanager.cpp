@@ -1742,23 +1742,37 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
     QElapsedTimer timer;
     timer.start();
 
+    int emptyReads = 0;
     while (timer.elapsed() < timeoutMs) {
         QElapsedTimer waitTimer;
         waitTimer.start();
         if (m_serial->waitForReadyRead(100)) {
-            m_responseBuffer.feed(m_serial->readAll());
-            auto resp = m_responseBuffer.getResponse();
-            if (resp.has_value())
-                return resp.value();
-        } else if (waitTimer.elapsed() < 50) {
-            // The wait returned at once instead of blocking: an rfcomm node
-            // with no remote (or a dead port) does this on every call, which
-            // turned this loop into a 100 % CPU spin for the whole timeout.
+            const QByteArray chunk = m_serial->readAll();
+            if (!chunk.isEmpty()) {
+                emptyReads = 0;
+                m_responseBuffer.feed(chunk);
+                auto resp = m_responseBuffer.getResponse();
+                if (resp.has_value())
+                    return resp.value();
+            } else if (++emptyReads >= 50) {
+                // Readable-but-empty on every poll (measured: ~20k ppoll+read
+                // pairs per second): an rfcomm node with no remote never
+                // clears this on its own. Treat it as a dead port.
+                qWarning() << "[OBD Worker] Port reports readable but delivers no data; giving up on this command";
+                break;
+            }
+        } else {
             const auto err = m_serial->error();
             if (err != QSerialPort::NoError && err != QSerialPort::TimeoutError)
                 break;  // port is gone; onSerialError reports it
-            QThread::msleep(100 - waitTimer.elapsed());
         }
+        // Whatever the branch, never iterate faster than ~10 Hz: an rfcomm
+        // node with no remote returns from the wait immediately (readable,
+        // zero bytes), which turned this loop into a 100 % CPU spin for the
+        // whole command timeout, repeated by the passive scanner forever.
+        const qint64 spent = waitTimer.elapsed();
+        if (spent < 100)
+            QThread::msleep(static_cast<unsigned long>(100 - spent));
     }
 
     // Timeout -- return whatever we have
