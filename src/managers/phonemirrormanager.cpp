@@ -223,6 +223,17 @@ void PhoneMirrorManager::killStaleServer()
                                         QStringLiteral("-f"), QStringLiteral("com.genymobile.scrcpy")});
 }
 
+void PhoneMirrorManager::setNativeMode(bool enabled)
+{
+    if (enabled == m_nativeMode)
+        return;
+    if (enabled)
+        qCWarning(lcPhoneMirror) << "Built-in phone mirror client is not implemented in the C++ backend yet "
+                                    "(docs/PHONE_MIRROR_NATIVE_PLAN.md phase 2); using scrcpy binary";
+    m_nativeMode = enabled;
+    emit nativeModeChanged();
+}
+
 int PhoneMirrorManager::getDeviceSdk()
 {
     bool ok = false;

@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Basic 2.15
+import QtMultimedia
 import OCTAVE.PhoneMirror 1.0
 import "." as App
 
@@ -29,7 +30,11 @@ Item {
     property string errorMessage: ""
     readonly property string captureMode: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager
                                            && phoneMirrorManager.captureMode) ? phoneMirrorManager.captureMode : "window"
-    readonly property bool v4l2Mode: captureMode === "v4l2"
+    readonly property bool v4l2Mode: captureMode === "v4l2" && !nativeMode
+    // Built-in scrcpy-protocol client: frames arrive on a QVideoSink bound to
+    // the VideoOutput below, touch goes over the control socket (multitouch).
+    readonly property bool nativeMode: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager
+                                        && phoneMirrorManager.nativeMode === true)
     // True when scrcpy and (on Linux) the video node are fine, so any failure
     // is about the phone. Re-evaluated whenever the error state changes.
     property bool setupOk: true
@@ -45,7 +50,7 @@ Item {
     // True once the capture has produced a real frame. In v4l2 mode the first
     // frame is seeded from the held buffer and a static phone emits no more
     // until something moves, so one frame is proof of life.
-    readonly property bool hasVideo: v4l2Mode ? frameCounter >= 1 : frameCounter >= 10
+    readonly property bool hasVideo: (v4l2Mode || nativeMode) ? frameCounter >= 1 : frameCounter >= 10
 
     // Handle when this view becomes active again
     StackView.onActivated: {
@@ -69,6 +74,10 @@ Item {
     }
 
     function resumeCapture() {
+        if (nativeMode) {
+            if (phoneMirrorManager && phoneMirrorManager.isRunning) mirrorRunning = true
+            return
+        }
         if (scrcpyCapture && phoneMirrorManager && phoneMirrorManager.isRunning) {
             var hwnd = phoneMirrorManager.scrcpyWindowHandle
             if (hwnd) {
@@ -103,14 +112,82 @@ Item {
             antialiasing: true
             mipmap: true
             // The source URL includes frameCounter to force refresh
-            source: mirrorRunning ? "image://scrcpyframe/frame?" + frameCounter : ""
+            source: (mirrorRunning && !nativeMode) ? "image://scrcpyframe/frame?" + frameCounter : ""
+            visible: !nativeMode
         }
 
-        // Touch/click forwarding to scrcpy
+        // Native mode: decoded frames land directly on this sink
+        VideoOutput {
+            id: nativeVideo
+            anchors.fill: parent
+            visible: nativeMode
+            fillMode: VideoOutput.PreserveAspectFit
+            Component.onCompleted: if (nativeMode && phoneMirrorManager) phoneMirrorManager.videoSink = videoSink
+            Connections {
+                target: phoneMirrorView
+                function onNativeModeChanged() {
+                    if (nativeMode && phoneMirrorManager) phoneMirrorManager.videoSink = nativeVideo.videoSink
+                }
+            }
+        }
+
+        // Native mode: real multitouch over the control socket. Mouse input
+        // arrives as a single touch point. Coordinates map through the
+        // letterboxed content rect to 0..1 of the mirrored display.
+        MultiPointTouchArea {
+            id: nativeTouch
+            anchors.fill: parent
+            enabled: nativeMode && mirrorRunning
+            visible: enabled
+            mouseEnabled: true
+            minimumTouchPoints: 1
+            maximumTouchPoints: 10
+
+            function relPos(p) {
+                var r = nativeVideo.contentRect
+                if (r.width <= 0 || r.height <= 0) return null
+                var x = (p.x - r.x) / r.width, y = (p.y - r.y) / r.height
+                return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) }
+            }
+            function send(points, action) {
+                for (var i = 0; i < points.length; ++i) {
+                    var p = points[i], rp = relPos(p)
+                    if (rp && phoneMirrorManager) phoneMirrorManager.injectTouch(p.pointId, action, rp.x, rp.y)
+                }
+            }
+            onPressed: function(points) { send(points, 0) }
+            onUpdated: function(points) { send(points, 2) }
+            onReleased: function(points) { send(points, 1) }
+            onCanceled: function(points) { send(points, 1) }
+        }
+
+        // Native mode: Android navigation buttons (a virtual display has no
+        // gesture nav bar the user can reach)
+        Row {
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottomMargin: dp(6)
+            spacing: dp(24)
+            visible: nativeMode && mirrorRunning
+            z: 10
+            Repeater {
+                model: [ { label: "◁", slot: "pressBack" }, { label: "○", slot: "pressHome" }, { label: "▢", slot: "pressAppSwitch" } ]
+                Rectangle {
+                    width: dp(44); height: dp(44); radius: dpMin(22, 2)
+                    color: navMouse.pressed ? App.Style.accent : "#66000000"
+                    Text { anchors.centerIn: parent; text: modelData.label; color: "white"; font.pixelSize: dp(20) }
+                    MouseArea { id: navMouse; anchors.fill: parent
+                        onClicked: if (phoneMirrorManager) phoneMirrorManager[modelData.slot]() }
+                }
+            }
+        }
+
+        // Touch/click forwarding to scrcpy (adb-based paths only)
         MouseArea {
             id: touchArea
             anchors.fill: parent
             hoverEnabled: false
+            enabled: !nativeMode
 
             property bool isDragging: false
             property real lastX: 0
@@ -213,6 +290,7 @@ Item {
         Text {
             anchors.centerIn: parent
             text: v4l2Mode ? "Connecting... (touch the phone to wake its screen)" : "Connecting..."
+            z: 5
             font.pixelSize: dp(24)
             font.family: phoneMirrorView.globalFont
             color: "white"
@@ -421,7 +499,7 @@ Item {
             return
         }
 
-        if (!phoneMirrorManager.isScrcpyInstalled) {
+        if (!nativeMode && !phoneMirrorManager.isScrcpyInstalled) {
             launchFailed = true
             errorMessage = "scrcpy not installed. Download from https://github.com/Genymobile/scrcpy"
             return
@@ -439,13 +517,17 @@ Item {
         target: phoneMirrorManager
 
         function onScrcpyStarted(hwnd) {
-            console.log("Phone Mirror: scrcpy started with handle", hwnd, "mode", captureMode)
-            if (scrcpyCapture) {
+            console.log("Phone Mirror: scrcpy started with handle", hwnd, "mode", nativeMode ? "native" : captureMode)
+            if (!nativeMode && scrcpyCapture) {
                 scrcpyCapture.setWindowHandle(hwnd)
                 scrcpyCapture.startCapture()
             }
             mirrorRunning = true
             launchFailed = false
+        }
+
+        function onFrameReady() {
+            if (nativeMode) phoneMirrorView.frameCounter++
         }
 
         function onScrcpyStopped() {
@@ -530,7 +612,8 @@ Item {
         if (phoneMirrorManager) {
             console.log("scrcpy installed:", phoneMirrorManager.isScrcpyInstalled)
             console.log("scrcpy path:", phoneMirrorManager.scrcpyPath, "version:", phoneMirrorManager.scrcpyVersion)
-            console.log("capture mode:", captureMode, v4l2Mode ? ("device " + phoneMirrorManager.videoDevice) : "")
+            console.log("capture mode:", nativeMode ? ("native (server " + phoneMirrorManager.serverVersion + ")") : captureMode,
+                        v4l2Mode ? ("device " + phoneMirrorManager.videoDevice) : "")
             console.log("scrcpy already running:", phoneMirrorManager.isRunning)
 
             // Start mirror

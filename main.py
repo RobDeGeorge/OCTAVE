@@ -135,6 +135,7 @@ if saved_scrcpy_path:
 phone_mirror_manager.setAudioEnabled(settings_manager.get_scrcpy_audio_enabled())
 phone_mirror_manager.setVideoDevice(settings_manager.get_scrcpy_video_device())
 phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
+phone_mirror_manager.setNativeMode(settings_manager.get_phone_mirror_native())
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
 settings_manager.scrcpyAudioEnabledChanged.connect(

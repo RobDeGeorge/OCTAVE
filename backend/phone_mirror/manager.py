@@ -19,6 +19,10 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 
 from backend.logging_config import get_logger
+from backend.phone_mirror.scrcpy_client import (
+    ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION,
+    ACTION_DOWN, ACTION_UP, ACTION_MOVE, KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH,
+)
 
 logger = get_logger(__name__)
 
@@ -142,6 +146,9 @@ class PhoneMirrorManager(QObject):
     videoDeviceChanged = Signal()
     displaySizeChanged = Signal()
     displayIdChanged = Signal()
+    nativeModeChanged = Signal()
+    frameSizeChanged = Signal(int, int)  # native mode: decoded frame size
+    frameReady = Signal()                # native mode: a frame reached the video sink
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -156,6 +163,13 @@ class PhoneMirrorManager(QObject):
         self._display_size: str = DEFAULT_DISPLAY_SIZE
         self._display_id: int = -1          # Android display id scrcpy is mirroring (-1 = default)
         self._active_display_size: str = ""  # "" when mirroring the phone's own screen
+
+        # Built-in scrcpy-protocol client (docs/PHONE_MIRROR_NATIVE_PLAN.md)
+        self._native_mode: bool = False
+        self._client: Optional[ScrcpyClient] = None
+        self._video_sink = None
+        self._frame_width: int = 0
+        self._frame_height: int = 0
 
         # Singleton scrcpy process
         self._process: Optional[subprocess.Popen] = None
@@ -226,6 +240,8 @@ class PhoneMirrorManager(QObject):
         """True when scrcpy is installed, new enough and (on Linux) the video
         node exists — i.e. a failure is about the phone, not the setup, so
         the view should not show install instructions."""
+        if self._native_mode:
+            return self.nativeAvailable
         if not self._get_effective_scrcpy_path() or self._version_too_old():
             return False
         if self._capture_mode == "v4l2" and not self.videoDeviceExists():
@@ -278,6 +294,145 @@ class PhoneMirrorManager(QObject):
         # Older format: DisplayDeviceInfo{"scrcpy": ... } followed by mDisplayId=N
         m = re.search(r'"scrcpy".{0,2000}?mDisplayId=(\d+)', out, re.S)
         return int(m.group(1)) if m else -1
+
+    # ── Built-in client (native mode) ────────────────────────────────
+
+    @Property(bool, notify=nativeModeChanged)
+    def nativeMode(self) -> bool:
+        """Use OCTAVE's own scrcpy-protocol client (no scrcpy binary, no v4l2)."""
+        return self._native_mode
+
+    @Property(bool, constant=True)
+    def nativeAvailable(self) -> bool:
+        """PyAV importable, bundled server jar found, adb found."""
+        return bool(HAVE_AV and bundled_server_jar() and self._adb_path)
+
+    @Property(str, constant=True)
+    def serverVersion(self) -> str:
+        return SERVER_VERSION
+
+    @Slot(bool)
+    def setNativeMode(self, enabled: bool):
+        enabled = bool(enabled)
+        if enabled == self._native_mode:
+            return
+        if enabled and not self.nativeAvailable:
+            logger.warning("Native phone mirror requested but unavailable "
+                           f"(av={HAVE_AV}, jar={bundled_server_jar()}, adb={self._adb_path})")
+        was_running = self.isRunning
+        if was_running:
+            self.stopScrcpy()
+        self._native_mode = enabled
+        self.nativeModeChanged.emit()
+        if was_running:
+            QTimer.singleShot(300, self.startScrcpy)
+
+    @Property(QObject, notify=nativeModeChanged)
+    def videoSink(self):
+        return self._video_sink
+
+    @videoSink.setter
+    def videoSink(self, sink):
+        """QML binds VideoOutput.videoSink here; decoded frames go straight to it."""
+        self._video_sink = sink
+        if self._client is not None:
+            self._client.set_video_sink(sink)
+
+    @Property(int, notify=frameSizeChanged)
+    def frameWidth(self) -> int:
+        return self._frame_width
+
+    @Property(int, notify=frameSizeChanged)
+    def frameHeight(self) -> int:
+        return self._frame_height
+
+    @Slot(int, int, float, float)
+    def injectTouch(self, pointer_id: int, action: int, rel_x: float, rel_y: float):
+        """Touch on the mirrored display. action: 0 down, 1 up, 2 move; rel_x/rel_y 0..1."""
+        if self._client is None or not self._client.is_running:
+            return
+        w, h = self._client.frame_size
+        self._client.inject_touch(pointer_id, action, rel_x * w, rel_y * h)
+
+    @Slot(int)
+    def injectKey(self, keycode: int):
+        if self._client is not None and self._client.is_running:
+            self._client.press_key(keycode)
+
+    @Slot()
+    def pressHome(self):
+        self.injectKey(KEYCODE_HOME)
+
+    @Slot()
+    def pressBack(self):
+        self.injectKey(KEYCODE_BACK)
+
+    @Slot()
+    def pressAppSwitch(self):
+        self.injectKey(KEYCODE_APP_SWITCH)
+
+    def _start_native(self, serial: str):
+        jar = bundled_server_jar()
+        if not HAVE_AV:
+            self.scrcpyError.emit("Built-in phone mirror needs the Python package 'av' (pip install av)")
+            return
+        if not jar:
+            self.scrcpyError.emit("Bundled scrcpy server not found (tools/scrcpy-server/)")
+            return
+        self._is_starting = True
+        self._is_stopping = False
+        self._ready = False
+        self._display_id = -1
+        self._active_display_size = self._display_size
+        if self._client is not None:
+            self._client.stop()
+        client = ScrcpyClient(self._adb_path, jar, self)
+        client.set_video_sink(self._video_sink)
+        client.connected.connect(self._on_native_connected)
+        client.disconnected.connect(self._on_native_disconnected)
+        client.frameSizeChanged.connect(self._on_native_frame_size)
+        client.frameReady.connect(self.frameReady)
+        self._client = client
+        # --new-display needs Android 11+; older phones mirror their screen
+        display_size = self._display_size
+        if display_size:
+            sdk = self.getDeviceSdk()
+            if 0 < sdk < NEW_DISPLAY_MIN_SDK:
+                logger.warning(f"Device SDK {sdk} < {NEW_DISPLAY_MIN_SDK}: virtual display unavailable")
+                display_size = ""
+                self._active_display_size = ""
+        logger.info(f"Starting built-in scrcpy client {SERVER_VERSION} for {serial} "
+                    f"(display {display_size or 'phone screen'})")
+        client.start(serial, display_size=display_size, audio=self._audio_enabled)
+        self.isRunningChanged.emit()
+
+    def _on_native_connected(self, w: int, h: int):
+        self._ready = True
+        self._is_starting = False
+        self._scrcpy_hwnd = 1  # non-zero "handle" keeps the QML contract
+        self._frame_width, self._frame_height = w, h
+        self.frameSizeChanged.emit(w, h)
+        if self._active_display_size:
+            self._active_display_size = f"{w}x{h}"
+        logger.info(f"Built-in client connected: {w}x{h}")
+        self.scrcpyStarted.emit(self._scrcpy_hwnd)
+
+    def _on_native_frame_size(self, w: int, h: int):
+        if (w, h) != (self._frame_width, self._frame_height):
+            self._frame_width, self._frame_height = w, h
+            self.frameSizeChanged.emit(w, h)
+
+    def _on_native_disconnected(self, reason: str):
+        if self._is_stopping:
+            return
+        self._ready = False
+        self._is_starting = False
+        self._scrcpy_hwnd = None
+        self.isRunningChanged.emit()
+        if reason:
+            self.scrcpyError.emit(reason)
+        else:
+            self.scrcpyStopped.emit()
 
     @Slot(str)
     def setVideoDevice(self, path: str):
@@ -635,6 +790,8 @@ class PhoneMirrorManager(QObject):
     @Property(bool, notify=isRunningChanged)
     def isRunning(self) -> bool:
         """Check if scrcpy is currently running."""
+        if self._client is not None and self._client.is_running:
+            return True
         return self._process is not None and self._process.poll() is None
 
     @Property(int, notify=scrcpyStarted)
@@ -655,6 +812,14 @@ class PhoneMirrorManager(QObject):
         # Already starting?
         if self._is_starting:
             logger.debug("scrcpy already starting, ignoring duplicate request")
+            return
+
+        if self._native_mode:
+            state = self.getDeviceState()
+            if state != "device":
+                self.scrcpyError.emit(self.describeDeviceState(state))
+                return
+            self._start_native(self.getDeviceSerial())
             return
 
         if self._capture_mode == "unsupported":
@@ -903,6 +1068,12 @@ class PhoneMirrorManager(QObject):
         self._ready = False
         self._display_id = -1
         self._active_display_size = ""
+
+        if self._client is not None:
+            client, self._client = self._client, None
+            client.stop()
+            client.deleteLater()
+            self._kill_stale_server()
 
         if self._process:
             try:

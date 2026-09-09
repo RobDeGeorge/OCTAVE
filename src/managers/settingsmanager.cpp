@@ -210,6 +210,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("scrcpyAudioEnabled")]      = false;
     d[QStringLiteral("scrcpyVideoDevice")]       = QStringLiteral("/dev/video10");  // Linux v4l2loopback node
     d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("1280x800");     // --new-display WxH, "" = phone screen
+    d[QStringLiteral("phoneMirrorNative")]       = false;  // built-in scrcpy-protocol client (phase 1)
 
     // Settings menu visibility
     QJsonObject menuVis;
@@ -439,6 +440,7 @@ SettingsManager::SettingsManager(QObject *parent)
     m_scrcpyAudioEnabled  = s(QStringLiteral("scrcpyAudioEnabled")).toBool();
     m_scrcpyVideoDevice   = s(QStringLiteral("scrcpyVideoDevice")).toString();
     m_scrcpyDisplaySize   = s(QStringLiteral("scrcpyDisplaySize")).toString();
+    m_phoneMirrorNative   = s(QStringLiteral("phoneMirrorNative")).toBool();
 
     // Settings menu visibility
     {
@@ -831,6 +833,7 @@ QString SettingsManager::scrcpyPath() const          { return m_scrcpyPath; }
 bool    SettingsManager::scrcpyAudioEnabled() const  { return m_scrcpyAudioEnabled; }
 QString SettingsManager::scrcpyVideoDevice() const   { return m_scrcpyVideoDevice; }
 QString SettingsManager::scrcpyDisplaySize() const   { return m_scrcpyDisplaySize; }
+bool    SettingsManager::phoneMirrorNative() const   { return m_phoneMirrorNative; }
 
 // --- ESP32 ---
 bool    SettingsManager::esp32VolumeEnabled() const    { return m_esp32VolumeEnabled; }
@@ -1652,6 +1655,14 @@ void SettingsManager::save_scrcpy_display_size(const QString &size)
     emit scrcpyDisplaySizeChanged(size);
 }
 
+void SettingsManager::save_phone_mirror_native(bool enabled)
+{
+    qCDebug(lcSettings) << "Saving phone mirror native:" << enabled;
+    m_phoneMirrorNative = enabled;
+    updateSetting(QStringLiteral("phoneMirrorNative"), enabled);
+    emit phoneMirrorNativeChanged(enabled);
+}
+
 // --- ESP32 ---
 void SettingsManager::save_esp32_volume_enabled(bool enabled)
 {
@@ -1883,6 +1894,7 @@ QString SettingsManager::get_scrcpy_path()             { return m_scrcpyPath; }
 bool    SettingsManager::get_scrcpy_audio_enabled()    { return m_scrcpyAudioEnabled; }
 QString SettingsManager::get_scrcpy_video_device()     { return m_scrcpyVideoDevice; }
 QString SettingsManager::get_scrcpy_display_size()     { return m_scrcpyDisplaySize; }
+bool    SettingsManager::get_phone_mirror_native()     { return m_phoneMirrorNative; }
 bool    SettingsManager::get_esp32_volume_enabled()    { return m_esp32VolumeEnabled; }
 QString SettingsManager::get_esp32_volume_port()       { return m_esp32VolumePort; }
 double  SettingsManager::get_esp32_volume_step_size()  { return m_esp32VolumeStepSize; }
@@ -2115,6 +2127,9 @@ void SettingsManager::reset_to_defaults()
 
     m_scrcpyDisplaySize = m_defaultSettings.value(QStringLiteral("scrcpyDisplaySize")).toString();
     emit scrcpyDisplaySizeChanged(m_scrcpyDisplaySize);
+
+    m_phoneMirrorNative = m_defaultSettings.value(QStringLiteral("phoneMirrorNative")).toBool();
+    emit phoneMirrorNativeChanged(m_phoneMirrorNative);
 
     // Settings menu visibility
     m_settingsMenuVisibility.clear();

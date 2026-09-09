@@ -204,6 +204,7 @@ class SettingsManager(QObject):
     scrcpyAudioEnabledChanged = Signal(bool)
     scrcpyVideoDeviceChanged = Signal(str)
     scrcpyDisplaySizeChanged = Signal(str)
+    phoneMirrorNativeChanged = Signal(bool)
     albumArtColorsChanged = Signal(str)  # JSON string with album art theme colors
 
     # Settings menu visibility signals
@@ -406,6 +407,7 @@ class SettingsManager(QObject):
             "scrcpyAudioEnabled": False,  # If True, forward audio from phone
             "scrcpyVideoDevice": "/dev/video10",  # Linux v4l2loopback node scrcpy streams into
             "scrcpyDisplaySize": "1280x800",  # Virtual display WxH (--new-display); "" = phone screen
+            "phoneMirrorNative": False,  # Built-in scrcpy-protocol client instead of the scrcpy binary (phase 1)
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
                 "deviceSettings": True,
@@ -557,6 +559,7 @@ class SettingsManager(QObject):
         self._scrcpy_audio_enabled = self._settings.get("scrcpyAudioEnabled", False)
         self._scrcpy_video_device = self._settings.get("scrcpyVideoDevice", "/dev/video10")
         self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "1280x800")
+        self._phone_mirror_native = self._settings.get("phoneMirrorNative", False)
 
         # Settings menu visibility
         self._settings_menu_visibility = self._settings.get(
@@ -1691,6 +1694,21 @@ class SettingsManager(QObject):
         self._scrcpy_display_size = size
         self.update_setting("scrcpyDisplaySize", size, self.scrcpyDisplaySizeChanged)
 
+    @Property(bool, notify=phoneMirrorNativeChanged)
+    def phoneMirrorNative(self):
+        """Use OCTAVE's built-in scrcpy-protocol client instead of the scrcpy binary"""
+        return self._phone_mirror_native
+
+    @Slot(result=bool)
+    def get_phone_mirror_native(self):
+        return self._phone_mirror_native
+
+    @Slot(bool)
+    def save_phone_mirror_native(self, enabled):
+        logger.debug(f"Saving phone mirror native: {enabled}")
+        self._phone_mirror_native = enabled
+        self.update_setting("phoneMirrorNative", enabled, self.phoneMirrorNativeChanged)
+
     # ==================== ESP32 Volume Knob Settings ====================
 
     @Property(bool, notify=esp32VolumeEnabledChanged)
@@ -2299,6 +2317,9 @@ class SettingsManager(QObject):
 
         self._scrcpy_display_size = self._default_settings["scrcpyDisplaySize"]
         self.scrcpyDisplaySizeChanged.emit(self._scrcpy_display_size)
+
+        self._phone_mirror_native = self._default_settings["phoneMirrorNative"]
+        self.phoneMirrorNativeChanged.emit(self._phone_mirror_native)
 
         self._settings_menu_visibility = self._default_settings["settingsMenuVisibility"].copy()
         self.settingsMenuVisibilityChanged.emit()

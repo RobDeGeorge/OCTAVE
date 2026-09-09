@@ -217,6 +217,7 @@ int main(int argc, char *argv[])
     phoneMirrorManager.setAudioEnabled(settingsManager.get_scrcpy_audio_enabled());
     phoneMirrorManager.setVideoDevice(settingsManager.get_scrcpy_video_device());
     phoneMirrorManager.setDisplaySize(settingsManager.get_scrcpy_display_size());
+    phoneMirrorManager.setNativeMode(settingsManager.get_phone_mirror_native());
 #endif
 
     // Register custom QML types for video embedding (stub types on mobile)

@@ -1684,6 +1684,43 @@ Flickable {
                     } // Linux-only column
 
                     SettingLabel {
+                        text: "Built-in Mirror Client"
+                    }
+
+                    SettingDescription {
+                        text: (phoneMirrorManager && phoneMirrorManager.nativeAvailable)
+                              ? "OCTAVE talks to the phone directly using its bundled scrcpy server "
+                                + (phoneMirrorManager.serverVersion || "") + ". No scrcpy install, no kernel module, touch works over USB."
+                              : "Not available in this build (needs the bundled server and the 'av' Python package)."
+                    }
+
+                    SettingsToggle {
+                        id: phoneMirrorNativeToggle
+                        Layout.fillWidth: true
+                        text: "Use built-in client (experimental)"
+                        enabled: phoneMirrorManager ? phoneMirrorManager.nativeAvailable : false
+                        checked: settingsManager ? settingsManager.phoneMirrorNative : false
+                        activeColor: App.Style.accent
+                        inactiveColor: App.Style.hoverColor
+
+                        onToggled: function(checked) {
+                            if (settingsManager) {
+                                settingsManager.save_phone_mirror_native(checked)
+                                if (phoneMirrorManager) {
+                                    phoneMirrorManager.setNativeMode(checked)
+                                }
+                            }
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onPhoneMirrorNativeChanged() {
+                                phoneMirrorNativeToggle.checked = settingsManager.phoneMirrorNative
+                            }
+                        }
+                    }
+
+                    SettingLabel {
                         text: "Virtual Display Size"
                     }
 

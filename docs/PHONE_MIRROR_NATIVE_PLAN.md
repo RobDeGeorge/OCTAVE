@@ -7,6 +7,23 @@ v4l2loopback, no ffmpeg on PATH, no `adb shell input` for touch. OCTAVE talks to
 phone itself; the only external pieces are two small Apache-2.0 files we ship inside
 OCTAVE (`adb` and the scrcpy server jar).
 
+## Phase 0 results (Orange Pi 5 Plus, scrcpy server 3.3.4, Galaxy S22 Ultra / Android 16)
+
+- **Decoder decision: Option B (PyAV / libavcodec).** Qt's FFmpeg backend refuses a raw
+  Annex-B `QIODevice` (`FormatError "Could not open file"` after 1.5 MB fed). Option A is dead.
+- **First paint:** 0.41–1.26 s from server launch to first decoded frame, phone idle or not
+  (v4l2 path: 4–58 s). The encoder emits a key frame on connect; the seed/nudge machinery goes away.
+- **Decode cost:** software h264 at 1280x800 = 12–15 % of one RK3588 core (PyAV 16.1 bundled ffmpeg).
+  PyAV has `h264` and `h264_v4l2m2m` but **not** `h264_rkmpp`; system ffmpeg has both. Try v4l2m2m later.
+- **Control socket:** 32-byte touch message opens an app; change visible in the stream at +0.17 s
+  (adb `input` path: ~0.13 s just to spawn, plus no multitouch).
+- **Byte layouts below verified against the v3.3.4 source** (`server.h`, `demuxer.c`, `control_msg.c`): no discrepancies.
+- **Gotchas:** `cleanup=true` deletes the jar on exit, so push it every session; with `tunnel_forward`
+  the local TCP connect succeeds before the server listens and then EOFs — retry until the dummy
+  byte arrives; the first decoded frame can precede the launcher drawing its icons.
+- Bundled server: `tools/scrcpy-server/scrcpy-server-v3.3.4`, sha256
+  `8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e`, Apache-2.0 (LICENSE alongside).
+
 ## Why
 
 The v4l2 path that landed in `b0f5095` works, but every link in it is an install step
@@ -93,10 +110,9 @@ build on Windows, brew on macOS); decode on a worker thread with `h264_rkmpp` /
 image-provider path. Python: **PyAV is already in `requirements.txt`** (`av>=12`) and
 wheels bundle ffmpeg, so the Python backend gets Option B for free.
 
-Decision rule: run the spike (Phase 0) on the Pi; if Option A shows ≤ 150 ms glass-to-glass
-and no startup stall, ship A in C++ (fewer deps, which is the whole point) and B in
-Python. Otherwise B in both. Either way the QML side is `VideoOutput`, not the image
-provider.
+Decision (Phase 0): **B in both backends.** Option A cannot open the stream at all. The QML
+side is `VideoOutput` bound to a `QVideoSink` the manager exposes; decoded YUV420P planes go
+into a `QVideoFrame` without an RGB conversion.
 
 ## Touch model
 

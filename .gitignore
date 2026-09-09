@@ -36,6 +36,7 @@ backend/.spotify_token_cache
 # Bundled scrcpy binaries (downloaded via scripts/download_scrcpy.py)
 tools/scrcpy/*
 tools/scrcpy-*/
+!tools/scrcpy-server/
 !tools/scrcpy/LICENSE
 
 # Generated protobuf files (regenerate with compile_protos.py)

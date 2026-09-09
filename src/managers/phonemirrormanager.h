@@ -35,6 +35,15 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(int displayId READ displayId NOTIFY displayIdChanged)
     // "WxH" of the virtual display actually in use, "" if mirroring the phone screen
     Q_PROPERTY(QString activeDisplaySize READ activeDisplaySize NOTIFY displayIdChanged)
+    // Built-in scrcpy-protocol client (docs/PHONE_MIRROR_NATIVE_PLAN.md).
+    // Phase 1 lands in the Python backend; C++ exposes the same API and
+    // reports nativeAvailable=false until phase 2 ports the client.
+    Q_PROPERTY(bool nativeMode READ nativeMode NOTIFY nativeModeChanged)
+    Q_PROPERTY(bool nativeAvailable READ nativeAvailable CONSTANT)
+    Q_PROPERTY(QString serverVersion READ serverVersion CONSTANT)
+    Q_PROPERTY(QObject* videoSink READ videoSink WRITE setVideoSink NOTIFY nativeModeChanged)
+    Q_PROPERTY(int frameWidth READ frameWidth NOTIFY frameSizeChanged)
+    Q_PROPERTY(int frameHeight READ frameHeight NOTIFY frameSizeChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -52,6 +61,13 @@ public:
     QString displaySize() const;
     int displayId() const;
     QString activeDisplaySize() const;
+    bool nativeMode() const { return m_nativeMode; }
+    bool nativeAvailable() const { return false; }  // TODO phase 2
+    QString serverVersion() const { return QStringLiteral("3.3.4"); }
+    QObject *videoSink() const { return m_videoSink; }
+    void setVideoSink(QObject *sink) { m_videoSink = sink; }
+    int frameWidth() const { return 0; }
+    int frameHeight() const { return 0; }
 
     // Validate "WxH": dimensions snapped down to multiples of 8 (scrcpy does the
     // same to a --new-display size), "" for invalid input.
@@ -74,12 +90,21 @@ signals:
     void videoDeviceChanged();
     void displaySizeChanged();
     void displayIdChanged();
+    void nativeModeChanged();
+    void frameSizeChanged(int width, int height);
+    void frameReady();
 
 public slots:
     void setScrcpyPath(const QString &path);
     void setAudioEnabled(bool enabled);
     void setVideoDevice(const QString &device);
     void setDisplaySize(const QString &size);
+    void setNativeMode(bool enabled);
+    void injectTouch(int pointerId, int action, float relX, float relY) { Q_UNUSED(pointerId) Q_UNUSED(action) Q_UNUSED(relX) Q_UNUSED(relY) }
+    void injectKey(int keycode) { Q_UNUSED(keycode) }
+    void pressHome() {}
+    void pressBack() {}
+    void pressAppSwitch() {}
     int getDeviceSdk();
     bool videoDeviceExists();
     bool environmentOk();
@@ -136,6 +161,8 @@ private:
     QString m_displaySize;
     QString m_activeDisplaySize;
     int m_displayId = -1;
+    bool m_nativeMode = false;
+    QObject *m_videoSink = nullptr;
 
     QProcess *m_process = nullptr;
     int m_scrcpyHwnd = 0;
@@ -167,6 +194,12 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(QString displaySize READ displaySize CONSTANT)
     Q_PROPERTY(int displayId READ displayId CONSTANT)
     Q_PROPERTY(QString activeDisplaySize READ activeDisplaySize CONSTANT)
+    Q_PROPERTY(bool nativeMode READ nativeMode CONSTANT)
+    Q_PROPERTY(bool nativeAvailable READ nativeAvailable CONSTANT)
+    Q_PROPERTY(QString serverVersion READ serverVersion CONSTANT)
+    Q_PROPERTY(QObject* videoSink READ videoSink WRITE setVideoSink CONSTANT)
+    Q_PROPERTY(int frameWidth READ frameWidth CONSTANT)
+    Q_PROPERTY(int frameHeight READ frameHeight CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
     void cleanup() {}
@@ -178,6 +211,13 @@ public:
     QString displaySize() const { return {}; }
     int displayId() const { return -1; }
     QString activeDisplaySize() const { return {}; }
+    bool nativeMode() const { return false; }
+    bool nativeAvailable() const { return false; }
+    QString serverVersion() const { return {}; }
+    QObject *videoSink() const { return nullptr; }
+    void setVideoSink(QObject *) {}
+    int frameWidth() const { return 0; }
+    int frameHeight() const { return 0; }
     bool isRunning() const { return false; }
     int scrcpyWindowHandle() const { return 0; }
 
@@ -186,6 +226,12 @@ public slots:
     void setAudioEnabled(bool) {}
     void setVideoDevice(const QString &) {}
     void setDisplaySize(const QString &) {}
+    void setNativeMode(bool) {}
+    void injectTouch(int, int, float, float) {}
+    void injectKey(int) {}
+    void pressHome() {}
+    void pressBack() {}
+    void pressAppSwitch() {}
     bool videoDeviceExists() const { return false; }
     bool environmentOk() const { return false; }
     bool hasConnectedDevice() const { return false; }
@@ -195,6 +241,9 @@ public slots:
 
 signals:
     void scrcpyPathChanged();
+    void nativeModeChanged();
+    void frameSizeChanged(int, int);
+    void frameReady();
     void error(const QString &);
     void scrcpyError(const QString &);  // PhoneMirrorView.qml onScrcpyError
     void scrcpyStarted(int);

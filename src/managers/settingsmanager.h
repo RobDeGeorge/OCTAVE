@@ -95,6 +95,7 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool scrcpyAudioEnabled READ scrcpyAudioEnabled NOTIFY scrcpyAudioEnabledChanged)
     Q_PROPERTY(QString scrcpyVideoDevice READ scrcpyVideoDevice NOTIFY scrcpyVideoDeviceChanged)
     Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize NOTIFY scrcpyDisplaySizeChanged)
+    Q_PROPERTY(bool phoneMirrorNative READ phoneMirrorNative NOTIFY phoneMirrorNativeChanged)
 
     // --- ESP32 Volume Knob ---
     Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled NOTIFY esp32VolumeEnabledChanged)
@@ -199,6 +200,7 @@ public:
     bool scrcpyAudioEnabled() const;
     QString scrcpyVideoDevice() const;
     QString scrcpyDisplaySize() const;
+    bool phoneMirrorNative() const;
 
     // ESP32
     bool esp32VolumeEnabled() const;
@@ -307,6 +309,7 @@ signals:
     void scrcpyAudioEnabledChanged(bool value);
     void scrcpyVideoDeviceChanged(const QString &value);
     void scrcpyDisplaySizeChanged(const QString &value);
+    void phoneMirrorNativeChanged(bool value);
 
     // ESP32
     void esp32VolumeEnabledChanged(bool value);
@@ -428,6 +431,7 @@ public slots:
     void save_scrcpy_audio_enabled(bool enabled);
     void save_scrcpy_video_device(const QString &device);
     void save_scrcpy_display_size(const QString &size);
+    void save_phone_mirror_native(bool enabled);
 
     // ESP32
     void save_esp32_volume_enabled(bool enabled);
@@ -489,6 +493,7 @@ public slots:
     Q_INVOKABLE bool get_scrcpy_audio_enabled();
     Q_INVOKABLE QString get_scrcpy_video_device();
     Q_INVOKABLE QString get_scrcpy_display_size();
+    Q_INVOKABLE bool get_phone_mirror_native();
     Q_INVOKABLE bool get_esp32_volume_enabled();
     Q_INVOKABLE QString get_esp32_volume_port();
     Q_INVOKABLE double get_esp32_volume_step_size();
@@ -610,6 +615,7 @@ private:
     bool m_scrcpyAudioEnabled = false;
     QString m_scrcpyVideoDevice;
     QString m_scrcpyDisplaySize;
+    bool m_phoneMirrorNative = false;
 
     // Settings menu visibility
     QVariantMap m_settingsMenuVisibility;
