@@ -24,6 +24,15 @@ OCTAVE (`adb` and the scrcpy server jar).
 - Bundled server: `tools/scrcpy-server/scrcpy-server-v3.3.4`, sha256
   `8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e`, Apache-2.0 (LICENSE alongside).
 
+## Phase 1 hardware results (Python client, commit 8c04adf, Orange Pi)
+
+- Handshake +0.34 s, first frame **+0.72–0.76 s**, picture at +1.13 s from the click — identical
+  with the phone idle 70 s (v4l2 path: 4–58 s). Touch reaction 0.45 s; tap, drag/scroll,
+  long-press, Back/Home all work. CPU while scrolling: python 23–28 % of a core (lower than
+  the v4l2 path), adb ~1 %. Exit paths clean. Fixed from this round: handshake ordering,
+  scid randomness (global RNG seeded elsewhere), stale adb forwards after SIGKILL.
+- **Untested:** multi-finger gestures (the Pi has no touchscreen), cable pull, unplugged start.
+
 ## Why
 
 The v4l2 path that landed in `b0f5095` works, but every link in it is an install step
