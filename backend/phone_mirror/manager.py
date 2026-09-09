@@ -97,6 +97,22 @@ def _default_capture_mode() -> str:
     return "unsupported"
 
 
+def _bundled_adb() -> Optional[str]:
+    """adb from Google's platform-tools fetched by scripts/fetch_platform_tools.py.
+
+    Dev layout: <repo>/tools/platform-tools/<linux|windows|darwin>/adb
+    Deployed:   <app dir>/platform-tools/adb (CI copies it next to the binary)
+    """
+    exe = "adb.exe" if platform.system() == "Windows" else "adb"
+    os_name = {"Linux": "linux", "Windows": "windows", "Darwin": "darwin"}.get(platform.system(), "")
+    root = Path(__file__).resolve().parents[2]
+    for c in (root / "tools" / "platform-tools" / os_name / exe,
+              root / "platform-tools" / exe):
+        if c.is_file():
+            return str(c)
+    return None
+
+
 def _get_bundled_tools_dir() -> Path:
     """Get the path to bundled tools directory.
 
@@ -588,7 +604,13 @@ class PhoneMirrorManager(QObject):
 
         Checks bundled location first, then PATH, then common install locations.
         """
-        # Check bundled location first (scrcpy package includes adb)
+        # Bundled platform-tools first (no user install needed)
+        bundled = _bundled_adb()
+        if bundled:
+            logger.debug(f" Using bundled platform-tools adb: {bundled}")
+            return bundled
+
+        # Then a bundled scrcpy package (includes adb)
         bundled_dir = _get_bundled_tools_dir()
         if platform.system() == "Windows":
             bundled_adb = bundled_dir / "adb.exe"

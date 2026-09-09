@@ -104,6 +104,12 @@ Outputs: `build/octave.app`. CI runs `macdeployqt` and `hdiutil` to produce the 
 
 CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7.3 via `jurplel/install-qt-action`.
 
+> **adb is bundled, not required from the user.** `python scripts/fetch_platform_tools.py`
+> downloads Google's pinned platform-tools (SHA-256 verified) into `tools/platform-tools/<os>/`;
+> CI runs it and ships `adb` next to the binary (`platform-tools/` beside the executable, or
+> `Contents/Resources/platform-tools/` in the macOS bundle). Google publishes x86_64 only, so on
+> ARM boards OCTAVE falls back to the distro's `adb` on PATH.
+>
 > **FFmpeg (libavcodec/libavutil) is optional on every platform.** It provides the H.264
 > decoder for the built-in phone-mirror client (`phoneMirrorManager.nativeAvailable`).
 > Without it OCTAVE still builds; phone mirroring then needs the external scrcpy binary.

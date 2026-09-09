@@ -145,6 +145,10 @@ jobs:
           arch: 'win64_msvc2019_64'
           modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d'
 
+      - name: Fetch platform-tools (adb) for bundling
+        shell: bash
+        run: python scripts/fetch_platform_tools.py --os windows
+
       - name: Install TagLib and FFmpeg (vcpkg)
         shell: bash
         run: |
@@ -177,6 +181,9 @@ jobs:
           cp "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/avcodec-*.dll \
              "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/avutil-*.dll \
              "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/swresample-*.dll dist/OCTAVE/ 2>/dev/null || true
+          # adb next to the binary so phone mirroring needs no user install
+          mkdir -p dist/OCTAVE/platform-tools
+          cp tools/platform-tools/windows/* dist/OCTAVE/platform-tools/
           windeployqt --qmldir frontend --release dist/OCTAVE/octave.exe
           # Inno Setup expects the binary at OCTAVE.exe (capitalized) per the .iss.
           mv dist/OCTAVE/octave.exe dist/OCTAVE/OCTAVE.exe
@@ -222,6 +229,9 @@ jobs:
       - name: Install TagLib and FFmpeg
         run: brew install taglib ffmpeg pkg-config
 
+      - name: Fetch platform-tools (adb) for bundling
+        run: python3 scripts/fetch_platform_tools.py --os darwin
+
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
@@ -233,6 +243,9 @@ jobs:
           # qt_add_executable produces lowercase 'octave.app'; rename for distribution.
           mkdir -p dist
           mv build/octave.app dist/OCTAVE.app
+          # adb inside the bundle so phone mirroring needs no user install
+          mkdir -p dist/OCTAVE.app/Contents/Resources/platform-tools
+          cp tools/platform-tools/darwin/* dist/OCTAVE.app/Contents/Resources/platform-tools/
           macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg
           # Rename to the unified scheme: OCTAVE-<version>-macos.dmg.
           # Workflow runs on tag pushes only, so GITHUB_REF_NAME is always vX.Y.
@@ -291,7 +304,9 @@ jobs:
           # so it picks up Qt 6 modules instead of any system Qt 5 stub.
           QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake6
           OCTAVE_VERSION: ${{ github.ref_name }}
-        run: bash packaging/linux/build-appimage.sh
+        run: |
+          python3 scripts/fetch_platform_tools.py --os linux
+          bash packaging/linux/build-appimage.sh
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4

@@ -154,7 +154,9 @@ FFmpeg on all three desktop targets. Verified against the fake server; hardware 
 Original estimate: Same classes in C++, CMake for the decoder choice,
 Windows and macOS builds in CI (`cpp-build-*` jobs) proving the bundled adb + jar load.
 
-**Phase 3 — bundle and remove (2 days).** Add `tools/platform-tools/<platform>/adb` and
+**Phase 3 — bundle and remove.** adb bundling DONE (`scripts/fetch_platform_tools.py`, pinned
+platform-tools 37.0.1 with SHA-256, shipped by all three CI packagers; finders prefer it). The
+removals wait for hardware validation of phases 1–2. Original scope: Add `tools/platform-tools/<platform>/adb` and
 `tools/scrcpy-server` with their LICENSE files to the repo (or a CI download step with
 pinned hashes) and to every packaging target in `BUILD.md`. Delete the v4l2 / window-grab
 code, the `scrcpyPath` / `scrcpyVideoDevice` settings, and the dead classes. Flip

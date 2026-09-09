@@ -39,6 +39,9 @@ tools/scrcpy-*/
 !tools/scrcpy-server/
 !tools/scrcpy/LICENSE
 
+# Google platform-tools (adb) fetched by scripts/fetch_platform_tools.py
+tools/platform-tools/
+
 # Generated protobuf files (regenerate with compile_protos.py)
 backend/android_auto/proto/aap_protobuf/**/*_pb2.py
 

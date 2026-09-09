@@ -191,7 +191,8 @@
             Both executables are discovered using a priority-based search:
           </p>
           <ol class="steps">
-            <li><strong>Bundled location</strong> -- Check <code>tools/scrcpy/</code> relative to the project root (or PyInstaller <code>_MEIPASS</code>)</li>
+            <li><strong>Bundled platform-tools</strong> (adb only) -- <code>tools/platform-tools/&lt;os&gt;/adb</code> in a checkout, <code>platform-tools/adb</code> next to a shipped binary (fetched by <code>scripts/fetch_platform_tools.py</code>, pinned and SHA-256 verified)</li>
+            <li><strong>Bundled scrcpy package</strong> -- Check <code>tools/scrcpy/</code> relative to the project root (or PyInstaller <code>_MEIPASS</code>)</li>
             <li><strong>System PATH</strong> -- <code>shutil.which("scrcpy")</code> / <code>shutil.which("adb")</code></li>
             <li><strong>Common install locations</strong> -- Platform-specific paths (e.g., <code>C:\scrcpy\</code>, <code>/usr/bin/scrcpy</code>, Android SDK paths)</li>
           </ol>

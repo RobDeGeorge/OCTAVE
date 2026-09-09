@@ -50,6 +50,12 @@ mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 
 cp "$BUILD_DIR/octave" "$APPDIR/usr/bin/octave"
 cp -r "$REPO_ROOT/frontend/." "$APPDIR/usr/frontend/"
+# Google platform-tools (adb) next to the binary, if fetched
+# (scripts/fetch_platform_tools.py), so phone mirroring needs no user install.
+if [ -d "$REPO_ROOT/tools/platform-tools/linux" ]; then
+    mkdir -p "$APPDIR/usr/bin/platform-tools"
+    cp -r "$REPO_ROOT/tools/platform-tools/linux/." "$APPDIR/usr/bin/platform-tools/"
+fi
 
 # ---- 3. Desktop file + icon ---------------------------------------------
 cat > "$APPDIR/usr/share/applications/octave.desktop" <<'EOF'

@@ -973,7 +973,35 @@ QString PhoneMirrorManager::findScrcpy() const
 
 QString PhoneMirrorManager::findAdb() const
 {
-    // Check bundled location first
+    // Bundled platform-tools first (scripts/fetch_platform_tools.py; CI ships
+    // it next to the binary). Dev layout: <repo>/tools/platform-tools/<os>/,
+    // deployed: <app dir>/platform-tools/ (or the app dir itself).
+    {
+#ifdef Q_OS_WIN
+        const QString exe = QStringLiteral("adb.exe");
+        const QString osName = QStringLiteral("windows");
+#elif defined(Q_OS_MACOS)
+        const QString exe = QStringLiteral("adb");
+        const QString osName = QStringLiteral("darwin");
+#else
+        const QString exe = QStringLiteral("adb");
+        const QString osName = QStringLiteral("linux");
+#endif
+        const QString appDir = QCoreApplication::applicationDirPath();
+        const QStringList candidates{
+            appDir + QStringLiteral("/platform-tools/") + exe,
+            appDir + QStringLiteral("/../tools/platform-tools/") + osName + QLatin1Char('/') + exe,
+            appDir + QStringLiteral("/../Resources/platform-tools/") + exe,   // macOS bundle
+        };
+        for (const QString &c : candidates) {
+            if (QFileInfo::exists(c)) {
+                qCDebug(lcPhoneMirror) << "Using bundled platform-tools adb:" << c;
+                return QFileInfo(c).absoluteFilePath();
+            }
+        }
+    }
+
+    // Then a bundled scrcpy package (includes adb)
     const QString bundledDir = getBundledToolsDir();
     if (!bundledDir.isEmpty()) {
 #ifdef Q_OS_WIN
