@@ -204,8 +204,8 @@ bool PhoneMirrorManager::environmentOk()
 {
     // scrcpy installed, new enough and (on Linux) the video node exists: a
     // failure is about the phone, not the setup, so no install instructions.
-    if (m_nativeMode)
-        return nativeAvailable();
+    if (m_nativeMode && nativeAvailable())
+        return true;
     if (getEffectiveScrcpyPath().isEmpty() || versionTooOld())
         return false;
     if (m_captureMode == QLatin1String("v4l2") && !videoDeviceExists())
@@ -595,7 +595,7 @@ void PhoneMirrorManager::startScrcpy()
         return;
     }
 
-    if (m_nativeMode) {
+    if (m_nativeMode && nativeAvailable()) {
         const QString state = getDeviceState();
         if (state != QLatin1String("device")) {
             emit scrcpyError(describeDeviceState(state));
@@ -604,6 +604,8 @@ void PhoneMirrorManager::startScrcpy()
         startNative(getDeviceSerial());
         return;
     }
+    if (m_nativeMode)
+        qCWarning(lcPhoneMirror) << "Built-in client unavailable (decoder/jar/adb missing); falling back to the scrcpy binary";
 
     if (m_captureMode == QLatin1String("unsupported")) {
         emit scrcpyError(QStringLiteral("Phone mirroring is not supported on this platform yet"));

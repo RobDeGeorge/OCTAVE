@@ -210,7 +210,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("scrcpyAudioEnabled")]      = false;
     d[QStringLiteral("scrcpyVideoDevice")]       = QStringLiteral("/dev/video10");  // Linux v4l2loopback node
     d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("1280x800");     // --new-display WxH, "" = phone screen
-    d[QStringLiteral("phoneMirrorNative")]       = false;  // built-in scrcpy-protocol client (phase 1)
+    d[QStringLiteral("phoneMirrorNative")]       = true;   // built-in scrcpy-protocol client (default); scrcpy binary is the fallback
 
     // Settings menu visibility
     QJsonObject menuVis;

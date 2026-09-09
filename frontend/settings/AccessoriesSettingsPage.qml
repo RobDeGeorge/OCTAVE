@@ -1697,9 +1697,9 @@ Flickable {
                     SettingsToggle {
                         id: phoneMirrorNativeToggle
                         Layout.fillWidth: true
-                        text: "Use built-in client (experimental)"
+                        text: "Use built-in client (recommended)"
                         enabled: phoneMirrorManager ? phoneMirrorManager.nativeAvailable : false
-                        checked: settingsManager ? settingsManager.phoneMirrorNative : false
+                        checked: settingsManager ? settingsManager.phoneMirrorNative : true
                         activeColor: App.Style.accent
                         inactiveColor: App.Style.hoverColor
 

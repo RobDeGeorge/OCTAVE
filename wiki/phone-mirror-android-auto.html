@@ -263,10 +263,10 @@
               <code>scrcpyError</code> carries scrcpy's own <code>ERROR</code> lines.</li>
           </ul>
 
-          <h4>Built-in client (native mode, phase 1 — Python backend)</h4>
+          <h4>Built-in client (native mode — default in both backends)</h4>
           <p>
-            With the <em>Built-in Mirror Client</em> toggle (setting <code>phoneMirrorNative</code>) OCTAVE no longer
-            runs the scrcpy binary at all. <span class="file-path">backend/phone_mirror/scrcpy_client.py</span> pushes the
+            By default (setting <code>phoneMirrorNative</code>, on) OCTAVE no longer runs the scrcpy binary at all;
+            the binary paths below are used only when the built-in client is unavailable. <span class="file-path">backend/phone_mirror/scrcpy_client.py</span> pushes the
             bundled server jar (<span class="file-path">tools/scrcpy-server/</span>, Apache-2.0) to the phone with adb,
             starts it with <code>app_process</code>, and speaks the scrcpy protocol itself: an H.264 stream on one socket,
             decoded with PyAV into YUV420P <code>QVideoFrame</code>s delivered to the <code>QVideoSink</code> that

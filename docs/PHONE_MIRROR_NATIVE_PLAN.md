@@ -33,6 +33,16 @@ OCTAVE (`adb` and the scrcpy server jar).
   scid randomness (global RNG seeded elsewhere), stale adb forwards after SIGKILL.
 - **Untested:** multi-finger gestures (the Pi has no touchscreen), cable pull, unplugged start.
 
+## Phase 2 hardware results (C++ client on the Pi, Qt 6.7.3 arm64 via aqt)
+
+- Handshake +0.51 s, first frame +0.65–0.83 s, picture +1.13 s, tap reaction 0.41 s — same as
+  Python. Close and SIGTERM tear down cleanly (SIGTERM handler was missing in main.cpp; fixed).
+- **`phoneMirrorNative` now defaults to true in both backends** (commit after 3810e03); the
+  scrcpy-binary paths remain only as an automatic fallback when the client is unavailable.
+- Side findings: Windows/macOS CI lacked the `qt5compat` QML module the main menu imports
+  (fixed); the C++ app idles at ~100 % of a core on the Pi in the OBD worker when
+  `/dev/rfcomm0` exists with no peer (`waitForReadyRead` returns at once; fixed to sleep).
+
 ## Why
 
 The v4l2 path that landed in `b0f5095` works, but every link in it is an install step

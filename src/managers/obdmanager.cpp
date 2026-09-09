@@ -711,6 +711,7 @@ void OBDManager::startConnection()
     m_worker->setPidsToWatch(pidsToWatch);
 
     m_workerThread = new QThread(this);
+    m_workerThread->setObjectName(QStringLiteral("obd-worker"));  // visible in top -H / ps
     m_worker->moveToThread(m_workerThread);
 
     // Connect worker signals (queued connections -- cross-thread safe)
@@ -1742,11 +1743,21 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
     timer.start();
 
     while (timer.elapsed() < timeoutMs) {
+        QElapsedTimer waitTimer;
+        waitTimer.start();
         if (m_serial->waitForReadyRead(100)) {
             m_responseBuffer.feed(m_serial->readAll());
             auto resp = m_responseBuffer.getResponse();
             if (resp.has_value())
                 return resp.value();
+        } else if (waitTimer.elapsed() < 50) {
+            // The wait returned at once instead of blocking: an rfcomm node
+            // with no remote (or a dead port) does this on every call, which
+            // turned this loop into a 100 % CPU spin for the whole timeout.
+            const auto err = m_serial->error();
+            if (err != QSerialPort::NoError && err != QSerialPort::TimeoutError)
+                break;  // port is gone; onSerialError reports it
+            QThread::msleep(100 - waitTimer.elapsed());
         }
     }
 

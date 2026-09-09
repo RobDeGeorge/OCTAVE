@@ -256,8 +256,8 @@ class PhoneMirrorManager(QObject):
         """True when scrcpy is installed, new enough and (on Linux) the video
         node exists — i.e. a failure is about the phone, not the setup, so
         the view should not show install instructions."""
-        if self._native_mode:
-            return self.nativeAvailable
+        if self._native_mode and self.nativeAvailable:
+            return True
         if not self._get_effective_scrcpy_path() or self._version_too_old():
             return False
         if self._capture_mode == "v4l2" and not self.videoDeviceExists():
@@ -840,13 +840,15 @@ class PhoneMirrorManager(QObject):
             logger.debug("scrcpy already starting, ignoring duplicate request")
             return
 
-        if self._native_mode:
+        if self._native_mode and self.nativeAvailable:
             state = self.getDeviceState()
             if state != "device":
                 self.scrcpyError.emit(self.describeDeviceState(state))
                 return
             self._start_native(self.getDeviceSerial())
             return
+        if self._native_mode:
+            logger.warning("Built-in client unavailable (PyAV / server jar / adb missing); falling back to the scrcpy binary")
 
         if self._capture_mode == "unsupported":
             self.scrcpyError.emit(f"Phone mirroring is not supported on {platform.system()} yet")

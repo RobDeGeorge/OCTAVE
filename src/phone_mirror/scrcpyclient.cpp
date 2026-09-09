@@ -27,6 +27,7 @@
 #ifdef Q_OS_LINUX
 #include <sys/prctl.h>
 #include <signal.h>
+#include <pthread.h>
 #endif
 
 #ifdef OCTAVE_HAVE_FFMPEG
@@ -148,6 +149,9 @@ bool ScrcpyClient::start(const QString &serial, const QString &displaySize,
     m_stopping = false;
     m_frameCount = 0;
     m_thread = std::thread([this, displaySize, maxFps, bitRate, audio, stayAwake]() {
+#ifdef Q_OS_LINUX
+        pthread_setname_np(pthread_self(), "scrcpy-client");
+#endif
         session(displaySize, maxFps, bitRate, audio, stayAwake);
     });
     return true;

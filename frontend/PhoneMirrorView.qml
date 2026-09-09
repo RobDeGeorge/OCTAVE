@@ -34,7 +34,8 @@ Item {
     // Built-in scrcpy-protocol client: frames arrive on a QVideoSink bound to
     // the VideoOutput below, touch goes over the control socket (multitouch).
     readonly property bool nativeMode: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager
-                                        && phoneMirrorManager.nativeMode === true)
+                                        && phoneMirrorManager.nativeMode === true
+                                        && phoneMirrorManager.nativeAvailable === true)
     // True when scrcpy and (on Linux) the video node are fine, so any failure
     // is about the phone. Re-evaluated whenever the error state changes.
     property bool setupOk: true

@@ -407,7 +407,7 @@ class SettingsManager(QObject):
             "scrcpyAudioEnabled": False,  # If True, forward audio from phone
             "scrcpyVideoDevice": "/dev/video10",  # Linux v4l2loopback node scrcpy streams into
             "scrcpyDisplaySize": "1280x800",  # Virtual display WxH (--new-display); "" = phone screen
-            "phoneMirrorNative": False,  # Built-in scrcpy-protocol client instead of the scrcpy binary (phase 1)
+            "phoneMirrorNative": True,  # Built-in scrcpy-protocol client (default); scrcpy binary is the fallback
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
                 "deviceSettings": True,
@@ -559,7 +559,7 @@ class SettingsManager(QObject):
         self._scrcpy_audio_enabled = self._settings.get("scrcpyAudioEnabled", False)
         self._scrcpy_video_device = self._settings.get("scrcpyVideoDevice", "/dev/video10")
         self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "1280x800")
-        self._phone_mirror_native = self._settings.get("phoneMirrorNative", False)
+        self._phone_mirror_native = self._settings.get("phoneMirrorNative", True)
 
         # Settings menu visibility
         self._settings_menu_visibility = self._settings.get(
