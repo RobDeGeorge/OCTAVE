@@ -222,6 +222,17 @@ class PhoneMirrorManager(QObject):
         return self._active_display_size
 
     @Slot(result=bool)
+    def environmentOk(self) -> bool:
+        """True when scrcpy is installed, new enough and (on Linux) the video
+        node exists — i.e. a failure is about the phone, not the setup, so
+        the view should not show install instructions."""
+        if not self._get_effective_scrcpy_path() or self._version_too_old():
+            return False
+        if self._capture_mode == "v4l2" and not self.videoDeviceExists():
+            return False
+        return True
+
+    @Slot(result=bool)
     def videoDeviceExists(self) -> bool:
         """True if the v4l2loopback node exists on disk (module loaded)."""
         return os.path.exists(self._video_device)
@@ -811,7 +822,16 @@ class PhoneMirrorManager(QObject):
         if was_ready and code == 0:
             self.scrcpyStopped.emit()
         else:
-            errs = [ln for ln in self._stderr_tail if "ERROR" in ln] or self._stderr_tail[-2:]
+            # A yanked cable is the common vehicle case: say so plainly so the
+            # view can offer reconnection instead of setup instructions.
+            if any("Device disconnected" in ln for ln in self._stderr_tail):
+                self.scrcpyError.emit("Phone disconnected. Reconnect the USB cable.")
+                return
+            # scrcpy's INFO lines (e.g. "No video mirroring, SDK mouse disabled")
+            # are normal headless-mode chatter, not causes.
+            errs = ([ln for ln in self._stderr_tail if "ERROR" in ln]
+                    or [ln for ln in self._stderr_tail if "WARN" in ln]
+                    or [ln for ln in self._stderr_tail if "INFO" not in ln][-2:])
             self.scrcpyError.emit("scrcpy failed: " + (" | ".join(errs)[:300] or f"exit code {code}"))
 
     def _find_scrcpy_window(self):

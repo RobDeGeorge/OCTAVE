@@ -30,6 +30,18 @@ Item {
     readonly property string captureMode: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager
                                            && phoneMirrorManager.captureMode) ? phoneMirrorManager.captureMode : "window"
     readonly property bool v4l2Mode: captureMode === "v4l2"
+    // True when scrcpy and (on Linux) the video node are fine, so any failure
+    // is about the phone. Re-evaluated whenever the error state changes.
+    property bool setupOk: true
+    // True when the last failure was the phone itself (unplugged, offline,
+    // not authorized) rather than scrcpy or the video path — only those are
+    // worth retrying automatically.
+    property bool deviceError: false
+    function refreshSetupOk() {
+        setupOk = (phoneMirrorManager && phoneMirrorManager.environmentOk) ? phoneMirrorManager.environmentOk() : false
+    }
+    onLaunchFailedChanged: if (launchFailed) refreshSetupOk()
+
     // True once the capture has produced a real frame. In v4l2 mode the first
     // frame is seeded from the held buffer and a static phone emits no more
     // until something moves, so one frame is proof of life.
@@ -321,9 +333,12 @@ Item {
                     Layout.maximumWidth: parent.width
                 }
 
+                // Install instructions only when the setup itself is broken;
+                // a disconnected or unauthorized phone gets a short hint instead.
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: dp(20)
+                    visible: !setupOk
                     text: "Setup Instructions"
                     font.pixelSize: dp(20)
                     font.family: phoneMirrorView.globalFont
@@ -333,6 +348,19 @@ Item {
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
+                    visible: setupOk && deviceError
+                    text: "Waiting for the phone... mirroring restarts automatically when it is connected and authorized."
+                    font.pixelSize: dp(14)
+                    font.family: phoneMirrorView.globalFont
+                    color: App.Style.secondaryTextColor
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.maximumWidth: parent.width * 0.8
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: !setupOk
                     text: phoneMirrorManager ? phoneMirrorManager.getInstallInstructions() : "Phone Mirror manager not available"
                     font.pixelSize: dp(14)
                     font.family: phoneMirrorView.globalFont
@@ -437,6 +465,7 @@ Item {
             mirrorRunning = false
             launchFailed = true
             errorMessage = error
+            deviceError = /disconnected|No Android device|not authorized|offline/i.test(error)
         }
     }
 
@@ -454,6 +483,29 @@ Item {
             mirrorRunning = false
             launchFailed = true
             errorMessage = errorMsg
+        }
+    }
+
+    // Auto-recovery: while the error screen is up and the setup is fine, poll
+    // the phone and restart mirroring the moment it is back (a nudged cable in
+    // a vehicle is the normal case). Stops when the view is left.
+    Timer {
+        id: reconnectTimer
+        interval: 2000
+        repeat: true
+        running: launchFailed && setupOk && deviceError && !mirrorRunning
+                 && phoneMirrorView.StackView.status === StackView.Active
+        onTriggered: {
+            if (!phoneMirrorManager || phoneMirrorManager.isRunning)
+                return
+            if (phoneMirrorManager.getDeviceState() === "device") {
+                console.log("Phone Mirror: phone is back, restarting")
+                launchFailed = false
+                deviceError = false
+                errorMessage = ""
+                frameCounter = 0
+                startMirror()
+            }
         }
     }
 

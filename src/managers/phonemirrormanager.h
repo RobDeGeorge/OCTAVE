@@ -82,6 +82,7 @@ public slots:
     void setDisplaySize(const QString &size);
     int getDeviceSdk();
     bool videoDeviceExists();
+    bool environmentOk();
     void setVolume(float volume);
     bool hasConnectedDevice();
     // "device" | "unauthorized" | "offline" | "none" | "no-adb"
@@ -186,6 +187,7 @@ public slots:
     void setVideoDevice(const QString &) {}
     void setDisplaySize(const QString &) {}
     bool videoDeviceExists() const { return false; }
+    bool environmentOk() const { return false; }
     bool hasConnectedDevice() const { return false; }
     QString getInstallInstructions() const { return QStringLiteral("Phone mirroring is desktop-only"); }
     void startScrcpy() {}

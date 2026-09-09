@@ -178,6 +178,7 @@
               <tr><td><code>getDeviceState()</code></td><td><code>str</code></td><td><code>"device"</code> / <code>"unauthorized"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code> -- lets the UI say <em>why</em> mirroring cannot start</td></tr>
               <tr><td><code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td><code>str</code>/<code>int</code></td><td>ADB probes</td></tr>
               <tr><td><code>videoDeviceExists()</code></td><td><code>bool</code></td><td>The loopback node exists on disk (module loaded)</td></tr>
+              <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>scrcpy present and new enough, and (Linux) the video node exists -- a failure is about the phone, not the setup</td></tr>
               <tr><td><code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>cleanup()</code></td><td>--</td><td>Process lifecycle</td></tr>
               <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Platform-specific install text</td></tr>
             </tbody>
@@ -260,6 +261,15 @@
               is searched for the logical display named <code>scrcpy</code>. If the process exits before that,
               <code>scrcpyError</code> carries scrcpy's own <code>ERROR</code> lines.</li>
           </ul>
+
+          <h4>Disconnects and recovery</h4>
+          <p>
+            When scrcpy reports <code>Device disconnected</code> the manager emits a plain
+            <em>"Phone disconnected. Reconnect the USB cable."</em> (scrcpy's <code>INFO</code> chatter is filtered out of
+            error text). The view then polls <code>getDeviceState()</code> every 2 s while it is active and restarts
+            mirroring on its own once the phone is back and authorized; install instructions are shown only when
+            <code>environmentOk()</code> says the setup itself (scrcpy version, video node) is broken.
+          </p>
 
           <h4>Virtual display (<code>--new-display</code>)</h4>
           <p>

@@ -197,6 +197,17 @@ void PhoneMirrorManager::setDisplaySize(const QString &size)
     }
 }
 
+bool PhoneMirrorManager::environmentOk()
+{
+    // scrcpy installed, new enough and (on Linux) the video node exists: a
+    // failure is about the phone, not the setup, so no install instructions.
+    if (getEffectiveScrcpyPath().isEmpty() || versionTooOld())
+        return false;
+    if (m_captureMode == QLatin1String("v4l2") && !videoDeviceExists())
+        return false;
+    return true;
+}
+
 bool PhoneMirrorManager::videoDeviceExists()
 {
     return QFileInfo::exists(m_videoDevice);
@@ -640,12 +651,29 @@ void PhoneMirrorManager::onProcessFinished(int exitCode, QProcess::ExitStatus st
     if (wasReady && exitCode == 0 && status == QProcess::NormalExit) {
         emit scrcpyStopped();
     } else {
+        // A yanked cable is the common vehicle case: say so plainly so the
+        // view can offer reconnection instead of setup instructions.
+        for (const QString &l : m_stderrTail) {
+            if (l.contains(QLatin1String("Device disconnected"))) {
+                emit scrcpyError(QStringLiteral("Phone disconnected. Reconnect the USB cable."));
+                return;
+            }
+        }
+        // scrcpy's INFO lines are normal headless-mode chatter, not causes.
         QStringList errs;
         for (const QString &l : m_stderrTail)
             if (l.contains(QLatin1String("ERROR")))
                 errs << l;
         if (errs.isEmpty())
-            errs = m_stderrTail.mid(qMax(0, m_stderrTail.size() - 2));
+            for (const QString &l : m_stderrTail)
+                if (l.contains(QLatin1String("WARN")))
+                    errs << l;
+        if (errs.isEmpty()) {
+            for (const QString &l : m_stderrTail)
+                if (!l.contains(QLatin1String("INFO")))
+                    errs << l;
+            errs = errs.mid(qMax(0, errs.size() - 2));
+        }
         QString msg = errs.join(QLatin1String(" | ")).left(300);
         if (msg.isEmpty())
             msg = QStringLiteral("exit code %1").arg(exitCode);
