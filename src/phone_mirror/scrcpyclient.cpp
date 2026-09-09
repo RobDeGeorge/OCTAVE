@@ -155,6 +155,9 @@ bool ScrcpyClient::start(const QString &serial, const QString &displaySize,
 
 void ScrcpyClient::stop()
 {
+    const bool wasActive = m_thread.joinable();
+    if (wasActive)
+        qCInfo(lcScrcpyClient) << "stop requested";
     m_stopping = true;
     m_running = false;
     // Unblock the worker: shut the control descriptor down from here; the
@@ -173,6 +176,15 @@ void ScrcpyClient::stop()
         else
             m_thread.join();
     }
+    // The worker removes its forward on the way out; if it could not (or was
+    // never reached), do it here so a clean exit never strands a port.
+    if (m_port) {
+        adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000);
+        qCInfo(lcScrcpyClient) << "removed forward tcp:" << m_port << "(from stop)";
+        m_port = 0;
+    }
+    if (wasActive)
+        qCInfo(lcScrcpyClient) << "stopped";
 }
 
 void ScrcpyClient::fail(const QString &reason)
@@ -432,6 +444,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     }
 
     // teardown (worker owns everything)
+    qCInfo(lcScrcpyClient) << "session ending (stopping =" << m_stopping.load() << ")";
     m_controlFd = -1;
     for (QTcpSocket **s : {&m_video, &m_audio, &m_control}) {
         if (*s) { (*s)->abort(); delete *s; *s = nullptr; }
@@ -443,6 +456,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         delete m_proc; m_proc = nullptr;
     }
     adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000);
+    qCInfo(lcScrcpyClient) << "removed forward tcp:" << m_port;
     m_port = 0;
     if (m_running.exchange(false)) {
         // Ended without a fail(): the peer closed the stream

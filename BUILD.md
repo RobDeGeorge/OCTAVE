@@ -61,7 +61,7 @@ sudo apt install -y build-essential cmake ninja-build pkg-config \
 # Qt 6.7.3 — install via the Qt online installer or aqtinstall:
 pipx install aqtinstall
 aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
 
 export PATH="$HOME/Qt/6.7.3/gcc_64/bin:$PATH"
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -91,7 +91,7 @@ xcode-select --install
 # Qt 6.7.3 (Apple Silicon and Intel both supported)
 pipx install aqtinstall
 aqt install-qt mac desktop 6.7.3 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
 
 export PATH="$HOME/Qt/6.7.3/macos/bin:$PATH"
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -104,6 +104,12 @@ Outputs: `build/octave.app`. CI runs `macdeployqt` and `hdiutil` to produce the 
 
 CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7.3 via `jurplel/install-qt-action`.
 
+> **Qt modules the QML frontend needs at runtime:** `QtQuick.Effects` (Qt ≥ 6.5) and
+> `Qt5Compat.GraphicalEffects` (`qt5compat`), both imported by `frontend/MainMenu.qml`. A build
+> against a Qt without them links fine and then fails at `Main.qml` load. Distro Qt 6.2 (Ubuntu
+> 22.04) cannot run OCTAVE for this reason; use the pinned 6.7.3 (aqtinstall offers `linux_arm64`
+> desktop builds for ARM boards: `aqt install-qt linux_arm64 desktop 6.7.3 -O ~/Qt -m …`).
+>
 > **adb is bundled, not required from the user.** `python scripts/fetch_platform_tools.py`
 > downloads Google's pinned platform-tools (SHA-256 verified) into `tools/platform-tools/<os>/`;
 > CI runs it and ships `adb` next to the binary (`platform-tools/` beside the executable, or
@@ -157,11 +163,11 @@ pipx install aqtinstall
 
 # Android target build (~1 GB)
 aqt install-qt linux android 6.7.3 android_arm64_v8a -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
 
 # Desktop host tools Qt (needed for cross-compile, ~1 GB)
 aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d
+    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools
 ```
 
 Verify:

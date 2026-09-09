@@ -38,6 +38,12 @@
 
 // Phase 5 managers (desktop only — all guarded by Q_OS_MOBILE in their headers)
 #include "managers/phonemirrormanager.h"
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MOBILE)
+#include <QSocketNotifier>
+#include <csignal>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 #include "managers/androidautomanager.h"
 #include "items/scrcpycapture.h"
 #include "items/embeddedscrcpyitem.h"
@@ -345,6 +351,25 @@ int main(int argc, char *argv[])
         mediaManager.toggle_mute();
         esp32VolumeManager.send_mute_state(mediaManager.is_muted());
     });
+
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MOBILE)
+    // SIGTERM/SIGINT (launcher scripts, systemd, Ctrl-C) must run the
+    // aboutToQuit cleanup below, otherwise child processes and adb forwards
+    // are orphaned. Self-pipe trick: the handler only writes a byte; the
+    // notifier turns it into app.quit() on the event loop.
+    static int quitPipe[2] = {-1, -1};
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, quitPipe) == 0) {
+        auto onSignal = [](int) { const char b = 1; (void)::write(quitPipe[0], &b, 1); };
+        std::signal(SIGTERM, onSignal);
+        std::signal(SIGINT, onSignal);
+        auto *quitNotifier = new QSocketNotifier(quitPipe[1], QSocketNotifier::Read, &app);
+        QObject::connect(quitNotifier, &QSocketNotifier::activated, &app, [] {
+            char b; (void)::read(quitPipe[1], &b, 1);
+            qInfo() << "Signal received, shutting down";
+            QCoreApplication::quit();
+        });
+    }
+#endif
 
     // Cleanup on quit (stubs make all calls no-op on mobile)
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
