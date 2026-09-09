@@ -51,8 +51,8 @@ constexpr quint8 kMsgSetDisplayPower = 10;
 // Frame header flags (app/src/demuxer.c)
 constexpr quint64 kFlagConfig = quint64(1) << 63;
 
-constexpr const char *kDeviceJarPath = "/data/local/tmp/scrcpy-server.jar";
-constexpr const char *kJarResource = ":/scrcpy/scrcpy-server-v3.3.4";
+constexpr const char *kDeviceJarPath = "/data/local/tmp/octave-phone-server.jar";
+constexpr const char *kJarResource = ":/phone-server/octave-phone-server";
 
 qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
 
@@ -94,7 +94,7 @@ QString ScrcpyClient::bundledServerJar()
     if (!QFile::exists(QString::fromLatin1(kJarResource)))
         return {};
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-    const QString out = dir + QStringLiteral("/octave-scrcpy-server-v") + QLatin1String(kServerVersion);
+    const QString out = dir + QStringLiteral("/octave-phone-server-") + QLatin1String(kServerVersion);
     QFile res(QString::fromLatin1(kJarResource));
     QFile dst(out);
     if (dst.exists() && dst.size() == res.size())
@@ -349,7 +349,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     args << QStringLiteral("shell")
          << QStringLiteral("CLASSPATH=") + QLatin1String(kDeviceJarPath)
          << QStringLiteral("app_process") << QStringLiteral("/")
-         << QStringLiteral("com.genymobile.scrcpy.Server") << QLatin1String(kServerVersion)
+         << QLatin1String(kServerClass) << QLatin1String(kServerVersion)
          << QStringLiteral("scid=") + m_scid << QStringLiteral("tunnel_forward=true")
          << QStringLiteral("video=true")
          << QStringLiteral("audio=%1").arg(audio ? QStringLiteral("true") : QStringLiteral("false"))

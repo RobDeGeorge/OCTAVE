@@ -108,7 +108,7 @@ Key managers:
 - `gesture_manager.py` — PAJ7620U2 I2C gesture sensor for touchless control
 - `audio_analyzer.py` — FFT waveform visualization from audio files
 - `android_auto/` — Android Auto via Google Desktop Head Unit (DHU)
-- `phone_mirror/` — Phone screen mirroring via the built-in scrcpy-protocol client (`scrcpy_client.py`); bundled server jar + adb, nothing to install
+- `phone_mirror/` — Phone screen mirroring via the built-in scrcpy-protocol client (`scrcpy_client.py`); talks to `phone_server/` (our fork of the scrcpy server, prebuilt jar in `tools/phone-server/`) over adb, nothing to install
 
 When adding a new manager: add `foo.py` to `backend/`, import + instantiate it in `main.py`, register as a QML context property with the **same name** the C++ side uses. Mirror every `Q_PROPERTY` / `Q_INVOKABLE` / slot / signal from the C++ header as a PySide6 `Property` / `Slot` / `Signal`. Use `get_app_data_dir()` from `backend/settings_manager.py` for storage paths (matches C++ `SettingsManager::getAppDataDir()`).
 
@@ -220,6 +220,10 @@ The project wiki lives in `wiki/` (static HTML pages — `architecture.html`, `d
 - Theme, style token, or animation system changes → update `theme-system.html`
 
 If you are unsure which page to update, `wiki/index.html` lists all pages. Rebuild the search index if wiki content changes: `python wiki/build_search_index.py`. The wiki is the user-facing reference — stale docs are worse than missing docs, so treat wiki updates as part of "done" for any feature or refactor.
+
+## Phone server (`phone_server/`)
+
+The Java program that runs on the phone during mirroring is OCTAVE's fork of the scrcpy server (Apache-2.0, forked at v3.3.4, package `org.octave.phoneserver`). Both backends push the prebuilt jar `tools/phone-server/octave-phone-server` over adb and speak the scrcpy 3.x protocol to it (`backend/phone_mirror/scrcpy_client.py`, `src/phone_mirror/scrcpyclient.{h,cpp}`). After editing anything under `phone_server/src`, rebuild the jar with `phone_server/build_without_gradle.sh` (see `BUILD.md`) and commit it together with the source — the `phone-server` CI job fails when they differ. The version string in `build_without_gradle.sh` (`SCRCPY_VERSION_NAME`) must equal `SERVER_VERSION` / `kServerVersion` in both clients; the server refuses a mismatch. Protocol byte layouts live in `docs/PHONE_MIRROR_NATIVE_PLAN.md`; when pulling upstream scrcpy changes, re-verify them against `phone_server/src/main/java/org/octave/phoneserver/` (`DesktopConnection`, `control/ControlMessageReader`, `device/Streamer`).
 
 ## Gauges & Dashboards
 

@@ -21,8 +21,10 @@ OCTAVE (`adb` and the scrcpy server jar).
 - **Gotchas:** `cleanup=true` deletes the jar on exit, so push it every session; with `tunnel_forward`
   the local TCP connect succeeds before the server listens and then EOFs — retry until the dummy
   byte arrives; the first decoded frame can precede the launcher drawing its icons.
-- Bundled server: `tools/scrcpy-server/scrcpy-server-v3.3.4`, sha256
-  `8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e`, Apache-2.0 (LICENSE alongside).
+- Bundled server: originally upstream `scrcpy-server-v3.3.4`; since the fork it is
+  `tools/phone-server/octave-phone-server`, built from `phone_server/` (package
+  `org.octave.phoneserver`, version `3.3.4-octave`), sha256
+  `6590dbca39fe146127ea5382e843b7fe00a33e4ce028fdf2601d995859f827cd`. Apache-2.0, LICENSE + NOTICE alongside.
 
 ## Phase 1 hardware results (Python client, commit 8c04adf, Orange Pi)
 

@@ -23,7 +23,7 @@ from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 
 from backend.logging_config import get_logger
 from backend.phone_mirror.scrcpy_client import (
-    ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION,
+    ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION, SERVER_PROCESS_PATTERN,
     KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH,
 )
 
@@ -155,7 +155,7 @@ class PhoneMirrorManager(QObject):
         if not HAVE_AV:
             missing.append("the Python package 'av' (pip install av)")
         if not bundled_server_jar():
-            missing.append("the bundled scrcpy server (tools/scrcpy-server/)")
+            missing.append("the bundled phone server (tools/phone-server/)")
         if not self._adb_path:
             missing.append("adb (run scripts/fetch_platform_tools.py or install android-tools)")
         if missing:
@@ -240,7 +240,7 @@ class PhoneMirrorManager(QObject):
 
     def _kill_stale_server(self):
         """A crashed session can leave the device-side server running."""
-        self._run_adb(["shell", "pkill", "-f", "com.genymobile.scrcpy"], timeout=5)
+        self._run_adb(["shell", "pkill", "-f", SERVER_PROCESS_PATTERN], timeout=5)
 
     # ── settings ────────────────────────────────────────────────────
 

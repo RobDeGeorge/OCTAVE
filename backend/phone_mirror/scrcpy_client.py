@@ -36,11 +36,14 @@ except Exception:  # pragma: no cover - optional at runtime
 
 logger = get_logger(__name__)
 
-# The bundled server jar; the version string must match exactly or the
-# server refuses to start.
-SERVER_VERSION = "3.3.4"
-SERVER_JAR_NAME = f"scrcpy-server-v{SERVER_VERSION}"
-DEVICE_JAR_PATH = "/data/local/tmp/scrcpy-server.jar"
+# The bundled phone server: OCTAVE's fork of the scrcpy server (phone_server/,
+# Java package org.octave.phoneserver). The version string must match the
+# jar's BuildConfig exactly or the server refuses to start.
+SERVER_VERSION = "3.3.4-octave"
+SERVER_JAR_NAME = "octave-phone-server"
+SERVER_CLASS = "org.octave.phoneserver.Server"
+SERVER_PROCESS_PATTERN = "org.octave.phoneserver"
+DEVICE_JAR_PATH = "/data/local/tmp/octave-phone-server.jar"
 
 # Control message types (app/src/control_msg.h)
 MSG_INJECT_KEYCODE = 0
@@ -67,12 +70,11 @@ KEYCODE_POWER = 26
 
 
 def bundled_server_jar() -> Optional[str]:
-    """Locate the bundled scrcpy server jar (repo: tools/scrcpy-server/)."""
+    """Locate the bundled phone server jar (repo: tools/phone-server/)."""
+    root = Path(__file__).resolve().parents[2]
     candidates = [
-        Path(__file__).resolve().parents[2] / "tools" / "scrcpy-server" / SERVER_JAR_NAME,
-        Path(__file__).resolve().parents[2] / "tools" / "scrcpy-server" / "scrcpy-server",
-        Path("/usr/local/share/scrcpy/scrcpy-server"),
-        Path("/usr/share/scrcpy/scrcpy-server"),
+        root / "tools" / "phone-server" / SERVER_JAR_NAME,   # checkout
+        root / "phone-server" / SERVER_JAR_NAME,             # next to a deployed binary
     ]
     for c in candidates:
         if c.is_file():
@@ -321,7 +323,7 @@ class ScrcpyClient(QObject):
         if self._serial:
             cmd += ["-s", self._serial]
         cmd += ["shell", f"CLASSPATH={DEVICE_JAR_PATH}", "app_process", "/",
-                "com.genymobile.scrcpy.Server", SERVER_VERSION, *opts]
+                SERVER_CLASS, SERVER_VERSION, *opts]
         logger.info(f"scrcpy client: starting server: {' '.join(cmd[-(len(opts) + 5):])}")
         popen_kw = {}
         if platform.system() == "Windows":

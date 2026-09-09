@@ -79,7 +79,7 @@
           <tbody>
             <tr><td><code>frontend/</code></td><td>All QML files, assets, fonts</td><td>Excludes <code>-src</code> directories (source design files)</td></tr>
             <tr><td><code>backend/</code></td><td>JSON and TXT data files</td><td>Excludes <code>__pycache__</code>, <code>temp</code>, <code>media</code>, dotfiles</td></tr>
-            <tr><td><code>tools/scrcpy-server/</code></td><td>Bundled scrcpy server jar (Apache-2.0)</td><td>Embedded in the C++ binary as a Qt resource; pushed to the phone by the built-in mirror client</td></tr>
+            <tr><td><code>tools/phone-server/</code></td><td>Prebuilt <code>octave-phone-server</code> (our fork of the scrcpy server, source in <code>phone_server/</code>, Apache-2.0)</td><td>Embedded in the C++ binary as a Qt resource; pushed to the phone by the built-in mirror client; rebuilt and verified by the <code>phone-server</code> CI job</td></tr>
             <tr><td><code>tools/platform-tools/</code></td><td>Google adb (fetched by <code>scripts/fetch_platform_tools.py</code>)</td><td>Shipped next to the binary by CI</td></tr>
             <tr><td>PySide6 QML</td><td>Qt Quick modules</td><td>Collected via <code>collect_data_files('PySide6')</code></td></tr>
           </tbody>
@@ -224,8 +224,8 @@ LSMinimumSystemVersion: <span class="str">'10.14.0'</span>
 
         <h3>Phone mirror bundling</h3>
         <p>
-          No scrcpy binary is bundled or required. The C++ binary embeds the scrcpy <em>server</em> jar
-          (<code>tools/scrcpy-server/</code>) as a Qt resource and CI ships Google's <code>adb</code> next to the executable
+          No scrcpy binary is bundled or required. The C++ binary embeds OCTAVE's phone <em>server</em> jar
+          (<code>tools/phone-server/</code>, built from <code>phone_server/</code>) as a Qt resource and CI ships Google's <code>adb</code> next to the executable
           (<code>python scripts/fetch_platform_tools.py</code>, pinned and SHA-256 verified). libavcodec is an optional
           build dependency for the H.264 decoder; without it <code>phoneMirrorManager.nativeAvailable</code> is false.
         </p>

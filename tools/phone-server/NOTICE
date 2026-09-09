@@ -1,0 +1,6 @@
+octave-phone-server is OCTAVE's fork of the scrcpy server
+(https://github.com/Genymobile/scrcpy, Apache License 2.0, Copyright (C)
+2018 Genymobile and contributors), forked at v3.3.4 into phone_server/ with
+the Java package renamed to org.octave.phoneserver. Rebuild with
+phone_server/build_without_gradle.sh (Android SDK required) or the
+phone-server CI job. The LICENSE file alongside applies.

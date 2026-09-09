@@ -114,6 +114,14 @@ CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7
 > 22.04) cannot run OCTAVE for this reason; use the pinned 6.7.3 (aqtinstall offers `linux_arm64`
 > desktop builds for ARM boards: `aqt install-qt linux_arm64 desktop 6.7.3 -O ~/Qt -m …`).
 >
+> **The phone-side mirror server is ours.** `phone_server/` is OCTAVE's fork of the scrcpy server
+> (Apache-2.0, forked at v3.3.4, Java package `org.octave.phoneserver`). The prebuilt jar lives in
+> `tools/phone-server/octave-phone-server` and is embedded in the C++ binary; rebuild it after
+> changing the source with
+> `ANDROID_HOME=~/Android/Sdk ANDROID_PLATFORM=36 ANDROID_BUILD_TOOLS=36.0.0 bash phone_server/build_without_gradle.sh`
+> (needs `platforms;android-36`, `build-tools;36.0.0`, a JDK). The `phone-server` CI job rebuilds it
+> on every push and fails if the committed jar differs from the source.
+>
 > **adb is bundled, not required from the user.** `python scripts/fetch_platform_tools.py`
 > downloads Google's pinned platform-tools (SHA-256 verified) into `tools/platform-tools/<os>/`;
 > CI runs it and ships `adb` next to the binary (`platform-tools/` beside the executable, or

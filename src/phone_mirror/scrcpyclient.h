@@ -34,7 +34,11 @@ class ScrcpyClient : public QObject
 {
     Q_OBJECT
 public:
-    static constexpr const char *kServerVersion = "3.3.4";
+    // OCTAVE's fork of the scrcpy server (phone_server/, org.octave.phoneserver);
+    // the version string must match the jar's BuildConfig exactly.
+    static constexpr const char *kServerVersion = "3.3.4-octave";
+    static constexpr const char *kServerClass = "org.octave.phoneserver.Server";
+    static constexpr const char *kServerProcessPattern = "org.octave.phoneserver";
 
     // Android MotionEvent / KeyEvent actions
     enum Action { ActionDown = 0, ActionUp = 1, ActionMove = 2 };

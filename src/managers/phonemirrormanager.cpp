@@ -55,7 +55,7 @@ QString PhoneMirrorManager::getInstallInstructions()
 {
     QStringList missing;
     if (!ScrcpyClient::available())
-        missing << QStringLiteral("a build with libavcodec (the H.264 decoder) and the bundled scrcpy server");
+        missing << QStringLiteral("a build with libavcodec (the H.264 decoder) and the bundled phone server");
     if (m_adbPath.isEmpty())
         missing << QStringLiteral("adb (run scripts/fetch_platform_tools.py or install android-tools)");
     if (!missing.isEmpty())
@@ -215,7 +215,7 @@ void PhoneMirrorManager::killStaleServer()
     // A crashed session can leave the device-side server running
     if (!m_adbPath.isEmpty())
         QProcess::startDetached(m_adbPath, {QStringLiteral("shell"), QStringLiteral("pkill"),
-                                            QStringLiteral("-f"), QStringLiteral("com.genymobile.scrcpy")});
+                                            QStringLiteral("-f"), QLatin1String(ScrcpyClient::kServerProcessPattern)});
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ void PhoneMirrorManager::startScrcpy()
     m_ready = false;
     m_activeDisplaySize = m_displaySize;
     runAdb({QStringLiteral("shell"), QStringLiteral("pkill"), QStringLiteral("-f"),
-            QStringLiteral("com.genymobile.scrcpy")}, 5000);  // clear a stale server first
+            QLatin1String(ScrcpyClient::kServerProcessPattern)}, 5000);  // clear a stale server first
 
     if (m_client) {
         m_client->stop();

@@ -169,14 +169,16 @@ qt_add_resources(octave "shaders"
     FILES "${CMAKE_SOURCE_DIR}/frontend/shaders/dissolve_squares.frag.qsb"
 )
 
-# ---- Bundled scrcpy server (Apache-2.0) for the built-in phone-mirror client ----
-# Embedded as a resource and written to a temp file at runtime, so no packaging
-# target has to carry it as a loose file.
-qt_add_resources(octave "scrcpy_server"
-    PREFIX "/scrcpy"
-    BASE "${CMAKE_SOURCE_DIR}/tools/scrcpy-server"
-    FILES "${CMAKE_SOURCE_DIR}/tools/scrcpy-server/scrcpy-server-v3.3.4"
-          "${CMAKE_SOURCE_DIR}/tools/scrcpy-server/LICENSE"
+# ---- Bundled phone server (OCTAVE's fork of the scrcpy server, Apache-2.0) ----
+# Source in phone_server/; prebuilt jar in tools/phone-server/ (rebuilt and
+# checked by the phone-server CI job). Embedded as a resource and written to a
+# temp file at runtime, so no packaging target has to carry it as a loose file.
+qt_add_resources(octave "phone_server"
+    PREFIX "/phone-server"
+    BASE "${CMAKE_SOURCE_DIR}/tools/phone-server"
+    FILES "${CMAKE_SOURCE_DIR}/tools/phone-server/octave-phone-server"
+          "${CMAKE_SOURCE_DIR}/tools/phone-server/LICENSE"
+          "${CMAKE_SOURCE_DIR}/tools/phone-server/NOTICE"
 )
 
 # ---- QML import path: reuse existing frontend/ directory ----

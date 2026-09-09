@@ -94,10 +94,15 @@
           <h2>Phone Mirror</h2>
           <p>
             Phone Mirror shows an Android phone inside OCTAVE and lets the user drive it from the dash with real
-            multitouch. OCTAVE is its own <strong>scrcpy-protocol client</strong>: it pushes the bundled scrcpy
-            <em>server</em> jar (<span class="file-path">tools/scrcpy-server/</span>, Apache-2.0, pinned to 3.3.4) to
-            the phone with <code>adb</code>, starts it, decodes the H.264 stream itself and injects input over the
-            control socket. <strong>Nothing has to be installed by the user</strong>: <code>adb</code> is shipped next to the
+            multitouch. OCTAVE is its own <strong>scrcpy-protocol client</strong>: it pushes the bundled phone
+            <em>server</em> jar (<span class="file-path">tools/phone-server/octave-phone-server</span>) to the phone
+            with <code>adb</code>, starts it, decodes the H.264 stream itself and injects input over the control
+            socket. The server is <strong>OCTAVE's fork of the scrcpy server</strong>
+            (<span class="file-path">phone_server/</span>, Apache-2.0, forked at v3.3.4, Java package
+            <code>org.octave.phoneserver</code>, version <code>3.3.4-octave</code>); it needs shell privileges,
+            which only an adb-launched process gets, so it cannot be an installed app. The
+            <code>phone-server</code> CI job rebuilds the jar from source on every push and fails if the
+            committed jar differs. <strong>Nothing has to be installed by the user</strong>: <code>adb</code> is shipped next to the
             binary (<code>scripts/fetch_platform_tools.py</code>; on ARM boards the distro's <code>adb</code> on PATH is used),
             the decoder is PyAV in the Python backend and libavcodec in C++. There is no scrcpy binary, no
             v4l2loopback, no ffmpeg subprocess and no <code>adb shell input</code> any more.
@@ -165,17 +170,19 @@
         <section id="pm-client">
           <h3>ScrcpyClient: session and protocol</h3>
           <ol class="steps">
-            <li><strong>Push</strong> the server jar to <code>/data/local/tmp/scrcpy-server.jar</code> (every session: the server deletes it on exit).</li>
+            <li><strong>Push</strong> the server jar to <code>/data/local/tmp/octave-phone-server.jar</code> (every session: the server deletes it on exit).</li>
             <li><strong>Tunnel</strong>: remove any stale <code>localabstract:scrcpy_*</code> forward for the device (a hard-killed OCTAVE leaves one in the adb server), then <code>adb forward tcp:PORT localabstract:scrcpy_SCID</code> with a random 31-bit scid.</li>
-            <li><strong>Start</strong> <code>app_process … com.genymobile.scrcpy.Server 3.3.4 scid=… tunnel_forward=true video=true audio=false control=true video_codec=h264 max_fps=60 stay_awake=true cleanup=true send_device_meta=true send_frame_meta=true send_codec_meta=true send_dummy_byte=true [new_display=WxH]</code>. On Linux the child gets <code>PR_SET_PDEATHSIG</code> so it dies with OCTAVE.</li>
+            <li><strong>Start</strong> <code>app_process … org.octave.phoneserver.Server 3.3.4-octave scid=… tunnel_forward=true video=true audio=false control=true video_codec=h264 max_fps=60 stay_awake=true cleanup=true send_device_meta=true send_frame_meta=true send_codec_meta=true send_dummy_byte=true [new_display=WxH]</code>. On Linux the child gets <code>PR_SET_PDEATHSIG</code> so it dies with OCTAVE.</li>
             <li><strong>Connect</strong>: the tunnel accepts before the server listens, so connect until the dummy byte arrives (video socket), then open the control socket. <em>The server sends device/codec meta only once every socket is connected</em> -- reading before opening control deadlocks.</li>
             <li><strong>Meta</strong>: 64-byte device name, then codec id (u32) + width + height (u32 each, big-endian).</li>
             <li><strong>Frames</strong>: <code>[u64 pts|flags][u32 size][data]</code>; bit 63 = config packet (SPS/PPS, prepended to the next packet), bit 62 = key frame. Decoded YUV420P planes are copied into a <code>QVideoFrame</code> and handed to the sink on the GUI thread, coalescing if it falls behind.</li>
             <li><strong>Control</strong>: 32-byte <code>INJECT_TOUCH_EVENT</code> (type 2) with pointer id, x/y in frame pixels, screen size, pressure; 14-byte <code>INJECT_KEYCODE</code> (type 0). Coordinates are relative to the mirrored display, so a virtual display needs no display-id routing.</li>
             <li><strong>Teardown</strong>: close sockets, terminate the child, remove the forward. The server destroys the virtual display itself (<code>cleanup=true</code>). The Python entry point routes SIGTERM/SIGINT through <code>app.quit()</code> and the C++ one installs a self-pipe signal handler, so launcher scripts get a clean exit too.</li>
           </ol>
-          <p>Byte layouts were verified against the scrcpy v3.3.4 source. Upgrading the server is a deliberate step:
-            bump the jar, re-check <code>app/src/demuxer.c</code> and <code>app/src/control_msg.c</code>.</p>
+          <p>Byte layouts were verified against the scrcpy v3.3.4 source. Changing the server is a deliberate step:
+            edit <span class="file-path">phone_server/src</span>, rebuild the jar (<code>BUILD.md</code>), bump
+            <code>SCRCPY_VERSION_NAME</code> and both clients' <code>SERVER_VERSION</code> together, and re-check the
+            message layouts in <code>DesktopConnection</code>, <code>ControlMessageReader</code> and <code>Streamer</code>.</p>
         </section>
 
         <section id="pm-input">

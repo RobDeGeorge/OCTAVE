@@ -125,6 +125,47 @@ jobs:
           PY
 
   # ---------------------------------------------------------------------------
+  # Phone server (OCTAVE's fork of the scrcpy server, phone_server/). Built
+  # from source on every push; the committed jar in tools/phone-server/ must
+  # be byte-identical so nobody ships a jar that does not match the source.
+  # ---------------------------------------------------------------------------
+
+  phone-server:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install platform + build-tools
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build octave-phone-server
+        env:
+          ANDROID_PLATFORM: '36'
+          ANDROID_BUILD_TOOLS: '36.0.0'
+        run: |
+          BUILD_DIR="$PWD/build-phone-server" bash phone_server/build_without_gradle.sh
+          ls -la build-phone-server/octave-phone-server
+
+      - name: Verify the committed jar matches the source
+        run: |
+          # d8 output is deterministic for identical inputs and tools; a
+          # mismatch means phone_server/ changed without rebuilding the jar
+          # (or the SDK versions drifted — pin them above, not here).
+          sha256sum build-phone-server/octave-phone-server tools/phone-server/octave-phone-server
+          cmp build-phone-server/octave-phone-server tools/phone-server/octave-phone-server \
+            || { echo "::error::tools/phone-server/octave-phone-server does not match phone_server/ source; rebuild it with phone_server/build_without_gradle.sh and commit"; exit 1; }
+
+  # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)
   # ---------------------------------------------------------------------------
 
