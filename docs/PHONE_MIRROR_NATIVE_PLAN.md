@@ -143,11 +143,15 @@ through `QMediaPlayer.setSourceDevice` to measure Option A. Also confirm on the 
 touch injection via the control socket lands on the virtual display; SPS/PPS handling;
 `new_display` size rounding. Output: decision A vs B, plus measured first-paint and latency.
 
-**Phase 1 — client + decode, Python first (3–4 days).** Python is the fastest to iterate
+**Phase 1 — client + decode, Python first. DONE (commits a3cdd09, 8c04adf):** hardware validation on the Pi in progress.
+Original estimate: Python is the fastest to iterate
 on the Pi. `scrcpy_client.py` + decoder + `VideoOutput` in QML + multitouch. Old paths
 stay behind a `phoneMirrorNative` setting (default off) so the Pi can A/B.
 
-**Phase 2 — C++ port (3–4 days).** Same classes in C++, CMake for the decoder choice,
+**Phase 2 — C++ port. DONE (same day):** `src/phone_mirror/scrcpyclient.{h,cpp}`, libavcodec via
+pkg-config / vcpkg (optional, `OCTAVE_HAVE_FFMPEG`), jar embedded as a Qt resource, CI installs
+FFmpeg on all three desktop targets. Verified against the fake server; hardware validation pending.
+Original estimate: Same classes in C++, CMake for the decoder choice,
 Windows and macOS builds in CI (`cpp-build-*` jobs) proving the bundled adb + jar load.
 
 **Phase 3 — bundle and remove (2 days).** Add `tools/platform-tools/<platform>/adb` and

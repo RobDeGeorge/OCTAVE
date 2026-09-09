@@ -84,7 +84,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config \
-            libtag1-dev libgl1-mesa-dev libegl1-mesa-dev \
+            libtag1-dev libavcodec-dev libavutil-dev libgl1-mesa-dev libegl1-mesa-dev \
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
             libpulse-dev libssl-dev
 
@@ -145,10 +145,11 @@ jobs:
           arch: 'win64_msvc2019_64'
           modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d'
 
-      - name: Install TagLib (vcpkg)
+      - name: Install TagLib and FFmpeg (vcpkg)
         shell: bash
         run: |
-          "$VCPKG_INSTALLATION_ROOT/vcpkg" install taglib:x64-windows
+          # ffmpeg[avcodec] provides the H.264 decoder for the built-in phone-mirror client
+          "$VCPKG_INSTALLATION_ROOT/vcpkg" install taglib:x64-windows "ffmpeg[core,avcodec]:x64-windows"
 
       - name: Configure CMake
         shell: bash
@@ -171,8 +172,11 @@ jobs:
           else
             cp build/octave.exe dist/OCTAVE/
           fi
-          # Copy taglib runtime DLL alongside the .exe (vcpkg dynamic build).
+          # Copy taglib + ffmpeg runtime DLLs alongside the .exe (vcpkg dynamic build).
           cp "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/tag.dll dist/OCTAVE/ 2>/dev/null || true
+          cp "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/avcodec-*.dll \
+             "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/avutil-*.dll \
+             "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/swresample-*.dll dist/OCTAVE/ 2>/dev/null || true
           windeployqt --qmldir frontend --release dist/OCTAVE/octave.exe
           # Inno Setup expects the binary at OCTAVE.exe (capitalized) per the .iss.
           mv dist/OCTAVE/octave.exe dist/OCTAVE/OCTAVE.exe
@@ -215,8 +219,8 @@ jobs:
           target: 'desktop'
           modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d'
 
-      - name: Install TagLib
-        run: brew install taglib pkg-config
+      - name: Install TagLib and FFmpeg
+        run: brew install taglib ffmpeg pkg-config
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -264,7 +268,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config \
-            libtag1-dev libgl1-mesa-dev libegl1-mesa-dev \
+            libtag1-dev libavcodec-dev libavutil-dev libgl1-mesa-dev libegl1-mesa-dev \
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
             libpulse-dev libfuse2 libssl-dev wget file
 

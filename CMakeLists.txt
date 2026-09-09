@@ -47,6 +47,25 @@ if(NOT ANDROID)
     endif()
 endif()
 
+# ---- FFmpeg (libavcodec) for the built-in phone-mirror client ----
+# Optional: without it the C++ backend still builds and reports
+# phoneMirrorManager.nativeAvailable=false (docs/PHONE_MIRROR_NATIVE_PLAN.md).
+set(OCTAVE_HAVE_FFMPEG OFF)
+if(NOT ANDROID)
+    if(WIN32)
+        find_package(FFMPEG QUIET)               # vcpkg: ffmpeg[avcodec,avutil]
+        if(FFMPEG_FOUND)
+            set(OCTAVE_HAVE_FFMPEG ON)
+        endif()
+    else()
+        pkg_check_modules(FFMPEG QUIET IMPORTED_TARGET libavcodec libavutil)
+        if(FFMPEG_FOUND)
+            set(OCTAVE_HAVE_FFMPEG ON)
+        endif()
+    endif()
+endif()
+message(STATUS "Built-in phone mirror decoder (libavcodec): ${OCTAVE_HAVE_FFMPEG}")
+
 # ---- Download feature flag ----
 # Desktop: default ON. Disable with `-DOCTAVE_ENABLE_DOWNLOADS=OFF` for app-store builds
 #          (yt-dlp is forbidden on Apple/Microsoft/Play stores).
@@ -92,6 +111,8 @@ qt_add_executable(octave
     src/managers/dashboardmanager.cpp
     src/items/scrcpycapture.h
     src/items/scrcpycapture.cpp
+    src/phone_mirror/scrcpyclient.h
+    src/phone_mirror/scrcpyclient.cpp
     src/items/embeddedscrcpyitem.h
     src/items/embeddedscrcpyitem.cpp
     src/items/embeddeddhuitem.h
@@ -104,6 +125,7 @@ qt_add_executable(octave
 
 target_compile_definitions(octave PRIVATE
     $<$<BOOL:${OCTAVE_ENABLE_DOWNLOADS}>:OCTAVE_ENABLE_DOWNLOADS>
+    $<$<BOOL:${OCTAVE_HAVE_FFMPEG}>:OCTAVE_HAVE_FFMPEG>
     # Activate existing #ifndef Q_OS_MOBILE guards on Android (and iOS later).
     # Without this define the guards are no-ops and desktop-only code compiles on mobile.
     $<$<BOOL:${ANDROID}>:Q_OS_MOBILE>
@@ -122,6 +144,14 @@ target_link_libraries(octave PRIVATE
     Qt6::SerialPort
     Qt6::Bluetooth
 )
+if(OCTAVE_HAVE_FFMPEG)
+    if(WIN32)
+        target_include_directories(octave PRIVATE ${FFMPEG_INCLUDE_DIRS})
+        target_link_libraries(octave PRIVATE ${FFMPEG_LIBRARIES})
+    else()
+        target_link_libraries(octave PRIVATE PkgConfig::FFMPEG)
+    endif()
+endif()
 if(Qt6Quick3D_FOUND)
     target_link_libraries(octave PRIVATE Qt6::Quick3D)
 endif()
@@ -141,6 +171,16 @@ qt_add_resources(octave "shaders"
     PREFIX "/shaders"
     BASE "${CMAKE_SOURCE_DIR}/frontend/shaders"
     FILES "${CMAKE_SOURCE_DIR}/frontend/shaders/dissolve_squares.frag.qsb"
+)
+
+# ---- Bundled scrcpy server (Apache-2.0) for the built-in phone-mirror client ----
+# Embedded as a resource and written to a temp file at runtime, so no packaging
+# target has to carry it as a loose file.
+qt_add_resources(octave "scrcpy_server"
+    PREFIX "/scrcpy"
+    BASE "${CMAKE_SOURCE_DIR}/tools/scrcpy-server"
+    FILES "${CMAKE_SOURCE_DIR}/tools/scrcpy-server/scrcpy-server-v3.3.4"
+          "${CMAKE_SOURCE_DIR}/tools/scrcpy-server/LICENSE"
 )
 
 # ---- QML import path: reuse existing frontend/ directory ----

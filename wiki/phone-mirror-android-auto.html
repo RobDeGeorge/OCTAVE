@@ -275,8 +275,12 @@
             which gives real multitouch with socket latency. No v4l2loopback, no ffmpeg, no <code>adb shell input</code>.
             Measured on the Orange Pi: first frame 0.4–1.3 s after launch regardless of phone idle state, touch visible
             in the stream after ~0.17 s. Design and protocol reference: <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>.
-            The C++ backend exposes the same properties and slots but reports <code>nativeAvailable=false</code> until
-            phase 2 ports the client; the scrcpy-binary paths above remain the fallback in both backends.
+            The C++ backend has the same client in <span class="file-path">src/phone_mirror/scrcpyclient.{h,cpp}</span>
+            (QTcpSocket + libavcodec, the server jar embedded as a Qt resource under <code>:/scrcpy/</code>); it is
+            compiled in when CMake finds libavcodec/libavutil (<code>OCTAVE_HAVE_FFMPEG</code>), otherwise
+            <code>nativeAvailable</code> is false. Both clients are verified against a fake server that reproduces the
+            handshake ordering (the real server sends device/codec meta only after every socket is connected). The
+            scrcpy-binary paths above remain the fallback in both backends until phase 3 removes them.
           </p>
 
           <h4>Disconnects and recovery</h4>

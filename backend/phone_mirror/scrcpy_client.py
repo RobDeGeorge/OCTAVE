@@ -244,6 +244,9 @@ class ScrcpyClient(QObject):
 
     @staticmethod
     def _free_port() -> int:
+        forced = os.environ.get("OCTAVE_SCRCPY_PORT")  # test hook (fake-server tests)
+        if forced:
+            return int(forced)
         s = socket.socket()
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]

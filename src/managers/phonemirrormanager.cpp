@@ -1,6 +1,7 @@
 #ifndef Q_OS_MOBILE
 
 #include "phonemirrormanager.h"
+#include "../phone_mirror/scrcpyclient.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -129,6 +130,8 @@ QString PhoneMirrorManager::adbPath() const
 
 bool PhoneMirrorManager::isRunning() const
 {
+    if (m_client && m_client->isRunning())
+        return true;
     return m_process != nullptr
         && m_process->state() != QProcess::NotRunning;
 }
@@ -201,6 +204,8 @@ bool PhoneMirrorManager::environmentOk()
 {
     // scrcpy installed, new enough and (on Linux) the video node exists: a
     // failure is about the phone, not the setup, so no install instructions.
+    if (m_nativeMode)
+        return nativeAvailable();
     if (getEffectiveScrcpyPath().isEmpty() || versionTooOld())
         return false;
     if (m_captureMode == QLatin1String("v4l2") && !videoDeviceExists())
@@ -223,15 +228,135 @@ void PhoneMirrorManager::killStaleServer()
                                         QStringLiteral("-f"), QStringLiteral("com.genymobile.scrcpy")});
 }
 
+// ─── Built-in client (native mode) ────────────────────────────────────
+
+bool PhoneMirrorManager::nativeAvailable() const
+{
+    return ScrcpyClient::available() && !m_adbPath.isEmpty();
+}
+
+QString PhoneMirrorManager::serverVersion() const
+{
+    return QLatin1String(ScrcpyClient::kServerVersion);
+}
+
+void PhoneMirrorManager::setVideoSink(QObject *sink)
+{
+    m_videoSink = sink;
+    if (m_client)
+        m_client->setVideoSink(sink);
+}
+
 void PhoneMirrorManager::setNativeMode(bool enabled)
 {
     if (enabled == m_nativeMode)
         return;
-    if (enabled)
-        qCWarning(lcPhoneMirror) << "Built-in phone mirror client is not implemented in the C++ backend yet "
-                                    "(docs/PHONE_MIRROR_NATIVE_PLAN.md phase 2); using scrcpy binary";
+    if (enabled && !nativeAvailable())
+        qCWarning(lcPhoneMirror) << "Built-in phone mirror requested but unavailable "
+                                    "(decoder linked:" << ScrcpyClient::available() << ", adb:" << m_adbPath << ")";
+    const bool wasRunning = isRunning();
+    if (wasRunning)
+        stopScrcpy();
     m_nativeMode = enabled;
     emit nativeModeChanged();
+    if (wasRunning)
+        QTimer::singleShot(300, this, &PhoneMirrorManager::startScrcpy);
+}
+
+void PhoneMirrorManager::injectTouch(int pointerId, int action, float relX, float relY)
+{
+    if (!m_client || !m_client->isRunning())
+        return;
+    m_client->injectTouch(pointerId, action,
+                          int(relX * m_client->frameWidth()), int(relY * m_client->frameHeight()));
+}
+
+void PhoneMirrorManager::injectKey(int keycode)
+{
+    if (m_client && m_client->isRunning())
+        m_client->pressKey(keycode);
+}
+
+void PhoneMirrorManager::pressHome()      { injectKey(ScrcpyClient::KeycodeHome); }
+void PhoneMirrorManager::pressBack()      { injectKey(ScrcpyClient::KeycodeBack); }
+void PhoneMirrorManager::pressAppSwitch() { injectKey(ScrcpyClient::KeycodeAppSwitch); }
+
+void PhoneMirrorManager::startNative(const QString &serial)
+{
+    if (!ScrcpyClient::available()) {
+        emit scrcpyError(QStringLiteral("This build has no built-in mirror client (libavcodec not linked)"));
+        return;
+    }
+    const QString jar = ScrcpyClient::bundledServerJar();
+    if (jar.isEmpty()) {
+        emit scrcpyError(QStringLiteral("Bundled scrcpy server could not be extracted"));
+        return;
+    }
+    m_isStarting = true;
+    m_isStopping = false;
+    m_ready = false;
+    m_displayId = -1;
+    m_activeDisplaySize = m_displaySize;
+
+    if (m_client) {
+        m_client->stop();
+        m_client->deleteLater();
+    }
+    m_client = new ScrcpyClient(m_adbPath, jar, this);
+    m_client->setVideoSink(m_videoSink);
+    connect(m_client, &ScrcpyClient::connected, this, &PhoneMirrorManager::onNativeConnected, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::disconnected, this, &PhoneMirrorManager::onNativeDisconnected, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::frameSizeChanged, this, [this](int w, int h) {
+        if (w != m_frameWidth || h != m_frameHeight) {
+            m_frameWidth = w; m_frameHeight = h;
+            emit frameSizeChanged(w, h);
+        }
+    }, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::frameReady, this, &PhoneMirrorManager::frameReady, Qt::QueuedConnection);
+
+    QString displaySize = m_displaySize;
+    if (!displaySize.isEmpty()) {
+        const int sdk = getDeviceSdk();
+        if (sdk > 0 && sdk < kNewDisplayMinSdk) {
+            qCWarning(lcPhoneMirror) << "Device SDK" << sdk << "<" << kNewDisplayMinSdk << ": virtual display unavailable";
+            displaySize.clear();
+            m_activeDisplaySize.clear();
+        }
+    }
+    // Audio forwarding is not implemented in the built-in client yet
+    if (m_audioEnabled)
+        qCInfo(lcPhoneMirror) << "Built-in client: audio forwarding not implemented yet, mirroring video only";
+    qCInfo(lcPhoneMirror) << "Starting built-in scrcpy client" << serverVersion() << "for" << serial
+                          << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize) << ")";
+    m_client->start(serial, displaySize, 60, 8000000, false, true);
+    emit isRunningChanged();
+}
+
+void PhoneMirrorManager::onNativeConnected(int w, int h)
+{
+    m_ready = true;
+    m_isStarting = false;
+    m_scrcpyHwnd = 1;  // non-zero "handle" keeps the QML contract
+    m_frameWidth = w; m_frameHeight = h;
+    emit frameSizeChanged(w, h);
+    if (!m_activeDisplaySize.isEmpty())
+        m_activeDisplaySize = QStringLiteral("%1x%2").arg(w).arg(h);
+    qCInfo(lcPhoneMirror) << "Built-in client connected:" << w << "x" << h;
+    emit scrcpyStarted(m_scrcpyHwnd);
+}
+
+void PhoneMirrorManager::onNativeDisconnected(const QString &reason)
+{
+    if (m_isStopping)
+        return;
+    m_ready = false;
+    m_isStarting = false;
+    m_scrcpyHwnd = 0;
+    emit isRunningChanged();
+    if (reason.isEmpty())
+        emit scrcpyStopped();
+    else
+        emit scrcpyError(reason);
 }
 
 int PhoneMirrorManager::getDeviceSdk()
@@ -470,6 +595,16 @@ void PhoneMirrorManager::startScrcpy()
         return;
     }
 
+    if (m_nativeMode) {
+        const QString state = getDeviceState();
+        if (state != QLatin1String("device")) {
+            emit scrcpyError(describeDeviceState(state));
+            return;
+        }
+        startNative(getDeviceSerial());
+        return;
+    }
+
     if (m_captureMode == QLatin1String("unsupported")) {
         emit scrcpyError(QStringLiteral("Phone mirroring is not supported on this platform yet"));
         return;
@@ -704,6 +839,14 @@ void PhoneMirrorManager::stopScrcpy()
     m_ready = false;
     m_displayId = -1;
     m_activeDisplaySize.clear();
+
+    if (m_client) {
+        ScrcpyClient *client = m_client;
+        m_client = nullptr;
+        client->stop();
+        client->deleteLater();
+        killStaleServer();
+    }
 
     if (m_process) {
         m_process->terminate();

@@ -13,6 +13,8 @@
 
 Q_DECLARE_LOGGING_CATEGORY(lcPhoneMirror)
 
+class ScrcpyClient;
+
 class PhoneMirrorManager : public QObject
 {
     Q_OBJECT
@@ -62,12 +64,12 @@ public:
     int displayId() const;
     QString activeDisplaySize() const;
     bool nativeMode() const { return m_nativeMode; }
-    bool nativeAvailable() const { return false; }  // TODO phase 2
-    QString serverVersion() const { return QStringLiteral("3.3.4"); }
+    bool nativeAvailable() const;
+    QString serverVersion() const;
     QObject *videoSink() const { return m_videoSink; }
-    void setVideoSink(QObject *sink) { m_videoSink = sink; }
-    int frameWidth() const { return 0; }
-    int frameHeight() const { return 0; }
+    void setVideoSink(QObject *sink);
+    int frameWidth() const { return m_frameWidth; }
+    int frameHeight() const { return m_frameHeight; }
 
     // Validate "WxH": dimensions snapped down to multiples of 8 (scrcpy does the
     // same to a --new-display size), "" for invalid input.
@@ -100,11 +102,11 @@ public slots:
     void setVideoDevice(const QString &device);
     void setDisplaySize(const QString &size);
     void setNativeMode(bool enabled);
-    void injectTouch(int pointerId, int action, float relX, float relY) { Q_UNUSED(pointerId) Q_UNUSED(action) Q_UNUSED(relX) Q_UNUSED(relY) }
-    void injectKey(int keycode) { Q_UNUSED(keycode) }
-    void pressHome() {}
-    void pressBack() {}
-    void pressAppSwitch() {}
+    void injectTouch(int pointerId, int action, float relX, float relY);
+    void injectKey(int keycode);
+    void pressHome();
+    void pressBack();
+    void pressAppSwitch();
     int getDeviceSdk();
     bool videoDeviceExists();
     bool environmentOk();
@@ -136,6 +138,11 @@ private:
     // Window finding (platform-specific)
     void findScrcpyWindow();
 
+    // Built-in client (native mode)
+    void startNative(const QString &serial);
+    void onNativeConnected(int w, int h);
+    void onNativeDisconnected(const QString &reason);
+
     // v4l2 mode readiness / process supervision
     void onProcessStderr();
     void markReady();
@@ -163,6 +170,9 @@ private:
     int m_displayId = -1;
     bool m_nativeMode = false;
     QObject *m_videoSink = nullptr;
+    ScrcpyClient *m_client = nullptr;
+    int m_frameWidth = 0;
+    int m_frameHeight = 0;
 
     QProcess *m_process = nullptr;
     int m_scrcpyHwnd = 0;

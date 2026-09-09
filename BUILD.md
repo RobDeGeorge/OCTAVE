@@ -74,7 +74,7 @@ To produce an AppImage locally (matches CI's layout, but linked against your dis
 
 ```bash
 # Ubuntu 22.04 prereqs (see the script's header for the full list)
-sudo apt-get install -y libtag1-dev libfuse2 wget file
+sudo apt-get install -y libtag1-dev libavcodec-dev libavutil-dev libfuse2 wget file
 
 bash packaging/linux/build-appimage.sh
 # -> dist/OCTAVE-<version>-x86_64.AppImage
@@ -102,7 +102,12 @@ Outputs: `build/octave.app`. CI runs `macdeployqt` and `hdiutil` to produce the 
 
 ### Windows
 
-CI uses **vcpkg** to provide `taglib` and pins Qt 6.7.3 via `jurplel/install-qt-action`.
+CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7.3 via `jurplel/install-qt-action`.
+
+> **FFmpeg (libavcodec/libavutil) is optional on every platform.** It provides the H.264
+> decoder for the built-in phone-mirror client (`phoneMirrorManager.nativeAvailable`).
+> Without it OCTAVE still builds; phone mirroring then needs the external scrcpy binary.
+> CMake prints `Built-in phone mirror decoder (libavcodec): ON/OFF` at configure time.
 
 ```powershell
 # Visual Studio 2022 with "Desktop development with C++" workload required.
