@@ -116,6 +116,7 @@ class PhoneMirrorManager(QObject):
         super().__init__(parent)
         self._adb_path: Optional[str] = _find_adb()
         self._audio_enabled: bool = False
+        self._volume: float = 1.0
         self._display_size: str = DEFAULT_DISPLAY_SIZE
         self._active_display_size: str = ""
 
@@ -242,6 +243,14 @@ class PhoneMirrorManager(QObject):
         self._run_adb(["shell", "pkill", "-f", "com.genymobile.scrcpy"], timeout=5)
 
     # ── settings ────────────────────────────────────────────────────
+
+    @Slot(float)
+    def setVolume(self, volume: float):
+        """Called by VolumeController.applyVolume() on every volume change.
+        Audio forwarding is not implemented in the built-in client yet, so
+        this is a deliberate no-op — but it must exist: removing it once
+        broke app startup (VolumeController calls it unconditionally)."""
+        self._volume = volume
 
     @Slot(bool)
     def setAudioEnabled(self, enabled: bool):

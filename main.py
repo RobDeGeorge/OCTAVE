@@ -363,7 +363,12 @@ def setup_perf_profiling():
     app.aboutToQuit.connect(stop_cmd_server)
 
     # Instrument hot paths
-    from backend.perf_patches import apply_patches
+    try:
+        # Developer-only instrumentation, intentionally gitignored (see .gitignore)
+        from backend.perf_patches import apply_patches
+    except ImportError:
+        logger.warning("--profile: backend/perf_patches.py not present, skipping method instrumentation")
+        return
     apply_patches(
         media_manager=media_manager,
         audio_analyzer=audio_analyzer,

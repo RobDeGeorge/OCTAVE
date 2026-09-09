@@ -72,6 +72,9 @@ signals:
     void videoSinkChanged();
 
 public slots:
+    // Called by VolumeController on every volume change; audio forwarding is
+    // not implemented in the built-in client yet, so this only records it.
+    void setVolume(float volume) { m_volume = volume; }
     void setAudioEnabled(bool enabled);
     void setDisplaySize(const QString &size);
     bool environmentOk();
@@ -104,6 +107,7 @@ private:
 
     QString m_adbPath;
     bool m_audioEnabled = false;
+    float m_volume = 1.0f;
     QString m_displaySize;
     QString m_activeDisplaySize;
 
@@ -148,6 +152,7 @@ public:
     int frameHeight() const { return 0; }
 
 public slots:
+    void setVolume(float) {}
     void setAudioEnabled(bool) {}
     void setDisplaySize(const QString &) {}
     bool environmentOk() const { return false; }
