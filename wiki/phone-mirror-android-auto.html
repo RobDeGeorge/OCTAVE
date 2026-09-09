@@ -163,7 +163,7 @@
               <tr><td><code>scrcpyVersion</code></td><td><code>str</code></td><td>Version of the effective scrcpy binary, e.g. <code>"3.3.4"</code>; <code>""</code> if unknown. Versions below <strong>2.0</strong> are rejected at <code>startScrcpy()</code></td></tr>
               <tr><td><code>captureMode</code></td><td><code>str</code></td><td><code>"window"</code> (Windows: screen-grab), <code>"v4l2"</code> (Linux: headless scrcpy into a v4l2loopback node rendered by QtMultimedia), <code>"unsupported"</code> (macOS, mobile)</td></tr>
               <tr><td><code>videoDevice</code></td><td><code>str</code></td><td>v4l2loopback node used in v4l2 mode (default <code>/dev/video10</code>, setting <code>scrcpyVideoDevice</code>)</td></tr>
-              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> passed as <code>--new-display</code> (default <code>1280x800</code>, setting <code>scrcpyDisplaySize</code>); <code>""</code> mirrors the phone's own screen. Width is snapped down to a multiple of 64</td></tr>
+              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> passed as <code>--new-display</code> (default <code>1280x800</code>, setting <code>scrcpyDisplaySize</code>); <code>""</code> mirrors the phone's own screen. Dimensions are snapped to even numbers</td></tr>
               <tr><td><code>displayId</code></td><td><code>int</code></td><td>Android display id of the running mirror, <code>-1</code> for the phone's main display. Touch injection targets it via <code>adb shell input -d ID</code></td></tr>
               <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td><code>"WxH"</code> of the virtual display actually in use, <code>""</code> when mirroring the phone screen</td></tr>
             </tbody>
@@ -265,9 +265,10 @@
           <p>
             By default OCTAVE does not mirror the phone's own screen. It asks scrcpy to create a separate
             <strong>landscape 1280x800 virtual display</strong> on the phone (Android 11+), which suits a dash
-            screen, leaves the handset usable, and -- critically -- has a width that is a multiple of 64.
-            Qt 6's FFmpeg V4L2 camera path mishandles the row stride for other widths and renders a diagonally
-            sheared image, so <code>setDisplaySize()</code> snaps any requested width down to a multiple of 64.
+            screen and leaves the handset usable. <code>setDisplaySize()</code> only snaps the dimensions to even
+            numbers (H.264 encoders require that); the raw-BGRA reader carries an explicit stride, so any width
+            renders correctly. A new virtual display is static from birth, so on capture start the reader sends an
+            8&nbsp;px horizontal swipe to it (<code>nudgeDisplay()</code>) to make it draw a first frame immediately.
             Touch injection maps to the virtual display's geometry (no portrait/landscape swap) and targets it with
             <code>adb shell input -d &lt;displayId&gt;</code>.
           </p>
@@ -314,7 +315,7 @@
             grab that runs concurrently with the stream and never treats "no new frames" as an error. Note that a
             cold reader only receives a frame when the producer writes one, and a bare home screen repaints only when
             its status-bar clock ticks -- so the first picture can take up to a minute on an untouched phone (the seed
-            waits 90 s); touching the phone makes it appear immediately, and the view says so. And both
+            waits 90 s). The reader therefore also nudges the virtual display with a tiny swipe so it draws at once. And both
             scrcpy and ffmpeg are spawned with <code>PR_SET_PDEATHSIG</code> on Linux (SIGTERM for scrcpy so it tears
             down its virtual display, SIGKILL for ffmpeg, which ignores SIGTERM while blocked in the v4l2 driver on
             an idle device), so they die with OCTAVE even when it is killed without running cleanup; the Python entry point additionally routes SIGTERM/SIGINT

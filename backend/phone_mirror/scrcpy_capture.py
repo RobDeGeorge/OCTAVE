@@ -447,6 +447,8 @@ class ScrcpyCapture(QObject):
                 seed_thread = threading.Thread(target=self._seed_frame, args=(device, ffmpeg, w, h, token),
                                                daemon=True, name="scrcpy-v4l2-seed")
                 seed_thread.start()
+                # Give the readers a frame to catch (see nudgeDisplay)
+                threading.Timer(0.5, self.nudgeDisplay).start()
             try:
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         bufsize=frame_bytes * 2, preexec_fn=die_with_parent_kill)
@@ -726,6 +728,32 @@ class ScrcpyCapture(QObject):
         device_y = max(0, min(device_y, self._device_height - 1))
 
         return device_x, device_y
+
+    def nudgeDisplay(self):
+        """Make the virtual display draw a frame right now.
+
+        A freshly created --new-display is static from birth (only its clock
+        ticks, once a minute), and the loopback node only yields a frame when
+        one is written, so the first picture could take up to a minute. An
+        8 px horizontal swipe in the middle of the launcher makes it repaint
+        (the page snaps straight back) without activating anything.
+        """
+        if not self._adb_path or not self._fixed_display or self._device_width <= 0:
+            return
+        cx, cy = self._device_width // 2, self._device_height // 2
+        cmd = [self._adb_path]
+        if self._device_serial:
+            cmd.extend(['-s', self._device_serial])
+        cmd.extend(['shell', 'input'] + self._display_args()
+                   + ['swipe', str(cx), str(cy), str(cx + 8), str(cy), '60'])
+        logger.info("v4l2 capture: nudging the virtual display to draw its first frame")
+
+        def run():
+            try:
+                subprocess.run(cmd, capture_output=True, timeout=5)
+            except (subprocess.SubprocessError, OSError) as e:
+                logger.warning(f"v4l2 capture: nudge failed: {e}")
+        threading.Thread(target=run, daemon=True, name="scrcpy-nudge").start()
 
     def _display_args(self) -> list:
         """`input -d <id>` routes the event to scrcpy's virtual display."""

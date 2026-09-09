@@ -228,7 +228,7 @@
             <tr><td><code>scrcpyPath</code></td><td>scrcpyPath</td><td>str</td><td>""</td><td>Any path</td><td>Custom path to scrcpy executable (auto-detected if empty)</td></tr>
             <tr><td><code>scrcpyAudioEnabled</code></td><td>scrcpyAudioEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Forward phone audio through scrcpy</td></tr>
             <tr><td><code>scrcpyVideoDevice</code></td><td>scrcpyVideoDevice</td><td>str</td><td>"/dev/video10"</td><td>Device path</td><td>Linux only: v4l2loopback node scrcpy streams into (<code>modprobe v4l2loopback exclusive_caps=0 card_label=OCTAVE video_nr=10</code>)</td></tr>
-            <tr><td><code>scrcpyDisplaySize</code></td><td>scrcpyDisplaySize</td><td>str</td><td>"1280x800"</td><td>"WxH" (width multiple of 64) or ""</td><td>Virtual display scrcpy creates on the phone (<code>--new-display</code>, Android 11+); empty mirrors the phone's own screen</td></tr>
+            <tr><td><code>scrcpyDisplaySize</code></td><td>scrcpyDisplaySize</td><td>str</td><td>"1280x800"</td><td>"WxH" (even numbers) or ""</td><td>Virtual display scrcpy creates on the phone (<code>--new-display</code>, Android 11+); empty mirrors the phone's own screen</td></tr>
           </tbody>
         </table>
 

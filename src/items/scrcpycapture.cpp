@@ -282,9 +282,12 @@ void ScrcpyCapture::startV4l2Reader()
     }
     m_v4l2Buffer.clear();
 
-    // First frame: race a one-shot grab against the stream (see startSeedGrab).
-    if (m_frameCount == 0 && !m_seedPending)
+    // First frame: race a one-shot grab against the stream (see startSeedGrab)
+    // and give both something to catch (see nudgeDisplay).
+    if (m_frameCount == 0 && !m_seedPending) {
         startSeedGrab(device);
+        QTimer::singleShot(500, this, &ScrcpyCapture::nudgeDisplay);
+    }
 
     m_v4l2Proc = new QProcess(this);
     m_v4l2Proc->setReadChannel(QProcess::StandardOutput);
@@ -533,6 +536,24 @@ QPair<int, int> ScrcpyCapture::convertToDeviceCoords(float relX, float relY) con
     deviceY = qBound(0, deviceY, m_deviceHeight - 1);
 
     return {deviceX, deviceY};
+}
+
+// ─── Display nudge ────────────────────────────────────────────────────
+
+void ScrcpyCapture::nudgeDisplay()
+{
+    // A freshly created --new-display is static from birth (only its clock
+    // ticks, once a minute), and the loopback node only yields a frame when
+    // one is written, so the first picture could take up to a minute. An
+    // 8 px horizontal swipe in the middle of the launcher makes it repaint
+    // (the page snaps straight back) without activating anything.
+    if (m_adbPath.isEmpty() || !m_fixedDisplay || m_deviceWidth <= 0)
+        return;
+    const int cx = m_deviceWidth / 2, cy = m_deviceHeight / 2;
+    qCInfo(lcScrcpyCapture) << "v4l2 capture: nudging the virtual display to draw its first frame";
+    runAdbAsync({QStringLiteral("shell"), QStringLiteral("input"), QStringLiteral("swipe"),
+                 QString::number(cx), QString::number(cy), QString::number(cx + 8), QString::number(cy),
+                 QStringLiteral("60")});
 }
 
 // ─── ADB async runner ─────────────────────────────────────────────────

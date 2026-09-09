@@ -1689,7 +1689,7 @@ Flickable {
 
                     SettingDescription {
                         text: "scrcpy creates a separate landscape display on the phone (Android 11+). "
-                              + "Width must be a multiple of 64. Leave empty to mirror the phone's own screen."
+                              + "Leave empty to mirror the phone's own screen."
                     }
 
                     SettingsTextField {
@@ -1703,7 +1703,7 @@ Flickable {
                                 settingsManager.save_scrcpy_display_size(text)
                                 if (phoneMirrorManager) {
                                     phoneMirrorManager.setDisplaySize(text)
-                                    // Manager may have snapped the width to a multiple of 64
+                                    // Manager may have snapped the dimensions to even numbers
                                     if (phoneMirrorManager.displaySize !== text) {
                                         settingsManager.save_scrcpy_display_size(phoneMirrorManager.displaySize)
                                     }

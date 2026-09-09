@@ -84,6 +84,9 @@ public slots:
     // Manager linkage
     void setPhoneMirrorManager(QObject *manager);
 
+    // v4l2 mode: make the (static-from-birth) virtual display draw a frame
+    void nudgeDisplay();
+
 private slots:
     void captureFrame();
 

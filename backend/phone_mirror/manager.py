@@ -32,21 +32,21 @@ MIN_SCRCPY_VERSION = (2, 0)
 DEFAULT_VIDEO_DEVICE = "/dev/video10"
 
 # Default size of the virtual display scrcpy creates on the phone
-# (--new-display, Android 11+). Landscape suits a dash screen, and the width
-# MUST be a multiple of 64: Qt's ffmpeg V4L2 camera path mis-handles the row
-# stride for other widths and renders a diagonally sheared image.
+# (--new-display, Android 11+). Landscape suits a dash screen. Dimensions
+# only need to be even (H.264 encoders want that); the raw-BGRA ffmpeg
+# reader carries an explicit stride, so any width renders correctly.
 DEFAULT_DISPLAY_SIZE = "1280x800"
 NEW_DISPLAY_MIN_SDK = 30  # Android 11
 
 
 def normalize_display_size(value: str) -> str:
-    """Validate "WxH"; snap the width down to a multiple of 64 (min 64).
+    """Validate "WxH"; snap both dimensions down to even numbers (min 2).
     Returns "" for empty/invalid input (= mirror the phone's own screen)."""
     m = re.fullmatch(r"\s*(\d+)\s*[xX]\s*(\d+)\s*", value or "")
     if not m:
         return ""
     w, h = int(m.group(1)), int(m.group(2))
-    w = max(64, (w // 64) * 64)
+    w = max(2, (w // 2) * 2)
     h = max(2, (h // 2) * 2)
     return f"{w}x{h}"
 
@@ -199,7 +199,7 @@ class PhoneMirrorManager(QObject):
     def setDisplaySize(self, size: str):
         norm = normalize_display_size(size)
         if norm != (size or "").strip():
-            logger.info(f"Display size '{size}' normalized to '{norm}' (width must be a multiple of 64)")
+            logger.info(f"Display size '{size}' normalized to '{norm}' (dimensions must be even)")
         if norm == self._display_size:
             return
         self._display_size = norm
