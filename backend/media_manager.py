@@ -669,9 +669,11 @@ class MediaManager(QObject):
     def _kmeans_colors(self, pixels, k=5, max_iterations=10):
         """Simple k-means clustering to find dominant colors. Pure Python."""
         import random
-        random.seed(42)
+        # Local generator: seeding the *global* random module here made every
+        # later random.shuffle() / getrandbits() in the process deterministic.
+        rng = random.Random(42)
         n = len(pixels)
-        indices = random.sample(range(n), min(k, n))
+        indices = rng.sample(range(n), min(k, n))
         centroids = [list(pixels[i]) for i in indices]
 
         labels = [0] * n

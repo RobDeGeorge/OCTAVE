@@ -13,7 +13,7 @@ and were verified against the scrcpy v3.3.4 source.
 
 import os
 import platform
-import random
+import secrets
 import socket
 import struct
 import subprocess
@@ -242,6 +242,27 @@ class ScrcpyClient(QObject):
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
                               creationflags=creationflags)
 
+    def _reap_stale_forwards(self):
+        """Remove leftover `localabstract:scrcpy_*` forwards for this device.
+
+        The forward lives in the adb server, so a hard-killed OCTAVE (no
+        cleanup, PDEATHSIG cannot reach it) strands a listening port per
+        session; they accumulate until the adb server restarts.
+        """
+        try:
+            r = self._adb_run(["forward", "--list"], timeout=5)
+        except (subprocess.SubprocessError, OSError):
+            return
+        for line in (r.stdout or "").splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[2].startswith("localabstract:scrcpy_") \
+                    and (not self._serial or parts[0] == self._serial):
+                logger.info(f"scrcpy client: removing stale forward {parts[1]} -> {parts[2]}")
+                try:
+                    self._adb_run(["forward", "--remove", parts[1]], timeout=5)
+                except (subprocess.SubprocessError, OSError):
+                    pass
+
     @staticmethod
     def _free_port() -> int:
         forced = os.environ.get("OCTAVE_SCRCPY_PORT")  # test hook (fake-server tests)
@@ -275,8 +296,11 @@ class ScrcpyClient(QObject):
         if r.returncode != 0:
             self._fail(f"could not push scrcpy server: {(r.stderr or r.stdout).strip()[-200:]}")
             return
-        # 2. tunnel
-        self._scid = f"{random.getrandbits(31):08x}"
+        # 2. tunnel. scid must fit a signed 32-bit int on the server side.
+        #    secrets, not random: other modules seed the global RNG (media
+        #    colour extraction), which made every session's scid identical.
+        self._scid = f"{secrets.randbits(31):08x}"
+        self._reap_stale_forwards()
         self._port = self._free_port()
         r = self._adb_run(["forward", f"tcp:{self._port}", f"localabstract:scrcpy_{self._scid}"])
         if r.returncode != 0:

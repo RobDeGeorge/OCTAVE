@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QProcess>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -304,8 +305,21 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         fail(QStringLiteral("could not push scrcpy server: ") + out.right(200));
         return;
     }
-    // 2. tunnel (scid must fit a signed 32-bit int on the server side)
-    m_scid = QStringLiteral("%1").arg(QRandomGenerator::global()->bounded(0x7fffffff), 8, 16, QLatin1Char('0'));
+    // 2. tunnel (scid must fit a signed 32-bit int on the server side).
+    //    Reap forwards left by a hard-killed OCTAVE first: they live in the
+    //    adb server and accumulate one listening port per session.
+    m_scid = QStringLiteral("%1").arg(QRandomGenerator::system()->bounded(0x7fffffff), 8, 16, QLatin1Char('0'));
+    if (adbRun({QStringLiteral("forward"), QStringLiteral("--list")}, &out, 5000)) {
+        const QStringList lines = out.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        for (const QString &line : lines) {
+            const QStringList parts = line.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+            if (parts.size() >= 3 && parts[2].startsWith(QLatin1String("localabstract:scrcpy_"))
+                && (m_serial.isEmpty() || parts[0] == m_serial)) {
+                qCInfo(lcScrcpyClient) << "removing stale forward" << parts[1] << "->" << parts[2];
+                adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), parts[1]}, nullptr, 5000);
+            }
+        }
+    }
     m_port = freePort();
     if (!adbRun({QStringLiteral("forward"), QStringLiteral("tcp:%1").arg(m_port),
                  QStringLiteral("localabstract:scrcpy_") + m_scid}, &out)) {

@@ -1316,8 +1316,8 @@ class SpotifyManager(QObject):
         """Simple k-means clustering to find dominant colors"""
         import numpy as np
 
-        np.random.seed(42)
-        indices = np.random.choice(len(pixels), k, replace=False)
+        rng = np.random.default_rng(42)  # local generator, do not seed the global numpy RNG
+        indices = rng.choice(len(pixels), k, replace=False)
         centroids = pixels[indices].astype(float)
 
         for _ in range(max_iterations):
