@@ -403,7 +403,11 @@ class PhoneMirrorManager(QObject):
                 self._active_display_size = ""
         logger.info(f"Starting built-in scrcpy client {SERVER_VERSION} for {serial} "
                     f"(display {display_size or 'phone screen'})")
-        client.start(serial, display_size=display_size, audio=self._audio_enabled)
+        # Audio forwarding is not implemented in the built-in client yet
+        # (the socket would be connected and drained, but nothing plays it).
+        if self._audio_enabled:
+            logger.info("Built-in client: audio forwarding not implemented yet, mirroring video only")
+        client.start(serial, display_size=display_size, audio=False)
         self.isRunningChanged.emit()
 
     def _on_native_connected(self, w: int, h: int):

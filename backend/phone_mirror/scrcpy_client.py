@@ -121,6 +121,7 @@ class ScrcpyClient(QObject):
         self._scid = ""
         self._proc: Optional[subprocess.Popen] = None
         self._video: Optional[socket.socket] = None
+        self._audio: Optional[socket.socket] = None
         self._control: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
         self._stopping = False
@@ -171,7 +172,7 @@ class ScrcpyClient(QObject):
     def stop(self):
         self._stopping = True
         self._running = False
-        for s in (self._video, self._control):
+        for s in (self._video, self._audio, self._control):
             if s is not None:
                 try:
                     s.shutdown(socket.SHUT_RDWR)
@@ -181,7 +182,7 @@ class ScrcpyClient(QObject):
                     s.close()
                 except OSError:
                     pass
-        self._video = self._control = None
+        self._video = self._audio = self._control = None
         proc, self._proc = self._proc, None
         if proc is not None:
             try:
@@ -305,11 +306,28 @@ class ScrcpyClient(QObject):
                          name="scrcpy-server-log").start()
 
         # 4. connect: the tunnel accepts before the server listens, so retry
-        #    until the dummy byte actually arrives.
+        #    until the dummy byte actually arrives on the first (video) socket.
+        #    The server then waits for EVERY socket (video, [audio], control)
+        #    to be connected before it sends device/codec meta, so the control
+        #    socket must be opened before reading anything else.
         video = self._connect_until_ready(deadline=t0 + 20.0)
         if video is None:
             return
         self._video = video
+        try:
+            if audio:
+                audio_sock = socket.create_connection(("127.0.0.1", self._port), timeout=5)
+                audio_sock.settimeout(None)
+                self._audio = audio_sock
+                threading.Thread(target=self._drain_audio, args=(audio_sock,), daemon=True,
+                                 name="scrcpy-audio").start()
+            control = socket.create_connection(("127.0.0.1", self._port), timeout=5)
+            control.settimeout(None)
+            control.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._control = control
+        except OSError as e:
+            self._fail(f"could not open control socket: {e}")
+            return
         try:
             name = _recv_exact(video, 64).split(b"\x00", 1)[0].decode(errors="replace")
             codec_id, w, h = struct.unpack(">III", _recv_exact(video, 12))
@@ -320,10 +338,6 @@ class ScrcpyClient(QObject):
         logger.info(f"scrcpy client: device '{name}', codec {codec}, {w}x{h}, "
                     f"handshake at +{time.monotonic() - t0:.2f} s")
         self._width, self._height = w, h
-        control = socket.create_connection(("127.0.0.1", self._port), timeout=5)
-        control.settimeout(None)
-        control.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self._control = control
         threading.Thread(target=self._drain_device_messages, args=(control,), daemon=True,
                          name="scrcpy-devmsg").start()
         self._running = True
@@ -338,17 +352,25 @@ class ScrcpyClient(QObject):
             if self._proc is not None and self._proc.poll() is not None:
                 self._fail("scrcpy server exited during startup (see log)")
                 return None
+            s = None
             try:
-                s = socket.create_connection(("127.0.0.1", self._port), timeout=1.0)
-                s.settimeout(1.0)
+                s = socket.create_connection(("127.0.0.1", self._port), timeout=2.0)
+                s.settimeout(2.0)
                 dummy = s.recv(1)
                 if dummy:
                     s.settimeout(None)
                     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     return s
-                s.close()
             except (OSError, socket.timeout):
                 pass
+            # Either EOF (tunnel accepted before the server listened) or a
+            # timeout: close it, or a leaked connection is later handed out
+            # by the server as the audio/control socket.
+            if s is not None:
+                try:
+                    s.close()
+                except OSError:
+                    pass
             time.sleep(0.1)
         if not self._stopping:
             self._fail("scrcpy server did not answer within 20 s")
@@ -363,7 +385,9 @@ class ScrcpyClient(QObject):
                 if "ERROR" in line or "WARN" in line:
                     logger.warning(f"scrcpy server: {line}")
                 else:
-                    logger.debug(f"scrcpy server: {line}")
+                    # Startup INFO ("Device: ...", "New display ...") is the
+                    # only trace of the server in a normal log: keep it visible.
+                    logger.info(f"scrcpy server: {line}")
                 self.serverLog.emit(line)
         except Exception:
             pass
@@ -371,6 +395,16 @@ class ScrcpyClient(QObject):
         if proc is self._proc and not self._stopping:
             self._fail("Phone disconnected. Reconnect the USB cable." if self._running
                        else f"scrcpy server exited (code {code})")
+
+    def _drain_audio(self, audio_sock: socket.socket):
+        # Audio playback is not implemented yet; the socket must still be
+        # connected and drained or the server never finishes its handshake.
+        try:
+            while not self._stopping:
+                if not audio_sock.recv(65536):
+                    break
+        except OSError:
+            pass
 
     def _drain_device_messages(self, control: socket.socket):
         # Clipboard notifications etc. — read and discard for now.
