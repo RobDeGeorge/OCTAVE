@@ -54,6 +54,26 @@ namespace {
 constexpr quint8 kMsgInjectKeycode = 0;
 constexpr quint8 kMsgInjectTouchEvent = 2;
 constexpr quint8 kMsgSetDisplayPower = 10;
+// A dozing phone streams pure black frames until it is woken. Rather than
+// flash the dash black, a run of all-black frames is held back (the last good
+// frame stays on screen) for this long, or for as long as the manager says
+// the phone is asleep; a black run that outlives it is real content.
+constexpr qint64 kBlackHoldMs = 3000;
+constexpr int kBlackLumaMax = 20;
+
+static bool isBlackFrame(const AVFrame *f)
+{
+    const int w = f->width, h = f->height, stride = f->linesize[0];
+    if (w < 8 || h < 8)
+        return false;
+    for (int r = 0; r < 8; ++r) {
+        const uint8_t *row = f->data[0] + qint64(r * (h - 1) / 7) * stride;
+        for (int c = 0; c < 8; ++c)
+            if (row[c * (w - 1) / 7] > kBlackLumaMax)
+                return false;
+    }
+    return true;
+}
 
 // Frame header flags (app/src/demuxer.c)
 constexpr quint64 kFlagConfig = quint64(1) << 63;
@@ -593,6 +613,17 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
                 if (w != m_width.load() || h != m_height.load()) {
                     m_width = w; m_height = h;
                     emit frameSizeChanged(w, h);
+                }
+                if (m_frameCount.load() > 0 && isBlackFrame(frame)) {
+                    const qint64 now = nowMs();
+                    if (m_blackSince < 0)
+                        m_blackSince = now;
+                    if (m_holdBlack.load() || now - m_blackSince < kBlackHoldMs) {
+                        av_frame_unref(frame);
+                        continue;
+                    }
+                } else {
+                    m_blackSince = -1;
                 }
                 QVideoFrameFormat fmt(QSize(w, h), QVideoFrameFormat::Format_YUV420P);
                 QVideoFrame vf(fmt);

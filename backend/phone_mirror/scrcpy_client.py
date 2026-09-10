@@ -81,6 +81,12 @@ AUDIO_SIGNAL_THRESHOLD = 164
 # to bridge the gaps between navigation sentences, short enough that music
 # comes back promptly after a prompt.
 AUDIO_HOLD_MS = 1500
+# A dozing phone streams pure black frames until it is woken. Rather than
+# flash the dash black, a run of all-black frames is held back (the last good
+# frame stays on screen) for this long, or for as long as the manager says
+# the phone is asleep; a black run that outlives it is real content.
+BLACK_HOLD_S = 3.0
+BLACK_LUMA_MAX = 20
 
 # Frame header flags (app/src/demuxer.c)
 FLAG_CONFIG = 1 << 63
@@ -161,6 +167,8 @@ class ScrcpyClient(QObject):
         self._height = 0
         self._sink = None
         self._latest_frame: Optional[QVideoFrame] = None
+        self._hold_black = False           # manager: the phone is asleep, keep holding black frames
+        self._black_since: Optional[float] = None
         self._frame_lock = threading.Lock()
         self._send_lock = threading.Lock()
         self._frame_count = 0
@@ -296,6 +304,25 @@ class ScrcpyClient(QObject):
     def press_key(self, keycode: int):
         self.inject_key(keycode, ACTION_DOWN)
         self.inject_key(keycode, ACTION_UP)
+
+    def set_hold_black(self, hold: bool):
+        """While True, all-black frames are never shown (the phone is asleep and
+        the last good frame stays up); otherwise only for BLACK_HOLD_S."""
+        self._hold_black = bool(hold)
+
+    @staticmethod
+    def _is_black(frame) -> bool:
+        plane = frame.planes[0]
+        buf = memoryview(plane).cast("B")
+        stride, w, h = plane.line_size, frame.width, frame.height
+        if w < 8 or h < 8:
+            return False
+        for r in range(8):
+            base = (r * (h - 1) // 7) * stride
+            for c in range(8):
+                if buf[base + c * (w - 1) // 7] > BLACK_LUMA_MAX:
+                    return False
+        return True
 
     def set_display_power(self, on: bool):
         self._send(struct.pack(">BB", MSG_SET_DISPLAY_POWER, 1 if on else 0))
@@ -677,6 +704,14 @@ class ScrcpyClient(QObject):
         if (w, h) != (self._width, self._height):
             self._width, self._height = w, h
             self.frameSizeChanged.emit(w, h)
+        if self._frame_count > 0 and self._is_black(frame):
+            now = time.monotonic()
+            if self._black_since is None:
+                self._black_since = now
+            if self._hold_black or now - self._black_since < BLACK_HOLD_S:
+                return
+        else:
+            self._black_since = None
         fmt = QVideoFrameFormat(QSize(w, h), QVideoFrameFormat.PixelFormat.Format_YUV420P)
         qframe = QVideoFrame(fmt)
         if not qframe.map(QVideoFrame.MapMode.WriteOnly):

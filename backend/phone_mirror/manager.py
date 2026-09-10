@@ -41,7 +41,7 @@ NEW_DISPLAY_MIN_SDK = 30  # Android 11
 # locked (dozing) phone keeps the stream open but stops compositing the
 # virtual display and drops injected touch, with no signal on the wire, so
 # the only way to notice is to ask (`dumpsys power`).
-WAKE_POLL_INTERVAL_S = 2.0
+WAKE_POLL_INTERVAL_S = 1.0
 # After a power press the phone is woken but its panel is left lit for this
 # long. If the user unlocks it in that window they want their phone, not the
 # mirror's screen-off; otherwise the panel is blanked again.
@@ -157,6 +157,7 @@ class PhoneMirrorManager(QObject):
         self._serial: str = ""
         self._vdisplay_id: int = -1          # id of the --new-display virtual display, from the server log
         self._prev_locked: Optional[int] = None   # deviceLocked at the previous poll; None before the first
+        self._blank_on_wake: bool = False        # the doze ended an in-use spell: user is putting the phone down
         self._grace = QTimer(self)
         self._grace.setSingleShot(True)
         self._grace.setInterval(WAKE_GRACE_MS)
@@ -442,6 +443,7 @@ class PhoneMirrorManager(QObject):
         self._grace.stop()
         self._set_in_use(False)
         self._prev_locked = None
+        self._blank_on_wake = False
         if self._phone_asleep:
             self._phone_asleep = False
             self.phoneAsleepChanged.emit(False)
@@ -476,14 +478,25 @@ class PhoneMirrorManager(QObject):
             if asleep:
                 # stay_awake means the phone never idles off: this is a power
                 # press. Wake it, then let the grace window tell us whether the
-                # user wanted the screen off or wanted their phone.
+                # user wanted the screen off or wanted their phone -- unless
+                # they were using it, in which case they are putting it down.
                 self._grace.stop()
+                self._blank_on_wake = self._phone_in_use and self._phone_screen_off
                 self._set_in_use(False)
+                if self._client is not None:
+                    self._client.set_hold_black(True)   # keep the last good frame on the dash
                 logger.info(f"Phone mirror: phone went to sleep ({state}); waking it")
+                if self._blank_on_wake:
+                    self._apply_screen_off()   # may survive the wake; re-applied below if not
                 self.wakePhone()
             else:
                 logger.info("Phone mirror: phone is awake again")
-                if self._phone_screen_off and not self._phone_in_use:
+                if self._client is not None:
+                    self._client.set_hold_black(False)
+                if self._blank_on_wake:
+                    self._blank_on_wake = False
+                    self._apply_screen_off()
+                elif self._phone_screen_off and not self._phone_in_use:
                     self._grace.start()
             return
         if asleep:

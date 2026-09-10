@@ -84,6 +84,9 @@ public:
     void injectKey(int keycode, int action = ActionDown, int meta = 0);
     void pressKey(int keycode);
     void setDisplayPower(bool on);
+    // While true, all-black frames are never shown (the phone is asleep and
+    // the last good frame stays up); otherwise only for kBlackHoldMs.
+    void setHoldBlack(bool hold) { m_holdBlack = hold; }
 
 signals:
     void connected(int width, int height);
@@ -121,6 +124,8 @@ private:
 
     std::thread m_thread;
     std::atomic<bool> m_stopping{false};
+    std::atomic<bool> m_holdBlack{false};
+    qint64 m_blackSince = -1;   // decode thread only
     std::atomic<bool> m_running{false};
     std::atomic<int> m_width{0};
     std::atomic<int> m_height{0};

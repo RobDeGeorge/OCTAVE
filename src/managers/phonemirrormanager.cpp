@@ -494,7 +494,7 @@ void PhoneMirrorManager::stopScrcpy()
 // A locked (dozing) phone keeps the stream open but stops compositing the
 // virtual display and drops injected touch, with no signal on the wire, so
 // the only way to notice is to ask (`dumpsys power`) every couple of seconds.
-static constexpr int kWakePollIntervalMs = 2000;
+static constexpr int kWakePollIntervalMs = 1000;
 // After a power press the phone is woken but its panel is left lit for this
 // long. If the user unlocks it in that window they want their phone, not the
 // mirror's screen-off; otherwise the panel is blanked again.
@@ -544,6 +544,7 @@ void PhoneMirrorManager::stopWakeWatch()
     m_grace.stop();
     setInUse(false);
     m_prevLocked = -2;
+    m_blankOnWake = false;
     if (m_phoneAsleep) {
         m_phoneAsleep = false;
         emit phoneAsleepChanged(false);
@@ -594,15 +595,27 @@ void PhoneMirrorManager::onWakefulness(const QString &state, int locked)
         if (asleep) {
             // stay_awake means the phone never idles off: this is a power
             // press. Wake it, then let the grace window tell us whether the
-            // user wanted the screen off or wanted their phone.
+            // user wanted the screen off or wanted their phone -- unless
+            // they were using it, in which case they are putting it down.
             m_grace.stop();
+            m_blankOnWake = m_phoneInUse && m_phoneScreenOff;
             setInUse(false);
+            if (m_client)
+                m_client->setHoldBlack(true);   // keep the last good frame on the dash
             qCInfo(lcPhoneMirror) << "Phone went to sleep (" << state << "); waking it";
+            if (m_blankOnWake)
+                applyScreenOff();   // may survive the wake; re-applied below if not
             wakePhone();
         } else {
             qCInfo(lcPhoneMirror) << "Phone is awake again";
-            if (m_phoneScreenOff && !m_phoneInUse)
+            if (m_client)
+                m_client->setHoldBlack(false);
+            if (m_blankOnWake) {
+                m_blankOnWake = false;
+                applyScreenOff();
+            } else if (m_phoneScreenOff && !m_phoneInUse) {
                 m_grace.start();
+            }
         }
         return;
     }
