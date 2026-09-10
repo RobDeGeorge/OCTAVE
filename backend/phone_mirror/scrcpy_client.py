@@ -786,7 +786,10 @@ class ScrcpyClient(QObject):
         if (w, h) != (self._width, self._height):
             self._width, self._height = w, h
             self.frameSizeChanged.emit(w, h)
-        if self._frame_count > 0 and self._is_black(frame):
+        # Also on the first frames of a reattached stream: the display's first
+        # composite after setSurface can be black + status bar, and the sink
+        # still holds the last good frame of the previous session.
+        if (self._frame_count > 0 or self._attach_scid) and self._is_black(frame):
             now = time.monotonic()
             if self._black_since is None:
                 self._black_since = now

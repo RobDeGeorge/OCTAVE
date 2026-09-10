@@ -423,6 +423,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     // attach: reconnect to a server still running on the phone (kPersistMs
     // window after a link drop) instead of pushing and starting a new one.
     const bool attach = !attachScid.isEmpty();
+    m_attached = attach;
 
     // 1. push the server (cleanup=true deletes it on exit, so every time)
     if (!attach && !adbRun({QStringLiteral("push"), m_jar, QString::fromLatin1(kDeviceJarPath)}, &out, 30000)) {
@@ -671,7 +672,10 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
                     m_width = w; m_height = h;
                     emit frameSizeChanged(w, h);
                 }
-                if (m_frameCount.load() > 0 && isBlackFrame(frame)) {
+                // Also on the first frames of a reattached stream: the display's
+                // first composite after setSurface can be black + status bar, and
+                // the sink still holds the last good frame of the previous session.
+                if ((m_frameCount.load() > 0 || m_attached.load()) && isBlackFrame(frame)) {
                     const qint64 now = nowMs();
                     if (m_blackSince < 0)
                         m_blackSince = now;

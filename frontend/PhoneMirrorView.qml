@@ -199,11 +199,22 @@ Item {
         // goes black and drops touch until it is awake again. The manager
         // wakes it; this tells the user what the black frame is and lets
         // them retry with a tap.
+        // Only if the wake takes longer than a moment: the keeper normally
+        // resolves a power press within a second, and dimming the whole dash
+        // for that reads as a flash. The held frame alone covers a short one.
         Rectangle {
             anchors.fill: parent
             color: "#AA000000"
-            visible: mirrorRunning && phoneMirrorManager && phoneMirrorManager.phoneAsleep === true
+            visible: mirrorRunning && asleepDelay.elapsed
             z: 8
+            Timer {
+                id: asleepDelay
+                property bool elapsed: false
+                interval: 1500
+                running: phoneMirrorManager ? phoneMirrorManager.phoneAsleep === true : false
+                onRunningChanged: if (!running) elapsed = false
+                onTriggered: elapsed = true
+            }
             Column {
                 anchors.centerIn: parent
                 spacing: dp(12)

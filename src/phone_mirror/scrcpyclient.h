@@ -136,6 +136,7 @@ private:
     std::thread m_thread;
     std::atomic<bool> m_stopping{false};
     std::atomic<bool> m_holdBlack{false};
+    std::atomic<bool> m_attached{false};   // this session reattached to a running server
     qint64 m_blackSince = -1;   // decode thread only
     std::atomic<bool> m_running{false};
     std::atomic<int> m_width{0};

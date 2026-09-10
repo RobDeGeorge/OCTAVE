@@ -215,10 +215,12 @@
               the session ends. Every change is reported as the <code>PHONE_STATE</code> device message
               (asleep / in use / panel dark), which both clients read on the control socket and expose as
               <code>phoneAsleep</code> / <code>phoneInUse</code>; the view dims the held frame with a "Phone is asleep" overlay
-              during the wake. Two client-side details keep the dash seamless: a dozing phone
+              only if the wake takes longer than 1.5&nbsp;s (a normal press resolves in about a second, and dimming the whole
+              dash for that reads as a flash). Two client-side details keep the dash seamless: a dozing phone
               streams pure black frames, so both clients take the max luma of the Y plane at stride 2 and hold back a run of
               all-black frames (last good frame stays up) for 3&nbsp;s or while the keeper reports the phone asleep -- a black
-              run that outlives that is real content and is shown. Phones with a lock-after-screen-off delay (Samsung default
+              run that outlives that is real content and is shown. The same hold covers the first frames of a reattached
+              stream, whose first composite can be black, so the session handover never shows black either. Phones with a lock-after-screen-off delay (Samsung default
               5&nbsp;s) stay unlocked for that long after a power press, so a wake inside it shows no keyguard and no unlock
               edge; set lock-after to "Immediately" for the crispest behaviour. OCTAVE itself no longer polls the phone over adb.</li>
             <li><strong>USB blips</strong>: the phone re-enumerates on the bus now and then (picked up, put down, a nudged
