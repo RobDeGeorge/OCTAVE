@@ -130,7 +130,13 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
         <h2 id="metadata-caching">Metadata Caching</h2>
         <p>
           Metadata is cached in <code>self._metadata_cache</code> (dict: filename to metadata dict) with a
-          maximum of 1000 entries. Each entry stores:
+          maximum of 1000 entries. Behind it sits a <strong>persistent tag store</strong>,
+          <code>&lt;app data&gt;/metadata_cache.json</code> (<code>{"version": 1, "files": {filename: {title, artist, album,
+          duration, size, mtime}}}</code>), written by both backends in the same format. <code>_cache_metadata()</code>
+          serves an entry from the store when the file's size and mtime still match and only reads the file's
+          tags (mutagen / TagLib) otherwise, so after the first run scrolling a list or opening the media page
+          no longer opens every file. New entries are saved 2&nbsp;s after the last addition and flushed at
+          shutdown (<code>flush_metadata_store()</code>). Each entry stores:
         </p>
         <pre><code>{
     <span class="str">"artist"</span>: <span class="str">"Artist Name"</span>,
@@ -159,6 +165,10 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
           Album art is cached in <code>self._album_art_cache</code> (dict: album_id to <code>file://</code> URL)
           with a maximum of 500 cached files on disk in the <code>backend/temp/</code> directory
           (<code>&lt;application dir&gt;/temp</code> in the C++ desktop build, the app data <code>temp/</code> folder on Android).
+          The files are content-addressed (<code>cover_&lt;sha256(album_id + "_0")[:16]&gt;.&lt;ext&gt;</code>) and are
+          <em>kept across runs</em>; <code>get_album_art()</code> first checks for that file
+          (<code>_cached_art_url_for()</code>) and only parses the audio file's tags when it is missing. The cache
+          used to be wiped at startup and quit, which made every cover a fresh tag read plus JPEG write on each boot.
         </p>
 
         <h3>Album ID Generation</h3>
@@ -208,7 +218,7 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
         <h3>Extraction Pipeline</h3>
         <ol class="steps">
           <li>Resize album art to 50x50 pixels via <code>QImage.scaled()</code> (smooth transformation)</li>
-          <li>Run k-means clustering (<code>_kmeans_colors()</code>, pure Python / C++ port with the same k=5, max 10 iterations) to find 5 dominant colors</li>
+          <li>Run k-means clustering (<code>_kmeans_colors()</code>, pure Python / C++ port with the same k=5, max 10 iterations) to find 5 dominant colors. This runs on a worker (a daemon thread in Python, <code>QtConcurrent</code> + <code>QFutureWatcher</code> in C++); the result is applied on the GUI thread by <code>_apply_album_colors()</code> only if no newer request superseded it, and a repeat request for the same file within 2&nbsp;s (startup restore + the 1&nbsp;s startup timer) is skipped</li>
           <li>Sort colors by vibrancy (saturation * value in HSV space)</li>
           <li>Determine if image is dark or light based on average luminance</li>
           <li>Call <code>_generate_theme_from_colors()</code> to build a full theme object</li>
@@ -410,7 +420,10 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
           <code>_precache_neighbors_start()</code> which pre-populates metadata and album art caches for
           the previous and next tracks in a background thread (a <code>threading.Thread</code> in Python,
           <code>QtConcurrent::run()</code> in C++). This ensures that the next skip is instant
-          with no visible loading delay in the QML UI.
+          with no visible loading delay in the QML UI. In C++ the worker only reads files
+          (<code>_read_tags()</code>, <code>_extract_art_for()</code>) and posts results back through
+          <code>QFutureWatcher</code>; the GUI thread is the sole owner of the metadata and album-art hashes, which
+          the earlier version mutated from the worker while list delegates read them.
         </p>
 
         <!-- Error Recovery -->

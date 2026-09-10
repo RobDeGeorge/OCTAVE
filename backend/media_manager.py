@@ -1,4 +1,5 @@
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QUrl, Qt, QVariantAnimation, QEasingCurve
+import time
 from PySide6.QtGui import QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from mutagen.mp3 import MP3
@@ -76,6 +77,8 @@ class MediaManager(QObject):
     currentPlaylistChanged = Signal(str)  # When active playlist changes
     scanProgress = Signal(str)           # Terminal-style feedback during scan
     albumColorsExtracted = Signal(str)    # JSON string with extracted album art colors
+    _colorsReady = Signal(str, str, int)  # internal: theme JSON, filename, job id (worker -> GUI)
+    _metaStoreChanged = Signal()          # internal: arm the store save timer from any thread
     
     
     def __init__(self):
@@ -184,10 +187,30 @@ class MediaManager(QObject):
         # Create media and temp directories if they don't exist
         self._ensure_directories()
 
-        # Clear temp files on startup
-        self._clear_temp_files()
+        # Extracted covers are content-addressed (album id hash) and stay in the
+        # temp dir across runs; _manage_cache() bounds them. Wiping them here made
+        # every cover a fresh ID3 read + JPEG write on each boot.
 
         self._settings_manager = None
+
+        # Persistent tag store (<appdata>/metadata_cache.json, shared with the
+        # C++ backend): tags are read from a file once, then served from here on
+        # every later run as long as its size and mtime are unchanged.
+        self._meta_store = {}
+        self._meta_store_path = os.path.join(get_app_data_dir(), 'metadata_cache.json')
+        self._meta_store_dirty = False
+        self._load_meta_store()
+        self._meta_store_timer = QTimer()
+        self._meta_store_timer.setSingleShot(True)
+        self._meta_store_timer.setInterval(2000)
+        self._meta_store_timer.timeout.connect(self._save_meta_store)
+        self._metaStoreChanged.connect(self._meta_store_timer.start, Qt.ConnectionType.QueuedConnection)
+
+        # Album colour extraction runs on a worker; only the newest job applies
+        self._color_job = 0
+        self._last_color_file = ""
+        self._last_color_time = 0.0
+        self._colorsReady.connect(self._apply_album_colors, Qt.ConnectionType.QueuedConnection)
 
         # Display name mapping (filename -> cleaned display name)
         self._display_names = {}
@@ -204,7 +227,7 @@ class MediaManager(QObject):
             if self._save_state_timer and self._save_state_timer.isActive():
                 self._save_state_timer.stop()
                 self._save_playback_state_now()
-            self._clear_temp_files()
+            self._save_meta_store()
             if self._player:
                 self._player.stop()
             if self._position_timer:
@@ -291,7 +314,89 @@ class MediaManager(QObject):
             logger.error(f"Playback recovery failed: {e}")
 
     def _cache_metadata(self, filename):
-        """Cache metadata for a file to reduce disk operations.
+        """Cache metadata for a file, from the persistent tag store when it is
+        still valid for this file, otherwise by reading the file's tags."""
+        if filename in self._metadata_cache:
+            return
+        file_path = self._get_file_path(filename)
+        stored = self._meta_from_store(filename, file_path)
+        if stored is not None:
+            if len(self._metadata_cache) >= self._metadata_cache_max:
+                self._metadata_cache.pop(next(iter(self._metadata_cache)))
+            self._metadata_cache[filename] = stored
+            return   # cover, if any, is found by get_album_art()'s hash fast path
+        self._cache_metadata_from_file(filename)
+        if filename in self._metadata_cache:
+            self._meta_to_store(filename, file_path, self._metadata_cache[filename])
+
+    # ── persistent tag store ──────────────────────────────────────────
+
+    def _load_meta_store(self):
+        try:
+            with open(self._meta_store_path, 'r', encoding='utf-8') as f:
+                root = json.load(f)
+            if root.get("version") == 1 and isinstance(root.get("files"), dict):
+                self._meta_store = root["files"]
+            logger.info(f"Loaded tag store with {len(self._meta_store)} entries")
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            logger.warning(f"Tag store unreadable, starting empty: {e}")
+            self._meta_store = {}
+
+    def _save_meta_store(self):
+        if not self._meta_store_dirty:
+            return
+        self._meta_store_timer.stop()
+        self._meta_store_dirty = False
+        try:
+            with open(self._meta_store_path, 'w', encoding='utf-8') as f:
+                json.dump({"version": 1, "files": self._meta_store}, f, separators=(',', ':'))
+        except Exception as e:
+            logger.warning(f"Could not write tag store: {e}")
+
+    @Slot()
+    def flush_metadata_store(self):
+        """Write the persistent tag store now if it changed (called at shutdown)."""
+        self._save_meta_store()
+
+    def _meta_from_store(self, filename, file_path):
+        e = self._meta_store.get(filename)
+        if not isinstance(e, dict):
+            return None
+        try:
+            st = os.stat(file_path)
+        except OSError:
+            return None
+        if e.get("size") != st.st_size or e.get("mtime") != int(st.st_mtime):
+            return None
+        return {"title": e.get("title", ""), "artist": e.get("artist", "Unknown Artist"),
+                "album": e.get("album", "Unknown Album"), "duration": int(e.get("duration", 0))}
+
+    def _meta_to_store(self, filename, file_path, meta):
+        try:
+            st = os.stat(file_path)
+        except OSError:
+            return
+        self._meta_store[filename] = {
+            "title": meta.get("title", ""), "artist": meta.get("artist", ""),
+            "album": meta.get("album", ""), "duration": int(meta.get("duration", 0)),
+            "size": st.st_size, "mtime": int(st.st_mtime),
+        }
+        self._meta_store_dirty = True
+        self._metaStoreChanged.emit()   # queued: safe from the precache thread
+
+    def _cached_art_url_for(self, album_id):
+        """Cover already extracted to the temp dir for this album id (any run)."""
+        cache_hash = hashlib.sha256(f"{album_id}_0".encode('utf-8')).hexdigest()[:16]
+        for ext in ('jpg', 'png', 'gif', 'img'):
+            path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{ext}')
+            if os.path.exists(path):
+                return QUrl.fromLocalFile(path).toString()
+        return ""
+
+    def _cache_metadata_from_file(self, filename):
+        """Read a file's tags into the cache.
 
         Also extracts album art from the same ID3 read so that a subsequent
         get_album_art() call is an instant cache hit (avoids a second file open).
@@ -569,11 +674,17 @@ class MediaManager(QObject):
 
             # Return if already cached
             if album_id in self._album_art_cache:
-                logger.info(f"Album art cache hit for {filename}: {self._album_art_cache[album_id][:80]}")
+                logger.debug(f"Album art cache hit for {filename}: {self._album_art_cache[album_id][:80]}")
                 return self._album_art_cache[album_id]
             
             # Manage cache BEFORE adding new entry
             self._manage_cache(album_id)
+
+            # A cover extracted on an earlier run is found by its hash with no tag parse
+            cached = self._cached_art_url_for(album_id)
+            if cached:
+                self._album_art_cache[album_id] = cached
+                return cached
 
             # Extract and cache new album art - use helper for correct path
             file_path = self._get_file_path(filename)
@@ -959,25 +1070,48 @@ class MediaManager(QObject):
                 logger.debug(f"[AlbumArtCapture] Album art file not found: {image_path}")
                 return
 
-            logger.debug(f"[AlbumArtCapture] Extracting colors from: {image_path}")
+            # Restoring playback and the 1 s startup timer both ask for the
+            # same file; one extraction is enough.
+            now = time.monotonic()
+            if filename == self._last_color_file and now - self._last_color_time < 2.0:
+                return
+            self._last_color_file = filename
+            self._last_color_time = now
 
-            # Extract colors
-            theme_json = self._extract_album_colors(image_path)
-            if theme_json:
-                # Use slot method on settings_manager (property-based approach for better QML reactivity)
-                if self._settings_manager:
-                    self._settings_manager.set_album_art_colors(theme_json)
-                    logger.debug(f"[AlbumArtCapture] Called set_album_art_colors for: {filename}")
-                else:
-                    # Fallback to direct signal
-                    self.albumColorsExtracted.emit(theme_json)
-                    logger.debug(f"[AlbumArtCapture] Emitted via mediaManager for: {filename}")
-            else:
-                logger.debug(f"[AlbumArtCapture] Failed to extract colors for: {filename}")
+            # k-means over the cover (~0.3 s here, closer to a second on the Pi)
+            # runs on a worker; a newer request supersedes this one so a fast
+            # skip through tracks applies only the last theme.
+            self._color_job += 1
+            job = self._color_job
+
+            def work():
+                try:
+                    theme_json = self._extract_album_colors(image_path)
+                except Exception as e:  # pragma: no cover
+                    logger.debug(f"[AlbumArtCapture] colour extraction failed: {e}")
+                    theme_json = None
+                self._colorsReady.emit(theme_json or "", filename, job)
+
+            threading.Thread(target=work, name="album-colors", daemon=True).start()
         except Exception as e:
             import traceback
             logger.debug(f"[AlbumArtCapture] Error extracting colors from album art: {e}")
             traceback.print_exc()
+
+    def _apply_album_colors(self, theme_json, filename, job):
+        # GUI thread (queued from the worker)
+        if job != self._color_job:
+            return
+        if not theme_json:
+            logger.debug(f"[AlbumArtCapture] Failed to extract colors for: {filename}")
+            return
+        if self._settings_manager:
+            # Slot on settings_manager (property-based approach for better QML reactivity)
+            self._settings_manager.set_album_art_colors(theme_json)
+            logger.debug(f"[AlbumArtCapture] Called set_album_art_colors for: {filename}")
+        else:
+            self.albumColorsExtracted.emit(theme_json)
+            logger.debug(f"[AlbumArtCapture] Emitted via mediaManager for: {filename}")
 
     @Slot(result=str)
     def get_current_file(self):

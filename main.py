@@ -304,7 +304,7 @@ esp32_volume_manager.connectionStatusChanged.connect(on_esp32_connection_changed
 def cleanup_on_quit():
     """Save state and cleanup before app exits"""
     media_manager._save_playback_state_now()
-    media_manager._clear_temp_files()
+    media_manager.flush_metadata_store()   # persistent tag store; covers stay cached across runs
     spotify_manager.cleanup()
     android_auto_manager.cleanup()  # Full cleanup: stops DHU, ADB, and head unit server
     phone_mirror_manager.cleanup()  # Stop phone mirror if running

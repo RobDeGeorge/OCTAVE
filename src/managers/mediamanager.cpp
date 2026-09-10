@@ -13,6 +13,9 @@
 #include <QThread>
 #include <QCoreApplication>
 #include <QtConcurrent>
+#include <QFutureWatcher>
+#include <QDateTime>
+#include <QJsonArray>
 #include <QColor>
 
 #ifndef Q_OS_MOBILE
@@ -179,10 +182,17 @@ MediaManager::MediaManager(QObject *parent)
     connect(&m_precacheTimer, &QTimer::timeout, this, &MediaManager::_precache_neighbors_start);
 
     _ensure_directories();
-    _clear_temp_files();
+    // Extracted covers are content-addressed (album id hash) and stay in the
+    // temp dir across runs; _manage_cache() bounds them. Wiping them here made
+    // every cover a fresh TagLib read + JPEG write on each boot.
 
     // Display names
     m_displayNamesPath = SettingsManager::getAppDataDir() + QStringLiteral("/display_names.json");
+    m_metaStorePath = SettingsManager::getAppDataDir() + QStringLiteral("/metadata_cache.json");
+    _load_meta_store();
+    m_metaStoreSaveTimer.setSingleShot(true);
+    m_metaStoreSaveTimer.setInterval(2000);
+    connect(&m_metaStoreSaveTimer, &QTimer::timeout, this, &MediaManager::_save_meta_store);
     _load_display_names();
 
     // Connect own signal for Album Art Capture theme updates
@@ -196,7 +206,7 @@ MediaManager::~MediaManager()
         m_saveStateTimer.stop();
         _save_playback_state_now();
     }
-    _clear_temp_files();
+    _save_meta_store();
     if (m_player) {
         m_player->stop();
     }
@@ -376,6 +386,117 @@ void MediaManager::_cache_metadata(const QString &filename)
 {
     if (m_metadataCache.contains(filename))
         return;
+    const QString filePath = _get_file_path(filename);
+    if (filePath.isEmpty())
+        return;
+    MediaMetadata stored;
+    if (_meta_from_store(filename, filePath, &stored)) {
+        if (m_metadataCache.size() >= m_metadataCacheMax)
+            m_metadataCache.erase(m_metadataCache.begin());
+        m_metadataCache.insert(filename, stored);
+        return;   // cover, if any, is found by get_album_art()'s hash fast path
+    }
+    _cache_metadata_from_file(filename);
+    if (m_metadataCache.contains(filename))
+        _meta_to_store(filename, filePath, m_metadataCache.value(filename));
+}
+
+// ---------------------------------------------------------------------------
+// Persistent tag store
+// ---------------------------------------------------------------------------
+void MediaManager::_load_meta_store()
+{
+    QFile f(m_metaStorePath);
+    if (!f.open(QIODevice::ReadOnly))
+        return;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    const QJsonObject root = doc.object();
+    if (root.value(QStringLiteral("version")).toInt() == 1)
+        m_metaStore = root.value(QStringLiteral("files")).toObject();
+    qCInfo(lcMedia) << "Loaded tag store with" << m_metaStore.size() << "entries";
+}
+
+void MediaManager::_save_meta_store()
+{
+    if (!m_metaStoreDirty)
+        return;
+    m_metaStoreSaveTimer.stop();
+    m_metaStoreDirty = false;
+    QJsonObject root;
+    root[QStringLiteral("version")] = 1;
+    root[QStringLiteral("files")] = m_metaStore;
+    QFile f(m_metaStorePath);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        f.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+}
+
+bool MediaManager::_meta_from_store(const QString &filename, const QString &filePath, MediaMetadata *out) const
+{
+    const QJsonValue v = m_metaStore.value(filename);
+    if (!v.isObject())
+        return false;
+    const QJsonObject e = v.toObject();
+    const QFileInfo fi(filePath);
+    if (!fi.exists() || e.value(QStringLiteral("size")).toDouble() != double(fi.size())
+        || qint64(e.value(QStringLiteral("mtime")).toDouble()) != fi.lastModified().toSecsSinceEpoch())
+        return false;
+    out->title = e.value(QStringLiteral("title")).toString();
+    out->artist = e.value(QStringLiteral("artist")).toString();
+    out->album = e.value(QStringLiteral("album")).toString();
+    out->durationSeconds = e.value(QStringLiteral("duration")).toInt();
+    return true;
+}
+
+void MediaManager::_meta_to_store(const QString &filename, const QString &filePath, const MediaMetadata &meta)
+{
+    const QFileInfo fi(filePath);
+    if (!fi.exists())
+        return;
+    QJsonObject e;
+    e[QStringLiteral("title")] = meta.title;
+    e[QStringLiteral("artist")] = meta.artist;
+    e[QStringLiteral("album")] = meta.album;
+    e[QStringLiteral("duration")] = meta.durationSeconds;
+    e[QStringLiteral("size")] = double(fi.size());
+    e[QStringLiteral("mtime")] = double(fi.lastModified().toSecsSinceEpoch());
+    m_metaStore[filename] = e;
+    m_metaStoreDirty = true;
+    m_metaStoreSaveTimer.start();
+}
+
+QString MediaManager::_cached_art_url_for(const QString &albumId) const
+{
+    const QByteArray hash = QCryptographicHash::hash((albumId + QStringLiteral("_0")).toUtf8(),
+                                                     QCryptographicHash::Sha256).toHex().left(16);
+    for (const char *ext : {"jpg", "png", "gif", "img"}) {
+        const QString path = m_tempDir + QStringLiteral("/cover_") + QString::fromLatin1(hash)
+                             + QLatin1Char('.') + QLatin1String(ext);
+        if (QFile::exists(path))
+            return QUrl::fromLocalFile(path).toString();
+    }
+    return {};
+}
+
+QString MediaManager::_extract_art_for(const QString &filePath, const QString &albumId)
+{
+    // Pure with respect to the caches: reads the file, may write one cover
+    // into m_tempDir. Safe to call from a worker thread.
+    const QString ext = QFileInfo(filePath).suffix().toLower();
+    if (ext == QStringLiteral("mp3"))
+        return _extract_album_art_mp3(filePath, albumId);
+    if (ext == QStringLiteral("m4a") || ext == QStringLiteral("mp4") || ext == QStringLiteral("aac"))
+        return _extract_album_art_mp4(filePath, albumId);
+    if (ext == QStringLiteral("flac"))
+        return _extract_album_art_flac(filePath, albumId);
+    if (ext == QStringLiteral("ogg") || ext == QStringLiteral("opus"))
+        return _extract_album_art_ogg(filePath, albumId);
+    return {};
+}
+
+void MediaManager::_cache_metadata_from_file(const QString &filename)
+{
+    if (m_metadataCache.contains(filename))
+        return;
 
     const QString filePath = _get_file_path(filename);
     if (filePath.isEmpty())
@@ -390,6 +511,7 @@ void MediaManager::_cache_metadata(const QString &filename)
     }
 
     const QString ext = QFileInfo(filePath).suffix().toLower();
+    Q_UNUSED(ext);
 
 #ifdef Q_OS_ANDROID
     // Android: use MediaMetadataRetriever via JNI (no TagLib cross-compile).
@@ -436,32 +558,7 @@ void MediaManager::_cache_metadata(const QString &filename)
                                       QStringLiteral("Unknown Album"), 0});
     return;
 #else
-    // Use TagLib's FileRef for generic metadata reading
-    TagLib::FileRef fileRef(filePath.toUtf8().constData());
-    if (fileRef.isNull() || !fileRef.tag()) {
-        // Fallback
-        m_metadataCache.insert(filename, {baseName, QStringLiteral("Unknown Artist"),
-                                          QStringLiteral("Unknown Album"), 0});
-        return;
-    }
-
-    TagLib::Tag *tag = fileRef.tag();
-    TagLib::AudioProperties *props = fileRef.audioProperties();
-
-    QString artist = QString::fromStdString(tag->artist().to8Bit(true));
-    QString album = QString::fromStdString(tag->album().to8Bit(true));
-    QString title = QString::fromStdString(tag->title().to8Bit(true));
-    int duration = props ? props->lengthInSeconds() : 0;
-
-    if (artist.isEmpty()) artist = QStringLiteral("Unknown Artist");
-    if (album.isEmpty()) album = QStringLiteral("Unknown Album");
-    if (title.isEmpty()) title = baseName;
-
-    artist = _sanitize_metadata(artist);
-    album = _sanitize_metadata(album);
-    title = _sanitize_metadata(title);
-
-    m_metadataCache.insert(filename, {title, artist, album, duration});
+    m_metadataCache.insert(filename, _read_tags(filePath, baseName));
 
     // Also extract album art from the same file read
     const QString albumId = _get_album_id(filename);
@@ -469,22 +566,39 @@ void MediaManager::_cache_metadata(const QString &filename)
         _manage_cache(albumId);
         m_accessCount[albumId] = m_accessCount.value(albumId, 0) + 1;
 
-        QString artUrl;
-        if (ext == QStringLiteral("mp3")) {
-            artUrl = _extract_album_art_mp3(filePath, albumId);
-        } else if (ext == QStringLiteral("m4a") || ext == QStringLiteral("mp4") || ext == QStringLiteral("aac")) {
-            artUrl = _extract_album_art_mp4(filePath, albumId);
-        } else if (ext == QStringLiteral("flac")) {
-            artUrl = _extract_album_art_flac(filePath, albumId);
-        } else if (ext == QStringLiteral("ogg") || ext == QStringLiteral("opus")) {
-            artUrl = _extract_album_art_ogg(filePath, albumId);
-        }
+        QString artUrl = _cached_art_url_for(albumId);
+        if (artUrl.isEmpty())
+            artUrl = _extract_art_for(filePath, albumId);
         if (!artUrl.isEmpty()) {
             m_albumArtCache.insert(albumId, artUrl);
         }
     }
 #endif // Q_OS_MOBILE
 }
+
+#if !defined(Q_OS_MOBILE)
+MediaMetadata MediaManager::_read_tags(const QString &filePath, const QString &baseName)
+{
+    // Pure TagLib read; safe on a worker thread.
+    TagLib::FileRef fileRef(filePath.toUtf8().constData());
+    if (fileRef.isNull() || !fileRef.tag())
+        return {baseName, QStringLiteral("Unknown Artist"), QStringLiteral("Unknown Album"), 0};
+
+    TagLib::Tag *tag = fileRef.tag();
+    TagLib::AudioProperties *props = fileRef.audioProperties();
+
+    QString artist = QString::fromStdString(tag->artist().to8Bit(true));
+    QString album = QString::fromStdString(tag->album().to8Bit(true));
+    QString title = QString::fromStdString(tag->title().to8Bit(true));
+    const int duration = props ? props->lengthInSeconds() : 0;
+
+    if (artist.isEmpty()) artist = QStringLiteral("Unknown Artist");
+    if (album.isEmpty()) album = QStringLiteral("Unknown Album");
+    if (title.isEmpty()) title = baseName;
+
+    return {_sanitize_metadata(title), _sanitize_metadata(artist), _sanitize_metadata(album), duration};
+}
+#endif
 
 void MediaManager::_emit_metadata(const QString &filename)
 {
@@ -727,22 +841,13 @@ QString MediaManager::get_album_art(const QString &filename)
     // Manage cache before adding
     _manage_cache(albumId);
 
-    // Extract album art
-    const QString filePath = _get_file_path(filename);
-    if (filePath.isEmpty() || !QFile::exists(filePath))
-        return {};
-
-    const QString ext = QFileInfo(filePath).suffix().toLower();
-    QString artUrl;
-
-    if (ext == QStringLiteral("mp3")) {
-        artUrl = _extract_album_art_mp3(filePath, albumId);
-    } else if (ext == QStringLiteral("m4a") || ext == QStringLiteral("mp4") || ext == QStringLiteral("aac")) {
-        artUrl = _extract_album_art_mp4(filePath, albumId);
-    } else if (ext == QStringLiteral("flac")) {
-        artUrl = _extract_album_art_flac(filePath, albumId);
-    } else if (ext == QStringLiteral("ogg") || ext == QStringLiteral("opus")) {
-        artUrl = _extract_album_art_ogg(filePath, albumId);
+    // A cover extracted on an earlier run is found by its hash with no tag parse
+    QString artUrl = _cached_art_url_for(albumId);
+    if (artUrl.isEmpty()) {
+        const QString filePath = _get_file_path(filename);
+        if (filePath.isEmpty() || !QFile::exists(filePath))
+            return {};
+        artUrl = _extract_art_for(filePath, albumId);
     }
 
     if (!artUrl.isEmpty()) {
@@ -1136,15 +1241,37 @@ void MediaManager::extract_colors_from_album_art(const QString &filename)
         return;
     }
 
-    const QString themeJson = _extract_album_colors(imagePath);
-    if (!themeJson.isEmpty()) {
-        if (m_settingsManager) {
-            m_settingsManager->set_album_art_colors(themeJson);
-            qCDebug(lcMedia) << "[AlbumArtCapture] Called set_album_art_colors for:" << filename;
-        } else {
-            emit albumColorsExtracted(themeJson);
-            qCDebug(lcMedia) << "[AlbumArtCapture] Emitted via mediaManager for:" << filename;
-        }
+    // Restoring playback and the 1 s startup timer both ask for the same file;
+    // one extraction is enough.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (filename == m_lastColorFile && now - m_lastColorMs < 2000)
+        return;
+    m_lastColorFile = filename;
+    m_lastColorMs = now;
+
+    // k-means over the cover runs on a worker; a newer request supersedes
+    // this one so a fast skip through tracks applies only the last theme.
+    const int job = ++m_colorJob;
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, job, filename]() {
+        watcher->deleteLater();
+        if (job != m_colorJob)
+            return;
+        _apply_album_colors(watcher->result(), filename);
+    });
+    watcher->setFuture(QtConcurrent::run([this, imagePath]() { return _extract_album_colors(imagePath); }));
+}
+
+void MediaManager::_apply_album_colors(const QString &themeJson, const QString &filename)
+{
+    if (themeJson.isEmpty())
+        return;
+    if (m_settingsManager) {
+        m_settingsManager->set_album_art_colors(themeJson);
+        qCDebug(lcMedia) << "[AlbumArtCapture] Called set_album_art_colors for:" << filename;
+    } else {
+        emit albumColorsExtracted(themeJson);
+        qCDebug(lcMedia) << "[AlbumArtCapture] Emitted via mediaManager for:" << filename;
     }
 }
 
@@ -2757,14 +2884,94 @@ void MediaManager::_precache_neighbors_start()
     if (neighbors.isEmpty())
         return;
 
-    // Run in a detached thread via QtConcurrent
-    QtConcurrent::run([this, neighbors]() {
-        _precache_tracks(neighbors);
+#if defined(Q_OS_MOBILE)
+    // Mobile reads tags through the platform (cheap); keep it on this thread.
+    _precache_tracks(neighbors);
+#else
+    // Phase 1 (worker): read tags for tracks not yet known. Phase 2 (GUI):
+    // insert them, then hand the tracks still lacking a cover to a worker that
+    // writes the cover file. Phase 3 (GUI): record the URLs. The caches are
+    // only ever touched here on the GUI thread; the old version mutated them
+    // from the worker while delegates read them.
+    struct TagJob { QString filename, filePath, baseName; };
+    QList<TagJob> tagJobs;
+    for (const QString &f : neighbors) {
+        if (m_metadataCache.contains(f))
+            continue;
+        const QString path = _get_file_path(f);
+        if (path.isEmpty())
+            continue;
+        MediaMetadata stored;
+        if (_meta_from_store(f, path, &stored)) {
+            m_metadataCache.insert(f, stored);
+            continue;
+        }
+        tagJobs.append({f, path, QFileInfo(_get_original_filename(f)).completeBaseName()});
+    }
+    auto *tagWatcher = new QFutureWatcher<QList<QPair<QString, MediaMetadata>>>(this);
+    connect(tagWatcher, &QFutureWatcher<QList<QPair<QString, MediaMetadata>>>::finished, this,
+            [this, tagWatcher, neighbors, tagJobs]() {
+        tagWatcher->deleteLater();
+        const auto results = tagWatcher->result();
+        for (int i = 0; i < results.size(); ++i) {
+            const QString &f = results[i].first;
+            if (!m_metadataCache.contains(f)) {
+                if (m_metadataCache.size() >= m_metadataCacheMax)
+                    m_metadataCache.erase(m_metadataCache.begin());
+                m_metadataCache.insert(f, results[i].second);
+                _meta_to_store(f, tagJobs[i].filePath, results[i].second);
+            }
+        }
+        // Covers
+        struct ArtJob { QString albumId, filePath; };
+        QList<ArtJob> artJobs;
+        for (const QString &f : neighbors) {
+            if (!m_metadataCache.contains(f))
+                continue;
+            const QString albumId = _get_album_id(f);
+            if (m_albumArtCache.contains(albumId))
+                continue;
+            const QString cached = _cached_art_url_for(albumId);
+            if (!cached.isEmpty()) {
+                m_albumArtCache.insert(albumId, cached);
+                continue;
+            }
+            const QString path = _get_file_path(f);
+            if (!path.isEmpty() && QFile::exists(path))
+                artJobs.append({albumId, path});
+        }
+        if (artJobs.isEmpty())
+            return;
+        auto *artWatcher = new QFutureWatcher<QList<QPair<QString, QString>>>(this);
+        connect(artWatcher, &QFutureWatcher<QList<QPair<QString, QString>>>::finished, this,
+                [this, artWatcher]() {
+            artWatcher->deleteLater();
+            for (const auto &r : artWatcher->result()) {
+                if (!r.second.isEmpty() && !m_albumArtCache.contains(r.first)) {
+                    _manage_cache(r.first);
+                    m_albumArtCache.insert(r.first, r.second);
+                }
+            }
+        });
+        artWatcher->setFuture(QtConcurrent::run([this, artJobs]() {
+            QList<QPair<QString, QString>> out;
+            for (const ArtJob &j : artJobs)
+                out.append({j.albumId, _extract_art_for(j.filePath, j.albumId)});
+            return out;
+        }));
     });
+    tagWatcher->setFuture(QtConcurrent::run([tagJobs]() {
+        QList<QPair<QString, MediaMetadata>> out;
+        for (const TagJob &j : tagJobs)
+            out.append({j.filename, _read_tags(j.filePath, j.baseName)});
+        return out;
+    }));
+#endif
 }
 
 void MediaManager::_precache_tracks(const QStringList &filenames)
 {
+    // Synchronous variant (mobile): tags via the platform, covers via cache
     for (const QString &filename : filenames) {
         _cache_metadata(filename);
         get_album_art(filename);

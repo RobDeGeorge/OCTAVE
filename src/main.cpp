@@ -379,6 +379,7 @@ int main(int argc, char *argv[])
         obdManager.close();
         downloadManager.cleanup();
         networkManager.cleanup();
+        mediaManager.flush_metadata_store();
         settingsManager.flushPendingSave();   // coalesced settings writes land before exit
     });
 

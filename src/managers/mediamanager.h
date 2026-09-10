@@ -11,6 +11,7 @@
 #include <QSet>
 #include <QTimer>
 #include <QVariantAnimation>
+#include <QJsonObject>
 #include <QMediaPlayer>
 #include <QAudioOutput>
 #include <QRegularExpression>
@@ -80,6 +81,8 @@ public slots:
     Q_INVOKABLE void connect_settings_manager(QObject *) { /* already wired in main.cpp */ }
     Q_INVOKABLE void _save_playback_state() { _save_playback_state_now(); }
     Q_INVOKABLE void _clear_temp_files() { clearTempFilesInternal(); }
+    // Write the persistent tag store now if it changed (called at shutdown)
+    Q_INVOKABLE void flush_metadata_store() { _save_meta_store(); }
 
     // Playback
     void play_file(const QString &filename);
@@ -172,6 +175,21 @@ private:
     void _ensure_directories();
     void clearTempFilesInternal();
     void _cache_metadata(const QString &filename);
+    void _cache_metadata_from_file(const QString &filename);
+    // Persistent tag store (<appdata>/metadata_cache.json, shared with the
+    // Python backend): tags are read from a file once, then served from here
+    // on every later run as long as its size and mtime are unchanged.
+    void _load_meta_store();
+    void _save_meta_store();
+    bool _meta_from_store(const QString &filename, const QString &filePath, MediaMetadata *out) const;
+    void _meta_to_store(const QString &filename, const QString &filePath, const MediaMetadata &meta);
+    // Cover already extracted to the temp dir for this album id (any run)
+    QString _cached_art_url_for(const QString &albumId) const;
+    QString _extract_art_for(const QString &filePath, const QString &albumId);
+    void _apply_album_colors(const QString &themeJson, const QString &filename);
+#if !defined(Q_OS_MOBILE)
+    static MediaMetadata _read_tags(const QString &filePath, const QString &baseName);
+#endif
     void _emit_metadata(const QString &filename);
     QString _get_album_id(const QString &filename);
     void _manage_cache(const QString &newAlbumId);
@@ -277,6 +295,17 @@ private:
     // Display names
     QHash<QString, QString> m_displayNames;
     QString m_displayNamesPath;
+
+    // Persistent metadata store (see _load_meta_store)
+    QJsonObject m_metaStore;
+    QString m_metaStorePath;
+    QTimer m_metaStoreSaveTimer;
+    bool m_metaStoreDirty = false;
+
+    // Album colour extraction runs on a worker; only the newest job applies
+    int m_colorJob = 0;
+    QString m_lastColorFile;
+    qint64 m_lastColorMs = 0;
 
     // Timers
     QTimer m_positionTimer;

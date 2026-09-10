@@ -104,7 +104,6 @@ ApplicationWindow {
         console.log("Window closing - running cleanup...")
         if (mediaManager) {
             mediaManager._save_playback_state()
-            mediaManager._clear_temp_files()
         }
         if (spotifyManager) {
             spotifyManager.cleanup()
