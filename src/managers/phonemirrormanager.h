@@ -108,6 +108,10 @@ private:
     void killStaleServer();
     void onConnected(int w, int h);
     void onDisconnected(const QString &reason);
+    void onAudioState(bool active);
+    QPair<int, int> phoneMediaVolume() const;   // (level, max) or (-1, -1)
+    void setPhoneMediaVolume(int level);
+    void restorePhoneVolume();
 
     QString m_adbPath;
     bool m_audioEnabled = false;
@@ -122,6 +126,7 @@ private:
     bool m_isStarting = false;
     bool m_isStopping = false;
     bool m_ready = false;
+    int m_savedPhoneVolume = -1;
 };
 
 #else // Q_OS_MOBILE — mobile stub
