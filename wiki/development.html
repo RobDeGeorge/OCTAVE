@@ -288,6 +288,18 @@ win.click_percent(<span class="num">0.51</span>, <span class="num">0.96</span>) 
 cap.capture(<span class="str">"media_view"</span>, <span class="str">"Media player view"</span>)</code></pre>
 
         <!-- Adding Features -->
+        <h3>Video stories (README / demo clips)</h3>
+        <p>
+          <code>python -m dev.screenshots.stories [tour|drive|media|settings] --visible</code> launches the dev app with
+          its own settings profile, drives it over the command server (navigation, media, the OBD simulator's
+          <code>sim_*</code> actions) and records the window with the command server's <code>record_start</code> /
+          <code>record_stop</code> (a GUI-thread <code>grabWindow()</code> per frame piped into ffmpeg, so it works on Wayland,
+          X11 and Xvfb). Each story yields an MP4, an 800&nbsp;px animated WebP and a GIF plus stills under
+          <code>dev/screenshots/output/stories/</code>; <code>python -m dev.screenshots.optimize</code> rescales and
+          recompresses assets for <code>frontend/assets/readme/</code>. The same operations are MCP tools
+          (<code>run_story</code>, <code>record_start</code>, <code>sim</code>, <code>optimize_assets</code>). Details in
+          <code>dev/docs/SCREENSHOTS.md</code>.
+        </p>
         <h2 id="adding-features">How to Add New Features</h2>
         <p>OCTAVE follows a consistent pattern for every feature. Here is a step-by-step guide:</p>
 
