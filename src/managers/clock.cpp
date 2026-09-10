@@ -14,28 +14,28 @@ Clock::Clock(SettingsManager *settingsManager, QObject *parent)
 
 void Clock::update_time()
 {
-    if (!m_settingsManager->showClock()) {
-        emit timeChanged(QString());
-        return;
-    }
-
-    QTime currentTime = QTime::currentTime();
-    const bool showSeconds = m_settingsManager->clockShowSeconds();
-
-    if (m_settingsManager->clockFormat24Hour()) {
-        const QString fmt = showSeconds ? QStringLiteral("HH:mm:ss") : QStringLiteral("HH:mm");
-        emit timeChanged(currentTime.toString(fmt));
-    } else {
-        int hour12 = currentTime.hour() % 12;
-        if (hour12 == 0)
-            hour12 = 12;
-        QString hourMin = QStringLiteral("%1:%2")
-                              .arg(hour12, 2, 10, QLatin1Char('0'))
-                              .arg(currentTime.minute(), 2, 10, QLatin1Char('0'));
-        if (showSeconds) {
-            hourMin += QStringLiteral(":%1").arg(currentTime.second(), 2, 10, QLatin1Char('0'));
+    QString text;
+    if (m_settingsManager->showClock()) {
+        const QTime currentTime = QTime::currentTime();
+        const bool showSeconds = m_settingsManager->clockShowSeconds();
+        if (m_settingsManager->clockFormat24Hour()) {
+            text = currentTime.toString(showSeconds ? QStringLiteral("HH:mm:ss") : QStringLiteral("HH:mm"));
+        } else {
+            int hour12 = currentTime.hour() % 12;
+            if (hour12 == 0)
+                hour12 = 12;
+            text = QStringLiteral("%1:%2")
+                       .arg(hour12, 2, 10, QLatin1Char('0'))
+                       .arg(currentTime.minute(), 2, 10, QLatin1Char('0'));
+            if (showSeconds)
+                text += QStringLiteral(":%1").arg(currentTime.second(), 2, 10, QLatin1Char('0'));
+            text += (currentTime.hour() >= 12) ? QStringLiteral(" PM") : QStringLiteral(" AM");
         }
-        const QString amPm = (currentTime.hour() >= 12) ? QStringLiteral("PM") : QStringLiteral("AM");
-        emit timeChanged(hourMin + QStringLiteral(" ") + amPm);
     }
+    // Without seconds the text changes once a minute; re-evaluating every
+    // binding that shows the clock 60 times for the same string is waste.
+    if (text == m_lastText)
+        return;
+    m_lastText = text;
+    emit timeChanged(text);
 }

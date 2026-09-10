@@ -23,6 +23,7 @@ public slots:
 private:
     SettingsManager *m_settingsManager;
     QTimer m_timer;
+    QString m_lastText;   // last emitted text; emit only on change
 };
 
 #endif // CLOCK_H

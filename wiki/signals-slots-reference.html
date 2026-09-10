@@ -259,7 +259,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Parameters</th><th>Fires When</th></tr></thead>
           <tbody>
-            <tr><td><code>timeChanged</code></td><td>str (formatted time)</td><td>Every second via QTimer. Format follows settingsManager.clockFormat24Hour. Emits "" when showClock is false.</td></tr>
+            <tr><td><code>timeChanged</code></td><td>str (formatted time)</td><td>Evaluated every second via QTimer, emitted only when the text changes (once a minute without seconds). Format follows settingsManager.clockFormat24Hour / clockShowSeconds. Emits "" once when showClock turns false.</td></tr>
           </tbody>
         </table>
 

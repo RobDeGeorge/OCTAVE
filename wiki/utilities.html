@@ -30,7 +30,7 @@
         <h2 id="clock">Clock</h2>
         <p><span class="file-path">backend/clock.py</span> &mdash; QML name: <code>clock</code></p>
 
-        <p>A simple QTimer-based clock that emits the formatted time string every second. Respects the user's clock visibility and format preferences from SettingsManager.</p>
+        <p>A simple QTimer-based clock. It formats the time every second (honouring <code>clockShowSeconds</code>) but emits <code>timeChanged</code> only when the text actually changed, so without seconds QML bindings re-evaluate once a minute instead of sixty times. Respects the user's clock visibility and format preferences from SettingsManager.</p>
 
         <h3>Source Code</h3>
         <pre><code><span class="kw">class</span> <span class="cls">Clock</span>(QObject):
@@ -45,18 +45,19 @@
 
     <span class="kw">def</span> <span class="fn">update_time</span>(self):
         <span class="kw">if not</span> self._settings_manager.showClock:
-            self.timeChanged.emit(<span class="str">""</span>)
+            self._emit_if_changed(<span class="str">""</span>)
             <span class="kw">return</span>
 
         current_time = datetime.now()
+        show_seconds = self._settings_manager.clockShowSeconds
         <span class="kw">if</span> self._settings_manager.clockFormat24Hour:
-            time_str = current_time.strftime(<span class="str">"%H:%M"</span>)
+            time_str = current_time.strftime(<span class="str">"%H:%M:%S"</span> <span class="kw">if</span> show_seconds <span class="kw">else</span> <span class="str">"%H:%M"</span>)
         <span class="kw">else</span>:
-            hour_min = current_time.strftime(<span class="str">"%I:%M"</span>)
+            hour_min = current_time.strftime(<span class="str">"%I:%M:%S"</span> <span class="kw">if</span> show_seconds <span class="kw">else</span> <span class="str">"%I:%M"</span>)
             am_pm = current_time.strftime(<span class="str">"%p"</span>).upper()
             time_str = <span class="str">f"{hour_min} {am_pm}"</span>
 
-        self.timeChanged.emit(time_str)</code></pre>
+        self._emit_if_changed(time_str)   <span class="cmt"># timeChanged only when the text differs</span></code></pre>
 
         <h3>Behavior</h3>
         <ul>
