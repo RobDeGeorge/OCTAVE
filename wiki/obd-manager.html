@@ -497,7 +497,7 @@ self._data_watchdog_timeout = <span class="num">30.0</span>  <span class="cmt">#
           <code>octave.elm327</code> category logs <code>TX</code>/<code>RX</code> lines (response truncated to 200 chars,
           with the round-trip time) from <code>OBDConnectionWorker::sendCommand</code>, a WARNING when a command gets no
           response within its timeout, and in <code>ELM327Protocol</code> adapter error responses, unparseable responses,
-          short responses and decoder failures. Debug-level lines need <code>--debug</code> (see the logging section of
+          short responses and decoder failures. On Android the Java BLE bridge (<code>OctaveOBDBridge</code>) queues its connection / service-discovery / error lines and the same 50&nbsp;ms poll that drains notifications forwards them as <code>[BLE] ...</code> INFO/WARNING lines in <code>octave-cpp.log</code>, so a BLE drop in the car is in the file the Diagnostics card exports. Debug-level lines need <code>--debug</code> (see the logging section of
           <a href="architecture.html#logging">Architecture</a>).
         </p>
 

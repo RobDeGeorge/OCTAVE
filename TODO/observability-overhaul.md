@@ -1,6 +1,6 @@
 # Observability overhaul — make OCTAVE post-mortem-debuggable
 
-**Status:** in progress — Chunks 1–4 shipped 2026-09-10. Remaining: Chunk 5 (Java BLE bridge → OCTAVE log) and optional Chunk 6 (UI watchdog).
+**Status:** Chunks 1–5 shipped 2026-09-10; only the optional Chunk 6 (UI watchdog) remains. Chunks 4 and 5 are untested on the Android tablet (no device here); verify there, then delete this file (or re-park Chunk 6 on its own).
 **Last updated:** 2026-09-10
 
 ## Why this exists
@@ -89,7 +89,7 @@ Six chunks, sequenced so each one delivers value standalone. Stop after any of t
 
 **Effort:** ~1 day. Most of it is the QML page; the `FileProvider` is small.
 
-### Chunk 5 — Java BLE bridge logging into OCTAVE's log files
+### Chunk 5 — Java BLE bridge logging into OCTAVE's log files — DONE 2026-09-10 (no JNI callback needed: the bridge queues its setEvent/setError lines and the existing 50 ms C++ poll drains `pollLog()` into the `octave.elm327` category as `[BLE] ...`)
 
 **Goal:** `OctaveOBDBridge.java` BLE state transitions show up in `octave-cpp.log`, not just logcat.
 

@@ -99,6 +99,14 @@ public class OctaveOBDBridge {
     private static final ConcurrentLinkedQueue<byte[]> pendingResponses =
         new ConcurrentLinkedQueue<>();
 
+    // Every setEvent/setError line, queued for OCTAVE's own log files
+    // (logcat alone is unreachable from the vehicle). C++ drains it on the
+    // same 50 ms poll as pendingResponses; bounded so a disconnected
+    // adapter cannot grow it without bound. Entries are "I|msg" / "W|msg".
+    private static final ConcurrentLinkedQueue<String> pendingLog =
+        new ConcurrentLinkedQueue<>();
+    private static final int LOG_QUEUE_MAX = 200;
+
     /** Returns the current connection state (one of STATE_* constants). */
     public static int stateCode() { return currentState; }
 
@@ -109,6 +117,9 @@ public class OctaveOBDBridge {
     /** Drain one pending response chunk from the FFE1 notification queue.
      *  Returns null when empty. C++ polls this on a 50ms timer. */
     public static byte[] pollResponse() { return pendingResponses.poll(); }
+
+    /** Drain one queued log line ("I|..." or "W|..."); null when empty. */
+    public static String pollLog() { return pendingLog.poll(); }
 
     /**
      * Connect to a BLE ELM327 adapter by MAC address.
@@ -251,10 +262,18 @@ public class OctaveOBDBridge {
     private static void setError(String msg) {
         Log.w(TAG, "ERROR: " + msg);
         lastError = msg;
+        queueLog("W|" + msg);
     }
     private static void setEvent(String msg) {
         Log.i(TAG, msg);
         lastEvent = msg;
+        queueLog("I|" + msg);
+    }
+    private static void queueLog(String line) {
+        if (pendingLog.size() >= LOG_QUEUE_MAX) {
+            pendingLog.poll();
+        }
+        pendingLog.offer(line);
     }
 
     private static final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {

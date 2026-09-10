@@ -2338,6 +2338,23 @@ void OBDManager::cleanupAndroidConnection()
 
 void OBDManager::onAndroidBlePoll()
 {
+    // 0) Forward the Java bridge's event/error lines into OCTAVE's log files
+    //    (Chunk 5 of the observability plan: logcat is unreachable in the car).
+    for (int i = 0; i < 50; ++i) {
+        QJniObject jLine = QJniObject::callStaticObjectMethod(
+            "org/octave/app/OctaveOBDBridge", "pollLog", "()Ljava/lang/String;");
+        if (!jLine.isValid())
+            break;
+        const QString line = jLine.toString();
+        if (line.isEmpty())
+            break;
+        const QString msg = line.mid(2);
+        if (line.startsWith(QLatin1String("W|")))
+            qCWarning(lcElm327) << "[BLE]" << msg;
+        else
+            qCInfo(lcElm327) << "[BLE]" << msg;
+    }
+
     // 1) Drain any pending FFE1 notification bytes.
     while (true) {
         QJniObject jArr = QJniObject::callStaticObjectMethod(
