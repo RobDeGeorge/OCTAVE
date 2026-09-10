@@ -33,6 +33,12 @@ Item {
     // True when the last failure was the phone itself (unplugged, offline,
     // not authorized) — those are worth retrying automatically.
     property bool deviceError: false
+    // A USB blip (the phone re-enumerates when picked up / put down) kills
+    // the session; the manager restarts it within a couple of seconds. Keep
+    // the last frame on screen meanwhile instead of flashing the error page.
+    property bool reconnecting: false
+    readonly property int reconnectGraceMs: 10000
+    property double reconnectSince: 0
     function refreshSetupOk() {
         setupOk = (phoneMirrorManager && phoneMirrorManager.environmentOk) ? phoneMirrorManager.environmentOk() : false
     }
@@ -142,6 +148,7 @@ Item {
                 anchors.fill: parent
                 onClicked: {
                     if (phoneMirrorManager) phoneMirrorManager.stopScrcpy()
+                    reconnecting = false
                     mirrorRunning = false
                     stackView.pop()
                 }
@@ -158,30 +165,33 @@ Item {
             z: 5
         }
 
-        // The user unlocked the phone in their hand: the mirror keeps working,
-        // OCTAVE just stops blanking / waking it. Small pill, not an overlay.
+        // Shown only if a reconnect takes more than a couple of seconds
         Rectangle {
+            id: reconnectBadge
             anchors.top: parent.top
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.topMargin: dp(10)
-            width: inUseLabel.implicitWidth + dp(28)
-            height: dp(34)
-            radius: dpMin(17, 2)
+            width: reconnectLabel.implicitWidth + dp(24)
+            height: dp(30)
+            radius: dpMin(15, 2)
             color: "#CC000000"
-            border.color: "#55FFFFFF"; border.width: 1
-            visible: mirrorRunning && phoneMirrorManager && phoneMirrorManager.phoneInUse === true
+            visible: reconnecting && reconnectDelay.elapsed
             z: 9
             Text {
-                id: inUseLabel
+                id: reconnectLabel
                 anchors.centerIn: parent
-                text: "Phone in use \u2014 tap to turn its screen back off"
+                text: "Reconnecting to phone\u2026"
                 font.pixelSize: dp(14)
                 font.family: phoneMirrorView.globalFont
                 color: "white"
             }
-            MouseArea {
-                anchors.fill: parent
-                onClicked: if (phoneMirrorManager) phoneMirrorManager.resumeMirroring()
+            Timer {
+                id: reconnectDelay
+                property bool elapsed: false
+                interval: 2000
+                running: reconnecting
+                onRunningChanged: if (!running) elapsed = false
+                onTriggered: elapsed = true
             }
         }
 
@@ -415,9 +425,10 @@ Item {
         target: phoneMirrorManager
 
         function onScrcpyStarted(handle) {
-            console.log("Phone Mirror: stream started")
+            console.log("Phone Mirror: stream started" + (reconnecting ? " (reconnected)" : ""))
             mirrorRunning = true
             launchFailed = false
+            reconnecting = false
         }
 
         function onFrameReady() {
@@ -432,10 +443,47 @@ Item {
 
         function onScrcpyError(error) {
             console.log("Phone Mirror: error -", error)
+            var isDeviceError = /disconnected|No Android device|not authorized|offline/i.test(error)
+            if (isDeviceError && mirrorRunning && hasVideo && !reconnecting) {
+                // Link dropped mid-stream: hold the picture and try to come back quietly
+                console.log("Phone Mirror: link dropped, holding the last frame while reconnecting")
+                reconnecting = true
+                reconnectSince = Date.now()
+                errorMessage = error
+                deviceError = true
+                return
+            }
+            if (reconnecting && Date.now() - reconnectSince < reconnectGraceMs) {
+                errorMessage = error   // a restart attempt failed; keep trying until the grace runs out
+                return
+            }
+            reconnecting = false
             mirrorRunning = false
             launchFailed = true
             errorMessage = error
-            deviceError = /disconnected|No Android device|not authorized|offline/i.test(error)
+            deviceError = isDeviceError
+        }
+    }
+
+    // Quiet reconnect: the last frame stays up; poll the phone every second
+    // and restart the moment it is back. After reconnectGraceMs give up and
+    // show the error page (whose own recovery timer takes over).
+    Timer {
+        interval: 1000
+        repeat: true
+        running: reconnecting && phoneMirrorView.StackView.status === StackView.Active
+        onTriggered: {
+            if (!phoneMirrorManager || phoneMirrorManager.isRunning)
+                return
+            if (Date.now() - reconnectSince >= reconnectGraceMs) {
+                console.log("Phone Mirror: reconnect timed out")
+                reconnecting = false
+                mirrorRunning = false
+                launchFailed = true
+                return
+            }
+            if (phoneMirrorManager.getDeviceState() === "device")
+                startMirror()
         }
     }
 
@@ -445,7 +493,7 @@ Item {
     Timer {
         interval: 2000
         repeat: true
-        running: launchFailed && setupOk && deviceError && !mirrorRunning
+        running: launchFailed && setupOk && deviceError && !mirrorRunning && !reconnecting
                  && phoneMirrorView.StackView.status === StackView.Active
         onTriggered: {
             if (!phoneMirrorManager || phoneMirrorManager.isRunning)

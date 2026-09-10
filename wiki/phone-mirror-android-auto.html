@@ -208,19 +208,25 @@
               a press from the locked state (phone in the cradle) wakes it with <code>KEYCODE_WAKEUP</code>, forces the panel on (the wake alone does not reliably relight a SurfaceControl-dark panel) and leaves it
               lit for an 8&nbsp;s grace window; if the keyguard is dismissed in that window (or at any time), or the phone turns out to be unlocked already, or the button is pressed again inside the window (someone trying to get in), the phone is
               <em>in use</em> -- panel left alone, locks not undone, the mirror keeps working because DeX on the virtual display
-              is independent of the panel -- until it is locked again or the user taps the "Phone in use" pill
-              (<code>OCTAVE_TAKE_BACK</code>); a press while in use means the user is putting it down, so the panel-off goes out
+              is independent of the panel -- until it is locked again (locking the phone is the hand-back gesture; <code>resumeMirroring()</code> /
+              <code>OCTAVE_TAKE_BACK</code> exists but is not exposed in the view); a press while in use means the user is putting it down, so the panel-off goes out
               before the wake and again the instant the phone is interactive; if the grace passes still locked, the panel is
               blanked. The panel is blanked with SurfaceControl's power mode (the phone stays awake) and restored by CleanUp when
               the session ends. Every change is reported as the <code>PHONE_STATE</code> device message
               (asleep / in use / panel dark), which both clients read on the control socket and expose as
               <code>phoneAsleep</code> / <code>phoneInUse</code>; the view dims the held frame with a "Phone is asleep" overlay
-              during the wake and shows the pill while in use. Two client-side details keep the dash seamless: a dozing phone
+              during the wake. Two client-side details keep the dash seamless: a dozing phone
               streams pure black frames, so both clients take the max luma of the Y plane at stride 2 and hold back a run of
               all-black frames (last good frame stays up) for 3&nbsp;s or while the keeper reports the phone asleep -- a black
               run that outlives that is real content and is shown. Phones with a lock-after-screen-off delay (Samsung default
               5&nbsp;s) stay unlocked for that long after a power press, so a wake inside it shows no keyguard and no unlock
               edge; set lock-after to "Immediately" for the crispest behaviour. OCTAVE itself no longer polls the phone over adb.</li>
+            <li><strong>USB blips</strong>: the phone re-enumerates on the bus now and then (picked up, put down, a nudged
+              cable), which ends the session with "Phone disconnected". <code>PhoneMirrorView</code> treats a device error that
+              arrives mid-stream as a quiet reconnect: the last frame stays on the <code>VideoOutput</code> (neither client
+              clears the sink), the view polls <code>getDeviceState()</code> every second and restarts the session the moment
+              the phone is back (typically 2&nbsp;s), showing only a small "Reconnecting to phone" badge if it takes longer than
+              2&nbsp;s. After 10&nbsp;s it falls back to the error page, whose own recovery timer keeps polling.</li>
             <li><strong>Navigation buttons on a virtual display</strong>: HOME and APP_SWITCH are system keys that Android routes
               to the default display, so injecting them does nothing on the virtual one (Back is dispatched to the focused window
               and works). <code>pressHome()</code> therefore runs <code>am start --display &lt;id&gt; -a MAIN -c HOME</code> on the
