@@ -27,7 +27,10 @@ cd -- "$OCTAVE_CHECKOUT"
 printf 'Launching native OCTAVE from %s\n' "$OCTAVE_CHECKOUT"
 
 if [[ ! -f "$OCTAVE_BUILD/CMakeCache.txt" ]]; then
-    cmake -S "$OCTAVE_CHECKOUT" -B "$OCTAVE_BUILD" -DCMAKE_BUILD_TYPE=Release
+    # The Qt package registry may otherwise select an installed Android kit.
+    OCTAVE_QT_CMAKE="$(/usr/bin/qmake6 -query QT_INSTALL_LIBS)/cmake/Qt6"
+    cmake -S "$OCTAVE_CHECKOUT" -B "$OCTAVE_BUILD" \
+        -DCMAKE_BUILD_TYPE=Release -DQt6_DIR="$OCTAVE_QT_CMAKE"
 fi
 # CMake automatically regenerates the existing build when its inputs change.
 # Bound parallelism so launching from the desktop does not exhaust memory.

@@ -723,8 +723,8 @@ void SettingsManager::flushPendingSave()
 // ---------------------------------------------------------------------------
 void SettingsManager::writeSettingsToDisk(const QJsonObject &settings)
 {
-    QJsonObject validated = validateSettings(settings);
-    QJsonDocument doc(validated);
+    // Callers pass an already validated object (saveSettings / the defaults).
+    QJsonDocument doc(settings);
 
     QString dirName = QFileInfo(m_settingsFile).absolutePath();
 
