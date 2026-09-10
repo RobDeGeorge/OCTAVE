@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick3D
-import QtQuick3D.AssetUtils
 import "." as App
 
 Item {
@@ -109,7 +108,7 @@ Item {
 
             View3D {
                 id: view3d
-                anchors.fill: parent
+                anchors { top: vehicleControls.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
 
                 environment: SceneEnvironment {
                     clearColor: "#18232F"
@@ -129,7 +128,7 @@ Item {
                         id: camera
                         // Fit the vehicle's rotation envelope even in a narrow view.
                         position: Qt.vector3d(0, 0, Math.max(cameraDistance,
-                            70 / Math.sin(Math.atan(Math.tan(Math.PI / 8)
+                            (jeep.radius * 30 + 3) / Math.sin(Math.atan(Math.tan(Math.PI / 8)
                                 * Math.min(1, view3d.width / Math.max(1, view3d.height))))))
                         fieldOfView: 45
                         clipNear: 10
@@ -158,26 +157,80 @@ Item {
                     position: Qt.vector3d(0, 0, 0)
                     scale: Qt.vector3d(30, 30, 30)
 
-                    RuntimeLoader {
-                        id: modelLoader
-                        source: "./assets/jeep_tj_2003.glb"
-                        // RuntimeLoader exposes `status` + `errorString`; there is no
-                        // `statusString`, so the old handler threw a ReferenceError and
-                        // swallowed the very message needed to diagnose a failed load
-                        // (e.g. a missing assimp asset-import plugin).
-                        onStatusChanged: {
-                            if (status === RuntimeLoader.Error)
-                                console.warn("[CarMenu] Model load failed:", modelLoader.errorString)
-                            else
-                                console.log("[CarMenu] Model status:", status)
-                        }
+                    JeepVehicle { id: jeep }
+                }
+            }
+
+            Flow {
+                id: vehicleControls
+                anchors { top: parent.top; left: parent.left; right: parent.right; margins: 6 }
+                spacing: 4
+                enabled: jeep.ready
+                Repeater {
+                    model: [
+                        {label: "Driver door", key: "driverDoorOpen"},
+                        {label: "Passenger door", key: "passengerDoorOpen"},
+                        {label: "Rear glass", key: "rearGlassOpen"},
+                        {label: "Tailgate", key: "tailgateOpen"},
+                        {label: "Hood", key: "hoodOpen"},
+                        {label: "Headlights", key: "headlightsOn"},
+                        {label: "Fog lights", key: "fogLightsOn"},
+                        {label: "Brake lights", key: "brakeLightsOn"},
+                        {label: "Reverse lights", key: "reverseLightsOn"}
+                    ]
+                    delegate: Button {
+                        required property var modelData
+                        objectName: "jeepControl_" + modelData.key
+                        text: modelData.label
+                        checkable: true
+                        checked: jeep[modelData.key]
+                        onClicked: jeep[modelData.key] = !jeep[modelData.key]
                     }
                 }
+                Button { objectName: "jeepOpenAll"; text: "Open all"; onClicked: jeep.openAll() }
+                Button { text: "Close all"; onClicked: jeep.closeAll() }
+                Row {
+                    spacing: 6
+                    Label { text: "Steer"; color: "white"; anchors.verticalCenter: parent.verticalCenter }
+                    Slider {
+                        objectName: "jeepSteering"
+                        width: carMenu.dp(130)
+                        from: -1; to: 1; value: -jeep.steeringInput
+                        onMoved: jeep.steeringInput = -value
+                    }
+                    Button { objectName: "centerWheels"; text: "Center wheels"; onClicked: jeep.steeringInput = 0 }
+                }
+                Row {
+                    spacing: 6
+                    Button {
+                        objectName: "jeepSpinWheels"; text: "Spin wheels"
+                        checkable: true; checked: jeep.wheelSpeedKph !== 0
+                        onClicked: jeep.wheelSpeedKph = jeep.wheelSpeedKph !== 0 ? 0 : 10
+                    }
+                    Slider {
+                        objectName: "jeepWheelSpeed"; width: carMenu.dp(130)
+                        from: -30; to: 30; value: jeep.wheelSpeedKph
+                        onMoved: jeep.wheelSpeedKph = value
+                    }
+                    Label {
+                        text: jeep.wheelSpeedKph.toFixed(0) + " km/h"
+                        color: "white"; anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+            }
+            Label {
+                anchors.centerIn: view3d
+                visible: !jeep.ready
+                text: jeep.error ? "Unable to load Jeep: " + jeep.error : "Loading Jeep…"
+                color: "white"
+                width: parent.width - 24
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
             }
 
             // Mouse area for orbiting the camera around the model
             MouseArea {
-                anchors.fill: parent
+                anchors.fill: view3d
                 acceptedButtons: Qt.LeftButton
                 property real lastX: 0
                 property real lastY: 0

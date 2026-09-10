@@ -56,7 +56,9 @@ Indices are zero-based positions in the downloaded gallery.
 
 ## Geometry corrections made from the photographs
 
-- Narrowed the grille and tapered the hood; gave the hood rolled shoulders and a crown.
+- Narrowed the grille and tapered the hood. The deck now has a shallow crown and
+  a small rolled shoulder; the rear hood meets a full-width cowl with flat sides
+  aligned to the door jambs, replacing the exaggerated rounded transition.
 - Cut seven actual grille openings and added recessed, convex headlamps and separate fog lamps.
 - Raised the door/tub beltline to meet the hood shoulder; revised the door shut lines,
   triangular hinges, paddle handles, mirror stalks, and side steps.
@@ -65,10 +67,51 @@ Indices are zero-based positions in the downloaded gallery.
   perimeter, molded ribs, liftglass hinges, and a rear wiper.
 - Replaced narrow generic spokes with broad dished Canyon-style spokes and revised
   the tire profile, shoulder lugs, and chevron tread.
-- Modeled the visible Khaki cabin, four-spoke steering wheel, console, and roll bar.
+- Modeled the cabin, four-spoke steering wheel, console, and roll bar. The app
+  version now has a black interior and roof, with the steering wheel, instruments
+  and pedals on the left.
 - Added the driver's-side fuel filler, rear lamp details, spare carrier, and exposed suspension.
+- Aligned the door window frames with the windshield A-pillars and removed body
+  surfaces behind the door and tailgate openings.
+- Added four detailed shocks, spring perches, drivetrain casings, frame crossmembers,
+  differential cover bolts, skid ribs, and exhaust components.
+- Changed the flares to textured black at the user’s request and moved the fuel
+  filler clear of the rear flare. Repositioned the pedals beneath the dashboard.
+- Replaced the full-width floor slab with thin shaped pans, a transmission tunnel,
+  rear wheel housings and raised cargo floor. Rebuilt the console cupholders as
+  recessed cups between the shifter and armrest, following photo 081.
+- Rigged both front doors, hood, tailgate/spare, and rear glass; added app controls
+  and switchable headlights.
 
 The wheelbase is anchored at 2.372 m using published 2003 dimensions. Other surfaces
 are manually interpreted from perspective photographs. No photogrammetry or
 manufacturer CAD was used; dimensional 1:1 accuracy has not been established.
 [Dimension reference](https://www.quadratec.com/c/reference/2003-jeep-wrangler-tj-specs).
+
+## Dana 44 and steering update
+
+- [Dana/Spicer Dana 44 differential cover specifications](https://www.danaaftermarket.com/10023536)
+  establish the ten-bolt cover pattern. The model uses an interpreted angular
+  carrier/cover profile, with a driver-offset front carrier and centered rear.
+- [Quadratec TJ steering overview](https://www.quadratec.com/c/reference/what-is-Jeep-bump-steer)
+  and gallery photo 298 informed the pitman-arm/drag-link/tie-rod arrangement.
+  The app uses an inverted-Y mechanism with fixed link lengths and approximate
+  hardpoints, plus a bent tie rod for differential clearance.
+- Gallery photos 028, 033 and 040 informed the front fender deck, rolled outer
+  lip and tapered fender ends. The inner cowl/apron junctions were extended to
+  close the previous triangular gaps.
+
+These changes customize the original Sahara reference. Dimensions remain
+photo-interpreted; this is not a measured suspension or manufacturer CAD model.
+
+
+### KO2 tire and black wheel revision
+
+The requested custom configuration uses 31-inch overall tire diameter and
+16-inch wheel bead-seat diameter on all five wheels. KO2 interlocking blocks,
+siping, shoulder lugs and sidewall lettering were visually interpreted from
+[this close-up](https://www.carid.com/images/bfgoodrich/bfgoodrich-all-terrain-t-a-ko2-wl-close-up.jpg).
+The [BFGoodrich launch reference](https://news.bfgoodrichtires.com/bfgoodrich-tires-toughest-all-terrain-tire-ever-hits-the-market/)
+identifies the KO2 range. The black eight-spoke wheel is an original generic
+design. Tire geometry is dimensioned for the requested visual and does not
+claim to duplicate the specifications of a particular retail metric size.
