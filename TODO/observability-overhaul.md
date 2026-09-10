@@ -1,6 +1,6 @@
 # Observability overhaul — make OCTAVE post-mortem-debuggable
 
-**Status:** in progress — Chunks 1 and 2 shipped 2026-09-10 (`src/util/logger.{h,cpp}`, `backend/logging_config._install_crash_handlers`). Next: Chunk 3.
+**Status:** in progress — Chunks 1, 2 and 3 shipped 2026-09-10. Next: Chunk 4 (Diagnostics page + Android share).
 **Last updated:** 2026-09-10
 
 ## Why this exists
@@ -62,7 +62,7 @@ Six chunks, sequenced so each one delivers value standalone. Stop after any of t
 
 **Effort:** ~4 hours for the simple `signal()` approach; ~1 day for breakpad integration with proper symbol upload.
 
-### Chunk 3 — Instrument `elm327_protocol` on both sides
+### Chunk 3 — Instrument `elm327_protocol` on both sides — DONE 2026-09-10 (Python: python-obd's own `obd.*` logger tree now writes to our files; C++: `octave.elm327` category, TX/RX/timeout lines in `OBDConnectionWorker::sendCommand`)
 
 **Goal:** every ELM327 command sent, response received, parse failure, and timeout is logged with enough context to reconstruct a failed OBD session.
 

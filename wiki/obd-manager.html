@@ -488,6 +488,19 @@ self._data_watchdog_timeout = <span class="num">30.0</span>  <span class="cmt">#
         </p>
 
         <!-- Key Slots -->
+        <h2 id="protocol-logging">Protocol logging</h2>
+        <p>
+          A failed OBD session can be reconstructed from the logs. Python: the OBD manager drives the adapter through
+          python-obd, whose <code>obd.*</code> loggers are attached to OCTAVE's handlers by <code>setup_logging()</code>;
+          with <code>--debug</code> every <code>write: b'010C\r'</code> / <code>read: ...</code> pair lands in
+          <code>octave-debug.log</code>, and its errors always reach <code>octave-error.log</code>. C++: the
+          <code>octave.elm327</code> category logs <code>TX</code>/<code>RX</code> lines (response truncated to 200 chars,
+          with the round-trip time) from <code>OBDConnectionWorker::sendCommand</code>, a WARNING when a command gets no
+          response within its timeout, and in <code>ELM327Protocol</code> adapter error responses, unparseable responses,
+          short responses and decoder failures. Debug-level lines need <code>--debug</code> (see the logging section of
+          <a href="architecture.html#logging">Architecture</a>).
+        </p>
+
         <h2 id="slots">Key Slots</h2>
         <table>
           <thead>

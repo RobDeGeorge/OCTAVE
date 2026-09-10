@@ -2,6 +2,7 @@
 #define ELM327PROTOCOL_H
 
 #include <QByteArray>
+#include <QLoggingCategory>
 #include <QList>
 #include <QPair>
 #include <QSet>
@@ -65,6 +66,8 @@ using DtcCode = QString;
 // ---------------------------------------------------------------------------
 // ELM327Protocol -- static utility class
 // ---------------------------------------------------------------------------
+Q_DECLARE_LOGGING_CATEGORY(lcElm327)
+
 class ELM327Protocol
 {
 public:

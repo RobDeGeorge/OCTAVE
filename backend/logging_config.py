@@ -132,6 +132,18 @@ def setup_logging(debug: bool = False, console: bool = True, file: bool = True):
             debug_handler.setFormatter(file_formatter)
             root_logger.addHandler(debug_handler)
 
+    # python-obd does the actual ELM327 I/O for the OBD manager and logs every
+    # command/response at DEBUG ("write: ..." / "read: ...") on its own
+    # logger tree; give it our handlers so a failed OBD session leaves a
+    # protocol transcript in octave-debug.log (with --debug) and its errors
+    # reach octave-error.log.
+    obd_logger = logging.getLogger('obd')
+    obd_logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    obd_logger.handlers.clear()
+    obd_logger.propagate = False
+    for h in root_logger.handlers:
+        obd_logger.addHandler(h)
+
     _initialized = True
     if file:
         _install_crash_handlers(root_logger, os.path.join(_get_log_dir(), 'octave-error.log'))

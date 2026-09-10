@@ -4,6 +4,10 @@
 #include <QRegularExpression>
 
 #include <cmath>
+#include <exception>
+
+// Protocol transcript and parse failures; TX/RX lines come from the OBD worker
+Q_LOGGING_CATEGORY(lcElm327, "octave.elm327")
 
 // ===========================================================================
 // Decoder functions
@@ -244,8 +248,10 @@ std::optional<ParsedResponse> ELM327Protocol::parseResponse(const QString &raw)
     const QString upper = line.toUpper();
 
     for (const QString &err : errorResponses()) {
-        if (upper.contains(err))
+        if (upper.contains(err)) {
+            qCDebug(lcElm327) << "adapter error response:" << line.left(200);
             return std::nullopt;
+        }
     }
 
     // Remove whitespace
@@ -253,8 +259,10 @@ std::optional<ParsedResponse> ELM327Protocol::parseResponse(const QString &raw)
 
     // Response format: 41 0C 1A F8 (mode+0x40, pid, data...)
     QByteArray hexBytes = QByteArray::fromHex(line.toLatin1());
-    if (hexBytes.size() < 2)
+    if (hexBytes.size() < 2) {
+        qCDebug(lcElm327) << "unparseable response:" << raw.trimmed().left(200);
         return std::nullopt;
+    }
 
     int respMode = static_cast<uint8_t>(hexBytes[0]);
     int pid      = static_cast<uint8_t>(hexBytes[1]);
@@ -276,13 +284,21 @@ std::optional<DecodedPid> ELM327Protocol::decodePid(int mode, int pid,
         return std::nullopt;
 
     const PidEntry &entry = it.value();
-    if (dataBytes.size() < entry.expectedBytes)
+    if (dataBytes.size() < entry.expectedBytes) {
+        qCWarning(lcElm327).nospace() << "short response for " << entry.signalName << " (mode " << Qt::hex << mode
+                                      << " pid " << pid << Qt::dec << "): " << dataBytes.size() << " of "
+                                      << entry.expectedBytes << " bytes";
         return std::nullopt;
+    }
 
     try {
         double value = entry.decoder(dataBytes);
         return DecodedPid{entry.signalName, value};
+    } catch (const std::exception &e) {
+        qCWarning(lcElm327) << "decode failed for" << entry.signalName << ":" << e.what();
+        return std::nullopt;
     } catch (...) {
+        qCWarning(lcElm327) << "decode failed for" << entry.signalName;
         return std::nullopt;
     }
 }

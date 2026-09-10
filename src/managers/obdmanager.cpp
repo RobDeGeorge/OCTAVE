@@ -1,4 +1,5 @@
 #include "obdmanager.h"
+#include "elm327protocol.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -1749,6 +1750,7 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
         return QString();
 
     m_responseBuffer.clear();
+    qCDebug(lcElm327) << "TX" << cmd.trimmed();
     m_serial->write(cmd);
     m_serial->flush();
 
@@ -1766,8 +1768,10 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
                 emptyReads = 0;
                 m_responseBuffer.feed(chunk);
                 auto resp = m_responseBuffer.getResponse();
-                if (resp.has_value())
+                if (resp.has_value()) {
+                    qCDebug(lcElm327) << "RX" << resp->trimmed().left(200) << "(" << timer.elapsed() << "ms )";
                     return resp.value();
+                }
                 continue;  // productive read: the prompt is probably next, do not pace
             } else if (++emptyReads >= 50) {
                 // Readable-but-empty on every poll: an rfcomm node whose
@@ -1797,6 +1801,7 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
         if (spent < 100)
             QThread::msleep(static_cast<unsigned long>(100 - spent));
     }
+    qCWarning(lcElm327) << "no response to" << cmd.trimmed() << "within" << timeoutMs << "ms";
 
     // Timeout -- return whatever we have
     auto resp = m_responseBuffer.getResponse();

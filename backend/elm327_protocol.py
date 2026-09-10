@@ -217,6 +217,7 @@ def parse_response(raw):
     line = raw.strip()
     for err in ERROR_RESPONSES:
         if err in line.upper():
+            logger.debug(f"adapter error response: {line[:200]}")
             return None
 
     # Remove any whitespace
@@ -226,9 +227,11 @@ def parse_response(raw):
     try:
         raw_bytes = bytes.fromhex(line)
     except ValueError:
+        logger.debug(f"unparseable response: {raw.strip()[:200]}")
         return None
 
     if len(raw_bytes) < 2:
+        logger.debug(f"unparseable response: {raw.strip()[:200]}")
         return None
 
     resp_mode = raw_bytes[0]  # e.g., 0x41 for mode 01 response
@@ -249,12 +252,15 @@ def decode_pid(mode, pid, data_bytes):
 
     name, signal_name, decoder, expected_bytes = PID_TABLE[key]
     if len(data_bytes) < expected_bytes:
+        logger.warning(f"short response for {signal_name} (mode {mode:02X} pid {pid:02X}): "
+                       f"{len(data_bytes)} of {expected_bytes} bytes")
         return None
 
     try:
         value = decoder(data_bytes)
         return (signal_name, value)
     except Exception:
+        logger.exception(f"decode failed for {signal_name}")
         return None
 
 
