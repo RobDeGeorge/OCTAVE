@@ -1627,7 +1627,7 @@ Flickable {
                     SettingsToggle {
                         id: scrcpyPhoneScreenOffToggle
                         Layout.fillWidth: true
-                        text: "Turn the phone's screen off while mirroring"
+                        text: "Phone screen off while mirroring"
                         checked: settingsManager ? settingsManager.scrcpyPhoneScreenOff : true
                         activeColor: App.Style.accent
                         inactiveColor: App.Style.hoverColor

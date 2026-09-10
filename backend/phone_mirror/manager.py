@@ -401,8 +401,10 @@ class PhoneMirrorManager(QObject):
             self.phoneAsleepChanged.emit(False)
 
     def _wake_watch(self, serial: str, stop: threading.Event):
+        # No `grep -m1`: closing the pipe early makes dumpsys log a broken-pipe
+        # error on the phone every poll. grep reads it all; re.search takes the first.
         while not stop.wait(WAKE_POLL_INTERVAL_S):
-            out = self._run_adb(["-s", serial, "shell", "dumpsys", "power", "|", "grep", "-m1", "mWakefulness="], timeout=5)
+            out = self._run_adb(["-s", serial, "shell", "dumpsys", "power", "|", "grep", "mWakefulness="], timeout=5)
             m = re.search(r"mWakefulness=(\w+)", out)
             if not stop.is_set():
                 self._wakefulness.emit(m.group(1) if m else "")

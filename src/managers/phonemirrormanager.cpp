@@ -546,7 +546,7 @@ void PhoneMirrorManager::pollWakefulness()
     QTimer::singleShot(5000, proc, [proc] { if (proc->state() != QProcess::NotRunning) proc->kill(); });
     proc->start(m_adbPath, {QStringLiteral("-s"), m_serial, QStringLiteral("shell"), QStringLiteral("dumpsys"),
                             QStringLiteral("power"), QStringLiteral("|"), QStringLiteral("grep"),
-                            QStringLiteral("-m1"), QStringLiteral("mWakefulness=")});
+                            QStringLiteral("mWakefulness=")});  // no -m1: an early pipe close makes dumpsys log an error on the phone
 }
 
 void PhoneMirrorManager::onWakefulness(const QString &state)
