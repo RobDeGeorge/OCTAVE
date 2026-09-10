@@ -157,11 +157,15 @@ class MediaManager(QObject):
         self._player.mediaStatusChanged.connect(self._handle_media_status)
         self._player.errorOccurred.connect(self._handle_player_error)
 
-        # Initialize position timer
+        # Position timer (100 ms) as a safety net for backends whose
+        # QMediaPlayer.positionChanged is coarse. It only runs while playing so
+        # an idle app does not wake ten times a second for nothing.
         self._position_timer = QTimer()
-        self._position_timer.setInterval(100)  # Update every 100ms
+        self._position_timer.setInterval(100)
         self._position_timer.timeout.connect(self._update_position)
-        self._position_timer.start()
+        self.playStateChanged.connect(
+            lambda playing: self._position_timer.start() if playing else self._position_timer.stop()
+        )
         
         # Debounce timer for saving playback state — avoids disk writes on every
         # rapid track change (spam next/prev).  Saves once 1s after the last change.

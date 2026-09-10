@@ -636,6 +636,14 @@ class SettingsManager(QObject):
         else:
             self._obd_parameters = self._default_settings["obdParameters"]
 
+        # Debounced disk write for every other setter (see save_settings)
+        self._settings_loaded = True
+        self._save_pending = False
+        self._save_timer = QTimer()
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(500)
+        self._save_timer.timeout.connect(self.flush_pending_save)
+
         # Debounce timer for OBD parameter changes - batches rapid toggles
         self._obd_params_dirty = False
         self._obd_params_save_timer = QTimer()
@@ -720,6 +728,16 @@ class SettingsManager(QObject):
         return validated
 
     def load_settings(self):
+        # After the constructor has read the file once, self._settings is the
+        # authoritative copy: every setter goes through save_settings(), which
+        # updates it and schedules one disk write. Re-reading the file per key
+        # (as this used to) cost a parse + validate on every slider release,
+        # every track change and every get_setting() call from QML.
+        if getattr(self, "_settings_loaded", False):
+            return dict(self._settings)
+        return self._read_settings_from_disk()
+
+    def _read_settings_from_disk(self):
         try:
             with open(self.settings_file, 'r') as f:
                 try:
@@ -738,13 +756,35 @@ class SettingsManager(QObject):
                     except Exception:
                         pass
         except FileNotFoundError:
-            self.save_settings(self._default_settings)
+            self._write_settings_to_disk(self._default_settings)
             return self._default_settings.copy()
         except json.JSONDecodeError as e:
             logger.error(f"Settings file corrupted ({e}), using defaults")
             return self._default_settings.copy()
 
     def save_settings(self, settings):
+        """Update the in-memory settings and write them to disk once things settle.
+
+        Bursts (album colours per track, several toggles in a row, a slider
+        drag) coalesce into a single atomic write, which also spares the SD
+        card on the Pi. flush_pending_save() forces the write (shutdown)."""
+        self._settings = self._validate_settings(settings)
+        if not getattr(self, "_settings_loaded", False):
+            self._write_settings_to_disk(self._settings)   # constructor path
+            return
+        self._save_pending = True
+        self._save_timer.start()
+
+    @Slot()
+    def flush_pending_save(self):
+        """Write any coalesced settings change to disk now (called at shutdown)."""
+        if not getattr(self, "_save_pending", False):
+            return
+        self._save_timer.stop()
+        self._save_pending = False
+        self._write_settings_to_disk(self._settings)
+
+    def _write_settings_to_disk(self, settings):
         """Save settings atomically with file locking"""
         # Validate before saving
         validated_settings = self._validate_settings(settings)
@@ -2182,15 +2222,13 @@ class SettingsManager(QObject):
 
     @Slot(str, result='QVariant')
     def get_setting(self, key, default_value=None):
-        """Get a setting value by key with optional default"""
-        settings = self.load_settings()
-        return settings.get(key, default_value)
+        """Get a setting value by key with optional default (from memory, no disk read)"""
+        return self._settings.get(key, default_value)
 
     @Slot(str, 'QVariant', result='QVariant')
     def get_setting_with_default(self, key, default_value):
-        """Get a setting value by key with a specified default value"""
-        settings = self.load_settings()
-        return settings.get(key, default_value)
+        """Get a setting value by key with a specified default value (from memory)"""
+        return self._settings.get(key, default_value)
 
     @Slot(str, 'QVariant')
     def save_setting(self, key, value):

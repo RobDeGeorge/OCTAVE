@@ -18,24 +18,24 @@ from concurrent.futures import ThreadPoolExecutor
 from backend.logging_config import get_logger
 logger = get_logger(__name__)
 
-try:
-    import spotipy
-    from spotipy.oauth2 import SpotifyOAuth
-    from spotipy.cache_handler import CacheHandler
-    SPOTIPY_AVAILABLE = True
-except ImportError:
-    SPOTIPY_AVAILABLE = False
+from backend.lazy_import import available, lazy_module
+
+# spotipy (which imports redis) and keyring together cost ~0.4 s at import on
+# the Pi and are only needed once the user connects; import them on first use.
+SPOTIPY_AVAILABLE = available("spotipy")
+if not SPOTIPY_AVAILABLE:
     logger.warning("spotipy not installed. Run: pip install spotipy")
+spotipy = lazy_module("spotipy")
 
-try:
-    import keyring
-    KEYRING_AVAILABLE = True
-except ImportError:
-    KEYRING_AVAILABLE = False
+KEYRING_AVAILABLE = available("keyring")
+if not KEYRING_AVAILABLE:
     logger.warning("keyring not installed. Token storage will be less secure.")
+keyring = lazy_module("keyring")
 
 
-_CacheHandlerBase = CacheHandler if SPOTIPY_AVAILABLE else object
+# spotipy duck-types its cache handler (get_cached_token / save_token_to_cache),
+# so no base class import is needed here.
+_CacheHandlerBase = object
 
 
 class KeyringCacheHandler(_CacheHandlerBase):
@@ -323,7 +323,7 @@ class SpotifyManager(QObject):
             # Generate secure state for CSRF protection
             self._oauth_state = secrets.token_urlsafe(32)
 
-            auth_manager = SpotifyOAuth(
+            auth_manager = spotipy.SpotifyOAuth(
                 client_id=self._client_id,
                 client_secret=self._client_secret,
                 redirect_uri=self._redirect_uri,

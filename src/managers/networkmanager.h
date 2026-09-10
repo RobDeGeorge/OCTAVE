@@ -141,6 +141,7 @@ private:
 
     // Timers
     QTimer *m_pollTimer = nullptr;
+    int m_offlineStreak = 0;          // consecutive failed connectivity probes
     QTimer *m_resultPollTimer = nullptr;
 
     // Async network

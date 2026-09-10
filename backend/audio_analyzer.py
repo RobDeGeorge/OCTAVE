@@ -10,21 +10,19 @@ import os
 from backend.logging_config import get_logger
 logger = get_logger(__name__)
 
-# Try to import numpy for FFT computation
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-    logger.warning("NumPy not available - waveform visualization will be disabled")
+from backend.lazy_import import available, lazy_module
 
-# Try to import av for audio decoding
-try:
-    import av
-    AV_AVAILABLE = True
-except ImportError:
-    AV_AVAILABLE = False
+# numpy and PyAV are only needed when a track is analysed; importing them at
+# startup cost ~0.2 s before the first frame, so they load on first use.
+NUMPY_AVAILABLE = available("numpy")
+if not NUMPY_AVAILABLE:
+    logger.warning("NumPy not available - waveform visualization will be disabled")
+np = lazy_module("numpy")
+
+AV_AVAILABLE = available("av")
+if not AV_AVAILABLE:
     logger.warning("PyAV not available - waveform visualization will be disabled")
+av = lazy_module("av")
 
 
 class AudioAnalyzer(QObject):

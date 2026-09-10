@@ -308,6 +308,7 @@ def cleanup_on_quit():
     spotify_manager.cleanup()
     android_auto_manager.cleanup()  # Full cleanup: stops DHU, ADB, and head unit server
     phone_mirror_manager.cleanup()  # Stop phone mirror if running
+    settings_manager.flush_pending_save()  # coalesced settings writes land before exit
     esp32_volume_manager.cleanup()  # Disconnect ESP32 volume controller
     berryimu_manager.cleanup()  # Stop BerryIMU sensor reading
     gesture_manager.cleanup()  # Stop gesture sensor reading

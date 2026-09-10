@@ -107,9 +107,12 @@ NetworkManager
         <section id="connectivity">
           <h2>WiFi Connectivity Detection</h2>
           <p>
-            Network status is polled every <strong>30 seconds</strong> via <code>_poll_timer</code>, with an
-            initial check 2 seconds after startup to let the UI load first. Each check runs two operations
-            on the worker thread:
+            Network status is polled every <strong>30 seconds</strong> via <code>_poll_timer</code> while online;
+            after three consecutive failed probes the interval backs off to <strong>2 minutes</strong> (a car with no
+            internet should not pay for an HTTPS timeout twice a minute) and returns to 30&nbsp;s on the first success.
+            The initial check runs 2 seconds after startup to let the UI load first; the <code>git --version</code> probe
+            behind <code>canSelfUpdate</code> runs at the same moment rather than in the constructor. Each check runs two
+            operations on the worker thread:
           </p>
 
           <h3>Network Name Detection</h3>

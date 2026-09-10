@@ -114,8 +114,14 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
     self.update_setting(<span class="str">"themeSetting"</span>, theme, self.themeSettingChanged)</code></pre>
 
         <p>
-          The <code>update_setting()</code> helper loads the current JSON, updates the key, saves atomically, and
-          optionally emits the signal:
+          The <code>update_setting()</code> helper updates the key and optionally emits the signal. Since the
+          2026-09 sweep <code>load_settings()</code> returns the in-memory copy read once at startup and
+          <code>save_settings()</code> only updates that copy and arms a 500&nbsp;ms single-shot timer; the atomic
+          disk write (below) happens when the timer fires, or immediately from <code>flush_pending_save()</code> /
+          <code>flushPendingSave()</code>, which both entry points call from <code>aboutToQuit</code>. Bursts such as
+          album colours on every track change or a slider drag therefore cost one write instead of dozens, and
+          <code>get_setting()</code> / <code>get_setting_with_default()</code> never touch the disk. Both backends behave
+          identically.
         </p>
         <pre><code><span class="kw">def</span> <span class="fn">update_setting</span>(self, key, value, signal=<span class="kw">None</span>):
     settings = self.load_settings()
@@ -259,9 +265,11 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>load_settings()</code></td><td>Reads JSON with shared file lock. If file missing, saves defaults. If corrupt, returns defaults.</td></tr>
-            <tr><td><code>save_settings(settings)</code></td><td>Validates, writes atomically via temp+rename, sets <code>chmod 600</code> on Unix.</td></tr>
-            <tr><td><code>update_setting(key, value, signal)</code></td><td>Convenience: load, update key, save, emit signal.</td></tr>
+            <tr><td><code>load_settings()</code></td><td>Returns a copy of the in-memory settings once loaded; the first call (constructor) reads the JSON with a shared file lock, saving defaults if the file is missing and returning defaults if it is corrupt.</td></tr>
+            <tr><td><code>save_settings(settings)</code></td><td>Validates into the in-memory copy and arms the 500&nbsp;ms write timer (constructor path writes immediately).</td></tr>
+            <tr><td><code>flush_pending_save()</code></td><td>Writes now if a save is pending; called at shutdown.</td></tr>
+            <tr><td><code>_write_settings_to_disk(settings)</code> / <code>writeSettingsToDisk()</code></td><td>The atomic temp+rename write with <code>chmod 600</code> on Unix.</td></tr>
+            <tr><td><code>update_setting(key, value, signal)</code></td><td>Convenience: update key, save (debounced), emit signal.</td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td>Slot. Restores all settings to <code>_default_settings</code> and emits all change signals.</td></tr>
           </tbody>
         </table>

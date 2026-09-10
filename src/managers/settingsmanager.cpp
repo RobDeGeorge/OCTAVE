@@ -343,7 +343,7 @@ SettingsManager::SettingsManager(QObject *parent)
     buildSettingsRegistry();
 
     // Load settings
-    m_settings = loadSettings();
+    m_settings = loadSettings();     // reads the file: m_settingsLoaded is still false
 
     // Migrate uiScale 0.6 -> 1.0
     if (qFuzzyCompare(m_settings.value(QStringLiteral("uiScale")).toDouble(), 0.6)) {
@@ -351,6 +351,11 @@ SettingsManager::SettingsManager(QObject *parent)
         m_settings[QStringLiteral("uiScale")] = 1.0;
         saveSettings(m_settings);
     }
+
+    m_settingsLoaded = true;
+    m_saveTimer.setSingleShot(true);
+    m_saveTimer.setInterval(500);
+    connect(&m_saveTimer, &QTimer::timeout, this, &SettingsManager::flushPendingSave);
 
     // Helper lambda: read a value from m_settings falling back to defaults
     auto s = [&](const QString &key) -> QJsonValue {
@@ -646,9 +651,21 @@ QJsonObject SettingsManager::validateSettings(const QJsonObject &settings)
 // ---------------------------------------------------------------------------
 QJsonObject SettingsManager::loadSettings()
 {
+    // After the constructor has read the file once, m_settings is the
+    // authoritative copy: every setter goes through saveSettings(), which
+    // updates it and schedules one disk write. Re-reading the file per key
+    // (as this used to) cost a parse + validate on every slider release and
+    // every track change, and always returned what we had just written.
+    if (m_settingsLoaded)
+        return m_settings;
+    return readSettingsFromDisk();
+}
+
+QJsonObject SettingsManager::readSettingsFromDisk()
+{
     QFile f(m_settingsFile);
     if (!f.exists()) {
-        saveSettings(m_defaultSettings);
+        writeSettingsToDisk(m_defaultSettings);
         return m_defaultSettings;
     }
 
@@ -674,9 +691,35 @@ QJsonObject SettingsManager::loadSettings()
 }
 
 // ---------------------------------------------------------------------------
-// saveSettings — atomic write (temp + rename) with file locking
+// saveSettings — update the in-memory copy, write to disk once things settle
 // ---------------------------------------------------------------------------
 void SettingsManager::saveSettings(const QJsonObject &settings)
+{
+    m_settings = validateSettings(settings);
+    if (!m_settingsLoaded) {
+        // Constructor path (first run, repair): write straight away.
+        writeSettingsToDisk(m_settings);
+        return;
+    }
+    // Coalesce bursts (album colours per track, several toggles in a row,
+    // a slider drag) into a single atomic write; also spares the SD card.
+    m_savePending = true;
+    m_saveTimer.start();
+}
+
+void SettingsManager::flushPendingSave()
+{
+    if (!m_savePending)
+        return;
+    m_saveTimer.stop();
+    m_savePending = false;
+    writeSettingsToDisk(m_settings);
+}
+
+// ---------------------------------------------------------------------------
+// writeSettingsToDisk — atomic write (temp + rename) with file locking
+// ---------------------------------------------------------------------------
+void SettingsManager::writeSettingsToDisk(const QJsonObject &settings)
 {
     QJsonObject validated = validateSettings(settings);
     QJsonDocument doc(validated);

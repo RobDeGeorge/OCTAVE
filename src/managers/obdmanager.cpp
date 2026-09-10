@@ -1768,6 +1768,7 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
                 auto resp = m_responseBuffer.getResponse();
                 if (resp.has_value())
                     return resp.value();
+                continue;  // productive read: the prompt is probably next, do not pace
             } else if (++emptyReads >= 50) {
                 // Readable-but-empty on every poll: an rfcomm node whose
                 // remote went away never clears this on its own. Treat it
@@ -1785,10 +1786,13 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
             if (err != QSerialPort::NoError && err != QSerialPort::TimeoutError)
                 break;  // port is gone; onSerialError reports it
         }
-        // Whatever the branch, never iterate faster than ~10 Hz: an rfcomm
-        // node with no remote returns from the wait immediately (readable,
-        // zero bytes), which turned this loop into a 100 % CPU spin for the
-        // whole command timeout, repeated by the passive scanner forever.
+        // When the wait returned without data, never iterate faster than
+        // ~10 Hz: an rfcomm node with no remote returns from the wait
+        // immediately (readable, zero bytes), which turned this loop into a
+        // 100 % CPU spin for the whole command timeout, repeated by the
+        // passive scanner forever. Reads that delivered bytes skip this (the
+        // ELM327 often sends data and the '>' prompt as separate chunks, and
+        // pacing between them cost 100 ms per PID).
         const qint64 spent = waitTimer.elapsed();
         if (spent < 100)
             QThread::msleep(static_cast<unsigned long>(100 - spent));

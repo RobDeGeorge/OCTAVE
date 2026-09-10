@@ -1,6 +1,5 @@
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QThread
-import obd
-from obd import OBDStatus
+from backend.lazy_import import lazy_module
 import time
 import os
 import re
@@ -11,6 +10,9 @@ import threading
 import glob
 
 from backend.logging_config import get_logger
+
+# python-obd drags in pint (~0.5 s on the Pi); import it when a connection is attempted.
+obd = lazy_module("obd")
 logger = get_logger(__name__)
 
 
@@ -610,7 +612,7 @@ class OBDManager(QObject):
         """Handle connection result on main thread"""
         logger.info(f"[OBD] Connection complete, status: {status}")
 
-        if status == OBDStatus.CAR_CONNECTED:
+        if status == obd.OBDStatus.CAR_CONNECTED:
             self._connection = connection
             self._connected = True
             self._connection_attempts = 0
@@ -642,7 +644,7 @@ class OBDManager(QObject):
             # Stop background scanning while connected
             self._device_scanner_timer.stop()
 
-        elif status == OBDStatus.ELM_CONNECTED:
+        elif status == obd.OBDStatus.ELM_CONNECTED:
             self._connection = connection
             self._connected = False
 
@@ -777,7 +779,7 @@ class OBDManager(QObject):
                 current_status = conn.status()
 
                 if current_status != last_status:
-                    if current_status != OBDStatus.CAR_CONNECTED and last_status == OBDStatus.CAR_CONNECTED:
+                    if current_status != obd.OBDStatus.CAR_CONNECTED and last_status == obd.OBDStatus.CAR_CONNECTED:
                         with self._lock:
                             self._connected = False
                         # Use QTimer.singleShot to emit from main thread

@@ -22,12 +22,18 @@ Q_LOGGING_CATEGORY(lcNetwork, "octave.network")
 // Constructor / Destructor
 // ---------------------------------------------------------------------------
 
+namespace {
+constexpr int kPollOnlineMs = 30000;
+constexpr int kPollOfflineMs = 120000;
+constexpr int kOfflineStreakForBackoff = 3;
+}
+
 NetworkManager::NetworkManager(QObject *parent)
     : QObject(parent)
     , m_selfUpdateStatus(QStringLiteral("idle"))
 {
-    m_canSelfUpdate = checkCanSelfUpdate();
-
+    // checkCanSelfUpdate() spawns `git --version`; do it after the UI is up
+    // (see the singleShot below) rather than on the startup path.
     m_nam = new QNetworkAccessManager(this);
 
     // Poll for intermediate progress messages from self-update steps
@@ -46,13 +52,22 @@ NetworkManager::NetworkManager(QObject *parent)
         }
     });
 
-    // Poll network status periodically (every 30 seconds)
+    // Poll network status periodically: every 30 s while online, every
+    // 2 min after a few consecutive misses (a car with no internet should
+    // not pay for a TLS timeout twice a minute forever).
     m_pollTimer = new QTimer(this);
     connect(m_pollTimer, &QTimer::timeout, this, &NetworkManager::refreshNetworkStatus);
-    m_pollTimer->start(30000);
+    m_pollTimer->start(kPollOnlineMs);
 
     // Check once on startup (slight delay to let the UI load)
-    QTimer::singleShot(2000, this, &NetworkManager::refreshNetworkStatus);
+    QTimer::singleShot(2000, this, [this]() {
+        const bool can = checkCanSelfUpdate();
+        if (can != m_canSelfUpdate) {
+            m_canSelfUpdate = can;
+            emit canSelfUpdateChanged(can);
+        }
+        refreshNetworkStatus();
+    });
 }
 
 NetworkManager::~NetworkManager()
@@ -436,6 +451,10 @@ void NetworkManager::startConnectivityCheck()
             m_isConnected = connected;
             emit isConnectedChanged(connected);
         }
+        m_offlineStreak = connected ? 0 : m_offlineStreak + 1;
+        const int wanted = (m_offlineStreak >= kOfflineStreakForBackoff) ? kPollOfflineMs : kPollOnlineMs;
+        if (m_pollTimer->interval() != wanted)
+            m_pollTimer->setInterval(wanted);
 
         // Auto-check for updates once on first successful connectivity
         if (connected && !m_autoUpdateChecked) {

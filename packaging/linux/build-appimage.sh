@@ -50,6 +50,8 @@ mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 
 cp "$BUILD_DIR/octave" "$APPDIR/usr/bin/octave"
 cp -r "$REPO_ROOT/frontend/." "$APPDIR/usr/frontend/"
+# Design sources and README screenshots are not runtime assets; keep them out of the image.
+rm -rf "$APPDIR/usr/frontend/assets/-src" "$APPDIR/usr/frontend/assets/readme"
 # Google platform-tools (adb) next to the binary, if fetched
 # (scripts/fetch_platform_tools.py), so phone mirroring needs no user install.
 if [ -d "$REPO_ROOT/tools/platform-tools/linux" ]; then
@@ -154,7 +156,7 @@ fi
 # ---- 6b. Qt Quick 3D asset importers ------------------------------------
 # linuxdeploy-plugin-qt bundles a fixed set of plugin categories (platforms,
 # imageformats, styles, ...) and does not know about "assetimporters". Without
-# it QtQuick3D's RuntimeLoader loads but cannot parse frontend/assets/cam.glb,
+# it QtQuick3D's RuntimeLoader loads but cannot parse the vehicle GLBs under frontend/assets/,
 # so the 3D vehicle view renders an empty scene and logs
 #   Failed to load asset import plugin with key: "assimp"
 # Copy the directory in ourselves; skip quietly when Quick3D isn't installed

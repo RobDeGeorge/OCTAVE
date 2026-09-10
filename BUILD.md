@@ -43,7 +43,8 @@ cmake --build build -j
 - **Qt Quick 3D** — backs the 3D vehicle-attitude view (`frontend/CarMenu.qml`). Optional at
   build time: CMake probes for it and prints `QtQuick3D NOT found` if absent, in which case the
   app still builds and the "3D View" card on the Sensors hub greys itself out at runtime.
-  Note that `RuntimeLoader` also needs Qt's **assimp asset-import plugin** to parse `cam.glb`.
+  Note that `RuntimeLoader` also needs Qt's **assimp asset-import plugin** to parse the vehicle
+  model (`frontend/assets/jeep_tj_2003.glb` and the hinge parts under `frontend/assets/jeep_tj/`).
   Official Qt (online installer / aqtinstall) bundles it with the `qtquick3d` module; distro Qt
   packages often split it out — on Arch, `qt6-quick3d` additionally needs `assimp` installed, or
   the model silently fails to load with `Failed to load asset import plugin with key: "assimp"`.

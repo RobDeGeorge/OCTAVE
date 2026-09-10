@@ -24,10 +24,10 @@ from typing import Optional
 
 from collections import deque
 
-try:
-    import numpy as np
-except Exception:  # pragma: no cover
-    np = None
+from backend.lazy_import import available, lazy_module
+
+# numpy is only touched once phone audio flows; defer the import (~0.2 s on the Pi).
+np = lazy_module("numpy") if available("numpy") else None
 
 from PySide6.QtCore import QObject, Signal, Slot, QSize, QTimer
 from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat, QAudioFormat, QAudioSink, QMediaDevices

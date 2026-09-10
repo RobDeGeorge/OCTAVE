@@ -156,10 +156,17 @@ MediaManager::MediaManager(QObject *parent)
     connect(m_player, &QMediaPlayer::mediaStatusChanged, this, &MediaManager::_handle_media_status);
     connect(m_player, &QMediaPlayer::errorOccurred, this, &MediaManager::_handle_player_error);
 
-    // Position timer (100ms updates)
+    // Position timer (100 ms) as a safety net for backends whose
+    // QMediaPlayer::positionChanged is coarse. It only runs while playing so
+    // an idle app does not wake ten times a second for nothing.
     m_positionTimer.setInterval(100);
     connect(&m_positionTimer, &QTimer::timeout, this, &MediaManager::_update_position);
-    m_positionTimer.start();
+    connect(this, &MediaManager::playStateChanged, this, [this](bool playing) {
+        if (playing)
+            m_positionTimer.start();
+        else
+            m_positionTimer.stop();
+    });
 
     // Debounce timer for saving playback state (1s after last track change)
     m_saveStateTimer.setInterval(1000);

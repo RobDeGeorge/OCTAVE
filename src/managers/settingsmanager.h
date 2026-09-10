@@ -487,6 +487,8 @@ public slots:
     Q_INVOKABLE QString get_window_state();
     Q_INVOKABLE QString get_music_button_default_page();
     Q_INVOKABLE bool get_return_to_library_after_selection();
+    // Write any coalesced settings change to disk now (called at shutdown)
+    Q_INVOKABLE void flushPendingSave();
     Q_INVOKABLE bool get_android_auto_enabled();
     Q_INVOKABLE bool get_phone_mirror_enabled();
     Q_INVOKABLE bool get_scrcpy_audio_enabled();
@@ -549,10 +551,13 @@ private:
     QJsonObject m_defaultSettings;
     QJsonObject m_settings;
 
-    // Debounce timer for saves (100ms)
+    // Debounced disk write: saveSettings() updates m_settings and arms this;
+    // flushPendingSave() (timeout, or explicit at shutdown) does the write.
     QTimer m_saveTimer;
-    QJsonObject m_pendingSave;
     bool m_savePending = false;
+    bool m_settingsLoaded = false;
+    QJsonObject readSettingsFromDisk();
+    void writeSettingsToDisk(const QJsonObject &settings);
 
     // OBD parameter debounce timer (800ms)
     QTimer m_obdParamsSaveTimer;

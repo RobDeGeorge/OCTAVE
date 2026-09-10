@@ -91,7 +91,7 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
           <li><code>errorOccurred</code> - triggers automatic playback recovery</li>
         </ul>
 
-        <p>A <code>QTimer</code> at 100ms interval supplements position updates for smooth UI slider tracking.</p>
+        <p>A <code>QTimer</code> at 100ms interval supplements position updates for smooth UI slider tracking. It runs only while playing (started and stopped from <code>playStateChanged</code>), so a paused or idle app does not wake ten times a second.</p>
 
         <!-- Library Scanning -->
         <h2 id="library-scanning">Library Scanning</h2>

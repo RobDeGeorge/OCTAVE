@@ -62,7 +62,7 @@ class NetworkManager(QObject):
         # Self-update state
         self._self_update_status = "idle"
         self._self_update_message = ""
-        self._can_self_update = self._check_can_self_update()
+        self._can_self_update = False   # probed 2 s after startup (spawns git), see below
         self._progress_lock = threading.Lock()
         self._progress_message = None
         self._updating = False  # Prevents double-tap
@@ -76,13 +76,27 @@ class NetworkManager(QObject):
         self._result_poll_timer.setInterval(250)
         self._result_poll_timer.timeout.connect(self._check_pending_result)
 
-        # Poll network status periodically
+        # Poll network status periodically: every 30 s while online, every
+        # 2 min after a few consecutive misses (a car with no internet should
+        # not pay for an HTTPS timeout twice a minute forever).
+        self._offline_streak = 0
         self._poll_timer = QTimer()
         self._poll_timer.timeout.connect(self._refresh_network_status)
-        self._poll_timer.start(30000)  # Every 30 seconds
+        self._poll_timer.start(self.POLL_ONLINE_MS)
 
         # Check once on startup (slight delay to let the UI load)
-        QTimer.singleShot(2000, self._refresh_network_status)
+        QTimer.singleShot(2000, self._startup_probe)
+
+    POLL_ONLINE_MS = 30000
+    POLL_OFFLINE_MS = 120000
+    OFFLINE_STREAK_FOR_BACKOFF = 3
+
+    def _startup_probe(self):
+        can = self._check_can_self_update()
+        if can != self._can_self_update:
+            self._can_self_update = can
+            self.canSelfUpdateChanged.emit(can)
+        self._refresh_network_status()
 
     # ==================== Properties ====================
 
@@ -179,6 +193,10 @@ class NetworkManager(QObject):
             if connected != self._is_connected:
                 self._is_connected = connected
                 self.isConnectedChanged.emit(connected)
+            self._offline_streak = 0 if connected else self._offline_streak + 1
+            wanted = self.POLL_OFFLINE_MS if self._offline_streak >= self.OFFLINE_STREAK_FOR_BACKOFF else self.POLL_ONLINE_MS
+            if self._poll_timer.interval() != wanted:
+                self._poll_timer.setInterval(wanted)
             # Auto-check for updates once on first successful connectivity
             if connected and not self._auto_update_checked:
                 self._auto_update_checked = True
