@@ -205,8 +205,8 @@
               group 0), so a power press dozes it with the phone: content stops and touch is dropped. The keeper watches the
               built-in display through a <code>DisplayListener</code> plus a 250&nbsp;ms poll of <code>isDisplayInteractive</code>
               and <code>IWindowManager.isKeyguardLocked</code>, entirely inside the device, and reacts within a frame or two:
-              a press from the locked state (phone in the cradle) wakes it with <code>KEYCODE_WAKEUP</code> and leaves the panel
-              lit for a 5&nbsp;s grace window; if the keyguard is dismissed in that window (or at any time) the phone is
+              a press from the locked state (phone in the cradle) wakes it with <code>KEYCODE_WAKEUP</code>, forces the panel on (the wake alone does not reliably relight a SurfaceControl-dark panel) and leaves it
+              lit for an 8&nbsp;s grace window; if the keyguard is dismissed in that window (or at any time), or the phone turns out to be unlocked already, or the button is pressed again inside the window (someone trying to get in), the phone is
               <em>in use</em> -- panel left alone, locks not undone, the mirror keeps working because DeX on the virtual display
               is independent of the panel -- until it is locked again or the user taps the "Phone in use" pill
               (<code>OCTAVE_TAKE_BACK</code>); a press while in use means the user is putting it down, so the panel-off goes out
