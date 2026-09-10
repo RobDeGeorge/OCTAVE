@@ -72,13 +72,21 @@ public final class DesktopConnection implements Closeable {
             if (tunnelForward) {
                 try (LocalServerSocket localServerSocket = new LocalServerSocket(socketName)) {
                     Thread watchdog = null;
+                    final boolean[] timedOut = {false};
                     if (acceptTimeoutMs > 0) {
+                        // Closing a LocalServerSocket does not reliably unblock
+                        // accept() on Android (measured: the server outlived its
+                        // window). Poke it with a connection of our own instead
+                        // and let the accept path see the flag.
                         watchdog = new Thread(() -> {
                             try {
                                 Thread.sleep(acceptTimeoutMs);
-                                localServerSocket.close();   // unblocks accept() with an IOException
+                                timedOut[0] = true;
+                                try (LocalSocket poke = new LocalSocket()) {
+                                    poke.connect(new LocalSocketAddress(socketName));
+                                }
                             } catch (InterruptedException | IOException e) {
-                                // stopped in time, or already closed
+                                // stopped in time, or the client beat us to it
                             }
                         }, "accept-timeout");
                         watchdog.setDaemon(true);
@@ -87,6 +95,9 @@ public final class DesktopConnection implements Closeable {
                     try {
                     if (video) {
                         videoSocket = localServerSocket.accept();
+                        if (timedOut[0]) {
+                            throw new IOException("No client connected within " + acceptTimeoutMs + " ms");
+                        }
                         if (sendDummyByte) {
                             // send one byte so the client may read() to detect a connection error
                             videoSocket.getOutputStream().write(0);
