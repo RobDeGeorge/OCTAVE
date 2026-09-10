@@ -98,7 +98,7 @@ BLACK_LUMA_MAX = 20
 # While the phone is asleep or a stream is being reattached, a frame that is
 # black apart from a strip of status icons is not content either: hold it if
 # fewer than this fraction of samples are bright.
-BLACK_LENIENT_FRACTION = 0.01
+BLACK_LENIENT_FRACTION = 0.05
 # How long the phone-side server keeps the virtual display (and the apps on
 # it) after the client drops, re-listening on the same socket. A USB data
 # dropout that kills the adb shell must not kill the server: it is launched

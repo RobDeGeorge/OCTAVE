@@ -71,7 +71,7 @@ constexpr int kBlackLumaMax = 20;
 // While the phone is asleep or a stream is being reattached, a frame that is
 // black apart from a strip of status icons is not content either: hold it if
 // fewer than this fraction of samples are bright.
-constexpr double kBlackLenientFraction = 0.01;
+constexpr double kBlackLenientFraction = 0.05;
 
 static bool isBlackFrame(const AVFrame *f, bool lenient)
 {
