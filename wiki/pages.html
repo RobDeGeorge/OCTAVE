@@ -215,11 +215,13 @@
         <!-- CarMenu -->
         <h2 id="carmenu">CarMenu.qml</h2>
 
-        <p><span class="file-path">frontend/CarMenu.qml</span> renders a <strong>3D vehicle model</strong> that rotates in real time based on IMU sensor data.</p>
+        <p><span class="file-path">frontend/CarMenu.qml</span> renders a <strong>rigged 3D model of the 2003 Jeep TJ</strong> that rotates in real time based on IMU sensor data, with working doors, hood, tailgate, rear glass, lights, steering and spinning wheels.</p>
 
         <h3>Key Features</h3>
         <ul>
-          <li><strong>QtQuick3D integration</strong> &mdash; Imports <code>QtQuick3D</code> and <code>QtQuick3D.AssetUtils</code> for real-time 3D rendering</li>
+          <li><strong>Rigged model</strong> &mdash; <code>JeepVehicle.qml</code> assembles the parts in <span class="file-path">frontend/assets/jeep_tj/</span> (body, doors, hood, tailgate, rear glass, wheels, steering links) through <code>JeepHinge</code>, <code>JeepLink</code> and <code>JeepLamp</code>, driven by the rig description in <code>rig.json</code> / <code>Rig.js</code> and the steering geometry in <code>JeepSteering.js</code>. The model is an original photo-referenced reconstruction built by <span class="file-path">tools/vehicle/build_jeep_tj.py</span> (Blender); see <span class="file-path">docs/vehicle/references.md</span></li>
+          <li><strong>Vehicle controls</strong> &mdash; A control row above the viewport toggles each door, the rear glass, tailgate and hood, the headlights, fog, brake and reverse lights (plus open/close all), with a steering slider and a wheel-spin speed slider. Buttons enable once the model reports <code>ready</code></li>
+          <li><strong>QtQuick3D integration</strong> &mdash; Imports <code>QtQuick3D</code> for real-time 3D rendering with a studio HDR light probe</li>
           <li><strong>Quaternion-based rotation</strong> &mdash; The 3D car model uses quaternion orientation directly from the BerryIMU, avoiding gimbal lock. The sensor frame (Z-up) is remapped to Qt3D's frame (Y-up): <code>(w,x,y,z) &rarr; (w,y,z,x)</code></li>
           <li><strong>Camera orbit</strong> &mdash; Properties <code>cameraYaw</code>, <code>cameraPitch</code>, and <code>cameraDistance</code> allow interactive camera control</li>
           <li><strong>Simulation fallback</strong> &mdash; When no IMU is connected, a timer generates sinusoidal pitch and roll values for demonstration</li>
