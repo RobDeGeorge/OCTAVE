@@ -328,6 +328,12 @@ void MediaManager::_handle_media_status(QMediaPlayer::MediaStatus status)
     if (status == QMediaPlayer::EndOfMedia) {
         qCInfo(lcMedia) << "Song ended, playing next track";
         next_track();
+    } else if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia) {
+        // The file decodes: this is what "recovered" actually means
+        if (m_recoveryAttempts)
+            qCInfo(lcMedia) << "Playback recovered for:" << m_recoveryFile;
+        m_recoveryAttempts = 0;
+        m_consecutiveBadTracks = 0;
     } else if (status == QMediaPlayer::StalledMedia) {
         qCWarning(lcMedia) << "Media stalled - attempting recovery";
         _attempt_playback_recovery();
@@ -343,11 +349,33 @@ void MediaManager::_handle_player_error(QMediaPlayer::Error error, const QString
     _attempt_playback_recovery();
 }
 
-void MediaManager::_attempt_playback_recovery()
+static constexpr int kMaxRecoveryAttempts = 2;        // per file, then skip it
+static constexpr int kMaxConsecutiveBadTracks = 10;   // then stop instead of looping the library
+
+// Re-seat the current source and resume playback. Capped per file: after
+// kMaxRecoveryAttempts the track is skipped (a tag-only stub or a truncated
+// file never becomes playable), and after kMaxConsecutiveBadTracks skips
+// playback stops.
+// Status/error driven calls are ignored while nothing is playing (a stopped
+// player keeps reporting the last failure); toggle_play passes force.
+void MediaManager::_attempt_playback_recovery(bool force)
 {
+    if (!m_isPlaying && !force)
+        return;
     const QString currentFile = get_current_file();
     if (currentFile.isEmpty()) {
         qCWarning(lcMedia) << "Recovery failed - no current file";
+        return;
+    }
+
+    if (currentFile != m_recoveryFile) {
+        m_recoveryFile = currentFile;
+        m_recoveryAttempts = 0;
+    }
+    if (++m_recoveryAttempts > kMaxRecoveryAttempts) {
+        qCCritical(lcMedia) << "Giving up on" << currentFile << "after" << kMaxRecoveryAttempts
+                            << "recovery attempts; skipping it";
+        _skip_bad_track();
         return;
     }
 
@@ -357,11 +385,16 @@ void MediaManager::_attempt_playback_recovery()
     const QString filePath = _get_file_path(currentFile);
     if (filePath.isEmpty() || !QFile::exists(filePath)) {
         qCWarning(lcMedia) << "Recovery failed - file missing:" << filePath;
+        _skip_bad_track();
         return;
     }
 
-    qCInfo(lcMedia) << "Recovering playback for:" << currentFile << "at" << position << "ms";
+    qCInfo(lcMedia) << "Recovering playback for:" << currentFile << "at" << position << "ms"
+                    << "(attempt" << m_recoveryAttempts << "/" << kMaxRecoveryAttempts << ")";
 
+    // Clear then re-set the source: Qt does not reload (or re-report an
+    // error for) a source identical to the current one.
+    m_player->setSource(QUrl());
     m_player->setSource(QUrl::fromLocalFile(filePath));
     if (position > 0)
         m_player->setPosition(position);
@@ -377,7 +410,28 @@ void MediaManager::_attempt_playback_recovery()
         m_audioOutput->setVolume(0.0f);
 
     emit playStateChanged(m_isPlaying);
-    qCInfo(lcMedia) << "Playback recovery successful";
+}
+
+// The current file is unplayable: move on, or stop if the whole playlist is
+// turning out that way.
+void MediaManager::_skip_bad_track()
+{
+    m_recoveryAttempts = 0;
+    m_recoveryFile.clear();
+    ++m_consecutiveBadTracks;
+    const int limit = qMin(kMaxConsecutiveBadTracks, qMax(1, int(m_currentPlaylist.size())));
+    if (m_consecutiveBadTracks >= limit) {
+        qCCritical(lcMedia) << m_consecutiveBadTracks << "unplayable tracks in a row; stopping playback";
+        m_consecutiveBadTracks = 0;
+        m_player->stop();
+        m_player->setSource(QUrl());   // no more status/error events for it
+        m_isPlaying = false;
+        m_isPaused = true;
+        emit playStateChanged(false);
+        return;
+    }
+    if (m_isPlaying)
+        next_track();
 }
 
 // ─── Metadata caching (TagLib) ─────────────────────────────────────
@@ -1584,7 +1638,7 @@ void MediaManager::toggle_play()
             || ms == QMediaPlayer::NoMedia
             || ms == QMediaPlayer::StalledMedia) {
             qCWarning(lcMedia) << "Player in bad state on resume:" << ms << "- recovering";
-            _attempt_playback_recovery();
+            _attempt_playback_recovery(true);
             return;
         }
 
@@ -1595,7 +1649,7 @@ void MediaManager::toggle_play()
         // Verify player started
         if (m_player->playbackState() != QMediaPlayer::PlayingState) {
             qCWarning(lcMedia) << "Player did not start - recovering";
-            _attempt_playback_recovery();
+            _attempt_playback_recovery(true);
             return;
         }
 

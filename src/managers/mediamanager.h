@@ -193,7 +193,7 @@ private:
     void _emit_metadata(const QString &filename);
     QString _get_album_id(const QString &filename);
     void _manage_cache(const QString &newAlbumId);
-    void _attempt_playback_recovery();
+    void _attempt_playback_recovery(bool force = false);
     QStringList _shuffle_playlist();
     QStringList _get_current_playlist_files();
     QString _get_file_path(const QString &filename);
@@ -251,6 +251,12 @@ private:
     bool m_isPlaying = false;
     bool m_isPaused = true;
     bool m_shuffle = false;
+    // Recovery bookkeeping: attempts on the current file, and how many
+    // tracks in a row were unplayable (a library of stubs must not loop)
+    QString m_recoveryFile;
+    int m_recoveryAttempts = 0;
+    int m_consecutiveBadTracks = 0;
+    void _skip_bad_track();
     bool m_autoPlay = false;
 
     // Playlist management

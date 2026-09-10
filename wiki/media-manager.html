@@ -136,7 +136,9 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
           serves an entry from the store when the file's size and mtime still match and only reads the file's
           tags (mutagen / TagLib) otherwise, so after the first run scrolling a list or opening the media page
           no longer opens every file. New entries are saved 2&nbsp;s after the last addition and flushed at
-          shutdown (<code>flush_metadata_store()</code>). Each entry stores:
+          shutdown (<code>flush_metadata_store()</code>). An entry whose file is gone or whose size / mtime no longer
+          match is removed on lookup, so the store stays bounded by the current library; the dirty flag is only
+          cleared once a write succeeds, so a failed write is retried on the next change or at shutdown. Each entry stores:
         </p>
         <pre><code>{
     <span class="str">"artist"</span>: <span class="str">"Artist Name"</span>,
@@ -169,6 +171,9 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
           <em>kept across runs</em>; <code>get_album_art()</code> first checks for that file
           (<code>_cached_art_url_for()</code>) and only parses the audio file's tags when it is missing. The cache
           used to be wiped at startup and quit, which made every cover a fresh tag read plus JPEG write on each boot.
+          Because the in-memory map starts empty on every launch, its LRU eviction cannot see covers from earlier
+          runs; <code>_prune_cover_dir()</code> therefore runs once at startup and deletes the least recently read
+          <code>cover_*</code> files beyond the 500 limit, so covers of removed tracks do not accumulate forever.
         </p>
 
         <h3>Album ID Generation</h3>
@@ -452,6 +457,17 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
     <span class="kw">if</span> self._is_muted:
         self._audio_output.setVolume(<span class="num">0.0</span>)</code></pre>
 
+        <p>
+          Recovery is capped. The source is cleared and re-set (Qt neither reloads nor re-reports an error for a
+          source identical to the current one, which used to leave a broken file stuck silently at 0:00 showing the
+          pause icon). After <strong>2 attempts on the same file</strong> the track is skipped
+          (<code>_skip_bad_track()</code> &rarr; <code>next_track()</code>): a tag-only stub or a truncated MP3 never
+          becomes playable. After <strong>10 unplayable tracks in a row</strong> (or the whole playlist, if shorter)
+          playback stops and the source is cleared instead of looping the library. "Recovered" is logged only when
+          the player reaches <code>LoadedMedia</code>/<code>BufferedMedia</code>, which also resets both counters.
+          Status- and error-driven recovery is ignored while nothing is playing, since a stopped player keeps
+          reporting its last failure; <code>toggle_play()</code> forces it when resuming from a bad state.
+        </p>
         <p>
           The <code>toggle_play()</code> method also checks for bad player states (InvalidMedia, NoMedia,
           StalledMedia) before resuming and triggers recovery if needed.

@@ -116,6 +116,11 @@ class MediaManager(QObject):
         self._is_playing = False
         self._is_paused = True
         self._shuffle = False
+        # Recovery bookkeeping: attempts on the current file, and how many
+        # tracks in a row were unplayable (a library of stubs must not loop)
+        self._recovery_file = ""
+        self._recovery_attempts = 0
+        self._consecutive_bad_tracks = 0
         self._auto_play = False  # Set to False to prevent auto-play
         
         # Playlist management
@@ -261,6 +266,12 @@ class MediaManager(QObject):
             if status == QMediaPlayer.MediaStatus.EndOfMedia:
                 logger.info("Song ended, playing next track")
                 self.next_track()
+            elif status in (QMediaPlayer.MediaStatus.LoadedMedia, QMediaPlayer.MediaStatus.BufferedMedia):
+                # The file decodes: this is what "recovered" actually means
+                if self._recovery_attempts:
+                    logger.info(f"Playback recovered for: {self._recovery_file}")
+                self._recovery_attempts = 0
+                self._consecutive_bad_tracks = 0
             elif status == QMediaPlayer.MediaStatus.StalledMedia:
                 logger.warning("Media stalled — attempting recovery")
                 self._attempt_playback_recovery()
@@ -276,12 +287,31 @@ class MediaManager(QObject):
         logger.error(f"Player error ({error}): {error_msg}")
         self._attempt_playback_recovery()
 
-    def _attempt_playback_recovery(self):
-        """Re-seat the current source and resume playback"""
+    MAX_RECOVERY_ATTEMPTS = 2          # per file, then skip it
+    MAX_CONSECUTIVE_BAD_TRACKS = 10    # then stop instead of looping the library
+
+    def _attempt_playback_recovery(self, force: bool = False):
+        """Re-seat the current source and resume playback. Capped per file:
+        after MAX_RECOVERY_ATTEMPTS the track is skipped (a tag-only stub or
+        a truncated file never becomes playable), and after
+        MAX_CONSECUTIVE_BAD_TRACKS skips playback stops. Status/error
+        driven calls are ignored while nothing is playing (a stopped player
+        keeps reporting the last failure); toggle_play passes force."""
         try:
+            if not self._is_playing and not force:
+                return
             current_file = self.get_current_file()
             if not current_file:
                 logger.warning("Recovery failed — no current file")
+                return
+
+            if current_file != self._recovery_file:
+                self._recovery_file = current_file
+                self._recovery_attempts = 0
+            self._recovery_attempts += 1
+            if self._recovery_attempts > self.MAX_RECOVERY_ATTEMPTS:
+                logger.error(f"Giving up on {current_file} after {self.MAX_RECOVERY_ATTEMPTS} recovery attempts; skipping it")
+                self._skip_bad_track()
                 return
 
             position = self._player.position()
@@ -290,11 +320,15 @@ class MediaManager(QObject):
             file_path = self._get_file_path(current_file)
             if not os.path.exists(file_path):
                 logger.warning(f"Recovery failed — file missing: {file_path}")
+                self._skip_bad_track()
                 return
 
-            logger.info(f"Recovering playback for: {current_file} at position {position}ms")
+            logger.info(f"Recovering playback for: {current_file} at position {position}ms "
+                        f"(attempt {self._recovery_attempts}/{self.MAX_RECOVERY_ATTEMPTS})")
 
-            # Re-set source and restore position
+            # Clear then re-set the source: Qt does not reload (or re-report an
+            # error for) a source identical to the current one.
+            self._player.setSource(QUrl())
             self._player.setSource(QUrl.fromLocalFile(file_path))
             if position > 0:
                 self._player.setPosition(position)
@@ -309,9 +343,27 @@ class MediaManager(QObject):
                 self._audio_output.setVolume(0.0)
 
             self.playStateChanged.emit(self._is_playing)
-            logger.info("Playback recovery successful")
         except Exception as e:
             logger.error(f"Playback recovery failed: {e}")
+
+    def _skip_bad_track(self):
+        """The current file is unplayable: move on, or stop if the whole
+        playlist is turning out that way."""
+        self._recovery_attempts = 0
+        self._recovery_file = ""
+        self._consecutive_bad_tracks += 1
+        limit = min(self.MAX_CONSECUTIVE_BAD_TRACKS, max(1, len(self._current_playlist)))
+        if self._consecutive_bad_tracks >= limit:
+            logger.error(f"{self._consecutive_bad_tracks} unplayable tracks in a row; stopping playback")
+            self._consecutive_bad_tracks = 0
+            self._player.stop()
+            self._player.setSource(QUrl())   # no more status/error events for it
+            self._is_playing = False
+            self._is_paused = True
+            self.playStateChanged.emit(False)
+            return
+        if self._is_playing:
+            self.next_track()
 
     def _cache_metadata(self, filename):
         """Cache metadata for a file, from the persistent tag store when it is
@@ -1332,7 +1384,7 @@ class MediaManager(QObject):
                 QMediaPlayer.MediaStatus.StalledMedia
             ):
                 logger.warning(f"Player in bad state ({media_status}) on resume — recovering")
-                self._attempt_playback_recovery()
+                self._attempt_playback_recovery(force=True)
                 return
 
             self._player.play()
@@ -1343,7 +1395,7 @@ class MediaManager(QObject):
             actual_state = self._player.playbackState()
             if actual_state != QMediaPlayer.PlaybackState.PlayingState:
                 logger.warning(f"Player did not start (state={actual_state}) — recovering")
-                self._attempt_playback_recovery()
+                self._attempt_playback_recovery(force=True)
                 return
 
             # Restore mute state after successful resume
