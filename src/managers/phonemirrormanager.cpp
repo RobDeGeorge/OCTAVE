@@ -220,11 +220,29 @@ void PhoneMirrorManager::killStaleServer()
 
 // ─── Settings ─────────────────────────────────────────────────────────
 
+void PhoneMirrorManager::setVolume(float volume)
+{
+    m_volume = volume;
+    if (m_client)
+        m_client->setVolume(volume);
+}
+
+bool PhoneMirrorManager::audioActive() const
+{
+    return m_client && m_client->audioActive();
+}
+
 void PhoneMirrorManager::setAudioEnabled(bool enabled)
 {
-    // Audio forwarding is not implemented in the built-in client yet; the
-    // setting is kept so it can be honoured later.
+    // Play the phone's audio through OCTAVE (setting scrcpyAudioEnabled).
+    // Restarts the session if one is running, like the display size.
+    if (enabled == m_audioEnabled)
+        return;
     m_audioEnabled = enabled;
+    if (isRunning()) {
+        stopScrcpy();
+        QTimer::singleShot(300, this, &PhoneMirrorManager::startScrcpy);
+    }
 }
 
 QString PhoneMirrorManager::normalizeDisplaySize(const QString &value)
@@ -338,6 +356,8 @@ void PhoneMirrorManager::startScrcpy()
         }
     }, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::frameReady, this, &PhoneMirrorManager::frameReady, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::audioStateChanged, this, &PhoneMirrorManager::audioActiveChanged, Qt::QueuedConnection);
+    m_client->setVolume(m_volume);
 
     QString displaySize = m_displaySize;
     if (!displaySize.isEmpty()) {
@@ -349,11 +369,10 @@ void PhoneMirrorManager::startScrcpy()
             m_activeDisplaySize.clear();
         }
     }
-    if (m_audioEnabled)
-        qCInfo(lcPhoneMirror) << "Audio forwarding not implemented yet, mirroring video only";
     qCInfo(lcPhoneMirror) << "Starting phone mirror (server" << serverVersion() << ") for" << serial
-                          << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize) << ")";
-    m_client->start(serial, displaySize, 60, 8000000, false, true);
+                          << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize)
+                          << ", audio" << (m_audioEnabled ? "on" : "off") << ")";
+    m_client->start(serial, displaySize, 60, 8000000, m_audioEnabled, true);
     emit isRunningChanged();
 }
 

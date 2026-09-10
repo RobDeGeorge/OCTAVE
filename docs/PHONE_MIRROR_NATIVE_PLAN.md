@@ -36,6 +36,7 @@ OCTAVE (`adb` and the scrcpy server jar).
   the v4l2 path), adb ~1 %. Exit paths clean. Fixed from this round: handshake ordering,
   scid randomness (global RNG seeded elsewhere), stale adb forwards after SIGKILL.
 - **Untested:** multi-finger gestures (the Pi has no touchscreen), cable pull, unplugged start.
+- **Audio (added after the fork):** PCM over the audio socket, played through QAudioSink at OCTAVE's volume in both backends; no ducking of local media yet.
 
 ## Phase 2 hardware results (C++ client on the Pi, Qt 6.7.3 arm64 via aqt)
 

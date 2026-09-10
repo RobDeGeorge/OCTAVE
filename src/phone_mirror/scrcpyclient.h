@@ -19,6 +19,8 @@
 #include <QString>
 #include <QVideoFrame>
 #include <QLoggingCategory>
+#include <QByteArray>
+#include <QList>
 
 #include <atomic>
 #include <mutex>
@@ -29,6 +31,8 @@ Q_DECLARE_LOGGING_CATEGORY(lcScrcpyClient)
 class QVideoSink;
 class QTcpSocket;
 class QProcess;
+class QAudioSink;
+class QIODevice;
 
 class ScrcpyClient : public QObject
 {
@@ -60,6 +64,9 @@ public:
     quint64 frameCount() const { return m_frameCount.load(); }
 
     void setVideoSink(QObject *sink);
+    // 0..1 linear, as produced by VolumeController; phone audio follows it
+    void setVolume(float linear);
+    bool audioActive() const { return m_audioActive.load(); }
 
     bool start(const QString &serial, const QString &displaySize = QString(),
                int maxFps = 60, int bitRate = 8000000, bool audio = false, bool stayAwake = true);
@@ -76,16 +83,22 @@ signals:
     void disconnected(const QString &reason);   // "" for a requested stop
     void frameSizeChanged(int width, int height);
     void frameReady();                          // a decoded frame is waiting (GUI thread pulls it)
+    void audioReady();                          // PCM chunks are queued (GUI thread writes them)
+    void audioStateChanged(bool active);        // phone audio is (not) being played through OCTAVE
     void serverLog(const QString &line);
 
 private slots:
     void deliverFrame();
+    void deliverAudio();
 
 private:
     void session(QString displaySize, int maxFps, int bitRate, bool audio, bool stayAwake);
     bool adbRun(const QStringList &args, QString *output, int timeoutMs = 15000);
     QTcpSocket *connectUntilReady(qint64 deadlineMs);
     void videoLoop(QTcpSocket *video, qint64 t0);
+    void audioLoop(QTcpSocket *audio);
+    bool ensureAudioSink();
+    void stopAudioSink();
     void pushFrame(const QVideoFrame &frame);
     void fail(const QString &reason);
     void sendControl(const QByteArray &msg);
@@ -116,6 +129,17 @@ private:
     QVideoSink *m_sink = nullptr;
     QVideoFrame m_latestFrame;
     std::mutex m_frameMutex;
+
+    // Audio: PCM s16le 48 kHz stereo from the audio socket, played through
+    // QAudioSink on the GUI thread (QAudioSink is not thread-safe).
+    std::thread m_audioThread;
+    std::atomic<bool> m_audioActive{false};
+    std::atomic<float> m_volume{1.0f};
+    QList<QByteArray> m_audioQueue;
+    qsizetype m_audioQueueBytes = 0;
+    std::mutex m_audioMutex;
+    QAudioSink *m_audioSink = nullptr;
+    QIODevice *m_audioIo = nullptr;
 };
 
 #endif // Q_OS_MOBILE

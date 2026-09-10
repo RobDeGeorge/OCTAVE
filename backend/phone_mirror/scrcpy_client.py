@@ -22,8 +22,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from collections import deque
+
 from PySide6.QtCore import QObject, Signal, Slot, QSize
-from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat
+from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat, QAudioFormat, QAudioSink, QMediaDevices
 
 from backend.logging_config import get_logger
 
@@ -56,6 +58,15 @@ MSG_SET_DISPLAY_POWER = 10
 ACTION_DOWN = 0
 ACTION_UP = 1
 ACTION_MOVE = 2
+
+# Audio stream (phone_server/.../audio/AudioConfig.java, device/Streamer.java)
+AUDIO_SAMPLE_RATE = 48000
+AUDIO_CHANNELS = 2
+AUDIO_BYTES_PER_FRAME = AUDIO_CHANNELS * 2          # s16le
+AUDIO_CODEC_RAW = 0x00726177                       # "raw"
+AUDIO_STREAM_DISABLED = 0                          # device could not capture; video continues
+AUDIO_STREAM_ERROR = 1                             # configuration error; session must stop
+AUDIO_QUEUE_MAX_BYTES = AUDIO_SAMPLE_RATE * AUDIO_BYTES_PER_FRAME // 4   # ~250 ms of backlog before dropping
 
 # Frame header flags (app/src/demuxer.c)
 FLAG_CONFIG = 1 << 63
@@ -112,6 +123,8 @@ class ScrcpyClient(QObject):
     disconnected = Signal(str)          # reason; "" for a requested stop
     frameSizeChanged = Signal(int, int)
     frameReady = Signal()               # a new decoded frame is waiting (GUI thread pulls it)
+    audioReady = Signal()               # PCM chunks are queued (GUI thread writes them to the sink)
+    audioStateChanged = Signal(bool)    # phone audio is (not) being played through OCTAVE
     serverLog = Signal(str)
 
     def __init__(self, adb_path: str, server_jar: str, parent=None):
@@ -136,6 +149,16 @@ class ScrcpyClient(QObject):
         self._send_lock = threading.Lock()
         self._frame_count = 0
         self.frameReady.connect(self._deliver_frame)
+        # Audio: PCM from the audio socket, played through QAudioSink on the
+        # GUI thread (QAudioSink is not thread-safe). Volume follows OCTAVE.
+        self._audio_queue: deque = deque()
+        self._audio_queue_bytes = 0
+        self._audio_lock = threading.Lock()
+        self._audio_sink: Optional[QAudioSink] = None
+        self._audio_io = None
+        self._audio_active = False
+        self._volume = 1.0
+        self.audioReady.connect(self._deliver_audio)
 
     # ── public API ────────────────────────────────────────────────────
 
@@ -150,6 +173,16 @@ class ScrcpyClient(QObject):
     @property
     def frame_count(self) -> int:
         return self._frame_count
+
+    @property
+    def audio_active(self) -> bool:
+        return self._audio_active
+
+    def set_volume(self, linear: float):
+        """0..1 linear, as produced by VolumeController."""
+        self._volume = max(0.0, min(1.0, float(linear)))
+        if self._audio_sink is not None:
+            self._audio_sink.setVolume(self._volume)
 
     def set_video_sink(self, sink):
         """QVideoSink (from QML VideoOutput.videoSink) that receives frames."""
@@ -200,6 +233,7 @@ class ScrcpyClient(QObject):
             self._port = 0
         if self._thread and self._thread.is_alive() and threading.current_thread() is not self._thread:
             self._thread.join(timeout=3)
+        self._stop_audio_sink()
 
     def inject_touch(self, pointer_id: int, action: int, x: int, y: int, pressure: float = 1.0):
         """Touch on the mirrored display, x/y in frame pixels."""
@@ -313,6 +347,7 @@ class ScrcpyClient(QObject):
             f"scid={self._scid}", "tunnel_forward=true", "video=true",
             f"audio={'true' if audio else 'false'}", "control=true",
             "video_codec=h264", "max_size=0", f"video_bit_rate={bit_rate}",
+            "audio_codec=raw",   # PCM s16le 48 kHz stereo: no decoder needed on our side
             f"max_fps={max_fps}", f"stay_awake={'true' if stay_awake else 'false'}",
             "cleanup=true", "send_device_meta=true", "send_frame_meta=true",
             "send_codec_meta=true", "send_dummy_byte=true", "log_level=info",
@@ -426,14 +461,97 @@ class ScrcpyClient(QObject):
                        else f"scrcpy server exited (code {code})")
 
     def _drain_audio(self, audio_sock: socket.socket):
-        # Audio playback is not implemented yet; the socket must still be
-        # connected and drained or the server never finishes its handshake.
+        """Audio socket: 4-byte codec id, then [u64 pts][u32 size][PCM] packets."""
         try:
+            (codec_id,) = struct.unpack(">I", _recv_exact(audio_sock, 4))
+            if codec_id == AUDIO_STREAM_DISABLED:
+                logger.warning("scrcpy client: phone cannot capture audio (Android 11+ required or "
+                               "capture refused); mirroring video only")
+                return
+            if codec_id == AUDIO_STREAM_ERROR:
+                logger.warning("scrcpy client: server reported an audio configuration error; video only")
+                return
+            if codec_id != AUDIO_CODEC_RAW:
+                logger.warning(f"scrcpy client: unexpected audio codec 0x{codec_id:08x}; video only")
+                return
+            logger.info("scrcpy client: audio stream is PCM 48 kHz stereo, playing through OCTAVE")
+            self._audio_active = True
+            self.audioStateChanged.emit(True)
             while not self._stopping:
-                if not audio_sock.recv(65536):
-                    break
-        except OSError:
-            pass
+                header = _recv_exact(audio_sock, 12)
+                _pts, size = struct.unpack(">QI", header)
+                data = _recv_exact(audio_sock, size)
+                with self._audio_lock:
+                    self._audio_queue.append(data)
+                    self._audio_queue_bytes += len(data)
+                    # Bound latency: if the GUI thread fell behind, drop the oldest
+                    while self._audio_queue_bytes > AUDIO_QUEUE_MAX_BYTES and len(self._audio_queue) > 1:
+                        self._audio_queue_bytes -= len(self._audio_queue.popleft())
+                self.audioReady.emit()
+        except (ConnectionError, OSError, struct.error) as e:
+            if not self._stopping:
+                logger.info(f"scrcpy client: audio stream ended: {e}")
+        finally:
+            if self._audio_active:
+                self._audio_active = False
+                self.audioStateChanged.emit(False)
+
+    def _ensure_audio_sink(self) -> bool:
+        if self._audio_sink is not None:
+            return self._audio_io is not None
+        fmt = QAudioFormat()
+        fmt.setSampleRate(AUDIO_SAMPLE_RATE)
+        fmt.setChannelCount(AUDIO_CHANNELS)
+        fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+        device = QMediaDevices.defaultAudioOutput()
+        if device.isNull():
+            logger.warning("scrcpy client: no audio output device; phone audio will not play")
+            return False
+        if not device.isFormatSupported(fmt):
+            logger.warning("scrcpy client: default audio output does not accept 48 kHz stereo s16; phone audio will not play")
+            return False
+        sink = QAudioSink(device, fmt)
+        sink.setBufferSize(AUDIO_SAMPLE_RATE * AUDIO_BYTES_PER_FRAME // 5)  # ~200 ms device buffer
+        sink.setVolume(self._volume)
+        io = sink.start()
+        if io is None:
+            logger.warning(f"scrcpy client: could not start audio output ({sink.error()})")
+            return False
+        self._audio_sink, self._audio_io = sink, io
+        return True
+
+    def _stop_audio_sink(self):
+        sink, self._audio_sink, self._audio_io = self._audio_sink, None, None
+        if sink is not None:
+            try:
+                sink.stop()
+            except RuntimeError:
+                pass
+        with self._audio_lock:
+            self._audio_queue.clear()
+            self._audio_queue_bytes = 0
+
+    @Slot()
+    def _deliver_audio(self):
+        # GUI thread. Write whatever is queued; never block on a full device
+        # buffer — dropping keeps the audio close to the picture.
+        if self._stopping or not self._ensure_audio_sink():
+            with self._audio_lock:
+                self._audio_queue.clear()
+                self._audio_queue_bytes = 0
+            return
+        while True:
+            with self._audio_lock:
+                if not self._audio_queue:
+                    return
+                chunk = self._audio_queue[0]
+            free = self._audio_sink.bytesFree()
+            if free < len(chunk):
+                return  # try again on the next audioReady
+            self._audio_io.write(chunk)
+            with self._audio_lock:
+                self._audio_queue.popleft()
+                self._audio_queue_bytes -= len(chunk)
 
     def _drain_device_messages(self, control: socket.socket):
         # Clipboard notifications etc. — read and discard for now.

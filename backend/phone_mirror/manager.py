@@ -111,6 +111,7 @@ class PhoneMirrorManager(QObject):
     frameSizeChanged = Signal(int, int)  # decoded frame size
     frameReady = Signal()                # a frame reached the video sink
     videoSinkChanged = Signal()
+    audioActiveChanged = Signal(bool)   # phone audio playing through OCTAVE (or not)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -246,17 +247,29 @@ class PhoneMirrorManager(QObject):
 
     @Slot(float)
     def setVolume(self, volume: float):
-        """Called by VolumeController.applyVolume() on every volume change.
-        Audio forwarding is not implemented in the built-in client yet, so
-        this is a deliberate no-op — but it must exist: removing it once
-        broke app startup (VolumeController calls it unconditionally)."""
+        """Called by VolumeController.applyVolume() on every volume change
+        (0..1 linear). Phone audio played through OCTAVE follows it. Must
+        exist even when audio is off: VolumeController calls it unconditionally."""
         self._volume = volume
+        if self._client is not None:
+            self._client.set_volume(volume)
 
     @Slot(bool)
     def setAudioEnabled(self, enabled: bool):
-        # Audio forwarding is not implemented in the built-in client yet; the
-        # setting is kept so it can be honoured later.
-        self._audio_enabled = bool(enabled)
+        """Play the phone's audio through OCTAVE (setting scrcpyAudioEnabled).
+        Restarts the session if one is running, like the display size."""
+        enabled = bool(enabled)
+        if enabled == self._audio_enabled:
+            return
+        self._audio_enabled = enabled
+        if self.isRunning:
+            self.stopScrcpy()
+            QTimer.singleShot(300, self.startScrcpy)
+
+    @Property(bool, notify=audioActiveChanged)
+    def audioActive(self) -> bool:
+        """Phone audio is currently being played through OCTAVE."""
+        return self._client is not None and self._client.audio_active
 
     @Property(str, notify=displaySizeChanged)
     def displaySize(self) -> str:
@@ -368,6 +381,8 @@ class PhoneMirrorManager(QObject):
         client.disconnected.connect(self._on_disconnected)
         client.frameSizeChanged.connect(self._on_frame_size)
         client.frameReady.connect(self.frameReady)
+        client.audioStateChanged.connect(self.audioActiveChanged)
+        client.set_volume(self._volume)
         self._client = client
 
         display_size = self._display_size
@@ -377,11 +392,9 @@ class PhoneMirrorManager(QObject):
                 logger.warning(f"Device SDK {sdk} < {NEW_DISPLAY_MIN_SDK}: virtual display unavailable, mirroring phone screen")
                 display_size = ""
                 self._active_display_size = ""
-        if self._audio_enabled:
-            logger.info("Audio forwarding not implemented yet, mirroring video only")
         logger.info(f"Starting phone mirror (server {SERVER_VERSION}) for {serial} "
-                    f"(display {display_size or 'phone screen'})")
-        client.start(serial, display_size=display_size, audio=False)
+                    f"(display {display_size or 'phone screen'}, audio {'on' if self._audio_enabled else 'off'})")
+        client.start(serial, display_size=display_size, audio=self._audio_enabled)
         self.isRunningChanged.emit()
 
     def _on_connected(self, w: int, h: int):

@@ -15,6 +15,10 @@
 #include <QThread>
 #include <QVideoFrameFormat>
 #include <QVideoSink>
+#include <QAudioFormat>
+#include <QAudioSink>
+#include <QAudioDevice>
+#include <QMediaDevices>
 #include <QtEndian>
 
 #ifdef Q_OS_WIN
@@ -50,6 +54,15 @@ constexpr quint8 kMsgSetDisplayPower = 10;
 
 // Frame header flags (app/src/demuxer.c)
 constexpr quint64 kFlagConfig = quint64(1) << 63;
+
+// Audio stream (phone_server/.../audio/AudioConfig.java, device/Streamer.java)
+constexpr int kAudioSampleRate = 48000;
+constexpr int kAudioChannels = 2;
+constexpr int kAudioBytesPerFrame = kAudioChannels * 2;   // s16le
+constexpr quint32 kAudioCodecRaw = 0x00726177;            // "raw"
+constexpr quint32 kAudioStreamDisabled = 0;               // device could not capture; video continues
+constexpr quint32 kAudioStreamError = 1;                  // configuration error
+constexpr qsizetype kAudioQueueMaxBytes = kAudioSampleRate * kAudioBytesPerFrame / 4;  // ~250 ms backlog
 
 constexpr const char *kDeviceJarPath = "/data/local/tmp/octave-phone-server.jar";
 constexpr const char *kJarResource = ":/phone-server/octave-phone-server";
@@ -124,6 +137,14 @@ ScrcpyClient::ScrcpyClient(const QString &adbPath, const QString &serverJar, QOb
     : QObject(parent), m_adb(adbPath), m_jar(serverJar)
 {
     connect(this, &ScrcpyClient::frameReady, this, &ScrcpyClient::deliverFrame, Qt::QueuedConnection);
+    connect(this, &ScrcpyClient::audioReady, this, &ScrcpyClient::deliverAudio, Qt::QueuedConnection);
+}
+
+void ScrcpyClient::setVolume(float linear)
+{
+    m_volume = qBound(0.0f, linear, 1.0f);
+    if (m_audioSink)
+        m_audioSink->setVolume(m_volume.load());
 }
 
 ScrcpyClient::~ScrcpyClient()
@@ -180,6 +201,13 @@ void ScrcpyClient::stop()
         else
             m_thread.join();
     }
+    if (m_audioThread.joinable()) {
+        if (std::this_thread::get_id() == m_audioThread.get_id())
+            m_audioThread.detach();
+        else
+            m_audioThread.join();
+    }
+    stopAudioSink();
     // The worker removes its forward on the way out; if it could not (or was
     // never reached), do it here so a clean exit never strands a port.
     if (m_port) {
@@ -354,6 +382,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
          << QStringLiteral("video=true")
          << QStringLiteral("audio=%1").arg(audio ? QStringLiteral("true") : QStringLiteral("false"))
          << QStringLiteral("control=true") << QStringLiteral("video_codec=h264")
+         << QStringLiteral("audio_codec=raw")   // PCM s16le 48 kHz stereo: no decoder needed on our side
          << QStringLiteral("max_size=0") << QStringLiteral("video_bit_rate=%1").arg(bitRate)
          << QStringLiteral("max_fps=%1").arg(maxFps)
          << QStringLiteral("stay_awake=%1").arg(stayAwake ? QStringLiteral("true") : QStringLiteral("false"))
@@ -413,9 +442,23 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     }
     m_video = video;
     if (audio) {
-        m_audio = new QTcpSocket;
-        m_audio->connectToHost(QHostAddress::LocalHost, quint16(m_port));
-        m_audio->waitForConnected(5000);
+        // The audio socket must be connected before the server sends any
+        // meta; it is read on its own thread so video never waits on it.
+        auto *audioSock = new QTcpSocket;
+        audioSock->connectToHost(QHostAddress::LocalHost, quint16(m_port));
+        if (audioSock->waitForConnected(5000)) {
+            m_audio = audioSock;
+            audioSock->moveToThread(nullptr);
+            m_audioThread = std::thread([this, audioSock]() {
+#ifdef Q_OS_LINUX
+                pthread_setname_np(pthread_self(), "scrcpy-audio");
+#endif
+                audioLoop(audioSock);
+            });
+        } else {
+            qCWarning(lcScrcpyClient) << "audio socket did not connect; mirroring video only";
+            delete audioSock;
+        }
     }
     m_control = new QTcpSocket;
     m_control->connectToHost(QHostAddress::LocalHost, quint16(m_port));
@@ -450,8 +493,19 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     // teardown (worker owns everything)
     qCInfo(lcScrcpyClient) << "session ending (stopping =" << m_stopping.load() << ")";
     m_controlFd = -1;
-    for (QTcpSocket **s : {&m_video, &m_audio, &m_control}) {
+    for (QTcpSocket **s : {&m_video, &m_control}) {
         if (*s) { (*s)->abort(); delete *s; *s = nullptr; }
+    }
+    if (m_audio) {
+        // Owned by the audio thread: just unblock it; it closes the socket itself
+        const qintptr afd = m_audio->socketDescriptor();
+        if (afd >= 0) {
+#ifdef Q_OS_WIN
+            ::shutdown(static_cast<SOCKET>(afd), SD_BOTH);
+#else
+            ::shutdown(static_cast<int>(afd), SHUT_RDWR);
+#endif
+        }
     }
     pumpServerLog();
     if (m_proc) {
@@ -550,6 +604,124 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
 #else
     Q_UNUSED(video) Q_UNUSED(t0)
 #endif
+}
+
+// ─── audio ────────────────────────────────────────────────────────────
+
+void ScrcpyClient::audioLoop(QTcpSocket *audio)
+{
+    // 4-byte codec id, then [u64 pts][u32 size][PCM] packets.
+    char meta[4] = {0};
+    bool announced = false;
+    if (recvExact(audio, meta, 4, m_stopping)) {
+        const quint32 codecId = qFromBigEndian<quint32>(meta);
+        if (codecId == kAudioStreamDisabled) {
+            qCWarning(lcScrcpyClient) << "phone cannot capture audio (Android 11+ required or capture refused); video only";
+        } else if (codecId == kAudioStreamError) {
+            qCWarning(lcScrcpyClient) << "server reported an audio configuration error; video only";
+        } else if (codecId != kAudioCodecRaw) {
+            qCWarning(lcScrcpyClient) << "unexpected audio codec" << Qt::hex << codecId << "; video only";
+        } else {
+            qCInfo(lcScrcpyClient) << "audio stream is PCM 48 kHz stereo, playing through OCTAVE";
+            m_audioActive = true;
+            announced = true;
+            emit audioStateChanged(true);
+            QByteArray data;
+            while (!m_stopping.load()) {
+                char header[12];
+                if (!recvExact(audio, header, 12, m_stopping))
+                    break;
+                const quint32 size = qFromBigEndian<quint32>(header + 8);
+                data.resize(int(size));
+                if (!recvExact(audio, data.data(), size, m_stopping))
+                    break;
+                {
+                    std::lock_guard<std::mutex> lock(m_audioMutex);
+                    m_audioQueue.append(data);
+                    m_audioQueueBytes += data.size();
+                    // Bound latency: if the GUI thread fell behind, drop the oldest
+                    while (m_audioQueueBytes > kAudioQueueMaxBytes && m_audioQueue.size() > 1)
+                        m_audioQueueBytes -= m_audioQueue.takeFirst().size();
+                }
+                emit audioReady();
+            }
+        }
+    }
+    audio->abort();
+    delete audio;
+    m_audio = nullptr;
+    if (announced) {
+        m_audioActive = false;
+        emit audioStateChanged(false);
+    }
+}
+
+bool ScrcpyClient::ensureAudioSink()
+{
+    if (m_audioSink)
+        return m_audioIo != nullptr;
+    QAudioFormat fmt;
+    fmt.setSampleRate(kAudioSampleRate);
+    fmt.setChannelCount(kAudioChannels);
+    fmt.setSampleFormat(QAudioFormat::Int16);
+    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    if (device.isNull()) {
+        qCWarning(lcScrcpyClient) << "no audio output device; phone audio will not play";
+        return false;
+    }
+    if (!device.isFormatSupported(fmt)) {
+        qCWarning(lcScrcpyClient) << "default audio output does not accept 48 kHz stereo s16; phone audio will not play";
+        return false;
+    }
+    m_audioSink = new QAudioSink(device, fmt, this);
+    m_audioSink->setBufferSize(kAudioSampleRate * kAudioBytesPerFrame / 5);  // ~200 ms device buffer
+    m_audioSink->setVolume(m_volume.load());
+    m_audioIo = m_audioSink->start();
+    if (!m_audioIo) {
+        qCWarning(lcScrcpyClient) << "could not start audio output:" << m_audioSink->error();
+        return false;
+    }
+    return true;
+}
+
+void ScrcpyClient::stopAudioSink()
+{
+    if (m_audioSink) {
+        m_audioSink->stop();
+        m_audioSink->deleteLater();
+        m_audioSink = nullptr;
+        m_audioIo = nullptr;
+    }
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    m_audioQueue.clear();
+    m_audioQueueBytes = 0;
+}
+
+void ScrcpyClient::deliverAudio()
+{
+    // GUI thread. Write whatever is queued; never block on a full device
+    // buffer — dropping keeps the audio close to the picture.
+    if (m_stopping.load() || !ensureAudioSink()) {
+        std::lock_guard<std::mutex> lock(m_audioMutex);
+        m_audioQueue.clear();
+        m_audioQueueBytes = 0;
+        return;
+    }
+    for (;;) {
+        QByteArray chunk;
+        {
+            std::lock_guard<std::mutex> lock(m_audioMutex);
+            if (m_audioQueue.isEmpty())
+                return;
+            chunk = m_audioQueue.first();
+        }
+        if (m_audioSink->bytesFree() < chunk.size())
+            return;  // try again on the next audioReady
+        m_audioIo->write(chunk);
+        std::lock_guard<std::mutex> lock(m_audioMutex);
+        m_audioQueue.removeFirst();
+        m_audioQueueBytes -= chunk.size();
+    }
 }
 
 // ─── frame delivery ──────────────────────────────────────────────────

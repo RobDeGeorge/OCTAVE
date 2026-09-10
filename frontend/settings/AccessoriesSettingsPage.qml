@@ -1621,7 +1621,7 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "Not supported by the built-in mirror client yet; the setting is kept for a future release."
+                        text: "Play the phone's audio through OCTAVE's speakers while mirroring (Android 11+). It follows OCTAVE's volume and mute. Applies to the next session."
                     }
 
                     SettingsToggle {
@@ -1647,7 +1647,7 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "Will apply once audio forwarding is implemented (Android 11+)"
+                        text: "Music, navigation prompts and calls from the phone"
                     }
                 }
 

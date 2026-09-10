@@ -37,6 +37,8 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(QObject* videoSink READ videoSink WRITE setVideoSink NOTIFY videoSinkChanged)
     Q_PROPERTY(int frameWidth READ frameWidth NOTIFY frameSizeChanged)
     Q_PROPERTY(int frameHeight READ frameHeight NOTIFY frameSizeChanged)
+    // Phone audio is currently being played through OCTAVE
+    Q_PROPERTY(bool audioActive READ audioActive NOTIFY audioActiveChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -52,6 +54,7 @@ public:
     void setVideoSink(QObject *sink);
     int frameWidth() const { return m_frameWidth; }
     int frameHeight() const { return m_frameHeight; }
+    bool audioActive() const;
 
     // Validate "WxH": dimensions snapped down to multiples of 8 (scrcpy does the
     // same to a --new-display size), "" for invalid input.
@@ -70,11 +73,12 @@ signals:
     void frameSizeChanged(int width, int height);
     void frameReady();
     void videoSinkChanged();
+    void audioActiveChanged(bool active);
 
 public slots:
-    // Called by VolumeController on every volume change; audio forwarding is
-    // not implemented in the built-in client yet, so this only records it.
-    void setVolume(float volume) { m_volume = volume; }
+    // Called by VolumeController on every volume change (0..1 linear);
+    // phone audio played through OCTAVE follows it.
+    void setVolume(float volume);
     void setAudioEnabled(bool enabled);
     void setDisplaySize(const QString &size);
     bool environmentOk();
@@ -137,8 +141,10 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(QObject* videoSink READ videoSink WRITE setVideoSink CONSTANT)
     Q_PROPERTY(int frameWidth READ frameWidth CONSTANT)
     Q_PROPERTY(int frameHeight READ frameHeight CONSTANT)
+    Q_PROPERTY(bool audioActive READ audioActive CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
+    bool audioActive() const { return false; }
     void cleanup() {}
     QString adbPath() const { return {}; }
     bool nativeAvailable() const { return false; }
@@ -177,6 +183,7 @@ signals:
     void frameSizeChanged(int, int);
     void frameReady();
     void videoSinkChanged();
+    void audioActiveChanged(bool);
 };
 
 #endif // Q_OS_MOBILE

@@ -137,6 +137,7 @@
               <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td>Size actually in use, <code>""</code> when mirroring the phone screen</td></tr>
               <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>QML assigns <code>VideoOutput.videoSink</code>; decoded frames go straight to it</td></tr>
               <tr><td><code>frameWidth</code>, <code>frameHeight</code></td><td><code>int</code></td><td>Decoded frame size</td></tr>
+              <tr><td><code>audioActive</code></td><td><code>bool</code></td><td>Phone audio is being played through OCTAVE (setting <code>scrcpyAudioEnabled</code>; the server reports codec id 0 when the phone cannot capture, e.g. Android &lt; 11, and video continues alone)</td></tr>
             </tbody>
           </table>
           <h4>Signals</h4>
@@ -160,7 +161,7 @@
               <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>various</td><td>adb probes</td></tr>
               <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Same as <code>nativeAvailable</code>; the view shows setup text only when false</td></tr>
               <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing, or the USB-debugging steps</td></tr>
-              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code></td><td>--</td><td>Settings; a size change restarts the session. Audio forwarding is not implemented yet</td></tr>
+              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code>, <code>setVolume(float)</code></td><td>--</td><td>Settings; a size or audio change restarts the session. <code>setVolume</code> is called by <code>VolumeController</code> on every volume change and phone audio follows it</td></tr>
               <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>--</td><td>Touch on the mirrored display: action 0 down / 1 up / 2 move, coordinates 0..1 of the frame</td></tr>
               <tr><td><code>injectKey(keycode)</code>, <code>pressBack()</code>, <code>pressHome()</code>, <code>pressAppSwitch()</code></td><td>--</td><td>Android key events</td></tr>
             </tbody>
@@ -176,6 +177,12 @@
             <li><strong>Connect</strong>: the tunnel accepts before the server listens, so connect until the dummy byte arrives (video socket), then open the control socket. <em>The server sends device/codec meta only once every socket is connected</em> -- reading before opening control deadlocks.</li>
             <li><strong>Meta</strong>: 64-byte device name, then codec id (u32) + width + height (u32 each, big-endian).</li>
             <li><strong>Frames</strong>: <code>[u64 pts|flags][u32 size][data]</code>; bit 63 = config packet (SPS/PPS, prepended to the next packet), bit 62 = key frame. Decoded YUV420P planes are copied into a <code>QVideoFrame</code> and handed to the sink on the GUI thread, coalescing if it falls behind.</li>
+            <li><strong>Audio</strong> (setting <code>scrcpyAudioEnabled</code>): a third socket, connected between video and
+              control, carries a 4-byte codec id (<code>"raw"</code> = PCM s16le 48&nbsp;kHz stereo, requested with
+              <code>audio_codec=raw</code> so no decoder is needed; <code>0</code> = the phone could not capture, video continues)
+              followed by the same <code>[pts][size][data]</code> packets. Chunks are queued (bounded to ~250&nbsp;ms, oldest dropped)
+              and written to a <code>QAudioSink</code> on the GUI thread with a ~200&nbsp;ms device buffer; the sink volume is
+              OCTAVE's linear volume, so the knob and mute apply. Expect lip-sync to trail the picture slightly.</li>
             <li><strong>Control</strong>: 32-byte <code>INJECT_TOUCH_EVENT</code> (type 2) with pointer id, x/y in frame pixels, screen size, pressure; 14-byte <code>INJECT_KEYCODE</code> (type 0). Coordinates are relative to the mirrored display, so a virtual display needs no display-id routing.</li>
             <li><strong>Teardown</strong>: close sockets, terminate the child, remove the forward. The server destroys the virtual display itself (<code>cleanup=true</code>). The Python entry point routes SIGTERM/SIGINT through <code>app.quit()</code> and the C++ one installs a self-pipe signal handler, so launcher scripts get a clean exit too.</li>
           </ol>
