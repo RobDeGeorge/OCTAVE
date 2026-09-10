@@ -138,6 +138,7 @@ private:
     std::atomic<bool> m_holdBlack{false};
     std::atomic<bool> m_attached{false};   // this session reattached to a running server
     qint64 m_blackSince = -1;   // decode thread only
+    qint64 m_tFirst = 0;        // ms when the session's decode started
     std::atomic<bool> m_running{false};
     std::atomic<int> m_width{0};
     std::atomic<int> m_height{0};

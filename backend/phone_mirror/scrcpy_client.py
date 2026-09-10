@@ -95,6 +95,10 @@ AUDIO_HOLD_MS = 1500
 # the phone is asleep; a black run that outlives it is real content.
 BLACK_HOLD_S = 3.0
 BLACK_LUMA_MAX = 20
+# While the phone is asleep or a stream is being reattached, a frame that is
+# black apart from a strip of status icons is not content either: hold it if
+# fewer than this fraction of samples are bright.
+BLACK_LENIENT_FRACTION = 0.01
 # How long the phone-side server keeps the virtual display (and the apps on
 # it) after the client drops, re-listening on the same socket. A USB data
 # dropout that kills the adb shell must not kill the server: it is launched
@@ -185,6 +189,7 @@ class ScrcpyClient(QObject):
         self._latest_frame: Optional[QVideoFrame] = None
         self._hold_black = False           # manager: the phone is asleep, keep holding black frames
         self._black_since: Optional[float] = None
+        self._t_first: float = 0.0        # monotonic time the session's decode started
         self._frame_lock = threading.Lock()
         self._send_lock = threading.Lock()
         self._frame_count = 0
@@ -336,7 +341,7 @@ class ScrcpyClient(QObject):
         self._hold_black = bool(hold)
 
     @staticmethod
-    def _is_black(frame) -> bool:
+    def _is_black(frame, lenient: bool = False) -> bool:
         plane = frame.planes[0]
         buf = memoryview(plane).cast("B")
         stride, w, h = plane.line_size, frame.width, frame.height
@@ -344,9 +349,12 @@ class ScrcpyClient(QObject):
             return False
         # Max luma over every other pixel in both directions. Point samples on
         # a grid miss thin bright UI (a 2 px icon stroke, a subtitle edge) and
-        # would hold a dark app's frame as if the phone were dozing.
+        # would hold a dark app's frame as if the phone were dozing. Lenient:
+        # a black frame with only a strip of status icons still counts.
         if np is not None:
             y = np.frombuffer(buf, dtype=np.uint8, count=stride * h).reshape(h, stride)[::2, :w:2]
+            if lenient:
+                return float((y > BLACK_LUMA_MAX).mean()) < BLACK_LENIENT_FRACTION
             return int(y.max()) <= BLACK_LUMA_MAX
         # No numpy: 24x24 point grid, the best pure Python can afford per frame.
         for r in range(24):
@@ -515,6 +523,7 @@ class ScrcpyClient(QObject):
 
     def _finish_session(self, video: socket.socket, audio: bool, t0: float):
         self._video = video
+        self._t_first = time.monotonic()
         try:
             if audio:
                 audio_sock = socket.create_connection(("127.0.0.1", self._port), timeout=5)
@@ -789,7 +798,11 @@ class ScrcpyClient(QObject):
         # Also on the first frames of a reattached stream: the display's first
         # composite after setSurface can be black + status bar, and the sink
         # still holds the last good frame of the previous session.
-        if (self._frame_count > 0 or self._attach_scid) and self._is_black(frame):
+        # Lenient while asleep or in the first seconds of a reattached stream:
+        # the display's first composite after setSurface is black plus the
+        # status/task bar, and neither is content.
+        lenient = self._hold_black or (bool(self._attach_scid) and time.monotonic() - self._t_first < BLACK_HOLD_S)
+        if (self._frame_count > 0 or self._attach_scid) and self._is_black(frame, lenient):
             now = time.monotonic()
             if self._black_since is None:
                 self._black_since = now

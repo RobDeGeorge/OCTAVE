@@ -68,20 +68,28 @@ constexpr quint8 kDevMsgOctavePhoneState = 100;
 // the phone is asleep; a black run that outlives it is real content.
 constexpr qint64 kBlackHoldMs = 3000;
 constexpr int kBlackLumaMax = 20;
+// While the phone is asleep or a stream is being reattached, a frame that is
+// black apart from a strip of status icons is not content either: hold it if
+// fewer than this fraction of samples are bright.
+constexpr double kBlackLenientFraction = 0.01;
 
-static bool isBlackFrame(const AVFrame *f)
+static bool isBlackFrame(const AVFrame *f, bool lenient)
 {
     const int w = f->width, h = f->height, stride = f->linesize[0];
     // Max luma over every other pixel in both directions, early exit on the
     // first bright one. Point samples on a grid miss thin bright UI (a 2 px
     // icon stroke, a subtitle edge) and would hold a dark app's frame as if
     // the phone were dozing. ~256k byte reads on 1280x800: well under 1 ms.
+    // Lenient: a black frame with only a strip of status icons still counts.
     if (w < 24 || h < 24)
         return false;
+    const qint64 samples = qint64((h + 1) / 2) * ((w + 1) / 2);
+    const qint64 allowed = lenient ? qint64(samples * kBlackLenientFraction) : 0;
+    qint64 bright = 0;
     for (int r = 0; r < h; r += 2) {
         const uint8_t *row = f->data[0] + qint64(r) * stride;
         for (int c = 0; c < w; c += 2)
-            if (row[c] > kBlackLumaMax)
+            if (row[c] > kBlackLumaMax && ++bright > allowed)
                 return false;
     }
     return true;
@@ -588,6 +596,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
             emit frameSizeChanged(w, h);
             emit connected(w, h);
             // 5. demux + decode until stop/disconnect
+            m_tFirst = nowMs();
             videoLoop(video, t0);
         }
     }
@@ -675,7 +684,11 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
                 // Also on the first frames of a reattached stream: the display's
                 // first composite after setSurface can be black + status bar, and
                 // the sink still holds the last good frame of the previous session.
-                if ((m_frameCount.load() > 0 || m_attached.load()) && isBlackFrame(frame)) {
+                // Lenient while asleep or in the first seconds of a reattached
+                // stream: the display's first composite after setSurface is
+                // black plus the status/task bar, and neither is content.
+                const bool lenient = m_holdBlack.load() || (m_attached.load() && nowMs() - m_tFirst < kBlackHoldMs);
+                if ((m_frameCount.load() > 0 || m_attached.load()) && isBlackFrame(frame, lenient)) {
                     const qint64 now = nowMs();
                     if (m_blackSince < 0)
                         m_blackSince = now;
