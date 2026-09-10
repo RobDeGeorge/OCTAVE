@@ -41,7 +41,7 @@ NEW_DISPLAY_MIN_SDK = 30  # Android 11
 # phone but leaves its panel lit for this long. If the keyguard is dismissed
 # in that window the user wants their phone, not the mirror's screen-off;
 # otherwise the panel is blanked again.
-WAKE_GRACE_MS = 5000
+WAKE_GRACE_MS = 8000
 
 
 def normalize_display_size(value: str) -> str:

@@ -502,7 +502,7 @@ void PhoneMirrorManager::stopScrcpy()
 // After a power press from the locked state the keeper wakes the phone but
 // leaves its panel lit for this long; a keyguard dismissal in that window
 // means the user wants their phone, otherwise the panel is blanked again.
-static constexpr int kWakeGraceMs = 5000;
+static constexpr int kWakeGraceMs = 8000;
 
 void PhoneMirrorManager::setPhoneScreenOff(bool off)
 {

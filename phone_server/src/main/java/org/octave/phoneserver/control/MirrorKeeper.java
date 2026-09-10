@@ -21,10 +21,13 @@ import android.view.KeyEvent;
  * touch is dropped. The only way to keep mirroring is to wake the phone
  * again. What the user meant by the press is decided here:
  * <ul>
- * <li>press while locked (phone in the cradle): wake it, leave the panel lit
- * for a grace window; if the keyguard is dismissed in that window the user
- * wants their phone ("in use": panel left alone, locks not undone), otherwise
- * the panel is blanked;</li>
+ * <li>press while locked (phone in the cradle): wake it and force the panel
+ * on (the wake alone does not reliably relight a SurfaceControl-dark panel),
+ * leave it lit for a grace window; if the keyguard is dismissed in that
+ * window, or the phone turns out to be unlocked already, or the button is
+ * pressed again inside the window (someone trying to get in), the user wants
+ * their phone ("in use": panel left alone, locks not undone); otherwise the
+ * panel is blanked;</li>
  * <li>press while in use: the user is putting the phone down; blank the panel
  * before the wake and again as soon as the phone is interactive;</li>
  * <li>keyguard dismissed at any time: in use; keyguard re-engaged while
@@ -60,6 +63,8 @@ public final class MirrorKeeper {
     private long graceDeadline = -1;   // uptime ms, -1 = no grace pending
     private boolean blankOnWake;
     private long lastWakeMs;
+    private long lastDozeMs = -1;   // uptime ms of the last observed doze
+    private boolean relightOnWake;  // force the panel on once interactive again
 
     private final Runnable pollRunnable = this::poll;
 
@@ -137,6 +142,7 @@ public final class MirrorKeeper {
             return;
         }
         graceDeadline = -1;
+        lastDozeMs = -1;
         setInUse(false);
         if (asleep) {
             blankOnWake = panelDark;
@@ -177,28 +183,52 @@ public final class MirrorKeeper {
                 Ln.i("Mirror keeper: phone put to sleep after use; waking it, panel dark");
                 setInUse(false);
                 graceDeadline = -1;
+                lastDozeMs = -1;
                 blankOnWake = panelDark;
                 if (blankOnWake) {
                     setPanel(false);
                 }
                 wake();
             } else {
-                Ln.i("Mirror keeper: phone went to sleep; waking it" + (panelDark ? " (grace " + graceMs + " ms)" : ""));
+                long now = android.os.SystemClock.uptimeMillis();
+                boolean again = lastDozeMs >= 0 && now - lastDozeMs < graceMs + 2000;
+                lastDozeMs = now;
                 blankOnWake = false;
-                panelIsDark = false;   // the wake relights the panel
+                relightOnWake = true;
+                if (again) {
+                    // Second press inside the window: nothing visible happened
+                    // for them the first time, so they are trying to get in.
+                    Ln.i("Mirror keeper: power pressed again; user wants the phone");
+                    graceDeadline = -1;
+                    inUse = true;
+                } else {
+                    Ln.i("Mirror keeper: phone went to sleep; waking it" + (panelDark ? " (grace " + graceMs + " ms)" : ""));
+                }
                 wake();
             }
         } else if (interactive && asleep) {
             asleep = false;
             changed = true;
             Ln.i("Mirror keeper: phone is awake again");
+            panelIsDark = false;   // the wake resets the panel mode as far as we know
             if (blankOnWake) {
                 blankOnWake = false;
-                panelIsDark = false;
                 setPanel(false);
-            } else if (panelDark && !inUse && enabled) {
-                graceDeadline = android.os.SystemClock.uptimeMillis() + graceMs;
-                panelIsDark = false;
+            } else if (relightOnWake) {
+                // Do not trust the wake to relight a SurfaceControl-dark panel
+                relightOnWake = false;
+                panelIsDark = true;
+                setPanel(true);
+                Boolean locked = isKeyguardLocked();
+                if (locked != null && !locked && !inUse) {
+                    // Woke to an unlocked phone (lock-after delay had not run):
+                    // it is lit in their hand, treat it as in use.
+                    Ln.i("Mirror keeper: awake and unlocked; phone in use");
+                    inUse = true;
+                }
+                if (!inUse && panelDark && enabled) {
+                    graceDeadline = android.os.SystemClock.uptimeMillis() + graceMs;
+                }
             }
         }
 
@@ -206,9 +236,12 @@ public final class MirrorKeeper {
             Boolean lockedObj = isKeyguardLocked();
             if (lockedObj != null) {
                 boolean locked = lockedObj;
+                if (lockedKnown && locked != prevLocked) {
+                    Ln.i("Mirror keeper: keyguard " + (locked ? "engaged" : "dismissed"));
+                }
                 if (lockedKnown) {
                     if (prevLocked && !locked && !inUse) {
-                        Ln.i("Mirror keeper: keyguard dismissed; phone in use");
+                        Ln.i("Mirror keeper: phone in use");
                         graceDeadline = -1;
                         setInUse(true);
                         changed = true;
