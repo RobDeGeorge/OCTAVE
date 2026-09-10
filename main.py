@@ -131,6 +131,9 @@ phone_mirror_manager.setAudioDuckLevel(settings_manager.get_scrcpy_audio_duck_le
 settings_manager.scrcpyAudioDuckEnabledChanged.connect(phone_mirror_manager.setAudioDuckEnabled)
 settings_manager.scrcpyAudioDuckLevelChanged.connect(phone_mirror_manager.setAudioDuckLevel)
 phone_mirror_manager.duckingChanged.connect(media_manager.setDucking)
+# Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
+phone_mirror_manager.setPhoneScreenOff(settings_manager.get_scrcpy_phone_screen_off())
+settings_manager.scrcpyPhoneScreenOffChanged.connect(phone_mirror_manager.setPhoneScreenOff)
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
 settings_manager.scrcpyAudioEnabledChanged.connect(

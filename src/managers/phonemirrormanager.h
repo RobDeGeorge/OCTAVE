@@ -15,6 +15,7 @@
 #include <QPair>
 #include <QList>
 #include <QLoggingCategory>
+#include <QTimer>
 
 Q_DECLARE_LOGGING_CATEGORY(lcPhoneMirror)
 
@@ -41,6 +42,9 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool audioActive READ audioActive NOTIFY audioActiveChanged)
     // The phone is producing sound right now (navigation prompt, video, call)
     Q_PROPERTY(bool audioPlaying READ audioPlaying NOTIFY audioPlayingChanged)
+    // The phone was put to sleep (power button / lock) during a session. Its
+    // virtual display stops compositing and drops touch; OCTAVE wakes it.
+    Q_PROPERTY(bool phoneAsleep READ phoneAsleep NOTIFY phoneAsleepChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -58,6 +62,7 @@ public:
     int frameHeight() const { return m_frameHeight; }
     bool audioActive() const;
     bool audioPlaying() const;
+    bool phoneAsleep() const { return m_phoneAsleep; }
     // Factor other sources should currently apply: duck level while the phone
     // is producing sound and ducking is on, 1.0 otherwise
     float duckingFactor() const;
@@ -81,6 +86,7 @@ signals:
     void videoSinkChanged();
     void audioActiveChanged(bool active);
     void audioPlayingChanged(bool playing);
+    void phoneAsleepChanged(bool asleep);
     // Emitted whenever duckingFactor() changes; main.cpp routes it to the
     // other audio sources (MediaManager::setDucking).
     void duckingChanged(float factor);
@@ -97,6 +103,12 @@ public slots:
     void setAudioDuckEnabled(bool enabled);
     void setAudioDuckLevel(float level);
     void setDisplaySize(const QString &size);
+    // Setting scrcpyPhoneScreenOff: keep the phone's own panel dark while
+    // mirroring. Stream and touch keep working (SurfaceControl power mode,
+    // not sleep); the server restores the panel when the session ends.
+    void setPhoneScreenOff(bool off);
+    // Wake a sleeping phone (KEYCODE_WAKEUP never toggles it off)
+    void wakePhone();
     bool environmentOk();
     QString getInstallInstructions();
     // "device" | "unauthorized" | "offline" | "none" | "no-adb"
@@ -125,6 +137,11 @@ private:
     void onConnected(int w, int h);
     void onDisconnected(const QString &reason);
     void updateDucking();
+    void applyScreenOff();
+    void startWakeWatch();
+    void stopWakeWatch();
+    void pollWakefulness();
+    void onWakefulness(const QString &state);
 
     QString m_adbPath;
     bool m_audioEnabled = false;
@@ -144,6 +161,11 @@ private:
     bool m_duckEnabled = true;
     float m_duckLevel = 0.1f;        // -20 dB
     float m_duckFactor = 1.0f;       // last value emitted through duckingChanged
+    bool m_phoneScreenOff = true;    // setting scrcpyPhoneScreenOff
+    bool m_phoneAsleep = false;
+    QString m_serial;
+    QTimer m_wakePoll;               // asks the phone for mWakefulness while a session is up
+    bool m_wakeProbeBusy = false;
 };
 
 #else // Q_OS_MOBILE — mobile stub
@@ -165,10 +187,12 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(int frameHeight READ frameHeight CONSTANT)
     Q_PROPERTY(bool audioActive READ audioActive CONSTANT)
     Q_PROPERTY(bool audioPlaying READ audioPlaying CONSTANT)
+    Q_PROPERTY(bool phoneAsleep READ phoneAsleep CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
     bool audioActive() const { return false; }
     bool audioPlaying() const { return false; }
+    bool phoneAsleep() const { return false; }
     float duckingFactor() const { return 1.0f; }
     void cleanup() {}
     QString adbPath() const { return {}; }
@@ -189,6 +213,8 @@ public slots:
     void setAudioDuckEnabled(bool) {}
     void setAudioDuckLevel(float) {}
     void setDisplaySize(const QString &) {}
+    void setPhoneScreenOff(bool) {}
+    void wakePhone() {}
     bool environmentOk() const { return false; }
     QString getInstallInstructions() const { return QStringLiteral("Phone mirroring is desktop-only"); }
     QString getDeviceState() const { return QStringLiteral("none"); }

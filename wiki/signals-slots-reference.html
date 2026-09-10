@@ -463,6 +463,7 @@
             <tr><td><code>frameWidth</code> / <code>frameHeight</code></td><td>int</td><td>Decoded frame size</td></tr>
             <tr><td><code>audioActive</code></td><td>bool</td><td>Phone audio is being played through OCTAVE</td></tr>
             <tr><td><code>audioPlaying</code></td><td>bool</td><td>The phone is producing sound right now (drives ducking)</td></tr>
+            <tr><td><code>phoneAsleep</code></td><td>bool</td><td>The phone was locked / put to sleep during a session (virtual display black, touch dropped); OCTAVE is waking it</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -474,6 +475,7 @@
             <tr><td><code>frameSizeChanged</code></td><td>int w, int h</td><td>Decoded size changed (also notifies <code>activeDisplaySize</code>)</td></tr>
             <tr><td><code>frameReady</code></td><td>&ndash;</td><td>A frame reached the video sink</td></tr>
             <tr><td><code>audioActiveChanged</code> / <code>audioPlayingChanged</code></td><td>bool</td><td>Audio stream state / sound detected</td></tr>
+            <tr><td><code>phoneAsleepChanged</code></td><td>bool</td><td>Phone went to sleep / woke up while mirrored</td></tr>
             <tr><td><code>duckingChanged</code></td><td>float factor</td><td>Duck level while the phone makes sound and ducking is on, 1.0 otherwise; <code>main</code> routes it to <code>mediaManager.setDucking</code></td></tr>
             <tr><td><code>error</code></td><td>str</td><td>Generic error message</td></tr>
           </tbody>
@@ -489,6 +491,8 @@
             <tr><td><code>setAudioEnabled(bool)</code>, <code>setAudioGain(float)</code></td><td>&ndash;</td><td>&ndash;</td><td>Settings <code>scrcpyAudioEnabled</code> / <code>scrcpyAudioGain</code></td></tr>
             <tr><td><code>setAudioDuckEnabled(bool)</code>, <code>setAudioDuckLevel(float)</code></td><td>&ndash;</td><td>&ndash;</td><td>Settings <code>scrcpyAudioDuckEnabled</code> / <code>scrcpyAudioDuckLevel</code></td></tr>
             <tr><td><code>setDisplaySize(str)</code></td><td>"WxH"</td><td>&ndash;</td><td>Virtual display size; restarts a running session</td></tr>
+            <tr><td><code>setPhoneScreenOff(bool)</code></td><td>&ndash;</td><td>&ndash;</td><td>Setting <code>scrcpyPhoneScreenOff</code>: keep the handset's panel dark while mirroring (applied live)</td></tr>
+            <tr><td><code>wakePhone()</code></td><td>&ndash;</td><td>&ndash;</td><td>Wake a sleeping phone (<code>KEYCODE_WAKEUP</code> over adb); called automatically when <code>phoneAsleep</code> turns true</td></tr>
             <tr><td><code>getDeviceState()</code></td><td>&ndash;</td><td>str</td><td>"device", "unauthorized", "offline", "none" or "no-adb"</td></tr>
             <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>&ndash;</td><td>bool / str / int</td><td>adb device queries</td></tr>
             <tr><td><code>environmentOk()</code>, <code>getInstallInstructions()</code></td><td>&ndash;</td><td>bool / str</td><td>Readiness check and user-facing help text</td></tr>

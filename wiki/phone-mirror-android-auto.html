@@ -198,6 +198,19 @@
               independently of the user's volume and mute. Spotify is deliberately not ducked: it plays on its own
               Spotify Connect device, usually the very phone being mirrored, so its sound already arrives through the
               mirror stream and an API round trip per prompt would be both slow and pointless.</li>
+            <li><strong>Phone screen and lock</strong> (setting <code>scrcpyPhoneScreenOff</code>, default on): once the
+              session is up the manager sends <code>SET_DISPLAY_POWER(off)</code>, which turns the handset's panel dark through
+              SurfaceControl without putting the device to sleep -- the stream and touch keep working and the server
+              restores the panel when the session ends. Locking the phone with its power button is different: on Android
+              13+ the virtual display carries <code>FLAG_OWN_DISPLAY_GROUP</code> and <code>FLAG_ALWAYS_UNLOCKED</code>, yet
+              measured on a Galaxy S22 Ultra (Android 16) it still follows the device into <code>DOZE</code>: the stream
+              stays open but app content stops compositing (black frames, status bar still drawn) and injected touch is
+              silently dropped, with nothing on the wire to notice. So while a session is up the manager polls
+              <code>adb shell dumpsys power | grep mWakefulness=</code> every 2&nbsp;s (off the GUI thread); anything but
+              <code>Awake</code> sets <code>phoneAsleep</code>, sends <code>input keyevent KEYCODE_WAKEUP</code> (224 -- wakes,
+              never toggles off) and, once the phone reports awake again, re-applies the panel-off request. The view shows a
+              "Phone is asleep" overlay with tap-to-retry (<code>wakePhone()</code>) until then. The phone therefore cannot be
+              used as a dark, locked handset while it is mirrored -- close the mirror for that.</li>
             <li><strong>Control</strong>: 32-byte <code>INJECT_TOUCH_EVENT</code> (type 2) with pointer id, x/y in frame pixels, screen size, pressure; 14-byte <code>INJECT_KEYCODE</code> (type 0). Coordinates are relative to the mirrored display, so a virtual display needs no display-id routing.</li>
             <li><strong>Teardown</strong>: close sockets, terminate the child, remove the forward. The server destroys the virtual display itself (<code>cleanup=true</code>). The Python entry point routes SIGTERM/SIGINT through <code>app.quit()</code> and the C++ one installs a self-pipe signal handler, so launcher scripts get a clean exit too.</li>
           </ol>

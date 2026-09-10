@@ -16,15 +16,17 @@ import platform
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 
 from backend.logging_config import get_logger
+
 from backend.phone_mirror.scrcpy_client import (
     ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION, SERVER_PROCESS_PATTERN,
-    KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH,
+    KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH, KEYCODE_WAKEUP,
 )
 
 logger = get_logger(__name__)
@@ -35,6 +37,11 @@ logger = get_logger(__name__)
 # way to keep the UI honest.
 DEFAULT_DISPLAY_SIZE = "1280x800"
 NEW_DISPLAY_MIN_SDK = 30  # Android 11
+# How often the phone's wakefulness is polled while a session is up. A
+# locked (dozing) phone keeps the stream open but stops compositing the
+# virtual display and drops injected touch, with no signal on the wire, so
+# the only way to notice is to ask (`dumpsys power`).
+WAKE_POLL_INTERVAL_S = 2.0
 
 
 def normalize_display_size(value: str) -> str:
@@ -113,6 +120,8 @@ class PhoneMirrorManager(QObject):
     videoSinkChanged = Signal()
     audioActiveChanged = Signal(bool)   # phone audio playing through OCTAVE (or not)
     audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound
+    phoneAsleepChanged = Signal(bool)   # the phone was put to sleep (locked) during a session
+    _wakefulness = Signal(str)          # poll thread -> GUI thread: "Awake" | "Dozing" | "Asleep" | ""
     # Emitted whenever duckingFactor changes; main.py routes it to the other
     # audio sources (MediaManager.setDucking).
     duckingChanged = Signal(float)
@@ -137,6 +146,12 @@ class PhoneMirrorManager(QObject):
         self._duck_enabled: bool = True
         self._duck_level: float = 0.1        # -20 dB
         self._duck_factor: float = 1.0       # last value emitted through duckingChanged
+        self._phone_screen_off: bool = True  # blank the phone's panel while mirroring (setting scrcpyPhoneScreenOff)
+        self._phone_asleep: bool = False
+        self._serial: str = ""
+        self._wake_stop = threading.Event()
+        self._wake_thread: Optional[threading.Thread] = None
+        self._wakefulness.connect(self._on_wakefulness)
 
     # ── availability / environment ──────────────────────────────────
 
@@ -333,6 +348,79 @@ class PhoneMirrorManager(QObject):
         logger.debug(f"phone mirror: ducking factor {factor:.3f}")
         self.duckingChanged.emit(factor)
 
+    # ── phone screen / sleep ────────────────────────────────────────
+
+    @Property(bool, notify=phoneAsleepChanged)
+    def phoneAsleep(self) -> bool:
+        """True while the phone is dozing (power button / lock) during a session.
+        Its virtual display stops compositing and drops touch; OCTAVE wakes it."""
+        return self._phone_asleep
+
+    @Slot(bool)
+    def setPhoneScreenOff(self, off: bool):
+        """Setting scrcpyPhoneScreenOff: keep the phone's own panel dark while
+        mirroring. The stream and touch keep working (SurfaceControl power
+        mode, not sleep); the server restores the panel when the session ends."""
+        off = bool(off)
+        if off == self._phone_screen_off:
+            return
+        self._phone_screen_off = off
+        if self._client is not None and self._client.is_running and self._ready:
+            self._client.set_display_power(not off)
+
+    @Slot()
+    def wakePhone(self):
+        """Wake a sleeping phone (KEYCODE_WAKEUP never toggles it off) and
+        re-apply the panel state."""
+        if not self._serial:
+            return
+        logger.info("Phone mirror: waking phone")
+        serial = self._serial
+        threading.Thread(
+            target=self._run_adb, daemon=True, name="phone-mirror-wake",
+            args=(["-s", serial, "shell", "input", "keyevent", str(KEYCODE_WAKEUP)],), kwargs={"timeout": 5},
+        ).start()
+
+    def _apply_screen_off(self):
+        if self._client is not None and self._client.is_running and self._ready and self._phone_screen_off:
+            self._client.set_display_power(False)
+
+    def _start_wake_watch(self, serial: str):
+        self._stop_wake_watch()
+        self._wake_stop = threading.Event()
+        t = threading.Thread(target=self._wake_watch, args=(serial, self._wake_stop),
+                             daemon=True, name="phone-mirror-wake-watch")
+        self._wake_thread = t
+        t.start()
+
+    def _stop_wake_watch(self):
+        self._wake_stop.set()
+        self._wake_thread = None
+        if self._phone_asleep:
+            self._phone_asleep = False
+            self.phoneAsleepChanged.emit(False)
+
+    def _wake_watch(self, serial: str, stop: threading.Event):
+        while not stop.wait(WAKE_POLL_INTERVAL_S):
+            out = self._run_adb(["-s", serial, "shell", "dumpsys", "power", "|", "grep", "-m1", "mWakefulness="], timeout=5)
+            m = re.search(r"mWakefulness=(\w+)", out)
+            if not stop.is_set():
+                self._wakefulness.emit(m.group(1) if m else "")
+
+    def _on_wakefulness(self, state: str):
+        if not state or self._client is None or not self._client.is_running:
+            return
+        asleep = state != "Awake"
+        if asleep != self._phone_asleep:
+            self._phone_asleep = asleep
+            self.phoneAsleepChanged.emit(asleep)
+            if asleep:
+                logger.info(f"Phone mirror: phone went to sleep ({state}); waking it")
+                self.wakePhone()
+            else:
+                logger.info("Phone mirror: phone is awake again")
+                self._apply_screen_off()
+
     @Property(str, notify=displaySizeChanged)
     def displaySize(self) -> str:
         """Requested virtual display size "WxH" (--new-display), "" = phone screen."""
@@ -458,6 +546,7 @@ class PhoneMirrorManager(QObject):
                 self._active_display_size = ""
         logger.info(f"Starting phone mirror (server {SERVER_VERSION}) for {serial} "
                     f"(display {display_size or 'phone screen'}, audio {'on' if self._audio_enabled else 'off'})")
+        self._serial = serial
         client.start(serial, display_size=display_size, audio=self._audio_enabled)
         self.isRunningChanged.emit()
 
@@ -470,6 +559,10 @@ class PhoneMirrorManager(QObject):
         self.frameSizeChanged.emit(w, h)
         logger.info(f"Phone mirror connected: {w}x{h}")
         self.scrcpyStarted.emit(1)
+        # The server powers the device on asynchronously at start; give it a
+        # moment before blanking the panel or the request is reverted.
+        QTimer.singleShot(1000, self._apply_screen_off)
+        self._start_wake_watch(self._serial)
 
     def _on_frame_size(self, w: int, h: int):
         if (w, h) != (self._frame_width, self._frame_height):
@@ -479,6 +572,7 @@ class PhoneMirrorManager(QObject):
     def _on_disconnected(self, reason: str):
         if self._is_stopping:
             return
+        self._stop_wake_watch()
         self._ready = False
         self._is_starting = False
         self.isRunningChanged.emit()
@@ -494,6 +588,7 @@ class PhoneMirrorManager(QObject):
         self._is_starting = False
         self._ready = False
         self._active_display_size = ""
+        self._stop_wake_watch()
         if self._client is not None:
             client, self._client = self._client, None
             client.stop()

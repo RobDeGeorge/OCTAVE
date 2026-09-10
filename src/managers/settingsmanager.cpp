@@ -211,6 +211,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)
     d[QStringLiteral("scrcpyAudioDuckEnabled")]  = true;  // duck local media while the phone produces sound
     d[QStringLiteral("scrcpyAudioDuckLevel")]    = 0.1;   // linear factor applied to local media while ducked (-20 dB)
+    d[QStringLiteral("scrcpyPhoneScreenOff")]    = true;  // keep the phone's own panel dark while mirroring
 
     // Settings menu visibility
     QJsonObject menuVis;
@@ -446,6 +447,7 @@ SettingsManager::SettingsManager(QObject *parent)
     m_scrcpyAudioGain     = s(QStringLiteral("scrcpyAudioGain")).toDouble();
     m_scrcpyAudioDuckEnabled = s(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
     m_scrcpyAudioDuckLevel   = s(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
+    m_scrcpyPhoneScreenOff   = s(QStringLiteral("scrcpyPhoneScreenOff")).toBool();
 
     // Settings menu visibility
     {
@@ -877,6 +879,7 @@ QString SettingsManager::scrcpyDisplaySize() const   { return m_scrcpyDisplaySiz
 double  SettingsManager::scrcpyAudioGain() const     { return m_scrcpyAudioGain; }
 bool    SettingsManager::scrcpyAudioDuckEnabled() const { return m_scrcpyAudioDuckEnabled; }
 double  SettingsManager::scrcpyAudioDuckLevel() const { return m_scrcpyAudioDuckLevel; }
+bool    SettingsManager::scrcpyPhoneScreenOff() const { return m_scrcpyPhoneScreenOff; }
 
 // --- ESP32 ---
 bool    SettingsManager::esp32VolumeEnabled() const    { return m_esp32VolumeEnabled; }
@@ -1708,6 +1711,14 @@ void SettingsManager::save_scrcpy_audio_duck_level(double level)
     emit scrcpyAudioDuckLevelChanged(level);
 }
 
+void SettingsManager::save_scrcpy_phone_screen_off(bool off)
+{
+    qCDebug(lcSettings) << "Saving scrcpy phone screen off:" << off;
+    m_scrcpyPhoneScreenOff = off;
+    updateSetting(QStringLiteral("scrcpyPhoneScreenOff"), off);
+    emit scrcpyPhoneScreenOffChanged(off);
+}
+
 // --- ESP32 ---
 void SettingsManager::save_esp32_volume_enabled(bool enabled)
 {
@@ -1940,6 +1951,7 @@ QString SettingsManager::get_scrcpy_display_size()     { return m_scrcpyDisplayS
 double  SettingsManager::get_scrcpy_audio_gain()       { return m_scrcpyAudioGain; }
 bool    SettingsManager::get_scrcpy_audio_duck_enabled() { return m_scrcpyAudioDuckEnabled; }
 double  SettingsManager::get_scrcpy_audio_duck_level() { return m_scrcpyAudioDuckLevel; }
+bool    SettingsManager::get_scrcpy_phone_screen_off() { return m_scrcpyPhoneScreenOff; }
 bool    SettingsManager::get_esp32_volume_enabled()    { return m_esp32VolumeEnabled; }
 QString SettingsManager::get_esp32_volume_port()       { return m_esp32VolumePort; }
 double  SettingsManager::get_esp32_volume_step_size()  { return m_esp32VolumeStepSize; }
@@ -2175,6 +2187,9 @@ void SettingsManager::reset_to_defaults()
 
     m_scrcpyAudioDuckLevel = m_defaultSettings.value(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
     emit scrcpyAudioDuckLevelChanged(m_scrcpyAudioDuckLevel);
+
+    m_scrcpyPhoneScreenOff = m_defaultSettings.value(QStringLiteral("scrcpyPhoneScreenOff")).toBool();
+    emit scrcpyPhoneScreenOffChanged(m_scrcpyPhoneScreenOff);
 
     // Settings menu visibility
     m_settingsMenuVisibility.clear();

@@ -223,6 +223,10 @@ int main(int argc, char *argv[])
                      &phoneMirrorManager, [&phoneMirrorManager](double l) { phoneMirrorManager.setAudioDuckLevel(float(l)); });
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged,
                      &mediaManager, &MediaManager::setDucking);
+    // Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
+    phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyPhoneScreenOffChanged,
+                     &phoneMirrorManager, &PhoneMirrorManager::setPhoneScreenOff);
 #endif
 
     // Register custom QML types for video embedding (stub types on mobile)

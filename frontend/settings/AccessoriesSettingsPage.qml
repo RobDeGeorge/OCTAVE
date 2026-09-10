@@ -1617,6 +1617,41 @@ Flickable {
                     spacing: App.Spacing.rowSpacing
 
                     SettingLabel {
+                        text: "Phone Screen"
+                    }
+
+                    SettingDescription {
+                        text: "Keep the phone's own screen dark while it is mirrored. The mirror and touch keep working, and the phone's screen comes back when you close the mirror. If the phone is locked with its power button during a session, OCTAVE wakes it again so the mirror does not go black."
+                    }
+
+                    SettingsToggle {
+                        id: scrcpyPhoneScreenOffToggle
+                        Layout.fillWidth: true
+                        text: "Turn the phone's screen off while mirroring"
+                        checked: settingsManager ? settingsManager.scrcpyPhoneScreenOff : true
+                        activeColor: App.Style.accent
+                        inactiveColor: App.Style.hoverColor
+
+                        onToggled: function(checked) {
+                            if (settingsManager) {
+                                settingsManager.save_scrcpy_phone_screen_off(checked)
+                            }
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onScrcpyPhoneScreenOffChanged() {
+                                scrcpyPhoneScreenOffToggle.checked = settingsManager.scrcpyPhoneScreenOff
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingLabel {
                         text: "Audio Forwarding"
                     }
 

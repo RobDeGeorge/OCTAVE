@@ -205,6 +205,7 @@ class SettingsManager(QObject):
     scrcpyAudioGainChanged = Signal(float)
     scrcpyAudioDuckEnabledChanged = Signal(bool)
     scrcpyAudioDuckLevelChanged = Signal(float)
+    scrcpyPhoneScreenOffChanged = Signal(bool)
     albumArtColorsChanged = Signal(str)  # JSON string with album art theme colors
 
     # Settings menu visibility signals
@@ -408,6 +409,7 @@ class SettingsManager(QObject):
             "scrcpyAudioGain": 2.0,  # Linear gain on phone audio before OCTAVE's volume (+6 dB)
             "scrcpyAudioDuckEnabled": True,  # Duck local media while the phone produces sound
             "scrcpyAudioDuckLevel": 0.1,  # Linear factor applied to local media while ducked (-20 dB)
+            "scrcpyPhoneScreenOff": True,  # Keep the phone's own panel dark while mirroring
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
                 "deviceSettings": True,
@@ -560,6 +562,7 @@ class SettingsManager(QObject):
         self._scrcpy_audio_gain = float(self._settings.get("scrcpyAudioGain", 2.0))
         self._scrcpy_audio_duck_enabled = bool(self._settings.get("scrcpyAudioDuckEnabled", True))
         self._scrcpy_audio_duck_level = float(self._settings.get("scrcpyAudioDuckLevel", 0.1))
+        self._scrcpy_phone_screen_off = bool(self._settings.get("scrcpyPhoneScreenOff", True))
 
         # Settings menu visibility
         self._settings_menu_visibility = self._settings.get(
@@ -785,9 +788,9 @@ class SettingsManager(QObject):
         self._write_settings_to_disk(self._settings)
 
     def _write_settings_to_disk(self, settings):
-        """Save settings atomically with file locking"""
-        # Validate before saving
-        validated_settings = self._validate_settings(settings)
+        """Save settings atomically with file locking. Callers pass an
+        already validated dict (save_settings / the defaults)."""
+        validated_settings = settings
 
         # Write to temp file first, then rename (atomic on most systems)
         dir_name = os.path.dirname(self.settings_file)
@@ -1748,6 +1751,23 @@ class SettingsManager(QObject):
         self._scrcpy_audio_duck_level = level
         self.update_setting("scrcpyAudioDuckLevel", level, self.scrcpyAudioDuckLevelChanged)
 
+
+    @Property(bool, notify=scrcpyPhoneScreenOffChanged)
+    def scrcpyPhoneScreenOff(self):
+        """Keep the phone's own panel dark while mirroring (stream and touch keep working)"""
+        return self._scrcpy_phone_screen_off
+
+    @Slot(result=bool)
+    def get_scrcpy_phone_screen_off(self):
+        return self._scrcpy_phone_screen_off
+
+    @Slot(bool)
+    def save_scrcpy_phone_screen_off(self, off):
+        off = bool(off)
+        logger.debug(f"Saving scrcpy phone screen off: {off}")
+        self._scrcpy_phone_screen_off = off
+        self.update_setting("scrcpyPhoneScreenOff", off, self.scrcpyPhoneScreenOffChanged)
+
     @Property(bool, notify=esp32VolumeEnabledChanged)
     def esp32VolumeEnabled(self):
         """Get whether ESP32 volume controller is enabled"""
@@ -2355,6 +2375,9 @@ class SettingsManager(QObject):
 
         self._scrcpy_audio_duck_level = self._default_settings["scrcpyAudioDuckLevel"]
         self.scrcpyAudioDuckLevelChanged.emit(self._scrcpy_audio_duck_level)
+
+        self._scrcpy_phone_screen_off = self._default_settings["scrcpyPhoneScreenOff"]
+        self.scrcpyPhoneScreenOffChanged.emit(self._scrcpy_phone_screen_off)
 
         self._settings_menu_visibility = self._default_settings["settingsMenuVisibility"].copy()
         self.settingsMenuVisibilityChanged.emit()

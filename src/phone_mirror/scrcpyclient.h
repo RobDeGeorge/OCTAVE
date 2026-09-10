@@ -48,7 +48,8 @@ public:
     // Android MotionEvent / KeyEvent actions
     enum Action { ActionDown = 0, ActionUp = 1, ActionMove = 2 };
     // Android keycodes we expose
-    enum Keycode { KeycodeHome = 3, KeycodeBack = 4, KeycodeAppSwitch = 187, KeycodePower = 26 };
+    enum Keycode { KeycodeHome = 3, KeycodeBack = 4, KeycodeAppSwitch = 187, KeycodePower = 26,
+                   KeycodeWakeup = 224 /* wakes the device, never puts it to sleep */ };
 
     // True when this build can decode (libavcodec linked) and the bundled
     // server resource is present.

@@ -250,7 +250,7 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
             <tr><td>ESP32 Knob</td><td><code>esp32VolumeEnabled</code>, <code>esp32VolumePort</code>, <code>esp32LedColorMode</code></td></tr>
             <tr><td>Gesture</td><td><code>gestureSensorEnabled</code>, <code>gestureMapping</code> (nested dict), <code>gestureCooldown</code></td></tr>
             <tr><td>IMU</td><td><code>imuEnabled</code>, <code>sensorEmitRate</code>, <code>sensorTempUnit</code></td></tr>
-            <tr><td>Android Auto / Phone Mirror</td><td><code>androidAutoEnabled</code>, <code>phoneMirrorEnabled</code>, <code>scrcpyAudioEnabled</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckEnabled</code>, <code>scrcpyAudioDuckLevel</code>, <code>scrcpyDisplaySize</code></td></tr>
+            <tr><td>Android Auto / Phone Mirror</td><td><code>androidAutoEnabled</code>, <code>phoneMirrorEnabled</code>, <code>scrcpyAudioEnabled</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckEnabled</code>, <code>scrcpyAudioDuckLevel</code>, <code>scrcpyPhoneScreenOff</code>, <code>scrcpyDisplaySize</code></td></tr>
             <tr><td>Playback Resume</td><td><code>lastPlayedSong</code>, <code>lastPlayedPosition</code>, <code>lastPlayedPlaylist</code>, <code>lastShuffleState</code></td></tr>
             <tr><td>Downloads</td><td><code>downloadSubfolder</code>, <code>downloadFormat</code>, <code>downloadBitrate</code></td></tr>
           </tbody>
@@ -505,7 +505,7 @@ Connections {
             <tr><td><code>albumArtColorsChanged</code></td><td>str</td><td>Album art theme palette updated (JSON)</td></tr>
             <tr><td><code>pinnedSettingsChanged</code></td><td>(none)</td><td>Setting pinned or unpinned from Quick Panel</td></tr>
             <tr><td><code>currentVolumeChanged</code></td><td>int</td><td>Unified volume (0-100) changes from any source</td></tr>
-            <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code></td><td>float / bool / float</td><td>Phone-mirror audio gain and ducking settings saved; wired straight into <code>phoneMirrorManager</code> at startup</td></tr>
+            <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code></td><td>float / bool / float / bool</td><td>Phone-mirror audio gain, ducking and phone-screen-off settings saved; wired straight into <code>phoneMirrorManager</code> at startup</td></tr>
           </tbody>
         </table>
 

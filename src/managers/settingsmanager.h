@@ -96,6 +96,7 @@ class SettingsManager : public QObject
     Q_PROPERTY(double scrcpyAudioGain READ scrcpyAudioGain NOTIFY scrcpyAudioGainChanged)
     Q_PROPERTY(bool scrcpyAudioDuckEnabled READ scrcpyAudioDuckEnabled NOTIFY scrcpyAudioDuckEnabledChanged)
     Q_PROPERTY(double scrcpyAudioDuckLevel READ scrcpyAudioDuckLevel NOTIFY scrcpyAudioDuckLevelChanged)
+    Q_PROPERTY(bool scrcpyPhoneScreenOff READ scrcpyPhoneScreenOff NOTIFY scrcpyPhoneScreenOffChanged)
 
     // --- ESP32 Volume Knob ---
     Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled NOTIFY esp32VolumeEnabledChanged)
@@ -201,6 +202,7 @@ public:
     double scrcpyAudioGain() const;
     bool scrcpyAudioDuckEnabled() const;
     double scrcpyAudioDuckLevel() const;
+    bool scrcpyPhoneScreenOff() const;
 
     // ESP32
     bool esp32VolumeEnabled() const;
@@ -310,6 +312,7 @@ signals:
     void scrcpyAudioGainChanged(double value);
     void scrcpyAudioDuckEnabledChanged(bool value);
     void scrcpyAudioDuckLevelChanged(double value);
+    void scrcpyPhoneScreenOffChanged(bool value);
 
     // ESP32
     void esp32VolumeEnabledChanged(bool value);
@@ -432,6 +435,7 @@ public slots:
     void save_scrcpy_audio_gain(double gain);
     void save_scrcpy_audio_duck_enabled(bool enabled);
     void save_scrcpy_audio_duck_level(double level);
+    void save_scrcpy_phone_screen_off(bool off);
 
     // ESP32
     void save_esp32_volume_enabled(bool enabled);
@@ -496,6 +500,7 @@ public slots:
     Q_INVOKABLE double get_scrcpy_audio_gain();
     Q_INVOKABLE bool get_scrcpy_audio_duck_enabled();
     Q_INVOKABLE double get_scrcpy_audio_duck_level();
+    Q_INVOKABLE bool get_scrcpy_phone_screen_off();
     Q_INVOKABLE bool get_esp32_volume_enabled();
     Q_INVOKABLE QString get_esp32_volume_port();
     Q_INVOKABLE double get_esp32_volume_step_size();
@@ -621,6 +626,7 @@ private:
     double m_scrcpyAudioGain = 2.0;
     bool m_scrcpyAudioDuckEnabled = true;
     double m_scrcpyAudioDuckLevel = 0.1;
+    bool m_scrcpyPhoneScreenOff = true;
 
     // Settings menu visibility
     QVariantMap m_settingsMenuVisibility;

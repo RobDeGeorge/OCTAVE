@@ -150,6 +150,39 @@ Item {
             visible: mirrorRunning && !hasVideo
             z: 5
         }
+
+        // The phone was locked (power button) mid-session: its virtual display
+        // goes black and drops touch until it is awake again. The manager
+        // wakes it; this tells the user what the black frame is and lets
+        // them retry with a tap.
+        Rectangle {
+            anchors.fill: parent
+            color: "#AA000000"
+            visible: mirrorRunning && phoneMirrorManager && phoneMirrorManager.phoneAsleep === true
+            z: 8
+            Column {
+                anchors.centerIn: parent
+                spacing: dp(12)
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Phone is asleep"
+                    font.pixelSize: dp(24)
+                    font.family: phoneMirrorView.globalFont
+                    color: "white"
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Waking it up… tap to retry"
+                    font.pixelSize: dp(16)
+                    font.family: phoneMirrorView.globalFont
+                    color: "#CCFFFFFF"
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: if (phoneMirrorManager) phoneMirrorManager.wakePhone()
+            }
+        }
     }
 
     // Error/Setup screen - shown when the mirror is not running

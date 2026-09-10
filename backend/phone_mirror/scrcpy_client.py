@@ -56,7 +56,8 @@ DEVICE_JAR_PATH = "/data/local/tmp/octave-phone-server.jar"
 MSG_INJECT_KEYCODE = 0
 MSG_INJECT_TEXT = 1
 MSG_INJECT_TOUCH_EVENT = 2
-MSG_BACK_OR_SCREEN_ON = 3
+MSG_INJECT_SCROLL_EVENT = 3
+MSG_BACK_OR_SCREEN_ON = 4
 MSG_SET_DISPLAY_POWER = 10
 
 # Android MotionEvent / KeyEvent actions
@@ -91,6 +92,7 @@ KEYCODE_HOME = 3
 KEYCODE_BACK = 4
 KEYCODE_APP_SWITCH = 187
 KEYCODE_POWER = 26
+KEYCODE_WAKEUP = 224   # wakes the device, never puts it to sleep
 
 
 def bundled_server_jar() -> Optional[str]:
