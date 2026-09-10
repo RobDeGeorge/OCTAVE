@@ -198,23 +198,29 @@
               independently of the user's volume and mute. Spotify is deliberately not ducked: it plays on its own
               Spotify Connect device, usually the very phone being mirrored, so its sound already arrives through the
               mirror stream and an API round trip per prompt would be both slow and pointless.</li>
-            <li><strong>Phone screen and lock</strong> (setting <code>scrcpyPhoneScreenOff</code>, default on): once the
-              session is up the manager sends <code>SET_DISPLAY_POWER(off)</code>, which turns the handset's panel dark through
-              SurfaceControl without putting the device to sleep -- the stream and touch keep working and the server
-              restores the panel when the session ends. Locking the phone with its power button is different: on Android
-              13+ the virtual display carries <code>FLAG_OWN_DISPLAY_GROUP</code> and <code>FLAG_ALWAYS_UNLOCKED</code>, yet
-              measured on a Galaxy S22 Ultra (Android 16) it still follows the device into <code>DOZE</code>: the stream
-              stays open but app content stops compositing (black frames, status bar still drawn) and injected touch is
-              silently dropped, with nothing on the wire to notice. So while a session is up the manager polls
-              <code>adb shell dumpsys power | grep mWakefulness=</code> every 2&nbsp;s (off the GUI thread); anything but
-              <code>Awake</code> sets <code>phoneAsleep</code>, sends <code>input keyevent KEYCODE_WAKEUP</code> (224 -- wakes,
-              never toggles off). The same poll reads <code>dumpsys trust</code>'s <code>deviceLocked</code>, and what happens
-              next depends on the user: after the wake the panel is left lit for a 5&nbsp;s grace window; if the phone is
-              unlocked in that window (or at any later point) <code>phoneInUse</code> turns on (edge-triggered on the <code>deviceLocked</code> 1&rarr;0 transition of the <em>current</em> user's line, so blanking the panel or a lock-after delay cannot fake it; the first poll of a session instead takes an already-unlocked phone as "in hand" and skips the blank) and OCTAVE stops blanking and
-              stops undoing locks -- the mirror keeps working because the virtual display is independent of the panel -- until
-              the phone is locked again or the user taps the "Phone in use" pill (<code>resumeMirroring()</code>). If the grace
-              window passes with the phone still locked, the press is taken as "screen off, please" and the panel is blanked
-              again. The view shows a "Phone is asleep" overlay with tap-to-retry (<code>wakePhone()</code>) during the wake. Two things keep it seamless: a dozing phone streams pure black frames, so both clients take the max luma of the Y plane at stride 2 and hold back a run of all-black frames (last good frame stays up, overlay dims it) for 3&nbsp;s, or for as long as the manager says the phone is asleep -- a black run that outlives that is real content and is shown; and when the doze ends an in-use spell (the user is putting the phone down) there is no grace window: the panel-off is sent before the wake and again as soon as the phone reports awake. The poll runs every 1&nbsp;s (about 0.7% of one RK3588 core).</li>
+            <li><strong>Phone screen and lock</strong> (setting <code>scrcpyPhoneScreenOff</code>, default on): handled on the phone by
+              OCTAVE's server extension <code>control/MirrorKeeper.java</code>, configured over the control socket
+              (<code>OCTAVE_SET_KEEPER</code>: enabled, panel dark, grace ms) once the session is up. The virtual display has
+              no power group of its own on the devices tested (<code>FLAG_OWN_DISPLAY_GROUP</code> is requested but it lands in
+              group 0), so a power press dozes it with the phone: content stops and touch is dropped. The keeper watches the
+              built-in display through a <code>DisplayListener</code> plus a 250&nbsp;ms poll of <code>isDisplayInteractive</code>
+              and <code>IWindowManager.isKeyguardLocked</code>, entirely inside the device, and reacts within a frame or two:
+              a press from the locked state (phone in the cradle) wakes it with <code>KEYCODE_WAKEUP</code> and leaves the panel
+              lit for a 5&nbsp;s grace window; if the keyguard is dismissed in that window (or at any time) the phone is
+              <em>in use</em> -- panel left alone, locks not undone, the mirror keeps working because DeX on the virtual display
+              is independent of the panel -- until it is locked again or the user taps the "Phone in use" pill
+              (<code>OCTAVE_TAKE_BACK</code>); a press while in use means the user is putting it down, so the panel-off goes out
+              before the wake and again the instant the phone is interactive; if the grace passes still locked, the panel is
+              blanked. The panel is blanked with SurfaceControl's power mode (the phone stays awake) and restored by CleanUp when
+              the session ends. Every change is reported as the <code>PHONE_STATE</code> device message
+              (asleep / in use / panel dark), which both clients read on the control socket and expose as
+              <code>phoneAsleep</code> / <code>phoneInUse</code>; the view dims the held frame with a "Phone is asleep" overlay
+              during the wake and shows the pill while in use. Two client-side details keep the dash seamless: a dozing phone
+              streams pure black frames, so both clients take the max luma of the Y plane at stride 2 and hold back a run of
+              all-black frames (last good frame stays up) for 3&nbsp;s or while the keeper reports the phone asleep -- a black
+              run that outlives that is real content and is shown. Phones with a lock-after-screen-off delay (Samsung default
+              5&nbsp;s) stay unlocked for that long after a power press, so a wake inside it shows no keyguard and no unlock
+              edge; set lock-after to "Immediately" for the crispest behaviour. OCTAVE itself no longer polls the phone over adb.</li>
             <li><strong>Navigation buttons on a virtual display</strong>: HOME and APP_SWITCH are system keys that Android routes
               to the default display, so injecting them does nothing on the virtual one (Back is dispatched to the focused window
               and works). <code>pressHome()</code> therefore runs <code>am start --display &lt;id&gt; -a MAIN -c HOME</code> on the

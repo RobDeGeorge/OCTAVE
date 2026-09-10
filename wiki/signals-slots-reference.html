@@ -494,8 +494,8 @@
             <tr><td><code>setAudioDuckEnabled(bool)</code>, <code>setAudioDuckLevel(float)</code></td><td>&ndash;</td><td>&ndash;</td><td>Settings <code>scrcpyAudioDuckEnabled</code> / <code>scrcpyAudioDuckLevel</code></td></tr>
             <tr><td><code>setDisplaySize(str)</code></td><td>"WxH"</td><td>&ndash;</td><td>Virtual display size; restarts a running session</td></tr>
             <tr><td><code>setPhoneScreenOff(bool)</code></td><td>&ndash;</td><td>&ndash;</td><td>Setting <code>scrcpyPhoneScreenOff</code>: keep the handset's panel dark while mirroring (applied live)</td></tr>
-            <tr><td><code>resumeMirroring()</code></td><td>&ndash;</td><td>&ndash;</td><td>Leave the in-use state: wake the phone if needed and re-apply screen-off</td></tr>
-            <tr><td><code>wakePhone()</code></td><td>&ndash;</td><td>&ndash;</td><td>Wake a sleeping phone (<code>KEYCODE_WAKEUP</code> over adb); called automatically when <code>phoneAsleep</code> turns true</td></tr>
+            <tr><td><code>resumeMirroring()</code></td><td>&ndash;</td><td>&ndash;</td><td>Leave the in-use state (<code>OCTAVE_TAKE_BACK</code> to the keeper): wake the phone if needed and re-apply screen-off</td></tr>
+            <tr><td><code>wakePhone()</code></td><td>&ndash;</td><td>&ndash;</td><td>Wake a sleeping phone from OCTAVE's side (<code>KEYCODE_WAKEUP</code> over adb); the phone-side keeper normally does this itself, this is the overlay's tap-to-retry</td></tr>
             <tr><td><code>getDeviceState()</code></td><td>&ndash;</td><td>str</td><td>"device", "unauthorized", "offline", "none" or "no-adb"</td></tr>
             <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>&ndash;</td><td>bool / str / int</td><td>adb device queries</td></tr>
             <tr><td><code>environmentOk()</code>, <code>getInstallInstructions()</code></td><td>&ndash;</td><td>bool / str</td><td>Readiness check and user-facing help text</td></tr>

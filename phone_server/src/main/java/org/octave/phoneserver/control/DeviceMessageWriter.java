@@ -39,6 +39,11 @@ public class DeviceMessageWriter {
                 dos.writeShort(data.length);
                 dos.write(data);
                 break;
+            case DeviceMessage.TYPE_OCTAVE_PHONE_STATE:
+                dos.writeBoolean(msg.isAsleep());
+                dos.writeBoolean(msg.isInUse());
+                dos.writeBoolean(msg.isPanelDark());
+                break;
             default:
                 throw new ControlProtocolException("Unknown event type: " + type);
         }

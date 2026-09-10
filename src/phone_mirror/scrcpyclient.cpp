@@ -54,6 +54,14 @@ namespace {
 constexpr quint8 kMsgInjectKeycode = 0;
 constexpr quint8 kMsgInjectTouchEvent = 2;
 constexpr quint8 kMsgSetDisplayPower = 10;
+// OCTAVE extensions (phone_server MirrorKeeper)
+constexpr quint8 kMsgOctaveSetKeeper = 100;
+constexpr quint8 kMsgOctaveTakeBack = 101;
+// Device messages (server -> client on the control socket)
+constexpr quint8 kDevMsgClipboard = 0;
+constexpr quint8 kDevMsgAckClipboard = 1;
+constexpr quint8 kDevMsgUhidOutput = 2;
+constexpr quint8 kDevMsgOctavePhoneState = 100;
 // A dozing phone streams pure black frames until it is woken. Rather than
 // flash the dash black, a run of all-black frames is held back (the last good
 // frame stays on screen) for this long, or for as long as the manager says
@@ -249,6 +257,12 @@ void ScrcpyClient::stop()
         else
             m_thread.join();
     }
+    if (m_devMsgThread.joinable()) {
+        if (std::this_thread::get_id() == m_devMsgThread.get_id())
+            m_devMsgThread.detach();
+        else
+            m_devMsgThread.join();
+    }
     if (m_audioThread.joinable()) {
         if (std::this_thread::get_id() == m_audioThread.get_id())
             m_audioThread.detach();
@@ -330,6 +344,21 @@ void ScrcpyClient::pressKey(int keycode)
 {
     injectKey(keycode, ActionDown);
     injectKey(keycode, ActionUp);
+}
+
+void ScrcpyClient::setKeeper(bool enabled, bool panelDark, int graceMs)
+{
+    QByteArray msg(7, 0);
+    msg[0] = char(kMsgOctaveSetKeeper);
+    msg[1] = enabled ? 1 : 0;
+    msg[2] = panelDark ? 1 : 0;
+    qToBigEndian<qint32>(graceMs, msg.data() + 3);
+    sendControl(msg);
+}
+
+void ScrcpyClient::takeBack()
+{
+    sendControl(QByteArray(1, char(kMsgOctaveTakeBack)));
 }
 
 void ScrcpyClient::setDisplayPower(bool on)
@@ -429,7 +458,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
          << QStringLiteral("scid=") + m_scid << QStringLiteral("tunnel_forward=true")
          << QStringLiteral("video=true")
          << QStringLiteral("audio=%1").arg(audio ? QStringLiteral("true") : QStringLiteral("false"))
-         << QStringLiteral("control=true") << QStringLiteral("video_codec=h264")
+         << QStringLiteral("control=true") << QStringLiteral("clipboard_autosync=false") << QStringLiteral("video_codec=h264")
          << QStringLiteral("audio_codec=raw")   // PCM s16le 48 kHz stereo: no decoder needed on our side
          << QStringLiteral("max_size=0") << QStringLiteral("video_bit_rate=%1").arg(bitRate)
          << QStringLiteral("max_fps=%1").arg(maxFps)
@@ -531,6 +560,13 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
             m_width = w;
             m_height = h;
             m_running = true;
+            const qintptr cfd = m_controlFd.load();
+            m_devMsgThread = std::thread([this, cfd]() {
+#ifdef Q_OS_LINUX
+                pthread_setname_np(pthread_self(), "scrcpy-devmsg");
+#endif
+                deviceMessageLoop(cfd);
+            });
             emit frameSizeChanged(w, h);
             emit connected(w, h);
             // 5. demux + decode until stop/disconnect
@@ -666,6 +702,54 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
 }
 
 // ─── audio ────────────────────────────────────────────────────────────
+
+// Blocking read of exactly n bytes from a raw descriptor (the control socket
+// belongs to the worker thread's QTcpSocket; this thread only reads the fd).
+static bool recvExactFd(qintptr fd, char *buf, int n, const std::atomic<bool> &stopping)
+{
+    int got = 0;
+    while (got < n && !stopping.load()) {
+#ifdef Q_OS_WIN
+        const int r = ::recv(static_cast<SOCKET>(fd), buf + got, n - got, 0);
+#else
+        const auto r = ::recv(static_cast<int>(fd), buf + got, size_t(n - got), 0);
+#endif
+        if (r <= 0)
+            return false;
+        got += int(r);
+    }
+    return got == n;
+}
+
+void ScrcpyClient::deviceMessageLoop(qintptr fd)
+{
+    // Device messages from the server (phone_server DeviceMessageWriter)
+    char hdr[8];
+    while (!m_stopping.load()) {
+        if (!recvExactFd(fd, hdr, 1, m_stopping))
+            return;
+        const quint8 type = quint8(hdr[0]);
+        if (type == kDevMsgClipboard) {
+            if (!recvExactFd(fd, hdr, 4, m_stopping)) return;
+            const quint32 n = qFromBigEndian<quint32>(hdr);
+            QByteArray skip(int(qMin<quint32>(n, 1u << 18)), 0);
+            if (!recvExactFd(fd, skip.data(), skip.size(), m_stopping)) return;
+        } else if (type == kDevMsgAckClipboard) {
+            if (!recvExactFd(fd, hdr, 8, m_stopping)) return;
+        } else if (type == kDevMsgUhidOutput) {
+            if (!recvExactFd(fd, hdr, 4, m_stopping)) return;
+            const quint16 n = qFromBigEndian<quint16>(hdr + 2);
+            QByteArray skip(n, 0);
+            if (!recvExactFd(fd, skip.data(), skip.size(), m_stopping)) return;
+        } else if (type == kDevMsgOctavePhoneState) {
+            if (!recvExactFd(fd, hdr, 3, m_stopping)) return;
+            emit phoneStateChanged(hdr[0] != 0, hdr[1] != 0, hdr[2] != 0);
+        } else {
+            qCWarning(lcScrcpyClient) << "unknown device message type" << type << "; stopping the reader";
+            return;
+        }
+    }
+}
 
 void ScrcpyClient::audioLoop(QTcpSocket *audio)
 {

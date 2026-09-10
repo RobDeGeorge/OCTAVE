@@ -59,6 +59,14 @@ MSG_INJECT_TOUCH_EVENT = 2
 MSG_INJECT_SCROLL_EVENT = 3
 MSG_BACK_OR_SCREEN_ON = 4
 MSG_SET_DISPLAY_POWER = 10
+# OCTAVE extensions (phone_server MirrorKeeper)
+MSG_OCTAVE_SET_KEEPER = 100     # enabled, panel_dark, grace_ms
+MSG_OCTAVE_TAKE_BACK = 101
+# Device messages (server -> client, control socket)
+DEVMSG_CLIPBOARD = 0
+DEVMSG_ACK_CLIPBOARD = 1
+DEVMSG_UHID_OUTPUT = 2
+DEVMSG_OCTAVE_PHONE_STATE = 100   # asleep, in_use, panel_dark
 
 # Android MotionEvent / KeyEvent actions
 ACTION_DOWN = 0
@@ -148,6 +156,7 @@ class ScrcpyClient(QObject):
     audioStateChanged = Signal(bool)    # phone audio is (not) being played through OCTAVE
     audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound (GUI thread)
     serverLog = Signal(str)
+    phoneStateChanged = Signal(bool, bool, bool)   # asleep, in_use, panel_dark (from the server's MirrorKeeper)
 
     def __init__(self, adb_path: str, server_jar: str, parent=None):
         super().__init__(parent)
@@ -331,6 +340,15 @@ class ScrcpyClient(QObject):
                     return False
         return True
 
+    def set_keeper(self, enabled: bool, panel_dark: bool, grace_ms: int):
+        """Configure the server's MirrorKeeper: wake the phone on doze, keep
+        its panel dark, grace window for a power press from the locked state."""
+        self._send(struct.pack(">BBBi", MSG_OCTAVE_SET_KEEPER, 1 if enabled else 0, 1 if panel_dark else 0, int(grace_ms)))
+
+    def take_back(self):
+        """Leave the in-use state: the keeper wakes the phone if needed and re-applies the panel policy."""
+        self._send(struct.pack(">B", MSG_OCTAVE_TAKE_BACK))
+
     def set_display_power(self, on: bool):
         self._send(struct.pack(">BB", MSG_SET_DISPLAY_POWER, 1 if on else 0))
 
@@ -422,7 +440,7 @@ class ScrcpyClient(QObject):
         # 3. start the server
         opts = [
             f"scid={self._scid}", "tunnel_forward=true", "video=true",
-            f"audio={'true' if audio else 'false'}", "control=true",
+            f"audio={'true' if audio else 'false'}", "control=true", "clipboard_autosync=false",
             "video_codec=h264", "max_size=0", f"video_bit_rate={bit_rate}",
             "audio_codec=raw",   # PCM s16le 48 kHz stereo: no decoder needed on our side
             f"max_fps={max_fps}", f"stay_awake={'true' if stay_awake else 'false'}",
@@ -660,12 +678,26 @@ class ScrcpyClient(QObject):
                 self._audio_queue_bytes -= len(chunk)
 
     def _drain_device_messages(self, control: socket.socket):
-        # Clipboard notifications etc. — read and discard for now.
+        """Device messages on the control socket (phone_server DeviceMessageWriter)."""
         try:
             while not self._stopping:
-                if not control.recv(4096):
+                t = _recv_exact(control, 1)[0]
+                if t == DEVMSG_CLIPBOARD:
+                    (n,) = struct.unpack(">I", _recv_exact(control, 4))
+                    _recv_exact(control, n)
+                elif t == DEVMSG_ACK_CLIPBOARD:
+                    _recv_exact(control, 8)
+                elif t == DEVMSG_UHID_OUTPUT:
+                    _recv_exact(control, 2)
+                    (n,) = struct.unpack(">H", _recv_exact(control, 2))
+                    _recv_exact(control, n)
+                elif t == DEVMSG_OCTAVE_PHONE_STATE:
+                    asleep, in_use, dark = _recv_exact(control, 3)
+                    self.phoneStateChanged.emit(bool(asleep), bool(in_use), bool(dark))
+                else:
+                    logger.warning(f"scrcpy client: unknown device message type {t}; stopping the reader")
                     break
-        except OSError:
+        except (ConnectionError, OSError, IndexError):
             pass
 
     def _video_loop(self, video: socket.socket, t0: float):

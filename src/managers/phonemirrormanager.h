@@ -145,14 +145,9 @@ private:
     void onConnected(int w, int h);
     void onDisconnected(const QString &reason);
     void updateDucking();
-    void applyScreenOff();
-    void setPanel(bool on);
-    void startWakeWatch();
-    void stopWakeWatch();
-    void pollWakefulness();
-    void onWakefulness(const QString &state, int locked);
-    void setInUse(bool inUse);
-    void onGraceExpired();
+    void sendKeeperPolicy();
+    void onPhoneState(bool asleep, bool inUse, bool panelDark);
+    void resetPhoneState();
     void onServerLog(const QString &line);
 
     QString m_adbPath;
@@ -178,12 +173,7 @@ private:
     bool m_phoneInUse = false;
     QString m_serial;
     int m_vdisplayId = -1;          // --new-display id, parsed from the server log
-    int m_prevLocked = -2;          // deviceLocked at the previous poll; -2 before the first
-    bool m_blankOnWake = false;     // the doze ended an in-use spell: user is putting the phone down
-    bool m_panelOff = false;        // last panel state we asked for this session
-    QTimer m_grace;                 // panel left lit after a wake until this fires
-    QTimer m_wakePoll;               // asks the phone for mWakefulness while a session is up
-    bool m_wakeProbeBusy = false;
+    bool m_panelDark = false;       // as reported by the keeper
 };
 
 #else // Q_OS_MOBILE — mobile stub

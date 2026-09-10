@@ -31,6 +31,8 @@ public final class WindowManager {
     private int thawDisplayRotationMethodVersion;
 
     private Method getDisplayImePolicyMethod;
+    private Method isKeyguardLockedMethod;
+    private boolean isKeyguardLockedUnavailable;
     private Method setDisplayImePolicyMethod;
 
     static WindowManager create() {
@@ -188,6 +190,26 @@ public final class WindowManager {
             }
         } catch (ReflectiveOperationException e) {
             Ln.e("Could not invoke method", e);
+        }
+    }
+
+    /**
+     * OCTAVE: whether the keyguard is currently showing and not dismissed
+     * (IWindowManager.isKeyguardLocked). null when the method is unavailable.
+     */
+    public Boolean isKeyguardLocked() {
+        if (isKeyguardLockedUnavailable) {
+            return null;
+        }
+        try {
+            if (isKeyguardLockedMethod == null) {
+                isKeyguardLockedMethod = manager.getClass().getMethod("isKeyguardLocked");
+            }
+            return (Boolean) isKeyguardLockedMethod.invoke(manager);
+        } catch (ReflectiveOperationException e) {
+            Ln.e("Could not invoke isKeyguardLocked", e);
+            isKeyguardLockedUnavailable = true;
+            return null;
         }
     }
 

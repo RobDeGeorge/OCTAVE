@@ -111,10 +111,11 @@ at the pinned tag. Verify each detail against that tag before coding.
      x i32, y i32 in **video frame pixels**, screen width u16, screen height u16,
      pressure u16 fixed-point (0xFFFF = 1.0), action_button i32, buttons i32. 32 bytes total.
    - `0` INJECT_KEYCODE: action u8, keycode i32, repeat i32, metastate i32.
-   - `1` INJECT_TEXT, `9` SET_CLIPBOARD, `10` SET_DISPLAY_POWER (screen off while mirroring), `3` BACK_OR_SCREEN_ON.
+   - `1` INJECT_TEXT, `9` SET_CLIPBOARD, `10` SET_DISPLAY_POWER (screen off while mirroring), `4` BACK_OR_SCREEN_ON.
+   - OCTAVE extensions (our server fork only): `100` OCTAVE_SET_KEEPER `[u8 enabled][u8 panelDark][i32 graceMs]` and `101` OCTAVE_TAKE_BACK (no payload). They drive `control/MirrorKeeper.java`, which wakes the phone on doze, keeps its panel dark and tracks the keyguard from inside the device.
    Coordinates are relative to the mirrored display, so the virtual display needs no
    `input -d`: the server routes injection to the display it mirrors.
-9. **Device messages** (control socket, server → client): clipboard changes; safe to read and drop initially.
+9. **Device messages** (control socket, server → client): `[u8 type]` then `0` CLIPBOARD `[u32 len][utf8]`, `1` ACK_CLIPBOARD `[u64 seq]`, `2` UHID_OUTPUT `[u16 id][u16 len][data]`, and OCTAVE's `100` PHONE_STATE `[u8 asleep][u8 inUse][u8 panelDark]`, sent by the MirrorKeeper on every change. Both clients run a reader thread on the control socket; `clipboard_autosync=false` keeps the clipboard traffic off.
 10. **Teardown:** close both sockets and kill the `app_process` child; the server exits and
     destroys the virtual display (`cleanup=true`). Keep the `adb shell pkill -f com.genymobile.scrcpy` safety net and `adb forward --remove`.
 

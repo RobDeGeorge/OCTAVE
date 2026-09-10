@@ -96,6 +96,7 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
     private final MotionEvent.PointerCoords[] pointerCoords = new MotionEvent.PointerCoords[PointersState.MAX_POINTERS];
 
     private boolean keepDisplayPowerOff;
+    private MirrorKeeper mirrorKeeper;   // OCTAVE extension, created on first TYPE_OCTAVE_SET_KEEPER
 
     // Used for resetting video encoding on RESET_VIDEO message
     private SurfaceCapture surfaceCapture;
@@ -232,6 +233,9 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
                 if (uhidManager != null) {
                     uhidManager.closeAll();
                 }
+                if (mirrorKeeper != null) {
+                    mirrorKeeper.stop();
+                }
                 listener.onTerminated(true);
             }
         }, "control-recv");
@@ -330,6 +334,17 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
                 break;
             case ControlMessage.TYPE_RESET_VIDEO:
                 resetVideo();
+                break;
+            case ControlMessage.TYPE_OCTAVE_SET_KEEPER:
+                if (mirrorKeeper == null) {
+                    mirrorKeeper = new MirrorKeeper(cleanUp, sender);
+                }
+                mirrorKeeper.setPolicy(msg.getOn(), msg.getPanelDark(), msg.getGraceMs());
+                break;
+            case ControlMessage.TYPE_OCTAVE_TAKE_BACK:
+                if (mirrorKeeper != null) {
+                    mirrorKeeper.takeBack();
+                }
                 break;
             default:
                 // do nothing

@@ -25,6 +25,9 @@ public final class ControlMessage {
     public static final int TYPE_OPEN_HARD_KEYBOARD_SETTINGS = 15;
     public static final int TYPE_START_APP = 16;
     public static final int TYPE_RESET_VIDEO = 17;
+    // OCTAVE extensions (MirrorKeeper)
+    public static final int TYPE_OCTAVE_SET_KEEPER = 100;   // enabled, panelDark, graceMs
+    public static final int TYPE_OCTAVE_TAKE_BACK = 101;    // leave the in-use state
 
     public static final long SEQUENCE_INVALID = 0;
 
@@ -51,6 +54,8 @@ public final class ControlMessage {
     private int id;
     private byte[] data;
     private boolean on;
+    private boolean panelDark;
+    private int graceMs;
     private int vendorId;
     private int productId;
 
@@ -118,6 +123,23 @@ public final class ControlMessage {
         msg.text = text;
         msg.paste = paste;
         return msg;
+    }
+
+    public static ControlMessage createOctaveSetKeeper(boolean enabled, boolean panelDark, int graceMs) {
+        ControlMessage msg = new ControlMessage();
+        msg.type = TYPE_OCTAVE_SET_KEEPER;
+        msg.on = enabled;
+        msg.panelDark = panelDark;
+        msg.graceMs = graceMs;
+        return msg;
+    }
+
+    public boolean getPanelDark() {
+        return panelDark;
+    }
+
+    public int getGraceMs() {
+        return graceMs;
     }
 
     public static ControlMessage createSetDisplayPower(boolean on) {

@@ -56,6 +56,10 @@ public class ControlMessageReader {
                 return parseUhidDestroy();
             case ControlMessage.TYPE_START_APP:
                 return parseStartApp();
+            case ControlMessage.TYPE_OCTAVE_SET_KEEPER:
+                return ControlMessage.createOctaveSetKeeper(dis.readBoolean(), dis.readBoolean(), dis.readInt());
+            case ControlMessage.TYPE_OCTAVE_TAKE_BACK:
+                return ControlMessage.createEmpty(type);
             default:
                 throw new ControlProtocolException("Unknown event type: " + type);
         }

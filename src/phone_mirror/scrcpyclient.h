@@ -84,6 +84,10 @@ public:
     void injectKey(int keycode, int action = ActionDown, int meta = 0);
     void pressKey(int keycode);
     void setDisplayPower(bool on);
+    // OCTAVE extensions (phone_server MirrorKeeper): wake on doze, keep the
+    // panel dark, grace window for a press from the locked state
+    void setKeeper(bool enabled, bool panelDark, int graceMs);
+    void takeBack();
     // While true, all-black frames are never shown (the phone is asleep and
     // the last good frame stays up); otherwise only for kBlackHoldMs.
     void setHoldBlack(bool hold) { m_holdBlack = hold; }
@@ -97,6 +101,7 @@ signals:
     void audioStateChanged(bool active);        // phone audio is (not) being played through OCTAVE
     void audioPlayingChanged(bool playing);     // the phone is (not) producing sound (GUI thread)
     void serverLog(const QString &line);
+    void phoneStateChanged(bool asleep, bool inUse, bool panelDark);   // from the keeper
 
 private slots:
     void deliverFrame();
@@ -108,6 +113,7 @@ private:
     QTcpSocket *connectUntilReady(qint64 deadlineMs);
     void videoLoop(QTcpSocket *video, qint64 t0);
     void audioLoop(QTcpSocket *audio);
+    void deviceMessageLoop(qintptr fd);
     bool ensureAudioSink();
     void stopAudioSink();
     void setAudioPlaying(bool playing);
@@ -147,6 +153,7 @@ private:
     // Audio: PCM s16le 48 kHz stereo from the audio socket, played through
     // QAudioSink on the GUI thread (QAudioSink is not thread-safe).
     std::thread m_audioThread;
+    std::thread m_devMsgThread;
     std::atomic<bool> m_audioActive{false};
     std::atomic<float> m_volume{1.0f};
     std::atomic<float> m_audioGain{2.0f};

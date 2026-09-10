@@ -5,12 +5,17 @@ public final class DeviceMessage {
     public static final int TYPE_CLIPBOARD = 0;
     public static final int TYPE_ACK_CLIPBOARD = 1;
     public static final int TYPE_UHID_OUTPUT = 2;
+    // OCTAVE extension: phone asleep / in use / panel dark (MirrorKeeper)
+    public static final int TYPE_OCTAVE_PHONE_STATE = 100;
 
     private int type;
     private String text;
     private long sequence;
     private int id;
     private byte[] data;
+    private boolean asleep;
+    private boolean inUse;
+    private boolean panelDark;
 
     private DeviceMessage() {
     }
@@ -35,6 +40,27 @@ public final class DeviceMessage {
         event.id = id;
         event.data = data;
         return event;
+    }
+
+    public static DeviceMessage createOctavePhoneState(boolean asleep, boolean inUse, boolean panelDark) {
+        DeviceMessage event = new DeviceMessage();
+        event.type = TYPE_OCTAVE_PHONE_STATE;
+        event.asleep = asleep;
+        event.inUse = inUse;
+        event.panelDark = panelDark;
+        return event;
+    }
+
+    public boolean isAsleep() {
+        return asleep;
+    }
+
+    public boolean isInUse() {
+        return inUse;
+    }
+
+    public boolean isPanelDark() {
+        return panelDark;
     }
 
     public int getType() {
