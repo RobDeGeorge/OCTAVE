@@ -210,50 +210,6 @@ int PhoneMirrorManager::getDeviceSdk()
     return ok ? sdk : 0;
 }
 
-// Phone media volume. With audio forwarding the phone's own STREAM_MUSIC
-// level scales what reaches OCTAVE before OCTAVE's volume curve does, so a
-// phone left at 5/15 arrives ~10 dB down. Push it to max for the session and
-// put it back afterwards; OCTAVE's dial is the one that matters.
-QPair<int, int> PhoneMirrorManager::phoneMediaVolume() const
-{
-    const QString out = runAdb({QStringLiteral("shell"), QStringLiteral("media"), QStringLiteral("volume"),
-                                QStringLiteral("--stream"), QStringLiteral("3"), QStringLiteral("--get")});
-    static const QRegularExpression re(QStringLiteral("volume is (\\d+) in range \\[(\\d+)\\.\\.(\\d+)\\]"));
-    const auto m = re.match(out);
-    return m.hasMatch() ? qMakePair(m.captured(1).toInt(), m.captured(3).toInt()) : qMakePair(-1, -1);
-}
-
-void PhoneMirrorManager::setPhoneMediaVolume(int level)
-{
-    if (level >= 0)
-        runAdb({QStringLiteral("shell"), QStringLiteral("media"), QStringLiteral("volume"),
-                QStringLiteral("--stream"), QStringLiteral("3"), QStringLiteral("--set"), QString::number(level)});
-}
-
-void PhoneMirrorManager::onAudioState(bool active)
-{
-    if (active) {
-        const auto [level, maximum] = phoneMediaVolume();
-        if (maximum > 0 && level < maximum) {
-            m_savedPhoneVolume = level;
-            setPhoneMediaVolume(maximum);
-            qCInfo(lcPhoneMirror) << "Phone media volume raised" << level << "->" << maximum
-                                  << "for the session (restored on stop)";
-        }
-    } else {
-        restorePhoneVolume();
-    }
-}
-
-void PhoneMirrorManager::restorePhoneVolume()
-{
-    if (m_savedPhoneVolume >= 0) {
-        setPhoneMediaVolume(m_savedPhoneVolume);
-        qCInfo(lcPhoneMirror) << "Phone media volume restored to" << m_savedPhoneVolume;
-        m_savedPhoneVolume = -1;
-    }
-}
-
 void PhoneMirrorManager::killStaleServer()
 {
     // A crashed session can leave the device-side server running
@@ -269,6 +225,13 @@ void PhoneMirrorManager::setVolume(float volume)
     m_volume = volume;
     if (m_client)
         m_client->setVolume(volume);
+}
+
+void PhoneMirrorManager::setAudioGain(float gain)
+{
+    m_audioGain = qBound(0.25f, gain, 8.0f);
+    if (m_client)
+        m_client->setAudioGain(m_audioGain);
 }
 
 bool PhoneMirrorManager::audioActive() const
@@ -401,7 +364,7 @@ void PhoneMirrorManager::startScrcpy()
     }, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::frameReady, this, &PhoneMirrorManager::frameReady, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::audioStateChanged, this, &PhoneMirrorManager::audioActiveChanged, Qt::QueuedConnection);
-    connect(m_client, &ScrcpyClient::audioStateChanged, this, &PhoneMirrorManager::onAudioState, Qt::QueuedConnection);
+    m_client->setAudioGain(m_audioGain);
     m_client->setVolume(m_volume);
 
     QString displaySize = m_displaySize;
@@ -460,7 +423,6 @@ void PhoneMirrorManager::stopScrcpy()
         client->deleteLater();
         killStaleServer();
     }
-    restorePhoneVolume();
     emit scrcpyStopped();
     emit isRunningChanged();
 }

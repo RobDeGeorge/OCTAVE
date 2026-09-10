@@ -128,7 +128,7 @@ class PhoneMirrorManager(QObject):
         self._is_starting: bool = False
         self._is_stopping: bool = False
         self._ready: bool = False
-        self._saved_phone_volume: int = -1
+        self._audio_gain: float = 2.0
 
     # ── availability / environment ──────────────────────────────────
 
@@ -240,21 +240,6 @@ class PhoneMirrorManager(QObject):
         except (TypeError, ValueError):
             return 0
 
-    # Phone media volume. With audio forwarding the phone's own STREAM_MUSIC
-    # level scales what reaches OCTAVE before OCTAVE's volume curve does, so a
-    # phone left at 5/15 arrives ~10 dB down. Push it to max for the session
-    # and put it back afterwards; OCTAVE's dial is the one that matters.
-    _MUSIC_STREAM = "3"
-
-    def _get_phone_media_volume(self) -> tuple:
-        out = self._run_adb(["shell", "media", "volume", "--stream", self._MUSIC_STREAM, "--get"])
-        m = re.search(r"volume is (\d+) in range \[(\d+)\.\.(\d+)\]", out)
-        return (int(m.group(1)), int(m.group(3))) if m else (-1, -1)
-
-    def _set_phone_media_volume(self, level: int):
-        if level >= 0:
-            self._run_adb(["shell", "media", "volume", "--stream", self._MUSIC_STREAM, "--set", str(level)])
-
     def _kill_stale_server(self):
         """A crashed session can leave the device-side server running."""
         self._run_adb(["shell", "pkill", "-f", SERVER_PROCESS_PATTERN], timeout=5)
@@ -281,6 +266,16 @@ class PhoneMirrorManager(QObject):
         if self.isRunning:
             self.stopScrcpy()
             QTimer.singleShot(300, self.startScrcpy)
+
+    @Slot(float)
+    def setAudioGain(self, gain: float):
+        """Linear gain applied to phone PCM before OCTAVE's volume (setting
+        scrcpyAudioGain). Phones deliver capture at their own media level,
+        typically well under loudness-mastered local music; +6 dB (2.0) is a
+        sensible default. Clamped 0.25..8, soft-limited in the client."""
+        self._audio_gain = max(0.25, min(8.0, float(gain)))
+        if self._client is not None:
+            self._client.set_audio_gain(self._audio_gain)
 
     @Property(bool, notify=audioActiveChanged)
     def audioActive(self) -> bool:
@@ -398,7 +393,7 @@ class PhoneMirrorManager(QObject):
         client.frameSizeChanged.connect(self._on_frame_size)
         client.frameReady.connect(self.frameReady)
         client.audioStateChanged.connect(self.audioActiveChanged)
-        client.audioStateChanged.connect(self._on_audio_state)
+        client.set_audio_gain(self._audio_gain)
         client.set_volume(self._volume)
         self._client = client
 
@@ -429,22 +424,6 @@ class PhoneMirrorManager(QObject):
             self._frame_width, self._frame_height = w, h
             self.frameSizeChanged.emit(w, h)
 
-    def _on_audio_state(self, active: bool):
-        if active:
-            level, maximum = self._get_phone_media_volume()
-            if maximum > 0 and level < maximum:
-                self._saved_phone_volume = level
-                self._set_phone_media_volume(maximum)
-                logger.info(f"Phone media volume raised {level} -> {maximum} for the session (restored on stop)")
-        else:
-            self._restore_phone_volume()
-
-    def _restore_phone_volume(self):
-        if self._saved_phone_volume >= 0:
-            self._set_phone_media_volume(self._saved_phone_volume)
-            logger.info(f"Phone media volume restored to {self._saved_phone_volume}")
-            self._saved_phone_volume = -1
-
     def _on_disconnected(self, reason: str):
         if self._is_stopping:
             return
@@ -468,7 +447,6 @@ class PhoneMirrorManager(QObject):
             client.stop()
             client.deleteLater()
             self._kill_stale_server()
-        self._restore_phone_volume()
         self.scrcpyStopped.emit()
         self.isRunningChanged.emit()
 

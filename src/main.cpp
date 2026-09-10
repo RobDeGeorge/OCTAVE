@@ -211,6 +211,9 @@ int main(int argc, char *argv[])
     // Phone mirror settings from saved config (desktop-only accessors)
     phoneMirrorManager.setAudioEnabled(settingsManager.get_scrcpy_audio_enabled());
     phoneMirrorManager.setDisplaySize(settingsManager.get_scrcpy_display_size());
+    phoneMirrorManager.setAudioGain(float(settingsManager.get_scrcpy_audio_gain()));
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyAudioGainChanged,
+                     &phoneMirrorManager, [&phoneMirrorManager](double g) { phoneMirrorManager.setAudioGain(float(g)); });
 #endif
 
     // Register custom QML types for video embedding (stub types on mobile)

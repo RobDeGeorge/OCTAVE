@@ -36,9 +36,9 @@ Item {
     property bool imuConnected: false
 
     // Camera orbit properties
-    property real cameraYaw: 0
+    property real cameraYaw: -35
     property real cameraPitch: -25
-    property real cameraDistance: 134
+    property real cameraDistance: 200
 
     // Helper: convert heading to cardinal direction
     function headingToCardinal(h) {
@@ -112,9 +112,10 @@ Item {
                 anchors.fill: parent
 
                 environment: SceneEnvironment {
-                    clearColor: "#87CEEB"
+                    clearColor: "#18232F"
                     backgroundMode: SceneEnvironment.Color
-                    antialiasingMode: SceneEnvironment.NoAA
+                    antialiasingMode: SceneEnvironment.MSAA
+                    antialiasingQuality: SceneEnvironment.Medium
                     aoEnabled: false
                 }
 
@@ -124,7 +125,11 @@ Item {
 
                     PerspectiveCamera {
                         id: camera
-                        position: Qt.vector3d(0, 0, cameraDistance)
+                        // Fit the vehicle's rotation envelope even in a narrow view.
+                        position: Qt.vector3d(0, 0, Math.max(cameraDistance,
+                            70 / Math.sin(Math.atan(Math.tan(Math.PI / 8)
+                                * Math.min(1, view3d.width / Math.max(1, view3d.height))))))
+                        fieldOfView: 45
                         clipNear: 10
                         clipFar: 1000
                     }
@@ -134,12 +139,18 @@ Item {
                     id: mainLight
                     eulerRotation.x: -45
                     eulerRotation.y: 45
-                    brightness: 2
-                    ambientColor: "#666666"
+                    brightness: 1.3
+                    ambientColor: "#777777"
                     castsShadow: false
                 }
 
-                // Car model
+                DirectionalLight {
+                    eulerRotation: Qt.vector3d(-25, -135, 0)
+                    brightness: 0.7
+                    color: "#C3D9FF"
+                }
+
+                // Metre-scale TJ, +Z forward / +Y up, pivot at chassis centre.
                 Node {
                     id: carModel
                     position: Qt.vector3d(0, 0, 0)
@@ -147,7 +158,7 @@ Item {
 
                     RuntimeLoader {
                         id: modelLoader
-                        source: "./assets/cam.glb"
+                        source: "./assets/jeep_tj_2003.glb"
                         // RuntimeLoader exposes `status` + `errorString`; there is no
                         // `statusString`, so the old handler threw a ReferenceError and
                         // swallowed the very message needed to diagnose a failed load

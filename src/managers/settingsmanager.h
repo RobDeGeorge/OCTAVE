@@ -93,6 +93,7 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool phoneMirrorEnabled READ phoneMirrorEnabled NOTIFY phoneMirrorEnabledChanged)
     Q_PROPERTY(bool scrcpyAudioEnabled READ scrcpyAudioEnabled NOTIFY scrcpyAudioEnabledChanged)
     Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize NOTIFY scrcpyDisplaySizeChanged)
+    Q_PROPERTY(double scrcpyAudioGain READ scrcpyAudioGain NOTIFY scrcpyAudioGainChanged)
 
     // --- ESP32 Volume Knob ---
     Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled NOTIFY esp32VolumeEnabledChanged)
@@ -195,6 +196,7 @@ public:
     bool phoneMirrorEnabled() const;
     bool scrcpyAudioEnabled() const;
     QString scrcpyDisplaySize() const;
+    double scrcpyAudioGain() const;
 
     // ESP32
     bool esp32VolumeEnabled() const;
@@ -301,6 +303,7 @@ signals:
     void phoneMirrorEnabledChanged(bool value);
     void scrcpyAudioEnabledChanged(bool value);
     void scrcpyDisplaySizeChanged(const QString &value);
+    void scrcpyAudioGainChanged(double value);
 
     // ESP32
     void esp32VolumeEnabledChanged(bool value);
@@ -420,6 +423,7 @@ public slots:
     void save_phone_mirror_enabled(bool enabled);
     void save_scrcpy_audio_enabled(bool enabled);
     void save_scrcpy_display_size(const QString &size);
+    void save_scrcpy_audio_gain(double gain);
 
     // ESP32
     void save_esp32_volume_enabled(bool enabled);
@@ -479,6 +483,7 @@ public slots:
     Q_INVOKABLE bool get_phone_mirror_enabled();
     Q_INVOKABLE bool get_scrcpy_audio_enabled();
     Q_INVOKABLE QString get_scrcpy_display_size();
+    Q_INVOKABLE double get_scrcpy_audio_gain();
     Q_INVOKABLE bool get_esp32_volume_enabled();
     Q_INVOKABLE QString get_esp32_volume_port();
     Q_INVOKABLE double get_esp32_volume_step_size();
@@ -598,6 +603,7 @@ private:
     bool m_phoneMirrorEnabled = false;
     bool m_scrcpyAudioEnabled = false;
     QString m_scrcpyDisplaySize;
+    double m_scrcpyAudioGain = 2.0;
 
     // Settings menu visibility
     QVariantMap m_settingsMenuVisibility;

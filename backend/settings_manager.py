@@ -202,6 +202,7 @@ class SettingsManager(QObject):
     phoneMirrorEnabledChanged = Signal(bool)
     scrcpyAudioEnabledChanged = Signal(bool)
     scrcpyDisplaySizeChanged = Signal(str)
+    scrcpyAudioGainChanged = Signal(float)
     albumArtColorsChanged = Signal(str)  # JSON string with album art theme colors
 
     # Settings menu visibility signals
@@ -402,6 +403,7 @@ class SettingsManager(QObject):
             "phoneMirrorEnabled": False,  # If True, show Phone Mirror button in bottom bar
             "scrcpyAudioEnabled": False,  # If True, forward audio from phone
             "scrcpyDisplaySize": "1280x800",  # Virtual display WxH (--new-display); "" = phone screen
+            "scrcpyAudioGain": 2.0,  # Linear gain on phone audio before OCTAVE's volume (+6 dB)
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
                 "deviceSettings": True,
@@ -551,6 +553,7 @@ class SettingsManager(QObject):
         self._phone_mirror_enabled = self._settings.get("phoneMirrorEnabled", False)
         self._scrcpy_audio_enabled = self._settings.get("scrcpyAudioEnabled", False)
         self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "1280x800")
+        self._scrcpy_audio_gain = float(self._settings.get("scrcpyAudioGain", 2.0))
 
         # Settings menu visibility
         self._settings_menu_visibility = self._settings.get(
@@ -1651,6 +1654,22 @@ class SettingsManager(QObject):
         self._scrcpy_display_size = size
         self.update_setting("scrcpyDisplaySize", size, self.scrcpyDisplaySizeChanged)
 
+    @Property(float, notify=scrcpyAudioGainChanged)
+    def scrcpyAudioGain(self):
+        """Linear gain applied to phone audio before OCTAVE's volume"""
+        return self._scrcpy_audio_gain
+
+    @Slot(result=float)
+    def get_scrcpy_audio_gain(self):
+        return self._scrcpy_audio_gain
+
+    @Slot(float)
+    def save_scrcpy_audio_gain(self, gain):
+        gain = max(0.25, min(8.0, float(gain)))
+        logger.debug(f"Saving scrcpy audio gain: {gain}")
+        self._scrcpy_audio_gain = gain
+        self.update_setting("scrcpyAudioGain", gain, self.scrcpyAudioGainChanged)
+
     @Property(bool, notify=esp32VolumeEnabledChanged)
     def esp32VolumeEnabled(self):
         """Get whether ESP32 volume controller is enabled"""
@@ -2251,6 +2270,9 @@ class SettingsManager(QObject):
 
         self._scrcpy_display_size = self._default_settings["scrcpyDisplaySize"]
         self.scrcpyDisplaySizeChanged.emit(self._scrcpy_display_size)
+
+        self._scrcpy_audio_gain = self._default_settings["scrcpyAudioGain"]
+        self.scrcpyAudioGainChanged.emit(self._scrcpy_audio_gain)
 
         self._settings_menu_visibility = self._default_settings["settingsMenuVisibility"].copy()
         self.settingsMenuVisibilityChanged.emit()

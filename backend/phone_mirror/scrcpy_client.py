@@ -24,6 +24,11 @@ from typing import Optional
 
 from collections import deque
 
+try:
+    import numpy as np
+except Exception:  # pragma: no cover
+    np = None
+
 from PySide6.QtCore import QObject, Signal, Slot, QSize
 from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat, QAudioFormat, QAudioSink, QMediaDevices
 
@@ -158,6 +163,8 @@ class ScrcpyClient(QObject):
         self._audio_io = None
         self._audio_active = False
         self._volume = 1.0
+        self._audio_gain = 2.0
+        self._gain_warned = False
         self.audioReady.connect(self._deliver_audio)
 
     # ── public API ────────────────────────────────────────────────────
@@ -177,6 +184,10 @@ class ScrcpyClient(QObject):
     @property
     def audio_active(self) -> bool:
         return self._audio_active
+
+    def set_audio_gain(self, gain: float):
+        """Linear gain applied to phone PCM before the sink (soft-limited)."""
+        self._audio_gain = max(0.25, min(8.0, float(gain)))
 
     def set_volume(self, linear: float):
         """0..1 linear, as produced by VolumeController."""
@@ -480,7 +491,7 @@ class ScrcpyClient(QObject):
             while not self._stopping:
                 header = _recv_exact(audio_sock, 12)
                 _pts, size = struct.unpack(">QI", header)
-                data = _recv_exact(audio_sock, size)
+                data = self._apply_gain(_recv_exact(audio_sock, size))
                 with self._audio_lock:
                     self._audio_queue.append(data)
                     self._audio_queue_bytes += len(data)
@@ -495,6 +506,19 @@ class ScrcpyClient(QObject):
             if self._audio_active:
                 self._audio_active = False
                 self.audioStateChanged.emit(False)
+
+    def _apply_gain(self, pcm: bytes) -> bytes:
+        """Multiply s16le samples by the gain with a soft limiter (tanh) so a
+        hot source cannot clip harshly. Runs on the audio thread."""
+        gain = self._audio_gain
+        if abs(gain - 1.0) < 1e-3 or np is None or len(pcm) < 4:
+            if np is None and not self._gain_warned:
+                self._gain_warned = True
+                logger.warning("scrcpy client: numpy not available, phone audio gain ignored")
+            return pcm
+        x = np.frombuffer(pcm[:len(pcm) - len(pcm) % 2], dtype="<i2").astype(np.float32) * (gain / 32768.0)
+        y = np.tanh(x) * 32767.0
+        return y.astype("<i2").tobytes()
 
     def _ensure_audio_sink(self) -> bool:
         if self._audio_sink is not None:

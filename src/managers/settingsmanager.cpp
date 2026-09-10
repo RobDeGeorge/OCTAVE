@@ -208,6 +208,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("phoneMirrorEnabled")]      = false;
     d[QStringLiteral("scrcpyAudioEnabled")]      = false;
     d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("1280x800");     // --new-display WxH, "" = phone screen
+    d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)
 
     // Settings menu visibility
     QJsonObject menuVis;
@@ -435,6 +436,7 @@ SettingsManager::SettingsManager(QObject *parent)
     m_phoneMirrorEnabled  = s(QStringLiteral("phoneMirrorEnabled")).toBool();
     m_scrcpyAudioEnabled  = s(QStringLiteral("scrcpyAudioEnabled")).toBool();
     m_scrcpyDisplaySize   = s(QStringLiteral("scrcpyDisplaySize")).toString();
+    m_scrcpyAudioGain     = s(QStringLiteral("scrcpyAudioGain")).toDouble();
 
     // Settings menu visibility
     {
@@ -825,6 +827,7 @@ bool    SettingsManager::androidAutoEnabled() const  { return m_androidAutoEnabl
 bool    SettingsManager::phoneMirrorEnabled() const  { return m_phoneMirrorEnabled; }
 bool    SettingsManager::scrcpyAudioEnabled() const  { return m_scrcpyAudioEnabled; }
 QString SettingsManager::scrcpyDisplaySize() const   { return m_scrcpyDisplaySize; }
+double  SettingsManager::scrcpyAudioGain() const     { return m_scrcpyAudioGain; }
 
 // --- ESP32 ---
 bool    SettingsManager::esp32VolumeEnabled() const    { return m_esp32VolumeEnabled; }
@@ -1630,6 +1633,15 @@ void SettingsManager::save_scrcpy_display_size(const QString &size)
     emit scrcpyDisplaySizeChanged(size);
 }
 
+void SettingsManager::save_scrcpy_audio_gain(double gain)
+{
+    gain = qBound(0.25, gain, 8.0);
+    qCDebug(lcSettings) << "Saving scrcpy audio gain:" << gain;
+    m_scrcpyAudioGain = gain;
+    updateSetting(QStringLiteral("scrcpyAudioGain"), gain);
+    emit scrcpyAudioGainChanged(gain);
+}
+
 // --- ESP32 ---
 void SettingsManager::save_esp32_volume_enabled(bool enabled)
 {
@@ -1859,6 +1871,7 @@ bool    SettingsManager::get_android_auto_enabled()    { return m_androidAutoEna
 bool    SettingsManager::get_phone_mirror_enabled()    { return m_phoneMirrorEnabled; }
 bool    SettingsManager::get_scrcpy_audio_enabled()    { return m_scrcpyAudioEnabled; }
 QString SettingsManager::get_scrcpy_display_size()     { return m_scrcpyDisplaySize; }
+double  SettingsManager::get_scrcpy_audio_gain()       { return m_scrcpyAudioGain; }
 bool    SettingsManager::get_esp32_volume_enabled()    { return m_esp32VolumeEnabled; }
 QString SettingsManager::get_esp32_volume_port()       { return m_esp32VolumePort; }
 double  SettingsManager::get_esp32_volume_step_size()  { return m_esp32VolumeStepSize; }
@@ -2085,6 +2098,9 @@ void SettingsManager::reset_to_defaults()
 
     m_scrcpyDisplaySize = m_defaultSettings.value(QStringLiteral("scrcpyDisplaySize")).toString();
     emit scrcpyDisplaySizeChanged(m_scrcpyDisplaySize);
+
+    m_scrcpyAudioGain = m_defaultSettings.value(QStringLiteral("scrcpyAudioGain")).toDouble();
+    emit scrcpyAudioGainChanged(m_scrcpyAudioGain);
 
     // Settings menu visibility
     m_settingsMenuVisibility.clear();

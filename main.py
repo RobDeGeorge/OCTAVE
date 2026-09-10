@@ -123,6 +123,8 @@ engine.rootContext().setContextProperty("phoneMirrorManager", phone_mirror_manag
 # Phone mirror settings
 phone_mirror_manager.setAudioEnabled(settings_manager.get_scrcpy_audio_enabled())
 phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
+phone_mirror_manager.setAudioGain(settings_manager.get_scrcpy_audio_gain())
+settings_manager.scrcpyAudioGainChanged.connect(phone_mirror_manager.setAudioGain)
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
 settings_manager.scrcpyAudioEnabledChanged.connect(

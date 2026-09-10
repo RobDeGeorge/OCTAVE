@@ -79,6 +79,8 @@ public slots:
     // Called by VolumeController on every volume change (0..1 linear);
     // phone audio played through OCTAVE follows it.
     void setVolume(float volume);
+    // Linear gain on phone PCM before OCTAVE's volume (setting scrcpyAudioGain)
+    void setAudioGain(float gain);
     void setAudioEnabled(bool enabled);
     void setDisplaySize(const QString &size);
     bool environmentOk();
@@ -108,10 +110,6 @@ private:
     void killStaleServer();
     void onConnected(int w, int h);
     void onDisconnected(const QString &reason);
-    void onAudioState(bool active);
-    QPair<int, int> phoneMediaVolume() const;   // (level, max) or (-1, -1)
-    void setPhoneMediaVolume(int level);
-    void restorePhoneVolume();
 
     QString m_adbPath;
     bool m_audioEnabled = false;
@@ -126,7 +124,7 @@ private:
     bool m_isStarting = false;
     bool m_isStopping = false;
     bool m_ready = false;
-    int m_savedPhoneVolume = -1;
+    float m_audioGain = 2.0f;
 };
 
 #else // Q_OS_MOBILE — mobile stub
@@ -164,6 +162,7 @@ public:
 
 public slots:
     void setVolume(float) {}
+    void setAudioGain(float) {}
     void setAudioEnabled(bool) {}
     void setDisplaySize(const QString &) {}
     bool environmentOk() const { return false; }

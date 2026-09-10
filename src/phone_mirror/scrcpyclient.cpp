@@ -42,6 +42,7 @@ extern "C" {
 #endif
 
 #include <cstring>
+#include <cmath>
 
 Q_LOGGING_CATEGORY(lcScrcpyClient, "octave.phonemirror.client")
 
@@ -635,6 +636,16 @@ void ScrcpyClient::audioLoop(QTcpSocket *audio)
                 data.resize(int(size));
                 if (!recvExact(audio, data.data(), size, m_stopping))
                     break;
+                // Gain with a soft limiter (tanh) so a hot source cannot clip harshly
+                const float gain = m_audioGain.load();
+                if (std::abs(gain - 1.0f) > 1e-3f) {
+                    auto *samples = reinterpret_cast<qint16 *>(data.data());
+                    const int n = data.size() / 2;
+                    for (int i = 0; i < n; ++i) {
+                        const float x = float(samples[i]) * (gain / 32768.0f);
+                        samples[i] = qint16(std::tanh(x) * 32767.0f);
+                    }
+                }
                 {
                     std::lock_guard<std::mutex> lock(m_audioMutex);
                     m_audioQueue.append(data);

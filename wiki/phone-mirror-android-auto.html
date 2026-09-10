@@ -161,7 +161,7 @@
               <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>various</td><td>adb probes</td></tr>
               <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Same as <code>nativeAvailable</code>; the view shows setup text only when false</td></tr>
               <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing, or the USB-debugging steps</td></tr>
-              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code>, <code>setVolume(float)</code></td><td>--</td><td>Settings; a size or audio change restarts the session. <code>setVolume</code> is called by <code>VolumeController</code> on every volume change and phone audio follows it</td></tr>
+              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code>, <code>setAudioGain(float)</code>, <code>setVolume(float)</code></td><td>--</td><td>Settings; a size or audio change restarts the session. <code>setVolume</code> is called by <code>VolumeController</code> on every volume change and phone audio follows it</td></tr>
               <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>--</td><td>Touch on the mirrored display: action 0 down / 1 up / 2 move, coordinates 0..1 of the frame</td></tr>
               <tr><td><code>injectKey(keycode)</code>, <code>pressBack()</code>, <code>pressHome()</code>, <code>pressAppSwitch()</code></td><td>--</td><td>Android key events</td></tr>
             </tbody>
@@ -182,9 +182,10 @@
               <code>audio_codec=raw</code> so no decoder is needed; <code>0</code> = the phone could not capture, video continues)
               followed by the same <code>[pts][size][data]</code> packets. Chunks are queued (bounded to ~250&nbsp;ms, oldest dropped)
               and written to a <code>QAudioSink</code> on the GUI thread with a ~200&nbsp;ms device buffer; the sink volume is
-              OCTAVE's linear volume, so the knob and mute apply. While audio is active the manager raises the phone's own
-              media volume (<code>adb shell media volume --stream 3</code>) to maximum and restores it on stop, so the
-              phone's slider does not attenuate what reaches OCTAVE. The default capture source is the phone's remote
+              OCTAVE's linear volume, so the knob and mute apply. Phones capture at their own media level, typically well under
+              loudness-mastered local music, so a gain (setting <code>scrcpyAudioGain</code>, default +6&nbsp;dB, soft-limited
+              with tanh) is applied to the PCM inside OCTAVE; the phone's own volume is deliberately never changed (a
+              crash could leave it at maximum). The default capture source is the phone's remote
               submix, which captures every app (playback is muted on the handset itself). Expect lip-sync to trail the
               picture slightly.</li>
             <li><strong>Control</strong>: 32-byte <code>INJECT_TOUCH_EVENT</code> (type 2) with pointer id, x/y in frame pixels, screen size, pressure; 14-byte <code>INJECT_KEYCODE</code> (type 0). Coordinates are relative to the mirrored display, so a virtual display needs no display-id routing.</li>

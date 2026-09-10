@@ -66,6 +66,8 @@ public:
     void setVideoSink(QObject *sink);
     // 0..1 linear, as produced by VolumeController; phone audio follows it
     void setVolume(float linear);
+    // Linear gain applied to phone PCM before the sink (soft-limited)
+    void setAudioGain(float gain) { m_audioGain = qBound(0.25f, gain, 8.0f); }
     bool audioActive() const { return m_audioActive.load(); }
 
     bool start(const QString &serial, const QString &displaySize = QString(),
@@ -135,6 +137,7 @@ private:
     std::thread m_audioThread;
     std::atomic<bool> m_audioActive{false};
     std::atomic<float> m_volume{1.0f};
+    std::atomic<float> m_audioGain{2.0f};
     QList<QByteArray> m_audioQueue;
     qsizetype m_audioQueueBytes = 0;
     std::mutex m_audioMutex;

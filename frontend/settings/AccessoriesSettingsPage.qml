@@ -1656,6 +1656,49 @@ Flickable {
                     spacing: App.Spacing.rowSpacing
 
                     SettingLabel {
+                        text: "Phone Audio Level"
+                    }
+
+                    SettingDescription {
+                        text: "Boost or trim the phone's audio before OCTAVE's volume. Phones capture at their own media level, usually quieter than local music."
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing
+
+                        SettingsSlider {
+                            id: scrcpyAudioGainSlider
+                            from: -12
+                            to: 18
+                            stepSize: 1
+                            value: settingsManager ? Math.round(20 * Math.log(settingsManager.scrcpyAudioGain) / Math.LN10) : 6
+                            Layout.fillWidth: true
+                            onPressedChanged: {
+                                if (!pressed && settingsManager) {
+                                    settingsManager.save_scrcpy_audio_gain(Math.pow(10, value / 20))
+                                }
+                            }
+                            Connections {
+                                target: settingsManager
+                                function onScrcpyAudioGainChanged() {
+                                    scrcpyAudioGainSlider.value = Math.round(20 * Math.log(settingsManager.scrcpyAudioGain) / Math.LN10)
+                                }
+                            }
+                        }
+
+                        ValueDisplay {
+                            text: (scrcpyAudioGainSlider.value >= 0 ? "+" : "") + scrcpyAudioGainSlider.value.toFixed(0) + " dB"
+                            Layout.fillWidth: false
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingLabel {
                         text: "Status"
                     }
 
