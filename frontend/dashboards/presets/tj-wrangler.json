@@ -1,0 +1,76 @@
+{
+  "id": "tj-wrangler",
+  "label": "TJ Wrangler 4.0",
+  "schema": 1,
+  "gridColumns": 12,
+  "gridRows": 12,
+  "cells": [
+    { "type": "CircularGauge", "paramId": "SPEED",
+      "col": 0, "row": 0, "colSpan": 4, "rowSpan": 4,
+      "props": { "showNeedle": true, "majorTickCount": 6, "minorTicksPerMajor": 4, "max": 100 } },
+
+    { "type": "CircularGauge", "paramId": "RPM",
+      "col": 4, "row": 0, "colSpan": 4, "rowSpan": 4,
+      "props": { "showNeedle": true, "majorTickCount": 7, "minorTicksPerMajor": 4, "max": 6000, "redlineStart": 5000 } },
+
+    { "type": "CircularGauge", "paramId": "COOLANT_TEMP",
+      "col": 8, "row": 0, "colSpan": 4, "rowSpan": 4,
+      "props": { "showNeedle": true, "majorTickCount": 6, "minorTicksPerMajor": 4, "min": 60, "max": 115, "redlineStart": 105 } },
+
+    { "type": "DigitalReadout", "paramId": "ELM_VOLTAGE",
+      "col": 0, "row": 4, "colSpan": 3, "rowSpan": 2,
+      "props": { "decimals": 1 } },
+
+    { "type": "BarGauge", "paramId": "INTAKE_PRESSURE",
+      "col": 3, "row": 4, "colSpan": 3, "rowSpan": 2,
+      "props": { "orientation": "horizontal", "max": 105 } },
+
+    { "type": "BarGauge", "paramId": "INTAKE_TEMP",
+      "col": 6, "row": 4, "colSpan": 3, "rowSpan": 2,
+      "props": { "orientation": "horizontal", "warnAbove": 60 } },
+
+    { "type": "LinearGauge", "paramId": "TIMING_ADVANCE",
+      "col": 9, "row": 4, "colSpan": 3, "rowSpan": 2,
+      "props": { "min": -10, "max": 35, "majorTickCount": 5 } },
+
+    { "type": "BarGauge", "paramId": "ENGINE_LOAD",
+      "col": 0, "row": 6, "colSpan": 6, "rowSpan": 2,
+      "props": { "orientation": "horizontal" } },
+
+    { "type": "BarGauge", "paramId": "THROTTLE_POS",
+      "col": 6, "row": 6, "colSpan": 6, "rowSpan": 2,
+      "props": { "orientation": "horizontal" } },
+
+    { "type": "SparklineGauge", "paramId": "LONG_FUEL_TRIM_1",
+      "col": 0, "row": 8, "colSpan": 3, "rowSpan": 2,
+      "props": { "autoScale": true, "maxSamples": 60, "sampleIntervalMs": 1000 } },
+
+    { "type": "LinearGauge", "paramId": "SHORT_FUEL_TRIM_1",
+      "col": 3, "row": 8, "colSpan": 3, "rowSpan": 2,
+      "props": { "min": -25, "max": 25, "majorTickCount": 5 } },
+
+    { "type": "LinearGauge", "paramId": "SHORT_FUEL_TRIM_2",
+      "col": 6, "row": 8, "colSpan": 3, "rowSpan": 2,
+      "props": { "min": -25, "max": 25, "majorTickCount": 5 } },
+
+    { "type": "SparklineGauge", "paramId": "LONG_FUEL_TRIM_2",
+      "col": 9, "row": 8, "colSpan": 3, "rowSpan": 2,
+      "props": { "autoScale": true, "maxSamples": 60, "sampleIntervalMs": 1000 } },
+
+    { "type": "SparklineGauge", "paramId": "O2_B1S1",
+      "col": 0, "row": 10, "colSpan": 3, "rowSpan": 2,
+      "props": { "maxSamples": 60, "sampleIntervalMs": 250 } },
+
+    { "type": "SparklineGauge", "paramId": "O2_B1S2",
+      "col": 3, "row": 10, "colSpan": 3, "rowSpan": 2,
+      "props": { "maxSamples": 60, "sampleIntervalMs": 250 } },
+
+    { "type": "SparklineGauge", "paramId": "O2_B2S1",
+      "col": 6, "row": 10, "colSpan": 3, "rowSpan": 2,
+      "props": { "maxSamples": 60, "sampleIntervalMs": 250 } },
+
+    { "type": "SparklineGauge", "paramId": "O2_B2S2",
+      "col": 9, "row": 10, "colSpan": 3, "rowSpan": 2,
+      "props": { "maxSamples": 60, "sampleIntervalMs": 250 } }
+  ]
+}
