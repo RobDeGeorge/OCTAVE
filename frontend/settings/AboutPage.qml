@@ -158,22 +158,26 @@ Flickable {
                         Layout.fillWidth: true
                     }
 
-                    // Buttons on their own row so they can never squeeze the title;
-                    // maximumWidth keeps a long label from widening the card.
-                    RowLayout {
+                    // Two-by-two grid: four labels side by side overflow the card
+                    // at dash scale, and a Layout cannot shrink a button below
+                    // its label. Each button takes half the card width.
+                    GridLayout {
                         Layout.fillWidth: true
-                        Layout.maximumWidth: diagColumn.width
-                        spacing: App.Spacing.overallSpacing
+                        columns: 2
+                        columnSpacing: App.Spacing.overallSpacing
+                        rowSpacing: App.Spacing.overallSpacing * 0.5
 
                         SettingsButton {
                             text: "Refresh"
                             height: dp(30)
+                            Layout.fillWidth: true
                             onClicked: logTail.text = diagnosticsManager.recentLogLines(200)
                         }
                         SettingsButton {
                             text: "Copy"
                             tooltipText: "Copy the recent log lines and device info to the clipboard"
                             height: dp(30)
+                            Layout.fillWidth: true
                             onClicked: diagColumn.status = diagnosticsManager.copyLogsToClipboard(400)
                                                             ? "Copied to clipboard" : "Copy failed"
                         }
@@ -181,6 +185,7 @@ Flickable {
                             text: "Export logs"
                             tooltipText: "Copy every log file into your Downloads folder, ready to attach to an email"
                             height: dp(30)
+                            Layout.fillWidth: true
                             onClicked: {
                                 var p = diagnosticsManager.exportLogs()
                                 diagColumn.status = p !== "" ? "Exported to " + p : "Export failed"
@@ -189,10 +194,10 @@ Flickable {
                         SettingsButton {
                             text: "Open folder"
                             height: dp(30)
+                            Layout.fillWidth: true
                             visible: diagnosticsManager.canOpenFolder
                             onClicked: diagnosticsManager.openLogFolder()
                         }
-                        Item { Layout.fillWidth: true }
                     }
 
                     Text {
