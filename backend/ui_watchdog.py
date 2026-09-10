@@ -41,6 +41,10 @@ class UiWatchdog(QObject):
 
     def stop(self):
         self._running = False
+        t = self._thread
+        if t is not None and t is not threading.current_thread():
+            t.join(timeout=self._ping_s + 0.5)
+        self._thread = None
 
     def _loop(self):
         stalled = False
@@ -49,7 +53,11 @@ class UiWatchdog(QObject):
             time.sleep(self._ping_s)
             if not self._running:
                 break
-            self._ping.emit()
+            try:
+                self._ping.emit()
+            except RuntimeError:
+                # The QObject was torn down under us (shutdown without stop())
+                break
             silent = time.monotonic() - self._last_pong
             if not stalled and silent > self._stall_s:
                 stalled = True

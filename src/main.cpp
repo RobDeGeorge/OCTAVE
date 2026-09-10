@@ -394,6 +394,7 @@ int main(int argc, char *argv[])
 
     // Cleanup on quit (stubs make all calls no-op on mobile)
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
+        uiWatchdog.stop();
         androidAutoManager.cleanup();
         phoneMirrorManager.cleanup();
         esp32VolumeManager.cleanup();

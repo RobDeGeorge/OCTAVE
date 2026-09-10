@@ -149,18 +149,21 @@ Flickable {
 
                     property string status: ""
 
+                    Text {
+                        text: "Diagnostics"
+                        color: App.Style.accent
+                        font.pixelSize: App.Spacing.overallText * 0.9
+                        font.family: App.Style.fontFamily
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    // Buttons on their own row so they can never squeeze the title;
+                    // maximumWidth keeps a long label from widening the card.
                     RowLayout {
                         Layout.fillWidth: true
+                        Layout.maximumWidth: diagColumn.width
                         spacing: App.Spacing.overallSpacing
-
-                        Text {
-                            text: "Diagnostics"
-                            color: App.Style.accent
-                            font.pixelSize: App.Spacing.overallText * 0.9
-                            font.family: App.Style.fontFamily
-                            font.bold: true
-                            Layout.fillWidth: true
-                        }
 
                         SettingsButton {
                             text: "Refresh"
@@ -189,6 +192,7 @@ Flickable {
                             visible: diagnosticsManager.canOpenFolder
                             onClicked: diagnosticsManager.openLogFolder()
                         }
+                        Item { Layout.fillWidth: true }
                     }
 
                     Text {
@@ -199,6 +203,7 @@ Flickable {
                         font.family: App.Style.fontFamily
                         wrapMode: Text.WrapAnywhere
                         Layout.fillWidth: true
+                        Layout.preferredWidth: 0   // wrap to the card, never widen it
                     }
 
                     Text {
@@ -209,11 +214,13 @@ Flickable {
                         font.family: App.Style.fontFamily
                         wrapMode: Text.WrapAnywhere
                         Layout.fillWidth: true
+                        Layout.preferredWidth: 0
                     }
 
                     // Last lines of the main log (plus the error log); newest at the bottom
                     Flickable {
                         Layout.fillWidth: true
+                        Layout.preferredWidth: 0
                         Layout.preferredHeight: dp(180)
                         contentWidth: width
                         contentHeight: logTail.implicitHeight
