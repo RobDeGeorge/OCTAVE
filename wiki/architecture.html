@@ -570,6 +570,13 @@ Image {
             <tr><td><code>octave-cpp-debug.log</code></td><td>DEBUG+ (only with <code>--debug</code>)</td><td>10 MB</td><td>2</td></tr>
           </tbody>
         </table>
+        <h3>Getting logs out of the vehicle</h3>
+        <p>
+          Settings &rarr; About &rarr; <strong>Diagnostics</strong> (<code>DiagnosticsManager</code>, both backends) shows the
+          last 200 lines of the running backend's log with its errors, and offers Copy (clipboard), Export logs (every log
+          file plus a device-info.txt into <code>Downloads/OCTAVE-logs-&lt;timestamp&gt;/</code>, so on the Android head unit
+          they can be attached from any mail or files app) and, on desktop, Open folder.
+        </p>
         <h3>Crash handlers</h3>
         <p>
           Both backends leave a trace when they die. Python (<code>logging_config._install_crash_handlers</code>):

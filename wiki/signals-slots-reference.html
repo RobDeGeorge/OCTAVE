@@ -225,6 +225,23 @@
           </tbody>
         </table>
 
+        <!-- DiagnosticsManager -->
+        <h2 id="diagnostics-manager">DiagnosticsManager</h2>
+        <p>Context property <code>diagnosticsManager</code> (both backends). Field diagnostics behind Settings &rarr; About &rarr; Diagnostics: read the recent log and get the log files off the head unit without a laptop.</p>
+        <table>
+          <thead><tr><th>Member</th><th>Kind</th><th>Type / Params</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>logDir</code></td><td>property</td><td>str</td><td><code>&lt;app data dir&gt;/logs</code></td></tr>
+            <tr><td><code>appVersion</code>, <code>backendName</code>, <code>deviceInfo</code></td><td>property</td><td>str</td><td>Version (CMake <code>PROJECT_VERSION</code> / <code>backend/version.py</code>), "C++" or "Python", OS + arch + host</td></tr>
+            <tr><td><code>lastExportPath</code></td><td>property</td><td>str</td><td>Folder the last <code>exportLogs()</code> wrote ("" until it has run); <code>lastExportPathChanged</code></td></tr>
+            <tr><td><code>canOpenFolder</code></td><td>property</td><td>bool</td><td>Desktop true, mobile false (no file manager to open)</td></tr>
+            <tr><td><code>recentLogLines(int)</code></td><td>slot</td><td>maxLines &rarr; str</td><td>Tail of the backend's main log followed by its error log (last 256 KB read)</td></tr>
+            <tr><td><code>copyLogsToClipboard(int)</code></td><td>slot</td><td>maxLines &rarr; bool</td><td>Header (version, backend, device, time) plus <code>recentLogLines()</code> onto the clipboard</td></tr>
+            <tr><td><code>exportLogs()</code></td><td>slot</td><td>&rarr; str</td><td>Copies every <code>octave*.log*</code> file plus <code>device-info.txt</code> into <code>&lt;Downloads&gt;/OCTAVE-logs-&lt;timestamp&gt;/</code>, where any mail or files app can attach them (Android: <code>/storage/emulated/0/Download</code>, no FileProvider needed since androidx is not bundled). Returns the folder, "" on failure</td></tr>
+            <tr><td><code>openLogFolder()</code></td><td>slot</td><td>&rarr; bool</td><td>Desktop: open the log folder in the file manager</td></tr>
+          </tbody>
+        </table>
+
         <!-- SettingsManager (abbreviated) -->
         <h2 id="settings-manager">SettingsManager</h2>
         <p><span class="file-path">backend/settings_manager.py</span> &mdash; QML name: <code>settingsManager</code></p>

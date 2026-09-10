@@ -1,6 +1,6 @@
 # Observability overhaul — make OCTAVE post-mortem-debuggable
 
-**Status:** in progress — Chunks 1, 2 and 3 shipped 2026-09-10. Next: Chunk 4 (Diagnostics page + Android share).
+**Status:** in progress — Chunks 1–4 shipped 2026-09-10. Remaining: Chunk 5 (Java BLE bridge → OCTAVE log) and optional Chunk 6 (UI watchdog).
 **Last updated:** 2026-09-10
 
 ## Why this exists
@@ -75,7 +75,7 @@ Six chunks, sequenced so each one delivers value standalone. Stop after any of t
 
 **Effort:** ~2 hours. Pure instrumentation, no logic changes.
 
-### Chunk 4 — Android log retrieval (in-app)
+### Chunk 4 — Android log retrieval (in-app) — DONE 2026-09-10 as a Diagnostics card on the About page (`DiagnosticsManager`, both backends). Export copies the files to Downloads instead of a share intent: androidx (FileProvider) is deliberately not bundled (see android/build.gradle), and the sideload build already holds MANAGE_EXTERNAL_STORAGE. Untested on the Android tablet; desktop verified.
 
 **Goal:** the user can extract logs from the Jeep without a laptop.
 

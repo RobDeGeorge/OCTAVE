@@ -133,6 +133,110 @@ Flickable {
                 }
             }
 
+            // ─── Diagnostics: read and get the logs out without a laptop ───
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: diagColumn.implicitHeight + App.Spacing.overallSpacing * 2
+                color: Qt.rgba(App.Style.hoverColor.r, App.Style.hoverColor.g, App.Style.hoverColor.b, 0.3)
+                radius: App.Spacing.overallRadius
+                visible: typeof diagnosticsManager !== "undefined"
+
+                ColumnLayout {
+                    id: diagColumn
+                    anchors.fill: parent
+                    anchors.margins: App.Spacing.overallSpacing
+                    spacing: App.Spacing.overallSpacing * 0.5
+
+                    property string status: ""
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing
+
+                        Text {
+                            text: "Diagnostics"
+                            color: App.Style.accent
+                            font.pixelSize: App.Spacing.overallText * 0.9
+                            font.family: App.Style.fontFamily
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+
+                        SettingsButton {
+                            text: "Refresh"
+                            height: dp(30)
+                            onClicked: logTail.text = diagnosticsManager.recentLogLines(200)
+                        }
+                        SettingsButton {
+                            text: "Copy"
+                            tooltipText: "Copy the recent log lines and device info to the clipboard"
+                            height: dp(30)
+                            onClicked: diagColumn.status = diagnosticsManager.copyLogsToClipboard(400)
+                                                            ? "Copied to clipboard" : "Copy failed"
+                        }
+                        SettingsButton {
+                            text: "Export logs"
+                            tooltipText: "Copy every log file into your Downloads folder, ready to attach to an email"
+                            height: dp(30)
+                            onClicked: {
+                                var p = diagnosticsManager.exportLogs()
+                                diagColumn.status = p !== "" ? "Exported to " + p : "Export failed"
+                            }
+                        }
+                        SettingsButton {
+                            text: "Open folder"
+                            height: dp(30)
+                            visible: diagnosticsManager.canOpenFolder
+                            onClicked: diagnosticsManager.openLogFolder()
+                        }
+                    }
+
+                    Text {
+                        text: "OCTAVE " + diagnosticsManager.appVersion + " (" + diagnosticsManager.backendName + " backend)  \u2022  "
+                              + diagnosticsManager.deviceInfo + "\nLogs: " + diagnosticsManager.logDir
+                        color: App.Style.secondaryTextColor
+                        font.pixelSize: App.Spacing.overallText * 0.8
+                        font.family: App.Style.fontFamily
+                        wrapMode: Text.WrapAnywhere
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: diagColumn.status
+                        visible: text !== ""
+                        color: App.Style.primaryTextColor
+                        font.pixelSize: App.Spacing.overallText * 0.8
+                        font.family: App.Style.fontFamily
+                        wrapMode: Text.WrapAnywhere
+                        Layout.fillWidth: true
+                    }
+
+                    // Last lines of the main log (plus the error log); newest at the bottom
+                    Flickable {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: dp(180)
+                        contentWidth: width
+                        contentHeight: logTail.implicitHeight
+                        clip: true
+                        flickableDirection: Flickable.VerticalFlick
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        Component.onCompleted: contentY = Math.max(0, contentHeight - height)
+
+                        TextEdit {
+                            id: logTail
+                            width: parent.width
+                            readOnly: true
+                            selectByMouse: true
+                            wrapMode: TextEdit.WrapAnywhere
+                            color: App.Style.primaryTextColor
+                            font.family: "monospace"
+                            font.pixelSize: App.Spacing.overallText * 0.7
+                            text: diagnosticsManager.recentLogLines(200)
+                        }
+                    }
+                }
+            }
+
             // ─── Check for Updates ───
             Rectangle {
                 Layout.fillWidth: true

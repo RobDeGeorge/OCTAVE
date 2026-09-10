@@ -77,6 +77,11 @@ engine.rootContext().setContextProperty("isAndroid", False)
 settings_manager = SettingsManager()
 engine.rootContext().setContextProperty("settingsManager", settings_manager)
 
+# Diagnostics — read / export the logs from the head unit (Settings > About)
+from backend.diagnostics_manager import DiagnosticsManager
+diagnostics_manager = DiagnosticsManager()
+engine.rootContext().setContextProperty("diagnosticsManager", diagnostics_manager)
+
 # Clock
 clock = Clock(settings_manager)
 engine.rootContext().setContextProperty("clock", clock)

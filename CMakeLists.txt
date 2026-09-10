@@ -81,6 +81,8 @@ qt_add_executable(octave
     src/util/logger.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
+    src/managers/diagnosticsmanager.h
+    src/managers/diagnosticsmanager.cpp
     src/managers/clock.h
     src/managers/clock.cpp
     src/managers/networkmanager.h
@@ -122,6 +124,7 @@ qt_add_executable(octave
 )
 
 target_compile_definitions(octave PRIVATE
+    OCTAVE_VERSION="${PROJECT_VERSION}"
     $<$<BOOL:${OCTAVE_ENABLE_DOWNLOADS}>:OCTAVE_ENABLE_DOWNLOADS>
     $<$<BOOL:${OCTAVE_HAVE_FFMPEG}>:OCTAVE_HAVE_FFMPEG>
     # Activate existing #ifndef Q_OS_MOBILE guards on Android (and iOS later).

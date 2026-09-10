@@ -19,6 +19,7 @@
 
 // Phase 1 managers
 #include "managers/settingsmanager.h"
+#include "managers/diagnosticsmanager.h"
 #include "util/logger.h"
 #include "managers/clock.h"
 #include "managers/networkmanager.h"
@@ -105,6 +106,10 @@ int main(int argc, char *argv[])
     // Settings Manager — central settings store, everything depends on this
     SettingsManager settingsManager;
     ctx->setContextProperty("settingsManager", &settingsManager);
+
+    // Diagnostics — read / export the logs from the head unit (Settings > About)
+    DiagnosticsManager diagnosticsManager;
+    ctx->setContextProperty("diagnosticsManager", &diagnosticsManager);
 
     // Clock — time display, depends on settings for format
     Clock clock(&settingsManager);
