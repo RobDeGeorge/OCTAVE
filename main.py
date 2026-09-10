@@ -354,6 +354,9 @@ def load_main_qml():
     return engine.rootObjects()[0]
 
 
+cmd_server = None   # set by setup_perf_profiling() (--profile); dev tooling registers actions on it
+
+
 def setup_perf_profiling():
     """Wire up perf monitor + command server. Called only when --profile is set."""
     from backend.perf_monitor import PerfMonitor
@@ -368,6 +371,7 @@ def setup_perf_profiling():
 
     # Command server for MCP/remote control
     from backend.command_server import CommandServer
+    global cmd_server
     cmd_server = CommandServer()
     cmd_server.start(
         managers={
