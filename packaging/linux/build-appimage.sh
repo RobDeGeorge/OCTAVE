@@ -170,6 +170,24 @@ else
     echo "==> No Qt Quick 3D asset importers found; 3D vehicle view will be unavailable"
 fi
 
+# ---- 6c. Optionally drop Qt plugins that cannot be deployed ---------------
+# OCTAVE_DROP_QT_PLUGINS: space-separated paths relative to Qt's plugins/
+# directory, e.g. "multimedia/libgstreamermediaplugin.so". Deleted from the
+# Qt install AFTER the CMake build (Qt's CMake config refuses to configure
+# when a listed plugin file is missing) and BEFORE linuxdeploy-plugin-qt
+# walks plugins/ (which aborts on an unresolvable dependency). Used by the
+# arm64 CI job: the arm64 Qt package's GStreamer plugin needs
+# libgstphotography, which Ubuntu 22.04 does not ship, and OCTAVE uses the
+# FFmpeg media backend anyway.
+if [ -n "${OCTAVE_DROP_QT_PLUGINS:-}" ]; then
+    QT_PLUGINS_DIR="$("$(dirname "${QMAKE:-$(command -v qmake6 || command -v qmake)}")/qmake6" -query QT_INSTALL_PLUGINS 2>/dev/null \
+        || "${QMAKE:-qmake6}" -query QT_INSTALL_PLUGINS)"
+    for p in $OCTAVE_DROP_QT_PLUGINS; do
+        echo "==> Dropping Qt plugin $QT_PLUGINS_DIR/$p"
+        rm -f "$QT_PLUGINS_DIR/$p"
+    done
+fi
+
 # ---- 7. Run linuxdeploy --------------------------------------------------
 cd "$REPO_ROOT"
 

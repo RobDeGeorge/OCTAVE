@@ -427,14 +427,14 @@ jobs:
           # so it picks up Qt 6 modules instead of any system Qt 5 stub.
           QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake6
           OCTAVE_VERSION: ${{ github.ref_name }}
+          # OCTAVE uses Qt's FFmpeg media backend; the arm64 Qt package's
+          # GStreamer plugin needs libgstphotography, which jammy does not
+          # ship, and linuxdeploy-plugin-qt aborts on the unresolved
+          # dependency. The script drops it after the CMake build.
+          OCTAVE_DROP_QT_PLUGINS: multimedia/libgstreamermediaplugin.so
         run: |
           # Google publishes no aarch64 platform-tools; the build falls back to
           # the distro adb on PATH (see BUILD.md). Skip the fetch.
-          # OCTAVE uses Qt's FFmpeg media backend; the arm64 Qt package's
-          # GStreamer plugin needs libgstphotography, which jammy's GStreamer
-          # 1.20 packages do not ship, and linuxdeploy-plugin-qt aborts on the
-          # unresolved dependency. Drop the plugin before deploying.
-          rm -f "$QT_ROOT_DIR"/plugins/multimedia/libgstreamermediaplugin.so
           bash packaging/linux/build-appimage.sh
 
       - name: Upload Linux AppImage
