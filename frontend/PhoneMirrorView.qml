@@ -93,18 +93,26 @@ Item {
 
         // Android navigation buttons (a virtual display has no gesture nav
         // bar the user can reach)
+        // Sits on the bottom edge of the picture (not the letterbox band, where
+        // a translucent button on black is invisible). Recents is hidden on a
+        // virtual display: Android's recents UI does not work there, and HOME
+        // goes through a launcher intent on that display (manager.pressHome).
         Row {
-            anchors.bottom: parent.bottom
+            readonly property bool virtualDisplay: phoneMirrorManager ? phoneMirrorManager.activeDisplaySize !== "" : false
+            readonly property rect content: video.contentRect
+            y: (content.height > 0 ? content.y + content.height : parent.height) - height - dp(6)
             anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottomMargin: dp(6)
             spacing: dp(24)
             visible: mirrorRunning
             z: 10
             Repeater {
-                model: [ { label: "◁", slot: "pressBack" }, { label: "○", slot: "pressHome" }, { label: "▢", slot: "pressAppSwitch" } ]
+                model: parent.virtualDisplay
+                       ? [ { label: "◁", slot: "pressBack" }, { label: "○", slot: "pressHome" } ]
+                       : [ { label: "◁", slot: "pressBack" }, { label: "○", slot: "pressHome" }, { label: "▢", slot: "pressAppSwitch" } ]
                 Rectangle {
                     width: dp(44); height: dp(44); radius: dpMin(22, 2)
-                    color: navMouse.pressed ? App.Style.accent : "#66000000"
+                    color: navMouse.pressed ? App.Style.accent : "#A0000000"
+                    border.color: "#55FFFFFF"; border.width: 1
                     Text { anchors.centerIn: parent; text: modelData.label; color: "white"; font.pixelSize: dp(20) }
                     MouseArea { id: navMouse; anchors.fill: parent
                         onClicked: if (phoneMirrorManager) phoneMirrorManager[modelData.slot]() }
@@ -149,6 +157,33 @@ Item {
             color: "white"
             visible: mirrorRunning && !hasVideo
             z: 5
+        }
+
+        // The user unlocked the phone in their hand: the mirror keeps working,
+        // OCTAVE just stops blanking / waking it. Small pill, not an overlay.
+        Rectangle {
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: dp(10)
+            width: inUseLabel.implicitWidth + dp(28)
+            height: dp(34)
+            radius: dpMin(17, 2)
+            color: "#CC000000"
+            border.color: "#55FFFFFF"; border.width: 1
+            visible: mirrorRunning && phoneMirrorManager && phoneMirrorManager.phoneInUse === true
+            z: 9
+            Text {
+                id: inUseLabel
+                anchors.centerIn: parent
+                text: "Phone in use \u2014 tap to turn its screen back off"
+                font.pixelSize: dp(14)
+                font.family: phoneMirrorView.globalFont
+                color: "white"
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: if (phoneMirrorManager) phoneMirrorManager.resumeMirroring()
+            }
         }
 
         // The phone was locked (power button) mid-session: its virtual display

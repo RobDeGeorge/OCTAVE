@@ -339,7 +339,21 @@ void PhoneMirrorManager::injectKey(int keycode)
         m_client->pressKey(keycode);
 }
 
-void PhoneMirrorManager::pressHome()      { injectKey(ScrcpyClient::KeycodeHome); }
+void PhoneMirrorManager::pressHome()
+{
+    // HOME is a system key that Android routes to the default display, so on
+    // a virtual display it does nothing; launch the launcher there instead.
+    if (m_vdisplayId >= 0 && !m_serial.isEmpty() && !m_adbPath.isEmpty()) {
+        auto *proc = new QProcess(this);
+        connect(proc, &QProcess::finished, proc, &QObject::deleteLater);
+        proc->start(m_adbPath, {QStringLiteral("-s"), m_serial, QStringLiteral("shell"), QStringLiteral("am"),
+                                QStringLiteral("start"), QStringLiteral("--display"), QString::number(m_vdisplayId),
+                                QStringLiteral("-a"), QStringLiteral("android.intent.action.MAIN"),
+                                QStringLiteral("-c"), QStringLiteral("android.intent.category.HOME")});
+        return;
+    }
+    injectKey(ScrcpyClient::KeycodeHome);
+}
 void PhoneMirrorManager::pressBack()      { injectKey(ScrcpyClient::KeycodeBack); }
 void PhoneMirrorManager::pressAppSwitch() { injectKey(ScrcpyClient::KeycodeAppSwitch); }
 
@@ -397,6 +411,7 @@ void PhoneMirrorManager::startScrcpy()
         }
     }, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::frameReady, this, &PhoneMirrorManager::frameReady, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::serverLog, this, &PhoneMirrorManager::onServerLog, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::audioStateChanged, this, &PhoneMirrorManager::audioActiveChanged, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::audioPlayingChanged, this, [this](bool playing) {
         if (playing == m_audioPlaying)
@@ -422,6 +437,7 @@ void PhoneMirrorManager::startScrcpy()
                           << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize)
                           << ", audio" << (m_audioEnabled ? "on" : "off") << ")";
     m_serial = serial;
+    m_vdisplayId = -1;
     m_client->start(serial, displaySize, 60, 8000000, m_audioEnabled, true);
     emit isRunningChanged();
 }
@@ -480,6 +496,10 @@ void PhoneMirrorManager::stopScrcpy()
 // virtual display and drops injected touch, with no signal on the wire, so
 // the only way to notice is to ask (`dumpsys power`) every couple of seconds.
 static constexpr int kWakePollIntervalMs = 2000;
+// After a power press the phone is woken but its panel is left lit for this
+// long. If the user unlocks it in that window they want their phone, not the
+// mirror's screen-off; otherwise the panel is blanked again.
+static constexpr int kWakeGraceMs = 5000;
 
 void PhoneMirrorManager::setPhoneScreenOff(bool off)
 {
@@ -510,6 +530,9 @@ void PhoneMirrorManager::wakePhone()
 void PhoneMirrorManager::startWakeWatch()
 {
     if (!m_wakePoll.isActive()) {
+        m_grace.setSingleShot(true);
+        m_grace.setInterval(kWakeGraceMs);
+        connect(&m_grace, &QTimer::timeout, this, &PhoneMirrorManager::onGraceExpired, Qt::UniqueConnection);
         m_wakePoll.setInterval(kWakePollIntervalMs);
         connect(&m_wakePoll, &QTimer::timeout, this, &PhoneMirrorManager::pollWakefulness, Qt::UniqueConnection);
         m_wakePoll.start();
@@ -519,6 +542,8 @@ void PhoneMirrorManager::startWakeWatch()
 void PhoneMirrorManager::stopWakeWatch()
 {
     m_wakePoll.stop();
+    m_grace.stop();
+    setInUse(false);
     if (m_phoneAsleep) {
         m_phoneAsleep = false;
         emit phoneAsleepChanged(false);
@@ -539,32 +564,90 @@ void PhoneMirrorManager::pollWakefulness()
         if (exitCode != 0)
             return;
         static const QRegularExpression re(QStringLiteral("mWakefulness=(\\w+)"));
+        static const QRegularExpression reLock(QStringLiteral("deviceLocked=(\\d)"));
         const auto m = re.match(out);
+        const auto lk = reLock.match(out);
         if (m.hasMatch())
-            onWakefulness(m.captured(1));
+            onWakefulness(m.captured(1), lk.hasMatch() ? lk.captured(1).toInt() : -1);
     });
     QTimer::singleShot(5000, proc, [proc] { if (proc->state() != QProcess::NotRunning) proc->kill(); });
-    proc->start(m_adbPath, {QStringLiteral("-s"), m_serial, QStringLiteral("shell"), QStringLiteral("dumpsys"),
-                            QStringLiteral("power"), QStringLiteral("|"), QStringLiteral("grep"),
-                            QStringLiteral("mWakefulness=")});  // no -m1: an early pipe close makes dumpsys log an error on the phone
+    // One adb round trip per poll: wakefulness plus the keyguard state
+    // (`dumpsys trust` prints deviceLocked=0 once the user has authenticated).
+    // No `grep -m1`: an early pipe close makes dumpsys log an error on the phone.
+    proc->start(m_adbPath, {QStringLiteral("-s"), m_serial, QStringLiteral("shell"),
+                            QStringLiteral("dumpsys power | grep mWakefulness=; dumpsys trust | grep deviceLocked")});
 }
 
-void PhoneMirrorManager::onWakefulness(const QString &state)
+void PhoneMirrorManager::onWakefulness(const QString &state, int locked)
 {
     if (!m_client || !m_client->isRunning() || !m_wakePoll.isActive())
         return;
     const bool asleep = state != QLatin1String("Awake");
-    if (asleep == m_phoneAsleep)
+    if (asleep != m_phoneAsleep) {
+        m_phoneAsleep = asleep;
+        emit phoneAsleepChanged(asleep);
+        if (asleep) {
+            // stay_awake means the phone never idles off: this is a power
+            // press. Wake it, then let the grace window tell us whether the
+            // user wanted the screen off or wanted their phone.
+            m_grace.stop();
+            setInUse(false);
+            qCInfo(lcPhoneMirror) << "Phone went to sleep (" << state << "); waking it";
+            wakePhone();
+        } else {
+            qCInfo(lcPhoneMirror) << "Phone is awake again";
+            if (m_phoneScreenOff && !m_phoneInUse)
+                m_grace.start();
+        }
         return;
-    m_phoneAsleep = asleep;
-    emit phoneAsleepChanged(asleep);
-    if (asleep) {
-        qCInfo(lcPhoneMirror) << "Phone went to sleep (" << state << "); waking it";
-        wakePhone();
-    } else {
-        qCInfo(lcPhoneMirror) << "Phone is awake again";
-        applyScreenOff();
     }
+    if (asleep)
+        return;
+    if (locked == 0 && !m_phoneInUse) {
+        m_grace.stop();
+        setInUse(true);
+    } else if (locked == 1 && m_phoneInUse) {
+        // Locked without sleeping (lock shortcut); treat like a power press.
+        setInUse(false);
+        if (m_phoneScreenOff)
+            m_grace.start();
+    }
+}
+
+void PhoneMirrorManager::setInUse(bool inUse)
+{
+    if (inUse == m_phoneInUse)
+        return;
+    m_phoneInUse = inUse;
+    if (inUse && m_client && m_client->isRunning() && m_ready)
+        m_client->setDisplayPower(true);   // they are holding it: never leave it dark
+    qCInfo(lcPhoneMirror) << (inUse ? "Phone unlocked by the user; leaving its screen alone"
+                                    : "Phone handed back to the mirror");
+    emit phoneInUseChanged(inUse);
+}
+
+void PhoneMirrorManager::onGraceExpired()
+{
+    if (!m_phoneInUse && !m_phoneAsleep)
+        applyScreenOff();
+}
+
+void PhoneMirrorManager::resumeMirroring()
+{
+    setInUse(false);
+    m_grace.stop();
+    if (m_phoneAsleep)
+        wakePhone();
+    else
+        applyScreenOff();
+}
+
+void PhoneMirrorManager::onServerLog(const QString &line)
+{
+    static const QRegularExpression re(QStringLiteral("New display: .*\\(id=(\\d+)\\)"));
+    const auto m = re.match(line);
+    if (m.hasMatch())
+        m_vdisplayId = m.captured(1).toInt();
 }
 
 void PhoneMirrorManager::cleanup()

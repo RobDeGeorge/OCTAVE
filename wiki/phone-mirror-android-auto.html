@@ -208,9 +208,18 @@
               silently dropped, with nothing on the wire to notice. So while a session is up the manager polls
               <code>adb shell dumpsys power | grep mWakefulness=</code> every 2&nbsp;s (off the GUI thread); anything but
               <code>Awake</code> sets <code>phoneAsleep</code>, sends <code>input keyevent KEYCODE_WAKEUP</code> (224 -- wakes,
-              never toggles off) and, once the phone reports awake again, re-applies the panel-off request. The view shows a
-              "Phone is asleep" overlay with tap-to-retry (<code>wakePhone()</code>) until then. The phone therefore cannot be
-              used as a dark, locked handset while it is mirrored -- close the mirror for that.</li>
+              never toggles off). The same poll reads <code>dumpsys trust</code>'s <code>deviceLocked</code>, and what happens
+              next depends on the user: after the wake the panel is left lit for a 5&nbsp;s grace window; if the phone is
+              unlocked in that window (or at any later point) <code>phoneInUse</code> turns on and OCTAVE stops blanking and
+              stops undoing locks -- the mirror keeps working because the virtual display is independent of the panel -- until
+              the phone is locked again or the user taps the "Phone in use" pill (<code>resumeMirroring()</code>). If the grace
+              window passes with the phone still locked, the press is taken as "screen off, please" and the panel is blanked
+              again. The view shows a "Phone is asleep" overlay with tap-to-retry (<code>wakePhone()</code>) during the wake.</li>
+            <li><strong>Navigation buttons on a virtual display</strong>: HOME and APP_SWITCH are system keys that Android routes
+              to the default display, so injecting them does nothing on the virtual one (Back is dispatched to the focused window
+              and works). <code>pressHome()</code> therefore runs <code>am start --display &lt;id&gt; -a MAIN -c HOME</code> on the
+              virtual display (its id is parsed from the server's "New display" log line); Samsung's recents UI renders empty on
+              a secondary display, so the Recents button is hidden whenever a virtual display is in use.</li>
             <li><strong>Control</strong>: 32-byte <code>INJECT_TOUCH_EVENT</code> (type 2) with pointer id, x/y in frame pixels, screen size, pressure; 14-byte <code>INJECT_KEYCODE</code> (type 0). Coordinates are relative to the mirrored display, so a virtual display needs no display-id routing.</li>
             <li><strong>Teardown</strong>: close sockets, terminate the child, remove the forward. The server destroys the virtual display itself (<code>cleanup=true</code>). The Python entry point routes SIGTERM/SIGINT through <code>app.quit()</code> and the C++ one installs a self-pipe signal handler, so launcher scripts get a clean exit too.</li>
           </ol>
