@@ -188,6 +188,16 @@
               crash could leave it at maximum). The default capture source is the phone's remote
               submix, which captures every app (playback is muted on the handset itself). Expect lip-sync to trail the
               picture slightly.</li>
+            <li><strong>Ducking</strong> (settings <code>scrcpyAudioDuckEnabled</code>, <code>scrcpyAudioDuckLevel</code>):
+              the audio thread measures each PCM chunk's peak before gain; anything above about −46&nbsp;dBFS (a silent
+              remote submix is exact zeros) marks the phone as producing sound. On the GUI thread that becomes
+              <code>PhoneMirrorManager.audioPlaying</code> with a 1.5&nbsp;s release hold, long enough to bridge the gaps
+              between navigation sentences. While it is true and ducking is on, the manager emits
+              <code>duckingChanged(factor)</code> (the duck level, default −20&nbsp;dB) and <code>main</code> routes it to
+              <code>MediaManager.setDucking()</code>, which ramps the local output (80&nbsp;ms attack, 500&nbsp;ms release)
+              independently of the user's volume and mute. Spotify is deliberately not ducked: it plays on its own
+              Spotify Connect device, usually the very phone being mirrored, so its sound already arrives through the
+              mirror stream and an API round trip per prompt would be both slow and pointless.</li>
             <li><strong>Control</strong>: 32-byte <code>INJECT_TOUCH_EVENT</code> (type 2) with pointer id, x/y in frame pixels, screen size, pressure; 14-byte <code>INJECT_KEYCODE</code> (type 0). Coordinates are relative to the mirrored display, so a virtual display needs no display-id routing.</li>
             <li><strong>Teardown</strong>: close sockets, terminate the child, remove the forward. The server destroys the virtual display itself (<code>cleanup=true</code>). The Python entry point routes SIGTERM/SIGINT through <code>app.quit()</code> and the C++ one installs a self-pipe signal handler, so launcher scripts get a clean exit too.</li>
           </ol>

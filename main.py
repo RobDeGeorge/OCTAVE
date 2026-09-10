@@ -125,6 +125,12 @@ phone_mirror_manager.setAudioEnabled(settings_manager.get_scrcpy_audio_enabled()
 phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
 phone_mirror_manager.setAudioGain(settings_manager.get_scrcpy_audio_gain())
 settings_manager.scrcpyAudioGainChanged.connect(phone_mirror_manager.setAudioGain)
+# Duck local media while the phone produces sound (nav prompts, video, calls)
+phone_mirror_manager.setAudioDuckEnabled(settings_manager.get_scrcpy_audio_duck_enabled())
+phone_mirror_manager.setAudioDuckLevel(settings_manager.get_scrcpy_audio_duck_level())
+settings_manager.scrcpyAudioDuckEnabledChanged.connect(phone_mirror_manager.setAudioDuckEnabled)
+settings_manager.scrcpyAudioDuckLevelChanged.connect(phone_mirror_manager.setAudioDuckLevel)
+phone_mirror_manager.duckingChanged.connect(media_manager.setDucking)
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
 settings_manager.scrcpyAudioEnabledChanged.connect(

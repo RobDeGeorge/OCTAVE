@@ -239,6 +239,40 @@ bool PhoneMirrorManager::audioActive() const
     return m_client && m_client->audioActive();
 }
 
+bool PhoneMirrorManager::audioPlaying() const
+{
+    return m_audioPlaying;
+}
+
+float PhoneMirrorManager::duckingFactor() const
+{
+    return m_duckFactor;
+}
+
+void PhoneMirrorManager::setAudioDuckEnabled(bool enabled)
+{
+    if (enabled == m_duckEnabled)
+        return;
+    m_duckEnabled = enabled;
+    updateDucking();
+}
+
+void PhoneMirrorManager::setAudioDuckLevel(float level)
+{
+    m_duckLevel = qBound(0.0f, level, 1.0f);
+    updateDucking();
+}
+
+void PhoneMirrorManager::updateDucking()
+{
+    const float factor = (m_duckEnabled && m_audioPlaying) ? m_duckLevel : 1.0f;
+    if (qFuzzyCompare(factor, m_duckFactor))
+        return;
+    m_duckFactor = factor;
+    qCDebug(lcPhoneMirror) << "ducking factor" << factor;
+    emit duckingChanged(factor);
+}
+
 void PhoneMirrorManager::setAudioEnabled(bool enabled)
 {
     // Play the phone's audio through OCTAVE (setting scrcpyAudioEnabled).
@@ -364,6 +398,13 @@ void PhoneMirrorManager::startScrcpy()
     }, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::frameReady, this, &PhoneMirrorManager::frameReady, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::audioStateChanged, this, &PhoneMirrorManager::audioActiveChanged, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::audioPlayingChanged, this, [this](bool playing) {
+        if (playing == m_audioPlaying)
+            return;
+        m_audioPlaying = playing;
+        emit audioPlayingChanged(playing);
+        updateDucking();
+    });
     m_client->setAudioGain(m_audioGain);
     m_client->setVolume(m_volume);
 

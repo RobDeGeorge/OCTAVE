@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QUrl, Qt
+from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QUrl, Qt, QVariantAnimation, QEasingCurve
 from PySide6.QtGui import QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from mutagen.mp3 import MP3
@@ -86,6 +86,15 @@ class MediaManager(QObject):
         
         # Set default volume
         self._audio_output.setVolume(0.5)
+        self._volume = 0.5            # user's volume (linear), before ducking and mute
+
+        # Ducking ramp: fast attack so a prompt is not stepped on, slower
+        # release so music does not jump back up between sentences.
+        self._duck_target = 1.0       # requested ducking factor
+        self._duck_current = 1.0      # ramped factor actually applied
+        self._duck_anim = QVariantAnimation(self)
+        self._duck_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._duck_anim.valueChanged.connect(self._on_duck_value)
         
         # Set up media directory
         self.backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1159,8 +1168,8 @@ class MediaManager(QObject):
         self.playStateChanged.emit(False)
         self._save_playback_state()
         # Preserve mute volume state during pause
-        if not self._is_muted and self._audio_output.volume() > 0.0:
-            self._previous_volume = self._audio_output.volume()
+        if not self._is_muted and self._volume > 0.0:
+            self._previous_volume = self._volume
         
     @Slot()
     def toggle_play(self):
@@ -1239,17 +1248,15 @@ class MediaManager(QObject):
 
         try:
             if self._is_muted:
-                # Unmuting — restore previous volume (ensure it's valid)
-                restore_vol = self._previous_volume if self._previous_volume > 0.0 else 0.5
-                self._audio_output.setVolume(restore_vol)
-            else:
-                # Muting — capture current volume only if it's meaningful
-                current_vol = self._audio_output.volume()
-                if current_vol > 0.0:
-                    self._previous_volume = current_vol
-                self._audio_output.setVolume(0.0)
+                # Unmuting: _volume tracked the slider while muted; fall back if it is 0
+                if self._volume <= 0.0:
+                    self._volume = self._previous_volume if self._previous_volume > 0.0 else 0.5
+            elif self._volume > 0.0:
+                # Muting — remember the meaningful volume
+                self._previous_volume = self._volume
 
             self._is_muted = not self._is_muted
+            self._apply_output_volume()
             self.muteChanged.emit(self._is_muted)
             logger.info(f"Mute toggled: {self._is_muted}")
         finally:
@@ -1273,22 +1280,46 @@ class MediaManager(QObject):
             # Clamp volume to valid range
             volume = max(0.0, min(1.0, volume))
 
-            # If muted, update the stored volume for when unmuted, but keep audio at 0
+            self._volume = volume
             if self._is_muted:
+                # Remember the slider position for when unmuted; output stays at 0
                 self._previous_volume = volume
-                # Keep actual audio muted
-                self._audio_output.setVolume(0.0)
-            else:
-                self._audio_output.setVolume(volume)
+            self._apply_output_volume()
 
             self.volumeChanged.emit(volume)
         except Exception as e:
             logger.error(f"Error setting volume: {e}")
-            
+
+    @Slot(float)
+    def setDucking(self, factor):
+        """Temporarily attenuate the output (1.0 = none, 0.1 = -20 dB) while
+        another source, e.g. the mirrored phone's navigation prompt, needs to
+        be heard. Independent of the user's volume: setVolume/mute keep working
+        underneath and the ramp restores the full level when the factor
+        returns to 1.0."""
+        factor = max(0.0, min(1.0, float(factor)))
+        if abs(factor - self._duck_target) < 1e-6:
+            return
+        ducking = factor < self._duck_target
+        self._duck_target = factor
+        self._duck_anim.stop()
+        self._duck_anim.setStartValue(self._duck_current)
+        self._duck_anim.setEndValue(factor)
+        self._duck_anim.setDuration(80 if ducking else 500)
+        self._duck_anim.start()
+
+    def _on_duck_value(self, value):
+        self._duck_current = float(value)
+        self._apply_output_volume()
+
+    def _apply_output_volume(self):
+        """output = 0 if muted else user volume × ducking factor"""
+        self._audio_output.setVolume(0.0 if self._is_muted else self._volume * self._duck_current)
+
     @Slot(result=float)
     def getVolume(self):
-        """Get current volume level (0.0-1.0)"""
-        return self._audio_output.volume()
+        """Get the user's volume level (0.0-1.0), not the (possibly ducked or muted) output"""
+        return self._volume
 
     def _get_current_playlist_files(self):
         """Get the files for the currently selected playlist.

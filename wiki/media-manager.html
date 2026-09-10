@@ -334,15 +334,29 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
         <h2 id="volume-mute">Volume and Mute</h2>
 
         <h3>Volume Control</h3>
+        <p>
+          The user's volume (<code>_volume</code> / <code>m_volume</code>), mute and a <em>ducking factor</em> are kept
+          separately; one helper (<code>_apply_output_volume()</code> / <code>applyOutputVolume()</code>) computes what the
+          <code>QAudioOutput</code> actually gets: <code>0</code> while muted, otherwise <code>volume × duck</code>.
+          <code>getVolume()</code> reports the user's volume, never the ducked or muted output level.
+        </p>
         <pre><code>@Slot(<span class="cls">float</span>)
 <span class="kw">def</span> <span class="fn">setVolume</span>(self, volume):
     volume = max(<span class="num">0.0</span>, min(<span class="num">1.0</span>, float(volume)))
+    self._volume = volume
     <span class="kw">if</span> self._is_muted:
         self._previous_volume = volume  <span class="cmt"># Store for unmute</span>
-        self._audio_output.setVolume(<span class="num">0.0</span>)  <span class="cmt"># Keep muted</span>
-    <span class="kw">else</span>:
-        self._audio_output.setVolume(volume)
+    self._apply_output_volume()         <span class="cmt"># 0 if muted else volume × duck</span>
     self.volumeChanged.emit(volume)</code></pre>
+
+        <h3>Ducking</h3>
+        <p>
+          <code>setDucking(factor)</code> (both backends) temporarily attenuates the output for another source that
+          needs to be heard, today the mirrored phone's audio (see
+          <a href="phone-mirror-android-auto.html">Phone Mirror</a>). The factor is ramped with a
+          <code>QVariantAnimation</code>: 80&nbsp;ms attack so a navigation prompt is not stepped on, 500&nbsp;ms release
+          so music does not jump back between sentences. Volume changes and mute keep working while ducked.
+        </p>
 
         <h3>Mute Toggle with Guard</h3>
         <p>

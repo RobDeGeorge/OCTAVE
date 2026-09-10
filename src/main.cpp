@@ -214,6 +214,15 @@ int main(int argc, char *argv[])
     phoneMirrorManager.setAudioGain(float(settingsManager.get_scrcpy_audio_gain()));
     QObject::connect(&settingsManager, &SettingsManager::scrcpyAudioGainChanged,
                      &phoneMirrorManager, [&phoneMirrorManager](double g) { phoneMirrorManager.setAudioGain(float(g)); });
+    // Duck local media while the phone produces sound (nav prompts, video, calls)
+    phoneMirrorManager.setAudioDuckEnabled(settingsManager.get_scrcpy_audio_duck_enabled());
+    phoneMirrorManager.setAudioDuckLevel(float(settingsManager.get_scrcpy_audio_duck_level()));
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyAudioDuckEnabledChanged,
+                     &phoneMirrorManager, &PhoneMirrorManager::setAudioDuckEnabled);
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyAudioDuckLevelChanged,
+                     &phoneMirrorManager, [&phoneMirrorManager](double l) { phoneMirrorManager.setAudioDuckLevel(float(l)); });
+    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged,
+                     &mediaManager, &MediaManager::setDucking);
 #endif
 
     // Register custom QML types for video embedding (stub types on mobile)

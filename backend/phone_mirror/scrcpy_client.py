@@ -29,7 +29,7 @@ try:
 except Exception:  # pragma: no cover
     np = None
 
-from PySide6.QtCore import QObject, Signal, Slot, QSize
+from PySide6.QtCore import QObject, Signal, Slot, QSize, QTimer
 from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat, QAudioFormat, QAudioSink, QMediaDevices
 
 from backend.logging_config import get_logger
@@ -72,6 +72,14 @@ AUDIO_CODEC_RAW = 0x00726177                       # "raw"
 AUDIO_STREAM_DISABLED = 0                          # device could not capture; video continues
 AUDIO_STREAM_ERROR = 1                             # configuration error; session must stop
 AUDIO_QUEUE_MAX_BYTES = AUDIO_SAMPLE_RATE * AUDIO_BYTES_PER_FRAME // 4   # ~250 ms of backlog before dropping
+# Sound detection (for ducking local media): a chunk counts as sound when its
+# peak, before gain, exceeds about -46 dBFS; a silent remote submix is exact
+# zeros, so this only has to reject dither-level noise.
+AUDIO_SIGNAL_THRESHOLD = 164
+# How long the phone must stay silent before audio_playing drops. Long enough
+# to bridge the gaps between navigation sentences, short enough that music
+# comes back promptly after a prompt.
+AUDIO_HOLD_MS = 1500
 
 # Frame header flags (app/src/demuxer.c)
 FLAG_CONFIG = 1 << 63
@@ -130,6 +138,7 @@ class ScrcpyClient(QObject):
     frameReady = Signal()               # a new decoded frame is waiting (GUI thread pulls it)
     audioReady = Signal()               # PCM chunks are queued (GUI thread writes them to the sink)
     audioStateChanged = Signal(bool)    # phone audio is (not) being played through OCTAVE
+    audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound (GUI thread)
     serverLog = Signal(str)
 
     def __init__(self, adb_path: str, server_jar: str, parent=None):
@@ -166,6 +175,14 @@ class ScrcpyClient(QObject):
         self._audio_gain = 2.0
         self._gain_warned = False
         self.audioReady.connect(self._deliver_audio)
+        # Sound detection for ducking: the audio thread flags a chunk with
+        # level, the GUI thread turns that into audio_playing with a release hold.
+        self._audio_signal_seen = False
+        self._audio_playing = False
+        self._audio_hold_timer = QTimer(self)
+        self._audio_hold_timer.setSingleShot(True)
+        self._audio_hold_timer.setInterval(AUDIO_HOLD_MS)
+        self._audio_hold_timer.timeout.connect(lambda: self._set_audio_playing(False))
 
     # ── public API ────────────────────────────────────────────────────
 
@@ -184,6 +201,19 @@ class ScrcpyClient(QObject):
     @property
     def audio_active(self) -> bool:
         return self._audio_active
+
+    @property
+    def audio_playing(self) -> bool:
+        """The phone is producing sound right now (level above
+        AUDIO_SIGNAL_THRESHOLD within the last AUDIO_HOLD_MS)."""
+        return self._audio_playing
+
+    def _set_audio_playing(self, playing: bool):
+        # GUI thread
+        if playing == self._audio_playing:
+            return
+        self._audio_playing = playing
+        self.audioPlayingChanged.emit(playing)
 
     def set_audio_gain(self, gain: float):
         """Linear gain applied to phone PCM before the sink (soft-limited)."""
@@ -509,14 +539,23 @@ class ScrcpyClient(QObject):
 
     def _apply_gain(self, pcm: bytes) -> bytes:
         """Multiply s16le samples by the gain with a soft limiter (tanh) so a
-        hot source cannot clip harshly. Runs on the audio thread."""
+        hot source cannot clip harshly, and note whether the chunk carried
+        sound (before gain) for ducking. Runs on the audio thread."""
         gain = self._audio_gain
-        if abs(gain - 1.0) < 1e-3 or np is None or len(pcm) < 4:
+        if np is None or len(pcm) < 4:
             if np is None and not self._gain_warned:
                 self._gain_warned = True
-                logger.warning("scrcpy client: numpy not available, phone audio gain ignored")
+                logger.warning("scrcpy client: numpy not available, phone audio gain ignored "
+                               "and ducking follows the stream instead of the sound level")
+            if np is None:
+                self._audio_signal_seen = True   # cannot measure: treat the stream as sound
             return pcm
-        x = np.frombuffer(pcm[:len(pcm) - len(pcm) % 2], dtype="<i2").astype(np.float32) * (gain / 32768.0)
+        samples = np.frombuffer(pcm[:len(pcm) - len(pcm) % 2], dtype="<i2")
+        if int(np.abs(samples.astype(np.int32)).max()) >= AUDIO_SIGNAL_THRESHOLD:
+            self._audio_signal_seen = True
+        if abs(gain - 1.0) < 1e-3:
+            return pcm
+        x = samples.astype(np.float32) * (gain / 32768.0)
         y = np.tanh(x) * 32767.0
         return y.astype("<i2").tobytes()
 
@@ -545,6 +584,9 @@ class ScrcpyClient(QObject):
         return True
 
     def _stop_audio_sink(self):
+        self._audio_signal_seen = False
+        self._audio_hold_timer.stop()
+        self._set_audio_playing(False)
         sink, self._audio_sink, self._audio_io = self._audio_sink, None, None
         if sink is not None:
             try:
@@ -559,6 +601,10 @@ class ScrcpyClient(QObject):
     def _deliver_audio(self):
         # GUI thread. Write whatever is queued; never block on a full device
         # buffer — dropping keeps the audio close to the picture.
+        if self._audio_signal_seen and not self._stopping:
+            self._audio_signal_seen = False
+            self._set_audio_playing(True)
+            self._audio_hold_timer.start()   # (re)arm the release
         if self._stopping or not self._ensure_audio_sink():
             with self._audio_lock:
                 self._audio_queue.clear()

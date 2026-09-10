@@ -1699,6 +1699,77 @@ Flickable {
                     spacing: App.Spacing.rowSpacing
 
                     SettingLabel {
+                        text: "Duck Local Music"
+                    }
+
+                    SettingDescription {
+                        text: "Turn OCTAVE's own music down while the phone is making sound, so navigation prompts, videos and calls come through. Music returns about a second and a half after the phone goes quiet."
+                    }
+
+                    SettingsToggle {
+                        id: scrcpyAudioDuckEnabledToggle
+                        Layout.fillWidth: true
+                        text: "Duck local music for phone audio"
+                        checked: settingsManager ? settingsManager.scrcpyAudioDuckEnabled : true
+                        activeColor: App.Style.accent
+                        inactiveColor: App.Style.hoverColor
+
+                        onToggled: function(checked) {
+                            if (settingsManager) {
+                                settingsManager.save_scrcpy_audio_duck_enabled(checked)
+                            }
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onScrcpyAudioDuckEnabledChanged() {
+                                scrcpyAudioDuckEnabledToggle.checked = settingsManager.scrcpyAudioDuckEnabled
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing
+                        enabled: scrcpyAudioDuckEnabledToggle.checked
+                        opacity: enabled ? 1.0 : 0.5
+
+                        SettingsSlider {
+                            id: scrcpyAudioDuckLevelSlider
+                            from: -40
+                            to: -6
+                            stepSize: 1
+                            value: settingsManager ? Math.round(20 * Math.log(settingsManager.scrcpyAudioDuckLevel) / Math.LN10) : -20
+                            Layout.fillWidth: true
+                            onPressedChanged: {
+                                if (!pressed && settingsManager) {
+                                    settingsManager.save_scrcpy_audio_duck_level(Math.pow(10, value / 20))
+                                }
+                            }
+                            Connections {
+                                target: settingsManager
+                                function onScrcpyAudioDuckLevelChanged() {
+                                    scrcpyAudioDuckLevelSlider.value = Math.round(20 * Math.log(settingsManager.scrcpyAudioDuckLevel) / Math.LN10)
+                                }
+                            }
+                        }
+
+                        ValueDisplay {
+                            text: scrcpyAudioDuckLevelSlider.value.toFixed(0) + " dB"
+                            Layout.fillWidth: false
+                        }
+                    }
+
+                    SettingDescription {
+                        text: "Spotify is not ducked: it plays on its own Spotify Connect device, usually the phone itself, so its sound already arrives through the mirror."
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingLabel {
                         text: "Status"
                     }
 

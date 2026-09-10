@@ -39,6 +39,8 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(int frameHeight READ frameHeight NOTIFY frameSizeChanged)
     // Phone audio is currently being played through OCTAVE
     Q_PROPERTY(bool audioActive READ audioActive NOTIFY audioActiveChanged)
+    // The phone is producing sound right now (navigation prompt, video, call)
+    Q_PROPERTY(bool audioPlaying READ audioPlaying NOTIFY audioPlayingChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -55,6 +57,10 @@ public:
     int frameWidth() const { return m_frameWidth; }
     int frameHeight() const { return m_frameHeight; }
     bool audioActive() const;
+    bool audioPlaying() const;
+    // Factor other sources should currently apply: duck level while the phone
+    // is producing sound and ducking is on, 1.0 otherwise
+    float duckingFactor() const;
 
     // Validate "WxH": dimensions snapped down to multiples of 8 (scrcpy does the
     // same to a --new-display size), "" for invalid input.
@@ -74,6 +80,10 @@ signals:
     void frameReady();
     void videoSinkChanged();
     void audioActiveChanged(bool active);
+    void audioPlayingChanged(bool playing);
+    // Emitted whenever duckingFactor() changes; main.cpp routes it to the
+    // other audio sources (MediaManager::setDucking).
+    void duckingChanged(float factor);
 
 public slots:
     // Called by VolumeController on every volume change (0..1 linear);
@@ -82,6 +92,10 @@ public slots:
     // Linear gain on phone PCM before OCTAVE's volume (setting scrcpyAudioGain)
     void setAudioGain(float gain);
     void setAudioEnabled(bool enabled);
+    // Duck OCTAVE's other sources while the phone produces sound
+    // (settings scrcpyAudioDuckEnabled / scrcpyAudioDuckLevel, linear factor)
+    void setAudioDuckEnabled(bool enabled);
+    void setAudioDuckLevel(float level);
     void setDisplaySize(const QString &size);
     bool environmentOk();
     QString getInstallInstructions();
@@ -110,6 +124,7 @@ private:
     void killStaleServer();
     void onConnected(int w, int h);
     void onDisconnected(const QString &reason);
+    void updateDucking();
 
     QString m_adbPath;
     bool m_audioEnabled = false;
@@ -125,6 +140,10 @@ private:
     bool m_isStopping = false;
     bool m_ready = false;
     float m_audioGain = 2.0f;
+    bool m_audioPlaying = false;
+    bool m_duckEnabled = true;
+    float m_duckLevel = 0.1f;        // -20 dB
+    float m_duckFactor = 1.0f;       // last value emitted through duckingChanged
 };
 
 #else // Q_OS_MOBILE — mobile stub
@@ -145,9 +164,12 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(int frameWidth READ frameWidth CONSTANT)
     Q_PROPERTY(int frameHeight READ frameHeight CONSTANT)
     Q_PROPERTY(bool audioActive READ audioActive CONSTANT)
+    Q_PROPERTY(bool audioPlaying READ audioPlaying CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
     bool audioActive() const { return false; }
+    bool audioPlaying() const { return false; }
+    float duckingFactor() const { return 1.0f; }
     void cleanup() {}
     QString adbPath() const { return {}; }
     bool nativeAvailable() const { return false; }
@@ -164,6 +186,8 @@ public slots:
     void setVolume(float) {}
     void setAudioGain(float) {}
     void setAudioEnabled(bool) {}
+    void setAudioDuckEnabled(bool) {}
+    void setAudioDuckLevel(float) {}
     void setDisplaySize(const QString &) {}
     bool environmentOk() const { return false; }
     QString getInstallInstructions() const { return QStringLiteral("Phone mirroring is desktop-only"); }
@@ -188,6 +212,8 @@ signals:
     void frameReady();
     void videoSinkChanged();
     void audioActiveChanged(bool);
+    void audioPlayingChanged(bool);
+    void duckingChanged(float);
 };
 
 #endif // Q_OS_MOBILE

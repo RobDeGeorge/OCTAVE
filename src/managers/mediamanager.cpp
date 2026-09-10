@@ -125,6 +125,14 @@ MediaManager::MediaManager(QObject *parent)
     m_player->setAudioOutput(m_audioOutput);
     m_audioOutput->setVolume(0.5f);
 
+    // Ducking ramp: fast attack so a prompt is not stepped on, slower release
+    // so music does not jump back up between sentences.
+    m_duckAnim.setEasingCurve(QEasingCurve::OutCubic);
+    connect(&m_duckAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &v) {
+        m_duckCurrent = v.toFloat();
+        applyOutputVolume();
+    });
+
     // Directories — use application dir as base, like the Python backend/ dir.
     // On Android, applicationDirPath is /data/app/.../lib (not writable by us),
     // so use the standard Music location for default library + app's
@@ -1415,8 +1423,8 @@ void MediaManager::pause()
     m_isPlaying = false;
     emit playStateChanged(false);
     _save_playback_state_debounced();
-    if (!m_isMuted && m_audioOutput->volume() > 0.0f)
-        m_previousVolume = m_audioOutput->volume();
+    if (!m_isMuted && m_volume > 0.0f)
+        m_previousVolume = m_volume;
 }
 
 void MediaManager::toggle_play()
@@ -1481,16 +1489,15 @@ void MediaManager::toggle_mute()
     m_muteToggleLocked = true;
 
     if (m_isMuted) {
-        float restoreVol = (m_previousVolume > 0.0f) ? m_previousVolume : 0.5f;
-        m_audioOutput->setVolume(restoreVol);
-    } else {
-        float currentVol = m_audioOutput->volume();
-        if (currentVol > 0.0f)
-            m_previousVolume = currentVol;
-        m_audioOutput->setVolume(0.0f);
+        // Unmuting: m_volume tracked the slider while muted; fall back if it is 0
+        if (m_volume <= 0.0f)
+            m_volume = (m_previousVolume > 0.0f) ? m_previousVolume : 0.5f;
+    } else if (m_volume > 0.0f) {
+        m_previousVolume = m_volume;
     }
 
     m_isMuted = !m_isMuted;
+    applyOutputVolume();
     emit muteChanged(m_isMuted);
     qCInfo(lcMedia) << "Mute toggled:" << m_isMuted;
 
@@ -1509,19 +1516,36 @@ bool MediaManager::is_muted() { return m_isMuted; }
 void MediaManager::setVolume(float volume)
 {
     volume = qBound(0.0f, volume, 1.0f);
-
-    if (m_isMuted) {
+    m_volume = volume;
+    if (m_isMuted)
         m_previousVolume = volume;
-        m_audioOutput->setVolume(0.0f);
-    } else {
-        m_audioOutput->setVolume(volume);
-    }
+    applyOutputVolume();
     emit volumeChanged(volume);
+}
+
+void MediaManager::setDucking(float factor)
+{
+    factor = qBound(0.0f, factor, 1.0f);
+    if (qFuzzyCompare(factor, m_duckTarget))
+        return;
+    const bool ducking = factor < m_duckTarget;
+    m_duckTarget = factor;
+    m_duckAnim.stop();
+    m_duckAnim.setStartValue(m_duckCurrent);
+    m_duckAnim.setEndValue(factor);
+    m_duckAnim.setDuration(ducking ? 80 : 500);
+    m_duckAnim.start();
+}
+
+void MediaManager::applyOutputVolume()
+{
+    m_audioOutput->setVolume(m_isMuted ? 0.0f : m_volume * m_duckCurrent);
 }
 
 float MediaManager::getVolume()
 {
-    return m_audioOutput->volume();
+    // The user's volume, not the (possibly ducked or muted) output level
+    return m_volume;
 }
 
 // ─── Shuffle ───────────────────────────────────────────────────────

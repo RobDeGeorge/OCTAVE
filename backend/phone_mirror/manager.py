@@ -112,6 +112,10 @@ class PhoneMirrorManager(QObject):
     frameReady = Signal()                # a frame reached the video sink
     videoSinkChanged = Signal()
     audioActiveChanged = Signal(bool)   # phone audio playing through OCTAVE (or not)
+    audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound
+    # Emitted whenever duckingFactor changes; main.py routes it to the other
+    # audio sources (MediaManager.setDucking).
+    duckingChanged = Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -129,6 +133,10 @@ class PhoneMirrorManager(QObject):
         self._is_stopping: bool = False
         self._ready: bool = False
         self._audio_gain: float = 2.0
+        self._audio_playing: bool = False
+        self._duck_enabled: bool = True
+        self._duck_level: float = 0.1        # -20 dB
+        self._duck_factor: float = 1.0       # last value emitted through duckingChanged
 
     # ── availability / environment ──────────────────────────────────
 
@@ -282,6 +290,49 @@ class PhoneMirrorManager(QObject):
         """Phone audio is currently being played through OCTAVE."""
         return self._client is not None and self._client.audio_active
 
+    @Property(bool, notify=audioPlayingChanged)
+    def audioPlaying(self) -> bool:
+        """The phone is producing sound right now (navigation prompt, video, call)."""
+        return self._audio_playing
+
+    @property
+    def duckingFactor(self) -> float:
+        """Factor other sources should currently apply: duck level while the
+        phone is producing sound and ducking is on, 1.0 otherwise."""
+        return self._duck_factor
+
+    @Slot(bool)
+    def setAudioDuckEnabled(self, enabled: bool):
+        """Duck OCTAVE's other sources while the phone produces sound
+        (setting scrcpyAudioDuckEnabled)."""
+        enabled = bool(enabled)
+        if enabled == self._duck_enabled:
+            return
+        self._duck_enabled = enabled
+        self._update_ducking()
+
+    @Slot(float)
+    def setAudioDuckLevel(self, level: float):
+        """Linear factor applied to the other sources while ducked
+        (setting scrcpyAudioDuckLevel, 0.1 = -20 dB)."""
+        self._duck_level = max(0.0, min(1.0, float(level)))
+        self._update_ducking()
+
+    def _on_audio_playing(self, playing: bool):
+        if playing == self._audio_playing:
+            return
+        self._audio_playing = playing
+        self.audioPlayingChanged.emit(playing)
+        self._update_ducking()
+
+    def _update_ducking(self):
+        factor = self._duck_level if (self._duck_enabled and self._audio_playing) else 1.0
+        if abs(factor - self._duck_factor) < 1e-6:
+            return
+        self._duck_factor = factor
+        logger.debug(f"phone mirror: ducking factor {factor:.3f}")
+        self.duckingChanged.emit(factor)
+
     @Property(str, notify=displaySizeChanged)
     def displaySize(self) -> str:
         """Requested virtual display size "WxH" (--new-display), "" = phone screen."""
@@ -393,6 +444,7 @@ class PhoneMirrorManager(QObject):
         client.frameSizeChanged.connect(self._on_frame_size)
         client.frameReady.connect(self.frameReady)
         client.audioStateChanged.connect(self.audioActiveChanged)
+        client.audioPlayingChanged.connect(self._on_audio_playing)
         client.set_audio_gain(self._audio_gain)
         client.set_volume(self._volume)
         self._client = client

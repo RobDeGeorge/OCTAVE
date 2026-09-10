@@ -32,6 +32,7 @@ class QVideoSink;
 class QTcpSocket;
 class QProcess;
 class QAudioSink;
+class QTimer;
 class QIODevice;
 
 class ScrcpyClient : public QObject
@@ -69,6 +70,9 @@ public:
     // Linear gain applied to phone PCM before the sink (soft-limited)
     void setAudioGain(float gain) { m_audioGain = qBound(0.25f, gain, 8.0f); }
     bool audioActive() const { return m_audioActive.load(); }
+    // The phone is producing sound right now (level above kAudioSignalThreshold
+    // within the last kAudioHoldMs); drives ducking of OCTAVE's other sources
+    bool audioPlaying() const { return m_audioPlaying; }
 
     bool start(const QString &serial, const QString &displaySize = QString(),
                int maxFps = 60, int bitRate = 8000000, bool audio = false, bool stayAwake = true);
@@ -87,6 +91,7 @@ signals:
     void frameReady();                          // a decoded frame is waiting (GUI thread pulls it)
     void audioReady();                          // PCM chunks are queued (GUI thread writes them)
     void audioStateChanged(bool active);        // phone audio is (not) being played through OCTAVE
+    void audioPlayingChanged(bool playing);     // the phone is (not) producing sound (GUI thread)
     void serverLog(const QString &line);
 
 private slots:
@@ -101,6 +106,7 @@ private:
     void audioLoop(QTcpSocket *audio);
     bool ensureAudioSink();
     void stopAudioSink();
+    void setAudioPlaying(bool playing);
     void pushFrame(const QVideoFrame &frame);
     void fail(const QString &reason);
     void sendControl(const QByteArray &msg);
@@ -138,6 +144,11 @@ private:
     std::atomic<bool> m_audioActive{false};
     std::atomic<float> m_volume{1.0f};
     std::atomic<float> m_audioGain{2.0f};
+    // Sound detection for ducking: the audio thread flags a chunk with level,
+    // the GUI thread turns that into audioPlaying with a release hold.
+    std::atomic<bool> m_audioSignalSeen{false};
+    bool m_audioPlaying = false;
+    QTimer *m_audioHoldTimer = nullptr;
     QList<QByteArray> m_audioQueue;
     qsizetype m_audioQueueBytes = 0;
     std::mutex m_audioMutex;

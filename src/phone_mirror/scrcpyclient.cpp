@@ -13,6 +13,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QThread>
+#include <QTimer>
 #include <QVideoFrameFormat>
 #include <QVideoSink>
 #include <QAudioFormat>
@@ -41,6 +42,7 @@ extern "C" {
 }
 #endif
 
+#include <algorithm>
 #include <cstring>
 #include <cmath>
 
@@ -64,6 +66,14 @@ constexpr quint32 kAudioCodecRaw = 0x00726177;            // "raw"
 constexpr quint32 kAudioStreamDisabled = 0;               // device could not capture; video continues
 constexpr quint32 kAudioStreamError = 1;                  // configuration error
 constexpr qsizetype kAudioQueueMaxBytes = kAudioSampleRate * kAudioBytesPerFrame / 4;  // ~250 ms backlog
+// Sound detection (for ducking local media): a chunk counts as sound when its
+// peak, before gain, exceeds about -46 dBFS; a silent remote submix is exact
+// zeros, so this only has to reject dither-level noise.
+constexpr int kAudioSignalThreshold = 164;
+// How long the phone must stay silent before audioPlaying drops. Long enough
+// to bridge the gaps between navigation sentences, short enough that music
+// comes back promptly after a prompt.
+constexpr int kAudioHoldMs = 1500;
 
 constexpr const char *kDeviceJarPath = "/data/local/tmp/octave-phone-server.jar";
 constexpr const char *kJarResource = ":/phone-server/octave-phone-server";
@@ -139,6 +149,19 @@ ScrcpyClient::ScrcpyClient(const QString &adbPath, const QString &serverJar, QOb
 {
     connect(this, &ScrcpyClient::frameReady, this, &ScrcpyClient::deliverFrame, Qt::QueuedConnection);
     connect(this, &ScrcpyClient::audioReady, this, &ScrcpyClient::deliverAudio, Qt::QueuedConnection);
+    m_audioHoldTimer = new QTimer(this);
+    m_audioHoldTimer->setSingleShot(true);
+    m_audioHoldTimer->setInterval(kAudioHoldMs);
+    connect(m_audioHoldTimer, &QTimer::timeout, this, [this] { setAudioPlaying(false); });
+}
+
+void ScrcpyClient::setAudioPlaying(bool playing)
+{
+    // GUI thread
+    if (playing == m_audioPlaying)
+        return;
+    m_audioPlaying = playing;
+    emit audioPlayingChanged(playing);
 }
 
 void ScrcpyClient::setVolume(float linear)
@@ -636,11 +659,17 @@ void ScrcpyClient::audioLoop(QTcpSocket *audio)
                 data.resize(int(size));
                 if (!recvExact(audio, data.data(), size, m_stopping))
                     break;
+                auto *samples = reinterpret_cast<qint16 *>(data.data());
+                const int n = data.size() / 2;
+                // Peak before gain: is the phone actually making sound?
+                int peak = 0;
+                for (int i = 0; i < n; ++i)
+                    peak = std::max(peak, std::abs(int(samples[i])));
+                if (peak >= kAudioSignalThreshold)
+                    m_audioSignalSeen = true;
                 // Gain with a soft limiter (tanh) so a hot source cannot clip harshly
                 const float gain = m_audioGain.load();
                 if (std::abs(gain - 1.0f) > 1e-3f) {
-                    auto *samples = reinterpret_cast<qint16 *>(data.data());
-                    const int n = data.size() / 2;
                     for (int i = 0; i < n; ++i) {
                         const float x = float(samples[i]) * (gain / 32768.0f);
                         samples[i] = qint16(std::tanh(x) * 32767.0f);
@@ -697,6 +726,14 @@ bool ScrcpyClient::ensureAudioSink()
 
 void ScrcpyClient::stopAudioSink()
 {
+    m_audioSignalSeen = false;
+    if (QThread::currentThread() == thread()) {
+        m_audioHoldTimer->stop();
+        setAudioPlaying(false);
+    } else {
+        QMetaObject::invokeMethod(this, [this] { m_audioHoldTimer->stop(); setAudioPlaying(false); },
+                                  Qt::QueuedConnection);
+    }
     if (m_audioSink) {
         m_audioSink->stop();
         m_audioSink->deleteLater();
@@ -712,6 +749,10 @@ void ScrcpyClient::deliverAudio()
 {
     // GUI thread. Write whatever is queued; never block on a full device
     // buffer — dropping keeps the audio close to the picture.
+    if (m_audioSignalSeen.exchange(false) && !m_stopping.load()) {
+        setAudioPlaying(true);
+        m_audioHoldTimer->start();   // (re)arm the release
+    }
     if (m_stopping.load() || !ensureAudioSink()) {
         std::lock_guard<std::mutex> lock(m_audioMutex);
         m_audioQueue.clear();

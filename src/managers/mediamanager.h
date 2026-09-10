@@ -10,6 +10,7 @@
 #include <QMap>
 #include <QSet>
 #include <QTimer>
+#include <QVariantAnimation>
 #include <QMediaPlayer>
 #include <QAudioOutput>
 #include <QRegularExpression>
@@ -89,6 +90,11 @@ public slots:
     void toggle_mute();
     void toggle_shuffle();
     void setVolume(float volume);
+    // Temporarily attenuate the output (1.0 = none, 0.1 = -20 dB) while another
+    // source, e.g. the mirrored phone's navigation prompt, needs to be heard.
+    // Independent of the user's volume: setVolume/mute keep working underneath
+    // and the ramp restores the full level when the factor returns to 1.0.
+    void setDucking(float factor);
     void set_position(int positionMs);
 
     // Metadata / album art
@@ -218,7 +224,12 @@ private:
     // Playback state
     int m_currentIndex = 0;
     bool m_isMuted = false;
+    float m_volume = 0.5f;          // user's volume (linear), before ducking and mute
     float m_previousVolume = 0.5f;
+    float m_duckTarget = 1.0f;      // requested ducking factor
+    float m_duckCurrent = 1.0f;     // ramped factor actually applied
+    QVariantAnimation m_duckAnim;
+    void applyOutputVolume();       // output = muted ? 0 : m_volume * m_duckCurrent
     bool m_isPlaying = false;
     bool m_isPaused = true;
     bool m_shuffle = false;

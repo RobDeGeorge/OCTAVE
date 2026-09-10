@@ -209,6 +209,8 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("scrcpyAudioEnabled")]      = false;
     d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("1280x800");     // --new-display WxH, "" = phone screen
     d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)
+    d[QStringLiteral("scrcpyAudioDuckEnabled")]  = true;  // duck local media while the phone produces sound
+    d[QStringLiteral("scrcpyAudioDuckLevel")]    = 0.1;   // linear factor applied to local media while ducked (-20 dB)
 
     // Settings menu visibility
     QJsonObject menuVis;
@@ -437,6 +439,8 @@ SettingsManager::SettingsManager(QObject *parent)
     m_scrcpyAudioEnabled  = s(QStringLiteral("scrcpyAudioEnabled")).toBool();
     m_scrcpyDisplaySize   = s(QStringLiteral("scrcpyDisplaySize")).toString();
     m_scrcpyAudioGain     = s(QStringLiteral("scrcpyAudioGain")).toDouble();
+    m_scrcpyAudioDuckEnabled = s(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
+    m_scrcpyAudioDuckLevel   = s(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
 
     // Settings menu visibility
     {
@@ -828,6 +832,8 @@ bool    SettingsManager::phoneMirrorEnabled() const  { return m_phoneMirrorEnabl
 bool    SettingsManager::scrcpyAudioEnabled() const  { return m_scrcpyAudioEnabled; }
 QString SettingsManager::scrcpyDisplaySize() const   { return m_scrcpyDisplaySize; }
 double  SettingsManager::scrcpyAudioGain() const     { return m_scrcpyAudioGain; }
+bool    SettingsManager::scrcpyAudioDuckEnabled() const { return m_scrcpyAudioDuckEnabled; }
+double  SettingsManager::scrcpyAudioDuckLevel() const { return m_scrcpyAudioDuckLevel; }
 
 // --- ESP32 ---
 bool    SettingsManager::esp32VolumeEnabled() const    { return m_esp32VolumeEnabled; }
@@ -1642,6 +1648,23 @@ void SettingsManager::save_scrcpy_audio_gain(double gain)
     emit scrcpyAudioGainChanged(gain);
 }
 
+void SettingsManager::save_scrcpy_audio_duck_enabled(bool enabled)
+{
+    qCDebug(lcSettings) << "Saving scrcpy audio duck enabled:" << enabled;
+    m_scrcpyAudioDuckEnabled = enabled;
+    updateSetting(QStringLiteral("scrcpyAudioDuckEnabled"), enabled);
+    emit scrcpyAudioDuckEnabledChanged(enabled);
+}
+
+void SettingsManager::save_scrcpy_audio_duck_level(double level)
+{
+    level = qBound(0.0, level, 1.0);
+    qCDebug(lcSettings) << "Saving scrcpy audio duck level:" << level;
+    m_scrcpyAudioDuckLevel = level;
+    updateSetting(QStringLiteral("scrcpyAudioDuckLevel"), level);
+    emit scrcpyAudioDuckLevelChanged(level);
+}
+
 // --- ESP32 ---
 void SettingsManager::save_esp32_volume_enabled(bool enabled)
 {
@@ -1872,6 +1895,8 @@ bool    SettingsManager::get_phone_mirror_enabled()    { return m_phoneMirrorEna
 bool    SettingsManager::get_scrcpy_audio_enabled()    { return m_scrcpyAudioEnabled; }
 QString SettingsManager::get_scrcpy_display_size()     { return m_scrcpyDisplaySize; }
 double  SettingsManager::get_scrcpy_audio_gain()       { return m_scrcpyAudioGain; }
+bool    SettingsManager::get_scrcpy_audio_duck_enabled() { return m_scrcpyAudioDuckEnabled; }
+double  SettingsManager::get_scrcpy_audio_duck_level() { return m_scrcpyAudioDuckLevel; }
 bool    SettingsManager::get_esp32_volume_enabled()    { return m_esp32VolumeEnabled; }
 QString SettingsManager::get_esp32_volume_port()       { return m_esp32VolumePort; }
 double  SettingsManager::get_esp32_volume_step_size()  { return m_esp32VolumeStepSize; }
@@ -2101,6 +2126,12 @@ void SettingsManager::reset_to_defaults()
 
     m_scrcpyAudioGain = m_defaultSettings.value(QStringLiteral("scrcpyAudioGain")).toDouble();
     emit scrcpyAudioGainChanged(m_scrcpyAudioGain);
+
+    m_scrcpyAudioDuckEnabled = m_defaultSettings.value(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
+    emit scrcpyAudioDuckEnabledChanged(m_scrcpyAudioDuckEnabled);
+
+    m_scrcpyAudioDuckLevel = m_defaultSettings.value(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
+    emit scrcpyAudioDuckLevelChanged(m_scrcpyAudioDuckLevel);
 
     // Settings menu visibility
     m_settingsMenuVisibility.clear();

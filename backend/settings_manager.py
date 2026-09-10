@@ -203,6 +203,8 @@ class SettingsManager(QObject):
     scrcpyAudioEnabledChanged = Signal(bool)
     scrcpyDisplaySizeChanged = Signal(str)
     scrcpyAudioGainChanged = Signal(float)
+    scrcpyAudioDuckEnabledChanged = Signal(bool)
+    scrcpyAudioDuckLevelChanged = Signal(float)
     albumArtColorsChanged = Signal(str)  # JSON string with album art theme colors
 
     # Settings menu visibility signals
@@ -404,6 +406,8 @@ class SettingsManager(QObject):
             "scrcpyAudioEnabled": False,  # If True, forward audio from phone
             "scrcpyDisplaySize": "1280x800",  # Virtual display WxH (--new-display); "" = phone screen
             "scrcpyAudioGain": 2.0,  # Linear gain on phone audio before OCTAVE's volume (+6 dB)
+            "scrcpyAudioDuckEnabled": True,  # Duck local media while the phone produces sound
+            "scrcpyAudioDuckLevel": 0.1,  # Linear factor applied to local media while ducked (-20 dB)
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
                 "deviceSettings": True,
@@ -554,6 +558,8 @@ class SettingsManager(QObject):
         self._scrcpy_audio_enabled = self._settings.get("scrcpyAudioEnabled", False)
         self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "1280x800")
         self._scrcpy_audio_gain = float(self._settings.get("scrcpyAudioGain", 2.0))
+        self._scrcpy_audio_duck_enabled = bool(self._settings.get("scrcpyAudioDuckEnabled", True))
+        self._scrcpy_audio_duck_level = float(self._settings.get("scrcpyAudioDuckLevel", 0.1))
 
         # Settings menu visibility
         self._settings_menu_visibility = self._settings.get(
@@ -1670,6 +1676,38 @@ class SettingsManager(QObject):
         self._scrcpy_audio_gain = gain
         self.update_setting("scrcpyAudioGain", gain, self.scrcpyAudioGainChanged)
 
+    @Property(bool, notify=scrcpyAudioDuckEnabledChanged)
+    def scrcpyAudioDuckEnabled(self):
+        """Duck local media while the phone produces sound"""
+        return self._scrcpy_audio_duck_enabled
+
+    @Slot(result=bool)
+    def get_scrcpy_audio_duck_enabled(self):
+        return self._scrcpy_audio_duck_enabled
+
+    @Slot(bool)
+    def save_scrcpy_audio_duck_enabled(self, enabled):
+        enabled = bool(enabled)
+        logger.debug(f"Saving scrcpy audio duck enabled: {enabled}")
+        self._scrcpy_audio_duck_enabled = enabled
+        self.update_setting("scrcpyAudioDuckEnabled", enabled, self.scrcpyAudioDuckEnabledChanged)
+
+    @Property(float, notify=scrcpyAudioDuckLevelChanged)
+    def scrcpyAudioDuckLevel(self):
+        """Linear factor applied to local media while ducked (0.1 = -20 dB)"""
+        return self._scrcpy_audio_duck_level
+
+    @Slot(result=float)
+    def get_scrcpy_audio_duck_level(self):
+        return self._scrcpy_audio_duck_level
+
+    @Slot(float)
+    def save_scrcpy_audio_duck_level(self, level):
+        level = max(0.0, min(1.0, float(level)))
+        logger.debug(f"Saving scrcpy audio duck level: {level}")
+        self._scrcpy_audio_duck_level = level
+        self.update_setting("scrcpyAudioDuckLevel", level, self.scrcpyAudioDuckLevelChanged)
+
     @Property(bool, notify=esp32VolumeEnabledChanged)
     def esp32VolumeEnabled(self):
         """Get whether ESP32 volume controller is enabled"""
@@ -2273,6 +2311,12 @@ class SettingsManager(QObject):
 
         self._scrcpy_audio_gain = self._default_settings["scrcpyAudioGain"]
         self.scrcpyAudioGainChanged.emit(self._scrcpy_audio_gain)
+
+        self._scrcpy_audio_duck_enabled = self._default_settings["scrcpyAudioDuckEnabled"]
+        self.scrcpyAudioDuckEnabledChanged.emit(self._scrcpy_audio_duck_enabled)
+
+        self._scrcpy_audio_duck_level = self._default_settings["scrcpyAudioDuckLevel"]
+        self.scrcpyAudioDuckLevelChanged.emit(self._scrcpy_audio_duck_level)
 
         self._settings_menu_visibility = self._default_settings["settingsMenuVisibility"].copy()
         self.settingsMenuVisibilityChanged.emit()
