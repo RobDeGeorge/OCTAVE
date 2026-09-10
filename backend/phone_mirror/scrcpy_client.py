@@ -315,10 +315,15 @@ class ScrcpyClient(QObject):
         plane = frame.planes[0]
         buf = memoryview(plane).cast("B")
         stride, w, h = plane.line_size, frame.width, frame.height
-        # 24x24 grid (576 samples): small bright UI (toolbar icons, subtitles)
-        # on a dark frame must not read as a dozing phone.
         if w < 24 or h < 24:
             return False
+        # Max luma over every other pixel in both directions. Point samples on
+        # a grid miss thin bright UI (a 2 px icon stroke, a subtitle edge) and
+        # would hold a dark app's frame as if the phone were dozing.
+        if np is not None:
+            y = np.frombuffer(buf, dtype=np.uint8, count=stride * h).reshape(h, stride)[::2, :w:2]
+            return int(y.max()) <= BLACK_LUMA_MAX
+        # No numpy: 24x24 point grid, the best pure Python can afford per frame.
         for r in range(24):
             base = (r * (h - 1) // 23) * stride
             for c in range(24):

@@ -64,14 +64,16 @@ constexpr int kBlackLumaMax = 20;
 static bool isBlackFrame(const AVFrame *f)
 {
     const int w = f->width, h = f->height, stride = f->linesize[0];
-    // 24x24 grid (576 samples): small bright UI (toolbar icons, subtitles)
-    // on a dark frame must not read as a dozing phone.
+    // Max luma over every other pixel in both directions, early exit on the
+    // first bright one. Point samples on a grid miss thin bright UI (a 2 px
+    // icon stroke, a subtitle edge) and would hold a dark app's frame as if
+    // the phone were dozing. ~256k byte reads on 1280x800: well under 1 ms.
     if (w < 24 || h < 24)
         return false;
-    for (int r = 0; r < 24; ++r) {
-        const uint8_t *row = f->data[0] + qint64(r * (h - 1) / 23) * stride;
-        for (int c = 0; c < 24; ++c)
-            if (row[c * (w - 1) / 23] > kBlackLumaMax)
+    for (int r = 0; r < h; r += 2) {
+        const uint8_t *row = f->data[0] + qint64(r) * stride;
+        for (int c = 0; c < w; c += 2)
+            if (row[c] > kBlackLumaMax)
                 return false;
     }
     return true;
