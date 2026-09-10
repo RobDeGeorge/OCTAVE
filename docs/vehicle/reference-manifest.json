@@ -1,0 +1,994 @@
+{
+  "source_page": "https://bringatrailer.com/listing/2003-jeep-wrangler-148/",
+  "vehicle": "2003 Jeep Wrangler Sahara, Shale Green / Dark Khaki hardtop",
+  "gallery_count": 386,
+  "downloaded_count": 164,
+  "indexing": "Zero-based gallery order as retrieved 2026-09-09",
+  "reference_only": true,
+  "images": [
+    {
+      "index": 0,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8038-71512-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/000.jpg",
+      "purpose": "Front three-quarter"
+    },
+    {
+      "index": 1,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8375-71672-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/001.jpg",
+      "purpose": "Elevated front three-quarter"
+    },
+    {
+      "index": 2,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8361-71659-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/002.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 3,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8371-71665-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/003.jpg",
+      "purpose": "Front quarter, wheel stance"
+    },
+    {
+      "index": 4,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/IMG_8388-09206-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/004.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 5,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8393-71678-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/005.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 6,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8430-71690-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/006.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 7,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/tempImageWXtYr0-09184-scaled.jpg",
+      "local_path": "dev/jeep-tj-reference/007.jpg",
+      "purpose": "Left profile"
+    },
+    {
+      "index": 8,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7885-71307-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/008.jpg",
+      "purpose": "Left profile alternate"
+    },
+    {
+      "index": 9,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8613-71821-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/009.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 10,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7927-71311-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/010.jpg",
+      "purpose": "Rear left quarter"
+    },
+    {
+      "index": 11,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7948-71263-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/011.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 12,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/tempImageHfqtno-09181-scaled.jpg",
+      "local_path": "dev/jeep-tj-reference/012.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 13,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8137-71583-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/013.jpg",
+      "purpose": "Right profile"
+    },
+    {
+      "index": 14,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8130-71579-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/014.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 15,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8149-71591-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/015.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 16,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8273-71654-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/016.jpg",
+      "purpose": "Right front quarter"
+    },
+    {
+      "index": 17,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8268-71649-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/017.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 18,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8056-71526-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/018.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 19,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8141-71587-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/019.jpg",
+      "purpose": "Front right quarter"
+    },
+    {
+      "index": 20,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8249-71643-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/020.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 21,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8027-71502-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/021.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 22,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8025-71495-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/022.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 23,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8049-71517-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/023.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 24,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/4.-09187.jpeg",
+      "local_path": "dev/jeep-tj-reference/024.jpg",
+      "purpose": "Straight front"
+    },
+    {
+      "index": 25,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/IMG_8385-09201-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/025.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 26,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7896-71296-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/026.jpg",
+      "purpose": "Hood crown and cowl"
+    },
+    {
+      "index": 27,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7898-71303-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/027.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 28,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7900-71284-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/028.jpg",
+      "purpose": "Hood latch and front flare"
+    },
+    {
+      "index": 29,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7899-71290-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/029.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 30,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8479-71774-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/030.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 31,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8478-71779-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/031.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 32,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8034-71507-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/032.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 33,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8171-71596-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/033.jpg",
+      "purpose": "Front wheel opening"
+    },
+    {
+      "index": 34,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8476-71792-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/034.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 35,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8477-71786-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/035.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 36,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8501-71816-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/036.jpg",
+      "purpose": "Door handle and shut line"
+    },
+    {
+      "index": 37,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7916-71269-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/037.jpg",
+      "purpose": "Hardtop quarter and rear glass"
+    },
+    {
+      "index": 38,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8492-71804-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/038.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 39,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8493-71798-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/039.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 40,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8496-71810-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/040.jpg",
+      "purpose": "Fuel filler and rear flare"
+    },
+    {
+      "index": 41,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8079-71544-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/041.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 42,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8088-71554-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/042.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 43,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2454-50403-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/043.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 44,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8074-71540-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/044.jpg",
+      "purpose": "Roof crown and reinforcement ribs"
+    },
+    {
+      "index": 45,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8073-71536-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/045.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 46,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8071-71531-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/046.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 47,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7901-71277-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/047.jpg",
+      "purpose": "Canyon wheel and tire tread"
+    },
+    {
+      "index": 48,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8178-71609-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/048.jpg",
+      "purpose": "Dashboard"
+    },
+    {
+      "index": 49,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7988-71438-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/049.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 50,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7989-71442-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/050.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 51,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7987-71432-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/051.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 52,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7986-71427-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/052.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 53,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7996-71464-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/053.jpg",
+      "purpose": "Front seat profile"
+    },
+    {
+      "index": 54,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8195-71635-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/054.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 55,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8197-71640-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/055.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 56,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7991-71459-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/056.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 57,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7993-71447-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/057.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 58,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7992-71453-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/058.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 59,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8102-71569-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/059.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 60,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8446-71701-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/060.jpg",
+      "purpose": "Door card"
+    },
+    {
+      "index": 61,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8104-71560-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/061.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 62,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8103-71564-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/062.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 63,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8439-71685-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/063.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 64,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8176-71603-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/064.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 65,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7977-71417-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/065.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 66,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7978-71410-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/066.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 67,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8467-71739-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/067.jpg",
+      "purpose": "Steering wheel and instruments"
+    },
+    {
+      "index": 68,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8465-71729-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/068.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 69,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8464-71724-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/069.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 70,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8179-71613-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/070.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 71,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8109-71573-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/071.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 72,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8474-71763-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/072.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 73,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8475-71769-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/073.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 74,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8018-71489-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/074.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 75,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8471-71744-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/075.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 76,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8472-71751-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/076.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 77,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8019-71484-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/077.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 78,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8183-71623-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/078.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 79,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8182-71618-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/079.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 80,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8014-71479-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/080.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 81,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7980-71423-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/081.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 82,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7979-71400-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/082.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 83,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7999-71470-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/083.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 84,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8473-71756-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/084.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 85,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8445-71695-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/085.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 86,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8451-71706-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/086.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 87,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7958-71223-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/087.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 88,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7959-71228-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/088.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 89,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7954-71235-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/089.jpg",
+      "purpose": "Rear bench"
+    },
+    {
+      "index": 90,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8461-71734-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/090.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 94,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_8194-71628-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/094.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 98,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7955-71198-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/098.jpg",
+      "purpose": "Rear opening and roll cage"
+    },
+    {
+      "index": 102,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7973-71393-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/102.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 106,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7965-71365-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/106.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 110,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7963-71326-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/110.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 114,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2287-50275-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/114.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 118,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_8698-28444-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/118.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 122,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_8706-28467-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/122.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 126,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_8727-28519-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/126.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 130,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9644.JPG-28551-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/130.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 134,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2399-50331-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/134.jpg",
+      "purpose": "Undercarriage front"
+    },
+    {
+      "index": 138,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2377-50313-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/138.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 142,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2328-50296-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/142.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 146,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2375-50320-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/146.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 150,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2414-50358-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/150.jpg",
+      "purpose": "Fuel tank skid"
+    },
+    {
+      "index": 154,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2422-50373-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/154.jpg",
+      "purpose": "Coil spring and axle"
+    },
+    {
+      "index": 158,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2430-50388-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/158.jpg",
+      "purpose": "Axles and suspension"
+    },
+    {
+      "index": 162,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2472-50409-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/162.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 166,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2507-50436-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/166.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 170,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2514-50448-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/170.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 174,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2534-50589-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/174.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 178,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2574-50613-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/178.jpg",
+      "purpose": "Wheel inner face"
+    },
+    {
+      "index": 182,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2346-50307-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/182.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 186,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_8707-28475-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/186.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 190,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2564-50604-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/190.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 194,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2496-50423-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/194.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 198,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2295-22175-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/198.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 202,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2490-22384-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/202.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 206,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2505-22400-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/206.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 210,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2566-22601-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/210.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 214,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2528-22650-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/214.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 218,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2290-22832-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/218.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 222,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9170-95651-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/222.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 226,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9175-95672-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/226.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 230,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9179-95693-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/230.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 234,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9183-96048-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/234.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 238,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9187-96075-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/238.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 242,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9191-96094-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/242.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 246,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9345-24565-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/246.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 250,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9223-24589-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/250.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 254,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9197-24624-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/254.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 258,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9218-24649-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/258.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 262,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9507-33922-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/262.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 266,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9495-33938-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/266.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 270,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9387-79986-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/270.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 274,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9399-80016-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/274.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 278,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9253-80101-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/278.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 282,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9438-70879-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/282.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 286,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9301-71037-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/286.jpg",
+      "purpose": "Right profile alternate"
+    },
+    {
+      "index": 290,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9229-71071-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/290.jpg",
+      "purpose": "Rear left quarter alternate"
+    },
+    {
+      "index": 294,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9216-71204-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/294.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 298,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9471-71502-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/298.jpg",
+      "purpose": "Front suspension detail"
+    },
+    {
+      "index": 302,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9291-71536-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/302.jpg",
+      "purpose": "Roof interior and roll bar"
+    },
+    {
+      "index": 306,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_0042-41746-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/306.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 310,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_0037-41768-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/310.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 314,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_0035-41871-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/314.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 318,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_0008-41910-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/318.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 322,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_0002-41932-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/322.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 326,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_7872-56436-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/326.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 330,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_7900-56474-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/330.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 334,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9646-56664-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/334.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 338,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_8039-56680-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/338.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 342,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_8023-57274-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/342.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 346,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2513-57454-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/346.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 350,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2472-57914-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/350.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 354,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9508-86281-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/354.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 358,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9208-86500-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/358.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 362,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9252-86896-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/362.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 366,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9230-86924-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/366.jpg",
+      "purpose": "Cabin roof and roll cage"
+    },
+    {
+      "index": 370,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9538-22560-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/370.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 374,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_9245-24269-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/374.jpg",
+      "purpose": "Open door view"
+    },
+    {
+      "index": 378,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_8494-61262-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/378.jpg",
+      "purpose": "Supplemental detail"
+    },
+    {
+      "index": 382,
+      "url": "https://bringatrailer.com/wp-content/uploads/2026/04/2003_jeep_wrangler_IMG_2619-63919-scaled.jpeg",
+      "local_path": "dev/jeep-tj-reference/382.jpg",
+      "purpose": "Rear right quarter"
+    }
+  ]
+}
