@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <cstring>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -18,6 +19,7 @@
 
 // Phase 1 managers
 #include "managers/settingsmanager.h"
+#include "util/logger.h"
 #include "managers/clock.h"
 #include "managers/networkmanager.h"
 #include "managers/volumecontroller.h"
@@ -54,6 +56,14 @@
 
 int main(int argc, char *argv[])
 {
+    // Persistent logging + crash handlers first, so anything the managers
+    // say during construction (and any crash) reaches the log files.
+    bool debugLogging = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--debug") == 0)
+            debugLogging = true;
+    OctaveLog::install(debugLogging);
+
     QGuiApplication app(argc, argv);
     app.setOrganizationName("OCTAVE");
     app.setApplicationName("OCTAVE");
@@ -383,6 +393,7 @@ int main(int argc, char *argv[])
         obdManager.close();
         downloadManager.cleanup();
         networkManager.cleanup();
+        mediaManager._save_playback_state();   // before the settings flush: saveSettings() is debounced now
         mediaManager.flush_metadata_store();
         settingsManager.flushPendingSave();   // coalesced settings writes land before exit
     });

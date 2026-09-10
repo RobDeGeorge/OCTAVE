@@ -550,6 +550,38 @@ Image {
             <tr><td><code>octave-debug.log</code></td><td>DEBUG+</td><td>10 MB</td><td>2</td><td>~30 MB</td></tr>
           </tbody>
         </table>
+        <h3>C++ build</h3>
+        <p>
+          The C++ build logs to the same directory through <code>src/util/logger.cpp</code>, installed in
+          <code>main()</code> before the <code>QGuiApplication</code> exists: a <code>qInstallMessageHandler</code> routes
+          every <code>qDebug</code>/<code>qCDebug</code>/<code>qInfo</code>/<code>qWarning</code>/<code>qCritical</code>/<code>qFatal</code>
+          <em>and every QML <code>console.*</code> call</em> into rotating files (same sizes as the Python ones), while
+          still echoing to stderr. Lines are <code>date time | LEVEL | category | file:line | message</code>; QML lines
+          carry the .qml file and line. <code>--debug</code> enables category debug output and the debug file;
+          without it debug messages are filtered at the source.
+        </p>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Level</th><th>Max Size</th><th>Backups</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>octave-cpp.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td></tr>
+            <tr><td><code>octave-cpp-error.log</code></td><td>WARNING+ and crash backtraces</td><td>2 MB</td><td>5</td></tr>
+            <tr><td><code>octave-cpp-debug.log</code></td><td>DEBUG+ (only with <code>--debug</code>)</td><td>10 MB</td><td>2</td></tr>
+          </tbody>
+        </table>
+        <h3>Crash handlers</h3>
+        <p>
+          Both backends leave a trace when they die. Python (<code>logging_config._install_crash_handlers</code>):
+          <code>sys.excepthook</code> and <code>threading.excepthook</code> log unhandled exceptions with their traceback
+          to <code>octave-error.log</code>, and <code>faulthandler</code> dumps every thread's Python stack to the same file
+          on a native fault. C++: <code>SIGSEGV</code>/<code>SIGABRT</code>/<code>SIGFPE</code>/<code>SIGILL</code>/<code>SIGBUS</code>
+          write a <code>==== FATAL SIGSEGV ====</code> block with a <code>backtrace_symbols_fd</code> backtrace to
+          <code>octave-cpp-error.log</code> over a raw descriptor (no Qt in the signal path), then re-raise so the OS still
+          produces its core / tombstone; Windows uses <code>SetUnhandledExceptionFilter</code> with
+          <code>CaptureStackBackTrace</code>. Symbolise addresses with <code>addr2line -e octave</code> against the same build.
+          <code>qFatal</code> goes through the message handler first, so assertion messages are on disk before the abort.
+        </p>
 
         <p>
           The debug log is only created when running with <code>--debug</code>. Total max disk

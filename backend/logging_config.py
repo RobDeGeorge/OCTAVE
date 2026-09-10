@@ -133,7 +133,38 @@ def setup_logging(debug: bool = False, console: bool = True, file: bool = True):
             root_logger.addHandler(debug_handler)
 
     _initialized = True
+    if file:
+        _install_crash_handlers(root_logger, os.path.join(_get_log_dir(), 'octave-error.log'))
     root_logger.info(f"Logging initialized (debug={debug}, log_dir={_get_log_dir()})")
+
+
+def _install_crash_handlers(root_logger: logging.Logger, error_log_path: str):
+    """A crash must leave a trace in the error log (mirrors src/util/logger.cpp):
+    unhandled exceptions on the main thread and on worker threads (OBD, IMU,
+    gesture, phone mirror ...) are logged with their traceback, and
+    faulthandler dumps the Python stacks on a native fault (SIGSEGV, SIGABRT,
+    SIGFPE, SIGBUS, SIGILL) straight to the error log's descriptor."""
+    import faulthandler
+    import threading
+
+    def _excepthook(exc_type, exc, tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc, tb)
+            return
+        root_logger.critical("Unhandled exception on the main thread", exc_info=(exc_type, exc, tb))
+        sys.__excepthook__(exc_type, exc, tb)
+
+    def _threading_excepthook(args):
+        root_logger.critical(f"Unhandled exception in thread '{args.thread.name if args.thread else '?'}'",
+                             exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+
+    sys.excepthook = _excepthook
+    threading.excepthook = _threading_excepthook
+    try:
+        fh = open(error_log_path, 'a', encoding='utf-8')   # kept open for the process lifetime
+        faulthandler.enable(file=fh, all_threads=True)
+    except OSError as e:
+        root_logger.warning(f"faulthandler not enabled: {e}")
 
 
 def get_logger(name: str) -> logging.Logger:

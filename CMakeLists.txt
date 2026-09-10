@@ -77,6 +77,8 @@ option(OCTAVE_ENABLE_DOWNLOADS "Enable music download feature (disable for app s
 # ---- Executable ----
 qt_add_executable(octave
     src/main.cpp
+    src/util/logger.h
+    src/util/logger.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
     src/managers/clock.h

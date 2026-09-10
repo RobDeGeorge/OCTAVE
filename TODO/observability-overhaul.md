@@ -1,7 +1,7 @@
 # Observability overhaul — make OCTAVE post-mortem-debuggable
 
-**Status:** deferred — high priority. Ready to start. Not yet scheduled.
-**Last updated:** 2026-05-07
+**Status:** in progress — Chunks 1 and 2 shipped 2026-09-10 (`src/util/logger.{h,cpp}`, `backend/logging_config._install_crash_handlers`). Next: Chunk 3.
+**Last updated:** 2026-09-10
 
 ## Why this exists
 
@@ -16,7 +16,7 @@ This is not a feature ask. This is so that real-world failures stop being unreco
 | Python rotating logs (`backend/logging_config.py`) | ✓ working | 5 MB × 4 main, 2 MB × 6 error, 10 MB × 3 debug. Used by 9 of 10 backend managers. |
 | Python `elm327_protocol.py` | ✗ **0 logger calls** | Exception handlers at lines 226, 254, 294 swallow errors silently. The layer where mysterious OBD drops actually happen is dark. |
 | C++ message handler in `src/main.cpp` | ✗ **not installed** | No `qInstallMessageHandler()`. Every `qDebug()` / `qCDebug()` (57 in `obdmanager.cpp` alone) goes to stderr and dies on app exit. |
-| C++ logging categories | ⚠ declared but unused | 16 managers declare `Q_LOGGING_CATEGORY` then never call `qCDebug()` on it (`audioanalyzer.cpp`, `networkmanager.cpp`, `spotifymanager.cpp`, etc.). |
+| C++ logging categories | ✓ used (re-audit 2026-09-10) | 13 managers now log through their category; the stale audit row is kept for history. |
 | C++ file rotation | ✗ none | No `QFile` rotator, no third-party logger. |
 | Crash handlers (both langs) | ✗ none | No `sys.excepthook`, no `threading.excepthook`, no `qInstallMessageHandler` for `qFatal`, no `signal(SIGSEGV)`, no `faulthandler`, no breakpad/crashpad. Segfaults leave no trace. |
 | QML console output | ✗ stderr only | 108 `console.log/warn/error` calls across `frontend/` go to stderr/logcat — never reach disk. |
@@ -28,7 +28,7 @@ This is not a feature ask. This is so that real-world failures stop being unreco
 
 Six chunks, sequenced so each one delivers value standalone. Stop after any of them and the codebase is still in a better state.
 
-### Chunk 1 — C++ message handler + rotating file logger (highest leverage)
+### Chunk 1 — C++ message handler + rotating file logger (highest leverage) — DONE 2026-09-10
 
 **Goal:** every `qDebug`, `qCDebug`, `qWarning`, `qCritical`, `qFatal`, and QML `console.*` call ends up in a rotating file on disk in the same directory the Python build uses.
 
@@ -45,7 +45,7 @@ Six chunks, sequenced so each one delivers value standalone. Stop after any of t
 
 **Effort:** ~3 hours. No external deps.
 
-### Chunk 2 — Crash handlers (both backends)
+### Chunk 2 — Crash handlers (both backends) — DONE 2026-09-10 (simple signal()/faulthandler approach; no breakpad)
 
 **Goal:** an unhandled exception or signal logs a stack trace before death.
 
