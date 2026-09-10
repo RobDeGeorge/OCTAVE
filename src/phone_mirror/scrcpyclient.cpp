@@ -480,7 +480,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         // long as the server, but the server survives the shell being killed by
         // adbd when the USB link drops (it is then reparented to init).
         args << QStringLiteral("shell")
-             << QStringLiteral("nohup CLASSPATH=%1 app_process / %2 %3 %4 2>&1 & wait")
+             << QStringLiteral("CLASSPATH=%1 nohup app_process / %2 %3 %4 2>&1 & wait")   // assignment before nohup
                     .arg(QLatin1String(kDeviceJarPath), QLatin1String(kServerClass),
                          QLatin1String(kServerVersion), opts.join(QLatin1Char(' ')));
         qCInfo(lcScrcpyClient) << "starting server: app_process ..." << opts;

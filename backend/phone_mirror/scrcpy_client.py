@@ -489,14 +489,15 @@ class ScrcpyClient(QObject):
         ]
         if display_size:
             opts.append(f"new_display={display_size}")
-        server_cmd = f"CLASSPATH={DEVICE_JAR_PATH} app_process / {SERVER_CLASS} {SERVER_VERSION} {' '.join(opts)}"
+        # The assignment must precede nohup (it applies to the command it prefixes).
+        server_cmd = f"CLASSPATH={DEVICE_JAR_PATH} nohup app_process / {SERVER_CLASS} {SERVER_VERSION} {' '.join(opts)}"
         cmd = [self._adb]
         if self._serial:
             cmd += ["-s", self._serial]
         # nohup + background + wait: the shell still relays stdout and lives as
         # long as the server, but the server survives the shell being killed
         # by adbd when the USB link drops (it is then reparented to init).
-        cmd += ["shell", f"nohup {server_cmd} 2>&1 & wait"]
+        cmd += ["shell", f"{server_cmd} 2>&1 & wait"]
         logger.info(f"scrcpy client: starting server: app_process ... {' '.join(opts)}")
         self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **popen_kw)
         threading.Thread(target=self._drain_server_log, args=(self._proc,), daemon=True,
