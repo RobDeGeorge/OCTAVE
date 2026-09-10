@@ -77,6 +77,11 @@ engine.rootContext().setContextProperty("isAndroid", False)
 settings_manager = SettingsManager()
 engine.rootContext().setContextProperty("settingsManager", settings_manager)
 
+# A hung event loop gets logged (octave.ui_watchdog) instead of vanishing
+from backend.ui_watchdog import UiWatchdog
+ui_watchdog = UiWatchdog()
+ui_watchdog.start()
+
 # Diagnostics — read / export the logs from the head unit (Settings > About)
 from backend.diagnostics_manager import DiagnosticsManager
 diagnostics_manager = DiagnosticsManager()

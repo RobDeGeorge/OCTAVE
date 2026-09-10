@@ -577,6 +577,14 @@ Image {
           file plus a device-info.txt into <code>Downloads/OCTAVE-logs-&lt;timestamp&gt;/</code>, so on the Android head unit
           they can be attached from any mail or files app) and, on desktop, Open folder.
         </p>
+        <h3>UI watchdog</h3>
+        <p>
+          A hung event loop is logged rather than lost: <code>UiWatchdog</code> (<code>src/util/uiwatchdog.cpp</code> /
+          <code>backend/ui_watchdog.py</code>, started in both mains) pings the GUI thread from a worker every 2&nbsp;s and
+          logs <code>UI thread blocked for N s and counting</code> on the <code>octave.ui_watchdog</code> category once the
+          GUI thread has been silent for 5&nbsp;s, then <code>responsive again after N s</code> when it recovers. Legitimate
+          slow work (a large library scan, dashboard JSON load) stays under the threshold; anything above it is worth a look.
+        </p>
         <h3>Crash handlers</h3>
         <p>
           Both backends leave a trace when they die. Python (<code>logging_config._install_crash_handlers</code>):

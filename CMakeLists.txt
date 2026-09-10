@@ -79,6 +79,8 @@ qt_add_executable(octave
     src/main.cpp
     src/util/logger.h
     src/util/logger.cpp
+    src/util/uiwatchdog.h
+    src/util/uiwatchdog.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
     src/managers/diagnosticsmanager.h

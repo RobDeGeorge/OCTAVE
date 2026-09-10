@@ -21,6 +21,7 @@
 #include "managers/settingsmanager.h"
 #include "managers/diagnosticsmanager.h"
 #include "util/logger.h"
+#include "util/uiwatchdog.h"
 #include "managers/clock.h"
 #include "managers/networkmanager.h"
 #include "managers/volumecontroller.h"
@@ -106,6 +107,10 @@ int main(int argc, char *argv[])
     // Settings Manager — central settings store, everything depends on this
     SettingsManager settingsManager;
     ctx->setContextProperty("settingsManager", &settingsManager);
+
+    // A hung event loop gets logged (octave.watchdog) instead of vanishing
+    UiWatchdog uiWatchdog;
+    uiWatchdog.start();
 
     // Diagnostics — read / export the logs from the head unit (Settings > About)
     DiagnosticsManager diagnosticsManager;

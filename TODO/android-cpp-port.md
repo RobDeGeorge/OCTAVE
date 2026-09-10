@@ -125,3 +125,11 @@ Play Store submission. Write `TODO/android-play-store.md` at that point covering
 ## Delete this file when done
 
 When a signed release AAB ships to the Play Store production track and the port is self-sustaining (CI building APKs on every main push, documented in `wiki/`), delete this TODO. Until then it's the source of truth for intent.
+
+## Observability, verify on device (added 2026-09-10)
+
+The observability overhaul (formerly `TODO/observability-overhaul.md`, all six chunks shipped 2026-09-10) has two pieces that could only be built blind here and need one on-device pass on the Android tablet:
+
+- **Diagnostics card** (Settings → About): `DiagnosticsManager::exportLogs()` copies `octave*.log*` into `QStandardPaths::DownloadLocation` (`/storage/emulated/0/Download/OCTAVE-logs-<timestamp>/`). Confirm the folder appears in the Files app and that a mail app can attach from it (the sideload build holds `MANAGE_EXTERNAL_STORAGE`; no FileProvider because androidx is not bundled).
+- **BLE bridge log forwarding**: `OctaveOBDBridge.pollLog()` drained in `OBDManager::onAndroidBlePoll()`. Connect the ELM327 dongle, then check `octave-cpp.log` for `[BLE] ...` lines (connect, service discovery, notifications enabled) and pull the plug for a `[BLE]` warning.
+- Also confirm `octave-cpp.log` exists at all on Android (`getAppDataDir()` resolves under the app's files dir) and that a forced crash (`kill -SEGV`) leaves a `==== FATAL SIGSEGV ====` block; bionic has no `execinfo`, so expect the "no backtrace support" line, not a stack.
