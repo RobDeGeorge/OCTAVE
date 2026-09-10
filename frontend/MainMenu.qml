@@ -12,6 +12,7 @@ Item {
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
 
     id: mainMenu
+    objectName: "mainMenu"
     property StackView stackView
     property ApplicationWindow mainWindow
     property real windowWidth

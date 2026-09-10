@@ -591,14 +591,28 @@ ApplicationWindow {
                 updateSensorConsumers()
             }
             Component.onCompleted: updateSensorConsumers()
-            // The 3D vehicle and sensor pages are the only consumers of the
-            // 60 Hz IMU stream; everywhere else 5 Hz keeps the settings status
-            // fresh without seven queued signals per frame into idle bindings.
+            // The 3D vehicle, the sensor pages, OBD dashboards (compass and
+            // G-force gauges) and a home screen with an IMU card are the only
+            // consumers of the 60 Hz IMU stream; everywhere else 5 Hz keeps the
+            // settings status fresh without seven queued signals per frame into
+            // idle bindings.
+            readonly property var _imuParamIds: ["PITCH", "ROLL", "HEADING", "ALTITUDE",
+                                                 "ACCEL_MAG", "LATERAL_G", "LONGITUDINAL_G", "BARO_TEMP"]
+            function _homeShowsImuParam() {
+                if (!settingsManager || !settingsManager.get_home_obd_parameters)
+                    return false
+                var params = settingsManager.get_home_obd_parameters()
+                for (var i = 0; i < params.length; ++i)
+                    if (_imuParamIds.indexOf(params[i]) !== -1)
+                        return true
+                return false
+            }
             function updateSensorConsumers() {
                 if (typeof berryIMU === "undefined" || !berryIMU || !stackView.currentItem)
                     return
                 var n = stackView.currentItem.objectName
-                berryIMU.setActive(n === "carMenu" || n === "sensorMenu" || n === "sensorHome")
+                berryIMU.setActive(n === "carMenu" || n === "sensorMenu" || n === "sensorHome"
+                                   || n === "obdMenu" || (n === "mainMenu" && _homeShowsImuParam()))
             }
         }
 
