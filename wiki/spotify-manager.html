@@ -91,6 +91,19 @@
           Users must provide a Spotify Developer application's Client ID and Client Secret. These are stored
           in <code>settingsConfigure.json</code> via SettingsManager:
         </p>
+        <p>
+          <strong>Spotify's Development Mode rules (February 2026).</strong> OCTAVE is a personal app, so it runs as a
+          Development Mode app registered by the user. Since Spotify's
+          <a href="https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide">February 2026 migration</a>
+          (new apps from 11 February, existing apps from 9 March 2026) that means: the app owner must hold an active
+          Spotify Premium subscription (the app stops working if it lapses), one Client ID per developer, and at most five
+          allow-listed users per app. Everything OCTAVE needs survived the migration: the player endpoints
+          (<code>/me/player</code> state, play, pause, next, previous, seek, volume, shuffle, queue, devices, transfer) and
+          <code>/me/playlists</code> are unchanged; playlist contents moved from <code>/playlists/{id}/tracks</code> to
+          <code>/playlists/{id}/items</code> (50 per page, track under <code>item</code>) and are only readable for playlists the
+          user owns or collaborates on, so a followed editorial playlist lists but will not load its tracks. OCTAVE never used
+          the removed browse, recommendations, audio-features or other-user endpoints.
+        </p>
         <pre><code>@Slot(<span class="cls">str</span>, <span class="cls">str</span>)
 <span class="kw">def</span> <span class="fn">set_credentials</span>(self, client_id, client_secret):
     self._client_id = client_id
@@ -394,7 +407,7 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
           </thead>
           <tbody>
             <tr><td><code>get_playlists()</code></td><td>Returns cached playlist list</td></tr>
-            <tr><td><code>get_playlist_tracks(playlist_id)</code></td><td>Python only. Fetches up to 100 tracks from a playlist. Returns list of track dicts with id, name, uri, artist, album, duration_ms, image. The C++ backend performs the same fetch inside <code>select_spotify_playlist()</code>.</td></tr>
+            <tr><td><code>get_playlist_tracks(playlist_id)</code></td><td>Python only. Fetches a playlist's tracks through <code>GET /playlists/{id}/items</code> (the February 2026 Web API shape: 50 per page, paged up to 1000, track under <code>item</code>; only playlists the user owns or collaborates on are readable). Returns list of track dicts with id, name, uri, artist, album, duration_ms, image. The C++ backend performs the same paged fetch inside <code>select_spotify_playlist()</code> / <code>fetchPlaylistItemsPage()</code>.</td></tr>
             <tr><td><code>select_spotify_playlist(playlist_id)</code></td><td>Loads tracks, sets current playlist, emits <code>spotifyTracksChanged</code> and <code>currentSpotifyPlaylistChanged</code></td></tr>
           </tbody>
         </table>

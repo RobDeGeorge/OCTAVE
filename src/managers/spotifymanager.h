@@ -174,6 +174,7 @@ private:
     // Spotify REST API helpers
     // ──────────────────────────────────────────────────────────────
     QNetworkRequest buildApiRequest(const QString &endpoint) const;
+    void fetchPlaylistItemsPage(const QString &playlistId, const QString &playlistName, int offset);
     void apiGet(const QString &endpoint,
                 std::function<void(const QJsonDocument &)> onSuccess,
                 std::function<void(const QString &)> onError = nullptr);

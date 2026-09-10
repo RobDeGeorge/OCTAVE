@@ -915,18 +915,33 @@ void SpotifyManager::select_spotify_playlist(const QString &playlistId)
 
     qCDebug(lcSpotify) << "Found playlist name:" << playlistName;
 
-    // Fetch tracks for this playlist
-    const QString endpoint = QStringLiteral("/v1/playlists/%1/tracks?limit=100").arg(playlistId);
-    apiGet(endpoint,
-           [this, playlistId, playlistName](const QJsonDocument &doc) {
-               const QJsonArray items = doc.object()
-                   .value(QStringLiteral("items")).toArray();
+    // Fetch tracks for this playlist. February 2026 Web API: the path is
+    // /items (was /tracks), pages are capped at 50 and the track lives under
+    // "item" ("track" is deprecated). Only playlists the user owns or
+    // collaborates on are readable.
+    m_spotifyTracks.clear();
+    fetchPlaylistItemsPage(playlistId, playlistName, 0);
+}
 
-               m_spotifyTracks.clear();
+void SpotifyManager::fetchPlaylistItemsPage(const QString &playlistId, const QString &playlistName, int offset)
+{
+    constexpr int kPageSize = 50;
+    constexpr int kMaxTracks = 1000;
+    const QString endpoint = QStringLiteral("/v1/playlists/%1/items?limit=%2&offset=%3&additional_types=track")
+                                 .arg(playlistId).arg(kPageSize).arg(offset);
+    apiGet(endpoint,
+           [this, playlistId, playlistName, offset](const QJsonDocument &doc) {
+               const QJsonObject page = doc.object();
+               const QJsonArray items = page.value(QStringLiteral("items")).toArray();
+
                for (const auto &val : items) {
                    const QJsonObject item = val.toObject();
-                   const QJsonObject track = item.value(QStringLiteral("track")).toObject();
+                   QJsonObject track = item.value(QStringLiteral("item")).toObject();
+                   if (track.isEmpty())
+                       track = item.value(QStringLiteral("track")).toObject();
                    if (track.isEmpty()) continue;
+                   if (track.value(QStringLiteral("type")).toString(QStringLiteral("track")) != QLatin1String("track"))
+                       continue;
 
                    // Build artist string
                    const QJsonArray artists = track.value(QStringLiteral("artists")).toArray();
@@ -951,6 +966,14 @@ void SpotifyManager::select_spotify_playlist(const QString &playlistId)
                    t[QStringLiteral("duration_ms")] = track.value(QStringLiteral("duration_ms")).toInt();
                    t[QStringLiteral("image")]       = imageUrl;
                    m_spotifyTracks.append(t);
+               }
+
+               const bool more = !page.value(QStringLiteral("next")).isNull()
+                                 && !items.isEmpty()
+                                 && m_spotifyTracks.size() < kMaxTracks;
+               if (more) {
+                   fetchPlaylistItemsPage(playlistId, playlistName, offset + kPageSize);
+                   return;
                }
 
                m_currentSpotifyPlaylistId   = playlistId;

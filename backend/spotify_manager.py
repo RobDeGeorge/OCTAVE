@@ -808,12 +808,20 @@ class SpotifyManager(QObject):
         if not self._sp:
             return []
         try:
-            results = self._sp.playlist_tracks(playlist_id, limit=100)
+            # February 2026 Web API: /playlists/{id}/tracks became /items, the
+            # page size is capped at 50 and the track lives under "item"
+            # ("track" is deprecated). Only playlists the user owns or
+            # collaborates on are readable.
+            results = self._sp.playlist_items(playlist_id, limit=50, additional_types=('track',))
+            entries = list(results.get('items', []))
+            while results.get('next') and len(entries) < 1000:
+                results = self._sp.next(results)
+                entries.extend(results.get('items', []))
 
             tracks = []
-            for item in results.get('items', []):
-                track = item.get('track')
-                if track:
+            for item in entries:
+                track = item.get('item') or item.get('track')
+                if track and track.get('type', 'track') == 'track':
                     tracks.append({
                         'id': track['id'],
                         'name': track['name'],
