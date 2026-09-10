@@ -272,11 +272,11 @@ class MediaManager(QObject):
                     logger.info(f"Playback recovered for: {self._recovery_file}")
                 self._recovery_attempts = 0
                 self._consecutive_bad_tracks = 0
-            elif status == QMediaPlayer.MediaStatus.StalledMedia:
-                logger.warning("Media stalled — attempting recovery")
-                self._attempt_playback_recovery()
-            elif status == QMediaPlayer.MediaStatus.InvalidMedia:
-                logger.error("Invalid media detected — attempting recovery")
+            elif status in (QMediaPlayer.MediaStatus.StalledMedia, QMediaPlayer.MediaStatus.InvalidMedia):
+                if not self._is_playing:
+                    return   # a stopped player keeps reporting its last failure
+                logger.warning("Media stalled — attempting recovery" if status == QMediaPlayer.MediaStatus.StalledMedia
+                               else "Invalid media detected — attempting recovery")
                 self._attempt_playback_recovery()
         except Exception as e:
             logger.error(f"Media status handling error: {e}")
@@ -284,6 +284,9 @@ class MediaManager(QObject):
     def _handle_player_error(self, error):
         """Handle player errors with automatic recovery"""
         error_msg = self._player.errorString()
+        if not self._is_playing:
+            logger.debug(f"Player error while stopped ({error}): {error_msg}")
+            return
         logger.error(f"Player error ({error}): {error_msg}")
         self._attempt_playback_recovery()
 

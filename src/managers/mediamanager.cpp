@@ -334,17 +334,21 @@ void MediaManager::_handle_media_status(QMediaPlayer::MediaStatus status)
             qCInfo(lcMedia) << "Playback recovered for:" << m_recoveryFile;
         m_recoveryAttempts = 0;
         m_consecutiveBadTracks = 0;
-    } else if (status == QMediaPlayer::StalledMedia) {
-        qCWarning(lcMedia) << "Media stalled - attempting recovery";
-        _attempt_playback_recovery();
-    } else if (status == QMediaPlayer::InvalidMedia) {
-        qCWarning(lcMedia) << "Invalid media - attempting recovery";
+    } else if (status == QMediaPlayer::StalledMedia || status == QMediaPlayer::InvalidMedia) {
+        if (!m_isPlaying)
+            return;   // a stopped player keeps reporting its last failure
+        qCWarning(lcMedia) << (status == QMediaPlayer::StalledMedia ? "Media stalled - attempting recovery"
+                                                                     : "Invalid media - attempting recovery");
         _attempt_playback_recovery();
     }
 }
 
 void MediaManager::_handle_player_error(QMediaPlayer::Error error, const QString &errorString)
 {
+    if (!m_isPlaying) {
+        qCDebug(lcMedia) << "Player error while stopped" << error << ":" << errorString;
+        return;
+    }
     qCWarning(lcMedia) << "Player error" << error << ":" << errorString;
     _attempt_playback_recovery();
 }
