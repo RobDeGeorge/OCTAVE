@@ -156,6 +156,7 @@ class PhoneMirrorManager(QObject):
         self._phone_in_use: bool = False
         self._serial: str = ""
         self._vdisplay_id: int = -1          # id of the --new-display virtual display, from the server log
+        self._prev_locked: Optional[int] = None   # deviceLocked at the previous poll; None before the first
         self._grace = QTimer(self)
         self._grace.setSingleShot(True)
         self._grace.setInterval(WAKE_GRACE_MS)
@@ -440,6 +441,7 @@ class PhoneMirrorManager(QObject):
         self._wake_thread = None
         self._grace.stop()
         self._set_in_use(False)
+        self._prev_locked = None
         if self._phone_asleep:
             self._phone_asleep = False
             self.phoneAsleepChanged.emit(False)
@@ -451,10 +453,16 @@ class PhoneMirrorManager(QObject):
         # (`dumpsys trust` prints deviceLocked=0 once the user has authenticated).
         cmd = ["-s", serial, "shell",
                "dumpsys power | grep mWakefulness=; dumpsys trust | grep deviceLocked"]
-        while not stop.wait(WAKE_POLL_INTERVAL_S):
+        # First poll after 1 s (the server powers the device on asynchronously
+        # at start); it decides the initial panel state. Then every 2 s.
+        wait = 1.0
+        while not stop.wait(wait):
+            wait = WAKE_POLL_INTERVAL_S
             out = self._run_adb(cmd, timeout=5)
             m = re.search(r"mWakefulness=(\w+)", out)
-            lk = re.search(r"deviceLocked=(\d)", out)
+            # The current user's line; a work profile / Secure Folder prints
+            # its own deviceLocked, which is not the keyguard we care about.
+            lk = re.search(r"\(current\)[^\n]*deviceLocked=(\d)", out) or re.search(r"deviceLocked=(\d)", out)
             if not stop.is_set():
                 self._wakefulness.emit(m.group(1) if m else "", int(lk.group(1)) if lk else -1)
 
@@ -480,11 +488,24 @@ class PhoneMirrorManager(QObject):
             return
         if asleep:
             return
-        if locked == 0 and not self._phone_in_use:
+        prev, self._prev_locked = self._prev_locked, (locked if locked >= 0 else self._prev_locked)
+        if prev is None:
+            # First poll of the session: an unlocked phone is in the user's
+            # hand, a locked one is in the cradle and gets the screen-off.
+            if locked == 0:
+                self._set_in_use(True)
+            else:
+                self._apply_screen_off()
+            return
+        # Edge-triggered on the unlock itself (1 -> 0). Blanking the panel does
+        # not lock the phone, so a level check would undo resumeMirroring() on
+        # the next poll; and phones with a lock-after delay stay deviceLocked=0
+        # for a while after a power press, which is not an unlock either.
+        if locked == 0 and prev == 1 and not self._phone_in_use:
             self._grace.stop()
             self._set_in_use(True)
-        elif locked == 1 and self._phone_in_use:
-            # Locked without sleeping (lock shortcut); treat like a power press.
+        elif locked == 1 and prev == 0 and self._phone_in_use:
+            # Locked without sleeping (lock shortcut / lock-after delay elapsed)
             self._set_in_use(False)
             if self._phone_screen_off:
                 self._grace.start()
@@ -644,9 +665,7 @@ class PhoneMirrorManager(QObject):
         self.frameSizeChanged.emit(w, h)
         logger.info(f"Phone mirror connected: {w}x{h}")
         self.scrcpyStarted.emit(1)
-        # The server powers the device on asynchronously at start; give it a
-        # moment before blanking the panel or the request is reverted.
-        QTimer.singleShot(1000, self._apply_screen_off)
+        # The first wakefulness poll (1 s in) decides the initial panel state.
         self._start_wake_watch(self._serial)
 
     def _on_frame_size(self, w: int, h: int):

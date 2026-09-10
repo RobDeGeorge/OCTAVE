@@ -93,22 +93,21 @@ Item {
 
         // Android navigation buttons (a virtual display has no gesture nav
         // bar the user can reach)
-        // Sits on the bottom edge of the picture (not the letterbox band, where
-        // a translucent button on black is invisible). Recents is hidden on a
-        // virtual display: Android's recents UI does not work there, and HOME
-        // goes through a launcher intent on that display (manager.pressHome).
+        // Only when mirroring the phone's own screen. A virtual display shows
+        // system decorations, i.e. Samsung's DeX taskbar with its own
+        // back/home/recents along the bottom, which this row would cover.
+        // Sits on the bottom edge of the picture (not the letterbox band,
+        // where a translucent button on black is invisible).
         Row {
             readonly property bool virtualDisplay: phoneMirrorManager ? phoneMirrorManager.activeDisplaySize !== "" : false
             readonly property rect content: video.contentRect
             y: (content.height > 0 ? content.y + content.height : parent.height) - height - dp(6)
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: dp(24)
-            visible: mirrorRunning
+            visible: mirrorRunning && !virtualDisplay
             z: 10
             Repeater {
-                model: parent.virtualDisplay
-                       ? [ { label: "◁", slot: "pressBack" }, { label: "○", slot: "pressHome" } ]
-                       : [ { label: "◁", slot: "pressBack" }, { label: "○", slot: "pressHome" }, { label: "▢", slot: "pressAppSwitch" } ]
+                model: [ { label: "◁", slot: "pressBack" }, { label: "○", slot: "pressHome" }, { label: "▢", slot: "pressAppSwitch" } ]
                 Rectangle {
                     width: dp(44); height: dp(44); radius: dpMin(22, 2)
                     color: navMouse.pressed ? App.Style.accent : "#A0000000"

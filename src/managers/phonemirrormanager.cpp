@@ -452,10 +452,9 @@ void PhoneMirrorManager::onConnected(int w, int h)
     emit frameSizeChanged(w, h);
     qCInfo(lcPhoneMirror) << "Phone mirror connected:" << w << "x" << h;
     emit scrcpyStarted(1);
-    // The server powers the device on asynchronously at start; give it a
-    // moment before blanking the panel or the request is reverted.
-    QTimer::singleShot(1000, this, &PhoneMirrorManager::applyScreenOff);
+    // The first wakefulness poll (1 s in) decides the initial panel state.
     startWakeWatch();
+    QTimer::singleShot(1000, this, &PhoneMirrorManager::pollWakefulness);
 }
 
 void PhoneMirrorManager::onDisconnected(const QString &reason)
@@ -544,6 +543,7 @@ void PhoneMirrorManager::stopWakeWatch()
     m_wakePoll.stop();
     m_grace.stop();
     setInUse(false);
+    m_prevLocked = -2;
     if (m_phoneAsleep) {
         m_phoneAsleep = false;
         emit phoneAsleepChanged(false);
@@ -564,9 +564,14 @@ void PhoneMirrorManager::pollWakefulness()
         if (exitCode != 0)
             return;
         static const QRegularExpression re(QStringLiteral("mWakefulness=(\\w+)"));
+        // The current user's line; a work profile / Secure Folder prints its
+        // own deviceLocked, which is not the keyguard we care about.
+        static const QRegularExpression reLockCurrent(QStringLiteral("\\(current\\)[^\\n]*deviceLocked=(\\d)"));
         static const QRegularExpression reLock(QStringLiteral("deviceLocked=(\\d)"));
         const auto m = re.match(out);
-        const auto lk = reLock.match(out);
+        auto lk = reLockCurrent.match(out);
+        if (!lk.hasMatch())
+            lk = reLock.match(out);
         if (m.hasMatch())
             onWakefulness(m.captured(1), lk.hasMatch() ? lk.captured(1).toInt() : -1);
     });
@@ -603,11 +608,27 @@ void PhoneMirrorManager::onWakefulness(const QString &state, int locked)
     }
     if (asleep)
         return;
-    if (locked == 0 && !m_phoneInUse) {
+    const int prev = m_prevLocked;
+    if (locked >= 0)
+        m_prevLocked = locked;
+    if (prev == -2) {
+        // First poll of the session: an unlocked phone is in the user's
+        // hand, a locked one is in the cradle and gets the screen-off.
+        if (locked == 0)
+            setInUse(true);
+        else
+            applyScreenOff();
+        return;
+    }
+    // Edge-triggered on the unlock itself (1 -> 0). Blanking the panel does
+    // not lock the phone, so a level check would undo resumeMirroring() on
+    // the next poll; and phones with a lock-after delay stay deviceLocked=0
+    // for a while after a power press, which is not an unlock either.
+    if (locked == 0 && prev == 1 && !m_phoneInUse) {
         m_grace.stop();
         setInUse(true);
-    } else if (locked == 1 && m_phoneInUse) {
-        // Locked without sleeping (lock shortcut); treat like a power press.
+    } else if (locked == 1 && prev == 0 && m_phoneInUse) {
+        // Locked without sleeping (lock shortcut / lock-after delay elapsed)
         setInUse(false);
         if (m_phoneScreenOff)
             m_grace.start();
