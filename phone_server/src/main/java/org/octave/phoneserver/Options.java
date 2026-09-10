@@ -63,6 +63,8 @@ public class Options {
 
     private NewDisplay newDisplay;
     private boolean vdDestroyContent = true;
+    // OCTAVE: keep the virtual display and re-listen for this long after the client drops (0 = exit like scrcpy)
+    private int octavePersistMs;
     private boolean vdSystemDecorations = true;
 
     private Orientation.Lock captureOrientationLock = Orientation.Lock.Unlocked;
@@ -222,6 +224,10 @@ public class Options {
 
     public boolean getCleanup() {
         return cleanup;
+    }
+
+    public int getOctavePersistMs() {
+        return octavePersistMs;
     }
 
     public boolean getPowerOn() {
@@ -425,6 +431,9 @@ public class Options {
                     break;
                 case "cleanup":
                     options.cleanup = Boolean.parseBoolean(value);
+                    break;
+                case "octave_persist_ms":
+                    options.octavePersistMs = Integer.parseInt(value);
                     break;
                 case "power_on":
                     options.powerOn = Boolean.parseBoolean(value);

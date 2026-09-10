@@ -4,6 +4,7 @@
 #include "../phone_mirror/scrcpyclient.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QProcess>
@@ -393,8 +394,15 @@ void PhoneMirrorManager::startScrcpy()
     m_isStopping = false;
     m_ready = false;
     m_activeDisplaySize = m_displaySize;
-    runAdb({QStringLiteral("shell"), QStringLiteral("pkill"), QStringLiteral("-f"),
-            QLatin1String(ScrcpyClient::kServerProcessPattern)}, 5000);  // clear a stale server first
+    QString attachScid;
+    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
+        attachScid = m_persistScid;
+    m_attaching = !attachScid.isEmpty();
+    if (!m_attaching) {
+        m_persistScid.clear();
+        runAdb({QStringLiteral("shell"), QStringLiteral("pkill"), QStringLiteral("-f"),
+                QLatin1String(ScrcpyClient::kServerProcessPattern)}, 5000);  // clear a stale server first
+    }
 
     if (m_client) {
         m_client->stop();
@@ -438,8 +446,11 @@ void PhoneMirrorManager::startScrcpy()
                           << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize)
                           << ", audio" << (m_audioEnabled ? "on" : "off") << ")";
     m_serial = serial;
-    m_vdisplayId = -1;
-    m_client->start(serial, displaySize, 60, 8000000, m_audioEnabled, true);
+    if (!m_attaching)
+        m_vdisplayId = -1;
+    else
+        qCInfo(lcPhoneMirror) << "Reattaching to the phone's running mirror session (scid" << attachScid << ")";
+    m_client->start(serial, displaySize, 60, 8000000, m_audioEnabled, true, attachScid);
     emit isRunningChanged();
 }
 
@@ -447,6 +458,8 @@ void PhoneMirrorManager::onConnected(int w, int h)
 {
     m_ready = true;
     m_isStarting = false;
+    m_attaching = false;
+    m_persistScid.clear();
     m_frameWidth = w; m_frameHeight = h;
     if (!m_activeDisplaySize.isEmpty())
         m_activeDisplaySize = QStringLiteral("%1x%2").arg(w).arg(h);
@@ -463,8 +476,23 @@ void PhoneMirrorManager::onDisconnected(const QString &reason)
     if (m_isStopping)
         return;
     resetPhoneState();
+    const bool wasReady = m_ready;
     m_ready = false;
     m_isStarting = false;
+    if (m_attaching) {
+        // The persisted server was gone (or the link is still down): start fresh
+        m_attaching = false;
+        m_persistScid.clear();
+        qCInfo(lcPhoneMirror) << "Reattach failed (" << reason << "); starting a new session";
+        emit isRunningChanged();
+        QTimer::singleShot(0, this, &PhoneMirrorManager::startScrcpy);
+        return;
+    }
+    if (wasReady && !m_activeDisplaySize.isEmpty() && m_client && !m_client->scid().isEmpty()) {
+        // Link drop mid-stream: the server keeps the virtual display for kPersistMs
+        m_persistScid = m_client->scid();
+        m_persistUntilMs = QDateTime::currentMSecsSinceEpoch() + ScrcpyClient::kPersistMs - 5000;
+    }
     emit isRunningChanged();
     if (reason.isEmpty())
         emit scrcpyStopped();
@@ -478,6 +506,8 @@ void PhoneMirrorManager::stopScrcpy()
     m_isStopping = true;
     m_isStarting = false;
     m_ready = false;
+    m_attaching = false;
+    m_persistScid.clear();
     m_activeDisplaySize.clear();
     resetPhoneState();
     if (m_client) {

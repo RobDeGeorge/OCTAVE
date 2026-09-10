@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -25,7 +26,7 @@ from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 from backend.logging_config import get_logger
 
 from backend.phone_mirror.scrcpy_client import (
-    ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION, SERVER_PROCESS_PATTERN,
+    ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION, SERVER_PROCESS_PATTERN, PERSIST_MS,
     KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH, KEYCODE_WAKEUP,
 )
 
@@ -152,6 +153,12 @@ class PhoneMirrorManager(QObject):
         self._serial: str = ""
         self._vdisplay_id: int = -1          # id of the --new-display virtual display, from the server log
         self._panel_dark: bool = False           # as reported by the keeper
+        # A session that died from a link drop leaves its server (and the
+        # virtual display with the user's apps) alive on the phone for
+        # PERSIST_MS; the next start attaches to it instead of starting fresh.
+        self._persist_scid: str = ""
+        self._persist_until: float = 0.0
+        self._attaching: bool = False
 
     # ── availability / environment ──────────────────────────────────
 
@@ -543,7 +550,13 @@ class PhoneMirrorManager(QObject):
         self._is_stopping = False
         self._ready = False
         self._active_display_size = self._display_size
-        self._kill_stale_server()
+        attach_scid = ""
+        if self._persist_scid and time.monotonic() < self._persist_until:
+            attach_scid = self._persist_scid
+        self._attaching = bool(attach_scid)
+        if not attach_scid:
+            self._persist_scid = ""
+            self._kill_stale_server()
 
         if self._client is not None:
             self._client.stop()
@@ -571,13 +584,18 @@ class PhoneMirrorManager(QObject):
         logger.info(f"Starting phone mirror (server {SERVER_VERSION}) for {serial} "
                     f"(display {display_size or 'phone screen'}, audio {'on' if self._audio_enabled else 'off'})")
         self._serial = serial
-        self._vdisplay_id = -1
-        client.start(serial, display_size=display_size, audio=self._audio_enabled)
+        if not attach_scid:
+            self._vdisplay_id = -1
+        if attach_scid:
+            logger.info(f"Reattaching to the phone's running mirror session (scid {attach_scid})")
+        client.start(serial, display_size=display_size, audio=self._audio_enabled, attach_scid=attach_scid)
         self.isRunningChanged.emit()
 
     def _on_connected(self, w: int, h: int):
         self._ready = True
         self._is_starting = False
+        self._attaching = False
+        self._persist_scid = ""
         self._frame_width, self._frame_height = w, h
         if self._active_display_size:
             self._active_display_size = f"{w}x{h}"
@@ -597,8 +615,21 @@ class PhoneMirrorManager(QObject):
         if self._is_stopping:
             return
         self._reset_phone_state()
+        was_ready = self._ready
         self._ready = False
         self._is_starting = False
+        if self._attaching:
+            # The persisted server was gone (or the link is still down): start fresh
+            self._attaching = False
+            self._persist_scid = ""
+            logger.info(f"Reattach failed ({reason}); starting a new session")
+            self.isRunningChanged.emit()
+            QTimer.singleShot(0, self.startScrcpy)
+            return
+        if was_ready and self._active_display_size and self._client is not None and self._client.scid:
+            # Link drop mid-stream: the server keeps the virtual display for PERSIST_MS
+            self._persist_scid = self._client.scid
+            self._persist_until = time.monotonic() + PERSIST_MS / 1000.0 - 5.0
         self.isRunningChanged.emit()
         if reason:
             self.scrcpyError.emit(reason)
@@ -611,6 +642,8 @@ class PhoneMirrorManager(QObject):
         self._is_stopping = True
         self._is_starting = False
         self._ready = False
+        self._attaching = False
+        self._persist_scid = ""
         self._active_display_size = ""
         self._reset_phone_state()
         if self._client is not None:

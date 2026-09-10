@@ -76,7 +76,12 @@ public:
     bool audioPlaying() const { return m_audioPlaying; }
 
     bool start(const QString &serial, const QString &displaySize = QString(),
-               int maxFps = 60, int bitRate = 8000000, bool audio = false, bool stayAwake = true);
+               int maxFps = 60, int bitRate = 8000000, bool audio = false, bool stayAwake = true,
+               const QString &attachScid = QString());
+    // Server socket id of this session (reuse with start(..., attachScid))
+    QString scid() const { return m_scid; }
+    // How long the phone-side server keeps the virtual display after the client drops
+    static constexpr int kPersistMs = 60000;
     void stop();
 
     // Touch on the mirrored display, x/y in frame pixels
@@ -108,9 +113,9 @@ private slots:
     void deliverAudio();
 
 private:
-    void session(QString displaySize, int maxFps, int bitRate, bool audio, bool stayAwake);
+    void session(QString displaySize, int maxFps, int bitRate, bool audio, bool stayAwake, QString attachScid);
+    QTcpSocket *connectUntilReady(qint64 deadlineMs, bool startup = true);
     bool adbRun(const QStringList &args, QString *output, int timeoutMs = 15000);
-    QTcpSocket *connectUntilReady(qint64 deadlineMs);
     void videoLoop(QTcpSocket *video, qint64 t0);
     void audioLoop(QTcpSocket *audio);
     void deviceMessageLoop(qintptr fd);

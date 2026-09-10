@@ -226,7 +226,13 @@
               arrives mid-stream as a quiet reconnect: the last frame stays on the <code>VideoOutput</code> (neither client
               clears the sink), the view polls <code>getDeviceState()</code> every second and restarts the session the moment
               the phone is back (typically 2&nbsp;s), showing only a small "Reconnecting to phone" badge if it takes longer than
-              2&nbsp;s. After 10&nbsp;s it falls back to the error page, whose own recovery timer keeps polling.</li>
+              2&nbsp;s. After 10&nbsp;s it falls back to the error page, whose own recovery timer keeps polling. What the user had open survives too:
+              the server is started with <code>octave_persist_ms=60000</code> and launched via <code>nohup &hellip; &amp; wait</code>, so when
+              adbd kills the shell on a data dropout the server lives on (reparented to init), keeps the virtual display and its apps,
+              and re-listens on the same socket for a minute; the manager remembers the session's scid and the next start
+              <em>attaches</em> to it (forward + connect, server log followed over logcat) instead of pushing a new server. Only if
+              that fails, or on a deliberate stop, is the server killed and a fresh display created. The MirrorKeeper is process-wide
+              on the phone, so its in-use / panel state survives the reconnect as well.</li>
             <li><strong>Navigation buttons on a virtual display</strong>: HOME and APP_SWITCH are system keys that Android routes
               to the default display, so injecting them does nothing on the virtual one (Back is dispatched to the focused window
               and works). <code>pressHome()</code> therefore runs <code>am start --display &lt;id&gt; -a MAIN -c HOME</code> on the

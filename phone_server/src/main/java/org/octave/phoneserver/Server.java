@@ -9,6 +9,7 @@ import org.octave.phoneserver.audio.AudioRawRecorder;
 import org.octave.phoneserver.audio.AudioSource;
 import org.octave.phoneserver.control.ControlChannel;
 import org.octave.phoneserver.control.Controller;
+import org.octave.phoneserver.control.MirrorKeeper;
 import org.octave.phoneserver.device.ConfigurationException;
 import org.octave.phoneserver.device.DesktopConnection;
 import org.octave.phoneserver.device.Device;
@@ -26,6 +27,7 @@ import org.octave.phoneserver.video.VideoSource;
 
 import android.annotation.SuppressLint;
 import android.os.Build;
+import android.os.Handler;
 import android.os.Looper;
 
 import java.io.File;
@@ -45,6 +47,7 @@ public final class Server {
     }
 
     private static class Completion {
+        private final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
         private int running;
         private boolean fatalError;
 
@@ -58,8 +61,12 @@ public final class Server {
                 this.fatalError = true;
             }
             if (running == 0 || this.fatalError) {
-                Looper.getMainLooper().quitSafely();
+                done.countDown();
             }
+        }
+
+        void await() throws InterruptedException {
+            done.await();
         }
     }
 
@@ -90,18 +97,100 @@ public final class Server {
             cleanUp = CleanUp.start(options);
         }
 
-        int scid = options.getScid();
-        boolean tunnelForward = options.isTunnelForward();
+        Workarounds.apply();
+
+        // OCTAVE: with octave_persist_ms the virtual display (and the apps on
+        // it) outlives a client session. The server re-listens on the same
+        // socket for up to that long after the client drops; the client
+        // reconnects to the same scid and the user keeps what they had open.
+        // The session loop runs on its own thread so the main looper keeps
+        // serving handlers for the whole process lifetime.
+        final long persistMs = options.getOctavePersistMs();
+        NewDisplayCapture persistentCapture = null;
+        if (persistMs > 0 && options.getVideo() && options.getVideoSource() == VideoSource.DISPLAY && options.getNewDisplay() != null) {
+            persistentCapture = new NewDisplayCapture(null, options);
+            persistentCapture.setPersistent(true);
+        }
+        final NewDisplayCapture sharedCapture = persistentCapture;
+        final CleanUp finalCleanUp = cleanUp;
+        final Handler mainHandler = new Handler(Looper.getMainLooper());
+        final Throwable[] failure = new Throwable[1];
+
+        Thread sessions = new Thread(() -> {
+            try {
+                boolean first = true;
+                while (true) {
+                    DesktopConnection connection;
+                    try {
+                        connection = DesktopConnection.open(options.getScid(), options.isTunnelForward(), options.getVideo(),
+                                options.getAudio(), options.getControl(), options.getSendDummyByte(), first ? 0 : persistMs);
+                    } catch (IOException e) {
+                        if (first) {
+                            throw e;
+                        }
+                        Ln.i("No client reconnected within " + persistMs + " ms; exiting");
+                        break;
+                    }
+                    if (!first) {
+                        Ln.i("Client reconnected; resuming the existing virtual display");
+                    }
+                    first = false;
+                    runSession(connection, options, finalCleanUp, sharedCapture, mainHandler);
+                    if (sharedCapture == null) {
+                        break;
+                    }
+                    Ln.i("Client gone; keeping the virtual display for " + persistMs + " ms");
+                }
+            } catch (Throwable t) {
+                failure[0] = t;
+            } finally {
+                MirrorKeeper.shutdown();
+                if (sharedCapture != null) {
+                    sharedCapture.destroy();
+                }
+                if (finalCleanUp != null) {
+                    finalCleanUp.interrupt();
+                }
+                OpenGLRunner.quit(); // quit the OpenGL thread, if any
+                try {
+                    if (finalCleanUp != null) {
+                        finalCleanUp.join();
+                    }
+                    OpenGLRunner.join();
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+                Looper.getMainLooper().quitSafely();
+            }
+        }, "sessions");
+        sessions.start();
+
+        Looper.loop();
+
+        try {
+            sessions.join();
+        } catch (InterruptedException e) {
+            // ignore
+        }
+        if (failure[0] instanceof IOException) {
+            throw (IOException) failure[0];
+        }
+        if (failure[0] instanceof ConfigurationException) {
+            throw (ConfigurationException) failure[0];
+        }
+        if (failure[0] != null) {
+            throw new IOException(failure[0]);
+        }
+    }
+
+    /** One client session: returns when the client is gone (sockets closed) or a processor failed. */
+    private static void runSession(DesktopConnection connection, Options options, CleanUp cleanUp, NewDisplayCapture sharedCapture,
+            Handler mainHandler) throws IOException, ConfigurationException {
         boolean control = options.getControl();
         boolean video = options.getVideo();
         boolean audio = options.getAudio();
-        boolean sendDummyByte = options.getSendDummyByte();
-
-        Workarounds.apply();
 
         List<AsyncProcessor> asyncProcessors = new ArrayList<>();
-
-        DesktopConnection connection = DesktopConnection.open(scid, tunnelForward, video, audio, control, sendDummyByte);
         try {
             if (options.getSendDeviceMeta()) {
                 connection.sendDeviceMeta(Device.getDeviceName());
@@ -111,7 +200,15 @@ public final class Server {
 
             if (control) {
                 ControlChannel controlChannel = connection.getControlChannel();
-                controller = new Controller(controlChannel, cleanUp, options);
+                // Created on the main thread like upstream (clipboard manager)
+                java.util.concurrent.FutureTask<Controller> task = new java.util.concurrent.FutureTask<>(
+                        () -> new Controller(controlChannel, cleanUp, options));
+                mainHandler.post(task);
+                try {
+                    controller = task.get();
+                } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
+                    throw new IOException("Could not create controller", e);
+                }
                 asyncProcessors.add(controller);
             }
 
@@ -139,7 +236,10 @@ public final class Server {
                 Streamer videoStreamer = new Streamer(connection.getVideoFd(), options.getVideoCodec(), options.getSendCodecMeta(),
                         options.getSendFrameMeta());
                 SurfaceCapture surfaceCapture;
-                if (options.getVideoSource() == VideoSource.DISPLAY) {
+                if (sharedCapture != null) {
+                    sharedCapture.setVirtualDisplayListener(controller);
+                    surfaceCapture = sharedCapture;
+                } else if (options.getVideoSource() == VideoSource.DISPLAY) {
                     NewDisplay newDisplay = options.getNewDisplay();
                     if (newDisplay != null) {
                         surfaceCapture = new NewDisplayCapture(controller, options);
@@ -165,27 +265,22 @@ public final class Server {
                 });
             }
 
-            Looper.loop(); // interrupted by the Completion implementation
-        } finally {
-            if (cleanUp != null) {
-                cleanUp.interrupt();
+            try {
+                completion.await();
+            } catch (InterruptedException e) {
+                // fall through to teardown
             }
+        } finally {
             for (AsyncProcessor asyncProcessor : asyncProcessors) {
                 asyncProcessor.stop();
             }
 
-            OpenGLRunner.quit(); // quit the OpenGL thread, if any
-
             connection.shutdown();
 
             try {
-                if (cleanUp != null) {
-                    cleanUp.join();
-                }
                 for (AsyncProcessor asyncProcessor : asyncProcessors) {
                     asyncProcessor.join();
                 }
-                OpenGLRunner.join();
             } catch (InterruptedException e) {
                 // ignore
             }

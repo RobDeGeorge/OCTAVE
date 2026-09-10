@@ -38,7 +38,7 @@ public class NewDisplayCapture extends SurfaceCapture {
     private static final int VIRTUAL_DISPLAY_FLAG_OWN_FOCUS = 1 << 14;
     private static final int VIRTUAL_DISPLAY_FLAG_DEVICE_DISPLAY_GROUP = 1 << 15;
 
-    private final VirtualDisplayListener vdListener;
+    private VirtualDisplayListener vdListener;
     private final NewDisplay newDisplay;
 
     private final DisplaySizeMonitor displaySizeMonitor = new DisplaySizeMonitor();
@@ -59,6 +59,7 @@ public class NewDisplayCapture extends SurfaceCapture {
     private final boolean vdSystemDecorations;
 
     private VirtualDisplay virtualDisplay;
+    private boolean persistent;   // OCTAVE: survive client sessions; release() only detaches the surface
     private Size videoSize;
     private Size displaySize; // the logical size of the display (including rotation)
     private Size physicalSize; // the physical size of the display (without rotation)
@@ -235,8 +236,29 @@ public class NewDisplayCapture extends SurfaceCapture {
         }
     }
 
+    /** OCTAVE: a persistent capture outlives one client session; the next session reuses the same display. */
+    public void setPersistent(boolean persistent) {
+        this.persistent = persistent;
+    }
+
+    public void setVirtualDisplayListener(VirtualDisplayListener listener) {
+        this.vdListener = listener;
+    }
+
+    /** OCTAVE: the real release, for the end of the process. */
+    public void destroy() {
+        persistent = false;
+        release();
+    }
+
     @Override
     public void release() {
+        if (persistent) {
+            if (virtualDisplay != null) {
+                virtualDisplay.setSurface(null);   // keep the display and its apps, drop the encoder surface
+            }
+            return;
+        }
         displaySizeMonitor.stopAndRelease();
 
         if (virtualDisplay != null) {

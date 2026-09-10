@@ -214,7 +214,7 @@ void ScrcpyClient::setVideoSink(QObject *sink)
 }
 
 bool ScrcpyClient::start(const QString &serial, const QString &displaySize,
-                         int maxFps, int bitRate, bool audio, bool stayAwake)
+                         int maxFps, int bitRate, bool audio, bool stayAwake, const QString &attachScid)
 {
     if (m_running.load() || m_thread.joinable())
         return false;
@@ -225,11 +225,11 @@ bool ScrcpyClient::start(const QString &serial, const QString &displaySize,
     m_serial = serial;
     m_stopping = false;
     m_frameCount = 0;
-    m_thread = std::thread([this, displaySize, maxFps, bitRate, audio, stayAwake]() {
+    m_thread = std::thread([this, displaySize, maxFps, bitRate, audio, stayAwake, attachScid]() {
 #ifdef Q_OS_LINUX
         pthread_setname_np(pthread_self(), "scrcpy-client");
 #endif
-        session(displaySize, maxFps, bitRate, audio, stayAwake);
+        session(displaySize, maxFps, bitRate, audio, stayAwake, attachScid);
     });
     return true;
 }
@@ -386,12 +386,12 @@ bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutM
     return ok;
 }
 
-QTcpSocket *ScrcpyClient::connectUntilReady(qint64 deadlineMs)
+QTcpSocket *ScrcpyClient::connectUntilReady(qint64 deadlineMs, bool startup)
 {
     // The adb tunnel accepts locally before the server listens, then EOFs;
     // retry until the dummy byte actually arrives on this first socket.
     while (nowMs() < deadlineMs && !m_stopping.load()) {
-        if (m_proc && m_proc->state() == QProcess::NotRunning) {
+        if (startup && m_proc && m_proc->state() == QProcess::NotRunning) {
             fail(QStringLiteral("scrcpy server exited during startup (see log)"));
             return nullptr;
         }
@@ -416,20 +416,24 @@ QTcpSocket *ScrcpyClient::connectUntilReady(qint64 deadlineMs)
     return nullptr;  // caller decides whether this is fatal
 }
 
-void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool audio, bool stayAwake)
+void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool audio, bool stayAwake, QString attachScid)
 {
     const qint64 t0 = nowMs();
     QString out;
+    // attach: reconnect to a server still running on the phone (kPersistMs
+    // window after a link drop) instead of pushing and starting a new one.
+    const bool attach = !attachScid.isEmpty();
 
     // 1. push the server (cleanup=true deletes it on exit, so every time)
-    if (!adbRun({QStringLiteral("push"), m_jar, QString::fromLatin1(kDeviceJarPath)}, &out, 30000)) {
+    if (!attach && !adbRun({QStringLiteral("push"), m_jar, QString::fromLatin1(kDeviceJarPath)}, &out, 30000)) {
         fail(QStringLiteral("could not push scrcpy server: ") + out.right(200));
         return;
     }
     // 2. tunnel (scid must fit a signed 32-bit int on the server side).
     //    Reap forwards left by a hard-killed OCTAVE first: they live in the
     //    adb server and accumulate one listening port per session.
-    m_scid = QStringLiteral("%1").arg(QRandomGenerator::system()->bounded(0x7fffffff), 8, 16, QLatin1Char('0'));
+    m_scid = attach ? attachScid
+                    : QStringLiteral("%1").arg(QRandomGenerator::system()->bounded(0x7fffffff), 8, 16, QLatin1Char('0'));
     if (adbRun({QStringLiteral("forward"), QStringLiteral("--list")}, &out, 5000)) {
         const QStringList lines = out.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
         for (const QString &line : lines) {
@@ -447,15 +451,13 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         fail(QStringLiteral("adb forward failed: ") + out.right(200));
         return;
     }
-    // 3. start the server
+    // 3. start the server (or, when attaching, follow the running server's
+    //    logcat: its stdout went with the old adb shell)
     QStringList args;
     if (!m_serial.isEmpty())
         args << QStringLiteral("-s") << m_serial;
-    args << QStringLiteral("shell")
-         << QStringLiteral("CLASSPATH=") + QLatin1String(kDeviceJarPath)
-         << QStringLiteral("app_process") << QStringLiteral("/")
-         << QLatin1String(kServerClass) << QLatin1String(kServerVersion)
-         << QStringLiteral("scid=") + m_scid << QStringLiteral("tunnel_forward=true")
+    QStringList opts;
+    opts << QStringLiteral("scid=") + m_scid << QStringLiteral("tunnel_forward=true")
          << QStringLiteral("video=true")
          << QStringLiteral("audio=%1").arg(audio ? QStringLiteral("true") : QStringLiteral("false"))
          << QStringLiteral("control=true") << QStringLiteral("clipboard_autosync=false") << QStringLiteral("video_codec=h264")
@@ -465,10 +467,24 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
          << QStringLiteral("stay_awake=%1").arg(stayAwake ? QStringLiteral("true") : QStringLiteral("false"))
          << QStringLiteral("cleanup=true") << QStringLiteral("send_device_meta=true")
          << QStringLiteral("send_frame_meta=true") << QStringLiteral("send_codec_meta=true")
-         << QStringLiteral("send_dummy_byte=true") << QStringLiteral("log_level=info");
+         << QStringLiteral("send_dummy_byte=true") << QStringLiteral("log_level=info")
+         << QStringLiteral("octave_persist_ms=%1").arg(displaySize.isEmpty() ? 0 : kPersistMs);
     if (!displaySize.isEmpty())
-        args << QStringLiteral("new_display=") + displaySize;
-    qCInfo(lcScrcpyClient) << "starting server:" << args.mid(args.indexOf(QStringLiteral("app_process")));
+        opts << QStringLiteral("new_display=") + displaySize;
+    if (attach) {
+        qCInfo(lcScrcpyClient) << "attaching to the running server (scid" << m_scid << ")";
+        args << QStringLiteral("logcat") << QStringLiteral("-v") << QStringLiteral("raw")
+             << QStringLiteral("-T") << QStringLiteral("1") << QStringLiteral("-s") << QStringLiteral("scrcpy:I");
+    } else {
+        // nohup + background + wait: the shell still relays stdout and lives as
+        // long as the server, but the server survives the shell being killed by
+        // adbd when the USB link drops (it is then reparented to init).
+        args << QStringLiteral("shell")
+             << QStringLiteral("nohup CLASSPATH=%1 app_process / %2 %3 %4 2>&1 & wait")
+                    .arg(QLatin1String(kDeviceJarPath), QLatin1String(kServerClass),
+                         QLatin1String(kServerVersion), opts.join(QLatin1Char(' ')));
+        qCInfo(lcScrcpyClient) << "starting server: app_process ..." << opts;
+    }
 
     m_proc = new QProcess;
     m_proc->setProcessChannelMode(QProcess::MergedChannels);
@@ -501,17 +517,18 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     //    (video, [audio], control) is connected, so open them all first.
     QTcpSocket *video = nullptr;
     {
-        const qint64 deadline = t0 + 20000;
+        const qint64 deadline = t0 + (attach ? 4000 : 20000);
         while (!video && nowMs() < deadline && !m_stopping.load()) {
             pumpServerLog();
-            video = connectUntilReady(qMin(deadline, nowMs() + 3000));
+            video = connectUntilReady(qMin(deadline, nowMs() + 3000), !attach);
             if (m_stopping.load())
                 break;
         }
     }
     if (!video) {
         if (!m_stopping.load())
-            fail(QStringLiteral("scrcpy server did not answer within 20 s"));
+            fail(attach ? QStringLiteral("could not attach to the running server")
+                        : QStringLiteral("scrcpy server did not answer within 20 s"));
         pumpServerLog();
         if (m_proc) { m_proc->kill(); m_proc->waitForFinished(1000); delete m_proc; m_proc = nullptr; }
         adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000);

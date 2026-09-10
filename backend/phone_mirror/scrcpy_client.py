@@ -95,6 +95,12 @@ AUDIO_HOLD_MS = 1500
 # the phone is asleep; a black run that outlives it is real content.
 BLACK_HOLD_S = 3.0
 BLACK_LUMA_MAX = 20
+# How long the phone-side server keeps the virtual display (and the apps on
+# it) after the client drops, re-listening on the same socket. A USB data
+# dropout that kills the adb shell must not kill the server: it is launched
+# with nohup in the background so it survives its shell (verified on the Pi
+# rig: the process is reparented to init and lives on).
+PERSIST_MS = 60000
 
 # Frame header flags (app/src/demuxer.c)
 FLAG_CONFIG = 1 << 63
@@ -165,6 +171,7 @@ class ScrcpyClient(QObject):
         self._serial = ""
         self._port = 0
         self._scid = ""
+        self._attach_scid = ""
         self._proc: Optional[subprocess.Popen] = None
         self._video: Optional[socket.socket] = None
         self._audio: Optional[socket.socket] = None
@@ -204,6 +211,11 @@ class ScrcpyClient(QObject):
         self._audio_hold_timer.timeout.connect(lambda: self._set_audio_playing(False))
 
     # ── public API ────────────────────────────────────────────────────
+
+    @property
+    def scid(self) -> str:
+        """Server socket id of this session (reuse with start(attach_scid=...))."""
+        return self._scid
 
     @property
     def is_running(self) -> bool:
@@ -249,7 +261,10 @@ class ScrcpyClient(QObject):
         self._sink = sink
 
     def start(self, serial: str, display_size: str = "", max_fps: int = 60,
-              bit_rate: int = 8_000_000, audio: bool = False, stay_awake: bool = True) -> bool:
+              bit_rate: int = 8_000_000, audio: bool = False, stay_awake: bool = True,
+              attach_scid: str = "") -> bool:
+        """attach_scid: reconnect to a server that is still running on the
+        phone (PERSIST_MS window) instead of pushing and starting a new one."""
         if self._running or (self._thread and self._thread.is_alive()):
             return False
         if not HAVE_AV:
@@ -258,6 +273,7 @@ class ScrcpyClient(QObject):
         self._serial = serial
         self._stopping = False
         self._frame_count = 0
+        self._attach_scid = attach_scid
         self._thread = threading.Thread(
             target=self._run, args=(display_size, max_fps, bit_rate, audio, stay_awake),
             daemon=True, name="scrcpy-client")
@@ -422,20 +438,43 @@ class ScrcpyClient(QObject):
 
     def _session(self, display_size, max_fps, bit_rate, audio, stay_awake):
         t0 = time.monotonic()
-        # 1. push the server (cleanup=true deletes it on exit, so every time)
-        r = self._adb_run(["push", self._jar, DEVICE_JAR_PATH], timeout=30)
-        if r.returncode != 0:
-            self._fail(f"could not push scrcpy server: {(r.stderr or r.stdout).strip()[-200:]}")
-            return
+        attach = bool(self._attach_scid)
+        if not attach:
+            # 1. push the server (cleanup=true deletes it on exit, so every time)
+            r = self._adb_run(["push", self._jar, DEVICE_JAR_PATH], timeout=30)
+            if r.returncode != 0:
+                self._fail(f"could not push scrcpy server: {(r.stderr or r.stdout).strip()[-200:]}")
+                return
         # 2. tunnel. scid must fit a signed 32-bit int on the server side.
         #    secrets, not random: other modules seed the global RNG (media
         #    colour extraction), which made every session's scid identical.
-        self._scid = f"{secrets.randbits(31):08x}"
+        self._scid = self._attach_scid if attach else f"{secrets.randbits(31):08x}"
         self._reap_stale_forwards()
         self._port = self._free_port()
         r = self._adb_run(["forward", f"tcp:{self._port}", f"localabstract:scrcpy_{self._scid}"])
         if r.returncode != 0:
             self._fail(f"adb forward failed: {(r.stderr or r.stdout).strip()[-200:]}")
+            return
+        popen_kw = {}
+        if platform.system() == "Windows":
+            popen_kw["creationflags"] = subprocess.CREATE_NO_WINDOW
+        else:
+            popen_kw["preexec_fn"] = _die_with_parent
+        if attach:
+            # 3'. the server is (hopefully) still listening on this scid; its
+            #     stdout went with the old adb shell, so follow its logcat.
+            logger.info(f"scrcpy client: attaching to the running server (scid {self._scid})")
+            cmd = [self._adb]
+            if self._serial:
+                cmd += ["-s", self._serial]
+            cmd += ["logcat", "-v", "raw", "-T", "1", "-s", "scrcpy:I"]
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **popen_kw)
+            threading.Thread(target=self._drain_server_log, args=(self._proc,), daemon=True,
+                             name="scrcpy-server-log").start()
+            video = self._connect_until_ready(deadline=t0 + 4.0, startup=False)
+            if video is None:
+                return
+            self._finish_session(video, audio, t0)
             return
         # 3. start the server
         opts = [
@@ -446,20 +485,19 @@ class ScrcpyClient(QObject):
             f"max_fps={max_fps}", f"stay_awake={'true' if stay_awake else 'false'}",
             "cleanup=true", "send_device_meta=true", "send_frame_meta=true",
             "send_codec_meta=true", "send_dummy_byte=true", "log_level=info",
+            f"octave_persist_ms={PERSIST_MS if display_size else 0}",
         ]
         if display_size:
             opts.append(f"new_display={display_size}")
+        server_cmd = f"CLASSPATH={DEVICE_JAR_PATH} app_process / {SERVER_CLASS} {SERVER_VERSION} {' '.join(opts)}"
         cmd = [self._adb]
         if self._serial:
             cmd += ["-s", self._serial]
-        cmd += ["shell", f"CLASSPATH={DEVICE_JAR_PATH}", "app_process", "/",
-                SERVER_CLASS, SERVER_VERSION, *opts]
-        logger.info(f"scrcpy client: starting server: {' '.join(cmd[-(len(opts) + 5):])}")
-        popen_kw = {}
-        if platform.system() == "Windows":
-            popen_kw["creationflags"] = subprocess.CREATE_NO_WINDOW
-        else:
-            popen_kw["preexec_fn"] = _die_with_parent
+        # nohup + background + wait: the shell still relays stdout and lives as
+        # long as the server, but the server survives the shell being killed
+        # by adbd when the USB link drops (it is then reparented to init).
+        cmd += ["shell", f"nohup {server_cmd} 2>&1 & wait"]
+        logger.info(f"scrcpy client: starting server: app_process ... {' '.join(opts)}")
         self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **popen_kw)
         threading.Thread(target=self._drain_server_log, args=(self._proc,), daemon=True,
                          name="scrcpy-server-log").start()
@@ -472,6 +510,9 @@ class ScrcpyClient(QObject):
         video = self._connect_until_ready(deadline=t0 + 20.0)
         if video is None:
             return
+        self._finish_session(video, audio, t0)
+
+    def _finish_session(self, video: socket.socket, audio: bool, t0: float):
         self._video = video
         try:
             if audio:
@@ -506,9 +547,9 @@ class ScrcpyClient(QObject):
         # 5. demux + decode
         self._video_loop(video, t0)
 
-    def _connect_until_ready(self, deadline: float) -> Optional[socket.socket]:
+    def _connect_until_ready(self, deadline: float, startup: bool = True) -> Optional[socket.socket]:
         while time.monotonic() < deadline and not self._stopping:
-            if self._proc is not None and self._proc.poll() is not None:
+            if startup and self._proc is not None and self._proc.poll() is not None:
                 self._fail("scrcpy server exited during startup (see log)")
                 return None
             s = None
@@ -532,7 +573,8 @@ class ScrcpyClient(QObject):
                     pass
             time.sleep(0.1)
         if not self._stopping:
-            self._fail("scrcpy server did not answer within 20 s")
+            self._fail("could not attach to the running server" if not startup
+                       else "scrcpy server did not answer within 20 s")
         return None
 
     def _drain_server_log(self, proc: subprocess.Popen):

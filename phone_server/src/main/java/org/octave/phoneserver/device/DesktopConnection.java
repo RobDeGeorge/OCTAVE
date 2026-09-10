@@ -55,6 +55,14 @@ public final class DesktopConnection implements Closeable {
 
     public static DesktopConnection open(int scid, boolean tunnelForward, boolean video, boolean audio, boolean control, boolean sendDummyByte)
             throws IOException {
+        return open(scid, tunnelForward, video, audio, control, sendDummyByte, 0);
+    }
+
+    /**
+     * OCTAVE: like {@link #open}, but give up (IOException) if no client connects within acceptTimeoutMs (0 = wait forever).
+     */
+    public static DesktopConnection open(int scid, boolean tunnelForward, boolean video, boolean audio, boolean control, boolean sendDummyByte,
+            long acceptTimeoutMs) throws IOException {
         String socketName = getSocketName(scid);
 
         LocalSocket videoSocket = null;
@@ -63,6 +71,20 @@ public final class DesktopConnection implements Closeable {
         try {
             if (tunnelForward) {
                 try (LocalServerSocket localServerSocket = new LocalServerSocket(socketName)) {
+                    Thread watchdog = null;
+                    if (acceptTimeoutMs > 0) {
+                        watchdog = new Thread(() -> {
+                            try {
+                                Thread.sleep(acceptTimeoutMs);
+                                localServerSocket.close();   // unblocks accept() with an IOException
+                            } catch (InterruptedException | IOException e) {
+                                // stopped in time, or already closed
+                            }
+                        }, "accept-timeout");
+                        watchdog.setDaemon(true);
+                        watchdog.start();
+                    }
+                    try {
                     if (video) {
                         videoSocket = localServerSocket.accept();
                         if (sendDummyByte) {
@@ -85,6 +107,11 @@ public final class DesktopConnection implements Closeable {
                             // send one byte so the client may read() to detect a connection error
                             controlSocket.getOutputStream().write(0);
                             sendDummyByte = false;
+                        }
+                    }
+                    } finally {
+                        if (watchdog != null) {
+                            watchdog.interrupt();
                         }
                     }
                 }

@@ -42,8 +42,10 @@ public final class MirrorKeeper {
 
     private static final long POLL_MS = 250;
 
+    private static MirrorKeeper instance;
+
     private final CleanUp cleanUp;
-    private final DeviceMessageSender sender;
+    private volatile DeviceMessageSender sender;
     private final HandlerThread thread;
     private final Handler handler;
     private DisplayManager.DisplayListenerHandle displayListener;
@@ -68,7 +70,32 @@ public final class MirrorKeeper {
 
     private final Runnable pollRunnable = this::poll;
 
-    public MirrorKeeper(CleanUp cleanUp, DeviceMessageSender sender) {
+    /** One keeper per server process: its state (in use, panel) outlives a client session. */
+    public static synchronized MirrorKeeper get(CleanUp cleanUp, DeviceMessageSender sender) {
+        if (instance == null) {
+            instance = new MirrorKeeper(cleanUp, sender);
+        } else {
+            instance.sender = sender;
+        }
+        return instance;
+    }
+
+    /** The client session using this sender is gone; keep running for the next one. */
+    public static synchronized void detach(DeviceMessageSender sender) {
+        if (instance != null && instance.sender == sender) {
+            instance.sender = null;
+        }
+    }
+
+    /** End of the server process. */
+    public static synchronized void shutdown() {
+        if (instance != null) {
+            instance.stop();
+            instance = null;
+        }
+    }
+
+    private MirrorKeeper(CleanUp cleanUp, DeviceMessageSender sender) {
         this.cleanUp = cleanUp;
         this.sender = sender;
         thread = new HandlerThread("mirror-keeper");
@@ -302,7 +329,10 @@ public final class MirrorKeeper {
     }
 
     private void report() {
-        sender.send(DeviceMessage.createOctavePhoneState(asleep, inUse, panelIsDark));
+        DeviceMessageSender s = sender;
+        if (s != null) {
+            s.send(DeviceMessage.createOctavePhoneState(asleep, inUse, panelIsDark));
+        }
     }
 
     private Boolean isKeyguardLocked() {

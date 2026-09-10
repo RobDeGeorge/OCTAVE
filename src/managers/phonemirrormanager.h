@@ -174,6 +174,12 @@ private:
     QString m_serial;
     int m_vdisplayId = -1;          // --new-display id, parsed from the server log
     bool m_panelDark = false;       // as reported by the keeper
+    // A session that died from a link drop leaves its server (and the
+    // virtual display with the user's apps) alive on the phone for
+    // ScrcpyClient::kPersistMs; the next start attaches to it.
+    QString m_persistScid;
+    qint64 m_persistUntilMs = 0;
+    bool m_attaching = false;
 };
 
 #else // Q_OS_MOBILE — mobile stub
