@@ -117,6 +117,8 @@ Item {
                     antialiasingMode: SceneEnvironment.MSAA
                     antialiasingQuality: SceneEnvironment.Medium
                     aoEnabled: false
+                    lightProbe: Texture { source: "./assets/vehicle_studio.hdr" }
+                    probeExposure: 0.8
                 }
 
                 Node {

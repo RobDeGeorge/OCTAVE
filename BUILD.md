@@ -70,6 +70,17 @@ cmake --build build -j
 
 Outputs: `build/octave`. CI packages this into a portable `OCTAVE-<version>-x86_64.AppImage` via `packaging/linux/build-appimage.sh` (see [CI parity](#ci-parity)) — no local installer needed for development.
 
+On Rhea's desktop, **Mod+D → OCTAVE** launches the native app from the Dropbox
+checkout through `scripts/octave-desktop.sh`. Each launch incrementally builds
+the current local source, then runs `build-desktop-<hostname>/octave`; QML and
+assets load directly from the checkout's `frontend/`. The computer-specific
+build directory avoids conflicting with CMake caches synced from other machines.
+This uses locally available Dropbox files and does not fetch or reset Git.
+Build failures stop the launch and show a desktop notification; details are in
+`~/.local/state/octave/desktop-launch.log` (or `$XDG_STATE_HOME/octave/`).
+The menu entry is installed at
+`~/.local/share/applications/octave-dropbox.desktop`.
+
 To produce an AppImage locally (matches CI's layout, but linked against your distro's glibc — only safe to run on the same distro):
 
 ```bash
