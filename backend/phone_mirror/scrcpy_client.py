@@ -801,7 +801,11 @@ class ScrcpyClient(QObject):
         # Lenient while asleep or in the first seconds of a reattached stream:
         # the display's first composite after setSurface is black plus the
         # status/task bar, and neither is content.
-        lenient = self._hold_black or (bool(self._attach_scid) and time.monotonic() - self._t_first < BLACK_HOLD_S)
+        if self._hold_black and self._frame_count > 0:
+            # The phone is asleep: whatever it streams now is the doze fade
+            # (a dimmed or black composite), never content. Hold everything.
+            return
+        lenient = bool(self._attach_scid) and time.monotonic() - self._t_first < BLACK_HOLD_S
         if (self._frame_count > 0 or self._attach_scid) and self._is_black(frame, lenient):
             now = time.monotonic()
             if self._black_since is None:

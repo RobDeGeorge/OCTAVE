@@ -687,7 +687,13 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
                 // Lenient while asleep or in the first seconds of a reattached
                 // stream: the display's first composite after setSurface is
                 // black plus the status/task bar, and neither is content.
-                const bool lenient = m_holdBlack.load() || (m_attached.load() && nowMs() - m_tFirst < kBlackHoldMs);
+                if (m_holdBlack.load() && m_frameCount.load() > 0) {
+                    // The phone is asleep: whatever it streams now is the doze
+                    // fade (a dimmed or black composite), never content.
+                    av_frame_unref(frame);
+                    continue;
+                }
+                const bool lenient = m_attached.load() && nowMs() - m_tFirst < kBlackHoldMs;
                 if ((m_frameCount.load() > 0 || m_attached.load()) && isBlackFrame(frame, lenient)) {
                     const qint64 now = nowMs();
                     if (m_blackSince < 0)
