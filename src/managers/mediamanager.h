@@ -173,6 +173,7 @@ private:
     // Internal helpers
     // ──────────────────────────────────────────────────────────────
     void _ensure_directories();
+    void _prune_cover_dir();
     void clearTempFilesInternal();
     void _cache_metadata(const QString &filename);
     void _cache_metadata_from_file(const QString &filename);
@@ -181,7 +182,7 @@ private:
     // on every later run as long as its size and mtime are unchanged.
     void _load_meta_store();
     void _save_meta_store();
-    bool _meta_from_store(const QString &filename, const QString &filePath, MediaMetadata *out) const;
+    bool _meta_from_store(const QString &filename, const QString &filePath, MediaMetadata *out);
     void _meta_to_store(const QString &filename, const QString &filePath, const MediaMetadata &meta);
     // Cover already extracted to the temp dir for this album id (any run)
     QString _cached_art_url_for(const QString &albumId) const;

@@ -183,8 +183,10 @@ MediaManager::MediaManager(QObject *parent)
 
     _ensure_directories();
     // Extracted covers are content-addressed (album id hash) and stay in the
-    // temp dir across runs; _manage_cache() bounds them. Wiping them here made
-    // every cover a fresh TagLib read + JPEG write on each boot.
+    // temp dir across runs; wiping them here made every cover a fresh TagLib
+    // read + JPEG write on each boot. _manage_cache() only bounds the covers
+    // this run knows about, so trim the oldest leftovers once at startup.
+    _prune_cover_dir();
 
     // Display names
     m_displayNamesPath = SettingsManager::getAppDataDir() + QStringLiteral("/display_names.json");
@@ -297,6 +299,24 @@ void MediaManager::_ensure_directories()
         dir.mkpath(m_tempDir);
         qCInfo(lcMedia) << "Created temp directory:" << m_tempDir;
     }
+}
+
+// Keep at most m_maxCacheFiles cover files on disk, dropping the least
+// recently read ones (covers from removed tracks would otherwise accumulate
+// forever now that the temp dir survives restarts).
+void MediaManager::_prune_cover_dir()
+{
+    QDir tempDir(m_tempDir);
+    QFileInfoList covers = tempDir.entryInfoList({QStringLiteral("cover_*")}, QDir::Files);
+    const int excess = covers.size() - m_maxCacheFiles;
+    if (excess <= 0)
+        return;
+    std::sort(covers.begin(), covers.end(), [](const QFileInfo &a, const QFileInfo &b) {
+        return a.lastRead() < b.lastRead();
+    });
+    for (int i = 0; i < excess; ++i)
+        QFile::remove(covers[i].absoluteFilePath());
+    qCInfo(lcMedia) << "Pruned" << excess << "stale cover files from" << m_tempDir;
 }
 
 void MediaManager::clearTempFilesInternal()
@@ -479,25 +499,34 @@ void MediaManager::_save_meta_store()
     if (!m_metaStoreDirty)
         return;
     m_metaStoreSaveTimer.stop();
-    m_metaStoreDirty = false;
     QJsonObject root;
     root[QStringLiteral("version")] = 1;
     root[QStringLiteral("files")] = m_metaStore;
     QFile f(m_metaStorePath);
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        f.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)
+        && f.write(QJsonDocument(root).toJson(QJsonDocument::Compact)) >= 0) {
+        m_metaStoreDirty = false;   // only once the write succeeded: a failed one retries later
+    } else {
+        qCWarning(lcMedia) << "Could not write tag store:" << f.errorString();
+    }
 }
 
-bool MediaManager::_meta_from_store(const QString &filename, const QString &filePath, MediaMetadata *out) const
+bool MediaManager::_meta_from_store(const QString &filename, const QString &filePath, MediaMetadata *out)
 {
-    const QJsonValue v = m_metaStore.value(filename);
-    if (!v.isObject())
+    if (!m_metaStore.contains(filename))
         return false;
+    const QJsonValue v = m_metaStore.value(filename);
     const QJsonObject e = v.toObject();
     const QFileInfo fi(filePath);
-    if (!fi.exists() || e.value(QStringLiteral("size")).toDouble() != double(fi.size())
-        || qint64(e.value(QStringLiteral("mtime")).toDouble()) != fi.lastModified().toSecsSinceEpoch())
+    if (!v.isObject() || !fi.exists() || e.value(QStringLiteral("size")).toDouble() != double(fi.size())
+        || qint64(e.value(QStringLiteral("mtime")).toDouble()) != fi.lastModified().toSecsSinceEpoch()) {
+        // Deleted, renamed or rewritten track: drop the entry so the store
+        // stays bounded by the current library, not by everything ever seen.
+        m_metaStore.remove(filename);
+        m_metaStoreDirty = true;
+        m_metaStoreSaveTimer.start();
         return false;
+    }
     out->title = e.value(QStringLiteral("title")).toString();
     out->artist = e.value(QStringLiteral("artist")).toString();
     out->album = e.value(QStringLiteral("album")).toString();

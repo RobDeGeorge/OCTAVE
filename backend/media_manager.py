@@ -193,8 +193,10 @@ class MediaManager(QObject):
         self._ensure_directories()
 
         # Extracted covers are content-addressed (album id hash) and stay in the
-        # temp dir across runs; _manage_cache() bounds them. Wiping them here made
-        # every cover a fresh ID3 read + JPEG write on each boot.
+        # temp dir across runs; wiping them here made every cover a fresh ID3
+        # read + JPEG write on each boot. _manage_cache() only bounds the covers
+        # this run knows about, so trim the oldest leftovers once at startup.
+        self._prune_cover_dir()
 
         self._settings_manager = None
 
@@ -255,6 +257,27 @@ class MediaManager(QObject):
         except Exception as e:
             logger.error(f"Error creating directories: {e}")
             
+    def _prune_cover_dir(self):
+        """Keep at most _max_cache_files cover files on disk, dropping the
+        least recently used ones (covers from removed tracks would otherwise
+        accumulate forever now that the temp dir survives restarts)."""
+        try:
+            with os.scandir(self.temp_dir) as it:
+                covers = [(e.stat().st_atime, e.path) for e in it
+                          if e.is_file() and e.name.startswith('cover_')]
+        except OSError:
+            return
+        excess = len(covers) - self._max_cache_files
+        if excess <= 0:
+            return
+        covers.sort()
+        for _, path in covers[:excess]:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        logger.info(f"Pruned {excess} stale cover files from {self.temp_dir}")
+
     def _update_position(self):
         """Update position for UI slider"""
         if self._player.playbackState() == QMediaPlayer.PlayingState:
@@ -403,10 +426,10 @@ class MediaManager(QObject):
         if not self._meta_store_dirty:
             return
         self._meta_store_timer.stop()
-        self._meta_store_dirty = False
         try:
             with open(self._meta_store_path, 'w', encoding='utf-8') as f:
                 json.dump({"version": 1, "files": self._meta_store}, f, separators=(',', ':'))
+            self._meta_store_dirty = False   # only once the write succeeded: a failed one retries later
         except Exception as e:
             logger.warning(f"Could not write tag store: {e}")
 
@@ -417,13 +440,19 @@ class MediaManager(QObject):
 
     def _meta_from_store(self, filename, file_path):
         e = self._meta_store.get(filename)
-        if not isinstance(e, dict):
+        if e is None:
             return None
         try:
             st = os.stat(file_path)
+            fresh = isinstance(e, dict) and e.get("size") == st.st_size and e.get("mtime") == int(st.st_mtime)
         except OSError:
-            return None
-        if e.get("size") != st.st_size or e.get("mtime") != int(st.st_mtime):
+            fresh = False
+        if not fresh:
+            # Deleted, renamed or rewritten track: drop the entry so the store
+            # stays bounded by the current library, not by everything ever seen.
+            self._meta_store.pop(filename, None)
+            self._meta_store_dirty = True
+            self._metaStoreChanged.emit()
             return None
         return {"title": e.get("title", ""), "artist": e.get("artist", "Unknown Artist"),
                 "album": e.get("album", "Unknown Album"), "duration": int(e.get("duration", 0))}
