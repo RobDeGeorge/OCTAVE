@@ -81,6 +81,10 @@ Item {
         if (settingsManager) settingsManager.save_setting("activeDashboard", id)
     }
 
+    // Scriptable (dev tooling drives these through the command server's `call`)
+    function openDashboardChooser() { dashboardChooserPopup.open() }
+    function closeDashboardChooser() { dashboardChooserPopup.close() }
+
     // Delete a user dashboard from the chooser. Lives on the page (not in the
     // card delegate) because dashboardsChanged rebuilds the registry
     // synchronously inside deleteDashboard(), which destroys the delegate that
