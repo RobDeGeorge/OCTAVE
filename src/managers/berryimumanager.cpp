@@ -46,6 +46,7 @@ static constexpr double SEA_LEVEL_PRESSURE = 1013.25;
 static constexpr double MADGWICK_BETA = 0.03;
 static constexpr double GYRO_DEADBAND = 0.4;
 static constexpr double EMIT_INTERVAL = 0.016; // ~60Hz
+static constexpr double IDLE_EMIT_INTERVAL = 0.2; // 5 Hz while no page shows the values
 
 // Sensor sample interval — ~200Hz target. The read loop sleeps for whatever is
 // left of this period after the I2C reads, so it never busy-spins. Measured on
@@ -255,6 +256,11 @@ void BerryIMUWorker::resetTare()
 void BerryIMUWorker::setEmitInterval(double interval)
 {
     m_emitInterval = interval;
+}
+
+void BerryIMUWorker::setIdle(bool idle)
+{
+    m_idle = idle;
 }
 
 // ==================== I2C Helpers ====================
@@ -628,7 +634,12 @@ void BerryIMUWorker::run()
 
         // Emit at configured rate
         readCount++;
+        // Sampling and fusion continue at full rate; only the cross-thread
+        // emission (7 queued signals per tick into QML bindings) slows down
+        // while nothing on screen consumes it.
         double emitInterval = m_emitInterval.load();
+        if (m_idle.load())
+            emitInterval = std::max(emitInterval, IDLE_EMIT_INTERVAL);
         if (now - lastEmit >= emitInterval) {
             lastEmit = now;
 
@@ -803,6 +814,7 @@ void BerryIMUManager::startSensor()
     return;
 #else
     m_worker = new BerryIMUWorker();
+    m_worker->setIdle(!m_active);
     m_workerThread = new QThread(this);
     m_worker->moveToThread(m_workerThread);
 
@@ -880,6 +892,16 @@ void BerryIMUManager::setEmitRate(int hz)
     if (m_worker)
         m_worker->setEmitInterval(interval);
     qCInfo(lcImu) << "emit rate set to" << hz << "Hz (interval=" << interval << "s)";
+}
+
+void BerryIMUManager::setActive(bool active)
+{
+    if (active == m_active)
+        return;
+    m_active = active;
+    if (m_worker)
+        m_worker->setIdle(!active);
+    qCDebug(lcImu) << (active ? "sensor page shown: full emit rate" : "no sensor page: idle emit rate");
 }
 
 void BerryIMUManager::calibrateTare()
@@ -1057,8 +1079,19 @@ void BerryIMUManager::setEmitRate(int hz)
 {
     hz = qBound(1, hz, 120);
     m_emitRate = hz;
-    m_accel->setDataRate(hz);
-    m_compass->setDataRate(hz);
+    const int rate = m_active ? m_emitRate : 5;
+    m_accel->setDataRate(rate);
+    m_compass->setDataRate(rate);
+}
+
+void BerryIMUManager::setActive(bool active)
+{
+    if (active == m_active)
+        return;
+    m_active = active;
+    const int rate = m_active ? m_emitRate : 5;   // 5 Hz while no page shows the values
+    if (m_accel) m_accel->setDataRate(rate);
+    if (m_compass) m_compass->setDataRate(rate);
 }
 
 void BerryIMUManager::calibrateTare()

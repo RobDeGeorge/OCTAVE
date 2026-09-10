@@ -588,6 +588,17 @@ ApplicationWindow {
             function onCurrentItemChanged() {
                 if (mainWindow.nowPlayingStudioOpen)
                     mainWindow.closeNowPlayingStudio()
+                updateSensorConsumers()
+            }
+            Component.onCompleted: updateSensorConsumers()
+            // The 3D vehicle and sensor pages are the only consumers of the
+            // 60 Hz IMU stream; everywhere else 5 Hz keeps the settings status
+            // fresh without seven queued signals per frame into idle bindings.
+            function updateSensorConsumers() {
+                if (typeof berryIMU === "undefined" || !berryIMU || !stackView.currentItem)
+                    return
+                var n = stackView.currentItem.objectName
+                berryIMU.setActive(n === "carMenu" || n === "sensorMenu" || n === "sensorHome")
             }
         }
 

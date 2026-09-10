@@ -478,18 +478,20 @@ class ESP32VolumeManager(QObject):
 
         while not self._stop_thread and self._serial_connection:
             try:
-                if self._serial_connection.in_waiting > 0:
-                    data = self._serial_connection.read(self._serial_connection.in_waiting)
-                    buffer += data.decode('utf-8', errors='ignore')
+                # Block in readline() (1 s port timeout, GIL released) instead of
+                # polling in_waiting at 100 Hz for a knob that sends a few bytes
+                # a second. A timeout returns b"" and re-checks _stop_thread.
+                data = self._serial_connection.readline()
+                if not data:
+                    continue
+                buffer += data.decode('utf-8', errors='ignore')
 
-                    # Process complete lines
-                    while '\n' in buffer:
-                        line, buffer = buffer.split('\n', 1)
-                        line = line.strip()
-                        if line:
-                            self._process_command(line)
-                else:
-                    time.sleep(0.01)  # Small sleep to prevent CPU spinning
+                # Process complete lines (readline may return a partial line on timeout)
+                while '\n' in buffer:
+                    line, buffer = buffer.split('\n', 1)
+                    line = line.strip()
+                    if line:
+                        self._process_command(line)
 
             except serial.SerialException as e:
                 logger.error(f"ESP32 volume: serial read error: {e}")

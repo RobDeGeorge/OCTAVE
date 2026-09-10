@@ -101,11 +101,11 @@
           <pre><code><span class="kw">def</span> <span class="fn">_read_loop</span>(<span class="prop">self</span>):
     buffer = <span class="str">""</span>
     <span class="kw">while not</span> <span class="prop">self</span>._stop_thread <span class="kw">and</span> <span class="prop">self</span>._serial_connection:
-        <span class="kw">if</span> <span class="prop">self</span>._serial_connection.in_waiting > <span class="num">0</span>:
-            data = <span class="prop">self</span>._serial_connection.read(
-                <span class="prop">self</span>._serial_connection.in_waiting
-            )
-            buffer += data.decode(<span class="str">'utf-8'</span>, errors=<span class="str">'ignore'</span>)
+        <span class="cmt"># blocks up to the 1 s port timeout (GIL released); b"" on timeout</span>
+        data = <span class="prop">self</span>._serial_connection.readline()
+        <span class="kw">if not</span> data:
+            <span class="kw">continue</span>
+        buffer += data.decode(<span class="str">'utf-8'</span>, errors=<span class="str">'ignore'</span>)
             <span class="kw">while</span> <span class="str">'\n'</span> <span class="kw">in</span> buffer:
                 line, buffer = buffer.split(<span class="str">'\n'</span>, <span class="num">1</span>)
                 <span class="prop">self</span>._process_command(line.strip())
@@ -432,7 +432,7 @@ yz = qz / yaw_norm
           </p>
           <ul>
             <li><strong>Deadband gating</strong> -- Gyro readings below <code>GYRO_DEADBAND</code> (0.4 deg/s) are zeroed. The Madgwick filter is only updated when there is actual motion, freezing the quaternion when stationary to prevent visible settling.</li>
-            <li><strong>Signal emission</strong> -- Orientation, pitch, roll, heading, accel magnitude, lateral G, and longitudinal G are emitted at ~60 Hz</li>
+            <li><strong>Signal emission</strong> -- Orientation, pitch, roll, heading, accel magnitude, lateral G, and longitudinal G are emitted at ~60 Hz while a sensor page (CarMenu, SensorMenu, SensorHome) is showing. <code>Main.qml</code> calls <code>berryIMU.setActive(bool)</code> on every page change; off those pages sampling and fusion continue but emission drops to 5 Hz (<code>IDLE_EMIT_INTERVAL</code>), enough for the settings status line and far fewer queued cross-thread signals into idle bindings</li>
             <li><strong>Barometer</strong> -- Read every 200 ms (<code>BARO_INTERVAL</code>, ~5 Hz), emitting altitude and temperature</li>
             <li><strong>Heading</strong> -- Computed directly from raw magnetometer (<code>atan2(my, mx)</code>), not from the Madgwick filter, to avoid drift</li>
           </ul>
@@ -463,6 +463,7 @@ yz = qz / yaw_norm
               <tr><td><code>setEnabled(bool)</code></td><td>Enable/disable the IMU sensor</td></tr>
               <tr><td><code>isEnabled()</code></td><td>Returns whether the IMU is enabled</td></tr>
               <tr><td><code>setEmitRate(hz)</code></td><td>Set signal emission rate (10-120 Hz)</td></tr>
+              <tr><td><code>setActive(bool)</code></td><td>A sensor page is showing; false drops emission to 5 Hz (called by <code>Main.qml</code>)</td></tr>
               <tr><td><code>calibrateTare()</code></td><td>Set current orientation as zero reference</td></tr>
               <tr><td><code>resetTare()</code></td><td>Clear the tare offset to identity</td></tr>
               <tr><td><code>getConnectionStatus()</code></td><td>Returns "Connected" or "Disconnected"</td></tr>

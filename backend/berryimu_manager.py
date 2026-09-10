@@ -35,6 +35,7 @@ GYRO_DEADBAND = 0.4
 
 # Signal emission interval — ~60Hz
 EMIT_INTERVAL = 0.016
+IDLE_EMIT_INTERVAL = 0.2   # 5 Hz while no page shows the values
 
 # Sensor sample interval — ~200Hz target. The read loop sleeps for whatever is
 # left of this period after the I2C reads, so it never busy-spins. Measured on
@@ -246,6 +247,7 @@ class BerryIMUManager(QObject):
         self._last_time = None
         self._ahrs = MadgwickAHRS(beta=MADGWICK_BETA)
         self._emit_interval = EMIT_INTERVAL
+        self._active = True   # a sensor page is showing (Main.qml drives this)
 
         self._settings_manager = None
 
@@ -487,7 +489,10 @@ class BerryIMUManager(QObject):
 
                 # Emit at ~60Hz
                 read_count += 1
-                if now - last_emit >= self._emit_interval:
+                # Sampling and fusion continue at full rate; only the emission
+                # into QML slows down while nothing on screen consumes it.
+                emit_interval = self._emit_interval if self._active else max(self._emit_interval, IDLE_EMIT_INTERVAL)
+                if now - last_emit >= emit_interval:
                     last_emit = now
 
                     # Strip yaw from quaternion — only keep pitch & roll
@@ -618,6 +623,16 @@ class BerryIMUManager(QObject):
         hz = max(10, min(120, hz))
         self._emit_interval = 1.0 / hz
         logger.info(f"BerryIMU: emit rate set to {hz}Hz (interval={self._emit_interval:.4f}s)")
+
+    @Slot(bool)
+    def setActive(self, active):
+        """Called by Main.qml on page changes: True while a sensor page is showing.
+        Off-page the values are still fused but emitted at IDLE_EMIT_INTERVAL."""
+        active = bool(active)
+        if active == self._active:
+            return
+        self._active = active
+        logger.debug("BerryIMU: %s", "sensor page shown: full emit rate" if active else "no sensor page: idle emit rate")
 
     @Slot()
     def calibrateTare(self):

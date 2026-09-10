@@ -53,7 +53,7 @@ Item {
                 border.color: App.Style.accent
 
                 SequentialAnimation {
-                    running: true
+                    running: sonarPing.visible   // an infinite animation keeps the render loop awake; stop it off-screen
                     loops: Animation.Infinite
                     ParallelAnimation {
                         NumberAnimation { target: sonarPing; property: "width"; from: 0; to: 60; duration: 3000; easing.type: Easing.OutCubic }

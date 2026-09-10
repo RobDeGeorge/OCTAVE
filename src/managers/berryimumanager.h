@@ -51,6 +51,8 @@ public:
     void calibrateTare();
     void resetTare();
     void setEmitInterval(double interval);
+    // No page is showing the values: emit at IDLE_EMIT_INTERVAL instead
+    void setIdle(bool idle);
 
 signals:
     void orientationChanged(float w, float x, float y, float z);
@@ -129,6 +131,7 @@ private:
 
     // Emit interval
     std::atomic<double> m_emitInterval;
+    std::atomic<bool> m_idle{false};
 
     MadgwickAHRS m_ahrs;
 };
@@ -172,6 +175,8 @@ public slots:
     void setEnabled(bool enabled);
     bool isEnabled();
     void setEmitRate(int hz);
+    // Called by Main.qml on page changes: true while a sensor page is showing
+    void setActive(bool active);
     void calibrateTare();
     void resetTare();
     void cleanup();
@@ -187,6 +192,7 @@ private:
     SettingsManager *m_settingsManager;
     QThread *m_workerThread;
     BerryIMUWorker *m_worker;
+    bool m_active = true;
     bool m_running;
     bool m_enabled;
     bool m_shuttingDown;
@@ -238,6 +244,8 @@ public slots:
     void setEnabled(bool enabled);
     bool isEnabled();
     void setEmitRate(int hz);
+    // Called by Main.qml on page changes: true while a sensor page is showing
+    void setActive(bool active);
     void calibrateTare();
     void resetTare();
     void cleanup();
@@ -256,6 +264,7 @@ private:
     QPressureSensor *m_pressure;
 
     int    m_emitRate;
+    bool   m_active = true;
     double m_tarePitch;
     double m_tareRoll;
     bool   m_enabled;
