@@ -506,13 +506,24 @@ void PhoneMirrorManager::setPhoneScreenOff(bool off)
         return;
     m_phoneScreenOff = off;
     if (m_client && m_client->isRunning() && m_ready)
-        m_client->setDisplayPower(!off);
+        setPanel(!off);
+}
+
+// Send SET_DISPLAY_POWER once per state change; the server logs each one.
+void PhoneMirrorManager::setPanel(bool on)
+{
+    if (!m_client || !m_client->isRunning())
+        return;
+    if (m_panelOff == !on)
+        return;
+    m_panelOff = !on;
+    m_client->setDisplayPower(on);
 }
 
 void PhoneMirrorManager::applyScreenOff()
 {
-    if (m_client && m_client->isRunning() && m_ready && m_phoneScreenOff)
-        m_client->setDisplayPower(false);
+    if (m_ready && m_phoneScreenOff)
+        setPanel(false);
 }
 
 void PhoneMirrorManager::wakePhone()
@@ -545,6 +556,7 @@ void PhoneMirrorManager::stopWakeWatch()
     setInUse(false);
     m_prevLocked = -2;
     m_blankOnWake = false;
+    m_panelOff = false;
     if (m_phoneAsleep) {
         m_phoneAsleep = false;
         emit phoneAsleepChanged(false);
@@ -602,6 +614,7 @@ void PhoneMirrorManager::onWakefulness(const QString &state, int locked)
             setInUse(false);
             if (m_client)
                 m_client->setHoldBlack(true);   // keep the last good frame on the dash
+            m_panelOff = false;   // the wake powers the panel on; our mode is reverted
             qCInfo(lcPhoneMirror) << "Phone went to sleep (" << state << "); waking it";
             if (m_blankOnWake)
                 applyScreenOff();   // may survive the wake; re-applied below if not
@@ -653,8 +666,8 @@ void PhoneMirrorManager::setInUse(bool inUse)
     if (inUse == m_phoneInUse)
         return;
     m_phoneInUse = inUse;
-    if (inUse && m_client && m_client->isRunning() && m_ready)
-        m_client->setDisplayPower(true);   // they are holding it: never leave it dark
+    if (inUse && m_ready)
+        setPanel(true);   // they are holding it: never leave it dark
     qCInfo(lcPhoneMirror) << (inUse ? "Phone unlocked by the user; leaving its screen alone"
                                     : "Phone handed back to the mirror");
     emit phoneInUseChanged(inUse);

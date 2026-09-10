@@ -315,12 +315,14 @@ class ScrcpyClient(QObject):
         plane = frame.planes[0]
         buf = memoryview(plane).cast("B")
         stride, w, h = plane.line_size, frame.width, frame.height
-        if w < 8 or h < 8:
+        # 24x24 grid (576 samples): small bright UI (toolbar icons, subtitles)
+        # on a dark frame must not read as a dozing phone.
+        if w < 24 or h < 24:
             return False
-        for r in range(8):
-            base = (r * (h - 1) // 7) * stride
-            for c in range(8):
-                if buf[base + c * (w - 1) // 7] > BLACK_LUMA_MAX:
+        for r in range(24):
+            base = (r * (h - 1) // 23) * stride
+            for c in range(24):
+                if buf[base + c * (w - 1) // 23] > BLACK_LUMA_MAX:
                     return False
         return True
 

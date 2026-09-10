@@ -64,12 +64,14 @@ constexpr int kBlackLumaMax = 20;
 static bool isBlackFrame(const AVFrame *f)
 {
     const int w = f->width, h = f->height, stride = f->linesize[0];
-    if (w < 8 || h < 8)
+    // 24x24 grid (576 samples): small bright UI (toolbar icons, subtitles)
+    // on a dark frame must not read as a dozing phone.
+    if (w < 24 || h < 24)
         return false;
-    for (int r = 0; r < 8; ++r) {
-        const uint8_t *row = f->data[0] + qint64(r * (h - 1) / 7) * stride;
-        for (int c = 0; c < 8; ++c)
-            if (row[c * (w - 1) / 7] > kBlackLumaMax)
+    for (int r = 0; r < 24; ++r) {
+        const uint8_t *row = f->data[0] + qint64(r * (h - 1) / 23) * stride;
+        for (int c = 0; c < 24; ++c)
+            if (row[c * (w - 1) / 23] > kBlackLumaMax)
                 return false;
     }
     return true;
