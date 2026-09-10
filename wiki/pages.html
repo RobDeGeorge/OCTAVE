@@ -22,14 +22,17 @@
             <li><a href="#mainmenu">MainMenu</a></li>
             <li><a href="#mediaroom">MediaRoom</a></li>
             <li><a href="#mediaplayer">MediaPlayer</a></li>
+            <li><a href="#obdhome">OBDHome</a></li>
             <li><a href="#obdmenu">OBDMenu</a></li>
             <li><a href="#obddiagnostics">OBDDiagnostics</a></li>
             <li><a href="#carmenu">CarMenu</a></li>
+            <li><a href="#sensorhome">SensorHome</a></li>
             <li><a href="#sensormenu">SensorMenu</a></li>
             <li><a href="#clockmenu">ClockMenu</a></li>
             <li><a href="#phonemirror">PhoneMirrorView</a></li>
             <li><a href="#androidauto">AndroidAutoView</a></li>
             <li><a href="#downloadpage">DownloadPage</a></li>
+            <li><a href="#nowplayingstudio">NowPlayingStudio</a></li>
           </ul>
         </nav>
 
@@ -142,6 +145,12 @@
         <h3>Backend Managers Used</h3>
         <p><code>mediaManager</code>, <code>spotifyManager</code>, <code>settingsManager</code>, <code>downloadManager</code></p>
 
+        <!-- OBDHome -->
+        <h2 id="obdhome">OBDHome.qml</h2>
+        <p><span class="file-path">frontend/OBDHome.qml</span> is the OBD hub: a tile page that leads to <code>OBDMenu</code> (live gauges), <code>OBDDiagnostics</code> and the dashboards chooser, shows the adapter connection status, and remembers the last-visited subpage with a highlighted border. Routed by <code>navigateTo("OBDHome.qml")</code>.</p>
+        <h3>Backend Managers Used</h3>
+        <p><code>obdManager</code>, <code>settingsManager</code></p>
+
         <!-- OBDMenu -->
         <h2 id="obdmenu">OBDMenu.qml</h2>
 
@@ -230,6 +239,12 @@
     <span class="kw">function</span> <span class="fn">onHeadingChanged</span>(val) { currentHeading = val }
 }</code></pre>
 
+        <h3>Backend Managers Used</h3>
+        <p><code>berryIMU</code>, <code>settingsManager</code></p>
+
+        <!-- SensorHome -->
+        <h2 id="sensorhome">SensorHome.qml</h2>
+        <p><span class="file-path">frontend/SensorHome.qml</span> is the sensors hub, styled to match <code>OBDHome</code>: tiles for <code>SensorMenu</code> (IMU readouts) and <code>CarMenu</code> (3D vehicle attitude), greyed out when the BerryIMU is not connected or Qt Quick 3D is unavailable.</p>
         <h3>Backend Managers Used</h3>
         <p><code>berryIMU</code>, <code>settingsManager</code></p>
 
@@ -347,6 +362,11 @@
         <p><code>downloadManager</code>, <code>mediaManager</code></p>
 
         <!-- Page Navigation Summary -->
+        <h2 id="nowplayingstudio">NowPlayingStudio.qml</h2>
+        <p><span class="file-path">frontend/NowPlayingStudio.qml</span> is a window-level immersive editor for the Now Playing visuals, instantiated once in <code>Main.qml</code> and opened with <code>openNowPlayingStudio()</code>. It covers the StackView and BottomBar: a live <code>MediaRoomLivePreview</code> is pinned top-right, the left rail holds <code>SettingCategory</code> / <code>SettingSubcategory</code> groups built from <code>NowPlayingButtonGrid</code>, <code>NowPlayingMiniToggle</code> and <code>NowPlayingVSlider</code>, and every change writes straight to <code>settingsManager</code>.</p>
+        <h3>Backend Managers Used</h3>
+        <p><code>settingsManager</code>, <code>mediaManager</code> (through the embedded MediaRoom)</p>
+
         <h2 id="navigation-summary">Page Navigation Summary</h2>
 
         <p>The following diagram shows the navigational relationships between pages. Solid arrows indicate primary navigation paths from the BottomBar; dashed arrows show secondary navigation within pages.</p>

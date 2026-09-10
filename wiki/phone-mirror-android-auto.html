@@ -349,8 +349,9 @@ dpi = 160</code></pre>
 
           <h4>DhuFrameProvider</h4>
           <p>
-            The <code>DhuFrameProvider</code> extends <code>QQuickImageProvider</code> identically to
-            ScrcpyFrameProvider. It returns a default 800x480 placeholder when no frame is available.
+            The <code>DhuFrameProvider</code> extends <code>QQuickImageProvider</code> (the phone mirror no longer
+            uses an image provider; it pushes frames to a <code>QVideoSink</code>). It returns a default 800x480
+            placeholder when no frame is available.
             QML accesses frames via the <code>image://dhuframe/</code> URI scheme.
           </p>
 

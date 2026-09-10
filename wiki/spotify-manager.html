@@ -42,7 +42,8 @@
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
         <p>
-          The <code>SpotifyManager</code> class in <span class="file-path">backend/spotify_manager.py</span> controls
+          The <code>SpotifyManager</code> class (<span class="file-path">src/managers/spotifymanager.{h,cpp}</span> in C++,
+          <span class="file-path">backend/spotify_manager.py</span> in Python) controls
           Spotify playback on connected devices (phone, desktop, smart speaker, etc.) via the Spotify Web API.
           It mirrors the <code>MediaManager</code> signal interface so QML can treat both local and Spotify
           playback through a unified UI.
@@ -50,7 +51,8 @@
         <p>
           SpotifyManager does <strong>not</strong> play audio directly -- it acts as a remote control for
           Spotify Connect devices, sending play/pause/skip/seek/volume commands over the API and polling
-          for playback state updates every 3 seconds.
+          for playback state updates (every 3 seconds while playing, 5 seconds while paused, 10 seconds when no
+          device is active). Spotify is desktop-only: the mobile C++ build ships a stub with the same API.
         </p>
 
         <span class="platform-badge desktop">Desktop</span>
@@ -67,7 +69,9 @@
           </tbody>
         </table>
 
-        <p>Both libraries are checked at import time with feature flags:</p>
+        <p>These are Python-only dependencies. The C++ backend talks to the Web API directly with
+          <code>QNetworkAccessManager</code> and has no keyring; see <a href="#keyring-storage">token storage</a>.
+          In Python both libraries are checked at import time with feature flags:</p>
         <pre><code><span class="kw">try</span>:
     <span class="kw">import</span> spotipy
     <span class="kw">from</span> spotipy.oauth2 <span class="kw">import</span> SpotifyOAuth
@@ -96,7 +100,9 @@
 
         <p>
           Credentials are loaded from SettingsManager when <code>connect_settings_manager()</code> is called
-          during app initialization.
+          during app initialization. <code>set_credentials()</code> exists only in the Python backend; QML writes
+          credentials through <code>settingsManager.save_spotify_credentials()</code>, which both backends pick up
+          via <code>spotifyCredentialsChanged</code>.
         </p>
 
         <div class="info-box warning">
@@ -148,6 +154,8 @@
     <span class="str">"playlist-read-collaborative "</span>
     <span class="str">"user-library-read"</span>
 )</code></pre>
+        <p>The C++ backend requests <code>user-follow-read</code> in place of <code>playlist-read-collaborative</code>;
+          the two token caches are otherwise interchangeable.</p>
 
         <h3>CSRF Protection</h3>
         <p>
@@ -210,7 +218,8 @@
 
         <p>
           If keyring is unavailable, tokens fall back to a file-based cache at
-          <code>backend/.spotify_token_cache</code>.
+          <code>backend/.spotify_token_cache</code>. The C++ backend always uses a file cache, at
+          <code>&lt;app data dir&gt;/.spotify_token_cache</code> (see <code>SpotifyManager::tokenCachePath()</code>).
         </p>
 
         <p>Key methods:</p>
@@ -223,8 +232,10 @@
         <!-- Async Pattern -->
         <h2 id="async-pattern">Async API Call Pattern</h2>
         <p>
-          All Spotify API calls run asynchronously via a <code>ThreadPoolExecutor</code> with a maximum of
-          2 concurrent workers (to avoid rate limiting):
+          In the Python backend all Spotify API calls run asynchronously via a <code>ThreadPoolExecutor</code> with a
+          maximum of 2 concurrent workers (to avoid rate limiting). The C++ backend needs no worker threads: every call
+          is a non-blocking <code>QNetworkReply</code> whose completion callback runs on the main thread
+          (<code>apiGet</code> / <code>apiPut</code> / <code>apiPost</code>).
         </p>
         <pre><code>self._executor = ThreadPoolExecutor(max_workers=<span class="num">2</span>)</code></pre>
 
@@ -315,11 +326,11 @@
         <!-- Position Interpolation -->
         <h2 id="position-interpolation">Position Interpolation</h2>
         <p>
-          The Spotify API is polled every 3 seconds (<code>_poll_timer</code>), but the UI progress bar needs
-          smooth updates. A fast local timer (<code>_interpolation_timer</code>, 250ms interval) interpolates
-          the position between API polls:
+          The Spotify API is polled by <code>_poll_timer</code> (3 s while playing, stretched to 5 s while paused and
+          10 s when no device is active), but the UI progress bar needs smooth updates. A fast local timer
+          (<code>_interpolation_timer</code>, 250ms interval) interpolates the position between API polls:
         </p>
-        <pre><code><span class="cmt"># Poll timer: actual API calls every 3 seconds</span>
+        <pre><code><span class="cmt"># Poll timer: actual API calls every 3 seconds while playing (5 s paused, 10 s idle)</span>
 self._poll_timer = QTimer()
 self._poll_timer.setInterval(<span class="num">3000</span>)
 self._poll_timer.timeout.connect(self._poll_playback_state)
@@ -383,7 +394,7 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
           </thead>
           <tbody>
             <tr><td><code>get_playlists()</code></td><td>Returns cached playlist list</td></tr>
-            <tr><td><code>get_playlist_tracks(playlist_id)</code></td><td>Fetches up to 100 tracks from a playlist. Returns list of track dicts with id, name, uri, artist, album, duration_ms, image.</td></tr>
+            <tr><td><code>get_playlist_tracks(playlist_id)</code></td><td>Python only. Fetches up to 100 tracks from a playlist. Returns list of track dicts with id, name, uri, artist, album, duration_ms, image. The C++ backend performs the same fetch inside <code>select_spotify_playlist()</code>.</td></tr>
             <tr><td><code>select_spotify_playlist(playlist_id)</code></td><td>Loads tracks, sets current playlist, emits <code>spotifyTracksChanged</code> and <code>currentSpotifyPlaylistChanged</code></td></tr>
           </tbody>
         </table>
@@ -417,6 +428,7 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
         <h2 id="disconnect-cleanup">Disconnect and Cleanup</h2>
 
         <h3>Disconnect</h3>
+        <p>QML calls <code>spotifyManager.disconnect()</code> on both backends; in C++ it is an alias of <code>logout()</code>.</p>
         <pre><code>@Slot()
 <span class="kw">def</span> <span class="fn">disconnect</span>(self):
     self._poll_timer.stop()
@@ -497,9 +509,9 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
             <tr><td><code>is_available</code></td><td>() -> bool</td><td>Check if spotipy is installed</td></tr>
             <tr><td><code>is_connected</code></td><td>() -> bool</td><td>Check authentication status</td></tr>
             <tr><td><code>has_credentials</code></td><td>() -> bool</td><td>Check if client ID/secret are set</td></tr>
-            <tr><td><code>set_credentials</code></td><td>(str, str)</td><td>Set client ID and secret</td></tr>
+            <tr><td><code>set_credentials</code></td><td>(str, str)</td><td>Set client ID and secret (Python only; QML uses <code>settingsManager.save_spotify_credentials</code>)</td></tr>
             <tr><td><code>authenticate</code></td><td>()</td><td>Start OAuth flow</td></tr>
-            <tr><td><code>disconnect</code></td><td>()</td><td>Disconnect and clear tokens</td></tr>
+            <tr><td><code>disconnect</code></td><td>()</td><td>Disconnect and clear tokens (C++ also exposes it as <code>logout()</code>)</td></tr>
             <tr><td><code>cleanup</code></td><td>()</td><td>Stop timers and shutdown executor</td></tr>
             <tr><td><code>play</code></td><td>()</td><td>Resume playback</td></tr>
             <tr><td><code>pause</code></td><td>()</td><td>Pause playback</td></tr>
@@ -515,12 +527,17 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
             <tr><td><code>get_devices</code></td><td>() -> list</td><td>Get cached device list</td></tr>
             <tr><td><code>get_playlists</code></td><td>() -> list</td><td>Get cached playlist list</td></tr>
             <tr><td><code>select_spotify_playlist</code></td><td>(str)</td><td>Load playlist tracks</td></tr>
+            <tr><td><code>get_spotify_tracks</code></td><td>() -> list</td><td>Tracks of the loaded playlist</td></tr>
+            <tr><td><code>get_spotify_playlist_names</code></td><td>() -> list</td><td>Names of the user's playlists</td></tr>
+            <tr><td><code>get_spotify_track_image</code> / <code>_artist</code> / <code>_album</code> / <code>_uri</code> / <code>_duration_formatted</code></td><td>(str) -> str</td><td>Per-track lookups by track name for the playlist view</td></tr>
+            <tr><td><code>get_next_track_info</code> / <code>get_previous_track_info</code></td><td>() -> str</td><td>Neighbor track JSON for the 3D side cards</td></tr>
+            <tr><td><code>has_spotify_playlist_loaded</code></td><td>() -> bool</td><td>Whether a playlist is currently selected</td></tr>
             <tr><td><code>connect_settings_manager</code></td><td>(QObject)</td><td>Connect to settings for credentials</td></tr>
           </tbody>
         </table>
 
         <!-- Related Pages -->
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="media-manager.html" class="related-link">Media Manager</a>

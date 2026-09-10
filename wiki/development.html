@@ -373,7 +373,7 @@ cap.capture(<span class="str">"media_view"</span>, <span class="str">"Media play
           <li><strong>MCP automation:</strong> Use the MCP server for repeatable test sequences (navigate pages, change settings, verify state)</li>
           <li><strong>Cross-platform:</strong> Test on Windows, macOS, and Linux. Use <code>python main.py --debug</code> for verbose logging when debugging platform-specific issues.</li>
           <li><strong>Hardware testing:</strong> Test with physical OBD adapter, ESP32 volume knob, BerryIMU, and gesture sensor when making changes to those subsystems</li>
-          <li><strong>Build testing:</strong> Run <code>python build_scripts/build.py</code> and test the built executable before releasing</li>
+          <li><strong>Build testing:</strong> Build the C++ tree (<code>cmake --build build -j</code>) and run the headless smoke suite (<code>QT_QPA_PLATFORM=offscreen pytest tests/</code>) before tagging; CI then builds every platform on a <code>v*</code> tag</li>
         </ol>
 
         <h3>Debug Mode</h3>

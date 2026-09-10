@@ -29,11 +29,17 @@
             <li><a href="#gesture">GestureManager</a></li>
             <li><a href="#audio-analyzer">AudioAnalyzer</a></li>
             <li><a href="#perf-monitor">PerfMonitor</a></li>
+            <li><a href="#volume-controller">VolumeController</a></li>
+            <li><a href="#phone-mirror">PhoneMirrorManager</a></li>
+            <li><a href="#network-manager">NetworkManager</a></li>
+            <li><a href="#download-manager">DownloadManager</a></li>
+            <li><a href="#dashboard-manager">DashboardManager</a></li>
+            <li><a href="#android-auto">AndroidAutoManager</a></li>
           </ul>
         </nav>
 
         <div class="info-box info">
-          <strong>Context Properties:</strong> All managers are registered in <span class="file-path">main.py</span> via <code>engine.rootContext().setContextProperty()</code>. QML accesses them by name: <code>mediaManager.next_track()</code>, <code>settingsManager.themeSetting</code>, etc.
+          <strong>Context Properties:</strong> All managers are registered in <span class="file-path">main.py</span> (Python) and <span class="file-path">src/main.cpp</span> (C++) via <code>engine.rootContext().setContextProperty()</code>. QML accesses them by name: <code>mediaManager.next_track()</code>, <code>settingsManager.themeSetting</code>, etc.
         </div>
 
         <!-- MediaManager -->
@@ -343,7 +349,7 @@
 
         <!-- GestureManager -->
         <h2 id="gesture">GestureManager</h2>
-        <p><span class="file-path">backend/gesture_manager.py</span> &mdash; QML name: <code>gestureManager</code></p>
+        <p><span class="file-path">backend/gesture_manager.py</span> &mdash; QML name: <code>gestureSensor</code></p>
 
         <h3>Signals</h3>
         <table>
@@ -422,6 +428,124 @@
           <thead><tr><th>Signal</th><th>Fires When</th></tr></thead>
           <tbody>
             <tr><td><code>metricsUpdated</code></td><td>Every 1 second reporting cycle</td></tr>
+          </tbody>
+        </table>
+
+
+        <!-- VolumeController -->
+        <h2 id="volume-controller">VolumeController</h2>
+        <p><span class="file-path">backend/volume_utils.py</span> / <span class="file-path">src/managers/volumecontroller.cpp</span> &mdash; QML name: <code>volumeController</code></p>
+        <p>The single entry point for volume. Every slider, knob and gesture calls <code>applyVolume(percent)</code>; the quadratic curve lives in one place and <code>volumeApplied</code> fans the result out to MediaManager, SpotifyManager, PhoneMirrorManager and the ESP32 LED.</p>
+        <table>
+          <thead><tr><th>Member</th><th>Kind</th><th>Parameters / Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>applyVolume(percent)</code></td><td>Slot</td><td>int 0&ndash;100</td><td>Clamps, persists <code>currentVolume</code>, computes the linear value and emits <code>volumeApplied</code></td></tr>
+            <tr><td><code>toLinear(percent)</code></td><td>Slot</td><td>float &rarr; float 0&ndash;1</td><td>Pure curve math for QML previews; does not dispatch</td></tr>
+            <tr><td><code>volumeApplied</code></td><td>Signal</td><td>int percent, float linear</td><td>After every <code>applyVolume</code></td></tr>
+          </tbody>
+        </table>
+
+        <!-- PhoneMirrorManager -->
+        <h2 id="phone-mirror">PhoneMirrorManager</h2>
+        <p><span class="file-path">backend/phone_mirror/manager.py</span> / <span class="file-path">src/managers/phonemirrormanager.cpp</span> &mdash; QML name: <code>phoneMirrorManager</code></p>
+        <p>Built-in scrcpy-protocol client (see <a href="phone-mirror-android-auto.html">Phone Mirror</a>). Desktop only; the mobile build registers a stub with the same members.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>adbPath</code></td><td>str</td><td>adb in use (bundled platform-tools preferred)</td></tr>
+            <tr><td><code>nativeAvailable</code></td><td>bool</td><td>adb and the server jar were found</td></tr>
+            <tr><td><code>serverVersion</code></td><td>str</td><td>Phone server version the client speaks (must match the jar)</td></tr>
+            <tr><td><code>isRunning</code></td><td>bool</td><td>A mirror session is active</td></tr>
+            <tr><td><code>displaySize</code> / <code>activeDisplaySize</code></td><td>str</td><td>Requested / in-use virtual display "WxH" ("" = phone screen)</td></tr>
+            <tr><td><code>videoSink</code></td><td>QObject</td><td>QML binds <code>VideoOutput.videoSink</code> here; decoded frames go straight to it</td></tr>
+            <tr><td><code>frameWidth</code> / <code>frameHeight</code></td><td>int</td><td>Decoded frame size</td></tr>
+            <tr><td><code>audioActive</code></td><td>bool</td><td>Phone audio is being played through OCTAVE</td></tr>
+            <tr><td><code>audioPlaying</code></td><td>bool</td><td>The phone is producing sound right now (drives ducking)</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Parameters</th><th>Fires When</th></tr></thead>
+          <tbody>
+            <tr><td><code>scrcpyStarted</code> / <code>scrcpyStopped</code> / <code>scrcpyError</code></td><td>int handle / &ndash; / str</td><td>Session lifecycle (names kept from the original design; PhoneMirrorView depends on them)</td></tr>
+            <tr><td><code>isRunningChanged</code>, <code>displaySizeChanged</code>, <code>videoSinkChanged</code></td><td>&ndash;</td><td>Property notifications</td></tr>
+            <tr><td><code>frameSizeChanged</code></td><td>int w, int h</td><td>Decoded size changed (also notifies <code>activeDisplaySize</code>)</td></tr>
+            <tr><td><code>frameReady</code></td><td>&ndash;</td><td>A frame reached the video sink</td></tr>
+            <tr><td><code>audioActiveChanged</code> / <code>audioPlayingChanged</code></td><td>bool</td><td>Audio stream state / sound detected</td></tr>
+            <tr><td><code>duckingChanged</code></td><td>float factor</td><td>Duck level while the phone makes sound and ducking is on, 1.0 otherwise; <code>main</code> routes it to <code>mediaManager.setDucking</code></td></tr>
+            <tr><td><code>error</code></td><td>str</td><td>Generic error message</td></tr>
+          </tbody>
+        </table>
+        <h3>Slots</h3>
+        <table>
+          <thead><tr><th>Slot</th><th>Parameters</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>startScrcpy()</code> / <code>stopScrcpy()</code> / <code>cleanup()</code></td><td>&ndash;</td><td>&ndash;</td><td>Start / stop a session; cleanup at exit</td></tr>
+            <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>int, int (0 down / 1 up / 2 move), float 0&ndash;1, float 0&ndash;1</td><td>&ndash;</td><td>Multitouch on the mirrored display</td></tr>
+            <tr><td><code>injectKey(keycode)</code>, <code>pressHome()</code>, <code>pressBack()</code>, <code>pressAppSwitch()</code></td><td>int</td><td>&ndash;</td><td>Android key events</td></tr>
+            <tr><td><code>setVolume(linear)</code></td><td>float</td><td>&ndash;</td><td>Called by VolumeController; phone audio follows OCTAVE's volume</td></tr>
+            <tr><td><code>setAudioEnabled(bool)</code>, <code>setAudioGain(float)</code></td><td>&ndash;</td><td>&ndash;</td><td>Settings <code>scrcpyAudioEnabled</code> / <code>scrcpyAudioGain</code></td></tr>
+            <tr><td><code>setAudioDuckEnabled(bool)</code>, <code>setAudioDuckLevel(float)</code></td><td>&ndash;</td><td>&ndash;</td><td>Settings <code>scrcpyAudioDuckEnabled</code> / <code>scrcpyAudioDuckLevel</code></td></tr>
+            <tr><td><code>setDisplaySize(str)</code></td><td>"WxH"</td><td>&ndash;</td><td>Virtual display size; restarts a running session</td></tr>
+            <tr><td><code>getDeviceState()</code></td><td>&ndash;</td><td>str</td><td>"device", "unauthorized", "offline", "none" or "no-adb"</td></tr>
+            <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>&ndash;</td><td>bool / str / int</td><td>adb device queries</td></tr>
+            <tr><td><code>environmentOk()</code>, <code>getInstallInstructions()</code></td><td>&ndash;</td><td>bool / str</td><td>Readiness check and user-facing help text</td></tr>
+          </tbody>
+        </table>
+
+        <!-- NetworkManager -->
+        <h2 id="network-manager">NetworkManager</h2>
+        <p><span class="file-path">backend/network_manager.py</span> / <span class="file-path">src/managers/networkmanager.cpp</span> &mdash; QML name: <code>networkManager</code></p>
+        <table>
+          <thead><tr><th>Member</th><th>Kind</th><th>Type / Parameters</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>networkName</code>, <code>isConnected</code></td><td>Property</td><td>str, bool</td><td>Current WiFi/SSID and internet reachability (30 s poll)</td></tr>
+            <tr><td><code>updateStatus</code>, <code>updateMessage</code>, <code>remoteCommit</code>, <code>remoteCommitMsg</code>, <code>workingTreeDirty</code></td><td>Property</td><td>str / bool</td><td>Result of <code>checkForUpdates()</code> against the git remote</td></tr>
+            <tr><td><code>selfUpdateStatus</code>, <code>selfUpdateMessage</code>, <code>canSelfUpdate</code></td><td>Property</td><td>str / bool</td><td>Self-update progress; <code>canSelfUpdate</code> requires a git checkout</td></tr>
+            <tr><td><code>refreshNetwork()</code>, <code>checkForUpdates()</code>, <code>applySelfUpdate()</code>, <code>restartApp()</code>, <code>shutdown_device()</code>, <code>cleanup()</code></td><td>Slot</td><td>&ndash;</td><td>Every property above has a matching <code>&lt;name&gt;Changed</code> signal</td></tr>
+          </tbody>
+        </table>
+
+        <!-- DownloadManager -->
+        <h2 id="download-manager">DownloadManager</h2>
+        <p><span class="file-path">backend/download_manager.py</span> / <span class="file-path">src/managers/downloadmanager.cpp</span> &mdash; QML name: <code>downloadManager</code> (compiled out for app-store builds with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code>, which registers a stub)</p>
+        <table>
+          <thead><tr><th>Member</th><th>Kind</th><th>Type / Parameters</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>isSearching</code>, <code>activeDownloads</code>, <code>downloadPath</code></td><td>Property</td><td>bool, int, str</td><td>Search in flight, queue depth, destination folder</td></tr>
+            <tr><td><code>search(query)</code>, <code>next_search_page()</code>, <code>search_more()</code></td><td>Slot</td><td>str</td><td>YouTube Music search (yt-dlp); results arrive via <code>searchResults</code></td></tr>
+            <tr><td><code>download(songId, name)</code>, <code>download_song(json)</code>, <code>cancel_download(id)</code>, <code>pause_download(id)</code>, <code>resume_download(id)</code></td><td>Slot</td><td>str</td><td>Queue control</td></tr>
+            <tr><td><code>get_download_queue()</code>, <code>clear_download_queue()</code>, <code>get_download_playlist()</code>, <code>set_download_playlist(name)</code></td><td>Slot</td><td>list / str</td><td>Queue inspection and target playlist</td></tr>
+            <tr><td><code>hasStorageAccess()</code>, <code>requestStorageAccess()</code></td><td>Slot</td><td>bool</td><td>Android storage permission (no-op on desktop)</td></tr>
+            <tr><td><code>searchResults</code>, <code>searchInProgress</code>, <code>searchError</code></td><td>Signal</td><td>str JSON / bool / str</td><td>Search lifecycle</td></tr>
+            <tr><td><code>downloadStarted</code>, <code>downloadProgress</code>, <code>downloadComplete</code>, <code>downloadError</code>, <code>downloadQueueChanged</code>, <code>downloadStatusChanged</code>, <code>statusMessage</code></td><td>Signal</td><td>songId + payload</td><td>Per-download progress and status patches (<code>field</code>, <code>valueJson</code>)</td></tr>
+          </tbody>
+        </table>
+
+        <!-- DashboardManager -->
+        <h2 id="dashboard-manager">DashboardManager</h2>
+        <p><span class="file-path">backend/dashboard_manager.py</span> / <span class="file-path">src/managers/dashboardmanager.cpp</span> &mdash; QML name: <code>dashboardManager</code> (see <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</p>
+        <table>
+          <thead><tr><th>Member</th><th>Kind</th><th>Type / Parameters</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>dashboards</code></td><td>Property</td><td>list of headers</td><td>Every preset and user dashboard (id, label, builtIn, &hellip;); <code>dashboardsChanged</code> on rescan</td></tr>
+            <tr><td><code>loadDashboard(id)</code></td><td>Invokable</td><td>str &rarr; spec</td><td>Full JSON spec for one dashboard</td></tr>
+            <tr><td><code>isBuiltIn(id)</code></td><td>Invokable</td><td>str &rarr; bool</td><td>Preset (read-only) or user dashboard</td></tr>
+            <tr><td><code>saveDashboard(spec)</code>, <code>deleteDashboard(id)</code>, <code>duplicateDashboard(sourceId, newLabel)</code>, <code>refresh()</code></td><td>Slot</td><td>&rarr; str id / bool</td><td>User-dashboard CRUD in the app data dir; the user dir is watched for external edits (hot reload)</td></tr>
+          </tbody>
+        </table>
+
+        <!-- AndroidAutoManager -->
+        <h2 id="android-auto">AndroidAutoManager</h2>
+        <p><span class="file-path">backend/android_auto/manager.py</span> / <span class="file-path">src/managers/androidautomanager.cpp</span> &mdash; QML name: <code>androidAutoManager</code></p>
+        <table>
+          <thead><tr><th>Member</th><th>Kind</th><th>Type / Parameters</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>isDhuInstalled</code>, <code>dhuPath</code></td><td>Property</td><td>bool, str</td><td>Google Desktop Head Unit detection</td></tr>
+            <tr><td><code>isDhuEmbedded</code>, <code>dhuWindowHandle</code>, <code>dhuCapture</code></td><td>Property</td><td>bool, int, QObject</td><td>Embedded-window state and the frame capture object</td></tr>
+            <tr><td><code>getDhuInstallInstructions()</code></td><td>Slot</td><td>&rarr; str</td><td>User-facing help text</td></tr>
+            <tr><td><code>connectionProgress</code>, <code>error</code>, <code>dhuWindowReady</code>, <code>dhuEmbeddedChanged</code></td><td>Signal</td><td>str / str / int / bool</td><td>Launch progress and embedding state</td></tr>
           </tbody>
         </table>
 

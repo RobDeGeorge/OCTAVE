@@ -37,7 +37,6 @@
             <li class="toc-h3"><a href="#thread-timer">QTimer Polling</a></li>
             <li><a href="#volume-system">Volume System</a></li>
             <li><a href="#image-providers">Image Providers</a></li>
-            <li><a href="#platform-detection">Platform Detection & Stubs</a></li>
             <li><a href="#settings-persistence">Settings Persistence</a></li>
             <li><a href="#logging">Logging System</a></li>
             <li><a href="#signal-wiring">Signal Wiring Graph</a></li>
@@ -185,6 +184,8 @@
             <tr><td>GestureManager</td><td><code>gesture_manager.py</code></td><td><code>gestureSensor</code></td><td>Gesture recognition</td></tr>
             <tr><td>NetworkManager</td><td><code>network_manager.py</code></td><td><code>networkManager</code></td><td>WiFi & updates</td></tr>
             <tr><td>DownloadManager</td><td><code>download_manager.py</code></td><td><code>downloadManager</code></td><td>Music download</td></tr>
+            <tr><td>DashboardManager</td><td><code>dashboard_manager.py</code></td><td><code>dashboardManager</code></td><td>JSON gauge dashboards (presets + user)</td></tr>
+            <tr><td>VolumeController</td><td><code>volume_utils.py</code></td><td><code>volumeController</code></td><td>Single entry point for the volume curve</td></tr>
           </tbody>
         </table>
 
@@ -282,9 +283,9 @@ EmbeddedDhuItem {
 
         <ol class="steps">
           <li>
-            <strong>Platform detection</strong> &mdash; Imports <code>IS_ANDROID</code> from
-            <code>backend.platform_config</code>. Sets <code>QT_QUICK_CONTROLS_STYLE=Basic</code>
-            (required for full slider customization). Forces landscape on Android.
+            <strong>Environment</strong> &mdash; Sets <code>QT_QUICK_CONTROLS_STYLE=Basic</code>
+            (required for full slider customization). The Python backend is desktop-only; Android and iOS
+            run the C++ tree.
           </li>
           <li>
             <strong>Argument parsing</strong> &mdash; <code>--debug</code> enables verbose logging.
@@ -487,49 +488,6 @@ Image {
           The image provider returns the latest captured frame on each request. QML periodically
           re-requests the image (via source binding or timer) to get new frames.
         </p>
-
-        <!-- Platform Detection -->
-        <h2 id="platform-detection">Platform Detection & Stubs</h2>
-        <span class="file-path">backend/platform_config.py</span>
-
-        <p>
-          Platform detection is centralized in a single module. All platform-conditional code imports
-          from here:
-        </p>
-
-        <pre><code><span class="kw">import</span> sys, os
-
-IS_ANDROID = <span class="fn">hasattr</span>(sys, <span class="str">'getandroidapilevel'</span>) <span class="kw">or</span> <span class="str">'ANDROID_ROOT'</span> <span class="kw">in</span> os.environ</code></pre>
-
-        <h3>Stub System</h3>
-        <span class="file-path">backend/stubs.py</span>
-        <p>
-          On Android, hardware-specific managers are replaced with <strong>stub classes</strong> that
-          provide the same interface but do nothing. This allows QML to reference these managers
-          without crashing:
-        </p>
-
-        <pre><code><span class="cmt"># main.py — conditional import</span>
-<span class="kw">if</span> IS_ANDROID:
-    <span class="kw">from</span> backend.stubs <span class="kw">import</span> (
-        StubOBDManager,
-        StubBerryIMUManager,
-        StubGestureManager <span class="kw">as</span> GestureManager,
-        StubESP32VolumeManager <span class="kw">as</span> ESP32VolumeManager,
-        StubPhoneMirrorManager <span class="kw">as</span> PhoneMirrorManager,
-        StubAndroidAutoManager <span class="kw">as</span> AndroidAutoManager,
-        <span class="cmt"># ...</span>
-    )
-    <span class="cmt"># Then try Android-specific alternatives</span>
-    <span class="kw">from</span> backend.android_obd_manager <span class="kw">import</span> AndroidOBDManager <span class="kw">as</span> OBDManager
-    <span class="kw">from</span> backend.android_sensors <span class="kw">import</span> AndroidSensorManager <span class="kw">as</span> BerryIMUManager
-<span class="kw">else</span>:
-    <span class="kw">from</span> backend.obd_manager <span class="kw">import</span> OBDManager
-    <span class="cmt"># ... real hardware managers</span></code></pre>
-
-        <p>Android also hides irrelevant settings sections:</p>
-        <pre><code><span class="kw">if</span> IS_ANDROID:
-    settings_manager.save_settings_section_visibility(<span class="str">"accessoriesSettings"</span>, <span class="kw">False</span>)</code></pre>
 
         <!-- Settings Persistence -->
         <h2 id="settings-persistence">Settings Persistence</h2>

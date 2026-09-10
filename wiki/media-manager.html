@@ -43,8 +43,9 @@
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
         <p>
-          The <code>MediaManager</code> class in <span class="file-path">backend/media_manager.py</span> handles all
-          local audio file playback for OCTAVE. It wraps PySide6's <code>QMediaPlayer</code> and <code>QAudioOutput</code>,
+          The <code>MediaManager</code> class (<span class="file-path">src/managers/mediamanager.{h,cpp}</span> in the C++
+          backend, <span class="file-path">backend/media_manager.py</span> in the Python backend) handles all
+          local audio file playback for OCTAVE. It wraps Qt's <code>QMediaPlayer</code> and <code>QAudioOutput</code>,
           manages a metadata and album art cache, extracts dominant colors from album art for dynamic theming, and
           provides full playlist support with shuffle, skip, and playback resume.
         </p>
@@ -60,9 +61,11 @@
         <p>The following file extensions are recognized during library scanning:</p>
         <pre><code>AUDIO_EXTENSIONS = (<span class="str">'.mp3'</span>, <span class="str">'.m4a'</span>, <span class="str">'.flac'</span>, <span class="str">'.ogg'</span>, <span class="str">'.opus'</span>, <span class="str">'.wav'</span>)</code></pre>
         <p>
-          MP3 files use the <code>mutagen</code> library's <code>ID3</code> and <code>MP3</code> classes for metadata.
+          In the Python backend, MP3 files use the <code>mutagen</code> library's <code>ID3</code> and <code>MP3</code> classes for metadata.
           M4A/MP4/AAC files use <code>mutagen.mp4.MP4</code>. Other formats fall back to <code>mutagen.File</code>
-          for basic duration information.
+          for basic duration information. The C++ backend reads the same tags with <strong>TagLib</strong>
+          (ID3v2 <code>APIC</code>, MP4 <code>covr</code>, FLAC and Ogg/Opus pictures); the list lives in
+          <code>MediaManager::s_audioExtensions</code>.
         </p>
 
         <!-- QMediaPlayer Integration -->
@@ -93,9 +96,10 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
         <!-- Library Scanning -->
         <h2 id="library-scanning">Library Scanning</h2>
         <p>
-          The media directory defaults to <code>backend/media/</code> but is typically overridden by the user via
-          SettingsManager's <code>mediaFolder</code> property (defaults to <code>~/Music</code> on desktop,
-          <code>/sdcard/Music</code> on Android).
+          The media directory defaults to <code>backend/media/</code> (Python) or <code>&lt;application dir&gt;/media</code>
+          (C++ desktop) but is typically overridden by the user via SettingsManager's <code>mediaFolder</code> property,
+          whose default is the empty string (meaning "use the built-in default"). The C++ Android build uses the system
+          Music location instead, falling back to <code>/sdcard/Music</code>.
         </p>
         <p>
           <code>get_media_files()</code> scans the configured directory for files matching <code>AUDIO_EXTENSIONS</code>:
@@ -153,7 +157,8 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
         <h2 id="album-art">Album Art Extraction</h2>
         <p>
           Album art is cached in <code>self._album_art_cache</code> (dict: album_id to <code>file://</code> URL)
-          with a maximum of 500 cached files on disk in the <code>backend/temp/</code> directory.
+          with a maximum of 500 cached files on disk in the <code>backend/temp/</code> directory
+          (<code>&lt;application dir&gt;/temp</code> in the C++ desktop build, the app data <code>temp/</code> folder on Android).
         </p>
 
         <h3>Album ID Generation</h3>
@@ -203,7 +208,7 @@ self._player.setProperty(<span class="str">"analyzeduration"</span>, <span class
         <h3>Extraction Pipeline</h3>
         <ol class="steps">
           <li>Resize album art to 50x50 pixels via <code>QImage.scaled()</code> (smooth transformation)</li>
-          <li>Run k-means clustering (<code>_kmeans_colors()</code>, pure Python, k=5, max 10 iterations) to find 5 dominant colors</li>
+          <li>Run k-means clustering (<code>_kmeans_colors()</code>, pure Python / C++ port with the same k=5, max 10 iterations) to find 5 dominant colors</li>
           <li>Sort colors by vibrancy (saturation * value in HSV space)</li>
           <li>Determine if image is dark or light based on average luminance</li>
           <li>Call <code>_generate_theme_from_colors()</code> to build a full theme object</li>
@@ -403,7 +408,8 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
         <p>
           After a track change, a single-shot timer (<code>_precache_timer</code>, 80ms) triggers
           <code>_precache_neighbors_start()</code> which pre-populates metadata and album art caches for
-          the previous and next tracks in a background thread. This ensures that the next skip is instant
+          the previous and next tracks in a background thread (a <code>threading.Thread</code> in Python,
+          <code>QtConcurrent::run()</code> in C++). This ensures that the next skip is instant
           with no visible loading delay in the QML UI.
         </p>
 
@@ -445,11 +451,13 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
             <tr><th>Signal</th><th>Type</th><th>Description</th></tr>
           </thead>
           <tbody>
+            <tr><td><code>playbackStateChanged</code></td><td>int</td><td>Raw <code>QMediaPlayer</code> playback state</td></tr>
             <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped</td></tr>
             <tr><td><code>currentMediaChanged</code></td><td>str</td><td>Filename of the now-playing track</td></tr>
             <tr><td><code>mediaListChanged</code></td><td>list</td><td>Updated file list after scan</td></tr>
             <tr><td><code>metadataChanged</code></td><td>str, str, str</td><td>Title, artist, album for current track</td></tr>
             <tr><td><code>durationChanged</code></td><td>int</td><td>Track duration in milliseconds</td></tr>
+            <tr><td><code>durationFormatChanged</code></td><td>str</td><td>Duration formatted as "M:SS"</td></tr>
             <tr><td><code>positionChanged</code></td><td>int</td><td>Playback position in milliseconds</td></tr>
             <tr><td><code>volumeChanged</code></td><td>float</td><td>Volume level (0.0-1.0)</td></tr>
             <tr><td><code>muteChanged</code></td><td>bool</td><td>Mute state changed</td></tr>
@@ -461,6 +469,7 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
             <tr><td><code>totalDurationChanged</code></td><td>str</td><td>Formatted total library duration</td></tr>
             <tr><td><code>albumCountChanged</code></td><td>int</td><td>Number of unique albums</td></tr>
             <tr><td><code>artistCountChanged</code></td><td>int</td><td>Number of unique artists</td></tr>
+            <tr><td><code>songDeleted</code></td><td>str</td><td>A file was removed via <code>delete_song()</code></td></tr>
           </tbody>
         </table>
 
@@ -479,6 +488,8 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
             <tr><td><code>set_position</code></td><td>(int)</td><td>Seek to position in ms</td></tr>
             <tr><td><code>toggle_mute</code></td><td>()</td><td>Toggle mute with debounce guard</td></tr>
             <tr><td><code>setVolume</code></td><td>(float)</td><td>Set volume (0.0-1.0)</td></tr>
+            <tr><td><code>getVolume</code></td><td>() -> float</td><td>User's volume (ignores mute and ducking)</td></tr>
+            <tr><td><code>setDucking</code></td><td>(float)</td><td>Temporarily attenuate output (1.0 = none); ramped 80 ms in / 500 ms out</td></tr>
             <tr><td><code>get_media_files</code></td><td>() -> list</td><td>Scan and return available files</td></tr>
             <tr><td><code>get_album_art</code></td><td>(str) -> str</td><td>Get album art URL for filename</td></tr>
             <tr><td><code>get_band</code></td><td>(str) -> str</td><td>Get artist from metadata</td></tr>
@@ -487,6 +498,13 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
             <tr><td><code>extract_colors_from_album_art</code></td><td>(str)</td><td>Extract and emit theme colors from album art</td></tr>
             <tr><td><code>get_neighbor_album_arts</code></td><td>() -> list</td><td>Returns [prevArt, nextArt] URLs</td></tr>
             <tr><td><code>invalidate_stats_cache</code></td><td>()</td><td>Force recalculation of library statistics</td></tr>
+            <tr><td><code>scan_library</code></td><td>(bool)</td><td>Rescan the library root into playlists (emits <code>scanProgress</code>, <code>playlistsChanged</code>)</td></tr>
+            <tr><td><code>select_playlist</code></td><td>(str)</td><td>Switch the active playlist ("All Music" spans every folder)</td></tr>
+            <tr><td><code>create_playlist</code> / <code>delete_playlist</code></td><td>(str) -> bool</td><td>Create or remove a playlist folder</td></tr>
+            <tr><td><code>move_song_to_playlist</code></td><td>(str, str) -> bool</td><td>Move a file into another playlist folder</td></tr>
+            <tr><td><code>delete_song</code></td><td>(str) -> bool</td><td>Delete a file from disk (emits <code>songDeleted</code>)</td></tr>
+            <tr><td><code>play_downloaded_song</code></td><td>(str, str, str) -> bool</td><td>Play a freshly downloaded track by artist / title / playlist</td></tr>
+            <tr><td><code>get_full_file_path</code></td><td>(str) -> str</td><td>Absolute path for a filename (used by the audio analyzer)</td></tr>
           </tbody>
         </table>
 
@@ -495,7 +513,7 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
 
         <h3>Adding a New Audio Format</h3>
         <ol class="steps">
-          <li>Add the extension to <code>AUDIO_EXTENSIONS</code> tuple</li>
+          <li>Add the extension to the <code>AUDIO_EXTENSIONS</code> tuple (Python) and <code>s_audioExtensions</code> (C++)</li>
           <li>Add format-specific metadata extraction in <code>_cache_metadata()</code> (add an <code>elif</code> branch)</li>
           <li>Add album art extraction in <code>get_album_art()</code> if the format supports embedded art</li>
         </ol>
@@ -513,11 +531,12 @@ self._save_state_timer.timeout.connect(self._save_playback_state_now)</code></pr
           <div class="info-box-title">Threading Note</div>
           MediaManager runs on the main thread. Heavy operations like library scanning emit progress
           signals but the scan itself is synchronous. The pre-cache neighbor operation uses a background
-          thread to avoid blocking the UI during track transitions.
+          thread to avoid blocking the UI during track transitions. Both backends expose the same slots and
+          signals, so QML never needs to know which one is running.
         </div>
 
         <!-- Related Pages -->
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="spotify-manager.html" class="related-link">Spotify Manager</a>

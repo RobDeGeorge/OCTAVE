@@ -33,7 +33,7 @@
         <!-- Overview -->
         <h2 id="overview">Pipeline Overview</h2>
 
-        <p><span class="file-path">backend/audio_analyzer.py</span> pre-computes FFT visualization data for an entire audio track, then provides time-indexed levels to QML based on playback position. This avoids real-time FFT computation during playback.</p>
+        <p><span class="file-path">backend/audio_analyzer.py</span> (Python) and <span class="file-path">src/managers/audioanalyzer.{h,cpp}</span> (C++) pre-compute FFT visualization data for an entire audio track, then provide time-indexed levels to QML based on playback position. This avoids real-time FFT computation during playback. Both backends expose the same <code>audioAnalyzer</code> API and produce the same 0-8 levels; the code shown below is the Python version.</p>
 
         <div class="diagram">
 <pre>
@@ -94,7 +94,7 @@
         <!-- Decoding -->
         <h2 id="decoding">Audio Decoding</h2>
 
-        <p>Audio files are decoded using the <strong>PyAV</strong> library (Python bindings for FFmpeg). This supports virtually any audio format: MP3, FLAC, AAC, OGG, WAV, etc.</p>
+        <p>In the Python backend audio files are decoded using the <strong>PyAV</strong> library (Python bindings for FFmpeg). This supports virtually any audio format: MP3, FLAC, AAC, OGG, WAV, etc. The C++ backend decodes with Qt Multimedia's <code>QAudioDecoder</code>, requesting 8 kHz mono float output directly, so the stereo-to-mono and downsampling steps below happen inside the decoder; it then runs the same Hann window, radix-2 FFT, logarithmic band grouping, 95th-percentile normalisation, and <code>^0.6</code> curve.</p>
 
         <pre><code><span class="kw">import</span> av
 
@@ -237,7 +237,7 @@ global_max = np.<span class="fn">percentile</span>(all_values, <span class="num"
         <!-- Threading -->
         <h2 id="threading">Threading Model</h2>
 
-        <p>Audio analysis is CPU-intensive and must not block the Qt event loop. The <code>AudioAnalyzer</code> uses a <code>ThreadPoolExecutor</code> with a single worker thread:</p>
+        <p>Audio analysis is CPU-intensive and must not block the Qt event loop. The Python <code>AudioAnalyzer</code> uses a <code>ThreadPoolExecutor</code> with a single worker thread; the C++ port runs <code>analyzeAudio()</code> through <code>QtConcurrent::run()</code> and collects the result on the main thread with a <code>QFutureWatcher</code>.</p>
 
         <pre><code>self._executor = ThreadPoolExecutor(max_workers=<span class="num">1</span>)
 
@@ -270,8 +270,8 @@ self._poll_timer.<span class="fn">start</span>()</code></pre>
         <h3>Guard Conditions</h3>
         <ul>
           <li><strong>Skip if already analyzed:</strong> If the same file is requested, the cached data is reused</li>
-          <li><strong>Skip if analyzing:</strong> If analysis is already in progress, new requests are dropped</li>
-          <li><strong>Graceful degradation:</strong> If NumPy or PyAV are not installed, the analyzer silently disables itself</li>
+          <li><strong>Skip if analyzing:</strong> If analysis is already in progress, the Python backend drops the new request; the C++ backend remembers the latest requested file (<code>m_pendingFile</code>) and analyzes it as soon as the current job finishes, so fast skip sequences do not leave the visualizer on the old track</li>
+          <li><strong>Graceful degradation:</strong> If NumPy or PyAV are not installed, the Python analyzer silently disables itself (the C++ analyzer only needs Qt Multimedia)</li>
         </ul>
 
         <!-- Performance -->
@@ -292,7 +292,7 @@ self._poll_timer.<span class="fn">start</span>()</code></pre>
         <!-- QML Integration -->
         <h2 id="qml-integration">QML Integration</h2>
 
-        <p>The <code>audioAnalyzer</code> is registered as a context property in <code>main.py</code> and consumed primarily by the MediaRoom waveform visualizer. The integration pattern:</p>
+        <p>The <code>audioAnalyzer</code> is registered as a context property in <code>src/main.cpp</code> / <code>main.py</code> and consumed primarily by the MediaRoom waveform visualizer. The integration pattern:</p>
 
         <pre><code><span class="cmt">// In MediaRoom.qml</span>
 
@@ -361,7 +361,7 @@ log_indices = np.<span class="fn">clip</span>(log_indices, <span class="num">0</
         <!-- Dependencies -->
         <h2 id="dependencies">Dependencies and Graceful Degradation</h2>
 
-        <p>The AudioAnalyzer requires two optional dependencies:</p>
+        <p>The Python AudioAnalyzer requires two optional dependencies (the C++ backend has none beyond Qt Multimedia):</p>
 
         <pre><code><span class="kw">try</span>:
     <span class="kw">import</span> numpy <span class="kw">as</span> np

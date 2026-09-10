@@ -21,10 +21,8 @@
           <ul class="toc-list">
             <li><a href="#clock">Clock</a></li>
             <li><a href="#logging">Logging Configuration</a></li>
-            <li><a href="#platform-config">Platform Config</a></li>
             <li><a href="#perf-monitor">Performance Monitor</a></li>
             <li><a href="#command-server">Command Server</a></li>
-            <li><a href="#stubs">Android Stubs</a></li>
           </ul>
         </nav>
 
@@ -137,39 +135,6 @@ logger.info(<span class="str">"Application started"</span>)</code></pre>
           <li>Log directory is created automatically at the platform-specific config path + <code>/logs/</code></li>
         </ul>
 
-        <!-- Platform Config -->
-        <h2 id="platform-config">Platform Config</h2>
-        <p><span class="file-path">backend/platform_config.py</span></p>
-
-        <p>Single source of truth for Android platform detection. All platform-conditional code should import from here rather than doing its own detection.</p>
-
-        <h3>Source Code</h3>
-        <pre><code><span class="kw">import</span> sys
-<span class="kw">import</span> os
-
-IS_ANDROID = <span class="fn">hasattr</span>(sys, <span class="str">'getandroidapilevel'</span>) <span class="kw">or</span> <span class="str">'ANDROID_ROOT'</span> <span class="kw">in</span> os.environ</code></pre>
-
-        <h3>Functions</h3>
-        <table>
-          <thead><tr><th>Function</th><th>Returns</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>IS_ANDROID</code></td><td>bool (constant)</td><td>True if running on Android (checks <code>sys.getandroidapilevel</code> or <code>ANDROID_ROOT</code> env var)</td></tr>
-            <tr><td><code>get_android_data_dir()</code></td><td>str</td><td>Returns <code>&lt;cwd&gt;/OCTAVE/</code>, creates directory if needed</td></tr>
-            <tr><td><code>get_android_media_dir()</code></td><td>str</td><td>Returns <code>/sdcard/Music/</code>, creates directory if needed</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Usage Pattern</h3>
-        <pre><code><span class="kw">from</span> backend.platform_config <span class="kw">import</span> IS_ANDROID
-
-<span class="kw">if</span> IS_ANDROID:
-    <span class="cmt"># Use stub managers, Android paths, etc.</span>
-    <span class="kw">from</span> backend.stubs <span class="kw">import</span> StubOBDManager <span class="kw">as</span> OBDManager
-<span class="kw">else</span>:
-    <span class="kw">from</span> backend.obd_manager <span class="kw">import</span> OBDManager</code></pre>
-
-        <p>Used by: <code>settings_manager.py</code> (config directory), <code>logging_config.py</code> (log directory), <code>main.py</code> (manager selection), <code>media_manager.py</code> (default music folder).</p>
-
         <!-- Performance Monitor -->
         <h2 id="perf-monitor">Performance Monitor</h2>
         <p><span class="file-path">backend/perf_monitor.py</span></p>
@@ -273,53 +238,6 @@ PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
           <li><strong>Numeric sliders:</strong> 10 settings with min/max clamping (ui_scale, blur_radius, etc.) via <code>set_numeric_setting</code></li>
           <li><strong>String/enum:</strong> 6 settings with validation (theme, font, album_art_transition, etc.) via <code>set_string_setting</code></li>
         </ul>
-
-        <!-- Stubs -->
-        <h2 id="stubs">Android Stubs</h2>
-        <p><span class="file-path">backend/stubs.py</span></p>
-        <p>Provides no-op implementations of hardware-dependent managers for Android deployment. Every stub has the same Signal/Property/Slot interface as the real manager so QML bindings work without errors.</p>
-
-        <h3>Stub Classes</h3>
-        <table>
-          <thead><tr><th>Stub Class</th><th>Replaces</th><th>Signals</th><th>Behavior</th></tr></thead>
-          <tbody>
-            <tr><td><code>StubOBDManager</code></td><td>OBDManager</td><td>87 sensor + 13 status signals</td><td>All sensor slots return 0.0, connection returns False</td></tr>
-            <tr><td><code>StubBerryIMUManager</code></td><td>BerryIMUManager</td><td>9 sensor + 1 status signal</td><td>Connected = False, all values zeroed</td></tr>
-            <tr><td><code>StubGestureManager</code></td><td>GestureManager</td><td>3 signals</td><td>No gestures detected, status "Unavailable"</td></tr>
-            <tr><td><code>StubESP32VolumeManager</code></td><td>ESP32VolumeManager</td><td>5 signals</td><td>No serial connection, all properties empty</td></tr>
-            <tr><td><code>StubPhoneMirrorManager</code></td><td>PhoneMirrorManager</td><td>4 signals</td><td>scrcpy not installed, no device</td></tr>
-            <tr><td><code>StubAndroidAutoManager</code></td><td>AndroidAutoManager</td><td>4 signals</td><td>DHU not installed</td></tr>
-            <tr><td><code>StubImageProvider</code></td><td>QQuickImageProvider</td><td>-</td><td>Returns 1x1 transparent ARGB32 image for any request</td></tr>
-          </tbody>
-        </table>
-
-        <h3>QQuickItem Stubs</h3>
-        <p>For QML types registered via <code>qmlRegisterType</code>, empty QQuickItem subclasses are provided:</p>
-        <ul>
-          <li><code>StubEmbeddedDhuItem</code> - Replaces EmbeddedDhuItem (Android Auto video)</li>
-        </ul>
-
-        <h3>Usage in main.py</h3>
-        <pre><code><span class="kw">from</span> backend.platform_config <span class="kw">import</span> IS_ANDROID
-
-<span class="kw">if</span> IS_ANDROID:
-    <span class="kw">from</span> backend.stubs <span class="kw">import</span> (
-        StubOBDManager, StubBerryIMUManager,
-        StubGestureManager, StubESP32VolumeManager,
-        StubPhoneMirrorManager, StubAndroidAutoManager,
-        StubImageProvider, StubEmbeddedDhuItem,
-        
-    )
-    obd_manager = StubOBDManager(settings_manager)
-    <span class="cmt"># ... etc.</span>
-<span class="kw">else</span>:
-    <span class="kw">from</span> backend.obd_manager <span class="kw">import</span> OBDManager
-    obd_manager = OBDManager(settings_manager)
-    <span class="cmt"># ... etc.</span></code></pre>
-
-        <div class="info-box tip">
-          <strong>Stub Design Pattern:</strong> Each stub replicates the exact same signal/slot/property interface as the real manager. This means QML code never needs conditional checks for platform -- it always works, it just receives no-op data on Android.
-        </div>
 
         <div class="related-pages">
           <h3>Related Pages</h3>

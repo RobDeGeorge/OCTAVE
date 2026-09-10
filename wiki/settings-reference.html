@@ -116,6 +116,7 @@
             <tr><td><code>bottomBarOrientation</code></td><td>bottomBarOrientation</td><td>str</td><td>"bottom"</td><td>"bottom", "side"</td><td>Position of the navigation bar</td></tr>
             <tr><td><code>backgroundGrid</code></td><td>backgroundGrid</td><td>str</td><td>"4x4"</td><td>Grid size string</td><td>Background grid layout configuration</td></tr>
             <tr><td><code>settingsLayoutStyle</code></td><td>settingsLayoutStyle</td><td>str</td><td>"Sidebar"</td><td>"Carousel", "Sidebar", "Hub", "Dashboard"</td><td>Layout style for the settings menu</td></tr>
+            <tr><td><code>clockShowSeconds</code></td><td>clockShowSeconds</td><td>bool</td><td>false</td><td>true/false</td><td>Show seconds in the clock (bottom bar and Clock page)</td></tr>
           </tbody>
         </table>
 
@@ -133,6 +134,7 @@
             <tr><td><code>obdParameters</code></td><td>obdParameters</td><td>dict</td><td>(see below)</td><td>Parameter name -> bool</td><td>Map of 87+ OBD PIDs to enabled/disabled state. Changes debounced at 800ms.</td></tr>
             <tr><td><code>homeOBDParameters</code></td><td>homeOBDParameters</td><td>list</td><td>["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"]</td><td>List of parameter names</td><td>OBD parameters displayed on the home screen</td></tr>
             <tr><td><code>supportedOBDParameters</code></td><td>supportedOBDParameters</td><td>list</td><td>[]</td><td>List of parameter names</td><td>Vehicle-supported parameters from last scan</td></tr>
+            <tr><td><code>obdSavedAdapters</code></td><td>obdSavedAdapters</td><td>str (JSON array)</td><td>"[]"</td><td>JSON list of adapter records</td><td>Adapters remembered by the unified adapter API (name, transport, address/port) for quick reconnect</td></tr>
           </tbody>
         </table>
 
@@ -255,6 +257,7 @@
           </thead>
           <tbody>
             <tr><td>downloadSubfolder</td><td>downloadSubfolder</td><td>str</td><td>"Downloads"</td><td>Any folder name</td><td>Subfolder within mediaFolder for downloaded music</td></tr>
+            <tr><td>downloadSubfolder</td><td>downloadSubfolder</td><td>str</td><td>"Downloads"</td><td>folder name</td><td>Subfolder of <code>mediaFolder</code> that downloaded songs are written to</td></tr>
             <tr><td>downloadFormat</td><td>downloadFormat</td><td>str</td><td>"mp3"</td><td>"mp3", "flac", "ogg", "opus", "m4a"</td><td>Audio format for music downloads</td></tr>
             <tr><td>downloadBitrate</td><td>downloadBitrate</td><td>str</td><td>"auto"</td><td>"auto", "128k", "192k", "320k"</td><td>Bitrate for downloaded audio files</td></tr>
           </tbody>

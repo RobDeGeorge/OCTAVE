@@ -27,7 +27,6 @@
             <li><a href="#hardware-sensors">Hardware Sensor Issues</a></li>
             <li><a href="#logs">Log Files &amp; Debug Mode</a></li>
             <li><a href="#performance">Performance Issues</a></li>
-            <li><a href="#android">Android-Specific Issues</a></li>
             <li><a href="#wsl">WSL Display Issues</a></li>
           </ul>
         </nav>
@@ -318,28 +317,6 @@ octave.app        <span class="cmt">- Main application</span></code></pre>
 
         <h3>Slow Media Library Scan</h3>
         <p>Large libraries (&gt;10,000 files) may take time on first scan. The scan runs on the main thread but uses lazy metadata loading. Pre-caching of neighboring tracks runs on a background thread after each track change.</p>
-
-        <!-- Android -->
-        <h2 id="android">Android-Specific Issues</h2>
-
-        <h3>Stub Managers</h3>
-        <p>On Android, hardware-dependent managers are replaced with stubs from <span class="file-path">backend/stubs.py</span>:</p>
-        <ul>
-          <li><code>StubOBDManager</code> - All sensor slots return 0.0, connection slots return False</li>
-          <li><code>StubBerryIMUManager</code> - No sensor data, connected returns False</li>
-          <li><code>StubGestureManager</code> - No gestures detected</li>
-          <li><code>StubESP32VolumeManager</code> - No serial connection</li>
-          <li><code>StubPhoneMirrorManager</code> / <code>StubAndroidAutoManager</code> - No external device support</li>
-          <li><code>StubImageProvider</code> - Returns 1x1 transparent image for any request</li>
-        </ul>
-
-        <h3>File Paths</h3>
-        <p>Android uses different data paths detected via <span class="file-path">backend/platform_config.py</span>:</p>
-        <ul>
-          <li>Settings: <code>&lt;cwd&gt;/OCTAVE/settingsConfigure.json</code></li>
-          <li>Music: <code>/sdcard/Music</code> (requires storage permission)</li>
-          <li>Logs: <code>&lt;cwd&gt;/OCTAVE/logs/</code></li>
-        </ul>
 
         <!-- WSL -->
         <h2 id="wsl">WSL Display Issues</h2>

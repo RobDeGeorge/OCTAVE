@@ -39,10 +39,12 @@
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
         <p>
-          The <code>SettingsManager</code> class in <span class="file-path">backend/settings_manager.py</span> is the
+          The <code>SettingsManager</code> class (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span> in C++,
+          <span class="file-path">backend/settings_manager.py</span> in Python) is the
           central configuration store for all of OCTAVE. It inherits from <code>QObject</code> and exposes every
           user-configurable option to QML via Qt's <code>Property</code>, <code>Signal</code>, and <code>Slot</code>
-          decorators. All state is persisted to a single JSON file (<code>settingsConfigure.json</code>) in an
+          decorators (<code>Q_PROPERTY</code> / signals / <code>public slots</code> in C++). Both backends define the
+          same keys, defaults, and slot names and share the on-disk file. The examples below use the Python syntax. All state is persisted to a single JSON file (<code>settingsConfigure.json</code>) in an
           OS-specific data directory.
         </p>
         <p>
@@ -67,17 +69,13 @@
             <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\settingsConfigure.json</code></td></tr>
             <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/settingsConfigure.json</code></td></tr>
             <tr><td>Linux</td><td><code>~/.config/OCTAVE/settingsConfigure.json</code> (or <code>$XDG_CONFIG_HOME/OCTAVE/</code>)</td></tr>
-            <tr><td>Android</td><td><code>&lt;cwd&gt;/OCTAVE/settingsConfigure.json</code> (app-private internal storage)</td></tr>
           </tbody>
         </table>
 
         <p>The <code>get_app_data_dir()</code> function creates the directory if it does not exist:</p>
         <pre><code><span class="kw">def</span> <span class="fn">get_app_data_dir</span>():
-    <span class="kw">from</span> backend.platform_config <span class="kw">import</span> IS_ANDROID
     app_name = <span class="str">"OCTAVE"</span>
-    <span class="kw">if</span> IS_ANDROID:
-        data_dir = os.path.join(os.getcwd(), app_name)
-    <span class="kw">elif</span> sys.platform == <span class="str">'win32'</span>:
+    <span class="kw">if</span> sys.platform == <span class="str">'win32'</span>:
         base = os.environ.get(<span class="str">'APPDATA'</span>, os.path.expanduser(<span class="str">'~'</span>))
         data_dir = os.path.join(base, app_name)
     <span class="kw">elif</span> sys.platform == <span class="str">'darwin'</span>:
@@ -230,8 +228,8 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
         <h2 id="default-settings">Default Settings</h2>
         <p>
           All defaults are defined in <code>self._default_settings</code> within <code>__init__</code>. This dictionary
-          serves as the schema: any key not present in the loaded JSON file receives its default value. The full list
-          includes over 80 settings across categories:
+          serves as the schema: any key not present in the loaded JSON file receives its default value. The C++
+          <code>buildDefaultSettings()</code> mirrors it key for key. The full list has 90 top-level keys across categories:
         </p>
         <table>
           <thead>
@@ -248,6 +246,7 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
             <tr><td>IMU</td><td><code>imuEnabled</code>, <code>sensorEmitRate</code>, <code>sensorTempUnit</code></td></tr>
             <tr><td>Android Auto / Phone Mirror</td><td><code>androidAutoEnabled</code>, <code>phoneMirrorEnabled</code>, <code>scrcpyAudioEnabled</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckEnabled</code>, <code>scrcpyAudioDuckLevel</code>, <code>scrcpyDisplaySize</code></td></tr>
             <tr><td>Playback Resume</td><td><code>lastPlayedSong</code>, <code>lastPlayedPosition</code>, <code>lastPlayedPlaylist</code>, <code>lastShuffleState</code></td></tr>
+            <tr><td>Downloads</td><td><code>downloadSubfolder</code>, <code>downloadFormat</code>, <code>downloadBitrate</code></td></tr>
           </tbody>
         </table>
 
@@ -327,6 +326,8 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
     <span class="str">"mediaSettings"</span>: <span class="kw">true</span>,
     <span class="str">"displaySettings"</span>: <span class="kw">true</span>,
     <span class="str">"obdSettings"</span>: <span class="kw">true</span>,
+    <span class="str">"androidAutoSettings"</span>: <span class="kw">true</span>,
+    <span class="str">"phoneMirrorSettings"</span>: <span class="kw">true</span>,
     <span class="str">"volumeKnobSettings"</span>: <span class="kw">false</span>,  <span class="cmt">// Hidden by default</span>
     <span class="str">"gestureSensorSettings"</span>: <span class="kw">true</span>,
     <span class="str">"about"</span>: <span class="kw">true</span>
@@ -387,7 +388,8 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
           When the "Album Art Capture" theme is active, extracted color palettes are stored on SettingsManager
           as a JSON string property. This is the central distribution point: MediaManager and SpotifyManager
           both call <code>set_album_art_colors()</code> to push new colors, and QML reads the <code>albumArtColors</code>
-          property.
+          property. The JSON is also persisted under the <code>albumArtColors</code> key so the last palette is restored
+          instantly on the next startup.
         </p>
         <pre><code>@Property(<span class="cls">str</span>, notify=albumArtColorsChanged)
 <span class="kw">def</span> <span class="fn">albumArtColors</span>(self):
@@ -396,12 +398,13 @@ themeSettingChanged = Signal(<span class="cls">str</span>)
 @Slot(<span class="cls">str</span>)
 <span class="kw">def</span> <span class="fn">set_album_art_colors</span>(self, colors_json):
     self._album_art_colors = colors_json
-    self.albumArtColorsChanged.emit(colors_json)</code></pre>
+    self.update_setting(<span class="str">"albumArtColors"</span>, colors_json, self.albumArtColorsChanged)</code></pre>
 
         <!-- QML Connection -->
         <h2 id="qml-connection">Connection to QML</h2>
         <p>
-          SettingsManager is registered as a QML context property in <span class="file-path">main.py</span>:
+          SettingsManager is registered as a QML context property in <span class="file-path">main.py</span>
+          (and identically in <span class="file-path">src/main.cpp</span>):
         </p>
         <pre><code>settings_manager = SettingsManager()
 engine.rootContext().setContextProperty(<span class="str">"settingsManager"</span>, settings_manager)</code></pre>
@@ -421,7 +424,10 @@ Connections {
 
         <!-- How to Add a New Setting -->
         <h2 id="adding-new-setting">How to Add a New Setting</h2>
-        <p>Follow these steps to add a new setting end-to-end:</p>
+        <p>Follow these steps to add a new setting end-to-end. Do the equivalent work in
+          <span class="file-path">src/managers/settingsmanager.{h,cpp}</span> in the same commit (default in
+          <code>buildDefaultSettings()</code>, <code>Q_PROPERTY</code>, signal, <code>save_*</code> slot) and add the key to
+          <a href="settings-reference.html">Settings Reference</a>:</p>
 
         <ol class="steps">
           <li>
@@ -491,11 +497,12 @@ Connections {
             <tr><td><code>albumArtColorsChanged</code></td><td>str</td><td>Album art theme palette updated (JSON)</td></tr>
             <tr><td><code>pinnedSettingsChanged</code></td><td>(none)</td><td>Setting pinned or unpinned from Quick Panel</td></tr>
             <tr><td><code>currentVolumeChanged</code></td><td>int</td><td>Unified volume (0-100) changes from any source</td></tr>
+            <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code></td><td>float / bool / float</td><td>Phone-mirror audio gain and ducking settings saved; wired straight into <code>phoneMirrorManager</code> at startup</td></tr>
           </tbody>
         </table>
 
         <!-- Related Pages -->
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="media-manager.html" class="related-link">Media Manager</a>
           <a href="spotify-manager.html" class="related-link">Spotify Manager</a>

@@ -32,7 +32,6 @@
             <li><a href="#vehicle-scanning">Vehicle Scanning</a></li>
             <li><a href="#diagnostics">Diagnostics (DTC)</a></li>
             <li><a href="#elm327-protocol">elm327_protocol.py</a></li>
-            <li><a href="#android-variant">AndroidOBDManager</a></li>
             <li><a href="#signals">Key Signals</a></li>
             <li><a href="#slots">Key Slots</a></li>
             <li><a href="#related">Related Pages</a></li>
@@ -48,9 +47,9 @@
           (DTC) reading and clearing.
         </p>
         <p>
-          On Android, the <code>AndroidOBDManager</code> in <span class="file-path">backend/android_obd_manager.py</span>
-          provides the same signal interface using Classic Bluetooth RFCOMM sockets (with BLE as fallback)
-          and the pure-Python ELM327 protocol handler in <span class="file-path">backend/elm327_protocol.py</span>.
+          The C++ peer, <span class="file-path">src/managers/obdmanager.cpp</span> with
+          <span class="file-path">src/managers/elm327protocol.cpp</span>, exposes the same API and is what the
+          Android build uses (OBD over Bluetooth). The Python backend is desktop-only.
         </p>
 
         <span class="platform-badge all">All Platforms</span>
@@ -64,7 +63,7 @@
           <tbody>
             <tr><td><span class="file-path">backend/obd_manager.py</span></td><td><span class="platform-badge desktop">Desktop</span></td><td>Main OBD manager using the <code>python-obd</code> library with async connection</td></tr>
             <tr><td><span class="file-path">backend/elm327_protocol.py</span></td><td><span class="platform-badge all">All</span></td><td>Pure-Python ELM327 protocol: PID table, response parsing, DTC decoding</td></tr>
-            <tr><td><span class="file-path">backend/android_obd_manager.py</span></td><td><span class="platform-badge android">Android</span></td><td>Android variant using Qt Bluetooth RFCOMM sockets</td></tr>
+            <tr><td><span class="file-path">src/managers/obdmanager.cpp</span>, <span class="file-path">src/managers/elm327protocol.cpp</span></td><td><span class="platform-badge all">All (C++)</span></td><td>C++ peer with the same slots/signals; the only OBD path on Android</td></tr>
           </tbody>
         </table>
 
@@ -445,63 +444,6 @@ self._data_watchdog_timeout = <span class="num">30.0</span>  <span class="cmt">#
         <span class="cmt"># Filter echo/prompts, return data line</span>
         ...</code></pre>
 
-        <!-- Android Variant -->
-        <h2 id="android-variant">AndroidOBDManager</h2>
-        <p>
-          <span class="file-path">backend/android_obd_manager.py</span> implements the same signal interface as
-          the desktop OBDManager but uses Qt's Bluetooth classes instead of <code>python-obd</code>.
-        </p>
-
-        <h3>Transport: Classic RFCOMM (Primary) + BLE (Fallback)</h3>
-        <p>
-          Most OBD adapters (NEXAS, Veepeak, BAFX, etc.) use Classic Bluetooth SPP. The primary transport
-          is a <code>QBluetoothSocket</code> with <code>RfcommProtocol</code>:
-        </p>
-        <pre><code>self._socket = QBluetoothSocket(QBluetoothServiceInfo.Protocol.RfcommProtocol, self)
-self._socket.connected.connect(self._on_classic_connected)
-self._socket.disconnected.connect(self._on_disconnected)
-self._socket.readyRead.connect(self._on_classic_data_ready)
-self._socket.errorOccurred.connect(self._on_classic_error)</code></pre>
-
-        <p>
-          BLE (FFE0/FFE1 service) is kept as a fallback for adapters that genuinely use BLE rather than Classic BT.
-        </p>
-
-        <h3>Device Discovery</h3>
-        <p>
-          Qt's Bluetooth scanner crashes on Android with <code>NullPointerException</code>, so discovery is done
-          via <code>dumpsys bluetooth_manager</code> subprocess instead. The <code>_list_bonded_devices()</code>
-          method parses bonded devices and searches for OBD adapter name keywords:
-        </p>
-        <pre><code>ADAPTER_KEYWORDS = (<span class="str">"elm327"</span>, <span class="str">"obd"</span>, <span class="str">"obdii"</span>, <span class="str">"v-link"</span>, <span class="str">"vlink"</span>, <span class="str">"veepeak"</span>,
-                    <span class="str">"bafx"</span>, <span class="str">"nexas"</span>, <span class="str">"nexlink"</span>, <span class="str">"ios-vlink"</span>, <span class="str">"carista"</span>)</code></pre>
-
-        <h3>ELM327 Initialization</h3>
-        <p>
-          After the RFCOMM socket connects, the init sequence from <code>elm327_protocol.INIT_COMMANDS</code>
-          is stepped through one command at a time using a single-shot timer (<code>_init_timer</code>),
-          waiting for each response before sending the next.
-        </p>
-
-        <h3>Polling Loop</h3>
-        <p>
-          Once initialized, the manager polls enabled PIDs in round-robin fashion. Each PID request is sent,
-          the response is accumulated in a <code>ResponseBuffer</code>, and when complete, it is decoded via
-          <code>elm327_protocol.decode_pid()</code> and the corresponding Signal is emitted.
-        </p>
-
-        <h3>Connection Log</h3>
-        <p>
-          AndroidOBDManager provides a <code>connectionLogChanged</code> signal for live debug output in the
-          QML UI. The <code>_log()</code> method keeps the last 100 lines and emits each new line.
-        </p>
-
-        <h3>Diagnostic Mode</h3>
-        <p>
-          DTC read/clear pauses the normal polling loop (<code>_diag_mode = True</code>), sends diagnostic
-          commands, and collects responses in <code>_diag_responses</code>.
-        </p>
-
         <!-- Key Signals -->
         <h2 id="signals">Key Signals</h2>
 
@@ -598,7 +540,7 @@ self._socket.errorOccurred.connect(self._on_classic_error)</code></pre>
         </div>
 
         <!-- Related Pages -->
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="media-manager.html" class="related-link">Media Manager</a>

@@ -40,15 +40,21 @@
             The <strong>NetworkManager</strong> is responsible for three core functions within OCTAVE: detecting
             network connectivity status, checking for application updates via the GitHub API, and performing
             git-based self-updates when running from source. It is defined in
-            <span class="file-path">backend/network_manager.py</span> and registered as a QML context property
-            in <span class="file-path">main.py</span>.
+            <span class="file-path">src/managers/networkmanager.{h,cpp}</span> (C++) and
+            <span class="file-path">backend/network_manager.py</span> (Python) and registered as the QML context
+            property <code>networkManager</code> in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>.
+            The sections below describe the Python implementation; the C++ port exposes the same properties, signals,
+            slots, and status strings.
           </p>
 
           <div class="info-box info">
             <div class="info-box-title">Thread Safety</div>
-            All blocking I/O operations (subprocess calls, HTTP requests) run on a background
+            In the Python backend all blocking I/O operations (subprocess calls, HTTP requests) run on a background
             <code>ThreadPoolExecutor</code> with a single worker. Results are polled back to the main Qt thread
             via a <code>QTimer</code> at 250ms intervals, ensuring signals are always emitted on the main thread.
+            The C++ backend needs no worker thread: it uses asynchronous <code>QProcess</code> and
+            <code>QNetworkAccessManager</code> calls whose completion slots run on the main thread (only the short
+            <code>git status</code> / <code>merge-base</code> queries that gate the destructive self-update run synchronously).
           </div>
 
           <p>
@@ -218,8 +224,10 @@ NetworkManager
 
           <div class="info-box warning">
             <div class="info-box-title">Availability</div>
-            Self-update is only available when running from source (not a frozen PyInstaller build or Android).
-            The <code>canSelfUpdate</code> property checks for git availability and non-frozen execution.
+            Self-update is only available when running from a git checkout. The <code>canSelfUpdate</code> property
+            checks that <code>git</code> is on the PATH (Python additionally requires a non-frozen interpreter; C++
+            additionally requires a <code>.git</code> directory next to the executable's repo root). Packaged builds
+            (AppImage, <code>.dmg</code>, <code>.exe</code>, Android) report <code>false</code>.
           </div>
 
           <div class="info-box warning">
@@ -240,8 +248,7 @@ NetworkManager
           <h3>Pre-Conditions</h3>
           <pre><code><span class="kw">@staticmethod</span>
 <span class="kw">def</span> <span class="fn">_check_can_self_update</span>():
-    <span class="kw">from</span> backend.platform_config <span class="kw">import</span> IS_ANDROID
-    <span class="kw">if</span> IS_ANDROID <span class="kw">or</span> <span class="fn">getattr</span>(sys, <span class="str">'frozen'</span>, <span class="num">False</span>):
+    <span class="kw">if</span> <span class="fn">getattr</span>(sys, <span class="str">'frozen'</span>, <span class="num">False</span>):
         <span class="kw">return</span> <span class="num">False</span>
     <span class="cmt"># Check git is available</span>
     result = subprocess.run([<span class="str">'git'</span>, <span class="str">'--version'</span>], ...)
@@ -314,6 +321,7 @@ NetworkManager
           <ul>
             <li><strong>Windows:</strong> Spawns a new process with <code>subprocess.Popen</code>, then calls <code>QApplication.quit()</code></li>
             <li><strong>Unix (Linux/macOS):</strong> Connects <code>os.execv</code> to the <code>aboutToQuit</code> signal, then calls <code>QApplication.quit()</code>. This replaces the current process in-place after cleanup.</li>
+            <li><strong>C++ backend:</strong> Launches a fresh copy of the executable with <code>QProcess::startDetached()</code> on every platform, then quits.</li>
           </ul>
 
           <div class="info-box danger">
@@ -393,6 +401,7 @@ Windows: shutdown /s /t 5</code></pre>
               <tr><td><code>applySelfUpdate()</code></td><td>--</td><td>Begin the git self-update pipeline</td></tr>
               <tr><td><code>restartApp()</code></td><td>--</td><td>Restart the OCTAVE application</td></tr>
               <tr><td><code>shutdown_device()</code></td><td>--</td><td>Shut down the host OS and quit OCTAVE</td></tr>
+              <tr><td><code>cleanup()</code></td><td>--</td><td>Stop timers (and the Python thread pool) at exit</td></tr>
             </tbody>
           </table>
         </section>

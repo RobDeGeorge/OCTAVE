@@ -161,7 +161,7 @@
             <tr>
               <td><strong>Android</strong></td>
               <td>Experimental</td>
-              <td>APK via Buildozer. Uses Android Bluetooth OBD and device sensors. Phone mirror/AA disabled.</td>
+              <td>C++ / Qt 6 <code>.apk</code> built by CI. OBD over Bluetooth, YouTube Music search and download. Phone mirror and Android Auto are desktop-only.</td>
             </tr>
           </tbody>
         </table>
@@ -183,9 +183,9 @@
           <li><a href="network-manager.html">Network Manager</a> &mdash; WiFi status, update checking, self-update</li>
           <li><a href="download-manager.html">Download Manager</a> &mdash; Music search and download pipeline</li>
           <li><a href="hardware-managers.html">Hardware Managers</a> &mdash; ESP32, BerryIMU, gesture sensor</li>
-          <li><a href="phone-mirror-android-auto.html">Phone Mirror & Android Auto</a> &mdash; Scrcpy, DHU, frame providers</li>
+          <li><a href="phone-mirror-android-auto.html">Phone Mirror & Android Auto</a> &mdash; Built-in scrcpy-protocol client, bundled adb and phone server, DHU</li>
           <li><a href="audio-analyzer.html">Audio Analyzer</a> &mdash; FFT waveform visualization</li>
-          <li><a href="utilities.html">Utilities</a> &mdash; Clock, logging, platform detection, performance monitor</li>
+          <li><a href="utilities.html">Utilities</a> &mdash; Clock, logging, performance monitor, command server</li>
         </ul>
 
         <h3>Frontend Deep Dives</h3>
@@ -196,6 +196,7 @@
           <li><a href="theme-system.html">Theme System</a> &mdash; Dynamic theming, design tokens</li>
           <li><a href="settings-ui.html">Settings UI</a> &mdash; Settings framework, layout engines, components</li>
           <li><a href="components.html">Components</a> &mdash; Reusable QML components</li>
+          <li><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a> &mdash; Gauge primitives, JSON dashboards, the in-app editor</li>
         </ul>
 
         <h3>Reference & Guides</h3>
@@ -203,7 +204,7 @@
           <li><a href="settings-reference.html">Settings Reference</a> &mdash; Complete catalog of every setting</li>
           <li><a href="signals-slots-reference.html">Signals & Slots API</a> &mdash; Every manager's QML-accessible API</li>
           <li><a href="hardware-setup.html">Hardware Setup</a> &mdash; Wiring, firmware, 3D printed mounts</li>
-          <li><a href="building.html">Building & CI/CD</a> &mdash; PyInstaller, platform builds, GitHub Actions</li>
+          <li><a href="building.html">Building & CI/CD</a> &mdash; CMake targets, AppImage / DMG / EXE / APK packaging, GitHub Actions</li>
           <li><a href="development.html">Development</a> &mdash; Dev mode, mock data, MCP server, profiling</li>
           <li><a href="troubleshooting.html">Troubleshooting</a> &mdash; Common issues, log locations, debugging</li>
         </ul>
@@ -270,8 +271,8 @@
             </tr>
             <tr>
               <td>Build</td>
-              <td>PyInstaller / Buildozer</td>
-              <td>Standalone executables and Android APK</td>
+              <td>CMake + Qt 6</td>
+              <td>Native executables and the Android APK; the Python backend runs from a venv (developers only)</td>
             </tr>
           </tbody>
         </table>
