@@ -369,15 +369,19 @@ void ScrcpyClient::takeBack()
     sendControl(QByteArray(1, char(kMsgOctaveTakeBack)));
 }
 
-void ScrcpyClient::setDisplayPower(bool on)
-{
-    QByteArray msg(2, 0);
-    msg[0] = char(kMsgSetDisplayPower);
-    msg[1] = on ? 1 : 0;
-    sendControl(msg);
-}
-
 // ─── worker thread ────────────────────────────────────────────────────
+
+void ScrcpyClient::hideConsoleWindow(QProcess *proc)
+{
+#ifdef Q_OS_WIN
+    proc->setCreateProcessArgumentsModifier(
+        [](QProcess::CreateProcessArguments *cpa) {
+            cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
+        });
+#else
+    Q_UNUSED(proc);
+#endif
+}
 
 bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutMs)
 {
@@ -387,6 +391,7 @@ bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutM
         full << QStringLiteral("-s") << m_serial;
     full << args;
     p.setProcessChannelMode(QProcess::MergedChannels);
+    hideConsoleWindow(&p);
     p.start(m_adb, full);
     const bool ok = p.waitForFinished(timeoutMs) && p.exitCode() == 0;
     if (output)
@@ -497,6 +502,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
 
     m_proc = new QProcess;
     m_proc->setProcessChannelMode(QProcess::MergedChannels);
+    hideConsoleWindow(m_proc);
 #ifdef Q_OS_LINUX
     m_proc->setChildProcessModifier([] { prctl(PR_SET_PDEATHSIG, SIGTERM); });
 #endif

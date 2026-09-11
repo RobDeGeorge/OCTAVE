@@ -22,7 +22,7 @@ Item {
     property var activeShiftFlag: null
     property bool shiftLightFlashVisible: true
 
-    // Parameter info from centralized singleton (covers all 93 params)
+    // Parameter info from centralized singleton (covers all 92 params: 84 OBD + 8 IMU)
     property var parameterInfo: App.OBDParameterModel.parameterInfo
     
     // Smart grid layout - 1 column for up to 5 cards, 2 columns for 6-8 cards

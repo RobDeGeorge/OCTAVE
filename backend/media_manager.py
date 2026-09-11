@@ -4,6 +4,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, TPE1, TALB
+import base64
 import os
 import json
 import random
@@ -16,8 +17,18 @@ import threading
 from backend.logging_config import get_logger
 from backend.settings_manager import get_app_data_dir
 
-AUDIO_EXTENSIONS = ('.mp3', '.m4a', '.flac', '.ogg', '.opus', '.wav')
+# .mp4: YouTube serves audio-only streams in an MP4 container that yt-dlp names
+# with a literal .mp4 extension — same format as .m4a, different extension.
+# Keep in sync with MediaManager::s_audioExtensions (C++).
+AUDIO_EXTENSIONS = ('.mp3', '.m4a', '.mp4', '.flac', '.ogg', '.opus', '.wav')
 logger = get_logger(__name__)
+
+
+def strip_audio_extension(filename):
+    """Filename without its audio extension (any of AUDIO_EXTENSIONS);
+    names with another or no extension are returned unchanged."""
+    root, ext = os.path.splitext(filename)
+    return root if ext.lower() in AUDIO_EXTENSIONS else filename
 
 
 def is_safe_path(base_path, target_path):
@@ -79,6 +90,8 @@ class MediaManager(QObject):
     albumColorsExtracted = Signal(str)    # JSON string with extracted album art colors
     _colorsReady = Signal(str, str, int)  # internal: theme JSON, filename, job id (worker -> GUI)
     _metaStoreChanged = Signal()          # internal: arm the store save timer from any thread
+    _precacheTagsReady = Signal(list, list)  # internal: neighbors, [(filename, path, meta)] (worker -> GUI)
+    _precacheArtReady = Signal(list)         # internal: [(album_id, url)] (worker -> GUI)
     
     
     def __init__(self):
@@ -164,6 +177,8 @@ class MediaManager(QObject):
         self._player.positionChanged.connect(self.positionChanged.emit)
         self._player.mediaStatusChanged.connect(self._handle_media_status)
         self._player.errorOccurred.connect(self._handle_player_error)
+        self._player.playbackStateChanged.connect(
+            lambda state: self.playbackStateChanged.emit(int(state.value)))
 
         # Position timer (100 ms) as a safety net for backends whose
         # QMediaPlayer.positionChanged is coarse. It only runs while playing so
@@ -218,6 +233,11 @@ class MediaManager(QObject):
         self._last_color_file = ""
         self._last_color_time = 0.0
         self._colorsReady.connect(self._apply_album_colors, Qt.ConnectionType.QueuedConnection)
+
+        # Precache workers only read files; results are applied to the caches
+        # here on the GUI thread
+        self._precacheTagsReady.connect(self._apply_precached_tags, Qt.ConnectionType.QueuedConnection)
+        self._precacheArtReady.connect(self._apply_precached_art, Qt.ConnectionType.QueuedConnection)
 
         # Display name mapping (filename -> cleaned display name)
         self._display_names = {}
@@ -468,7 +488,7 @@ class MediaManager(QObject):
             "size": st.st_size, "mtime": int(st.st_mtime),
         }
         self._meta_store_dirty = True
-        self._metaStoreChanged.emit()   # queued: safe from the precache thread
+        self._metaStoreChanged.emit()   # queued: arms the save timer from any thread
 
     def _cached_art_url_for(self, album_id):
         """Cover already extracted to the temp dir for this album id (any run)."""
@@ -482,81 +502,117 @@ class MediaManager(QObject):
     def _cache_metadata_from_file(self, filename):
         """Read a file's tags into the cache.
 
-        Also extracts album art from the same ID3 read so that a subsequent
+        Also extracts album art from the same file so that a subsequent
         get_album_art() call is an instant cache hit (avoids a second file open).
         """
         if filename in self._metadata_cache:
             return
 
+        # Use helper to get correct file path (handles All Music multi-folder)
+        file_path = self._get_file_path(filename)
+        display_name = self._get_original_filename(filename)
+        base_name = os.path.splitext(display_name)[0]
+
+        # Manage cache size
+        if len(self._metadata_cache) >= self._metadata_cache_max:
+            # Remove oldest entry
+            self._metadata_cache.pop(next(iter(self._metadata_cache)))
+
+        self._metadata_cache[filename] = self._read_tags(file_path, base_name)
+
+        # Also cache the cover from the same file
         try:
-            # Use helper to get correct file path (handles All Music multi-folder)
-            file_path = self._get_file_path(filename)
-            display_name = self._get_original_filename(filename)
+            album_id = self._get_album_id(filename)
+            if album_id not in self._album_art_cache:
+                self._manage_cache(album_id)
+                self._access_count[album_id] = self._access_count.get(album_id, 0) + 1
+                url = self._cached_art_url_for(album_id) or self._extract_art_for(file_path, album_id)
+                if url:
+                    self._album_art_cache[album_id] = url
+        except Exception:
+            pass  # non-critical — get_album_art() is the fallback
 
-            # Manage cache size
-            if len(self._metadata_cache) >= self._metadata_cache_max:
-                # Remove oldest entry
-                self._metadata_cache.pop(next(iter(self._metadata_cache)))
+    def _read_tags(self, file_path, base_name):
+        """Read title / artist / album / duration from a file.
 
-            # Read metadata — handle MP3 and M4A/MP4 formats
+        Pure with respect to the caches, so safe on a worker thread. Never
+        raises: an unreadable file yields the filename-based fallback (the
+        C++ TagLib path does the same). Every container's tags go through
+        sanitize_metadata().
+        """
+        try:
             ext = os.path.splitext(file_path)[1].lower()
-            base_name = os.path.splitext(display_name)[0]
-
             if ext == '.mp3':
-                audio = ID3(file_path)
                 mp3 = MP3(file_path)
-                self._metadata_cache[filename] = {
-                    "artist": self._extract_id3_text(audio.get('TPE1'), "Unknown Artist"),
-                    "album": self._extract_id3_text(audio.get('TALB'), "Unknown Album"),
-                    "title": self._extract_id3_text(audio.get('TIT2'), base_name),
-                    "duration": int(mp3.info.length)
+                tags = mp3.tags or {}
+                return {
+                    "artist": self._extract_id3_text(tags.get('TPE1'), "Unknown Artist"),
+                    "album": self._extract_id3_text(tags.get('TALB'), "Unknown Album"),
+                    "title": self._extract_id3_text(tags.get('TIT2'), base_name),
+                    "duration": int(mp3.info.length) if mp3.info else 0
                 }
-                self._cache_album_art_from_id3(filename, audio)
-            elif ext in ('.m4a', '.mp4', '.aac'):
-                from mutagen.mp4 import MP4 as M4A, MP4Cover
+            if ext in ('.m4a', '.mp4', '.aac'):
+                from mutagen.mp4 import MP4 as M4A
                 m4a = M4A(file_path)
-                self._metadata_cache[filename] = {
-                    "artist": (m4a.tags.get('\xa9ART', ['Unknown Artist'])[0] if m4a.tags else "Unknown Artist"),
-                    "album": (m4a.tags.get('\xa9alb', ['Unknown Album'])[0] if m4a.tags else "Unknown Album"),
-                    "title": (m4a.tags.get('\xa9nam', [base_name])[0] if m4a.tags else base_name),
+                tags = m4a.tags or {}
+                return {
+                    "artist": self._extract_list_text(tags.get('\xa9ART'), "Unknown Artist"),
+                    "album": self._extract_list_text(tags.get('\xa9alb'), "Unknown Album"),
+                    "title": self._extract_list_text(tags.get('\xa9nam'), base_name),
                     "duration": int(m4a.info.length) if m4a.info else 0
                 }
-                # Cache album art from m4a covr tag
-                covers = m4a.tags.get('covr', []) if m4a.tags else []
-                if covers:
-                    album_id = self._get_album_id(filename)
-                    if album_id not in self._album_art_cache:
-                        self._manage_cache(album_id)
-                        cover = covers[0]
-                        art_ext = 'png' if cover.imageformat == MP4Cover.FORMAT_PNG else 'jpg'
-                        cache_hash = hashlib.sha256(f"{album_id}_0".encode('utf-8')).hexdigest()[:16]
-                        temp_path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{art_ext}')
-                        if not os.path.exists(temp_path):
-                            with open(temp_path, 'wb') as img_file:
-                                img_file.write(bytes(cover))
-                        self._album_art_cache[album_id] = QUrl.fromLocalFile(temp_path).toString()
-            else:
-                # Generic fallback using mutagen.File
-                from mutagen import File as MutagenFile
-                mf = MutagenFile(file_path)
-                self._metadata_cache[filename] = {
-                    "artist": "Unknown Artist",
-                    "album": "Unknown Album",
-                    "title": base_name,
-                    "duration": int(mf.info.length) if mf and mf.info else 0
+            if ext in ('.flac', '.ogg', '.opus'):
+                # Vorbis comments (FLAC, Ogg Vorbis, Opus): lower-case keys, list values
+                audio = self._open_xiph_file(file_path, ext)
+                tags = audio.tags or {}
+                return {
+                    "artist": self._extract_list_text(tags.get('artist'), "Unknown Artist"),
+                    "album": self._extract_list_text(tags.get('album'), "Unknown Album"),
+                    "title": self._extract_list_text(tags.get('title'), base_name),
+                    "duration": int(audio.info.length) if audio.info else 0
                 }
-        except Exception as e:
-            logger.error(f"Metadata caching error for {filename}: {e}")
-            # Set fallback values
-            display_name = self._get_original_filename(filename)
-            base_name = os.path.splitext(display_name)[0]
-            self._metadata_cache[filename] = {
+            if ext == '.wav':
+                # WAV carries an optional ID3 chunk
+                from mutagen.wave import WAVE
+                wav = WAVE(file_path)
+                tags = wav.tags or {}
+                return {
+                    "artist": self._extract_id3_text(tags.get('TPE1'), "Unknown Artist"),
+                    "album": self._extract_id3_text(tags.get('TALB'), "Unknown Album"),
+                    "title": self._extract_id3_text(tags.get('TIT2'), base_name),
+                    "duration": int(wav.info.length) if wav.info else 0
+                }
+            # Generic fallback using mutagen.File: duration only
+            from mutagen import File as MutagenFile
+            mf = MutagenFile(file_path)
+            return {
                 "artist": "Unknown Artist",
                 "album": "Unknown Album",
-                "title": base_name,
+                "title": sanitize_metadata(base_name),
+                "duration": int(mf.info.length) if mf and mf.info else 0
+            }
+        except Exception as e:
+            logger.error(f"Metadata caching error for {file_path}: {e}")
+            # Set fallback values
+            return {
+                "artist": "Unknown Artist",
+                "album": "Unknown Album",
+                "title": sanitize_metadata(base_name),
                 "duration": 0
             }
-    
+
+    @staticmethod
+    def _open_xiph_file(file_path, ext):
+        """Open a FLAC / Ogg Vorbis / Opus file with the matching mutagen class."""
+        if ext == '.flac':
+            from mutagen.flac import FLAC
+            return FLAC(file_path)
+        if ext == '.opus':
+            from mutagen.oggopus import OggOpus
+            return OggOpus(file_path)
+        from mutagen.oggvorbis import OggVorbis
+        return OggVorbis(file_path)
+
     def _extract_id3_text(self, tag, default=""):
         """Helper to safely extract and sanitize text from ID3 tags"""
         if tag is None:
@@ -567,40 +623,92 @@ class MediaManager(QObject):
             return sanitize_metadata(tag.text[0])
         return sanitize_metadata(str(tag)) if tag else sanitize_metadata(default)
 
-    def _cache_album_art_from_id3(self, filename, audio):
-        """Extract and cache album art from an already-loaded ID3 object.
+    def _extract_list_text(self, values, default=""):
+        """Helper to safely extract and sanitize the first value of a list-valued
+        tag (MP4 atoms, Vorbis comments); an absent or empty tag yields default."""
+        if values and str(values[0]):
+            return sanitize_metadata(str(values[0]))
+        return sanitize_metadata(default)
 
-        Called by _cache_metadata() so a single file read populates both caches.
-        get_album_art() then returns instantly from cache.
-        """
+    # ── album art extraction (pure: reads the file, writes one cover file) ─
+
+    def _extract_art_for(self, file_path, album_id):
+        """Write a file's embedded cover to the temp dir and return its file URL,
+        or "" when it has none. Pure with respect to the caches, so safe on a
+        worker thread. Mirrors the C++ _extract_art_for dispatch."""
         try:
-            album_id = self._get_album_id(filename)
-            if album_id in self._album_art_cache:
-                return
-            self._manage_cache(album_id)
-            self._access_count[album_id] = self._access_count.get(album_id, 0) + 1
-            for tag in audio.values():
-                if tag.FrameID == 'APIC':
-                    mime = tag.mime.lower()
-                    if mime in ('image/jpeg', 'image/jpg'):
-                        ext = 'jpg'
-                    elif mime == 'image/png':
-                        ext = 'png'
-                    elif mime == 'image/gif':
-                        ext = 'gif'
-                    else:
-                        ext = 'img'
-                    cache_key = f"{album_id}_0"
-                    cache_hash = hashlib.sha256(cache_key.encode('utf-8')).hexdigest()[:16]
-                    temp_path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{ext}')
-                    if not os.path.exists(temp_path):
-                        with open(temp_path, 'wb') as img_file:
-                            img_file.write(tag.data)
-                    url = QUrl.fromLocalFile(temp_path).toString()
-                    self._album_art_cache[album_id] = url
-                    return
-        except Exception:
-            pass  # non-critical — get_album_art() is the fallback
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext == '.mp3':
+                return self._extract_album_art_mp3(file_path, album_id)
+            if ext in ('.m4a', '.mp4', '.aac'):
+                return self._extract_album_art_mp4(file_path, album_id)
+            if ext == '.flac':
+                return self._extract_album_art_flac(file_path, album_id)
+            if ext in ('.ogg', '.opus'):
+                return self._extract_album_art_ogg(file_path, album_id)
+        except Exception as e:
+            logger.debug(f"No cover read from {file_path}: {e}")
+        return ""
+
+    def _write_cover(self, album_id, data, mime):
+        """Write cover bytes to the temp dir (content-addressed by album id,
+        skipped when already there) and return the file URL."""
+        mime = (mime or '').lower()
+        if mime in ('image/jpeg', 'image/jpg'):
+            ext = 'jpg'
+        elif mime == 'image/png':
+            ext = 'png'
+        elif mime == 'image/gif':
+            ext = 'gif'
+        else:
+            ext = 'img'
+        cache_hash = hashlib.sha256(f"{album_id}_0".encode('utf-8')).hexdigest()[:16]
+        temp_path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{ext}')
+        if not os.path.exists(temp_path):
+            with open(temp_path, 'wb') as img_file:
+                img_file.write(data)
+        return QUrl.fromLocalFile(temp_path).toString()
+
+    def _extract_album_art_mp3(self, file_path, album_id):
+        """MP3: cover art stored as APIC ID3 frames"""
+        audio = ID3(file_path)
+        for tag in audio.values():
+            if tag.FrameID == 'APIC' and tag.data:
+                return self._write_cover(album_id, tag.data, tag.mime)
+        return ""
+
+    def _extract_album_art_mp4(self, file_path, album_id):
+        """M4A/MP4: cover art stored as 'covr' tag"""
+        from mutagen.mp4 import MP4 as M4A, MP4Cover
+        m4a = M4A(file_path)
+        covers = m4a.tags.get('covr', []) if m4a.tags else []
+        if not covers or not bytes(covers[0]):
+            return ""
+        mime = 'image/png' if covers[0].imageformat == MP4Cover.FORMAT_PNG else 'image/jpeg'
+        return self._write_cover(album_id, bytes(covers[0]), mime)
+
+    def _extract_album_art_flac(self, file_path, album_id):
+        """FLAC: cover art stored as PICTURE metadata blocks"""
+        from mutagen.flac import FLAC
+        pictures = FLAC(file_path).pictures
+        if not pictures or not pictures[0].data:
+            return ""
+        return self._write_cover(album_id, pictures[0].data, pictures[0].mime)
+
+    def _extract_album_art_ogg(self, file_path, album_id):
+        """Ogg Vorbis / Opus: cover art is a base64 FLAC picture block in the
+        METADATA_BLOCK_PICTURE Vorbis comment"""
+        from mutagen.flac import Picture
+        audio = self._open_xiph_file(file_path, os.path.splitext(file_path)[1].lower())
+        blocks = audio.tags.get('metadata_block_picture', []) if audio.tags else []
+        for block in blocks:
+            try:
+                picture = Picture(base64.b64decode(block))
+            except Exception:
+                continue
+            if picture.data:
+                return self._write_cover(album_id, picture.data, picture.mime)
+        return ""
 
     def _emit_metadata(self, filename):
         """Emit metadata change signals"""
@@ -609,7 +717,7 @@ class MediaManager(QObject):
             
         meta = self._metadata_cache[filename]
         self.metadataChanged.emit(
-            meta.get("title", filename.replace('.mp3', '')),
+            meta.get("title", strip_audio_extension(filename)),
             meta.get("artist", "Unknown Artist"),
             meta.get("album", "Unknown Album")
         )
@@ -646,7 +754,7 @@ class MediaManager(QObject):
                 
                 # Remove it from cache
                 if least_used in self._album_art_cache:
-                    file_path = self._album_art_cache[least_used].replace('file:///', '')
+                    file_path = QUrl(self._album_art_cache[least_used]).toLocalFile()
                     try:
                         if os.path.exists(file_path):
                             os.remove(file_path)
@@ -698,6 +806,7 @@ class MediaManager(QObject):
         return shuffled
                 
     @Slot(result=list)
+    @Slot(bool, result=list)
     def get_media_files(self, emit_signal=True):
         """Get list of available MP3 files"""
         mp3_files = []
@@ -771,62 +880,10 @@ class MediaManager(QObject):
                 return cached
 
             # Extract and cache new album art - use helper for correct path
-            file_path = self._get_file_path(filename)
-            file_ext = os.path.splitext(file_path)[1].lower()
-
-            found_apic = False
-            apic_index = 0
-
-            if file_ext in ('.m4a', '.mp4', '.aac'):
-                # M4A/MP4: cover art stored as 'covr' tag
-                from mutagen.mp4 import MP4 as M4A, MP4Cover
-                m4a = M4A(file_path)
-                covers = m4a.tags.get('covr', []) if m4a.tags else []
-                for cover in covers:
-                    found_apic = True
-                    ext = 'png' if cover.imageformat == MP4Cover.FORMAT_PNG else 'jpg'
-                    cache_key = f"{album_id}_{apic_index}"
-                    cache_hash = hashlib.sha256(cache_key.encode('utf-8')).hexdigest()[:16]
-                    temp_path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{ext}')
-                    if not os.path.exists(temp_path):
-                        with open(temp_path, 'wb') as img_file:
-                            img_file.write(bytes(cover))
-
-                    if album_id not in self._album_art_cache:
-                        url = QUrl.fromLocalFile(temp_path).toString()
-                        self._album_art_cache[album_id] = url
-                        return url
-                    apic_index += 1
-            else:
-                # MP3: cover art stored as APIC ID3 frames
-                audio = ID3(file_path)
-                for tag in audio.values():
-                    if tag.FrameID == 'APIC':
-                        found_apic = True
-                        mime = tag.mime.lower()
-                        if mime in ('image/jpeg', 'image/jpg'):
-                            ext = 'jpg'
-                        elif mime == 'image/png':
-                            ext = 'png'
-                        else:
-                            ext = 'jpg'
-                        cache_key = f"{album_id}_{apic_index}"
-                        cache_hash = hashlib.sha256(cache_key.encode('utf-8')).hexdigest()[:16]
-                        temp_path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{ext}')
-                        if not os.path.exists(temp_path):
-                            with open(temp_path, 'wb') as img_file:
-                                img_file.write(tag.data)
-
-                        if album_id not in self._album_art_cache:
-                            url = QUrl.fromLocalFile(temp_path).toString()
-                            self._album_art_cache[album_id] = url
-                            return url
-                        apic_index += 1
-
-            if not found_apic:
-                return ""
-            # If multiple APICs, only the first is returned/cached for now
-            return self._album_art_cache.get(album_id, "")
+            url = self._extract_art_for(self._get_file_path(filename), album_id)
+            if url:
+                self._album_art_cache[album_id] = url
+            return url
         except Exception as e:
             logger.error(f"Error getting album art: {e}")
             return ""
@@ -1617,6 +1674,7 @@ class MediaManager(QObject):
     # ==================== Playlist Management ====================
 
     @Slot()
+    @Slot(bool)
     def scan_library(self, reset_display_names=True):
         """Scan the library root for subfolders (playlists) and their MP3s"""
         if getattr(self, '_scan_in_progress', False):
@@ -2252,9 +2310,7 @@ class MediaManager(QObject):
 
     def _strip_single_filename(self, filename):
         """Strip a single filename and return the cleaned name, or None if unchanged."""
-        name = filename
-        if name.lower().endswith(AUDIO_EXTENSIONS):
-            name = name[:-4]
+        name = strip_audio_extension(filename)
 
         original_name = name
 
@@ -2350,7 +2406,7 @@ class MediaManager(QObject):
             cleaned = self._strip_single_filename(filename)
             if cleaned:
                 self._display_names[filename] = cleaned
-                original = filename[:-4] if filename.lower().endswith(AUDIO_EXTENSIONS) else filename
+                original = strip_audio_extension(filename)
                 self.scanProgress.emit(f'[STRIP] "{original}" → "{cleaned}"')
                 changed += 1
 
@@ -2365,7 +2421,7 @@ class MediaManager(QObject):
     @Slot(str, result=str)
     def get_display_name(self, filename):
         """Get the cleaned display name for a file, falling back to filename without extension"""
-        return self._display_names.get(filename, filename.replace('.mp3', ''))
+        return self._display_names.get(filename, strip_audio_extension(filename))
 
     @Slot(QObject)
     def connect_settings_manager(self, settings_manager):
@@ -2534,9 +2590,12 @@ class MediaManager(QObject):
     def _precache_neighbors_start(self):
         """Kick off background pre-caching of neighboring tracks' metadata + art.
 
-        Runs in a daemon thread so the main thread (and animation) is never blocked.
-        CPython's GIL makes dict reads/writes atomic, so accessing the caches from
-        the worker thread is safe without a lock.
+        Phase 1 (worker): read tags for tracks not yet known. Phase 2 (GUI,
+        _apply_precached_tags): insert them, then hand the tracks still lacking
+        a cover to a worker that writes the cover file. Phase 3 (GUI,
+        _apply_precached_art): record the URLs. The caches are only ever
+        touched on the GUI thread; the workers return their results through
+        queued signals. Mirrors the C++ backend.
         """
         if not self._current_playlist:
             return
@@ -2560,20 +2619,76 @@ class MediaManager(QObject):
             neighbors.append(track)
         if not neighbors:
             return
-        threading.Thread(
-            target=self._precache_tracks,
-            args=(neighbors,),
-            daemon=True,
-        ).start()
 
-    def _precache_tracks(self, filenames):
-        """Background: pre-cache metadata and album art so future clicks are instant."""
-        for filename in filenames:
-            try:
-                self._cache_metadata(filename)
-                self.get_album_art(filename)
-            except Exception:
-                pass  # non-critical — worst case the main thread does the work later
+        # Tracks whose tags are neither cached nor in the persistent store
+        tag_jobs = []
+        for filename in neighbors:
+            if filename in self._metadata_cache:
+                continue
+            file_path = self._get_file_path(filename)
+            if not file_path:
+                continue
+            stored = self._meta_from_store(filename, file_path)
+            if stored is not None:
+                if len(self._metadata_cache) >= self._metadata_cache_max:
+                    self._metadata_cache.pop(next(iter(self._metadata_cache)))
+                self._metadata_cache[filename] = stored
+                continue
+            base_name = os.path.splitext(self._get_original_filename(filename))[0]
+            tag_jobs.append((filename, file_path, base_name))
+
+        if not tag_jobs:
+            self._apply_precached_tags(neighbors, [])
+            return
+
+        def read_tags():
+            results = [(filename, file_path, self._read_tags(file_path, base_name))
+                       for filename, file_path, base_name in tag_jobs]
+            self._precacheTagsReady.emit(neighbors, results)
+
+        threading.Thread(target=read_tags, daemon=True).start()
+
+    def _apply_precached_tags(self, neighbors, results):
+        """GUI thread: record the tags a precache worker read, then start the cover pass."""
+        for filename, file_path, meta in results:
+            if filename in self._metadata_cache:
+                continue
+            if len(self._metadata_cache) >= self._metadata_cache_max:
+                self._metadata_cache.pop(next(iter(self._metadata_cache)))
+            self._metadata_cache[filename] = meta
+            self._meta_to_store(filename, file_path, meta)
+
+        # Covers: albums not yet known this run, not already extracted on an earlier run
+        art_jobs = []
+        for filename in neighbors:
+            if filename not in self._metadata_cache:
+                continue
+            album_id = self._get_album_id(filename)
+            if album_id in self._album_art_cache or any(a == album_id for a, _ in art_jobs):
+                continue
+            cached = self._cached_art_url_for(album_id)
+            if cached:
+                self._album_art_cache[album_id] = cached
+                continue
+            file_path = self._get_file_path(filename)
+            if file_path and os.path.exists(file_path):
+                art_jobs.append((album_id, file_path))
+
+        if not art_jobs:
+            return
+
+        def extract_art():
+            self._precacheArtReady.emit(
+                [(album_id, self._extract_art_for(file_path, album_id)) for album_id, file_path in art_jobs])
+
+        threading.Thread(target=extract_art, daemon=True).start()
+
+    def _apply_precached_art(self, results):
+        """GUI thread: record the cover URLs a precache worker wrote."""
+        for album_id, url in results:
+            if url and album_id not in self._album_art_cache:
+                self._manage_cache(album_id)
+                self._album_art_cache[album_id] = url
 
     def update_media_directory(self, directory):
         if os.path.exists(directory) and os.path.isdir(directory):

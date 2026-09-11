@@ -20,10 +20,6 @@ appimagetool-*.AppImage
 *.aab
 .buildozer/
 /buildozer.spec
-!deployment/buildozer.spec
-deployment/wheels/*
-!deployment/wheels/.gitkeep
-deployment/.buildozer/
 build-android/
 aqtinstall.log
 build-android-configure.log

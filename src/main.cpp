@@ -8,6 +8,9 @@
 #include <QDir>
 #include <QWindow>
 #include <QTimer>
+#include <QColor>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QtQml/qqml.h>
 
 #ifdef Q_OS_ANDROID
@@ -108,7 +111,7 @@ int main(int argc, char *argv[])
     SettingsManager settingsManager;
     ctx->setContextProperty("settingsManager", &settingsManager);
 
-    // A hung event loop gets logged (octave.watchdog) instead of vanishing
+    // A hung event loop gets logged (octave.ui_watchdog) instead of vanishing
     UiWatchdog uiWatchdog;
     uiWatchdog.start();
 
@@ -278,11 +281,20 @@ int main(int argc, char *argv[])
             spotifyManager.set_volume(pendingSpotifyVolume);
     });
 
+    // Same fan-out as backend/volume_utils.py VolumeController.applyVolume():
+    // media + phone mirror take the curved linear value, Spotify + the ESP32
+    // LED ring take the raw percent (the ESP32 manager rate-limits itself).
     QObject::connect(&volumeController, &VolumeController::volumeApplied,
-                     [&mediaManager](int percent, float linear) {
+                     [&mediaManager, &phoneMirrorManager, &esp32VolumeManager](int percent, float linear) {
         mediaManager.setVolume(linear);
         pendingSpotifyVolume = percent;
         spotifyVolumeDebounce.start();
+        phoneMirrorManager.setVolume(linear);
+#ifndef Q_OS_MOBILE
+        esp32VolumeManager.send_volume_update(percent);
+#else
+        Q_UNUSED(esp32VolumeManager);
+#endif
     });
     volumeController.applyVolume(settingsManager.currentVolume());
 
@@ -373,6 +385,68 @@ int main(int argc, char *argv[])
         esp32VolumeManager.send_mute_state(mediaManager.is_muted());
     });
 
+#ifndef Q_OS_MOBILE
+    // ESP32 LED ring colour sync (mirrors main.py send_current_led_color /
+    // sync_theme_to_esp32 / on_static_color_changed / on_color_mode_changed).
+    // "static" mode pushes the user's picked colour; "theme" mode follows the
+    // album-art accent. Cyan (0,255,255) is the fallback when a colour is
+    // missing or unparsable.
+    auto sendEsp32Rgb = [&esp32VolumeManager](const QString &hex, bool fallbackOnError) {
+        const QColor c(hex.trimmed());
+        if (c.isValid())
+            esp32VolumeManager.send_theme_color(c.red(), c.green(), c.blue());
+        else if (fallbackOnError)
+            esp32VolumeManager.send_theme_color(0, 255, 255);
+    };
+    auto accentFromAlbumArt = [](const QString &colorsJson) -> QString {
+        const QJsonDocument doc = QJsonDocument::fromJson(colorsJson.toUtf8());
+        if (!doc.isObject())
+            return QString();
+        return doc.object().value(QStringLiteral("accent")).toString(QStringLiteral("#00FFFF"));
+    };
+    auto sendCurrentLedColor = [&]() {
+        if (settingsManager.esp32LedColorMode() == QLatin1String("static")) {
+            sendEsp32Rgb(settingsManager.esp32LedStaticColor(), true);
+            return;
+        }
+        const QString accent = accentFromAlbumArt(settingsManager.albumArtColors());
+        if (accent.isEmpty())
+            esp32VolumeManager.send_theme_color(0, 255, 255);
+        else
+            sendEsp32Rgb(accent, true);
+    };
+    QObject::connect(&settingsManager, &SettingsManager::albumArtColorsChanged,
+                     &esp32VolumeManager, [&, accentFromAlbumArt, sendEsp32Rgb](const QString &colorsJson) {
+        if (settingsManager.esp32LedColorMode() != QLatin1String("theme") || colorsJson.isEmpty())
+            return;
+        const QString accent = accentFromAlbumArt(colorsJson);
+        if (!accent.isEmpty())
+            sendEsp32Rgb(accent, false);
+    });
+    QObject::connect(&settingsManager, &SettingsManager::esp32LedStaticColorChanged,
+                     &esp32VolumeManager, [&, sendEsp32Rgb](const QString &color) {
+        if (settingsManager.esp32LedColorMode() == QLatin1String("static"))
+            sendEsp32Rgb(color, false);
+    });
+    QObject::connect(&settingsManager, &SettingsManager::esp32LedColorModeChanged,
+                     &esp32VolumeManager, [sendCurrentLedColor](const QString &) {
+        sendCurrentLedColor();
+    });
+    // Push the full state (volume / mute / colour) once the knob is up; the
+    // 500 ms delay gives the firmware time to finish its own boot after the
+    // serial port opens (same as main.py on_esp32_connection_changed).
+    QObject::connect(&esp32VolumeManager, &ESP32VolumeManager::connectionStatusChanged,
+                     &esp32VolumeManager, [&, sendCurrentLedColor](const QString &status) {
+        if (status != QLatin1String("Connected"))
+            return;
+        QTimer::singleShot(500, &esp32VolumeManager, [&, sendCurrentLedColor]() {
+            esp32VolumeManager.send_volume_update(settingsManager.currentVolume());
+            esp32VolumeManager.send_mute_state(mediaManager.is_muted());
+            sendCurrentLedColor();
+        });
+    });
+#endif
+
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MOBILE)
     // SIGTERM/SIGINT (launcher scripts, systemd, Ctrl-C) must run the
     // aboutToQuit cleanup below, otherwise child processes and adb forwards
@@ -407,6 +481,7 @@ int main(int argc, char *argv[])
         mediaManager._save_playback_state();   // before the settings flush: saveSettings() is debounced now
         mediaManager.flush_metadata_store();
         settingsManager.flushPendingSave();   // coalesced settings writes land before exit
+        OctaveLog::flush();                   // last: everything the cleanup above logged reaches disk
     });
 
     return app.exec();

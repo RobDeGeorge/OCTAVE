@@ -41,7 +41,7 @@ GESTURE_NAMES = {
     GES_COUNTERCLOCKWISE: "COUNTER-CLOCKWISE",
 }
 
-# PAJ7620U2 Initialization Register Table (DFRobot reference, 220 register pairs)
+# PAJ7620U2 Initialization Register Table (DFRobot reference, 219 register pairs)
 INIT_REGISTER_ARRAY = [
     # Bank 0
     [0xEF, 0x00],
@@ -341,23 +341,22 @@ class GestureManager(QObject):
 
                 else:
                     # Directional / rotation / wave — confirm with a second read
-                    # to reject single-sample glitches
+                    # to reject single-sample glitches. The PAJ7620 clears
+                    # 0x43/0x44 on read, so a clean gesture re-reads as either
+                    # the same flag or nothing; a *different* flag 20 ms later
+                    # means the sensor is still settling on some other motion,
+                    # so the sample is dropped.
                     time.sleep(0.02)
                     f0_confirm, f1_confirm = self._read_gesture_raw()
                     first = self._decode_gesture(flag0, flag1)
                     second = self._decode_gesture(f0_confirm, f1_confirm)
 
-                    if first == second:
-                        # Both reads agree — high confidence
-                        gesture = first
-                    elif second is not None:
-                        # Second read got something different — trust the first
-                        # (it was the initial trigger)
+                    if second is None or second == first:
+                        # Agreed, or sensor already cleared itself
                         gesture = first
                     else:
-                        # Second read is empty — the first was likely real,
-                        # sensor already cleared itself
-                        gesture = first
+                        logger.debug(f"GestureSensor: discarding {first} — "
+                                     f"confirmation read saw {second}")
 
                 if gesture:
                     read_count += 1

@@ -84,7 +84,7 @@
           </thead>
           <tbody>
             <tr><td><code>deviceName</code></td><td>deviceName</td><td>str</td><td>"Default Device"</td><td>–</td><td>Device page (via <code>Main.updateDeviceName()</code>, which rejects blank names)</td><td>Display name for this OCTAVE installation</td></tr>
-            <tr><td><code>fontSetting</code></td><td>fontSetting</td><td>str</td><td>"Google Sans"</td><td>–</td><td>Display page</td><td>UI font family; <code>Style.setFont()</code> is called on change</td></tr>
+            <tr><td><code>fontSetting</code></td><td>fontSetting</td><td>str</td><td>"GoogleSans Regular"</td><td>–</td><td>Display page</td><td>UI font family; <code>Style.setFont()</code> is called on change. The default is the display name <code>Main.qml</code> derives from the bundled <code>GoogleSans-Regular.ttf</code>; a stored legacy <code>"Google Sans"</code> (which <code>Style.setFont()</code> rejected, leaving the system font) is migrated to it at load and written back</td></tr>
             <tr><td><code>windowState</code></td><td>windowState</td><td>str</td><td>"windowed"</td><td>"windowed", "fullscreen", "maximized" (others ignored)</td><td>Display page (Window)</td><td>Window mode applied at startup</td></tr>
             <tr><td><code>screenWidth</code></td><td>screenWidth</td><td>int</td><td>1280</td><td>–</td><td>Display page; <code>Main.qml</code> also saves the size on window resize</td><td>Window width in pixels when windowed</td></tr>
             <tr><td><code>screenHeight</code></td><td>screenHeight</td><td>int</td><td>720</td><td>–</td><td>Display page; <code>Main.qml</code> on resize</td><td>Window height in pixels when windowed</td></tr>
@@ -101,7 +101,7 @@
             <tr><td><code>uiScale</code></td><td>uiScale</td><td>float (C++ <code>float</code>)</td><td>1.0</td><td>– (UI 0.5 – 2.0, step 0.05)</td><td>Display page</td><td>Global UI scale factor (<code>Spacing.globalScale</code>). A stored 0.6 (an old default) is migrated to 1.0 at load. Pinnable</td></tr>
             <tr><td><code>themeSetting</code></td><td>themeSetting</td><td>str</td><td>"CosmicVoyager"</td><td>Any built-in or custom theme name; "Album Art Capture" enables palette extraction</td><td>Display page; <code>Main.updateTheme()</code></td><td>Active colour theme (<a href="theme-system.html">Theme System</a>). Pinnable (chips from <code>themeList</code>)</td></tr>
             <tr><td><code>customThemes</code></td><td>customThemes</td><td>dict (property is a list of names)</td><td>{}</td><td>name → theme object with colour keys and optional <code>albumArt</code> file URL</td><td>Saved from MediaRoom (<code>save_custom_theme</code>), deleted from the Display page</td><td>User-created themes captured from album art; art files live in <code>theme_art/</code></td></tr>
-            <tr><td><code>colorTransitionMs</code></td><td>colorTransitionMs</td><td>int</td><td>1000</td><td>– (Display slider 0 – 2000 step 50; registry 0 – 5000 step 100)</td><td>Display page</td><td>Duration of theme colour transitions in ms. Pinnable</td></tr>
+            <tr><td><code>colorTransitionMs</code></td><td>colorTransitionMs</td><td>int</td><td>1000</td><td>0 – 2000, step 50 (Display slider and pinned-card registry agree)</td><td>Display page</td><td>Duration of theme colour transitions in ms. Pinnable</td></tr>
             <tr><td><code>songLengthTransition</code></td><td>songLengthTransition</td><td>bool</td><td>false</td><td>true/false</td><td>Display page</td><td>Animate the theme colour transition over the whole song length instead of <code>colorTransitionMs</code></td></tr>
             <tr><td><code>showClock</code></td><td>showClock</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Clock); Display widget</td><td>Show the clock in the bottom bar. Pinnable</td></tr>
             <tr><td><code>clockFormat24Hour</code></td><td>clockFormat24Hour</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Clock)</td><td>24-hour clock (false = 12-hour). Signal is <code>clockFormatChanged</code></td></tr>
@@ -231,8 +231,8 @@ RELATIVE_ACCEL_POS  HYBRID_BATTERY_REMAINING  ELM_VOLTAGE</code></pre>
           </thead>
           <tbody>
             <tr><td><code>esp32VolumeEnabled</code></td><td>esp32VolumeEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the wireless rotary encoder</td></tr>
-            <tr><td><code>esp32VolumePort</code></td><td>esp32VolumePort</td><td>str</td><td>"COM7"</td><td>Serial port name</td><td>USB serial port of the ESP32-S3 receiver dongle</td></tr>
-            <tr><td><code>esp32VolumeStepSize</code></td><td>esp32VolumeStepSize</td><td>float (C++ <code>double</code>); default literal is the <em>integer</em> 1</td><td>1</td><td>clamped 0.25 – 10, rounded to the nearest 0.25 (UI slider and chips)</td><td>Volume change per encoder tick in percent. See the <a href="#parity">parity note</a> on the integer default</td></tr>
+            <tr><td><code>esp32VolumePort</code></td><td>esp32VolumePort</td><td>str</td><td>""</td><td>Serial port name, or empty</td><td>USB serial port of the ESP32-S3 receiver dongle; empty means auto-select the ESP32-S3 at startup</td></tr>
+            <tr><td><code>esp32VolumeStepSize</code></td><td>esp32VolumeStepSize</td><td>float (C++ <code>double</code>)</td><td>1.0</td><td>clamped 0.25 – 10, rounded to the nearest 0.25 (UI slider and chips)</td><td>Volume change per encoder tick in percent. The default is a float literal so fractional steps (0.25 / 0.5 / 0.75) survive the Python validator</td></tr>
             <tr><td><code>esp32AutoReconnect</code></td><td>esp32AutoReconnect</td><td>bool</td><td>true</td><td>true/false</td><td>Reconnect automatically after the dongle disappears</td></tr>
             <tr><td><code>esp32LedSleepEnabled</code></td><td>esp32LedSleepEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Let the knob's LEDs turn off (code comment: "LEDs turn off when OCTAVE closes")</td></tr>
             <tr><td><code>esp32LedColorMode</code></td><td>esp32LedColorMode</td><td>str</td><td>"theme"</td><td>"theme", "static" (others ignored)</td><td>LEDs follow the album-art / theme palette or a fixed colour</td></tr>
@@ -337,8 +337,8 @@ RELATIVE_ACCEL_POS  HYBRID_BATTERY_REMAINING  ELM_VOLTAGE</code></pre>
             <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>lastSettingsSection</code> / <code>set_last_settings_section()</code></td><td>lastSettingsSection</td><td>str</td><td>"deviceSettings"</td><td>"deviceSettings", "mediaSettings", "displaySettings", "obdSettings", "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings", "about" (others ignored; "clockSettings" migrated to "displaySettings")</td><td>Section reopened when the settings menu is entered. The menu's <code>accessoriesSettings</code> is not in the list, so it is never remembered</td></tr>
-            <tr><td><code>settingsMenuVisibility</code> (JSON str) / <code>is_settings_section_visible()</code> / <code>save_settings_section_visibility()</code></td><td>settingsMenuVisibility</td><td>dict of bool</td><td>all true except <code>volumeKnobSettings: false</code></td><td>section ID → visible; unknown sections read as visible</td><td>Which sections the settings menu shows</td></tr>
+            <tr><td><code>lastSettingsSection</code> / <code>set_last_settings_section()</code></td><td>lastSettingsSection</td><td>str</td><td>"deviceSettings"</td><td>the six current sections "displaySettings", "mediaSettings", "obdSettings", "accessoriesSettings", "deviceSettings", "about", plus the legacy IDs "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings" an older file may carry (others ignored; "clockSettings" migrated to "displaySettings")</td><td>Section reopened when the settings menu is entered</td></tr>
+            <tr><td><code>settingsMenuVisibility</code> (JSON str) / <code>is_settings_section_visible()</code> / <code>save_settings_section_visibility()</code></td><td>settingsMenuVisibility</td><td>dict of bool</td><td><code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>: all true</td><td>section ID → visible; a section missing from the file (or unknown) reads as visible in both backends</td><td>Which sections the settings menu shows</td></tr>
             <tr><td><code>pinnedSettings</code> / <code>toggle_pin_setting()</code></td><td>pinnedSettings</td><td>list of str</td><td>[]</td><td>Registry IDs only</td><td>Quick Panel pins, in pin order</td></tr>
             <tr><td>generic (<span class="file-path">frontend/settings/ExpandedCards.js</span>)</td><td>expandedCards</td><td>dict of bool</td><td>{}</td><td>card ID → expanded</td><td>Expanded / collapsed state of collapsible settings cards</td></tr>
           </tbody>
@@ -404,14 +404,12 @@ RELATIVE_ACCEL_POS  HYBRID_BATTERY_REMAINING  ELM_VOLTAGE</code></pre>
         <ul>
           <li><strong>Keys:</strong> 92 in both; no key exists in only one backend.</li>
           <li><strong>Default values:</strong> identical for every key, including all 86 PID flags and the nine gesture bindings.</li>
-          <li><strong>Properties / signals / slots:</strong> identical names; the only naming difference is the shutdown flush (<code>flush_pending_save</code> vs <code>flushPendingSave</code>), which QML never calls.</li>
+          <li><strong>Properties / signals / slots:</strong> identical names. The shutdown flush is <code>flushPendingSave()</code> on both sides; Python keeps a <code>flush_pending_save()</code> alias for older callers.</li>
         </ul>
         <div class="info-box warning">
           <div class="info-box-title">Differences that affect stored values</div>
           <ul>
-            <li><code>esp32VolumeStepSize</code> defaults to the integer <code>1</code> in both backends. The Python validator truncates a float to <code>int()</code> when the default is an int, so a saved 0.25 / 0.5 / 0.75 step becomes 0 on disk under the Python backend; C++ accepts any number. Fix by changing the literal to <code>1.0</code> in both backends.</li>
             <li><code>mediaFolder</code> resolves an empty value to <code>QStandardPaths::MusicLocation</code> in C++ and to <code>~/Music</code> in Python. Identical on Linux and macOS; may differ on Windows and Android.</li>
-            <li>When a stored <code>settingsMenuVisibility</code> lacks a section, Python fills it with <code>true</code> and C++ with the default (<code>false</code> for <code>volumeKnobSettings</code>).</li>
           </ul>
         </div>
 

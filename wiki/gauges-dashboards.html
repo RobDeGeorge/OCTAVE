@@ -388,7 +388,7 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
             <tr><td><code>label</code></td><td>yes (for save)</td><td>DashboardManager, OBDMenu</td><td><code>saveDashboard</code> rejects an empty label; a preset with an empty label loads with a blank name.</td></tr>
             <tr><td><code>schema</code></td><td>by convention</td><td>nobody yet</td><td>Written by the editor and every preset; no reader checks it today. It exists so a future format can degrade gracefully instead of stranding files.</td></tr>
             <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>no</td><td>Renderer, Editor</td><td>Falsy values (0, missing) fall back to 12 / 6.</td></tr>
-            <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>Renderer only</td><td>Applied through <code>App.Spacing.dp()</code>. The editor canvas always uses 20 / 16 and does not persist these, so a hand-edited spacing survives editing only if you never save from the editor.</td></tr>
+            <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>Renderer and editor</td><td>Applied through <code>App.Spacing.dp()</code>. The editor keeps a loaded spec's values (<code>specMargins</code> / <code>specSpacing</code>), renders its canvas with them and writes them back into saves and drafts (<code>_withGridGeometry()</code>), but only when the spec had them &mdash; a dashboard without the keys keeps relying on the 20 / 16 defaults and its JSON stays minimal.</td></tr>
             <tr><td><code>cells[].type</code></td><td>yes</td><td>Renderer, Editor, WidgetCatalog</td><td>Unknown type: renderer logs and skips the cell; editor drops it on load.</td></tr>
             <tr><td><code>cells[].paramId</code></td><td>no</td><td>Renderer, Editor</td><td>Unknown id: renderer logs and leaves the widget unbound; editor clears it to <code>""</code>. Ignored for widgets without a <code>paramId</code> property.</td></tr>
             <tr><td><code>cells[].col/row/colSpan/rowSpan</code></td><td>no</td><td>Renderer, Editor</td><td>Renderer trusts them; editor clamps into the grid on load.</td></tr>
@@ -548,7 +548,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
             <tr><td><code>moveCell(index, col, row)</code></td><td>Clamps, checks <code>canPlace</code> excluding the cell itself, patches -- or, on a rejected drop, reassigns <code>cells = cells.slice()</code> so the dragged delegate is rebuilt at its origin.</td></tr>
             <tr><td><code>nudgeCell</code>, <code>resizeCell</code></td><td>Stepper helpers (±1 column/row/span) built on the same checks.</td></tr>
             <tr><td><code>removeCell</code>, <code>setCellParam</code>, <code>setCellProp</code>, <code>clearCellProp</code></td><td>Patch helpers; clearing a prop removes the key so the gauge default applies again.</td></tr>
-            <tr><td><code>save()</code></td><td>Label defaults to "Untitled"; id = <code>editingId</code> or <code>_uniqueId(label)</code> (slugify + uniquify against <code>dashboardManager.dashboards</code> and the reserved <code>"grid"</code>); builds <code>{ schema: 1, id, label, gridColumns, gridRows, cells }</code>; on success clears <code>dirty</code>, clears the stored draft if this session resumed one, calls <code>callerPage.setActiveDashboard(savedId)</code> and pops. Failure shows a 3 s error banner.</td></tr>
+            <tr><td><code>save()</code></td><td>Label defaults to "Untitled"; id = <code>editingId</code> or <code>_uniqueId(label)</code> (slugify + uniquify against <code>dashboardManager.dashboards</code> and the reserved <code>"grid"</code>); builds <code>{ schema: 1, id, label, gridColumns, gridRows, cells }</code> plus <code>margins</code> / <code>spacing</code> when the loaded spec carried them; on success clears <code>dirty</code>, clears the stored draft if this session resumed one, calls <code>callerPage.setActiveDashboard(savedId)</code> and pops. Failure shows a 3 s error banner.</td></tr>
             <tr><td><code>cancel()</code></td><td>First tap with unsaved work arms "Discard?" for 3 s; the second tap clears <code>dirty</code>, clears a resumed draft and pops. "Editing in a car -- accidental data loss hurts."</td></tr>
             <tr><td><code>_sanitizeCells(raw)</code></td><td>Applied to every spec arriving from disk or a draft: drops unknown types, clamps col/row/span into the grid, clears unknown <code>paramId</code>s (the panel then shows "Choose PID…").</td></tr>
           </tbody>
@@ -557,8 +557,9 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <strong>Draft stash</strong>: switching menus mid-build pops the whole <code>StackView</code>, destroying the page.
           <code>Component.onDestruction</code> first forces <code>OBDParameterModel.simulationActive = false</code> (demo data
           must never leak into the real OBD views), then, if <code>dirty</code>, writes
-          <code>{ editingId, label, gridColumns, gridRows, cells }</code> as JSON to the <code>dashboardEditorDraft</code>
-          setting. Only a session that <em>resumed</em> a draft may clear it, so opening and cancelling a fresh editor cannot
+          <code>{ editingId, label, gridColumns, gridRows, cells }</code> (plus <code>margins</code> / <code>spacing</code>
+          when the loaded spec had them) as JSON to the <code>dashboardEditorDraft</code> setting; restoring a draft reads
+          them back the same way. Only a session that <em>resumed</em> a draft may clear it, so opening and cancelling a fresh editor cannot
           wipe an earlier draft. <strong>Demo data</strong> is the checkable button in the top bar bound to
           <code>simulationActive</code>.
         </p>
@@ -571,7 +572,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
 
         <h3>EditorCanvas.qml</h3>
         <ul>
-          <li>Geometry mirrors the renderer's defaults exactly (20 dp margin, 16 dp spacing, same cell formulas) so the layout you edit is the layout that renders.</li>
+          <li>Geometry mirrors the renderer exactly: the canvas takes the spec's optional <code>margins</code> / <code>spacing</code> (<code>undefined</code> keeps the 20 dp / 16 dp defaults) and uses the same cell formulas, so the layout you edit is the layout that renders.</li>
           <li><code>canPlace(col, row, colSpan, rowSpan, exceptIndex)</code>: inside the grid and no rectangle overlap with any other cell.</li>
           <li><code>_occupied</code>: a flat <code>row * cols + col</code> boolean map recomputed whenever <code>cells</code> is reassigned; a <code>Repeater</code> over <code>gridColumns * gridRows</code> shows a <code>[+]</code> target on every free index (dimmed while dragging).</li>
           <li>Placed cells: a synchronous <code>Loader</code> (synchronous so panel tweaks, which rebuild the Repeater, do not flicker) with the same bind/props logic as the renderer, a "no PID" hint for unbound PID widgets, a selection frame, and a <code>MouseArea</code> with <code>drag.target: cellRoot</code>. <code>onPressed</code> selects; while dragging, <code>_updateDragCandidate()</code> rounds the item position to the nearest cell, clamps, and sets <code>dragCol/dragRow/dragValid</code> for the highlight rectangle (accent when valid, <code>statusDanger</code> when not); <code>onReleased</code> emits <code>cellMoveRequested</code>.</li>

@@ -253,7 +253,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
             <tr><td><code>headerBackgroundColor</code>, <code>contentColor</code>, <code>bottomBarGradientEnd</code></td><td><code>baseAlt</code></td></tr>
             <tr><td><code>hoverColor</code></td><td><code>states.hover</code></td></tr>
             <tr><td><code>hoverPausedColor</code>, <code>pausedHighlightColor</code></td><td><code>states.paused</code></td></tr>
-            <tr><td><code>hoverPlayingColor</code></td><td><code>states.paused</code> (not <code>states.playing</code> &mdash; as written in the source)</td></tr>
+            <tr><td><code>hoverPlayingColor</code></td><td><code>states.playing</code></td></tr>
             <tr><td><code>playingHighlightColor</code></td><td><code>states.playing</code></td></tr>
             <tr><td><code>bottomBarToggleShade</code></td><td><code>bottombar.toggleShade</code></td></tr>
             <tr><td><code>mediaRoomToggleShade</code></td><td><code>mediaroom.toggleShade</code></td></tr>
@@ -340,9 +340,9 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
 
         <p>The Font picker (Display &rarr; Appearance &rarr; Font) is a <code>SettingsChips</code> row with <code>chipFonts</code>: each chip renders the first word of its own name in that font (<code>fontSizeMode: Text.Fit</code>, minimum <code>dp(8)</code>) so the user sees the typeface before choosing it. Selecting a chip calls <code>save_font_setting()</code> and <code>App.Style.setFont()</code>; the <code>fontChanged</code> signal fires for components that need to react beyond the property binding.</p>
 
-        <div class="info-box warning">
-          <div class="info-box-title">Default Font Name Mismatch</div>
-          Both backends default <code>fontSetting</code> to <code>"Google Sans"</code>, but the display name derived from <code>GoogleSans-Regular.ttf</code> is <code>"GoogleSans Regular"</code>. <code>setFont("Google Sans")</code> therefore fails the <code>availableFonts</code> check on a fresh install and the UI renders in the system font until a chip is picked.
+        <div class="info-box info">
+          <div class="info-box-title">Default Font Name and Migration</div>
+          Both backends default <code>fontSetting</code> to <code>"GoogleSans Regular"</code>, the display name Main.qml derives from <code>GoogleSans-Regular.ttf</code>, and migrate the legacy value <code>"Google Sans"</code> to it when loading <span class="file-path">settingsConfigure.json</span> (the old name failed the <code>availableFonts</code> check and left the UI in the system font).
         </div>
 
         <!-- EnvironmentTheme -->
@@ -429,7 +429,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
         <!-- GUI scale -->
         <h2 id="gui-scale">GUI Scale Slider and Auto-Scale</h2>
 
-        <p><strong>Auto-scale.</strong> Both entry points compute <code>screenAutoScale</code> before QML loads and expose it as a context property; Main.qml copies it into <code>App.Spacing.autoScaleFactor</code>. <span class="file-path">src/main.cpp</span> divides the <em>shorter</em> edge of <code>primaryScreen()->availableSize()</code> by 720 and clamps to [0.4, 3.0]; the comment explains that Android reports the natural portrait size even when the app is locked landscape, and using the height alone produced a roughly 3&times; factor there. <span class="file-path">main.py</span> uses <code>available.height() / 720.0</code> with the same clamp (desktop-only, where height is normally the shorter edge).</p>
+        <p><strong>Auto-scale.</strong> Both entry points compute <code>screenAutoScale</code> before QML loads and expose it as a context property; Main.qml copies it into <code>App.Spacing.autoScaleFactor</code>. <span class="file-path">src/main.cpp</span> divides the <em>shorter</em> edge of <code>primaryScreen()->availableSize()</code> by 720 and clamps to [0.4, 3.0]; the comment explains that Android reports the natural portrait size even when the app is locked landscape, and using the height alone produced a roughly 3&times; factor there. <span class="file-path">main.py</span> uses <code>min(available.width(), available.height()) / 720.0</code> with the same clamp, so both backends produce the same factor for a given display.</p>
 
         <p><strong>User scale.</strong> <code>settingsManager.uiScale</code> (default 1.0) is loaded into <code>App.Spacing.globalScale</code> at startup. Both backends migrate a stored value of exactly 0.6 (the old design factor that used to be persisted) to 1.0. The slider lives in Display &rarr; Layout &rarr; "UI Scaling":</p>
 

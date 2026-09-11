@@ -63,7 +63,7 @@
  | FFT Analysis     |  Split into 100 ms chunks
  |  numpy.fft.rfft  |  Hann window per chunk
  |  / radix-2 C++   |  Magnitudes, DC dropped
- |                  |  96 log-spaced bands, mean per band
+ |                  |  96 log-spaced bands (each >= 1 bin), mean per band
  +------------------+
        |
        v
@@ -183,17 +183,21 @@ window = np.<span class="fn">hanning</span>(chunk_size)     <span class="cmt"># 
           <li><strong>Window function</strong> - a Hann window (<code>np.hanning</code> / <code>hannWindow()</code>) reduces spectral leakage at chunk boundaries:
             <pre><code>windowed = chunk * window</code></pre>
           </li>
-          <li><strong>FFT and magnitude</strong> - Python takes the real FFT and then keeps only the lower half of the positive-frequency bins, discarding DC:
-            <pre><code>fft = np.<span class="fn">abs</span>(np.fft.<span class="fn">rfft</span>(windowed))
-fft = fft[<span class="num">1</span>:<span class="fn">len</span>(fft)//<span class="num">2</span>]</code></pre>
-            C++ runs the complex radix-2 FFT on the 1024-point padded buffer and keeps bins <code>1 .. N/2-1</code> (511 magnitudes). <strong>This is where the backends differ:</strong> <code>rfft</code> already returns only the positive frequencies (0 to Nyquist), so halving it again leaves Python with bins up to a quarter of the sample rate, i.e. <strong>0-2&nbsp;kHz</strong> (199 bins at 10&nbsp;Hz for an 800-sample chunk), whereas the C++ magnitudes span the full <strong>0-4&nbsp;kHz</strong> at 7.8&nbsp;Hz per bin. The C++ comment says it matches the Python slice, but the two visualizers do not show the same frequency range.
+          <li><strong>FFT and magnitude</strong> - both backends keep the magnitudes of every positive-frequency bin except DC, i.e. bins <code>1 .. N/2</code>, which at the 8&nbsp;kHz effective rate is <strong>0-4&nbsp;kHz</strong>:
+            <pre><code>fft_len = chunk_size // <span class="num">2</span>
+fft = np.<span class="fn">abs</span>(np.fft.<span class="fn">rfft</span>(windowed))[<span class="num">1</span>:<span class="num">1</span> + fft_len]   <span class="cmt"># skip DC</span></code></pre>
+            Python gets <code>chunk_size // 2</code> bins (441 at 10&nbsp;Hz for an 882-sample chunk, 400 for 800 samples); C++ runs the complex radix-2 FFT on the 1024-point padded buffer and keeps <code>fftSize / 2</code> = 512 magnitudes at 7.8&nbsp;Hz per bin. (An earlier Python version halved the <code>rfft</code> output a second time and so only showed 0-2&nbsp;kHz; the two visualizers now cover the same range.)
           </li>
-          <li><strong>Logarithmic frequency bands</strong> - the bins are grouped into 96 bands with logarithmic spacing, giving more resolution to low frequencies:
-            <pre><code>log_indices = np.<span class="fn">logspace</span>(<span class="num">0</span>, np.<span class="fn">log10</span>(<span class="fn">len</span>(fft)), self._num_bars + <span class="num">1</span>, dtype=<span class="fn">int</span>)
-log_indices = np.<span class="fn">clip</span>(log_indices, <span class="num">0</span>, <span class="fn">len</span>(fft))</code></pre>
-            C++ computes the same boundaries as <code>int(pow(fftLen, i / 96.0))</code>.
+          <li><strong>Logarithmic frequency bands</strong> - the bins are grouped into 96 bands with logarithmic spacing, giving more resolution to low frequencies. The edges are computed once per file by <code>_log_band_edges(fft_len, num_bars)</code> / <code>logBandEdges(fftLen, numBars)</code>, since they depend only on the bin count:
+            <pre><code>edges = [<span class="num">0</span>] * (num_bars + <span class="num">1</span>)
+<span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">1</span>, num_bars + <span class="num">1</span>):
+    idx = <span class="fn">int</span>(fft_len ** (i / num_bars))      <span class="cmt"># the np.logspace(0, log10(N), 97) curve</span>
+    idx = <span class="fn">max</span>(idx, edges[i - <span class="num">1</span>] + <span class="num">1</span>)          <span class="cmt"># every band at least one bin wide</span>
+    edges[i] = <span class="fn">min</span>(idx, fft_len)
+edges[num_bars] = fft_len</code></pre>
+            Edge <code>i</code> is <code>N^(i/96)</code> truncated, but forced to be strictly greater than the previous edge, so the first bands are one bin each (linear) until the log curve overtakes them.
           </li>
-          <li><strong>Band averaging</strong> - each band's value is the mean of its bins; a band whose start and end index coincide gets 0</li>
+          <li><strong>Band averaging</strong> - each band's value is the mean of its bins; because the edges are strictly increasing, every band has at least one bin</li>
         </ol>
 
         <h3>Global Normalization (Two-Pass)</h3>
@@ -222,20 +226,20 @@ global_max = np.<span class="fn">percentile</span>(all_values, <span class="num"
         <!-- Frequency Band Distribution -->
         <h2 id="frequency-bands">Frequency Band Distribution</h2>
 
-        <p>Linear spacing would dedicate most bars to high frequencies, which are less musically interesting; logarithmic spacing mirrors how pitch is perceived. Boundary <code>i</code> of 96 sits at bin <code>N^(i/96)</code> (truncated to an integer), where <code>N</code> is the number of magnitude bins: 511 in C++ (0-4&nbsp;kHz), 199 in Python for an 8&nbsp;kHz effective rate (0-2&nbsp;kHz). Approximate boundaries:</p>
+        <p>Linear spacing would dedicate most bars to high frequencies, which are less musically interesting; logarithmic spacing mirrors how pitch is perceived. Boundary <code>i</code> of 96 sits at bin <code>N^(i/96)</code> (truncated to an integer, then bumped to at least the previous boundary + 1), where <code>N</code> is the number of magnitude bins covering 0-4&nbsp;kHz: 512 in C++ (7.8&nbsp;Hz/bin), 400 or 441 in Python depending on whether the source decimated to 8000 or 8820&nbsp;Hz (10&nbsp;Hz/bin). Approximate boundaries for the 8&nbsp;kHz case:</p>
 
         <table>
-          <thead><tr><th>Bar</th><th>C++ (N = 511, 7.8 Hz/bin)</th><th>Python (N = 199, 10 Hz/bin)</th></tr></thead>
+          <thead><tr><th>Bar</th><th>C++ (N = 512, 7.8 Hz/bin)</th><th>Python (N = 400, 10 Hz/bin)</th></tr></thead>
           <tbody>
-            <tr><td>24</td><td>bin 4, ~31 Hz</td><td>bin 3, ~30 Hz</td></tr>
-            <tr><td>48</td><td>bin 22, ~172 Hz</td><td>bin 14, ~140 Hz</td></tr>
-            <tr><td>72</td><td>bin 107, ~836 Hz</td><td>bin 53, ~530 Hz</td></tr>
-            <tr><td>96</td><td>bin 511, ~3.99 kHz</td><td>bin 199, ~1.99 kHz</td></tr>
+            <tr><td>1-24</td><td>one bin each (linear), 8-188 Hz</td><td>one bin each (linear), 10-240 Hz</td></tr>
+            <tr><td>48</td><td>bin 48, ~375 Hz</td><td>bin 48, ~480 Hz</td></tr>
+            <tr><td>72</td><td>bin 107, ~836 Hz</td><td>bin 89, ~890 Hz</td></tr>
+            <tr><td>96</td><td>bin 512, ~4 kHz</td><td>bin 400, ~4 kHz</td></tr>
           </tbody>
         </table>
 
         <div class="info-box info">
-          <strong>Empty low bands.</strong> Because the boundaries are truncated to integers, <code>N^(i/96)</code> stays below 2 for the first boundaries (about the first 10 bars in C++, 12 in Python), so those bands span no bins at all and their bars are permanently 0. The leftmost bars of the visualizer therefore never move; this is a property of the band math in both backends, not a decoding problem.
+          <strong>Why the first bands are linear.</strong> Truncated to an integer, <code>N^(i/96)</code> stays at 1 for roughly the first dozen boundaries, which used to leave those bands with no bins at all -- the leftmost bars of the visualizer were permanently 0 in both backends. The edge builder now forces every band to be at least one bin wide, so the low bars are consecutive single bins (a linear stretch that lasts until about bar 65, where <code>N^(i/96)</code> finally outgrows <code>i</code>) and only the upper third is truly logarithmic.
         </div>
 
         <!-- Data Flow -->
@@ -428,9 +432,9 @@ av = <span class="fn">lazy_module</span>(<span class="str">"av"</span>)</code></
           <tbody>
             <tr><td><strong>Pre-compute the whole track</strong> instead of analyzing live</td><td>The class docstring states the design: "Pre-computes FFT for entire track, then provides data based on playback position." Playback then costs one list lookup per poll regardless of device, and there is no need to tap the audio output on any platform.</td></tr>
             <tr><td><strong>No animation in the backend</strong></td><td>The first version interpolated the bars toward target levels on its own timer inside the analyzer, which was the visualizer "eating CPU" (commit <code>e25ea66</code> removed <code>_animation_timer</code> / <code>_target_levels</code>). Now <code>update_position()</code> emits only when the chunk's levels differ ("No intermediate animation &mdash; QML handles any smoothing it needs"), and the QML <code>Behavior</code> animations do the easing on the scene graph.</td></tr>
-            <tr><td><strong>8&nbsp;kHz, 100&nbsp;ms chunks, 0-8 levels</strong></td><td>The code comments give the reason for the rate ("Downsample to ~8kHz for faster processing"); 100&nbsp;ms chunks give 10 data frames per second, which the 120&nbsp;ms bar animations bridge, and nine discrete integer levels make "did anything change?" a cheap list comparison so unchanged chunks emit nothing.</td></tr>
+            <tr><td><strong>8&nbsp;kHz, 100&nbsp;ms chunks, 0-8 levels</strong></td><td>The code comments give the reason for the rate ("Downsample to ~8kHz for faster processing"); the spectrum is analysed up to the 4&nbsp;kHz Nyquist limit in both backends, 100&nbsp;ms chunks give 10 data frames per second, which the 120&nbsp;ms bar animations bridge, and nine discrete integer levels make "did anything change?" a cheap list comparison so unchanged chunks emit nothing.</td></tr>
             <tr><td><strong>Analysis after the card animation</strong></td><td>MediaRoom calls <code>analyze_file</code> from the carousel's settled signal so decoding and the first FFT do not compete with animation frames; the bars drop to zero and stay visible meanwhile.</td></tr>
-            <tr><td><strong>QAudioDecoder in C++</strong></td><td>Qt Multimedia is already linked for <code>QMediaPlayer</code> and supplies the native codec on every target (including MediaCodec on Android, where shipping FFmpeg would be a separate build). An earlier C++ version shelled out to an <code>ffmpeg</code> CLI to mirror PyAV; the decoder route removed the external binary (Android sweep, commit <code>d751c9d</code>). Running the decoder inside a local <code>QEventLoop</code> on the worker, with a watchdog, is what makes it usable off the GUI thread.</td></tr>
+            <tr><td><strong>QAudioDecoder in C++</strong></td><td>Qt Multimedia is already linked for <code>QMediaPlayer</code> and supplies the native codec on every target (including MediaCodec on Android, where shipping FFmpeg would be a separate build). An earlier C++ version shelled out to an <code>ffmpeg</code> CLI to mirror PyAV; the decoder route removed the external binary (Android sweep, commit <code>d751c9d</code>) and the source comments and log lines no longer mention ffmpeg. Running the decoder inside a local <code>QEventLoop</code> on the worker, with a watchdog, is what makes it usable off the GUI thread.</td></tr>
             <tr><td><strong>Int16 rather than Float from the decoder</strong></td><td>Some Android MediaCodec configurations reject float sample formats; Int16 works everywhere and converting to float is one multiply per sample.</td></tr>
             <tr><td><strong>Own radix-2 FFT</strong></td><td>The header labels the helpers "FFT helpers (no external deps)": a 1024-point transform ten times per second of audio does not justify another library across nine build targets, and zero-padding 800 samples to 1024 is the only cost.</td></tr>
             <tr><td><strong>Pending-file chaining (C++)</strong></td><td>Rapid skip presses used to drop every request after the first, leaving the visualizer on the previous track's FFT or blank; remembering only the latest request and chaining into it when the current job ends fixes that without cancelling decoders mid-flight.</td></tr>

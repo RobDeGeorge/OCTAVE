@@ -85,6 +85,10 @@ private:
     void processCommand(const QString &command);
     void sendPendingVolume();
     void sendKeepalive();
+    // Writes to the port and checks the result; false means the write was
+    // rejected (port gone / not open) and the caller should treat the link
+    // as lost.
+    bool writeCommand(const QByteArray &data, const char *what);
 
     // Settings change handlers
     void onPortChanged();
@@ -126,37 +130,53 @@ private:
 };
 
 #else // Q_OS_MOBILE — mobile stub
+// Every slot/signal/property below must keep the exact desktop signature:
+// QML binds the same names on both builds (SettingsHubLayout,
+// AccessoriesSettingsPage parse get_ports_with_descriptions() as JSON text).
 
 #include <QObject>
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
 
+class SettingsManager;
+
 class ESP32VolumeManager : public QObject
 {
     Q_OBJECT
-public:
-    explicit ESP32VolumeManager(QObject *parent = nullptr) : QObject(parent) {}
-    void connect_settings_manager(QObject *) {}
-    void cleanup() {}
-    void send_mute_state(bool) {}
 
-public slots:
-    bool is_connected() const { return false; }
-    QString get_connection_detail() const { return QStringLiteral("Not available on mobile"); }
-    QVariantList get_ports_with_descriptions() const { return {}; }
-    void connect_device() {}
-    void reset_reconnect_attempts() {}
+    Q_PROPERTY(bool connected READ is_connected NOTIFY connectionStatusChanged)
+    Q_PROPERTY(QString connectionStatus READ get_connection_status NOTIFY connectionStatusChanged)
+    Q_PROPERTY(QString connectionDetail READ get_connection_detail NOTIFY connectionDetailChanged)
+    Q_PROPERTY(QVariantList availablePorts READ get_available_ports NOTIFY availablePortsChanged)
+
+public:
+    explicit ESP32VolumeManager(SettingsManager * = nullptr, QObject *parent = nullptr)
+        : QObject(parent) {}
+    void connect_settings_manager(SettingsManager *) {}
+
+    void send_volume_update(int) {}
+    void send_mute_state(bool) {}
+    void send_theme_color(int, int, int) {}
 
 signals:
-    void volumeChangeRequested(float);
+    void connectionStatusChanged(const QString &status);
+    void connectionDetailChanged(const QString &detail);
+    void availablePortsChanged(const QVariantList &ports);
+    void volumeChangeRequested(float delta);
     void muteToggleRequested();
-    void availablePortsChanged(const QVariantList &);
-    void connectionStateChanged();
-    // Mirrored from the desktop class so QML `Connections` handlers
-    // (SettingsHubLayout, AccessoriesSettingsPage) resolve on mobile.
-    void connectionStatusChanged(const QString &);
-    void connectionDetailChanged(const QString &);
+
+public slots:
+    void connect_device() {}
+    void disconnect_device() {}
+    QVariantList get_available_ports() { return {}; }
+    QString get_ports_with_descriptions() { return QStringLiteral("[]"); }
+    bool is_connected() { return false; }
+    QString get_connection_status() { return QStringLiteral("Disconnected"); }
+    QString get_connection_detail() { return QStringLiteral("Not available on mobile"); }
+    void refresh_ports() {}
+    void reset_reconnect_attempts() {}
+    void cleanup() {}
 };
 
 #endif // Q_OS_MOBILE

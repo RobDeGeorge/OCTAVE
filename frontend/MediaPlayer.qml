@@ -651,7 +651,7 @@ Item {
         }
 
         // Download Button (top right corner, overlays title bar)
-        // Hidden when playlist is empty — MediaRoom shows a large download button instead
+        // Hidden when the local playlist is empty (unless a Spotify playlist is shown), since there is nothing to add to yet
         Control {
             id: downloadButton
             visible: (mediaFiles.length > 0) || isSpotifyPlaylist

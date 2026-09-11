@@ -21,7 +21,10 @@ void install(bool debug);
 // Directory the log files live in (created on install).
 QString logDir();
 
-// Flush all files (called on normal exit and from the fatal path).
+// Flush all files. Called from main.cpp's aboutToQuit handler (normal exit)
+// and by the message handler after a QtFatalMsg, right before Qt aborts.
+// Never called from the crash (signal) handlers: those must stay Qt-free,
+// and every line is already flushed as it is written.
 void flush();
 
 }  // namespace OctaveLog

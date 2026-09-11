@@ -31,7 +31,7 @@
             <li><a href="#shuffle">Shuffle State</a></li>
             <li><a href="#external-volume">External Volume Sources</a></li>
             <li><a href="#managers">Manager Communication</a></li>
-            <li><a href="#visibility-popup">Toggle View Popup (dormant)</a></li>
+            <li><a href="#visibility-popup">Toggle View Popup</a></li>
             <li><a href="#sizing">Sizing Tokens</a></li>
             <li><a href="#animation-pattern">Button Animation Pattern</a></li>
             <li><a href="#svg-pattern">SVG Icon Pattern</a></li>
@@ -247,17 +247,17 @@
             <tr>
               <td>C++</td>
               <td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td>
-              <td>Clamps to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code> and to a debounced <code>spotifyManager.set_volume(percent)</code>. The ESP32 manager receives volume through <code>connect_settings_manager()</code> (it reads <code>currentVolume</code> from the settings object).</td>
+              <td>Clamps to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code>, a 300&nbsp;ms trailing-debounced <code>spotifyManager.set_volume(percent)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out as the Python controller.</td>
             </tr>
             <tr>
               <td>Python</td>
               <td><span class="file-path">backend/volume_utils.py</span></td>
-              <td>Clamps, calls <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>spotify_manager.set_volume(percent)</code> (if connected), <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>.</td>
+              <td>Clamps, calls <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>spotify_manager.set_volume(percent)</code> (if connected, through the same 300&nbsp;ms trailing debounce as C++), <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>.</td>
             </tr>
           </tbody>
         </table>
 
-        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (both entry points also apply it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>).</p>
+        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (both entry points also apply it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). The vertical layout's handler does the same for <code>volumeControlVertical</code> / <code>volumeSliderVertical</code>, guarded by <code>!volumeSliderVertical.pressed</code>.</p>
 
         <div class="info-box info">
           <div class="info-box-title">One Curve, One Entry Point</div>
@@ -339,7 +339,7 @@
             </tr>
             <tr>
               <td>Settings</td><td><code>settings_button.svg</code> / <code>bottomBarSettingsButton</code></td>
-              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid; a no-op for Sidebar and Carousel). Otherwise pops to root and pushes a new <code>SettingsMenu.qml</code> with <code>initialSection: lastSettingsSection</code> (a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>).</td>
+              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid; a no-op for Sidebar and Carousel). Otherwise pops to root and pushes a new <code>SettingsMenu.qml</code> with <code>initialSection: lastSettingsSection</code> (a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>). Press-and-hold (<code>onPressAndHold</code>, in both orientations) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
             </tr>
             <tr>
               <td>Android Auto</td><td><code>android_auto_button.svg</code> / <code>bottomBarAndroidAutoButton</code></td>
@@ -380,17 +380,23 @@
 
         <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and <code>font.pixelSize: settingsManager.clockSize</code> (default 18, slider 10&ndash;85). Tapping the clock pushes <code>SensorHome.qml</code>. A press highlight uses <code>hoverColor</code>.</p>
 
-        <div class="info-box warning">
-          <div class="info-box-title">Vertical Clock Binding</div>
-          In the vertical layout the clock's initial binding is <code>text: clockTextVertical.text</code> &mdash; a reference to itself. It works only because the <code>Connections</code> on <code>clock.timeChanged</code> overwrites the text every tick; the binding itself never supplies a value.
-        </div>
+        <p>Both layouts bind their clock <code>Text</code> to one bar-level property, <code>bottomBar.clockTimeText</code>, which a single <code>Connections</code> on <code>clock.timeChanged</code> (also at bar level, outside both layout components) keeps current:</p>
+
+        <pre><code><span class="prop">property string</span> clockTimeText: <span class="str">""</span>
+
+<span class="cls">Connections</span> {
+    <span class="prop">target</span>: clock
+    <span class="kw">function</span> <span class="fn">onTimeChanged</span>(time) { bottomBar.clockTimeText = time }
+}</code></pre>
+
+        <p>The comment explains why the value is held on the bar rather than written into each layout's <code>Text</code> by its own handler: the layout that the <code>Loader</code> instantiates on an orientation switch shows the current time immediately instead of staying blank until the clock next emits &mdash; up to a minute when seconds are hidden.</p>
 
         <!-- Shuffle -->
         <h2 id="shuffle">Shuffle State</h2>
 
         <p><code>isShuffleEnabled</code> on the bar root is the single source of truth for both layouts' shuffle buttons. It is initialised from <code>spotifyManager.is_shuffled()</code> or <code>mediaManager.is_shuffled()</code> depending on <code>useSpotify</code>, and kept current by <code>shuffleStateChanged(enabled)</code> from whichever manager is active, plus a <code>Connections</code> on <code>settingsManager.mediaSourceChanged</code> that re-reads the correct source when the user switches between local and Spotify playback.</p>
 
-        <p>When active, the button background becomes <code>bottomBarToggleShade</code> (radius 4) and the icon is tinted <code>bottomBarActiveToggleButton</code> (the accent). When inactive the icon uses <code>bottomBarVolumeButton</code> &mdash; the per-theme <code>bottombar.shuffle</code> colour (<code>Style.bottomBarShuffleButton</code>) is not referenced by the bar.</p>
+        <p>When active, the button background becomes <code>bottomBarToggleShade</code> (radius 4) and the icon is tinted <code>bottomBarActiveToggleButton</code> (the accent). When inactive the icon uses <code>bottomBarShuffleButton</code>, the per-theme <code>bottombar.shuffle</code> colour.</p>
 
         <!-- External Volume -->
         <h2 id="external-volume">External Volume Sources</h2>
@@ -426,9 +432,9 @@
         <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>spotifyManager</code>, <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered under the same names by <span class="file-path">src/main.cpp</span> and <span class="file-path">main.py</span>.</p>
 
         <!-- Visibility popup -->
-        <h2 id="visibility-popup">Toggle View Popup (dormant)</h2>
+        <h2 id="visibility-popup">Toggle View Popup</h2>
 
-        <p>At the bottom of the file, outside both layout components, a modal <code>Popup</code> named <code>settingsVisibilityPopup</code> ("Toggle View") lists six settings sections (Device, Media, Display, OBD, Accessories, About) with animated switches bound to <code>settingsManager.is_settings_section_visible(section)</code> and writing <code>save_settings_section_visibility(section, state)</code>. It is defined at bar level "so both horizontal and vertical layouts can access it", but nothing in the current code calls <code>settingsVisibilityPopup.open()</code> &mdash; the Settings button's second tap now calls <code>navigateToHub()</code> instead. The visibility setting itself is still honoured by <code>SettingsMenu.buildHubModel()</code> (see <a href="settings-ui.html#visibility">Settings UI &rarr; Section Visibility</a>).</p>
+        <p>At the bottom of the file, outside both layout components, a modal <code>Popup</code> named <code>settingsVisibilityPopup</code> ("Toggle View") lists six settings sections (Device, Media, Display, OBD, Accessories, About) with animated switches bound to <code>settingsManager.is_settings_section_visible(section)</code> and writing <code>save_settings_section_visibility(section, state)</code>. It is defined at bar level "so both horizontal and vertical layouts can access it": the Settings nav button's <code>MouseArea</code> in each layout calls <code>settingsVisibilityPopup.open()</code> from <code>onPressAndHold</code>, while a plain tap keeps the navigate / <code>navigateToHub()</code> behaviour described above. The visibility map is honoured by <code>SettingsMenu.buildHubModel()</code> (see <a href="settings-ui.html#visibility">Settings UI &rarr; Section Visibility</a>).</p>
 
         <!-- Sizing -->
         <h2 id="sizing">Sizing Tokens</h2>
@@ -490,7 +496,7 @@
           <tbody>
             <tr>
               <td>Two complete layout <code>Component</code>s instead of one reflowing layout</td>
-              <td>The horizontal and vertical bars differ in more than direction (section proportions, button widths, hit areas, popup ids), so each is written out in full and a <code>Loader</code> swaps them. The cost is duplication: helper functions, <code>Connections</code> and the mute/volume logic exist twice (suffixed <code>Vertical</code>).</td>
+              <td>The horizontal and vertical bars differ in more than direction (section proportions, button widths, hit areas, popup ids), so each is written out in full and a <code>Loader</code> swaps them. The cost is duplication: helper functions, most <code>Connections</code> and the mute/volume logic exist twice (suffixed <code>Vertical</code>); only the clock text (<code>clockTimeText</code>) and the shuffle flag are shared at bar level.</td>
             </tr>
             <tr>
               <td>Release anchors before re-anchoring</td>
@@ -526,7 +532,7 @@
             </tr>
             <tr>
               <td>Second tap on Settings returns to the hub</td>
-              <td>The Hub and Dashboard layouts have a card-grid landing state; <code>navigateToHub()</code> gives the nav button a purpose while already in Settings. The older "visibility popup" behaviour was left in the file but is no longer wired (see above).</td>
+              <td>The Hub and Dashboard layouts have a card-grid landing state; <code>navigateToHub()</code> gives the nav button a purpose while already in Settings. The section-visibility popup moved to press-and-hold on the same button (see above), so a tap never opens a modal by surprise.</td>
             </tr>
             <tr>
               <td>Phone Mirror pops back to an existing view</td>

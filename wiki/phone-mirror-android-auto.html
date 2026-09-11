@@ -70,7 +70,8 @@
               <a href="#aa-status">What actually works</a>.</li>
           </ul>
           <p>
-            The two paths share nothing but <code>adb</code>. Phone Mirror pushes decoded frames into a
+            The two paths share one thing: <code>adb</code>, found once by <code>PhoneMirrorManager::findAdb()</code> /
+            <code>_find_adb()</code> and reused by Android Auto. Phone Mirror pushes decoded frames into a
             <code>QVideoSink</code> bound to a QML <code>VideoOutput</code>; Android Auto embeds a native window
             (Python/Windows) and additionally registers a <code>QQuickImageProvider</code> (<code>image://dhuframe/</code>)
             that no QML currently reads.
@@ -140,7 +141,7 @@
           <table>
             <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>adbPath</code></td><td><code>str</code></td><td>adb in use. Search order: bundled platform-tools (C++: <code>&lt;app dir&gt;/platform-tools/</code>, <code>&lt;app dir&gt;/../tools/platform-tools/&lt;os&gt;/</code>, <code>&lt;app dir&gt;/../Resources/platform-tools/</code>; Python: <code>&lt;repo&gt;/tools/platform-tools/&lt;os&gt;/</code>, <code>&lt;repo&gt;/platform-tools/</code>), then PATH, then common SDK locations</td></tr>
+              <tr><td><code>adbPath</code></td><td><code>str</code></td><td>adb in use. Search order: bundled platform-tools (C++: <code>&lt;app dir&gt;/platform-tools/</code>, <code>&lt;app dir&gt;/../tools/platform-tools/&lt;os&gt;/</code>, <code>&lt;app dir&gt;/../Resources/platform-tools/</code>; Python: <code>&lt;repo&gt;/tools/platform-tools/&lt;os&gt;/</code>, <code>&lt;repo&gt;/platform-tools/</code>), then PATH, then common SDK locations. The lookup is <code>PhoneMirrorManager::findAdb()</code> (public static) / module-level <code>_find_adb()</code> in <span class="file-path">backend/phone_mirror/manager.py</span>, which <code>AndroidAutoManager</code> reuses so both features drive the same binary</td></tr>
               <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>Decoder present (C++: built with <code>OCTAVE_HAVE_FFMPEG</code>; Python: <code>import av</code> succeeded), server jar found (C++: Qt resource <code>:/phone-server/octave-phone-server</code>; Python: <code>tools/phone-server/</code> or <code>phone-server/</code> next to a deployed tree), adb found</td></tr>
               <tr><td><code>serverVersion</code></td><td><code>str</code></td><td><code>"3.3.4-octave"</code> -- the string the client sends on launch; the server refuses anything else</td></tr>
               <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>A client thread is up (true from <code>start()</code>, not only after the handshake)</td></tr>
@@ -160,13 +161,12 @@
             <tbody>
               <tr><td><code>scrcpyStarted</code></td><td><code>int</code></td><td>Handshake done, stream is up (handle is always 1; the name predates the built-in client and <code>PhoneMirrorView.qml</code> depends on it)</td></tr>
               <tr><td><code>scrcpyStopped</code></td><td>--</td><td>Session ended by request</td></tr>
-              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>Specific failure text: <code>describeDeviceState()</code> for unauthorized / offline / no device / no adb, <code>getInstallInstructions()</code> for a missing prerequisite, or the client's own reason ("Phone disconnected. Reconnect the USB cable.", "scrcpy server did not answer within 20 s", "handshake failed", ...)</td></tr>
+              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>The only error channel (a never-emitted <code>error</code> signal was removed from both backends). Specific failure text: <code>describeDeviceState()</code> for unauthorized / offline / no device / no adb, <code>getInstallInstructions()</code> for a missing prerequisite, or the client's own reason ("Phone disconnected. Reconnect the USB cable.", "scrcpy server did not answer within 20 s", "handshake failed", ...)</td></tr>
               <tr><td><code>isRunningChanged</code>, <code>displaySizeChanged</code>, <code>videoSinkChanged</code></td><td>--</td><td>Property notifications</td></tr>
               <tr><td><code>frameSizeChanged</code></td><td><code>int, int</code></td><td>Frame size; also notifies <code>activeDisplaySize</code>, <code>frameWidth</code>, <code>frameHeight</code></td></tr>
               <tr><td><code>frameReady</code></td><td>--</td><td>A frame reached the sink (the view counts these as proof of life; "Connecting..." shows until the first one)</td></tr>
               <tr><td><code>audioActiveChanged</code>, <code>audioPlayingChanged</code>, <code>phoneAsleepChanged</code>, <code>phoneInUseChanged</code></td><td><code>bool</code></td><td>Property notifications</td></tr>
               <tr><td><code>duckingChanged</code></td><td><code>float</code></td><td>Factor other sources should apply: the duck level while <code>audioPlaying</code> and ducking is on, 1.0 otherwise. <code>main</code> routes it to <code>MediaManager.setDucking()</code></td></tr>
-              <tr><td><code>error</code></td><td><code>str</code></td><td>Declared in both backends; currently nothing emits it</td></tr>
             </tbody>
           </table>
           <h4>Slots</h4>
@@ -256,7 +256,7 @@
             <thead><tr><th>Socket</th><th>Server &rarr; client</th></tr></thead>
             <tbody>
               <tr><td>video (first)</td><td><code>[u8 dummy]</code> then <code>[64 B device name, NUL-padded]</code> then <code>[u32 codec id "h264"][u32 width][u32 height]</code> then packets</td></tr>
-              <tr><td>audio (only with <code>audio=true</code>)</td><td><code>[u32 codec id]</code>: <code>0x00726177</code> (<code>"raw"</code>) then packets; <code>0</code> = the phone cannot capture (video continues); <code>1</code> = configuration error (both clients also continue video-only)</td></tr>
+              <tr><td>audio (only with <code>audio=true</code>)</td><td><code>[u32 codec id]</code>: <code>0x00726177</code> (<code>"raw"</code>) then packets; <code>0</code> = the phone cannot capture; <code>1</code> = configuration error. Both clients log a warning and continue video-only in either case (<code>AUDIO_STREAM_ERROR</code> / <code>kAudioStreamError</code> never ends the session)</td></tr>
               <tr><td>control (last)</td><td>Device messages (below); client &rarr; server control messages</td></tr>
             </tbody>
           </table>
@@ -271,7 +271,7 @@
             <tbody>
               <tr><td>0</td><td><code>INJECT_KEYCODE</code></td><td><code>[u8 action][i32 keycode][i32 repeat][i32 metastate]</code></td><td>14 B</td><td>yes (action 0 down / 1 up, repeat 0)</td></tr>
               <tr><td>2</td><td><code>INJECT_TOUCH_EVENT</code></td><td><code>[u8 action][i64 pointer id][i32 x][i32 y][u16 screen w][u16 screen h][u16 pressure][i32 action_button][i32 buttons]</code></td><td>32 B</td><td>yes: x/y in frame pixels (clamped), screen w/h = frame size, pressure 0xFFFF (0 on up), buttons 0</td></tr>
-              <tr><td>10</td><td><code>SET_DISPLAY_POWER</code></td><td><code>[u8 on]</code></td><td>2 B</td><td>implemented in both clients, no caller (the keeper owns the panel now)</td></tr>
+              <tr><td>10</td><td><code>SET_DISPLAY_POWER</code></td><td><code>[u8 on]</code></td><td>2 B</td><td>no longer sent: the <code>setDisplayPower()</code> / <code>set_display_power()</code> client methods were removed (the keeper owns the panel)</td></tr>
               <tr><td>100</td><td><code>OCTAVE_SET_KEEPER</code></td><td><code>[u8 enabled][u8 panelDark][i32 graceMs]</code></td><td>7 B</td><td>yes, 500 ms after connect and on every setting change</td></tr>
               <tr><td>101</td><td><code>OCTAVE_TAKE_BACK</code></td><td>none</td><td>1 B</td><td><code>resumeMirroring()</code></td></tr>
               <tr><td>1, 3, 4, 5..9, 11..</td><td>upstream text / scroll / back-or-screen-on / clipboard / panels / UHID / start-app / reset-video</td><td>as in scrcpy 3.3.4</td><td></td><td>parsed by the server, never sent</td></tr>
@@ -539,8 +539,8 @@
               <tr><td>Black test / gain without numpy</td><td>n/a</td><td>Falls back to a 24x24 point grid (no lenient mode) and skips the gain; ducking then treats the whole stream as sound (warning logged once). numpy is lazily imported so it costs nothing until audio flows</td></tr>
               <tr><td>Server process exit mid-stream</td><td>Detected only through the video socket EOF</td><td>The log-drain thread also fails the session when the adb child exits ("Phone disconnected..." if running, else "scrcpy server exited (code N)")</td></tr>
               <tr><td>Failure path</td><td><code>fail()</code> emits <code>disconnected</code>; the worker tears down on its way out</td><td><code>_fail()</code> emits and spawns <code>stop()</code> on a helper thread; worker join is bounded to 3 s</td></tr>
-              <tr><td>Stale-server kill on stop</td><td><code>QProcess::startDetached</code> (fire and forget)</td><td>Blocking <code>subprocess.run</code> with a 5 s timeout</td></tr>
-              <tr><td>Console windows on Windows</td><td>No <code>CREATE_NO_WINDOW</code> on the adb processes</td><td><code>CREATE_NO_WINDOW</code> on every adb subprocess</td></tr>
+              <tr><td>Stale-server kill on stop</td><td><code>QProcess::startDetached()</code> (fire and forget)</td><td>Blocking <code>subprocess.run</code> with a 5 s timeout</td></tr>
+              <tr><td>Console windows on Windows</td><td><code>ScrcpyClient::hideConsoleWindow()</code> sets <code>CREATE_NO_WINDOW</code> on every adb / server <code>QProcess</code> (probes, stale-server kill, <code>pressHome</code>, <code>wakePhone</code>, the session's adb child); no-op elsewhere</td><td><code>CREATE_NO_WINDOW</code> on every adb subprocess</td></tr>
               <tr><td>Threads</td><td><code>scrcpy-client</code>, <code>scrcpy-audio</code>, <code>scrcpy-devmsg</code> (std::thread); GUI thread delivers</td><td>Same names plus <code>scrcpy-server-log</code>; one-shot <code>phone-mirror-home</code> / <code>phone-mirror-wake</code> threads for adb</td></tr>
             </tbody>
           </table>
@@ -666,7 +666,7 @@
               <tr><td><code>getDhuInstallInstructions()</code></td><td><code>str</code></td><td>Android Studio &rarr; SDK Manager &rarr; SDK Tools &rarr; "Android Auto Desktop Head Unit Emulator"</td></tr>
               <tr><td><code>sendDhuClick(x, y)</code></td><td>--</td><td>Forwards to <code>DhuCapture.sendMouseClick</code>; not called by any QML</td></tr>
               <tr><td><code>closeDhu()</code></td><td>--</td><td>Stop capture, terminate the DHU (5 s, then kill), reset state</td></tr>
-              <tr><td><code>cleanup()</code></td><td>--</td><td><code>closeDhu()</code> plus <code>adb forward --remove-all</code>; called at application quit</td></tr>
+              <tr><td><code>cleanup()</code></td><td>--</td><td><code>closeDhu()</code> plus <code>adb forward --remove tcp:5277</code> (only its own forward); called at application quit</td></tr>
             </tbody>
           </table>
         </section>
@@ -681,9 +681,10 @@
 <span class="cmt"># SDK roots checked:</span>
 Windows: %LOCALAPPDATA%\Android\Sdk, %USERPROFILE%\AppData\Local\Android\Sdk, C:\Android\Sdk, C:\Users\%USERNAME%\Android\Sdk
 macOS/Linux: ~/Android/Sdk, ~/Library/Android/sdk, /opt/android-sdk, /usr/local/android-sdk</code></pre>
-          <p>adb is searched separately from the phone mirror's discovery and does <em>not</em> use the bundled platform-tools or PATH:
-            <code>%USERPROFILE%\Downloads\platform-tools</code>, the SDK <code>platform-tools</code> directories, <code>/usr/bin/adb</code>,
-            <code>/usr/local/bin/adb</code>.</p>
+          <p>adb comes from the same discovery as the phone mirror: C++ <code>findAdbPath()</code> calls the public static
+            <code>PhoneMirrorManager::findAdb()</code> (cached after the first hit), Python <code>_find_adb_path()</code> calls
+            <code>backend.phone_mirror.manager._find_adb()</code> -- bundled platform-tools, then PATH, then the common SDK
+            locations -- so both features drive the same binary.</p>
           <h4>DHU Configuration</h4>
           <p>
             Before launching, a config file is written to <code>~/.android/headunit.ini</code>:
@@ -704,9 +705,10 @@ dpi = 160</code></pre>
               <code>device</code> (no state parsing like the phone mirror's <code>getDeviceState()</code>).
             </li>
             <li>
-              <strong>Port forwarding</strong> -- <code>adb forward --remove-all</code>, then <code>adb forward tcp:5277 tcp:5277</code>
-              (the DHU's port). <code>--remove-all</code> also removes a live phone-mirror forward, so launching Android Auto during a
-              mirror session breaks the mirror's tunnel.
+              <strong>Port forwarding</strong> -- <code>adb forward --remove tcp:5277</code> (a stale DHU forward only), then
+              <code>adb forward tcp:5277 tcp:5277</code> (the DHU's port). An earlier <code>--remove-all</code> also tore down a live
+              phone-mirror <code>localabstract:scrcpy_*</code> tunnel; Android Auto now touches only its own forward, here and in
+              <code>cleanup()</code>.
             </li>
             <li>
               <strong>Head unit server</strong> -- <code>dumpsys activity services com.google.android.projection.gearhead/.companion.DeveloperHeadUnitNetworkService</code>

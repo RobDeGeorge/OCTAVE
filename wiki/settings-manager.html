@@ -170,9 +170,9 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <p>
           The slot names are deliberately snake_case on both sides (<code>save_theme_setting</code>, not
           <code>saveThemeSetting</code>): the Python backend came first, the QML was written against it, and the C++ port
-          kept the names so no QML had to change. The one exception is the shutdown flush,
-          <code>flush_pending_save()</code> in Python and <code>flushPendingSave()</code> in C++, which only the two
-          <code>main</code> entry points call.
+          kept the names so no QML had to change. The one camelCase slot is the shutdown flush,
+          <code>flushPendingSave()</code> on both sides (Python also keeps a <code>flush_pending_save()</code> alias),
+          which only the two <code>main</code> entry points call.
         </p>
 
         <p>
@@ -217,16 +217,17 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <ol class="steps">
           <li>Build <code>_default_settings</code> / <code>buildDefaultSettings()</code> (92 keys) and the registry.</li>
           <li><code>load_settings()</code>: the file is opened with a <em>shared</em> lock, parsed and passed through <code>_validate_settings()</code>. A missing file is created from the defaults immediately; a corrupt file (JSON parse error) is logged and the defaults are used in memory without overwriting the file.</li>
-          <li><strong>Migrations</strong>, applied in memory (only the first one writes back):
+          <li><strong>Migrations</strong>, applied in memory (only the first two write back):
             <ul>
               <li><code>uiScale == 0.6</code> (an old default) becomes <code>1.0</code> and is saved straight away.</li>
+              <li><code>fontSetting == "Google Sans"</code> (the pre-0.9 default, which <code>Style.setFont()</code> rejects because <code>Main.qml</code> derives the display name <code>"GoogleSans Regular"</code> from the bundled <code>GoogleSans-Regular.ttf</code>, silently leaving the app in the system font) becomes <code>"GoogleSans Regular"</code> and is saved straight away.</li>
               <li><code>obdBluetoothPort == "/dev/rfcomm0"</code> (the former desktop placeholder, meaningless on Android where the field holds a MAC address) is cleared to <code>""</code>.</li>
               <li><code>lastSettingsSection == "clockSettings"</code> (a removed page) becomes <code>"displaySettings"</code>.</li>
               <li><code>obdParameters</code>: every PID present in the defaults but missing from the file is added, so new PIDs appear after an upgrade without discarding the user's toggles.</li>
-              <li><code>settingsMenuVisibility</code>: sections missing from the stored dict are filled in (see <a href="#parity-notes">Parity Notes</a> for a C++/Python difference here).</li>
+              <li><code>settingsMenuVisibility</code>: sections missing from the stored dict are filled in as <code>true</code> (visible) in both backends, matching <code>is_settings_section_visible()</code>.</li>
             </ul>
           </li>
-          <li>Every backing member is populated from the loaded dict with the default as fallback.</li>
+          <li>Every backing member is populated from the loaded dict with the default as fallback (<code>_load_members_from_settings()</code> / <code>populateMembers()</code>, which <code>reset_to_defaults()</code> reuses).</li>
           <li><code>mediaFolder</code> defaults to <code>""</code> on disk and is resolved at load: C++ uses <code>QStandardPaths::MusicLocation</code> (falling back to <code>~/Music</code>) and creates the directory on desktop only; Python uses <code>~/Music</code> and always creates it.</li>
           <li><code>currentVolume</code> (never persisted) is derived from <code>startUpVolume</code> by inverting the volume curve: <code>round(sqrt(startUpVolume) * 100)</code>, e.g. the default 0.1 gives 32&nbsp;%. See <a href="architecture.html">Architecture</a> for the quadratic curve.</li>
           <li>Two single-shot timers are created: the 500&nbsp;ms settings write timer and the 800&nbsp;ms OBD-parameter debounce timer.</li>
@@ -245,8 +246,8 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
                     ▼
               signal.emit(value) ──► QML bindings update immediately
                     ⋮
-        500 ms of quiet  ──► flush_pending_save() ──► _write_settings_to_disk()   (atomic temp + rename)
-        aboutToQuit      ──► flush_pending_save()      (main.py / main.cpp, after MediaManager saves playback state)</pre>
+        500 ms of quiet  ──► flushPendingSave() ──► _write_settings_to_disk()   (atomic temp + rename)
+        aboutToQuit      ──► flushPendingSave()      (main.py / main.cpp, after MediaManager saves playback state)</pre>
 
         <p>
           Consequences worth knowing: a slider drag that fires twenty <code>save_*</code> calls costs one write;
@@ -293,12 +294,12 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           </tbody>
         </table>
 
-        <div class="info-box warning">
-          <div class="info-box-title">Known validation trap: integer defaults for float settings</div>
-          <code>esp32VolumeStepSize</code> defaults to the integer literal <code>1</code> in both backends although its
-          property is a float and the slider steps by 0.25. Under the Python rule above a stored <code>0.25</code> is
-          truncated to <code>0</code> on every save; C++ is unaffected. Reported in the audit, not yet fixed in code, so
-          keep new float settings' defaults as float literals (<code>1.0</code>, not <code>1</code>).
+        <div class="info-box info">
+          <div class="info-box-title">Float settings need float defaults</div>
+          Under the Python rule above an integer default truncates every stored float. <code>esp32VolumeStepSize</code>
+          used to default to the integer <code>1</code>, so a 0.25 / 0.5 / 0.75 knob step became <code>0</code> on disk
+          under the Python backend; its default is now the float literal <code>1.0</code> in both backends. Keep new
+          float settings' defaults as float literals (<code>1.0</code>, not <code>1</code>).
         </div>
 
         <h3>File Locking</h3>
@@ -367,7 +368,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
             <tr><td><code>theme_setting</code></td><td>themeSetting</td><td>chips</td><td><code>optionsSource: "themeList"</code></td></tr>
             <tr><td><code>show_clock</code></td><td>showClock</td><td>toggle</td><td></td></tr>
             <tr><td><code>bottom_bar_media_controls</code></td><td>showBottomBarMediaControls</td><td>toggle</td><td></td></tr>
-            <tr><td><code>color_transition_ms</code></td><td>colorTransitionMs</td><td>slider</td><td>0 – 5000, step 100 (the Display page's own slider uses 0 – 2000, step 50)</td></tr>
+            <tr><td><code>color_transition_ms</code></td><td>colorTransitionMs</td><td>slider</td><td>0 – 2000, step 50 (same as the Display page's own slider)</td></tr>
             <tr><td><code>obd_fast_mode</code></td><td>obdFastMode</td><td>toggle</td><td></td></tr>
             <tr><td><code>gesture_sensor_enabled</code></td><td>gestureSensorEnabled</td><td>toggle</td><td></td></tr>
             <tr><td><code>imu_enabled</code></td><td>imuEnabled</td><td>toggle</td><td></td></tr>
@@ -456,12 +457,12 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           <tbody>
             <tr><td><code>load_settings()</code> / <code>loadSettings()</code></td><td>Returns a copy of the in-memory dict once loaded. Before that (constructor only) it reads the file under a shared lock, writing the defaults if the file is missing and returning the defaults if it is corrupt.</td></tr>
             <tr><td><code>save_settings(settings)</code> / <code>saveSettings()</code></td><td>Validates into the in-memory copy and arms the 500&nbsp;ms timer. On the constructor path (migration, first run) it writes immediately.</td></tr>
-            <tr><td><code>flush_pending_save()</code> / <code>flushPendingSave()</code></td><td>Writes now if a save is pending and stops the timer. Called from <code>aboutToQuit</code> in <span class="file-path">main.py</span> / <span class="file-path">src/main.cpp</span>, after <code>MediaManager</code> has saved playback state so that write is included.</td></tr>
+            <tr><td><code>flushPendingSave()</code> (Python alias <code>flush_pending_save()</code>)</td><td>Writes now if a save is pending and stops the timer. Called from <code>aboutToQuit</code> in <span class="file-path">main.py</span> / <span class="file-path">src/main.cpp</span>, after <code>MediaManager</code> has saved playback state so that write is included.</td></tr>
             <tr><td><code>_write_settings_to_disk(settings)</code> / <code>writeSettingsToDisk()</code></td><td>The atomic temp+rename write; takes an already validated object.</td></tr>
             <tr><td><code>update_setting(key, value, signal)</code> / <code>updateSetting(key, value)</code></td><td>Convenience funnel: copy, set key, <code>save_settings</code>, emit (Python emits inside; C++ setters emit themselves).</td></tr>
             <tr><td><code>get_setting(key)</code>, <code>get_setting_with_default(key, default)</code></td><td>Read any key from memory. <code>get_setting</code> returns <code>None</code> / an invalid <code>QVariant</code> for unknown keys.</td></tr>
             <tr><td><code>save_setting(key, value)</code></td><td>Write any key and emit <code>genericSettingChanged(key)</code>. No type validation for keys without a default.</td></tr>
-            <tr><td><code>reset_to_defaults()</code></td><td>Slot. Saves the default dict, resets most backing members and emits their signals. Not wired to any UI or backend caller at present; see <a href="#parity-notes">Parity Notes</a> for the members it does not reset.</td></tr>
+            <tr><td><code>reset_to_defaults()</code></td><td>Slot. Saves the default dict (Python deep-copies it so no cached nested dict aliases the defaults), reloads <em>every</em> backing member through the constructor's <code>_load_members_from_settings()</code> / <code>populateMembers()</code> and emits every property signal. Not wired to any UI or backend caller at present.</td></tr>
           </tbody>
         </table>
 
@@ -568,15 +569,12 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           boolean query:
         </p>
         <pre><code><span class="str">"settingsMenuVisibility"</span>: {
-    <span class="str">"deviceSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"mediaSettings"</span>: <span class="kw">true</span>,
     <span class="str">"displaySettings"</span>: <span class="kw">true</span>,
+    <span class="str">"mediaSettings"</span>: <span class="kw">true</span>,
     <span class="str">"obdSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"androidAutoSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"phoneMirrorSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"volumeKnobSettings"</span>: <span class="kw">false</span>,  <span class="cmt">// the only section hidden by default</span>
-    <span class="str">"gestureSensorSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"about"</span>: <span class="kw">true</span>
+    <span class="str">"accessoriesSettings"</span>: <span class="kw">true</span>,
+    <span class="str">"deviceSettings"</span>: <span class="kw">true</span>,
+    <span class="str">"about"</span>: <span class="kw">true</span>      <span class="cmt">// every section visible by default</span>
 }</code></pre>
 
         <ul>
@@ -586,15 +584,15 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         </ul>
         <p>
           The toggles live in the <code>settingsVisibilityPopup</code> defined in
-          <span class="file-path">frontend/BottomBar.qml</span> (its comment says "opened on second click of settings
-          button", but as of this audit no QML calls <code>open()</code> on it, so the toggles are currently
-          unreachable from the UI), and <span class="file-path">frontend/SettingsMenu.qml</span> filters its page model through
-          <code>is_settings_section_visible()</code>. The current menu has six sections:
+          <span class="file-path">frontend/BottomBar.qml</span>, opened by a press-and-hold on the settings navigation
+          button (a tap navigates as before), and <span class="file-path">frontend/SettingsMenu.qml</span> filters its page model through
+          <code>is_settings_section_visible()</code>. The default keys are exactly the menu's six sections:
           <code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>,
           <code>accessoriesSettings</code> (Volume Knob, IMU, Gesture and Phone Dock sub-sections; desktop only),
-          <code>deviceSettings</code> and <code>about</code>. The default dict still carries the older per-feature
-          section names; <code>accessoriesSettings</code> works because a missing key reads as visible, and toggling it
-          simply adds the key. See <a href="settings-ui.html">Settings UI</a> for the layouts.
+          <code>deviceSettings</code> and <code>about</code>, all <code>true</code>. A file written by an older build
+          may still carry the retired per-feature keys (<code>androidAutoSettings</code>, <code>phoneMirrorSettings</code>,
+          <code>volumeKnobSettings</code>, <code>gestureSensorSettings</code>); they are kept but nothing reads them, and any
+          current section missing from the file reads as visible in both backends. See <a href="settings-ui.html">Settings UI</a> for the layouts.
         </p>
 
         <!-- Pinned Settings -->
@@ -842,7 +840,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <pre><code><span class="str">"myNewFeature"</span>: <span class="str">"my_new_feature"</span>,</code></pre>
           </li>
           <li>
-            <strong>Add to <code>reset_to_defaults()</code></strong> so the in-memory member and its signal are reset too.
+            <strong>Emit its signal from <code>reset_to_defaults()</code></strong> &mdash; the member itself is reloaded by <code>_load_members_from_settings()</code> / <code>populateMembers()</code>, but the signal list in <code>reset_to_defaults()</code> is explicit.
           </li>
           <li>
             <strong>Wire the UI</strong> on the owning page under <span class="file-path">frontend/settings/</span> and, if it is a Now Playing visual, in <span class="file-path">frontend/NowPlayingStudio.qml</span> (which carries a commented template for exactly this).
@@ -866,7 +864,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
           </thead>
           <tbody>
             <tr><td><code>clockFormatChanged</code></td><td>bool</td><td><code>clockFormat24Hour</code> changes (the signal name does not follow the key)</td></tr>
-            <tr><td><code>startUpVolumeChanged</code></td><td>str</td><td>Declared <code>Signal(str)</code> in Python; C++ emits <code>QString::number(volume)</code> to match. Read the <code>startUpVolume</code> property rather than the payload</td></tr>
+            <tr><td><code>startUpVolumeChanged</code></td><td>str</td><td>Declared <code>Signal(str)</code> in Python and emitted with <code>str(volume)</code>; C++ emits <code>QString::number(volume)</code>. Read the <code>startUpVolume</code> property rather than the payload</td></tr>
             <tr><td><code>currentVolumeChanged</code></td><td>int</td><td>Unified 0–100 volume changed by any source; not persisted</td></tr>
             <tr><td><code>obdParametersChanged</code></td><td>none</td><td>After the 800&nbsp;ms OBD debounce flush, or on reset</td></tr>
             <tr><td><code>homeOBDParametersChanged</code>, <code>supportedOBDParametersChanged</code></td><td>none</td><td>Home-card list / scan result saved</td></tr>
@@ -887,14 +885,14 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <tr><th>Topic</th><th>Python</th><th>C++</th></tr>
           </thead>
           <tbody>
-            <tr><td>Shutdown flush name</td><td><code>flush_pending_save()</code> (<code>@Slot()</code>)</td><td><code>flushPendingSave()</code> (<code>Q_INVOKABLE</code>). Only <code>main.*</code> call it, so QML is unaffected</td></tr>
+            <tr><td>Shutdown flush name</td><td><code>flushPendingSave()</code> (<code>@Slot()</code>), plus a <code>flush_pending_save()</code> alias for older callers</td><td><code>flushPendingSave()</code> (<code>Q_INVOKABLE</code>)</td></tr>
             <tr><td>Numeric validation</td><td>int defaults truncate floats; float defaults coerce ints</td><td>any number accepted for either</td></tr>
-            <tr><td>Missing <code>settingsMenuVisibility</code> sections at load</td><td>filled with <code>True</code> (so an old file gains a <em>visible</em> Volume Knob section)</td><td>filled with the default value (<code>False</code> for <code>volumeKnobSettings</code>)</td></tr>
+            <tr><td>Missing <code>settingsMenuVisibility</code> sections at load</td><td colspan="2">filled with <code>true</code> (visible) in both backends</td></tr>
             <tr><td><code>mediaFolder</code> fallback</td><td><code>~/Music</code>, directory always created</td><td><code>QStandardPaths::MusicLocation</code>; directory created on desktop only</td></tr>
             <tr><td>Remote theme-art download</td><td><code>urllib</code> in a daemon thread</td><td>external <code>curl</code> via <code>QProcess</code> (30&nbsp;s timeout)</td></tr>
             <tr><td><code>save_obd_saved_adapters</code></td><td>re-parses and re-serialises; non-list input becomes <code>[]</code></td><td>stores the string as given; only empty becomes <code>"[]"</code></td></tr>
-            <tr><td><code>reset_to_defaults()</code> (both)</td><td colspan="2">Writes the full default dict but leaves these members (and their signals) untouched until restart: <code>persistShuffleState</code>, <code>lastShuffleState</code>, <code>show3DButtonTilt</code>, <code>show3DAlbumPreview</code>, <code>settingsLayoutStyle</code>, <code>mediaSource</code>, Spotify credentials, <code>homeOBDParameters</code>, <code>supportedOBDParameters</code>, <code>directoryHistory</code>, <code>lastSettingsSection</code>, <code>albumArtColors</code>. No caller exists today</td></tr>
-            <tr><td><code>set_last_settings_section()</code> (both)</td><td colspan="2">Whitelists the nine original section IDs; the menu's <code>accessoriesSettings</code> is not among them, so the Accessories page is never remembered as the last section</td></tr>
+            <tr><td><code>reset_to_defaults()</code> (both)</td><td colspan="2">Writes the full default dict, reloads every cached member (<code>_load_members_from_settings()</code> / <code>populateMembers()</code>) and emits every property signal. No caller exists today</td></tr>
+            <tr><td><code>set_last_settings_section()</code> (both)</td><td colspan="2">Whitelists the six current section IDs (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the four legacy per-feature IDs an older file may carry</td></tr>
             <tr><td><code>fuelTankCapacity</code> (both)</td><td colspan="2">Property and slot exist in both backends but nothing reads or writes them (no QML, no OBD manager use)</td></tr>
           </tbody>
         </table>

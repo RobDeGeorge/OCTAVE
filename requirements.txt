@@ -2,7 +2,7 @@ mutagen==1.47.0
 numpy>=1.26.0
 obd>=0.7.3
 spotipy>=2.25.2
-PySide6>=6.5.0
+PySide6>=6.8.0
 keyring==25.7.0
 av>=12.0.0
 requests>=2.25.0

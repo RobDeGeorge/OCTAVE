@@ -179,9 +179,10 @@ NetworkManager (src/managers/networkmanager.cpp)
 
           <p>Python gives every subprocess a 5-second timeout. C++ waits up to 5&nbsp;s for the process to <em>start</em>
             (<code>waitForStarted(5000)</code>) and otherwise lets it run to completion asynchronously; a name check that is
-            still running when the next poll fires is simply skipped. One behavioural difference: when neither WiFi nor
-            Ethernet is found, Python reports an empty name, whereas the C++ wired-fallback lambda only writes
-            <code>"Ethernet"</code> on success and leaves the previously reported SSID in place.</p>
+            still running when the next poll fires is simply skipped. When neither WiFi nor Ethernet is found both backends
+            report an empty name: the C++ wired-fallback lambda on every desktop platform (and the failed-to-start path)
+            calls <code>clearNetworkName()</code>, which clears <code>networkName</code> and emits
+            <code>networkNameChanged("")</code> so a stale SSID is never left on screen.</p>
 
           <h3>Internet Connectivity Check</h3>
           <p>
@@ -421,11 +422,9 @@ NetworkManager (src/managers/networkmanager.cpp)
             Worker-side progress is relayed through a lock-protected message slot. The worker calls
             <code>_set_progress(msg)</code> / <code>setProgress(msg)</code>, and the 250&nbsp;ms result poll timer on the main
             thread picks the message up and emits <code>selfUpdateMessageChanged</code>. In Python the timer is started by
-            <code>_submit_work()</code>, so every step's message reaches the About page. The C++ port creates the same
-            <code>m_resultPollTimer</code> but nothing calls <code>start()</code> on it; as a result only the initial
-            "Fetching latest changes..." (set directly in <code>applySelfUpdate()</code>) and the final message from
-            <code>finishSelfUpdate()</code> are visible in the C++ build -- the intermediate "Applying update...",
-            "Verifying new code..." and "Installing dependencies..." texts are stored but never relayed.
+            <code>_submit_work()</code>; in C++ <code>applySelfUpdate()</code> starts the same <code>m_resultPollTimer</code>
+            before setting the initial "Fetching latest changes...", so every step's message ("Applying update...",
+            "Verifying new code...", "Installing dependencies...") reaches the About page on both backends.
           </p>
 
           <h3>Self-Update Status Values</h3>
@@ -595,7 +594,7 @@ engine.rootContext().setContextProperty(<span class="str">"networkManager"</span
               <tr><td>Repo root</td><td><code>applicationDirPath()/..</code></td><td>Parent of <span class="file-path">backend/</span></td></tr>
               <tr><td><code>canSelfUpdate</code></td><td>git on PATH <em>and</em> <code>.git</code> present; always false on Android</td><td>git on PATH and not <code>sys.frozen</code></td></tr>
               <tr><td>Update check connectivity gate</td><td>None (request error → "Could not reach GitHub")</td><td>Probe first → "No internet connection"</td></tr>
-              <tr><td>Name/connectivity probes</td><td>Parallel; Android reports fixed "WiFi"; stale SSID kept when nothing is found</td><td>Sequential; empty string when nothing is found</td></tr>
+              <tr><td>Name/connectivity probes</td><td>Parallel; Android reports fixed "WiFi"; empty string when nothing is found</td><td>Sequential; empty string when nothing is found</td></tr>
               <tr><td>Step timeouts</td><td>None on fetch / reset / pip (only 5&nbsp;s to start a process)</td><td>60 s fetch, 30 s reset, 15 s py_compile, 600 s pip</td></tr>
               <tr><td>Rollback triggers</td><td>fetch, reset, syntax-check failures, git failing to start in steps 1-2</td><td>syntax-check failure, timeout, unexpected exception</td></tr>
               <tr><td>Progress relay</td><td>Timer never started; only first and last messages shown</td><td>Every step's message shown</td></tr>

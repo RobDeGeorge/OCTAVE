@@ -355,7 +355,9 @@ Item {
                                 userSeeking = true
                             } else {
                                 userSeeking = false
-                                if (mediaManager) {
+                                if (useSpotify && spotifyManager) {
+                                    spotifyManager.set_position(value)
+                                } else if (mediaManager) {
                                     mediaManager.set_position(value)
                                 }
                             }

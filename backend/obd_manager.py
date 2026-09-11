@@ -320,11 +320,13 @@ class OBDManager(QObject):
 
         # Connection management
         self._connection_attempts = 0
-        self._connection_status = "Not Connected"
+        self._connection_status = "Disconnected"
         self._connection_detail = "Waiting for startup..."
         self._connection_progress = 0
-        # Keep the Q_PROPERTY-style readers (connectionDetail / connectionProgress)
-        # in sync with whatever was last emitted — mirrors the C++ constructor hook.
+        # Keep the Q_PROPERTY-style readers (connectionStatus / connectionDetail /
+        # connectionProgress) in sync with whatever was last emitted — mirrors the
+        # C++ constructor hook.
+        self.connectionStatusChanged.connect(self._cache_connection_status)
         self.connectionStatusDetailChanged.connect(self._cache_connection_detail)
         self.connectionProgressChanged.connect(self._cache_connection_progress)
         self._is_connecting = False
@@ -1573,8 +1575,15 @@ class OBDManager(QObject):
         if self._settings_manager:
             self._settings_manager.save_obd_bluetooth_port(address)
 
+    def _cache_connection_status(self, status):
+        self._connection_status = status
+
     def _cache_connection_detail(self, detail):
         self._connection_detail = detail
+
+    @Property(str, notify=connectionStatusChanged)
+    def connectionStatus(self):
+        return self._connection_status
 
     def _cache_connection_progress(self, progress):
         self._connection_progress = progress
@@ -1612,10 +1621,10 @@ class OBDManager(QObject):
 
     @Slot(result=str)
     def get_connection_status(self):
-        """Get detailed connection status"""
-        if not self._connection:
-            return "No Connection"
-        return str(self._connection.status())
+        """Last connectionStatusChanged value ("Disconnected", "Connecting",
+        "Connected", "No Vehicle", ...) — the same vocabulary the C++ backend
+        returns, so the QML status colour map keys on one set of strings."""
+        return self._connection_status
 
     @Slot()
     def close(self):

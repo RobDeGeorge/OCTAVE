@@ -42,6 +42,12 @@ Item {
     property int gridColumns: 12
     property int gridRows: 6
 
+    // Optional grid geometry (dp) carried through from a loaded spec so a
+    // hand-authored margins/spacing survives a save. undefined = not in the
+    // spec; the renderer (and canvas) then fall back to their 20/16 defaults.
+    property var specMargins: undefined
+    property var specSpacing: undefined
+
     // Working cell list. Reassign the whole array (never mutate in place) so
     // the canvas Repeater rebuilds.
     property var cells: []
@@ -73,6 +79,8 @@ Item {
         }
         gridColumns = spec.gridColumns ? spec.gridColumns : 12
         gridRows = spec.gridRows ? spec.gridRows : 6
+        specMargins = spec.margins
+        specSpacing = spec.spacing
         cells = _sanitizeCells(spec.cells)
         nameField.text = spec.label ? spec.label : ""
     }
@@ -87,13 +95,22 @@ Item {
         App.OBDParameterModel.simulationActive = false
         if (!dirty) return
         if (typeof settingsManager === "undefined" || !settingsManager) return
-        settingsManager.save_setting("dashboardEditorDraft", JSON.stringify({
+        settingsManager.save_setting("dashboardEditorDraft", JSON.stringify(_withGridGeometry({
             "editingId": editingId,
             "label": nameField.text,
             "gridColumns": gridColumns,
             "gridRows": gridRows,
             "cells": cells
-        }))
+        })))
+    }
+
+    // Add margins/spacing to a spec-shaped object only when the loaded spec
+    // had them, so a dashboard that relies on the renderer defaults keeps
+    // relying on them (and its JSON stays minimal).
+    function _withGridGeometry(obj) {
+        if (specMargins !== undefined && specMargins !== null) obj["margins"] = specMargins
+        if (specSpacing !== undefined && specSpacing !== null) obj["spacing"] = specSpacing
+        return obj
     }
 
     function _restoreDraft(json) {
@@ -102,6 +119,8 @@ Item {
             editingId = draft.editingId ? draft.editingId : ""
             gridColumns = draft.gridColumns ? draft.gridColumns : 12
             gridRows = draft.gridRows ? draft.gridRows : 6
+            specMargins = draft.margins
+            specSpacing = draft.spacing
             cells = _sanitizeCells(draft.cells || [])
             nameField.text = draft.label ? draft.label : ""
             dirty = true
@@ -300,14 +319,14 @@ Item {
         if (label.length === 0) label = "Untitled"
 
         var id = editingId.length > 0 ? editingId : _uniqueId(label)
-        var spec = {
+        var spec = _withGridGeometry({
             "schema": 1,
             "id": id,
             "label": label,
             "gridColumns": gridColumns,
             "gridRows": gridRows,
             "cells": cells
-        }
+        })
 
         var savedId = dashboardManager.saveDashboard(spec)
         if (savedId && savedId.length > 0) {
@@ -429,6 +448,8 @@ Item {
             anchors.fill: parent
             gridColumns: editor.gridColumns
             gridRows: editor.gridRows
+            margins: editor.specMargins
+            spacing: editor.specSpacing
             cells: editor.cells
             selectedIndex: editor.selectedIndex
 

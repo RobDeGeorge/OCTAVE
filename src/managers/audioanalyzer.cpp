@@ -106,13 +106,38 @@ static int nextPow2(int n)
 }
 
 // ════════════════════════════════════════════════════════════════
+// Logarithmic band edges: numBars+1 bin indices from 0 to fftLen.
+//
+// Edge i is fftLen^(i/numBars) truncated, the same curve the Python
+// backend uses (np.logspace(0, log10(fftLen), numBars+1)). With
+// ~400-500 bins over 96 bars the first dozen edges all truncate to
+// 1, which used to leave those bars permanently at 0; every band is
+// therefore forced to be at least one bin wide, so edges are strictly
+// increasing (the first bands are then linear until the log curve
+// overtakes them). Edge 0 is the first non-DC bin.
+// ════════════════════════════════════════════════════════════════
+
+static std::vector<int> logBandEdges(int fftLen, int numBars)
+{
+    std::vector<int> edges(numBars + 1);
+    edges[0] = 0;
+    for (int i = 1; i <= numBars; ++i) {
+        const double t = static_cast<double>(i) / numBars;
+        int idx = static_cast<int>(std::pow(static_cast<double>(fftLen), t));
+        idx = std::max(idx, edges[i - 1] + 1);
+        edges[i] = std::min(idx, fftLen);
+    }
+    edges[numBars] = fftLen;
+    return edges;
+}
+
+// ════════════════════════════════════════════════════════════════
 // Worker: decode audio file and compute per-chunk FFT levels
 // Runs on a QtConcurrent thread — must NOT touch Qt GUI objects.
 //
-// Uses ffmpeg CLI to decode audio to raw PCM float data, matching
-// the Python version's use of PyAV.  QAudioDecoder was previously
-// used here but fails silently on worker threads due to event-loop
-// and thread-affinity issues with the GStreamer/FFmpeg backends.
+// Decodes with QAudioDecoder (driven by a local QEventLoop so it
+// works on this worker thread) to 8 kHz mono PCM, matching the
+// Python version's PyAV decode + 8 kHz downsample.
 // ════════════════════════════════════════════════════════════════
 
 AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
@@ -182,7 +207,7 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
     }
 
     if (pcmBuffer.isEmpty()) {
-        qCWarning(lcAudioAnalyzer) << "ffmpeg produced no audio data for" << filePath;
+        qCWarning(lcAudioAnalyzer) << "QAudioDecoder produced no audio data for" << filePath;
         return result;
     }
 
@@ -217,6 +242,12 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
     const int fftSize = nextPow2(chunkSize);
     const auto window = hannWindow(chunkSize);
 
+    // Magnitudes of the positive frequencies, skipping DC: bins 1..N/2, i.e.
+    // 0-4 kHz at the 8 kHz decode rate (the Python backend keeps the same
+    // range: np.abs(np.fft.rfft(chunk))[1:]).
+    const int fftLen = fftSize / 2;
+    const std::vector<int> logIndices = logBandEdges(fftLen, numBars);
+
     // First pass: raw magnitudes per chunk per bar
     std::vector<std::vector<float>> rawFftData(numChunks);
 
@@ -230,29 +261,9 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
 
         fft_radix2(buf);
 
-        // Magnitude of positive frequencies, skip DC
-        // For a real signal FFT of size N, positive frequencies are bins 1..N/2-1
-        // This matches Python's: fft = fft[1:len(fft)//2]  after rfft
-        const int halfFFT = fftSize / 2;
-        std::vector<float> mag(halfFFT - 1);
-        for (int i = 0; i < static_cast<int>(mag.size()); ++i)
+        std::vector<float> mag(fftLen);
+        for (int i = 0; i < fftLen; ++i)
             mag[i] = std::abs(buf[i + 1]);   // +1 to skip DC
-
-        if (mag.empty()) {
-            rawFftData[c].assign(numBars, 0.0f);
-            continue;
-        }
-
-        // Logarithmic bin edges — match Python's np.logspace(0, log10(len(fft)), numBars+1)
-        // np.logspace(0, log10(N), M) produces M values from 10^0=1 to 10^log10(N)=N
-        const int fftLen = static_cast<int>(mag.size());
-        std::vector<int> logIndices(numBars + 1);
-        for (int i = 0; i <= numBars; ++i) {
-            double t = static_cast<double>(i) / numBars;
-            double logVal = std::pow(static_cast<double>(fftLen), t);
-            int idx = static_cast<int>(logVal);
-            logIndices[i] = std::clamp(idx, 0, fftLen);
-        }
 
         // Bin into bars
         std::vector<float> levels(numBars, 0.0f);

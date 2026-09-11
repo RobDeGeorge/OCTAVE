@@ -24,6 +24,20 @@ Rectangle {
     // Shared shuffle state - single source of truth for all shuffle buttons
     property bool isShuffleEnabled: false
 
+    // Clock text shared by both layouts. Held at bottomBar level (rather than
+    // set on each layout's Text from its own Connections) so the layout that
+    // is loaded on an orientation switch shows the current time immediately
+    // instead of staying blank until the clock next emits — up to a minute
+    // when seconds are hidden.
+    property string clockTimeText: ""
+
+    Connections {
+        target: clock
+        function onTimeChanged(time) {
+            bottomBar.clockTimeText = time
+        }
+    }
+
     Component.onCompleted: {
         updateLayout()
         // Initialize shuffle state from the appropriate source
@@ -436,7 +450,7 @@ Rectangle {
                                     source: shuffleButtonImage
                                     color: bottomBar.isShuffleEnabled ?
                                         App.Style.bottomBarActiveToggleButton :
-                                        App.Style.bottomBarVolumeButton
+                                        App.Style.bottomBarShuffleButton
                                 }
                             }
 
@@ -1202,6 +1216,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
+                                onPressAndHold: settingsVisibilityPopup.open()
                                 onClicked: {
                                     var currentItem = stackView.currentItem
                                     if (currentItem && currentItem.objectName === "settingsMenu") {
@@ -1436,8 +1451,9 @@ Rectangle {
                                 font.pixelSize: settingsManager ? settingsManager.clockSize : 18
                                 font.family: bottomBar.globalFont
                                 color: App.Style.clockTextColor
+                                text: bottomBar.clockTimeText
                             }
-                            
+
                             MouseArea {
                                 id: mouseAreaClock
                                 anchors.fill: parent
@@ -1455,13 +1471,6 @@ Rectangle {
                 }
 
                 // Connections and Signal handlers
-                Connections {
-                    target: clock
-                    function onTimeChanged(time) {
-                        clockText.text = time
-                    }
-                }
-
                 Connections {
                     target: mediaManager
                     function onPlayStateChanged(playing) {
@@ -1817,7 +1826,7 @@ Rectangle {
                                     source: shuffleButtonImageVertical
                                     color: bottomBar.isShuffleEnabled ?
                                         App.Style.bottomBarActiveToggleButton :
-                                        App.Style.bottomBarVolumeButton
+                                        App.Style.bottomBarShuffleButton
                                 }
                             }
 
@@ -2554,6 +2563,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
+                                onPressAndHold: settingsVisibilityPopup.open()
                                 onClicked: {
                                     var currentItem = stackView.currentItem
                                     if (currentItem && currentItem.objectName === "settingsMenu") {
@@ -2789,7 +2799,7 @@ Rectangle {
                                 font.pixelSize: settingsManager ? settingsManager.clockSize : 18
                                 font.family: bottomBar.globalFont
                                 color: App.Style.clockTextColor
-                                text: clockTextVertical.text  // Get the time from the horizontal layout
+                                text: bottomBar.clockTimeText
                             }
                             
                             MouseArea {
@@ -2829,16 +2839,9 @@ Rectangle {
                 
                 // Connections for vertical layout
                 Connections {
-                    target: clock
-                    function onTimeChanged(time) {
-                        clockTextVertical.text = time
-                    }
-                }
-
-                Connections {
                     target: mediaManager
                     function onPlayStateChanged(playing) {
-                        playButtonImageVertical.source = playing ? 
+                        playButtonImageVertical.source = playing ?
                             "./assets/pause_button.svg" : "./assets/play_button.svg"
                     }
                     function onMuteChanged(muted) {
@@ -2846,9 +2849,13 @@ Rectangle {
                         updateMuteButtonImageVertical()
                     }
                     function onVolumeChanged(volume) {
-                        // Update volume text in vertical layout
-                        var volumePercentage = Math.round(Math.sqrt(volume) * 100)
-                        volumeControlVertical.currentValue = volumePercentage
+                        // Only update if not being changed by the slider itself
+                        if (!volumeSliderVertical.pressed) {
+                            // Convert from raw volume to percentage (0-100)
+                            var volumePercentage = Math.round(Math.sqrt(volume) * 100)
+                            volumeControlVertical.currentValue = volumePercentage
+                            volumeSliderVertical.value = volumePercentage
+                        }
                         updateMuteButtonImageVertical()
                     }
                     function onShuffleStateChanged(enabled) {
@@ -2891,7 +2898,7 @@ Rectangle {
         }
     }
 
-    // Settings Visibility Popup - opened on second click of settings button
+    // Settings Visibility Popup - opened by press-and-hold on the settings button
     // Defined at bottomBar level so both horizontal and vertical layouts can access it
     Popup {
         id: settingsVisibilityPopup

@@ -29,6 +29,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cerrno>
 #endif
 
 Q_LOGGING_CATEGORY(lcGesture, "octave.gesture")
@@ -65,7 +66,12 @@ static constexpr double GES_FORWARD_WAIT     = 0.30;
 static constexpr double GES_BACKWARD_WAIT    = 0.40;
 static constexpr double GES_POST_FLUSH       = 0.10;
 
-// PAJ7620U2 initialization register table (DFRobot reference, 220 register pairs)
+// Consecutive failed gesture-register reads before the loop declares the bus
+// dead, emits "Error" and hands off to the manager's retry/back-off path
+// (Python raises on the first OSError; a small threshold rides out one NACK).
+static constexpr int MAX_CONSECUTIVE_READ_FAILURES = 5;
+
+// PAJ7620U2 initialization register table (DFRobot reference, 219 register pairs)
 static const uint8_t INIT_REGISTER_ARRAY[][2] = {
     // Bank 0
     {0xEF, 0x00},
@@ -191,13 +197,22 @@ QMap<QString, QString> GestureWorker::gestureMapping() const
 
 // ==================== I2C Helpers ====================
 
-bool GestureWorker::openBus()
+bool GestureWorker::openBus(bool &permissionDenied)
 {
+    permissionDenied = false;
 #ifdef Q_OS_LINUX
     QString busPath = QStringLiteral("/dev/i2c-%1").arg(I2C_BUS);
     m_fd = ::open(busPath.toLocal8Bit().constData(), O_RDWR);
     if (m_fd < 0) {
-        qCWarning(lcGesture) << "failed to open" << busPath;
+        if (errno == EACCES || errno == EPERM) {
+            // Same as the Python backend: a permission problem will not fix
+            // itself on retry, so report it once and stop.
+            permissionDenied = true;
+            qCWarning(lcGesture) << "permission denied on" << busPath
+                                 << "- add the user to the i2c group; not retrying";
+        } else {
+            qCWarning(lcGesture) << "failed to open" << busPath;
+        }
         return false;
     }
     return true;
@@ -297,12 +312,13 @@ bool GestureWorker::initRegisters()
 
 // ==================== Gesture Reading ====================
 
-void GestureWorker::readGestureRaw(uint8_t &flag0, uint8_t &flag1)
+bool GestureWorker::readGestureRaw(uint8_t &flag0, uint8_t &flag1)
 {
     uint8_t data[2] = {0, 0};
-    readBlockData(PAJ7620_ADDR, REG_GESTURE_0, data, 2);
-    flag0 = data[0];
-    flag1 = data[1];
+    const bool ok = readBlockData(PAJ7620_ADDR, REG_GESTURE_0, data, 2);
+    flag0 = ok ? data[0] : 0;
+    flag1 = ok ? data[1] : 0;
+    return ok;
 }
 
 QString GestureWorker::decodeGesture(uint8_t flag0, uint8_t flag1) const
@@ -341,9 +357,10 @@ void GestureWorker::flushSensor(double duration)
 void GestureWorker::run()
 {
     // Open I2C bus
-    if (!openBus()) {
+    bool permissionDenied = false;
+    if (!openBus(permissionDenied)) {
         emit connectionStatusChanged(QStringLiteral("Disconnected"));
-        emit stopped();
+        emit stopped(!permissionDenied);
         return;
     }
 
@@ -352,7 +369,7 @@ void GestureWorker::run()
         qCWarning(lcGesture) << "PAJ7620 wakeup failed";
         closeBus();
         emit connectionStatusChanged(QStringLiteral("Error"));
-        emit stopped();
+        emit stopped(true);
         return;
     }
 
@@ -361,7 +378,7 @@ void GestureWorker::run()
         qCWarning(lcGesture) << "failed to read chip ID";
         closeBus();
         emit connectionStatusChanged(QStringLiteral("Error"));
-        emit stopped();
+        emit stopped(true);
         return;
     }
 
@@ -369,7 +386,7 @@ void GestureWorker::run()
         qCWarning(lcGesture) << "expected chip ID 0x7620, got" << Qt::hex << chipId;
         closeBus();
         emit connectionStatusChanged(QStringLiteral("Error"));
-        emit stopped();
+        emit stopped(true);
         return;
     }
 
@@ -377,7 +394,7 @@ void GestureWorker::run()
         qCWarning(lcGesture) << "register init failed";
         closeBus();
         emit connectionStatusChanged(QStringLiteral("Error"));
-        emit stopped();
+        emit stopped(true);
         return;
     }
 
@@ -396,11 +413,25 @@ void GestureWorker::run()
 
     double lastGestureTime = 0.0;
     int readCount = 0;
+    int consecutiveFailures = 0;
+    bool busDead = false;
     int pollMs = static_cast<int>(POLL_INTERVAL * 1000);
 
     while (m_running) {
         uint8_t flag0, flag1;
-        readGestureRaw(flag0, flag1);
+        if (!readGestureRaw(flag0, flag1)) {
+            // Dead-bus detection: surface a sustained failure as "Error" +
+            // retry like the Python backend instead of polling zeros forever.
+            if (++consecutiveFailures >= MAX_CONSECUTIVE_READ_FAILURES) {
+                qCWarning(lcGesture) << "read loop error:" << consecutiveFailures
+                                     << "consecutive I2C read failures";
+                busDead = true;
+                break;
+            }
+            QThread::msleep(pollMs);
+            continue;
+        }
+        consecutiveFailures = 0;
 
         if (!flag0 && !(flag1 & GES_WAVE)) {
             QThread::msleep(pollMs);
@@ -447,19 +478,22 @@ void GestureWorker::run()
                 gesture = QStringLiteral("BACKWARD");
             }
         } else {
-            // Directional / rotation / wave — confirm with a second read
+            // Directional / rotation / wave — confirm with a second read to
+            // reject single-sample glitches. The PAJ7620 clears 0x43/0x44 on
+            // read, so a clean gesture re-reads as either the same flag or
+            // nothing; a *different* flag 20 ms later means the sensor is
+            // still settling on some other motion, so the sample is dropped.
             QThread::msleep(20);
             uint8_t f0Confirm, f1Confirm;
             readGestureRaw(f0Confirm, f1Confirm);
             QString first = decodeGesture(flag0, flag1);
             QString second = decodeGesture(f0Confirm, f1Confirm);
 
-            if (first == second) {
-                gesture = first;
-            } else if (!second.isEmpty()) {
-                gesture = first; // Trust the initial trigger
+            if (second.isEmpty() || second == first) {
+                gesture = first; // Agreed, or sensor already cleared itself
             } else {
-                gesture = first; // Sensor already cleared itself
+                qCDebug(lcGesture) << "discarding" << first
+                                   << "- confirmation read saw" << second;
             }
         }
 
@@ -488,7 +522,9 @@ void GestureWorker::run()
 
     closeBus();
     qCInfo(lcGesture) << "read loop exited after" << readCount << "gestures";
-    emit stopped();
+    if (busDead)
+        emit connectionStatusChanged(QStringLiteral("Error"));
+    emit stopped(true);
 }
 
 // ==================== GestureManager ====================
@@ -631,9 +667,10 @@ void GestureManager::startSensor()
         m_running = true;
         m_retryCount = 0;
     });
-    connect(m_worker, &GestureWorker::stopped, this, [this]() {
+    connect(m_worker, &GestureWorker::stopped, this, [this](bool retryable) {
         m_running = false;
-        scheduleRetry();
+        if (retryable)
+            scheduleRetry();
     });
 
     connect(m_workerThread, &QThread::started, m_worker, &GestureWorker::run);

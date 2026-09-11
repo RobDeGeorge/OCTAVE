@@ -380,7 +380,7 @@ ApplicationWindow {
             "SensorMenu.qml":       { file: "SensorMenu.qml",       props: { stackView: stackView, mainWindow: mainWindow } },
             "CarMenu.qml":          { file: "CarMenu.qml",          props: { stackView: stackView, mainWindow: mainWindow } },
             "DownloadPage.qml":     { file: "DownloadPage.qml",     props: { stackView: stackView } },
-            "ClockMenu.qml":        { file: "ClockMenu.qml",        props: { stackView: stackView } },
+            "ClockMenu.qml":        { file: "ClockMenu.qml",        props: { stackView: stackView, mainWindow: mainWindow } },
         }
         var entry = pageMap[pageName]
         if (!entry) {

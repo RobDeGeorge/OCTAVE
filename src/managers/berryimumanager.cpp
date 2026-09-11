@@ -3,8 +3,9 @@
  * Reads accelerometer, gyroscope, magnetometer, and barometer data
  * via I2C and emits signals to QML for the CarMenu 3D model and gauges.
  *
- * Uses Madgwick AHRS (9DOF) for sensor fusion — outputs a quaternion
- * directly to the 3D model, completely avoiding gimbal lock.
+ * Uses Madgwick AHRS for sensor fusion — outputs a quaternion directly
+ * to the 3D model, completely avoiding gimbal lock. Fusion is deliberately
+ * accel+gyro only (6DOF); the magnetometer feeds the heading readout only.
  *
  * I2C sensors (Linux only):
  *   LSM6DSL  (accel/gyro)  at 0x6A
@@ -32,6 +33,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cerrno>
 #endif
 
 Q_LOGGING_CATEGORY(lcImu, "octave.berryimu")
@@ -61,6 +63,12 @@ static constexpr double SAMPLE_INTERVAL = 0.005;
 
 // Barometer read interval — ~5Hz, time-based so it doesn't drift with loop rate
 static constexpr double BARO_INTERVAL = 0.2;
+
+// Consecutive failed accel/gyro/mag block reads before the loop declares the
+// bus dead, emits "Error" and hands off to the manager's retry/back-off path
+// (the Python backend raises on the first OSError; a small threshold here
+// rides out a single NACK without dropping the connection).
+static constexpr int MAX_CONSECUTIVE_READ_FAILURES = 5;
 
 // ==================== Madgwick AHRS ====================
 
@@ -265,13 +273,22 @@ void BerryIMUWorker::setIdle(bool idle)
 
 // ==================== I2C Helpers ====================
 
-bool BerryIMUWorker::openBus()
+bool BerryIMUWorker::openBus(bool &permissionDenied)
 {
+    permissionDenied = false;
 #ifdef Q_OS_LINUX
     QString busPath = QStringLiteral("/dev/i2c-%1").arg(I2C_BUS);
     m_fd = ::open(busPath.toLocal8Bit().constData(), O_RDWR);
     if (m_fd < 0) {
-        qCWarning(lcImu) << "failed to open" << busPath;
+        if (errno == EACCES || errno == EPERM) {
+            // Same as the Python backend: a permission problem will not fix
+            // itself on retry, so report it once and stop.
+            permissionDenied = true;
+            qCWarning(lcImu) << "permission denied on" << busPath
+                             << "- add the user to the i2c group; not retrying";
+        } else {
+            qCWarning(lcImu) << "failed to open" << busPath;
+        }
         return false;
     }
     return true;
@@ -392,12 +409,12 @@ bool BerryIMUWorker::initBMP388()
 
 // ==================== Sensor Read ====================
 
-void BerryIMUWorker::readAccel(double &ax, double &ay, double &az)
+bool BerryIMUWorker::readAccel(double &ax, double &ay, double &az)
 {
     uint8_t data[6];
     if (!readBlockData(LSM6DSL_ADDR, 0x28, data, 6)) {
         ax = ay = az = 0.0;
-        return;
+        return false;
     }
     int16_t rawX, rawY, rawZ;
     std::memcpy(&rawX, &data[0], 2);
@@ -406,14 +423,15 @@ void BerryIMUWorker::readAccel(double &ax, double &ay, double &az)
     ax = rawX * 0.000122;
     ay = rawY * 0.000122;
     az = rawZ * 0.000122;
+    return true;
 }
 
-void BerryIMUWorker::readGyro(double &gx, double &gy, double &gz)
+bool BerryIMUWorker::readGyro(double &gx, double &gy, double &gz)
 {
     uint8_t data[6];
     if (!readBlockData(LSM6DSL_ADDR, 0x22, data, 6)) {
         gx = gy = gz = 0.0;
-        return;
+        return false;
     }
     int16_t rawX, rawY, rawZ;
     std::memcpy(&rawX, &data[0], 2);
@@ -422,15 +440,16 @@ void BerryIMUWorker::readGyro(double &gx, double &gy, double &gz)
     gx = rawX * 0.00875;
     gy = rawY * 0.00875;
     gz = rawZ * 0.00875;
+    return true;
 }
 
-void BerryIMUWorker::readMag(double &mx, double &my, double &mz)
+bool BerryIMUWorker::readMag(double &mx, double &my, double &mz)
 {
     // LIS3MDL auto-increment requires MSB set on register address
     uint8_t data[6];
     if (!readBlockData(LIS3MDL_ADDR, 0x28 | 0x80, data, 6)) {
         mx = my = mz = 0.0;
-        return;
+        return false;
     }
     int16_t rawX, rawY, rawZ;
     std::memcpy(&rawX, &data[0], 2);
@@ -439,6 +458,7 @@ void BerryIMUWorker::readMag(double &mx, double &my, double &mz)
     mx = rawX / 3421.0;
     my = rawY / 3421.0;
     mz = rawZ / 3421.0;
+    return true;
 }
 
 void BerryIMUWorker::readBaro(double &pressure, double &temp, double &altitude)
@@ -514,9 +534,10 @@ void BerryIMUWorker::calibrateGyro()
 void BerryIMUWorker::run()
 {
     // Open I2C bus
-    if (!openBus()) {
+    bool permissionDenied = false;
+    if (!openBus(permissionDenied)) {
         emit connectionStatusChanged(QStringLiteral("Disconnected"));
-        emit stopped();
+        emit stopped(!permissionDenied);
         return;
     }
 
@@ -525,21 +546,21 @@ void BerryIMUWorker::run()
         qCWarning(lcImu) << "LSM6DSL init failed";
         closeBus();
         emit connectionStatusChanged(QStringLiteral("Error"));
-        emit stopped();
+        emit stopped(true);
         return;
     }
     if (!initLIS3MDL()) {
         qCWarning(lcImu) << "LIS3MDL init failed";
         closeBus();
         emit connectionStatusChanged(QStringLiteral("Error"));
-        emit stopped();
+        emit stopped(true);
         return;
     }
     if (!initBMP388()) {
         qCWarning(lcImu) << "BMP388 init failed";
         closeBus();
         emit connectionStatusChanged(QStringLiteral("Error"));
-        emit stopped();
+        emit stopped(true);
         return;
     }
 
@@ -565,6 +586,8 @@ void BerryIMUWorker::run()
     double lastBaro = 0.0;      // 0 => first baro read happens on the first iteration
     bool baroLogged = false;
     int readCount = 0;
+    int consecutiveFailures = 0;
+    bool busDead = false;
 
     while (m_running) {
         double now = getTime();
@@ -607,9 +630,24 @@ void BerryIMUWorker::run()
 
         // Read all sensors
         double ax, ay, az, gx, gy, gz, mx, my, mz;
-        readAccel(ax, ay, az);
-        readGyro(gx, gy, gz);
-        readMag(mx, my, mz);
+        const bool accelOk = readAccel(ax, ay, az);
+        const bool gyroOk  = readGyro(gx, gy, gz);
+        const bool magOk   = readMag(mx, my, mz);
+        if (!accelOk || !gyroOk || !magOk) {
+            // Dead-bus detection: zeros must not be fed to the filter, and a
+            // sustained failure has to surface as "Error" + retry like the
+            // Python backend does instead of silently freezing the model.
+            if (++consecutiveFailures >= MAX_CONSECUTIVE_READ_FAILURES) {
+                qCWarning(lcImu) << "read loop error:" << consecutiveFailures
+                                 << "consecutive I2C read failures (accel=" << accelOk
+                                 << "gyro=" << gyroOk << "mag=" << magOk << ")";
+                busDead = true;
+                break;
+            }
+            QThread::usleep(static_cast<unsigned long>(SAMPLE_INTERVAL * 1e6));
+            continue;
+        }
+        consecutiveFailures = 0;
 
         // Remove gyro bias and apply deadband
         double gxCorr = gx - m_gyroBiasX;
@@ -622,7 +660,13 @@ void BerryIMUWorker::run()
         double gyRad = qDegreesToRadians(gyCorr);
         double gzRad = qDegreesToRadians(gzCorr);
 
-        // Only update filter when there's actual motion
+        // Only update filter when there's actual motion.
+        // Fusion is deliberately accel+gyro only (6DOF): the magnetometer is
+        // passed as zeros so MadgwickAHRS takes its 6DOF branch. In-car
+        // magnetic interference (alternator, speakers, steel body) would pull
+        // the quaternion around if it were fused; the magnetometer is used
+        // only for the raw heading readout below. Enabling 9DOF fusion is a
+        // behaviour change that needs on-vehicle testing first.
         if (gxCorr != 0.0 || gyCorr != 0.0 || gzCorr != 0.0) {
             m_ahrs.update(gxRad, gyRad, gzRad, ax, ay, az, 0.0, 0.0, 0.0, dt);
         }
@@ -726,7 +770,9 @@ void BerryIMUWorker::run()
 
     closeBus();
     qCInfo(lcImu) << "read loop exited after" << readCount << "reads";
-    emit stopped();
+    if (busDead)
+        emit connectionStatusChanged(QStringLiteral("Error"));
+    emit stopped(true);
 }
 
 // ==================== BerryIMUManager ====================
@@ -736,6 +782,7 @@ BerryIMUManager::BerryIMUManager(QObject *parent)
     , m_settingsManager(nullptr)
     , m_workerThread(nullptr)
     , m_worker(nullptr)
+    , m_emitInterval(EMIT_INTERVAL)
     , m_running(false)
     , m_enabled(true)
     , m_shuttingDown(false)
@@ -815,6 +862,7 @@ void BerryIMUManager::startSensor()
 #else
     m_worker = new BerryIMUWorker();
     m_worker->setIdle(!m_active);
+    m_worker->setEmitInterval(m_emitInterval);
     m_workerThread = new QThread(this);
     m_worker->moveToThread(m_workerThread);
 
@@ -844,9 +892,10 @@ void BerryIMUManager::startSensor()
         m_running = true;
         m_retryCount = 0;
     });
-    connect(m_worker, &BerryIMUWorker::stopped, this, [this]() {
+    connect(m_worker, &BerryIMUWorker::stopped, this, [this](bool retryable) {
         m_running = false;
-        scheduleRetry();
+        if (retryable)
+            scheduleRetry();
     });
 
     // Start worker thread
@@ -888,10 +937,10 @@ bool BerryIMUManager::isEnabled()
 void BerryIMUManager::setEmitRate(int hz)
 {
     hz = qBound(10, hz, 120);
-    double interval = 1.0 / hz;
+    m_emitInterval = 1.0 / hz;
     if (m_worker)
-        m_worker->setEmitInterval(interval);
-    qCInfo(lcImu) << "emit rate set to" << hz << "Hz (interval=" << interval << "s)";
+        m_worker->setEmitInterval(m_emitInterval);
+    qCInfo(lcImu) << "emit rate set to" << hz << "Hz (interval=" << m_emitInterval << "s)";
 }
 
 void BerryIMUManager::setActive(bool active)
@@ -925,6 +974,8 @@ void BerryIMUManager::cleanup()
 
 #else // Q_OS_MOBILE — Android QtSensors implementation
 
+#include "settingsmanager.h"
+
 #include <QAccelerometer>
 #include <QCompass>
 #include <QPressureSensor>
@@ -932,6 +983,7 @@ void BerryIMUManager::cleanup()
 #include <QCompassReading>
 #include <QPressureReading>
 #include <QLoggingCategory>
+#include <QVariant>
 #include <QtMath>
 #include <cmath>
 
@@ -989,6 +1041,19 @@ BerryIMUManager::~BerryIMUManager()
 void BerryIMUManager::connect_settings_manager(SettingsManager *sm)
 {
     m_settingsManager = sm;
+    // Desktop reads imuEnabled before its delayed start; the phone sensors
+    // were already started in the constructor, so honour a persisted "off"
+    // here by stopping them again.
+    QVariant v = sm->property("imuEnabled");
+    if (v.isValid() && !v.toBool() && m_enabled) {
+        m_enabled = false;
+        m_accel->stop();
+        m_compass->stop();
+        m_pressure->stop();
+        m_connected = false;
+        qCInfo(lcImuMobile) << "disabled in settings, sensors stopped";
+        emit connectionStatusChanged(QStringLiteral("Disabled"));
+    }
 }
 
 bool BerryIMUManager::getConnected() const
@@ -1021,6 +1086,20 @@ void BerryIMUManager::onAccelReading()
     roll  -= m_tareRoll;
     emit pitchChanged(static_cast<float>(pitch));
     emit rollChanged(static_cast<float>(roll));
+
+    // QtSensors gives no quaternion here (QAccelerometer only), so build the
+    // same yaw-stripped, tared orientation desktop emits from the tared
+    // pitch/roll: q = q_pitch(Y) * q_roll(X) with yaw = 0. Inverting it with
+    // the desktop's pitch = asin(2(wy - zx)) / roll = atan2(...) formulas
+    // returns exactly these angles, so the CarMenu model sees one convention.
+    const double hp = qDegreesToRadians(pitch) * 0.5;
+    const double hr = qDegreesToRadians(roll) * 0.5;
+    const double cp = std::cos(hp), sp = std::sin(hp);
+    const double cr = std::cos(hr), sr = std::sin(hr);
+    emit orientationChanged(static_cast<float>(cp * cr),
+                            static_cast<float>(cp * sr),
+                            static_cast<float>(sp * cr),
+                            static_cast<float>(-sp * sr));
 }
 
 void BerryIMUManager::onCompassReading()
@@ -1062,14 +1141,23 @@ void BerryIMUManager::setEnabled(bool enabled)
 {
     if (enabled == m_enabled) return;
     m_enabled = enabled;
+    // Persist exactly like the desktop branch so the toggle survives restart.
+    if (m_settingsManager) {
+        QMetaObject::invokeMethod(m_settingsManager, "save_imu_enabled",
+                                  Q_ARG(bool, enabled));
+    }
     if (enabled) {
-        m_accel->start();
+        m_connected = m_accel->start();
         m_compass->start();
         if (m_hasPressure) m_pressure->start();
+        emit connectionStatusChanged(m_connected ? QStringLiteral("Connected")
+                                                 : QStringLiteral("Unavailable"));
     } else {
         m_accel->stop();
         m_compass->stop();
         m_pressure->stop();
+        m_connected = false;   // `connected` reads false while disabled, as on desktop
+        emit connectionStatusChanged(QStringLiteral("Disabled"));
     }
 }
 
@@ -1077,7 +1165,7 @@ bool BerryIMUManager::isEnabled() { return m_enabled; }
 
 void BerryIMUManager::setEmitRate(int hz)
 {
-    hz = qBound(1, hz, 120);
+    hz = qBound(10, hz, 120);   // same clamp as desktop / Python
     m_emitRate = hz;
     const int rate = m_active ? m_emitRate : 5;
     m_accel->setDataRate(rate);

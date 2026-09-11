@@ -77,8 +77,8 @@
             </tr>
             <tr>
               <td><strong>Python</strong> (dev backend only)</td>
-              <td>3.10 or 3.11</td>
-              <td><code>pyproject.toml</code> pins <code>&gt;=3.10,&lt;3.12</code> and CI runs 3.11; <code>setup.py</code>'s own check only rejects versions below 3.8. Not needed for release binaries or Android.</td>
+              <td>3.10+</td>
+              <td><code>pyproject.toml</code> declares <code>requires-python = "&gt;=3.10"</code> with no upper cap and <code>setup.py</code> exits below 3.10; CI tests 3.11 and the developer machines run 3.14. Not needed for release binaries or Android.</td>
             </tr>
             <tr>
               <td><strong>C++ toolchain</strong> (source builds only)</td>
@@ -166,8 +166,8 @@ python main.py</code></pre>
             <code>dnf</code>/<code>yum</code> is on <code>PATH</code>. It also notes WSL ("microsoft" in <code>/proc/version</code>).
           </li>
           <li>
-            <strong>Checks the Python version</strong> &mdash; exits if below 3.8 (note that the project itself
-            targets 3.10+; see requirements above).
+            <strong>Checks the Python version</strong> &mdash; exits with "Python 3.10+ required" if below 3.10 (the same
+            floor <code>pyproject.toml</code> declares; see requirements above).
           </li>
           <li>
             <strong>Installs system dependencies</strong> (Linux only, via <code>sudo</code>) &mdash; audio
@@ -254,7 +254,7 @@ sudo apt install -y python3 python3-venv python3-pip libpulse0 libasound2 \
         <h2 id="platform-windows">Windows (Python backend)</h2>
         <ol class="steps">
           <li>
-            <strong>Install Python 3.10 or 3.11</strong> from <a href="https://python.org">python.org</a>.
+            <strong>Install Python 3.10 or newer</strong> from <a href="https://python.org">python.org</a>.
             Check "Add Python to PATH" during installation.
           </li>
           <li>
@@ -273,7 +273,7 @@ python setup.py</code></pre>
         <h2 id="platform-macos">macOS (Python backend)</h2>
         <ol class="steps">
           <li>
-            <strong>Install Python 3.10 or 3.11</strong> via <a href="https://brew.sh">Homebrew</a>
+            <strong>Install Python 3.10 or newer</strong> via <a href="https://brew.sh">Homebrew</a>
             (<code>brew install python</code>) or from <a href="https://python.org">python.org</a>.
           </li>
           <li>
@@ -457,7 +457,10 @@ python main.py
           <code>perfMonitor</code>), a <strong>command server</strong> on <code>127.0.0.1:9876</code> for remote control
           and the MCP tools, and instruments hot paths. The modules behind it
           (<code>backend/perf_monitor.py</code>, <code>backend/command_server.py</code>, <code>backend/perf_patches.py</code>)
-          are gitignored developer files, so <code>--profile</code> only works on a machine that has them.
+          are gitignored developer files, so <code>--profile</code> only does something on a machine that has them:
+          on a checkout without them <code>setup_perf_profiling()</code> logs a warning for each missing module
+          (<code>--profile: backend/perf_monitor.py not present (gitignored dev tooling), skipping ...</code>)
+          and the app starts normally instead of raising <code>ImportError</code>.
         </p>
 
         <!-- Dev Mode -->
@@ -494,7 +497,7 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
             <tr><th>Package</th><th>Version</th><th>Purpose</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>PySide6</code></td><td>&ge;6.5.0</td><td>Qt 6 Python bindings (QML engine, QMediaPlayer, QVideoSink, QAudioSink)</td></tr>
+            <tr><td><code>PySide6</code></td><td>&ge;6.8.0</td><td>Qt 6 Python bindings (QML engine, QMediaPlayer, QVideoSink, QAudioSink)</td></tr>
             <tr><td><code>mutagen</code></td><td>1.47.0</td><td>Audio file metadata (ID3 tags, album art)</td></tr>
             <tr><td><code>numpy</code></td><td>&ge;1.26.0</td><td>FFT for the waveform visualiser; phone-mirror audio buffers (imported lazily)</td></tr>
             <tr><td><code>obd</code></td><td>&ge;0.7.3</td><td>python-obd: ELM327 communication (imported lazily)</td></tr>

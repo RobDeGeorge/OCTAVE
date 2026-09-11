@@ -151,6 +151,8 @@ class SpotifyManager(QObject):
     _colorsReady = Signal(str)            # Extracted theme JSON from worker
     _devicesReady = Signal(list)  # Devices from API
     _playlistsReady = Signal(list)  # Playlists from API
+    _deviceTransferred = Signal(str)  # device_id after transfer_playback succeeded
+    _playlistTracksReady = Signal(str, str, list)  # playlist_id, name, tracks
 
     def __init__(self):
         super().__init__()
@@ -214,6 +216,8 @@ class SpotifyManager(QObject):
         self._colorsReady.connect(self._handle_colors_result)
         self._devicesReady.connect(self._handle_devices_result)
         self._playlistsReady.connect(self._handle_playlists_result)
+        self._deviceTransferred.connect(self._handle_device_transferred)
+        self._playlistTracksReady.connect(self._handle_playlist_tracks_result)
 
         # Track pending async operations to avoid duplicates
         self._poll_in_progress = False
@@ -238,6 +242,11 @@ class SpotifyManager(QObject):
         """Connect to settings manager to load/save credentials"""
         self._settings_manager = settings_manager
         self._load_credentials()
+
+        # Pick up credentials entered in the settings page during this session,
+        # so Connect works without a restart.
+        if hasattr(settings_manager, 'spotifyCredentialsChanged'):
+            settings_manager.spotifyCredentialsChanged.connect(self._load_credentials)
 
         # Connect theme change signal for Album Art Capture
         if hasattr(settings_manager, 'themeSettingChanged'):
@@ -736,20 +745,33 @@ class SpotifyManager(QObject):
 
     @Slot(str)
     def set_active_device(self, device_id):
-        """Transfer playback to a specific device"""
+        """Transfer playback to a specific device (async, like C++ apiPut)"""
         if not self._sp:
             return
-        try:
-            self._sp.transfer_playback(device_id, force_play=False)
-            self._active_device_id = device_id
 
-            # Find device name
-            for d in self._devices:
-                if d['id'] == device_id:
-                    self.activeDeviceChanged.emit(d['name'])
-                    break
-        except Exception as e:
-            self.errorOccurred.emit(f"Device transfer failed: {str(e)}")
+        def do_transfer():
+            self._sp.transfer_playback(device_id, force_play=False)
+
+        def on_done(future):
+            if not self._sp:  # Skip if shutting down
+                return
+            try:
+                future.result()
+                self._deviceTransferred.emit(device_id)
+            except Exception as e:
+                self.errorOccurred.emit(f"Device transfer failed: {str(e)}")
+
+        self._executor.submit(do_transfer).add_done_callback(on_done)
+
+    def _handle_device_transferred(self, device_id):
+        """Handle successful device transfer on main thread"""
+        self._active_device_id = device_id
+
+        # Find device name
+        for d in self._devices:
+            if d['id'] == device_id:
+                self.activeDeviceChanged.emit(d['name'])
+                break
 
     @Slot(result=list)
     def get_devices(self):
@@ -804,38 +826,42 @@ class SpotifyManager(QObject):
 
     @Slot(str, result=list)
     def get_playlist_tracks(self, playlist_id):
-        """Get tracks from a playlist"""
+        """Get tracks from a playlist (synchronous — blocks the caller; QML
+        uses select_spotify_playlist() which fetches on the worker pool)"""
         if not self._sp:
             return []
         try:
-            # February 2026 Web API: /playlists/{id}/tracks became /items, the
-            # page size is capped at 50 and the track lives under "item"
-            # ("track" is deprecated). Only playlists the user owns or
-            # collaborates on are readable.
-            results = self._sp.playlist_items(playlist_id, limit=50, additional_types=('track',))
-            entries = list(results.get('items', []))
-            while results.get('next') and len(entries) < 1000:
-                results = self._sp.next(results)
-                entries.extend(results.get('items', []))
-
-            tracks = []
-            for item in entries:
-                track = item.get('item') or item.get('track')
-                if track and track.get('type', 'track') == 'track':
-                    tracks.append({
-                        'id': track['id'],
-                        'name': track['name'],
-                        'uri': track['uri'],
-                        'artist': ', '.join([a['name'] for a in track['artists']]),
-                        'album': track['album']['name'],
-                        'duration_ms': track['duration_ms'],
-                        'image': track['album']['images'][0]['url'] if track['album']['images'] else ''
-                    })
-            return tracks
-
+            return self._fetch_playlist_tracks(playlist_id)
         except Exception as e:
             logger.error(f"Get playlist tracks error: {e}")
             return []
+
+    def _fetch_playlist_tracks(self, playlist_id):
+        """Fetch every page of a playlist's items (worker thread; raises on error)"""
+        # February 2026 Web API: /playlists/{id}/tracks became /items, the
+        # page size is capped at 50 and the track lives under "item"
+        # ("track" is deprecated). Only playlists the user owns or
+        # collaborates on are readable.
+        results = self._sp.playlist_items(playlist_id, limit=50, additional_types=('track',))
+        entries = list(results.get('items', []))
+        while results.get('next') and len(entries) < 1000:
+            results = self._sp.next(results)
+            entries.extend(results.get('items', []))
+
+        tracks = []
+        for item in entries:
+            track = item.get('item') or item.get('track')
+            if track and track.get('type', 'track') == 'track':
+                tracks.append({
+                    'id': track['id'],
+                    'name': track['name'],
+                    'uri': track['uri'],
+                    'artist': ', '.join([a['name'] for a in track['artists']]),
+                    'album': track['album']['name'],
+                    'duration_ms': track['duration_ms'],
+                    'image': track['album']['images'][0]['url'] if track['album']['images'] else ''
+                })
+        return tracks
 
     @Slot(str)
     def select_spotify_playlist(self, playlist_id):
@@ -854,8 +880,27 @@ class SpotifyManager(QObject):
 
         logger.debug(f"Found playlist name: {playlist_name}")
 
-        # Load tracks
-        self._spotify_tracks = self.get_playlist_tracks(playlist_id)
+        # Load tracks on the worker pool (up to 20 sequential API pages —
+        # never on the GUI thread); the result lands in
+        # _handle_playlist_tracks_result on the main thread.
+        def fetch():
+            return self._fetch_playlist_tracks(playlist_id)
+
+        def on_done(future):
+            if not self._sp:  # Skip if shutting down
+                return
+            try:
+                tracks = future.result()
+            except Exception as e:
+                logger.error(f"Playlist tracks fetch error: {e}")
+                return
+            self._playlistTracksReady.emit(playlist_id, playlist_name, tracks)
+
+        self._executor.submit(fetch).add_done_callback(on_done)
+
+    def _handle_playlist_tracks_result(self, playlist_id, playlist_name, tracks):
+        """Handle playlist tracks on main thread"""
+        self._spotify_tracks = tracks
         self._current_spotify_playlist_id = playlist_id
         self._current_spotify_playlist_name = playlist_name
 
@@ -937,11 +982,6 @@ class SpotifyManager(QObject):
     def get_current_spotify_playlist_id(self):
         """Get the currently selected Spotify playlist ID"""
         return self._current_spotify_playlist_id
-
-    @Slot(result=str)
-    def get_current_spotify_playlist_name(self):
-        """Get the currently selected Spotify playlist name"""
-        return self._current_spotify_playlist_name
 
     @Slot(result=bool)
     def has_spotify_playlist_loaded(self):

@@ -534,6 +534,7 @@ private:
     QJsonObject validateSettings(const QJsonObject &settings);
     void setFilePermissions(const QString &filepath);
     QJsonObject buildDefaultSettings() const;
+    void populateMembers();   // cached members <- m_settings (constructor + reset_to_defaults)
     static QJsonObject buildSettingsRegistry();
     QString keyToAttr(const QString &key) const;
     QString getGitRepoDir() const;

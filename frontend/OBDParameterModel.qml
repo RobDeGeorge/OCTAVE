@@ -272,7 +272,7 @@ QtObject {
         function onBaroTempChanged(v) { root.updateParamValue("BARO_TEMP", v); }
     }
 
-    // ── Signal connections to obdManager for all 93 parameters ───────
+    // ── Signal connections to obdManager for all 92 parameters (84 OBD + 8 IMU) ───────
     property var _obdConnections: Connections {
         target: obdManager
 

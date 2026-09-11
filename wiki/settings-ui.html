@@ -144,6 +144,8 @@
         <h3>OBD &mdash; <span class="file-path">settings/OBDSettingsPage.qml</span></h3>
         <p>Four tiles split from the former monolithic "Connection" card in commit <code>93d0fc9</code>: <strong>Connection</strong> (<code>obd_connection</code>: status with colour map, live log), <strong>Adapters</strong> (<code>obd_adapters</code>: scan, port, manual entry), <strong>Tuning</strong> (<code>obd_tuning</code>: fast mode, reconnect attempts, gauge style), <strong>Parameters</strong> (<code>obd_parameters</code>: PID visibility). See <a href="obd-manager.html">OBD Manager</a> for what the controls drive.</p>
 
+        <p>The Connection tile's status dot keeps a <code>status</code> string property seeded from <code>obdManager.get_connection_status()</code> and refreshed by a <code>Connections</code> handler for <code>connectionStatusChanged</code>, so the colour, the label and the "Connecting" pulse all re-evaluate on every transition. Its <code>statusColors</code> map is keyed on the <code>connectionStatusChanged</code> vocabulary that both backends also return from <code>get_connection_status()</code>: <code>Connected</code> (accent), <code>Connecting</code> / <code>Reconnecting</code> / <code>Device Lost</code> / <code>Stale Connection</code> (<code>statusWarning</code>), <code>Device Not Found</code> / <code>Connection Failed</code> / <code>Error</code> (<code>statusError</code>), <code>Disconnected</code> (<code>statusDisconnected</code>), <code>No Vehicle</code> (<code>statusInfo</code>), plus the Android BLE intermediate states from the C++ backend &mdash; <code>Connecting BLE...</code>, <code>Discovering services...</code>, <code>Initializing ELM327...</code>, <code>Querying PIDs...</code> (warning) and <code>No MAC Address</code>, <code>BLE connect failed</code>, <code>BLE error</code>, <code>Bluetooth permission denied</code> (error). Anything else falls back to <code>statusError</code>.</p>
+
         <h3>Accessories &mdash; <span class="file-path">settings/AccessoriesSettingsPage.qml</span></h3>
         <p><strong>Volume Knob</strong>, <strong>IMU Sensor</strong>, <strong>Gesture Sensor</strong>, <strong>Phone Dock</strong> (Android Auto + Phone Mirror). Marked <code>desktopOnly</code> in the page model, so it is absent from the Android build's menu. See <a href="hardware-managers.html">Hardware Managers</a> and <a href="phone-mirror-android-auto.html">Phone Mirror / Android Auto</a>.</p>
 
@@ -286,7 +288,6 @@
             <tr><td><strong>NowPlayingButtonGrid</strong></td><td>Two-column <code>GridLayout</code> of equal-width option buttons (selected = accent); signal <code>selected(value)</code>.</td></tr>
             <tr><td><strong>NowPlayingMiniToggle</strong> <em>(defined, not instantiated &mdash; the studio uses SettingsToggle)</em></td><td>Label-left / switch-right row whose toggle has a fixed <code>dp(104)</code> width so every switch lands on the same x whether it reads "On" or "Off".</td></tr>
             <tr><td><strong>NowPlayingVSlider</strong> <em>(defined, not instantiated &mdash; the studio uses SettingsSlider)</em></td><td>Vertical slider tile (<code>dp(70)</code> wide, fills rail height) with label above and value below; <code>from</code>, <code>to</code>, <code>stepSize</code>, <code>suffix</code>, <code>dimmed</code>; signal <code>moved(value)</code>.</td></tr>
-            <tr><td><strong>HomeScreenButton</strong></td><td>Small bordered home-icon button (<code>isActive</code>, <code>clicked()</code>); not referenced by any current layout or page.</td></tr>
           </tbody>
         </table>
 
@@ -299,7 +300,7 @@
           <thead><tr><th>Widget</th><th>Shows</th><th>Sub-section chips</th></tr></thead>
           <tbody>
             <tr><td><span class="file-path">DisplayWidget.qml</span></td><td>Theme, Scale and Font pills (font name truncated at 14 characters); Show Clock toggle</td><td>Layout, Window, Appearance, Clock</td></tr>
-            <tr><td><span class="file-path">MediaWidget.qml</span></td><td>Source pill (with a Spotify connected/disconnected dot); Autoplay, Visualizer and 3D Preview toggles</td><td>Library, Playback, Album Art, Background, Effects, Spotify &mdash; the middle three no longer match a Media tile title (the page's tiles are Library, Playback, Now Playing, Spotify), so those chips navigate to the page but cannot find a card to scroll to</td></tr>
+            <tr><td><span class="file-path">MediaWidget.qml</span></td><td>Source pill (with a Spotify connected/disconnected dot); Autoplay, Visualizer and 3D Preview toggles</td><td>Library, Playback, Now Playing, Spotify &mdash; one chip per Media tile title</td></tr>
             <tr><td><span class="file-path">OBDWidget.qml</span></td><td>Connection status row with a reconnect glyph (hidden while connected); Fast toggle; Circular Gauges toggle (generic setting <code>obdCardStyleCircular</code>)</td><td>Connection, Parameters</td></tr>
             <tr><td><span class="file-path">AccessoriesWidget.qml</span></td><td>Knob pill (ESP32 connection), Gestures toggle (<code>gestureSensorEnabled</code>), Phone Dock pill</td><td>Volume Knob, Gesture Sensor, Phone Dock</td></tr>
             <tr><td><span class="file-path">DeviceWidget.qml</span></td><td>Name pill; network status row with a refresh glyph</td><td>&mdash;</td></tr>
@@ -327,7 +328,7 @@
     hubModel = model
 }</code></pre>
 
-        <p>Both backends persist the map as <code>settingsMenuVisibility</code> and expose <code>is_settings_section_visible(section)</code> (unknown sections are treated as visible) and <code>save_settings_section_visibility(section, visible)</code>, which emits <code>settingsMenuVisibilityChanged</code>; the orchestrator rebuilds <code>hubModel</code> on that signal. The shipped defaults still list older section keys (<code>androidAutoSettings</code>, <code>phoneMirrorSettings</code>, <code>volumeKnobSettings</code> = false, <code>gestureSensorSettings</code>) alongside the current ones, and have no entry for <code>accessoriesSettings</code>, so that page is visible by the unknown-section rule. The only UI that writes the map is the dormant "Toggle View" popup in the bottom bar (see <a href="bottom-bar.html#visibility-popup">Bottom Bar</a>), so in practice every page is visible.</p>
+        <p>Both backends persist the map as <code>settingsMenuVisibility</code> and expose <code>is_settings_section_visible(section)</code> (unknown sections are treated as visible) and <code>save_settings_section_visibility(section, visible)</code>, which emits <code>settingsMenuVisibilityChanged</code>; the orchestrator rebuilds <code>hubModel</code> on that signal. The shipped defaults are exactly the six <code>pageModel</code> sections &mdash; <code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code> &mdash; all <code>true</code>, and a section missing from a stored <span class="file-path">settingsConfigure.json</span> is filled in as visible when the file loads, so every page shows until the user hides it. The UI that writes the map is the "Toggle View" popup, opened by press-and-hold on the bottom bar's Settings button (see <a href="bottom-bar.html#visibility-popup">Bottom Bar</a>).</p>
 
         <!-- Persistence -->
         <h2 id="persistence">Card State and Scroll Memory</h2>
@@ -426,7 +427,7 @@ ExpandedCards.<span class="fn">load</span>(settingsManager)     <span class="cmt
             </tr>
             <tr>
               <td><code>subSections</code> must equal tile titles</td>
-              <td>Sub-navigation looks cards up by <code>objectName</code>, which pages set from <code>modelData.title</code>; a mismatch silently fails to scroll (the Media widget's chips are an example).</td>
+              <td>Sub-navigation looks cards up by <code>objectName</code>, which pages set from <code>modelData.title</code>; a mismatch silently fails to scroll.</td>
             </tr>
             <tr>
               <td>Card state in a <code>.pragma library</code> cache with a debounced write</td>

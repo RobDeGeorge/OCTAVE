@@ -76,9 +76,11 @@ public:
     // same to a --new-display size), "" for invalid input.
     static QString normalizeDisplaySize(const QString &value);
     static constexpr int kNewDisplayMinSdk = 30;  // Android 11
+    // adb discovery: bundled platform-tools, then PATH, then common SDK
+    // locations. Shared with AndroidAutoManager so both find the same binary.
+    static QString findAdb();
 
 signals:
-    void error(const QString &message);
     // Session state (names kept from the original scrcpy-binary design;
     // PhoneMirrorView.qml depends on them)
     void scrcpyStarted(int handle);
@@ -138,7 +140,6 @@ public slots:
     void cleanup();
 
 private:
-    QString findAdb() const;
     QString runAdb(const QStringList &args, int timeoutMs = 10000) const;
     QList<QPair<QString, QString>> devices() const;  // (serial, state)
     void killStaleServer();
@@ -245,7 +246,6 @@ public slots:
     void stopScrcpy() {}
 
 signals:
-    void error(const QString &);
     void scrcpyStarted(int);
     void scrcpyStopped();
     void scrcpyError(const QString &);

@@ -67,26 +67,40 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: dp(40)
 
-                // Use more diverse status colors
+                // Keyed on the connectionStatusChanged vocabulary, which both
+                // backends also return from get_connection_status().
                 property var statusColors: {
                     "Connected": App.Style.accent,
                     "Connecting": App.Style.statusWarning,
+                    "Reconnecting": App.Style.statusWarning,
                     "Device Not Found": App.Style.statusError,
+                    "Connection Failed": App.Style.statusError,
                     "Error": App.Style.statusError,
                     "Disconnected": App.Style.statusDisconnected,
                     "Device Lost": App.Style.statusWarning,
-                    "No Vehicle": App.Style.statusInfo
+                    "Stale Connection": App.Style.statusWarning,
+                    "No Vehicle": App.Style.statusInfo,
+                    // Android BLE (C++ only) intermediate states
+                    "No MAC Address": App.Style.statusError,
+                    "Connecting BLE...": App.Style.statusWarning,
+                    "Discovering services...": App.Style.statusWarning,
+                    "Initializing ELM327...": App.Style.statusWarning,
+                    "Querying PIDs...": App.Style.statusWarning,
+                    "BLE connect failed": App.Style.statusError,
+                    "BLE error": App.Style.statusError,
+                    "Bluetooth permission denied": App.Style.statusError
                 }
 
+                // Last status string; refreshed from onConnectionStatusChanged
+                // below so the colour and label re-evaluate on every change.
+                property string status: obdManager ? obdManager.get_connection_status() : "Disconnected"
+
                 // Default to error color if status not in our map
-                color: obdManager ?
-                    (statusColors[obdManager.get_connection_status()] || App.Style.statusError) :
-                    App.Style.statusError
+                color: statusColors[status] || App.Style.statusError
                 radius: 4
 
                 // Properties for animations
-                property bool connecting: obdManager ?
-                    (obdManager.get_connection_status() === "Connecting") : false
+                property bool connecting: status === "Connecting"
                 property real pulseOpacity: 0.7
                 property real connectionProgress: obdManager ?
                     (obdManager.connectionProgress || 0) : 0
@@ -201,7 +215,7 @@ Item {
                         Text {
                             id: statusText
                             anchors.verticalCenter: parent.verticalCenter
-                            text: obdManager ? obdManager.get_connection_status() : "Not Connected"
+                            text: connectionStatusRect.status
                             color: "white"
                             font.pixelSize: App.Spacing.overallText
                             font.family: App.Style.fontFamily
@@ -261,7 +275,7 @@ Item {
                     target: obdManager
 
                     function onConnectionStatusChanged(status) {
-                        connectionStatusRect.connecting = (status === "Connecting")
+                        connectionStatusRect.status = status
                     }
 
                     function onConnectionProgressChanged(progress) {

@@ -56,6 +56,9 @@ public:
     static bool available();
     // Writes the embedded server jar to a temp file; returns its path ("" on failure).
     static QString bundledServerJar();
+    // On Windows, keep adb from flashing a console window (CREATE_NO_WINDOW);
+    // no-op elsewhere. Shared with PhoneMirrorManager.
+    static void hideConsoleWindow(QProcess *proc);
 
     explicit ScrcpyClient(const QString &adbPath, const QString &serverJar, QObject *parent = nullptr);
     ~ScrcpyClient() override;
@@ -88,7 +91,6 @@ public:
     void injectTouch(qint64 pointerId, int action, int x, int y, float pressure = 1.0f);
     void injectKey(int keycode, int action = ActionDown, int meta = 0);
     void pressKey(int keycode);
-    void setDisplayPower(bool on);
     // OCTAVE extensions (phone_server MirrorKeeper): wake on doze, keep the
     // panel dark, grace window for a press from the locked state
     void setKeeper(bool enabled, bool panelDark, int graceMs);

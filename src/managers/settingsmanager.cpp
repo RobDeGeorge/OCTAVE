@@ -104,7 +104,7 @@ QJsonObject SettingsManager::buildSettingsRegistry()
     reg[QStringLiteral("show_clock")]                 = entry("showClock", "Show Clock", "displaySettings", "toggle", "save_show_clock");
     reg[QStringLiteral("bottom_bar_media_controls")]  = entry("showBottomBarMediaControls", "Nav Bar Media Controls", "displaySettings", "toggle", "save_show_bottom_bar_media_controls");
     reg[QStringLiteral("background_blur_radius")]     = entry("backgroundBlurRadius", "Album Art Blur", "mediaSettings", "slider", "save_background_blur_radius", sliderParams(0, 100, 1));
-    reg[QStringLiteral("color_transition_ms")]        = entry("colorTransitionMs", "Theme Transition Speed", "displaySettings", "slider", "save_color_transition_ms", sliderParams(0, 5000, 100));
+    reg[QStringLiteral("color_transition_ms")]        = entry("colorTransitionMs", "Theme Transition Speed", "displaySettings", "slider", "save_color_transition_ms", sliderParams(0, 2000, 50));
     reg[QStringLiteral("obd_fast_mode")]              = entry("obdFastMode", "OBD Fast Mode", "obdSettings", "toggle", "save_obd_fast_mode");
     reg[QStringLiteral("gesture_sensor_enabled")]     = entry("gestureSensorEnabled", "Gesture Sensor", "gestureSensorSettings", "toggle", "save_gesture_sensor_enabled");
     reg[QStringLiteral("imu_enabled")]                = entry("imuEnabled", "IMU Sensor", "imuSettings", "toggle", "save_imu_enabled");
@@ -121,7 +121,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     QJsonObject d;
     d[QStringLiteral("deviceName")]          = QStringLiteral("Default Device");
     d[QStringLiteral("themeSetting")]         = QStringLiteral("CosmicVoyager");
-    d[QStringLiteral("fontSetting")]          = QStringLiteral("Google Sans");
+    d[QStringLiteral("fontSetting")]          = QStringLiteral("GoogleSans Regular");  // display name Main.qml derives from GoogleSans-Regular.ttf
     d[QStringLiteral("startUpVolume")]        = 0.1;
     d[QStringLiteral("showClock")]            = true;
     d[QStringLiteral("clockFormat24Hour")]    = true;
@@ -215,21 +215,18 @@ QJsonObject SettingsManager::buildDefaultSettings() const
 
     // Settings menu visibility
     QJsonObject menuVis;
-    menuVis[QStringLiteral("deviceSettings")]       = true;
-    menuVis[QStringLiteral("mediaSettings")]        = true;
     menuVis[QStringLiteral("displaySettings")]      = true;
+    menuVis[QStringLiteral("mediaSettings")]        = true;
     menuVis[QStringLiteral("obdSettings")]          = true;
-    menuVis[QStringLiteral("androidAutoSettings")]  = true;
-    menuVis[QStringLiteral("phoneMirrorSettings")]  = true;
-    menuVis[QStringLiteral("volumeKnobSettings")]   = false;
-    menuVis[QStringLiteral("gestureSensorSettings")] = true;
+    menuVis[QStringLiteral("accessoriesSettings")]  = true;
+    menuVis[QStringLiteral("deviceSettings")]       = true;
     menuVis[QStringLiteral("about")]                = true;
     d[QStringLiteral("settingsMenuVisibility")]     = menuVis;
 
     // ESP32
     d[QStringLiteral("esp32VolumeEnabled")]    = true;
-    d[QStringLiteral("esp32VolumePort")]       = QStringLiteral("COM7");
-    d[QStringLiteral("esp32VolumeStepSize")]   = 1;
+    d[QStringLiteral("esp32VolumePort")]       = QString();  // empty = auto-select the ESP32-S3 on startup
+    d[QStringLiteral("esp32VolumeStepSize")]   = 1.0;        // % per encoder tick; double so 0.25/0.5/0.75 round-trip
     d[QStringLiteral("esp32AutoReconnect")]    = true;
     d[QStringLiteral("esp32LedSleepEnabled")]  = true;
     d[QStringLiteral("esp32LedColorMode")]     = QStringLiteral("theme");
@@ -353,10 +350,44 @@ SettingsManager::SettingsManager(QObject *parent)
         saveSettings(m_settings);
     }
 
+    // Migrate legacy "Google Sans" -> "GoogleSans Regular". Main.qml derives the
+    // display name from the bundled GoogleSans-Regular.ttf and Style.setFont()
+    // rejects unknown names, so the old value silently left the app in the
+    // system font.
+    if (m_settings.value(QStringLiteral("fontSetting")).toString() == QStringLiteral("Google Sans")) {
+        qCInfo(lcSettings) << "Migrating fontSetting from legacy 'Google Sans' to 'GoogleSans Regular'";
+        m_settings[QStringLiteral("fontSetting")] = QStringLiteral("GoogleSans Regular");
+        saveSettings(m_settings);
+    }
+
     m_settingsLoaded = true;
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(500);
     connect(&m_saveTimer, &QTimer::timeout, this, &SettingsManager::flushPendingSave);
+
+    populateMembers();
+
+    // --- OBD parameter debounce timer ---
+    m_obdParamsSaveTimer.setSingleShot(true);
+    m_obdParamsSaveTimer.setInterval(800);
+    connect(&m_obdParamsSaveTimer, &QTimer::timeout, this, &SettingsManager::flushObdParameters);
+}
+
+// ---------------------------------------------------------------------------
+// populateMembers — load every cached member from m_settings (falling back to
+// the defaults). Runs from the constructor and again from reset_to_defaults()
+// so no cached value can go stale.
+// ---------------------------------------------------------------------------
+void SettingsManager::populateMembers()
+{
+    // Containers below are appended to, so start from a clean slate.
+    m_homeObdParameters.clear();
+    m_settingsMenuVisibility.clear();
+    m_gestureMapping.clear();
+    m_pinnedSettings.clear();
+    m_obdParameters.clear();
+    m_supportedObdParameters.clear();
+    m_directoryHistory.clear();
 
     // Helper lambda: read a value from m_settings falling back to defaults
     auto s = [&](const QString &key) -> QJsonValue {
@@ -452,11 +483,12 @@ SettingsManager::SettingsManager(QObject *parent)
     // Settings menu visibility
     {
         QJsonObject vis = s(QStringLiteral("settingsMenuVisibility")).toObject();
-        // Ensure all default sections exist
+        // Ensure all default sections exist; a section missing from the stored
+        // file is visible (matches is_settings_section_visible / SettingsMenu.qml).
         QJsonObject defVis = m_defaultSettings.value(QStringLiteral("settingsMenuVisibility")).toObject();
         for (auto it = defVis.begin(); it != defVis.end(); ++it) {
             if (!vis.contains(it.key()))
-                vis[it.key()] = it.value();
+                vis[it.key()] = true;
         }
         for (auto it = vis.begin(); it != vis.end(); ++it)
             m_settingsMenuVisibility[it.key()] = it.value().toVariant();
@@ -549,11 +581,6 @@ SettingsManager::SettingsManager(QObject *parent)
     // Album art colors — persisted so the last-extracted palette is reapplied
     // on startup before a fresh extraction runs (avoids flashing the placeholder).
     m_albumArtColors = s(QStringLiteral("albumArtColors")).toString();
-
-    // --- OBD parameter debounce timer ---
-    m_obdParamsSaveTimer.setSingleShot(true);
-    m_obdParamsSaveTimer.setInterval(800);
-    connect(&m_obdParamsSaveTimer, &QTimer::timeout, this, &SettingsManager::flushObdParameters);
 }
 
 // ---------------------------------------------------------------------------
@@ -1620,12 +1647,14 @@ void SettingsManager::save_window_state(const QString &state)
 
 void SettingsManager::set_last_settings_section(const QString &section)
 {
+    // Current SettingsMenu.qml pageModel sections, plus the legacy per-feature
+    // IDs that an older settingsConfigure.json may still carry.
     static const QStringList valid = {
-        QStringLiteral("deviceSettings"), QStringLiteral("mediaSettings"),
-        QStringLiteral("displaySettings"), QStringLiteral("obdSettings"),
+        QStringLiteral("displaySettings"), QStringLiteral("mediaSettings"),
+        QStringLiteral("obdSettings"), QStringLiteral("accessoriesSettings"),
+        QStringLiteral("deviceSettings"), QStringLiteral("about"),
         QStringLiteral("androidAutoSettings"), QStringLiteral("phoneMirrorSettings"),
-        QStringLiteral("volumeKnobSettings"), QStringLiteral("gestureSensorSettings"),
-        QStringLiteral("about")
+        QStringLiteral("volumeKnobSettings"), QStringLiteral("gestureSensorSettings")
     };
     if (!valid.contains(section))
         return;
@@ -2064,215 +2093,89 @@ QString SettingsManager::keyToAttr(const QString &key) const
 // =========================================================================
 void SettingsManager::reset_to_defaults()
 {
+    // Persist the defaults, reload every cached member exactly as the
+    // constructor does, then notify QML of each property.
     saveSettings(m_defaultSettings);
+    populateMembers();
 
-    m_deviceName = m_defaultSettings.value(QStringLiteral("deviceName")).toString();
     emit deviceNameChanged(m_deviceName);
-
-    m_themeSetting = m_defaultSettings.value(QStringLiteral("themeSetting")).toString();
     emit themeSettingChanged(m_themeSetting);
-
-    m_fontSetting = m_defaultSettings.value(QStringLiteral("fontSetting")).toString();
     emit fontSettingChanged(m_fontSetting);
-
-    m_startVolume = static_cast<float>(m_defaultSettings.value(QStringLiteral("startUpVolume")).toDouble());
     emit startUpVolumeChanged(QString::number(static_cast<double>(m_startVolume)));
-
-    m_showClock = m_defaultSettings.value(QStringLiteral("showClock")).toBool();
+    emit currentVolumeChanged(m_currentVolume);
     emit showClockChanged(m_showClock);
-
-    m_clockFormat24Hour = m_defaultSettings.value(QStringLiteral("clockFormat24Hour")).toBool();
     emit clockFormatChanged(m_clockFormat24Hour);
-
-    m_clockShowSeconds = m_defaultSettings.value(QStringLiteral("clockShowSeconds")).toBool();
     emit clockShowSecondsChanged(m_clockShowSeconds);
-
-    m_clockSize = m_defaultSettings.value(QStringLiteral("clockSize")).toInt();
     emit clockSizeChanged(m_clockSize);
-
-    m_backgroundGrid = m_defaultSettings.value(QStringLiteral("backgroundGrid")).toString();
     emit backgroundGridChanged(m_backgroundGrid);
-
-    m_screenWidth = m_defaultSettings.value(QStringLiteral("screenWidth")).toInt();
     emit screenWidthChanged(m_screenWidth);
-
-    m_screenHeight = m_defaultSettings.value(QStringLiteral("screenHeight")).toInt();
     emit screenHeightChanged(m_screenHeight);
-
-    m_backgroundBlurRadius = m_defaultSettings.value(QStringLiteral("backgroundBlurRadius")).toInt();
     emit backgroundBlurRadiusChanged(m_backgroundBlurRadius);
-
-    m_uiScale = static_cast<float>(m_defaultSettings.value(QStringLiteral("uiScale")).toDouble());
     emit uiScaleChanged(m_uiScale);
-
-    m_colorTransitionMs = m_defaultSettings.value(QStringLiteral("colorTransitionMs")).toInt();
     emit colorTransitionMsChanged(m_colorTransitionMs);
-
-    m_songLengthTransition = m_defaultSettings.value(QStringLiteral("songLengthTransition")).toBool();
     emit songLengthTransitionChanged(m_songLengthTransition);
-
-    m_obdBluetoothPort = m_defaultSettings.value(QStringLiteral("obdBluetoothPort")).toString();
     emit obdBluetoothPortChanged(m_obdBluetoothPort);
-
-    m_obdSavedAdapters = m_defaultSettings.value(QStringLiteral("obdSavedAdapters")).toString();
-    if (m_obdSavedAdapters.isEmpty()) m_obdSavedAdapters = QStringLiteral("[]");
     emit obdSavedAdaptersChanged(m_obdSavedAdapters);
-
-    m_obdFastMode = m_defaultSettings.value(QStringLiteral("obdFastMode")).toBool();
     emit obdFastModeChanged(m_obdFastMode);
-
-    m_obdAutoReconnectAttempts = m_defaultSettings.value(QStringLiteral("obdAutoReconnectAttempts")).toInt();
     emit obdAutoReconnectAttemptsChanged(m_obdAutoReconnectAttempts);
-
-    // Reset OBD parameters
-    m_obdParameters.clear();
-    QJsonObject defObd = m_defaultSettings.value(QStringLiteral("obdParameters")).toObject();
-    for (auto it = defObd.begin(); it != defObd.end(); ++it)
-        m_obdParameters[it.key()] = it.value().toVariant();
     emit obdParametersChanged();
-
-    // Media folder: reset to OS-standard music location
-    QString defaultMusic = QStandardPaths::writableLocation(QStandardPaths::MusicLocation);
-    if (defaultMusic.isEmpty())
-        defaultMusic = QDir::homePath() + QStringLiteral("/Music");
-    m_mediaFolder = m_defaultSettings.value(QStringLiteral("mediaFolder")).toString();
-    if (m_mediaFolder.isEmpty())
-        m_mediaFolder = defaultMusic;
+    emit homeOBDParametersChanged();
+    emit supportedOBDParametersChanged();
     emit mediaFolderChanged(m_mediaFolder);
-
-    m_fuelTankCapacity = static_cast<float>(m_defaultSettings.value(QStringLiteral("fuelTankCapacity")).toDouble());
+    emit directoryHistoryChanged();
     emit fuelTankCapacityChanged(m_fuelTankCapacity);
-
-    m_bottomBarOrientation = m_defaultSettings.value(QStringLiteral("bottomBarOrientation")).toString();
     emit bottomBarOrientationChanged(m_bottomBarOrientation);
-
-    m_showBottomBarMediaControls = m_defaultSettings.value(QStringLiteral("showBottomBarMediaControls")).toBool();
     emit showBottomBarMediaControlsChanged(m_showBottomBarMediaControls);
-
-    m_autoPlayOnStartup = m_defaultSettings.value(QStringLiteral("autoPlayOnStartup")).toBool();
+    emit spotifyCredentialsChanged();
+    emit mediaSourceChanged(m_mediaSource);
     emit autoPlayOnStartupChanged(m_autoPlayOnStartup);
-
-    m_lastPlayedSong = m_defaultSettings.value(QStringLiteral("lastPlayedSong")).toString();
+    emit persistShuffleStateChanged(m_persistShuffleState);
+    emit lastShuffleStateChanged(m_lastShuffleState);
     emit lastPlayedSongChanged(m_lastPlayedSong);
-
-    m_lastPlayedPosition = m_defaultSettings.value(QStringLiteral("lastPlayedPosition")).toInt();
     emit lastPlayedPositionChanged(m_lastPlayedPosition);
-
-    m_lastPlayedPlaylist = m_defaultSettings.value(QStringLiteral("lastPlayedPlaylist")).toString();
     emit lastPlayedPlaylistChanged(m_lastPlayedPlaylist);
-
-    m_musicButtonDefaultPage = m_defaultSettings.value(QStringLiteral("musicButtonDefaultPage")).toString();
+    emit windowStateChanged(m_windowState);
     emit musicButtonDefaultPageChanged(m_musicButtonDefaultPage);
-
-    m_returnToLibraryAfterSelection = m_defaultSettings.value(QStringLiteral("returnToLibraryAfterSelection")).toBool();
     emit returnToLibraryAfterSelectionChanged(m_returnToLibraryAfterSelection);
-
-    m_androidAutoEnabled = m_defaultSettings.value(QStringLiteral("androidAutoEnabled")).toBool();
     emit androidAutoEnabledChanged(m_androidAutoEnabled);
-
-    m_phoneMirrorEnabled = m_defaultSettings.value(QStringLiteral("phoneMirrorEnabled")).toBool();
     emit phoneMirrorEnabledChanged(m_phoneMirrorEnabled);
-
-    m_scrcpyAudioEnabled = m_defaultSettings.value(QStringLiteral("scrcpyAudioEnabled")).toBool();
     emit scrcpyAudioEnabledChanged(m_scrcpyAudioEnabled);
-
-    m_scrcpyDisplaySize = m_defaultSettings.value(QStringLiteral("scrcpyDisplaySize")).toString();
     emit scrcpyDisplaySizeChanged(m_scrcpyDisplaySize);
-
-    m_scrcpyAudioGain = m_defaultSettings.value(QStringLiteral("scrcpyAudioGain")).toDouble();
     emit scrcpyAudioGainChanged(m_scrcpyAudioGain);
-
-    m_scrcpyAudioDuckEnabled = m_defaultSettings.value(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
     emit scrcpyAudioDuckEnabledChanged(m_scrcpyAudioDuckEnabled);
-
-    m_scrcpyAudioDuckLevel = m_defaultSettings.value(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
     emit scrcpyAudioDuckLevelChanged(m_scrcpyAudioDuckLevel);
-
-    m_scrcpyPhoneScreenOff = m_defaultSettings.value(QStringLiteral("scrcpyPhoneScreenOff")).toBool();
     emit scrcpyPhoneScreenOffChanged(m_scrcpyPhoneScreenOff);
-
-    // Settings menu visibility
-    m_settingsMenuVisibility.clear();
-    QJsonObject defVis = m_defaultSettings.value(QStringLiteral("settingsMenuVisibility")).toObject();
-    for (auto it = defVis.begin(); it != defVis.end(); ++it)
-        m_settingsMenuVisibility[it.key()] = it.value().toVariant();
     emit settingsMenuVisibilityChanged();
-
-    m_esp32VolumeEnabled = m_defaultSettings.value(QStringLiteral("esp32VolumeEnabled")).toBool();
     emit esp32VolumeEnabledChanged(m_esp32VolumeEnabled);
-
-    m_esp32VolumePort = m_defaultSettings.value(QStringLiteral("esp32VolumePort")).toString();
     emit esp32VolumePortChanged(m_esp32VolumePort);
-
-    m_esp32VolumeStepSize = m_defaultSettings.value(QStringLiteral("esp32VolumeStepSize")).toDouble();
     emit esp32VolumeStepSizeChanged(m_esp32VolumeStepSize);
-
-    m_esp32AutoReconnect = m_defaultSettings.value(QStringLiteral("esp32AutoReconnect")).toBool();
     emit esp32AutoReconnectChanged(m_esp32AutoReconnect);
-
-    m_esp32LedSleepEnabled = m_defaultSettings.value(QStringLiteral("esp32LedSleepEnabled")).toBool();
     emit esp32LedSleepEnabledChanged(m_esp32LedSleepEnabled);
-
-    m_esp32LedColorMode = m_defaultSettings.value(QStringLiteral("esp32LedColorMode")).toString();
     emit esp32LedColorModeChanged(m_esp32LedColorMode);
-
-    m_esp32LedStaticColor = m_defaultSettings.value(QStringLiteral("esp32LedStaticColor")).toString();
     emit esp32LedStaticColorChanged(m_esp32LedStaticColor);
-
-    m_showWaveformVisualizer = m_defaultSettings.value(QStringLiteral("showWaveformVisualizer")).toBool();
     emit showWaveformVisualizerChanged(m_showWaveformVisualizer);
-
-    m_imuEnabled = m_defaultSettings.value(QStringLiteral("imuEnabled")).toBool();
-    emit imuEnabledChanged(m_imuEnabled);
-
-    m_gestureSensorEnabled = m_defaultSettings.value(QStringLiteral("gestureSensorEnabled")).toBool();
-    emit gestureSensorEnabledChanged(m_gestureSensorEnabled);
-
-    // Reset gesture mapping
-    m_gestureMapping.clear();
-    QJsonObject defGm = m_defaultSettings.value(QStringLiteral("gestureMapping")).toObject();
-    for (auto it = defGm.begin(); it != defGm.end(); ++it)
-        m_gestureMapping[it.key()] = it.value().toVariant();
-    emit gestureMappingChanged();
-
-    m_gestureVolumeStep = m_defaultSettings.value(QStringLiteral("gestureVolumeStep")).toInt();
-    emit gestureVolumeStepChanged(m_gestureVolumeStep);
-
-    m_gestureCooldown = m_defaultSettings.value(QStringLiteral("gestureCooldown")).toInt();
-    emit gestureCooldownChanged(m_gestureCooldown);
-
-    m_roundedAlbumArt = m_defaultSettings.value(QStringLiteral("roundedAlbumArt")).toBool();
+    emit show3DButtonTiltChanged(m_show3DButtonTilt);
+    emit show3DAlbumPreviewChanged(m_show3DAlbumPreview);
     emit roundedAlbumArtChanged(m_roundedAlbumArt);
-
-    m_albumArtCornerRadius = m_defaultSettings.value(QStringLiteral("albumArtCornerRadius")).toInt();
     emit albumArtCornerRadiusChanged(m_albumArtCornerRadius);
-
-    m_showAlbumArtShadow = m_defaultSettings.value(QStringLiteral("showAlbumArtShadow")).toBool();
     emit showAlbumArtShadowChanged(m_showAlbumArtShadow);
-
-    m_vinylRecordMode = m_defaultSettings.value(QStringLiteral("vinylRecordMode")).toBool();
     emit vinylRecordModeChanged(m_vinylRecordMode);
-
-    m_albumArtTransition = m_defaultSettings.value(QStringLiteral("albumArtTransition")).toString();
     emit albumArtTransitionChanged(m_albumArtTransition);
-
-    m_backgroundOverlayOpacity = m_defaultSettings.value(QStringLiteral("backgroundOverlayOpacity")).toInt();
     emit backgroundOverlayOpacityChanged(m_backgroundOverlayOpacity);
-
-    m_sideCardOpacity = m_defaultSettings.value(QStringLiteral("sideCardOpacity")).toDouble();
     emit sideCardOpacityChanged(m_sideCardOpacity);
-
-    m_sideCardAngle = m_defaultSettings.value(QStringLiteral("sideCardAngle")).toInt();
     emit sideCardAngleChanged(m_sideCardAngle);
-
-    m_buttonTiltDuration = m_defaultSettings.value(QStringLiteral("buttonTiltDuration")).toInt();
     emit buttonTiltDurationChanged(m_buttonTiltDuration);
-
-    m_textScrollSpeed = m_defaultSettings.value(QStringLiteral("textScrollSpeed")).toInt();
     emit textScrollSpeedChanged(m_textScrollSpeed);
-
-    m_pinnedSettings.clear();
+    emit albumArtColorsChanged(m_albumArtColors);
+    emit settingsLayoutStyleChanged(m_settingsLayoutStyle);
+    emit imuEnabledChanged(m_imuEnabled);
+    emit gestureSensorEnabledChanged(m_gestureSensorEnabled);
+    emit gestureMappingChanged();
+    emit gestureVolumeStepChanged(m_gestureVolumeStep);
+    emit gestureCooldownChanged(m_gestureCooldown);
     emit pinnedSettingsChanged();
+    emit lastSettingsSectionChanged(m_lastSettingsSection);
+    emit customThemesChanged();
 }
 
 // =========================================================================

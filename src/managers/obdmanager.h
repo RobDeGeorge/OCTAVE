@@ -370,6 +370,15 @@ private:
     // Build the signal-name -> emit-lambda dispatch table
     void buildSignalDispatch();
 
+    // The poll list: every PID-table entry whose python-obd command name is
+    // enabled in settings (the original 17 default to on). Used on connect
+    // and again, live, when the parameter toggles change.
+    QList<PidKey> buildPidsToWatch() const;
+
+    // Queue a worker slot by name; logs and returns false when there is no
+    // worker (Android drives the adapter from this thread instead).
+    bool invokeWorker(const char *method);
+
     // Emit a parameter signal by name
     void emitParameterSignal(const QString &signalName, float value);
 
@@ -390,7 +399,7 @@ private:
     bool m_connected = false;
     bool m_isConnecting = false;
     int m_connectionAttempts = 0;
-    QString m_connectionStatus;
+    QString m_connectionStatus = QStringLiteral("Disconnected");  // last connectionStatusChanged value
     QString m_connectionDetail;
     int m_connectionProgress = 0;
     int m_connectionTimeout = 5;  // seconds
@@ -524,11 +533,14 @@ private:
     QString m_pendingPort;
 
 #ifdef Q_OS_ANDROID
-    // Android-only BLE GATT state -- on Android the worker thread is bypassed
-    // entirely; the main thread owns the QLowEnergyController directly.
+    // Android-only BLE state -- on Android the worker thread is bypassed
+    // entirely; the main thread drives OctaveOBDBridge.java (native
+    // BluetoothGatt) over JNI and polls it on a timer.
     void startAndroidConnection();
     void cleanupAndroidConnection();
-    void requestAndroidBluetoothPermission(std::function<void(bool)> done);
+    // Bonded devices from BluetoothAdapter.getBondedDevices() via the Java
+    // bridge; empty when the runtime Bluetooth permission is missing (the
+    // bridge requests it on the first Connect tap).
     QStringList listAndroidPairedDevices();
     // Logs to qDebug + emits to the QML connection-log element.
     void logAndroid(const QString &line);
@@ -537,6 +549,9 @@ private:
     void sendNextAndroidInitCommand();
     void queryAndroidSupportedPids();
     void finalizeAndroidConnection();
+    // Settings-enabled PIDs filtered by the vehicle's supported set; called
+    // on connect and live from onSettingsParametersChanged().
+    void rebuildAndroidPollList();
     void pollNextAndroidPid();
 
     // Java-side state we mirror via JNI polling. m_bleLastJavaState tracks
@@ -556,7 +571,10 @@ private:
     QSet<int> m_androidSupportedPids;
     QTimer m_androidInitTimer;
     QTimer m_androidPollWatchdog;
-    bool m_androidPermissionGranted = false;
+    // True between writing "ATRV" and its (text) reply.
+    bool m_androidAwaitingElmVoltage = false;
+    // MAC -> friendly name from the last bonded-device listing.
+    QHash<QString, QString> m_androidDeviceNames;
 #endif
 };
 
@@ -605,6 +623,8 @@ public slots:
     void releasePort();   // close + delete the QSerialPort; nothing may hold it open while idle
     void startPolling();
     void stopPolling();
+    // Swap the poll list without reconnecting (settings toggles).
+    void updatePidsToWatch(const QList<PidKey> &pids);
     void doReadDtc();
     void doReadCurrentDtc();
     void doClearDtc();

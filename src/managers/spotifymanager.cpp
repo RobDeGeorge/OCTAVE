@@ -62,8 +62,13 @@ void SpotifyManager::setSettingsManager(SettingsManager *sm)
     m_settingsManager = sm;
     loadCredentials();
 
-    // Track theme changes for Album Art Capture
     if (sm) {
+        // Pick up credentials entered in the settings page during this session,
+        // so Connect works without a restart.
+        connect(sm, &SettingsManager::spotifyCredentialsChanged,
+                this, &SpotifyManager::loadCredentials);
+
+        // Track theme changes for Album Art Capture
         connect(sm, &SettingsManager::themeSettingChanged,
                 this, &SpotifyManager::onThemeChanged);
         m_albumArtCaptureActive = (sm->themeSetting() == QStringLiteral("Album Art Capture"));

@@ -71,7 +71,7 @@
           <thead><tr><th>Implementation</th><th>Platforms</th><th>Tag / cover reader</th></tr></thead>
           <tbody>
             <tr><td><span class="file-path">src/managers/mediamanager.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td><strong>TagLib</strong> on desktop (<code>TagLib::FileRef</code> for tags, format-specific readers for pictures). On Android the CMake define <code>Q_OS_MOBILE</code> (set for <code>ANDROID</code> builds in <span class="file-path">CMakeLists.txt</span>) compiles TagLib out; tags and covers come from <code>OctaveAndroid::readMetadata()</code> / <code>extractAlbumArt()</code> in <span class="file-path">src/platform/androidmediabridge.h</span> (JNI). Any other mobile target falls back to the file name with "Unknown Artist" / "Unknown Album".</td></tr>
-            <tr><td><span class="file-path">backend/media_manager.py</span></td><td><span class="platform-badge desktop">Desktop</span></td><td><strong>mutagen</strong> (<code>ID3</code> + <code>MP3</code> for MP3, <code>mutagen.mp4.MP4</code> for M4A/MP4/AAC, generic <code>mutagen.File</code> for everything else)</td></tr>
+            <tr><td><span class="file-path">backend/media_manager.py</span></td><td><span class="platform-badge desktop">Desktop</span></td><td><strong>mutagen</strong> (<code>MP3</code> / <code>ID3</code> for MP3, <code>mutagen.mp4.MP4</code> for M4A/MP4/AAC, <code>FLAC</code> / <code>OggVorbis</code> / <code>OggOpus</code> for the Xiph containers, <code>mutagen.wave.WAVE</code> for WAV, generic <code>mutagen.File</code> for duration only on anything else)</td></tr>
           </tbody>
         </table>
         <p>
@@ -86,23 +86,23 @@
 <span class="str">".mp3"</span>, <span class="str">".m4a"</span>, <span class="str">".mp4"</span>, <span class="str">".flac"</span>, <span class="str">".ogg"</span>, <span class="str">".opus"</span>, <span class="str">".wav"</span>
 
 <span class="cmt"># Python (backend/media_manager.py)</span>
-AUDIO_EXTENSIONS = (<span class="str">'.mp3'</span>, <span class="str">'.m4a'</span>, <span class="str">'.flac'</span>, <span class="str">'.ogg'</span>, <span class="str">'.opus'</span>, <span class="str">'.wav'</span>)</code></pre>
+AUDIO_EXTENSIONS = (<span class="str">'.mp3'</span>, <span class="str">'.m4a'</span>, <span class="str">'.mp4'</span>, <span class="str">'.flac'</span>, <span class="str">'.ogg'</span>, <span class="str">'.opus'</span>, <span class="str">'.wav'</span>)</code></pre>
         <p>
-          The C++ list additionally accepts <code>.mp4</code>: YouTube serves audio-only streams in an MP4 container
-          that yt-dlp names with a literal <code>.mp4</code> extension, and those files are the same format as
-          <code>.m4a</code>. The Python scanner does not list <code>.mp4</code> files (a known parity gap), although its
-          tag reader would handle one if asked.
+          Both lists accept <code>.mp4</code>: YouTube serves audio-only streams in an MP4 container that yt-dlp names
+          with a literal <code>.mp4</code> extension, and those files are the same format as <code>.m4a</code>. The
+          Python module also exposes <code>strip_audio_extension(filename)</code>, which removes any of these extensions
+          (and only these) and is what the display-name and metadata fallbacks use.
         </p>
-        <p>Which tags and embedded covers each backend can actually read depends on the format:</p>
+        <p>Which tags and embedded covers each backend can read is the same for every format except WAV art, which neither backend extracts. Python's dispatch lives in <code>_read_tags(file_path, base_name)</code> (tags, never raises) and <code>_extract_art_for(file_path, album_id)</code> (cover, mirrors the C++ function of the same name); a file that fails to open yields the file-name title with "Unknown Artist" / "Unknown Album" in both backends:</p>
         <table>
           <thead><tr><th>Format</th><th>C++ (TagLib, desktop)</th><th>Python (mutagen)</th></tr></thead>
           <tbody>
             <tr><td>MP3</td><td>Title / artist / album / length via <code>FileRef</code>; cover from the first ID3v2 <code>APIC</code> frame</td><td>Title / artist / album via <code>ID3</code> (<code>TIT2</code>, <code>TPE1</code>, <code>TALB</code>), length via <code>MP3</code>; cover from the first <code>APIC</code> frame</td></tr>
-            <tr><td>M4A / MP4 / AAC</td><td>Tags via <code>FileRef</code>; cover from the first <code>covr</code> item (<code>TagLib::MP4::File</code>)</td><td>Tags <code>\xa9nam</code>, <code>\xa9ART</code>, <code>\xa9alb</code>; cover from the first <code>covr</code> item</td></tr>
-            <tr><td>FLAC</td><td>Tags via <code>FileRef</code>; cover from <code>TagLib::FLAC::File::pictureList()</code></td><td>Duration only (<code>mutagen.File</code>); title falls back to the file name, no cover</td></tr>
-            <tr><td>Ogg Vorbis</td><td>Tags via <code>FileRef</code>; cover from the Xiph comment's <code>pictureList()</code> (<code>TagLib::Ogg::Vorbis::File</code>)</td><td>Duration only, no cover</td></tr>
-            <tr><td>Opus</td><td>Tags via <code>FileRef</code>. The cover extractor opens <code>.opus</code> with the Ogg <em>Vorbis</em> reader (<code>_extract_album_art_ogg</code>), which does not accept Opus streams, so no cover is found</td><td>Duration only, no cover</td></tr>
-            <tr><td>WAV</td><td>Length via <code>FileRef</code>; no cover</td><td>Duration only, no cover</td></tr>
+            <tr><td>M4A / MP4 / AAC</td><td>Tags via <code>FileRef</code>; cover from the first <code>covr</code> item (<code>TagLib::MP4::File</code>)</td><td>Tags <code>\xa9nam</code>, <code>\xa9ART</code>, <code>\xa9alb</code>; cover from the first <code>covr</code> item (<code>_extract_album_art_mp4</code>)</td></tr>
+            <tr><td>FLAC</td><td>Tags via <code>FileRef</code>; cover from <code>TagLib::FLAC::File::pictureList()</code></td><td>Vorbis comments <code>title</code>, <code>artist</code>, <code>album</code> via <code>mutagen.flac.FLAC</code>; cover from the first <code>PICTURE</code> block (<code>FLAC.pictures</code>, <code>_extract_album_art_flac</code>)</td></tr>
+            <tr><td>Ogg Vorbis</td><td>Tags via <code>FileRef</code>; cover from the Xiph comment's <code>pictureList()</code> (<code>TagLib::Ogg::Vorbis::File</code>)</td><td>Vorbis comments via <code>mutagen.oggvorbis.OggVorbis</code>; cover from the base64 FLAC picture block in the <code>METADATA_BLOCK_PICTURE</code> comment (<code>_extract_album_art_ogg</code>)</td></tr>
+            <tr><td>Opus</td><td>Tags via <code>FileRef</code>; cover from the Xiph comment's <code>pictureList()</code>. <code>_extract_album_art_ogg</code> picks the reader by extension -- <code>TagLib::Ogg::Opus::File</code> for <code>.opus</code>, since the Vorbis reader rejects an Opus stream -- and shares the picture handling</td><td>Vorbis comments via <code>mutagen.oggopus.OggOpus</code>; cover from <code>METADATA_BLOCK_PICTURE</code>, as for Ogg Vorbis</td></tr>
+            <tr><td>WAV</td><td>Tags and length via <code>FileRef</code>; no cover</td><td>Tags from the optional ID3 chunk via <code>mutagen.wave.WAVE</code> (<code>TIT2</code>, <code>TPE1</code>, <code>TALB</code>); no cover</td></tr>
           </tbody>
         </table>
 
@@ -125,6 +125,8 @@ m_audioOutput-&gt;<span class="fn">setVolume</span>(<span class="num">0.5f</span
 <span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::positionChanged,    <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::positionChanged);
 <span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::mediaStatusChanged, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_handle_media_status);
 <span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::errorOccurred,      <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_handle_player_error);
+<span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::playbackStateChanged, <span class="kw">this</span>,
+        [<span class="kw">this</span>](<span class="cls">QMediaPlayer</span>::PlaybackState state) { <span class="kw">emit</span> <span class="fn">playbackStateChanged</span>(<span class="kw">static_cast</span>&lt;<span class="kw">int</span>&gt;(state)); });
 
 <span class="cmt">// Position timer (100 ms) as a safety net for backends whose</span>
 <span class="cmt">// QMediaPlayer::positionChanged is coarse. It only runs while playing.</span>
@@ -138,6 +140,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li><code>durationChanged</code> / <code>positionChanged</code> - forwarded directly to QML as the manager's own signals of the same name</li>
           <li><code>mediaStatusChanged</code> - routed to <code>_handle_media_status()</code>: <code>EndOfMedia</code> advances to the next track, <code>LoadedMedia</code> / <code>BufferedMedia</code> reset the recovery counters, <code>StalledMedia</code> / <code>InvalidMedia</code> trigger <a href="#error-recovery">recovery</a></li>
           <li><code>errorOccurred</code> - also triggers recovery (ignored while nothing is playing)</li>
+          <li><code>playbackStateChanged</code> - forwarded as <code>playbackStateChanged(int)</code> with the raw <code>QMediaPlayer::PlaybackState</code> value (0 stopped, 1 playing, 2 paused); the manager's own <code>playStateChanged(bool)</code> remains the signal the QML actually binds</li>
         </ul>
         <p>
           The 100&nbsp;ms <code>QTimer</code> re-emits <code>positionChanged(position)</code> while the player's
@@ -178,9 +181,12 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <code>play_file_at_path()</code> has a filename-only fallback for the same reason.
         </p>
         <p>
-          <code>get_media_files()</code> is the older flat listing of the current <code>m_mediaDir</code>; it is still
+          <code>get_media_files(emitSignal)</code> is the older flat listing of the current <code>m_mediaDir</code>; it is still
           called by <span class="file-path">MediaPlayer.qml</span> on load and used as a fallback by shuffle and sorting
-          when no playlist is selected.
+          when no playlist is selected. Both it and <code>scan_library(resetDisplayNames)</code> can be called from QML
+          with or without their boolean in either backend: the C++ methods have default arguments, the Python methods
+          carry two <code>@Slot</code> decorators (<code>@Slot(result=list)</code> and <code>@Slot(bool, result=list)</code>;
+          <code>@Slot()</code> and <code>@Slot(bool)</code>).
         </p>
 
         <div class="info-box info">
@@ -226,14 +232,14 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li>Only on a miss does <code>_cache_metadata_from_file()</code> read the tags; the result is written back with <code>_meta_to_store()</code>.</li>
           <li>Writes are coalesced: a single-shot 2&nbsp;s timer is restarted on every change and <code>_save_meta_store()</code> writes the compact JSON once. The dirty flag is only cleared when the write succeeded, so a failed write is retried on the next change or at shutdown.</li>
           <li>Shutdown flushes it explicitly: <code>flush_metadata_store()</code> is called from the <code>aboutToQuit</code> handler in <code>main.cpp</code> and from <code>cleanup_on_quit()</code> in <code>main.py</code> (the C++ destructor also saves).</li>
-          <li>Python detail: the pre-cache worker thread also calls <code>_meta_to_store()</code>, so the timer is armed through the internal <code>_metaStoreChanged</code> signal with a <code>QueuedConnection</code>; a <code>QTimer</code> must not be started from another thread.</li>
+          <li>Python detail: the save timer is armed through the internal <code>_metaStoreChanged</code> signal with a <code>QueuedConnection</code>, so <code>_meta_to_store()</code> is safe to call from any thread (a <code>QTimer</code> must not be started from another thread).</li>
         </ul>
         <p>
           Tag strings are sanitized (control characters replaced by spaces, whitespace collapsed, truncated to 200
-          characters with "...") by <code>_sanitize_metadata()</code> / <code>sanitize_metadata()</code>. The C++
-          <code>_read_tags()</code> sanitizes every format; the Python backend sanitizes MP3 tags through
-          <code>_extract_id3_text()</code> but stores M4A tags as read. Missing tags fall back to the file's base name
-          for the title and to "Unknown Artist" / "Unknown Album".
+          characters with "...") by <code>_sanitize_metadata()</code> / <code>sanitize_metadata()</code>. Both
+          <code>_read_tags()</code> implementations sanitize every format (Python through <code>_extract_id3_text()</code>
+          for ID3 frames and <code>_extract_list_text()</code> for MP4 atoms and Vorbis comments). Missing tags fall back
+          to the file's base name for the title and to "Unknown Artist" / "Unknown Album".
         </p>
 
         <!-- Album Art Extraction -->
@@ -260,7 +266,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li>Return the URL from the in-memory map <code>m_albumArtCache</code> (albumId &rarr; URL) if present</li>
           <li>Run <code>_manage_cache()</code>: when the map already holds 500 entries (<code>m_maxCacheFiles</code>), the entry with the <em>lowest access count</em> (other than the one being added) is removed from the map and its file deleted</li>
           <li><code>_cached_art_url_for(albumId)</code>: if a cover file with that hash already exists in the temp dir from <em>any earlier run</em>, use it without opening the audio file</li>
-          <li>Otherwise open the audio file and extract the first picture (C++ <code>_extract_art_for()</code> dispatches on extension to the TagLib readers; Python reads <code>APIC</code> frames or <code>covr</code> items, see the <a href="#supported-formats">format table</a>) and write it if the file does not exist yet</li>
+          <li>Otherwise open the audio file and extract the first picture (<code>_extract_art_for()</code> in both backends dispatches on extension: TagLib readers in C++, the mutagen readers in the <a href="#supported-formats">format table</a> in Python, whose <code>_write_cover()</code> names the file by MIME type) and write it if the file does not exist yet</li>
           <li>Store the URL in the map and return it (empty string if the file has no picture)</li>
         </ol>
 
@@ -279,10 +285,9 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <h3>Single-Read Population</h3>
         <p>
           When <code>_cache_metadata_from_file()</code> has to open a file for its tags it also extracts the cover in
-          the same pass (Python: <code>_cache_album_art_from_id3()</code> from the already-loaded <code>ID3</code> object,
-          or the <code>covr</code> item of an <code>MP4</code>; C++: <code>_extract_art_for()</code> after
-          <code>_read_tags()</code>), so the <code>get_album_art()</code> call that follows in a QML binding is an instant
-          map hit. Entries served from the tag store skip this step on purpose; their cover is found by the hash fast
+          the same pass (<code>_extract_art_for()</code> after <code>_read_tags()</code> in both backends, skipped when
+          the album's cover is already known or found by hash), so the <code>get_album_art()</code> call that follows in
+          a QML binding is an instant map hit. Entries served from the tag store skip this step on purpose; their cover is found by the hash fast
           path.
         </p>
 
@@ -444,8 +449,9 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           a list of YouTube-style junk such as <code>(Official Audio)</code>, <code>[HD]</code>, <code>(feat. ...)</code>,
           and leftover separators. <code>_auto_strip_display_names()</code> runs at the end of every scan for files that
           have no entry yet; the settings page's "Strip filenames" button (<code>strip_filenames()</code>) re-strips every
-          file and reports each change through <code>scanProgress</code>. Without an entry, the C++ fallback strips any
-          recognised audio extension while the Python fallback only strips <code>.mp3</code>.
+          file and reports each change through <code>scanProgress</code>. Without an entry, both fallbacks strip any recognised audio
+          extension (Python: <code>strip_audio_extension()</code>, also used for the <code>metadataChanged</code> title
+          fallback and the strip log lines).
         </p>
 
         <!-- Volume and Mute -->
@@ -472,8 +478,8 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
 }</code></pre>
         <p>The fan-out differs between the backends:</p>
         <ul>
-          <li><strong>C++:</strong> <code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <span class="file-path">main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code> and to a 300&nbsp;ms debounced <code>spotifyManager.set_volume(percent)</code>. Phone-mirror and ESP32 wiring is likewise done in <code>main.cpp</code>.</li>
-          <li><strong>Python:</strong> the <code>VolumeController</code> holds references and calls <code>media_manager.setVolume(linear)</code>, <code>spotify_manager.set_volume(percent)</code> (only when connected), <code>phone_mirror_manager.setVolume(linear)</code> and <code>esp32_manager.send_volume_update(percent)</code> directly.</li>
+          <li><strong>C++:</strong> <code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <span class="file-path">main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop builds) and a 300&nbsp;ms debounced <code>spotifyManager.set_volume(percent)</code>.</li>
+          <li><strong>Python:</strong> the <code>VolumeController</code> holds references and calls <code>media_manager.setVolume(linear)</code>, <code>phone_mirror_manager.setVolume(linear)</code> and <code>esp32_manager.send_volume_update(percent)</code> directly; the Spotify leg goes through the same 300&nbsp;ms trailing debounce (<code>_flush_spotify_volume()</code>, only when connected).</li>
         </ul>
         <p>
           Both mains call <code>applyVolume(settingsManager.currentVolume)</code> once at startup after every manager
@@ -589,11 +595,11 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           queues each neighbor once instead of six redundant jobs. Both backends also bail on the "no current track"
           sentinel (<code>-1</code>) or an index that outlived a playlist shrink.
         </p>
-        <p>The worker model differs:</p>
+        <p>Both desktop backends use the same three-phase, race-free model (C++ since commit <code>1232538</code>, Python since the mutagen rework): phase 1 on a worker reads tags (<code>_read_tags()</code>) for neighbors not already in the map or the tag store; phase 2 on the GUI thread inserts them (and writes them to the store), then hands the neighbors still lacking a cover to a second worker that only writes cover files (<code>_extract_art_for()</code>); phase 3 on the GUI thread records the URLs. The GUI thread is therefore the sole owner of the metadata and album-art maps, and the workers never touch them. What differs is the plumbing:</p>
         <ul>
-          <li><strong>C++ desktop</strong> (race-free, commit <code>1232538</code>): phase 1 on a <code>QtConcurrent</code> worker reads tags (<code>_read_tags()</code>) for neighbors not already in the map or the tag store; phase 2 on the GUI thread inserts them (and writes them to the store), then hands the neighbors still lacking a cover to a second worker that only writes cover files (<code>_extract_art_for()</code>); phase 3 on the GUI thread records the URLs. Results travel through <code>QFutureWatcher</code>, so the GUI thread is the sole owner of <code>m_metadataCache</code> and <code>m_albumArtCache</code>. The earlier version mutated the hashes from the worker while list delegates were reading them.</li>
+          <li><strong>C++ desktop:</strong> <code>QtConcurrent</code> workers, results delivered through <code>QFutureWatcher</code>. The earlier version mutated the hashes from the worker while list delegates were reading them.</li>
           <li><strong>C++ mobile:</strong> <code>_precache_tracks()</code> runs synchronously on the GUI thread, since the platform tag reader is cheap.</li>
-          <li><strong>Python:</strong> a daemon <code>threading.Thread</code> runs <code>_precache_tracks()</code>, which calls <code>_cache_metadata()</code> and <code>get_album_art()</code> directly and therefore does write the dicts from the worker; the code relies on CPython's GIL making individual dict operations atomic. Store writes from that thread are made safe by the queued <code>_metaStoreChanged</code> signal.</li>
+          <li><strong>Python:</strong> daemon <code>threading.Thread</code>s, results delivered through the internal queued signals <code>_precacheTagsReady(neighbors, [(filename, path, meta)])</code> &rarr; <code>_apply_precached_tags()</code> and <code>_precacheArtReady([(album_id, url)])</code> &rarr; <code>_apply_precached_art()</code>. The earlier <code>_precache_tracks()</code> thread called <code>_cache_metadata()</code> / <code>get_album_art()</code> directly and wrote the dicts from the worker.</li>
         </ul>
 
         <!-- Error Recovery -->
@@ -651,7 +657,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><th>Signal</th><th>Type</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>playbackStateChanged</code></td><td>int</td><td>Declared in both backends for the raw <code>QMediaPlayer</code> state; currently nothing emits it</td></tr>
+            <tr><td><code>playbackStateChanged</code></td><td>int</td><td>Raw <code>QMediaPlayer</code> playback state, forwarded on every change in both backends: 0 stopped, 1 playing, 2 paused</td></tr>
             <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped; also drives the position timer and the analyzer's <code>set_active</code></td></tr>
             <tr><td><code>currentMediaChanged</code></td><td>str</td><td>Filename of the now-playing (or restored) track; triggers colour extraction when Album Art Capture is active</td></tr>
             <tr><td><code>mediaListChanged</code></td><td>list</td><td>New ordered file list after a playlist selection, shuffle toggle, strip or scan</td></tr>
@@ -695,7 +701,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>get_current_file</code></td><td>() -&gt; str</td><td>Current filename (initializes the order if needed, never plays)</td></tr>
             <tr><td><code>get_next_track_name</code> / <code>get_previous_track_name</code></td><td>() -&gt; str</td><td>Peek at neighbors</td></tr>
             <tr><td><code>get_next_track_album_art</code> / <code>get_previous_track_album_art</code> / <code>get_neighbor_album_arts</code></td><td>() -&gt; str / list</td><td>Neighbor cover URLs; the list form returns <code>[prevArt, nextArt]</code></td></tr>
-            <tr><td><code>get_media_files</code></td><td>(bool emitSignal=true) -&gt; list</td><td>Flat listing of the current media directory (emits <code>mediaListChanged</code> by default)</td></tr>
+            <tr><td><code>get_media_files</code></td><td>(bool emitSignal=true) -&gt; list</td><td>Flat listing of the current media directory (emits <code>mediaListChanged</code> by default); callable with or without the bool from QML in both backends</td></tr>
             <tr><td><code>get_album_art</code></td><td>(str) -&gt; str</td><td>Cover <code>file://</code> URL for a filename, or ""</td></tr>
             <tr><td><code>get_band</code> / <code>get_album</code></td><td>(str) -&gt; str</td><td>Artist / album from metadata</td></tr>
             <tr><td><code>get_formatted_duration</code></td><td>(str) -&gt; str</td><td>"M:SS" duration string (also emits <code>durationFormatChanged</code>)</td></tr>
@@ -704,7 +710,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>invalidate_stats_cache</code></td><td>()</td><td>Force recalculation of library statistics</td></tr>
             <tr><td><code>sort_media_files</code></td><td>(str column, bool ascending) -&gt; list</td><td>Current list sorted by "title", "album" or "artist"</td></tr>
             <tr><td><code>extract_colors_from_album_art</code></td><td>(str)</td><td>Run the k-means theme extraction for a file's cover</td></tr>
-            <tr><td><code>scan_library</code></td><td>(bool resetDisplayNames=true)</td><td>Rescan the library root into playlists (emits <code>scanProgress</code>, <code>playlistsChanged</code>)</td></tr>
+            <tr><td><code>scan_library</code></td><td>(bool resetDisplayNames=true)</td><td>Rescan the library root into playlists (emits <code>scanProgress</code>, <code>playlistsChanged</code>); callable with or without the bool from QML in both backends</td></tr>
             <tr><td><code>set_library_root</code></td><td>(str)</td><td>Set and scan a new root, select its first playlist (connected to <code>mediaFolderChanged</code>)</td></tr>
             <tr><td><code>select_playlist</code></td><td>(str)</td><td>Switch the active playlist ("All Music" spans every folder)</td></tr>
             <tr><td><code>get_playlist_names</code> / <code>get_current_playlist_name</code> / <code>get_current_song_list</code> / <code>get_movable_playlist_names</code></td><td>() -&gt; list / str</td><td>Playlist queries</td></tr>
@@ -729,7 +735,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           MediaManager lives on the GUI thread and all of its slots are called there. Work that leaves the thread:
         </p>
         <ul>
-          <li><strong>Neighbor pre-cache</strong> - QtConcurrent workers (C++, results marshalled back through <code>QFutureWatcher</code>) / a daemon thread (Python), see <a href="#precaching">above</a></li>
+          <li><strong>Neighbor pre-cache</strong> - QtConcurrent workers (C++, results marshalled back through <code>QFutureWatcher</code>) / daemon threads with queued signals back (Python); the caches are written only on the GUI thread, see <a href="#precaching">above</a></li>
           <li><strong>Colour extraction</strong> - QtConcurrent + <code>QFutureWatcher&lt;QString&gt;</code> (C++) / a daemon thread with a queued signal back (Python); only the newest job is applied</li>
           <li><strong>Library scanning and tag reads on demand</strong> stay synchronous on the GUI thread; the tag store makes a warm scan cheap</li>
         </ul>
@@ -750,7 +756,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><strong>Colour extraction off the GUI thread</strong></td><td>k-means over a 50&times;50 cover takes ~0.3&nbsp;s on a desktop and closer to a second on the Pi; doing it in the <code>currentMediaChanged</code> handler froze the track-change animation. A job counter makes a fast skip through tracks apply only the last theme, and the 2&nbsp;s dedupe removes the startup double-fire (restore + the 1&nbsp;s timer).</td></tr>
             <tr><td><strong>Fixed k-means seed</strong></td><td>The same cover must produce the same theme every time it is played; and the Python version uses a private <code>random.Random(42)</code> because seeding the global module made every later <code>random.shuffle()</code> deterministic (visible as identical shuffle orders).</td></tr>
             <tr><td><strong>Caches populated before <code>currentMediaChanged</code></strong></td><td>QML bindings on the now-playing track run during the render phase; pre-filling the metadata and cover caches moves the disk I/O out of binding evaluation so the carousel animation starts without blocking the scene graph.</td></tr>
-            <tr><td><strong>GUI thread as sole owner of the caches (C++)</strong></td><td>The first QtConcurrent pre-cache mutated <code>QHash</code>es from the worker while list delegates were reading them. Splitting the work into "read files on the worker, insert on the GUI thread" keeps the speed without a mutex around every lookup.</td></tr>
+            <tr><td><strong>GUI thread as sole owner of the caches</strong></td><td>The first QtConcurrent pre-cache mutated <code>QHash</code>es from the worker while list delegates were reading them, and the Python thread relied on the GIL for the same dict writes. Splitting the work into "read files on the worker, insert on the GUI thread" keeps the speed without a mutex around every lookup; both backends now do it.</td></tr>
             <tr><td><strong>Quadratic volume curve in one place</strong></td><td>Per the <code>VolumeController</code> header, <code>(percent/100)&sup2;</code> "gives a more natural perceptual response than linear at low volumes", and "every audio output in the app must use this same curve or they will drift out of sync when the user moves the slider". Before <code>VolumeController</code> existed the curve was hard-coded in about nine call sites across <code>main.py</code> and QML and every output drifted out of sync when one site changed; centralizing math and dispatch means changing the curve is a one-line edit (<code>volume_utils.py</code> docstring, commit <code>d2b047b</code>).</td></tr>
             <tr><td><strong>Volume, mute and ducking as separate state</strong></td><td>Before ducking, mute read the output level back as "the volume to restore", so a ducked or muted output could be persisted as the user's volume. Computing the output from three independent values in one function removed that class of bug (<code>5834d9d</code>).</td></tr>
             <tr><td><strong>Recovery cap, skip, then stop</strong></td><td>Qt neither reloads nor re-reports an error for a source identical to the current one, so the old "re-set the same URL" recovery left a broken file silently stuck at 0:00 with the pause icon, logging "recovery successful" unconditionally. A library of tag-only stubs must be skipped, not retried forever, and if every track is bad the player must stop rather than cycle the library (<code>2884c65</code>). "Recovered" is only claimed when the player actually reaches <code>LoadedMedia</code>.</td></tr>
@@ -765,7 +771,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         <h3>Adding a New Audio Format</h3>
         <ol class="steps">
           <li>Add the extension to <code>s_audioExtensions</code> <em>and</em> the file-local <code>s_audioExts</code> list in <span class="file-path">mediamanager.cpp</span>, and to <code>AUDIO_EXTENSIONS</code> in <span class="file-path">media_manager.py</span></li>
-          <li>C++ tags already come from <code>TagLib::FileRef</code>; add a picture reader to <code>_extract_art_for()</code> if the container embeds art. Python: add an <code>elif</code> branch in <code>_cache_metadata_from_file()</code> and the matching branch in <code>get_album_art()</code></li>
+          <li>C++ tags already come from <code>TagLib::FileRef</code>; add a picture reader to <code>_extract_art_for()</code> if the container embeds art. Python: add a branch in <code>_read_tags()</code> (tags) and, if the container embeds art, an <code>_extract_album_art_*()</code> reader dispatched from <code>_extract_art_for()</code></li>
           <li>Update the <a href="#supported-formats">format table</a> above</li>
         </ol>
 
@@ -779,10 +785,11 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
 
         <div class="info-box warning">
           <div class="info-box-title">Parity Notes</div>
-          Known differences to keep in mind when working on this class: the Python scanner does not list
-          <code>.mp4</code>; Python reads no tags or covers for FLAC / Ogg / Opus / WAV; the C++ Opus cover path uses the
-          Vorbis reader; the Python pre-cache thread writes the caches directly; the Python display-name fallback only
-          strips <code>.mp3</code>. The QML never needs to know which backend is running.
+          The extension list, the per-format tag and cover readers (TagLib / mutagen), the three-phase pre-cache and the
+          extension-stripping fallbacks now match between the backends; the remaining differences are the tag-store
+          eviction order (oldest insertion in Python, <code>QHash::begin()</code> in C++), the Python-only
+          <code>probe-size</code> / <code>analyzeduration</code> player properties, and the mobile C++ paths. The QML
+          never needs to know which backend is running.
         </div>
 
         <!-- Related Pages -->

@@ -3,9 +3,11 @@ BerryIMU v3 Manager for OCTAVE
 Reads accelerometer, gyroscope, magnetometer, and barometer data from BerryIMU v3
 via I2C and emits signals to QML for the CarMenu 3D model and gauges.
 
-Uses Madgwick AHRS (9DOF) for sensor fusion — outputs a quaternion directly
+Uses Madgwick AHRS for sensor fusion — outputs a quaternion directly
 to the 3D model, completely avoiding gimbal lock. No Euler angle clamping,
-no cascaded EMA stages. One filter, one quaternion, 1:1 mapping.
+no cascaded EMA stages. One filter, one quaternion, 1:1 mapping. Fusion is
+deliberately accel+gyro only (6DOF); the magnetometer feeds the heading
+readout only.
 """
 
 import struct
@@ -55,7 +57,11 @@ BARO_INTERVAL = 0.2
 # ==================== Madgwick AHRS Filter ====================
 
 class MadgwickAHRS:
-    """Madgwick 9DOF MARG filter. Fuses accel + gyro + mag into one quaternion."""
+    """Madgwick MARG filter (full 9DOF implementation).
+
+    The read loop deliberately calls update() with mx=my=mz=0 so only the
+    6DOF accel+gyro branch runs — see the call site in _read_loop for why.
+    """
 
     def __init__(self, beta=0.04):
         self.beta = beta
@@ -168,7 +174,12 @@ class MadgwickAHRS:
         self.q = [q0 / n, q1 / n, q2 / n, q3 / n]
 
     def get_euler(self):
-        """Extract pitch, roll, heading from quaternion (for gauge displays only)."""
+        """Extract pitch, roll, heading from quaternion (for gauge displays only).
+
+        Currently unused: the read loop derives pitch/roll from the tared,
+        yaw-stripped quaternion itself and heading from the raw magnetometer.
+        Only meaningful for heading if 9DOF fusion is ever enabled.
+        """
         w, x, y, z = self.q
 
         # Pitch (nose up/down)
@@ -243,6 +254,12 @@ class BerryIMUManager(QObject):
         self._accel_bias_y = 0.0
         self._last_ax = 0.0
         self._last_ay = 0.0
+
+        # Tare requests are raised from the GUI thread and serviced inside the
+        # read loop, so the quaternion / accel snapshot is taken on the thread
+        # that writes them (mirrors the C++ worker's atomic request flags).
+        self._tare_requested = threading.Event()
+        self._tare_reset_requested = threading.Event()
 
         self._last_time = None
         self._ahrs = MadgwickAHRS(beta=MADGWICK_BETA)
@@ -458,6 +475,14 @@ class BerryIMUManager(QObject):
                 if dt <= 0:
                     dt = 0.001
 
+                # Handle tare requests (raised by calibrateTare / resetTare)
+                if self._tare_requested.is_set():
+                    self._tare_requested.clear()
+                    self._apply_tare()
+                if self._tare_reset_requested.is_set():
+                    self._tare_reset_requested.clear()
+                    self._apply_tare_reset()
+
                 # Read all sensors
                 ax, ay, az = self._read_accel()
                 gx, gy, gz = self._read_gyro()
@@ -478,7 +503,13 @@ class BerryIMUManager(QObject):
                 gz_rad = math.radians(gz_corr)
 
                 # Only update filter when there's actual motion — freezes quaternion
-                # when stationary so the accel correction doesn't cause visible settling
+                # when stationary so the accel correction doesn't cause visible settling.
+                # Fusion is deliberately accel+gyro only (6DOF): the magnetometer is
+                # passed as zeros so MadgwickAHRS takes its 6DOF branch. In-car
+                # magnetic interference (alternator, speakers, steel body) would pull
+                # the quaternion around if it were fused; the magnetometer is used
+                # only for the raw heading readout below. Enabling 9DOF fusion is a
+                # behaviour change that needs on-vehicle testing first.
                 if gx_corr != 0.0 or gy_corr != 0.0 or gz_corr != 0.0:
                     self._ahrs.update(gx_rad, gy_rad, gz_rad, ax, ay, az, 0.0, 0.0, 0.0, dt)
 
@@ -578,6 +609,41 @@ class BerryIMUManager(QObject):
 
         logger.info(f"BerryIMU: read loop exited after {read_count} reads")
 
+    # ==================== Tare (read-thread side) ====================
+
+    def _apply_tare(self):
+        """Capture the current orientation as the zero reference. Runs on the
+        read thread so _ahrs.q and _last_ax/_last_ay are read where they're
+        written."""
+        # Strip yaw first (same decomposition as the emit path) so the tare
+        # operates in the same domain as the values it's applied to.
+        qw, qx, qy, qz = self._ahrs.q
+        yaw_norm = math.sqrt(qw * qw + qz * qz)
+        if yaw_norm > 0.001:
+            yw = qw / yaw_norm
+            yz = qz / yaw_norm
+        else:
+            yw = 1.0
+            yz = 0.0
+        tw = yw * qw + yz * qz
+        tx = yw * qx + yz * qy
+        ty = yw * qy - yz * qx
+        tz = yw * qz - yz * qw
+        # Inverse of a unit quaternion is its conjugate: (w, -x, -y, -z)
+        self._tare_q = [tw, -tx, -ty, -tz]
+        # Also capture current accel as G-force zero reference
+        self._accel_bias_x = self._last_ax
+        self._accel_bias_y = self._last_ay
+        logger.info(f"BerryIMU: tare set — q=[{tw:.3f},{tx:.3f},{ty:.3f},{tz:.3f}] "
+                    f"accel_bias=[{self._accel_bias_x:.4f},{self._accel_bias_y:.4f}]")
+
+    def _apply_tare_reset(self):
+        """Clear the tare offset (identity quaternion, zero accel bias)."""
+        self._tare_q = [1.0, 0.0, 0.0, 0.0]
+        self._accel_bias_x = 0.0
+        self._accel_bias_y = 0.0
+        logger.info("BerryIMU: tare reset to identity")
+
     # ==================== Properties ====================
 
     @Property(bool, notify=connectionStatusChanged)
@@ -586,7 +652,7 @@ class BerryIMUManager(QObject):
 
     @Property(bool, notify=hasTemperatureChanged)
     def hasTemperature(self):
-        # Desktop BerryIMU always carries the BMP280 barometer/thermometer.
+        # Desktop BerryIMU always carries the BMP388 barometer/thermometer.
         # Mirrors the C++ desktop branch (`return true`); the Android build
         # flips this at runtime from Qt sensors, which Python never targets.
         return True
@@ -636,36 +702,23 @@ class BerryIMUManager(QObject):
 
     @Slot()
     def calibrateTare(self):
-        """Set current orientation as the zero reference (tare)."""
-        # Strip yaw first (same decomposition as the read loop) so the tare
-        # operates in the same domain as the values it's applied to.
-        qw, qx, qy, qz = self._ahrs.q
-        yaw_norm = math.sqrt(qw * qw + qz * qz)
-        if yaw_norm > 0.001:
-            yw = qw / yaw_norm
-            yz = qz / yaw_norm
-        else:
-            yw = 1.0
-            yz = 0.0
-        tw = yw * qw + yz * qz
-        tx = yw * qx + yz * qy
-        ty = yw * qy - yz * qx
-        tz = yw * qz - yz * qw
-        # Inverse of a unit quaternion is its conjugate: (w, -x, -y, -z)
-        self._tare_q = [tw, -tx, -ty, -tz]
-        # Also capture current accel as G-force zero reference
-        self._accel_bias_x = self._last_ax
-        self._accel_bias_y = self._last_ay
-        logger.info(f"BerryIMU: tare set — q=[{tw:.3f},{tx:.3f},{ty:.3f},{tz:.3f}] "
-                    f"accel_bias=[{self._accel_bias_x:.4f},{self._accel_bias_y:.4f}]")
+        """Set current orientation as the zero reference (tare).
+
+        Only raises a request; the read loop performs the capture on its own
+        thread (same as the C++ worker) so the quaternion is not read from
+        the GUI thread while the loop is writing it."""
+        if not self._running:
+            logger.info("BerryIMU: tare requested while not running, ignored")
+            return
+        self._tare_requested.set()
 
     @Slot()
     def resetTare(self):
         """Clear the tare offset."""
-        self._tare_q = [1.0, 0.0, 0.0, 0.0]
-        self._accel_bias_x = 0.0
-        self._accel_bias_y = 0.0
-        logger.info("BerryIMU: tare reset to identity")
+        if self._running:
+            self._tare_reset_requested.set()
+        else:
+            self._apply_tare_reset()
 
     # ==================== Cleanup ====================
 

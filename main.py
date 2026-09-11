@@ -53,7 +53,9 @@ app = QApplication(sys.argv)
 screen = app.primaryScreen()
 if screen:
     available = screen.availableSize()
-    auto_scale = available.height() / 720.0
+    # Scale off the SHORTER axis so the factor is the same whether the display
+    # reports landscape or portrait dimensions (matches src/main.cpp).
+    auto_scale = min(available.width(), available.height()) / 720.0
     auto_scale = max(0.4, min(3.0, auto_scale))  # Clamp to [0.4, 3.0]
     logger.info(f"Screen auto-detection: {available.width()}x{available.height()}, autoScale={auto_scale:.2f}")
 else:
@@ -358,8 +360,18 @@ cmd_server = None   # set by setup_perf_profiling() (--profile); dev tooling reg
 
 
 def setup_perf_profiling():
-    """Wire up perf monitor + command server. Called only when --profile is set."""
-    from backend.perf_monitor import PerfMonitor
+    """Wire up perf monitor + command server. Called only when --profile is set.
+
+    backend/perf_monitor.py, backend/command_server.py and backend/perf_patches.py
+    are developer-only and intentionally gitignored (see .gitignore), so every
+    import is guarded — a fresh clone gets a log line, not an ImportError."""
+    global cmd_server
+    try:
+        from backend.perf_monitor import PerfMonitor
+    except ImportError:
+        logger.warning("--profile: backend/perf_monitor.py not present (gitignored dev tooling), "
+                       "skipping performance monitor and command server")
+        return
     perf_stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     perf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dev", "perf", "logs")
     os.makedirs(perf_dir, exist_ok=True)
@@ -370,24 +382,28 @@ def setup_perf_profiling():
     perf_monitor.start()
 
     # Command server for MCP/remote control
-    from backend.command_server import CommandServer
-    global cmd_server
-    cmd_server = CommandServer()
-    cmd_server.start(
-        managers={
-            "media": media_manager,
-            "spotify": spotify_manager,
-            "obd": obd_manager,
-            "settings": settings_manager,
-        },
-        perf_monitor=perf_monitor,
-        engine=engine,
-    )
+    try:
+        from backend.command_server import CommandServer
+    except ImportError:
+        logger.warning("--profile: backend/command_server.py not present (gitignored dev tooling), "
+                       "skipping command server")
+    else:
+        cmd_server = CommandServer()
+        cmd_server.start(
+            managers={
+                "media": media_manager,
+                "spotify": spotify_manager,
+                "obd": obd_manager,
+                "settings": settings_manager,
+            },
+            perf_monitor=perf_monitor,
+            engine=engine,
+        )
 
-    def stop_cmd_server():
-        cmd_server.stop()
+        def stop_cmd_server():
+            cmd_server.stop()
 
-    app.aboutToQuit.connect(stop_cmd_server)
+        app.aboutToQuit.connect(stop_cmd_server)
 
     # Instrument hot paths
     try:

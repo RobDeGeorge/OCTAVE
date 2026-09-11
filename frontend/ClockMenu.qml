@@ -124,10 +124,14 @@ Item {
             var date = new Date()
             dateDisplay.text = Qt.formatDate(date, "dddd, MMMM d, yyyy")
 
-            // Update analog clock hands
-            var hours = parseInt(time.split(":")[0])
-            var minutes = parseInt(time.split(":")[1])
-            var seconds = parseInt(time.split(":")[2])
+            // Update analog clock hands. The string is "HH:mm[:ss][ AM|PM]" —
+            // the seconds field is absent when clockShowSeconds is off (and
+            // the whole string is empty when showClock is off), so treat a
+            // missing field as 0 rather than letting NaN reach the rotations.
+            var parts = time.split(":")
+            var hours = parseInt(parts[0]) || 0
+            var minutes = parseInt(parts[1]) || 0
+            var seconds = parseInt(parts[2]) || 0
 
             // Calculate rotations
             hourHand.rotation = (hours % 12) * 30 + (minutes / 60) * 30

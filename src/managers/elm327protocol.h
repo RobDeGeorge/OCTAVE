@@ -40,12 +40,21 @@ using PidDecoder = std::function<double(const QVector<uint8_t> &)>;
 struct PidEntry {
     QString name;          // Human-readable name ("Coolant Temp")
     QString signalName;    // Signal name on OBDManager ("coolantTempChanged")
+    QString commandName;   // python-obd command name ("COOLANT_TEMP") -- the
+                           // settings key and the scan-result vocabulary
     PidDecoder decoder;    // Decodes raw bytes to a double
     int expectedBytes;     // Number of data bytes expected
 };
 
 // Key for PID table: (mode, pid)
 using PidKey = QPair<int, int>;
+
+// Pseudo-PID for python-obd's ELM_VOLTAGE: not a Mode 01 request but the
+// adapter's own "ATRV" command, answered with text such as "12.6V". It lives
+// in the PID table so settings / scan / poll lists treat it like any other
+// parameter; the pollers special-case the request and parse the reply with
+// ELM327Protocol::parseElmVoltage().
+inline const PidKey kElmVoltageKey{0, 0};
 
 // Parsed response from ELM327: (mode, pid, data_bytes)
 struct ParsedResponse {
@@ -89,6 +98,13 @@ public:
     static std::optional<DecodedPid> decodePid(int mode, int pid,
                                                const QVector<uint8_t> &dataBytes);
 
+    // "ATRV\r" -- the adapter voltage request behind kElmVoltageKey.
+    static QByteArray elmVoltageRequest();
+
+    // Parse an ATRV reply ("12.6V", "12.6") into volts.
+    // Returns std::nullopt if the text is not a voltage.
+    static std::optional<double> parseElmVoltage(const QString &raw);
+
     // Parse supported-PIDs bitmap (mode 01, PID 00/20/40/60).
     // Returns set of supported PID numbers (1-indexed relative to the base).
     static QSet<int> parseSupportedPids(const QVector<uint8_t> &dataBytes);
@@ -105,6 +121,11 @@ public:
 
     // Get all parameter names from the PID table
     static QStringList allParameterNames();
+
+    // python-obd command names of every table entry whose PID appears in the
+    // vehicle's supported set (mode 01 PID numbers). ELM_VOLTAGE is always
+    // included -- python-obd lists it among the base commands.
+    static QStringList supportedCommandNames(const QSet<int> &supportedPids);
 
 private:
     ELM327Protocol() = delete; // Static-only class

@@ -67,7 +67,7 @@ QString PhoneMirrorManager::getInstallInstructions()
 
 // ─── adb discovery ────────────────────────────────────────────────────
 
-QString PhoneMirrorManager::findAdb() const
+QString PhoneMirrorManager::findAdb()
 {
     // Bundled platform-tools first (scripts/fetch_platform_tools.py; CI ships
     // it next to the binary). Dev layout: <repo>/tools/platform-tools/<os>/,
@@ -124,6 +124,7 @@ QString PhoneMirrorManager::runAdb(const QStringList &args, int timeoutMs) const
         return {};
     QProcess proc;
     proc.setProcessChannelMode(QProcess::MergedChannels);
+    ScrcpyClient::hideConsoleWindow(&proc);
     proc.start(m_adbPath, args);
     if (!proc.waitForFinished(timeoutMs) || proc.exitCode() != 0)
         return {};
@@ -214,9 +215,14 @@ int PhoneMirrorManager::getDeviceSdk()
 void PhoneMirrorManager::killStaleServer()
 {
     // A crashed session can leave the device-side server running
-    if (!m_adbPath.isEmpty())
-        QProcess::startDetached(m_adbPath, {QStringLiteral("shell"), QStringLiteral("pkill"),
-                                            QStringLiteral("-f"), QLatin1String(ScrcpyClient::kServerProcessPattern)});
+    if (!m_adbPath.isEmpty()) {
+        QProcess proc;
+        proc.setProgram(m_adbPath);
+        proc.setArguments({QStringLiteral("shell"), QStringLiteral("pkill"),
+                           QStringLiteral("-f"), QLatin1String(ScrcpyClient::kServerProcessPattern)});
+        ScrcpyClient::hideConsoleWindow(&proc);
+        proc.startDetached();
+    }
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────
@@ -347,6 +353,7 @@ void PhoneMirrorManager::pressHome()
     if (m_vdisplayId >= 0 && !m_serial.isEmpty() && !m_adbPath.isEmpty()) {
         auto *proc = new QProcess(this);
         connect(proc, &QProcess::finished, proc, &QObject::deleteLater);
+        ScrcpyClient::hideConsoleWindow(proc);
         proc->start(m_adbPath, {QStringLiteral("-s"), m_serial, QStringLiteral("shell"), QStringLiteral("am"),
                                 QStringLiteral("start"), QStringLiteral("--display"), QString::number(m_vdisplayId),
                                 QStringLiteral("-a"), QStringLiteral("android.intent.action.MAIN"),
@@ -555,6 +562,7 @@ void PhoneMirrorManager::wakePhone()
     qCInfo(lcPhoneMirror) << "Waking phone";
     auto *proc = new QProcess(this);
     connect(proc, &QProcess::finished, proc, &QObject::deleteLater);
+    ScrcpyClient::hideConsoleWindow(proc);
     proc->start(m_adbPath, {QStringLiteral("-s"), m_serial, QStringLiteral("shell"), QStringLiteral("input"),
                             QStringLiteral("keyevent"), QString::number(ScrcpyClient::KeycodeWakeup)});
 }

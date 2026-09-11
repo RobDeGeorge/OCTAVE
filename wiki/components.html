@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Components</div>
           <h1 class="page-title">Components</h1>
-          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, LazyImage, ThemedIcon, TerminalFeedback, CornerBrackets, GalleryTile, SensorCard, GForceDisplay, HomeOBDView, the OBDParameterModel singleton and the rigged Jeep TJ</p>
+          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, GalleryTile, SensorCard, GForceDisplay, HomeOBDView, the OBDParameterModel singleton and the rigged Jeep TJ</p>
         </div>
 
         <nav class="toc">
@@ -22,7 +22,6 @@
             <li><a href="#scope">Scope and Conventions</a></li>
             <li><a href="#album-art-carousel">AlbumArtCarousel</a></li>
             <li><a href="#coverflow-card">CoverflowCard</a></li>
-            <li><a href="#lazy-image">LazyImage</a></li>
             <li><a href="#themed-icon">ThemedIcon</a></li>
             <li><a href="#terminal-feedback">TerminalFeedback</a></li>
             <li><a href="#corner-brackets">CornerBrackets</a></li>
@@ -48,7 +47,6 @@
           <tbody>
             <tr><td><code>AlbumArtCarousel</code></td><td><code>Item</code></td><td><span class="file-path">MediaRoom.qml</span> (and, through it, the Now Playing Studio preview)</td></tr>
             <tr><td><code>CoverflowCard</code></td><td><code>Item</code></td><td><code>AlbumArtCarousel</code> (three instances)</td></tr>
-            <tr><td><code>LazyImage</code></td><td><code>Item</code></td><td>nothing &mdash; currently unused</td></tr>
             <tr><td><code>ThemedIcon</code></td><td><code>Item</code></td><td>settings tiles and cards, hub widgets</td></tr>
             <tr><td><code>TerminalFeedback</code></td><td><code>Rectangle</code></td><td><span class="file-path">settings/MediaSettingsPage.qml</span> (library-scan and Spotify-connection output); <span class="file-path">OBDDiagnostics.qml</span> has its own inline terminal instead</td></tr>
             <tr><td><code>CornerBrackets</code></td><td><code>Item</code></td><td><code>TerminalFeedback</code>, <code>SettingsCard</code>, <code>SettingsTile</code>, <code>SettingsDashboardCard</code>, <code>SettingsHubCard</code>, <code>SettingsHubGridCard</code> (always hidden, see below)</td></tr>
@@ -184,16 +182,6 @@
           The comment on <code>roundedMask</code> / <code>vinylMask</code> says it directly: "External mask items &mdash; shared across all cards to avoid duplicating GPU textures." Three cards plus the dissolve effect would otherwise allocate four identical mask textures per resize.
         </div>
 
-        <!-- LazyImage -->
-        <h2 id="lazy-image">LazyImage</h2>
-
-        <p><span class="file-path">frontend/LazyImage.qml</span> (30 lines) wraps an <code>Image</code> whose <code>source</code> is bound to <code>root.visible ? root.source : ""</code>, so an instance that scrolls out of view releases its decoded pixels. It decodes at <code>fidelity</code> &times; <code>fidelity</code> (default 60&nbsp;px), <code>asynchronous</code>, <code>cache: true</code>, <code>fillMode: PreserveAspectFit</code>, <code>autoTransform: true</code>, and only becomes visible at <code>Image.Ready</code>. <code>smoothing</code>, <code>mipmap</code> and <code>antialiasing</code> (all default <code>false</code>) map to the matching <code>Image</code> properties.</p>
-
-        <div class="info-box warning">
-          <div class="info-box-title">Currently unused</div>
-          No file under <span class="file-path">frontend/</span> instantiates <code>LazyImage</code>. <span class="file-path">MediaPlayer.qml</span>'s song rows use a plain <code>Image</code> with <code>sourceSize</code> 1.5&times; the thumbnail, <code>asynchronous</code>, <code>cache: true</code>, inside a <code>ListView</code> with <code>reuseItems: true</code> and <code>cacheBuffer: height * 0.5</code>. The <code>rounded</code>, <code>quality</code> and <code>cacheLimit</code> properties are declared but never read by the inner <code>Image</code>. The type is kept as a ready-made thumbnail loader.
-        </div>
-
         <!-- ThemedIcon -->
         <h2 id="themed-icon">ThemedIcon</h2>
 
@@ -311,7 +299,7 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
           <li><strong>Rebuild on change</strong> &mdash; <code>onHomeOBDParametersChanged</code> sets the <code>Repeater</code> model to <code>[]</code> and re-assigns it via <code>Qt.callLater</code> "to force re-creation of all delegates".</li>
         </ul>
 
-        <p>The window-wide full-screen and aura flashes for the same flags live in <span class="file-path">Main.qml</span> (see <a href="frontend-overview.html#shift-light">Shift Light Overlays</a>); the flags are edited in the RPM popup on <a href="pages.html#obdmenu">OBDMenu</a>. The file comment "covers all 93 params" predates the current 92-entry model.</p>
+        <p>The window-wide full-screen and aura flashes for the same flags live in <span class="file-path">Main.qml</span> (see <a href="frontend-overview.html#shift-light">Shift Light Overlays</a>); the flags are edited in the RPM popup on <a href="pages.html#obdmenu">OBDMenu</a>.</p>
 
         <!-- OBDParameterModel -->
         <h2 id="obd-parameter-model">OBDParameterModel</h2>
@@ -366,11 +354,6 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
         <h3>Demo mode</h3>
 
         <p><code>simulationActive</code> switches the singleton to "pure-QML fake data so dashboards can be built/tested without a live OBD connection": every parameter sweeps a sine between its <code>min</code> and <code>max</code> with a 4&ndash;16&nbsp;s period and a per-parameter phase (so the screen "doesn't pulse in lockstep"), driven by a 100&nbsp;ms timer; big-range values are rounded to integers. While active, real backend updates are dropped; on deactivation <code>paramValues</code> is reset so stale fake readings never linger in the real OBD views. The dashboard editor toggles this (see <a href="gauges-dashboards.html#editor">Gauges &amp; Dashboards &rarr; Editor</a>).</p>
-
-        <div class="info-box info">
-          <div class="info-box-title">Stale count in a comment</div>
-          The heading comment above <code>_obdConnections</code> still says "all 93 parameters"; the array contains 84 OBD entries and 8 IMU entries (92 in total, matching <span class="file-path">docs/GAUGE_AUTHORING.md</span>). The <code>allParameters</code> array is authoritative.
-        </div>
 
         <!-- Jeep rig -->
         <h2 id="jeep-rig">The Jeep TJ Rig</h2>

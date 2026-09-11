@@ -529,13 +529,38 @@ void ESP32VolumeManager::onSerialError(QSerialPort::SerialPortError error)
     if (error == QSerialPort::NoError)
         return;
 
-    // ResourceError typically means the device was unplugged
-    if (error == QSerialPort::ResourceError) {
-        qCWarning(lcEsp32) << "serial resource error (device unplugged?)";
+    switch (error) {
+    // ResourceError typically means the device was unplugged; the others
+    // are the SerialException-class failures the Python backend treats as a
+    // lost link (pyserial raises for a vanished/unreadable/unwritable port).
+    case QSerialPort::ResourceError:
+    case QSerialPort::DeviceNotFoundError:
+    case QSerialPort::PermissionError:
+    case QSerialPort::ReadError:
+    case QSerialPort::WriteError:
+        qCWarning(lcEsp32) << "serial error:" << error << "-"
+                           << (m_serialPort ? m_serialPort->errorString() : QString());
+        // No-op while not connected (e.g. a failed open(), which schedules
+        // its own reconnect); otherwise routes into the reconnect path.
         handleDisconnect();
-    } else {
+        break;
+    default:
         qCWarning(lcEsp32) << "serial error:" << error;
+        break;
     }
+}
+
+bool ESP32VolumeManager::writeCommand(const QByteArray &data, const char *what)
+{
+    if (!m_serialPort)
+        return false;
+    const qint64 written = m_serialPort->write(data);
+    if (written != data.size()) {
+        qCWarning(lcEsp32) << "failed to send" << what << ":"
+                           << m_serialPort->errorString();
+        return false;
+    }
+    return true;
 }
 
 void ESP32VolumeManager::processCommand(const QString &command)
@@ -719,7 +744,7 @@ void ESP32VolumeManager::sendPendingVolume()
 
     QString cmd = QStringLiteral("V%1\n").arg(m_pendingVolume);
     qCInfo(lcEsp32) << "sending volume command:" << cmd.trimmed();
-    m_serialPort->write(cmd.toUtf8());
+    writeCommand(cmd.toUtf8(), "volume");
     m_hasPendingVolume = false;
 }
 
@@ -732,8 +757,10 @@ void ESP32VolumeManager::sendKeepalive()
         QVariant volVar = m_settingsManager->property("currentVolume");
         int volume = volVar.isValid() ? volVar.toInt() : 50;
         QString cmd = QStringLiteral("V%1\n").arg(volume);
-        m_serialPort->write(cmd.toUtf8());
-        // Don't log keepalives to avoid spam
+        // Don't log successful keepalives to avoid spam. A rejected keepalive
+        // write means the port is gone — treat as a lost link, like Python.
+        if (!writeCommand(cmd.toUtf8(), "keepalive"))
+            handleDisconnect();
     }
 }
 
@@ -746,7 +773,7 @@ void ESP32VolumeManager::send_mute_state(bool muted)
 
     QString cmd = QStringLiteral("M%1\n").arg(muted ? 1 : 0);
     qCInfo(lcEsp32) << "sending mute command:" << cmd.trimmed();
-    m_serialPort->write(cmd.toUtf8());
+    writeCommand(cmd.toUtf8(), "mute state");
 }
 
 void ESP32VolumeManager::send_theme_color(int r, int g, int b)
@@ -758,8 +785,8 @@ void ESP32VolumeManager::send_theme_color(int r, int g, int b)
 
     QString cmd = QStringLiteral("C%1,%2,%3\n").arg(r).arg(g).arg(b);
     qCInfo(lcEsp32) << "sending color command:" << cmd.trimmed();
-    m_serialPort->write(cmd.toUtf8());
-    qCDebug(lcEsp32) << "sent theme color: RGB(" << r << g << b << ")";
+    if (writeCommand(cmd.toUtf8(), "theme color"))
+        qCDebug(lcEsp32) << "sent theme color: RGB(" << r << g << b << ")";
 }
 
 // ==================== Timer Slots ====================

@@ -180,6 +180,13 @@ class AudioAnalyzer(QObject):
             # Pre-compute window function once
             window = np.hanning(chunk_size)
 
+            # Magnitudes of the positive frequencies, skipping DC: rfft bins
+            # 1..N/2, i.e. 0-4 kHz at the 8 kHz effective rate (the C++
+            # backend keeps the same range). The band edges depend only on
+            # the bin count, so compute them once.
+            fft_len = chunk_size // 2
+            log_indices = self._log_band_edges(fft_len, self._num_bars)
+
             # First pass: collect raw FFT magnitudes
             raw_fft_data = []
             for i in range(num_chunks):
@@ -189,16 +196,11 @@ class AudioAnalyzer(QObject):
                 windowed = chunk * window
 
                 # Compute FFT
-                fft = np.abs(np.fft.rfft(windowed))
-                fft = fft[1:len(fft)//2]  # Skip DC, use lower half
+                fft = np.abs(np.fft.rfft(windowed))[1:1 + fft_len]  # Skip DC
 
                 if len(fft) == 0:
                     raw_fft_data.append([0.0] * self._num_bars)
                     continue
-
-                # Split into frequency bands with logarithmic spacing
-                log_indices = np.logspace(0, np.log10(len(fft)), self._num_bars + 1, dtype=int)
-                log_indices = np.clip(log_indices, 0, len(fft))
 
                 levels = []
                 for j in range(self._num_bars):
@@ -237,6 +239,26 @@ class AudioAnalyzer(QObject):
         except Exception as e:
             logger.error(f"FFT analysis error: {e}")
             return None
+
+    @staticmethod
+    def _log_band_edges(fft_len, num_bars):
+        """Logarithmic band edges: num_bars + 1 bin indices from 0 to fft_len.
+
+        Edge i is fft_len ** (i / num_bars) truncated (np.logspace(0,
+        log10(fft_len), num_bars + 1)), the same curve the C++ backend uses.
+        With ~400-500 bins over 96 bars the first dozen edges all truncate to
+        1, which used to leave those bars permanently at 0; every band is
+        therefore forced to be at least one bin wide, so edges are strictly
+        increasing (the first bands are then linear until the log curve
+        overtakes them). Edge 0 is the first non-DC bin.
+        """
+        edges = [0] * (num_bars + 1)
+        for i in range(1, num_bars + 1):
+            idx = int(fft_len ** (i / num_bars))
+            idx = max(idx, edges[i - 1] + 1)
+            edges[i] = min(idx, fft_len)
+        edges[num_bars] = fft_len
+        return edges
 
     @Slot(float)
     def update_position(self, position_seconds: float):

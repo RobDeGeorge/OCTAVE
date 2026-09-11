@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / OBD Manager</div>
           <h1 class="page-title">OBD Manager</h1>
-          <p class="page-subtitle">OBD-II vehicle diagnostics: a threaded ELM327 connection worker, 83 pollable parameters, DTC reading, an Android BLE bridge, and the parameter model that feeds every gauge</p>
+          <p class="page-subtitle">OBD-II vehicle diagnostics: a threaded ELM327 connection worker, 83 pollable parameters on both backends, DTC reading, an Android BLE bridge, and the parameter model that feeds every gauge</p>
         </div>
 
         <nav class="toc">
@@ -84,10 +84,10 @@
           </thead>
           <tbody>
             <tr><td><span class="file-path">backend/obd_manager.py</span></td><td><span class="platform-badge desktop">Desktop</span></td><td><code>OBDManager</code> + <code>OBDConnectionWorker</code> built on python-obd (<code>obd.Async</code> for live data, <code>obd.OBD</code> sync connections for DTC work). 83 <code>obd.commands.*</code> entries in <code>_get_all_commands()</code>.</td></tr>
-            <tr><td><span class="file-path">backend/elm327_protocol.py</span></td><td><span class="platform-badge desktop">Desktop (reference)</span></td><td>Pure-Python ELM327 protocol: init sequence, 61-entry PID table with decoders, response/DTC parsing, <code>ResponseBuffer</code>. It is the parity twin of the C++ <code>ELM327Protocol</code> and is <strong>not imported by any live Python manager</strong> (python-obd does the I/O and decoding on the Python side; its docstring still mentions the deleted <code>AndroidOBDManager</code>).</td></tr>
+            <tr><td><span class="file-path">backend/elm327_protocol.py</span></td><td><span class="platform-badge desktop">Desktop (reference)</span></td><td>Pure-Python ELM327 protocol: init sequence, the 83-entry PID table with decoders and python-obd command names, <code>parse_elm_voltage()</code>, <code>supported_command_names()</code>, response/DTC parsing, <code>ResponseBuffer</code>. Its docstring now states what it is: the parity twin of the C++ <code>ELM327Protocol</code>, <strong>not imported by any live Python manager</strong> (python-obd does the I/O and decoding on the Python side), kept so the PID table and decoders can be diffed and exercised in plain Python.</td></tr>
             <tr><td><span class="file-path">src/managers/obdmanager.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td><code>OBDManager</code> (main thread: timers, settings, signal dispatch table) and <code>OBDConnectionWorker</code> (worker thread: <code>QSerialPort</code>, init, polling, DTC, scan). The Android BLE state machine lives at the bottom of the .cpp under <code>#ifdef Q_OS_ANDROID</code>.</td></tr>
-            <tr><td><span class="file-path">src/managers/elm327protocol.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td>Static <code>ELM327Protocol</code> class (init commands, PID table, parsers, <code>defaultPids()</code>), <code>ResponseBuffer</code>, and the <code>octave.elm327</code> logging category.</td></tr>
-            <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td><span class="platform-badge android">Android</span></td><td>Static Java class wrapping <code>BluetoothGatt</code>. Called from C++ via <code>QJniObject</code>: <code>connect</code>, <code>disconnect</code>, <code>write</code>, <code>stateCode</code>, <code>pollResponse</code>, <code>pollLog</code>, <code>lastError</code>, <code>lastEvent</code>.</td></tr>
+            <tr><td><span class="file-path">src/managers/elm327protocol.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td>Static <code>ELM327Protocol</code> class (init commands, PID table with a <code>commandName</code> column, parsers, <code>elmVoltageRequest()</code> / <code>parseElmVoltage()</code>, <code>supportedCommandNames()</code>, <code>defaultPids()</code>), <code>ResponseBuffer</code>, and the <code>octave.elm327</code> logging category.</td></tr>
+            <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td><span class="platform-badge android">Android</span></td><td>Static Java class wrapping <code>BluetoothGatt</code>. Called from C++ via <code>QJniObject</code>: <code>connect</code>, <code>disconnect</code>, <code>write</code>, <code>stateCode</code>, <code>pollResponse</code>, <code>pollLog</code>, <code>lastError</code>, <code>lastEvent</code>, <code>bondedDevices</code> (paired adapters as <code>"MAC|name"</code>).</td></tr>
             <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td><span class="platform-badge all">QML</span></td><td>Singleton that maps every <code>*Changed</code> signal to a <code>paramId</code> and holds the live <code>paramValues</code> map every gauge binds to (see <a href="#parameter-model">below</a>).</td></tr>
             <tr><td><span class="file-path">dev/mock_obd_manager.py</span></td><td><span class="platform-badge desktop">Dev mode</span></td><td><code>MockOBDManager</code>: simulated ELM327 with the same signal surface, installed instead of the real manager by <span class="file-path">dev/dev_runtime.py</span> (<code>python -m dev.main_dev</code>).</td></tr>
           </tbody>
@@ -125,7 +125,7 @@ Desktop (Python)                Desktop (C++)                       Android (C++
             <tr><td><span class="file-path">frontend/OBDDiagnostics.qml</span></td><td><code>enter_diagnostic_mode()</code> on creation and on every <code>visible</code> transition, <code>exit_diagnostic_mode()</code> when hidden or destroyed, plus <code>read_dtc</code> / <code>read_current_dtc</code> / <code>read_status</code> / <code>read_freeze_frame</code> / <code>clear_dtc</code>.</td></tr>
             <tr><td><span class="file-path">frontend/HomeOBDView.qml</span></td><td>Home-screen cards for the parameters in <code>homeOBDParameters</code>, plus the RPM card's shift-light disc.</td></tr>
             <tr><td><span class="file-path">frontend/Main.qml</span></td><td>Connects <code>obdManager.rpmChanged</code> by hand in <code>Component.onCompleted</code> to drive the global full-screen flash and aura overlays.</td></tr>
-            <tr><td><span class="file-path">frontend/settings/OBDSettingsPage.qml</span></td><td>Connection card (<code>get_connection_status()</code>, <code>connectionDetail</code>, <code>connectionProgress</code>, <code>reset_connection()</code>), a 60-line Connection Log, the adapter list bound to <code>availableAdapters</code>, <code>connect_to_adapter()</code>, <code>platform_hint()</code>, fast mode, auto-reconnect attempts and the parameter toggles.</td></tr>
+            <tr><td><span class="file-path">frontend/settings/OBDSettingsPage.qml</span></td><td>Connection card (a <code>status</code> string seeded from <code>get_connection_status()</code> and refreshed by <code>onConnectionStatusChanged</code>, <code>connectionDetail</code>, <code>connectionProgress</code>, <code>reset_connection()</code>), a 60-line Connection Log, the adapter list bound to <code>availableAdapters</code>, <code>connect_to_adapter()</code>, <code>platform_hint()</code>, fast mode, auto-reconnect attempts and the parameter toggles. The status dot's colour map is keyed on the full <code>connectionStatusChanged</code> vocabulary (including <code>Reconnecting</code>, <code>Connection Failed</code>, <code>Stale Connection</code>, <code>Device Lost</code> and the Android BLE states).</td></tr>
           </tbody>
         </table>
 
@@ -227,17 +227,21 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           <strong>C++ desktop</strong> (<code>sendInitSequence()</code>): each command is sent with
           <code>sendCommand()</code> and its own timeout; an <code>ATZ</code> reply without <em>ELM</em> only logs a warning
           (clones omit the banner), and the function always returns <code>true</code>. The real test is the vehicle probe
-          that follows: one <code>010C</code> (RPM) request with a 3 s timeout. An empty reply, <code>NO DATA</code> or
+          that follows: one <code>010C</code> (RPM) request that waits up to the connection timeout (<code>m_timeout</code>, 5 s
+          unless <code>set_connection_timeout()</code> changed it -- the same value python-obd gets as <code>timeout=</code>).
+          An empty reply, <code>NO DATA</code> or
           <code>UNABLE</code> means "adapter but no vehicle": the worker <em>releases the port</em> and emits
           <code>initComplete(false, "Connected to adapter, no vehicle response")</code>. Note the header comment claims
           <code>ELM327Protocol::defaultPids()</code> lists "the 16 most common"; that list is not used by the worker --
-          the poll list is built from settings (see <a href="#watcher-system">Which PIDs Get Polled</a>).
+          the poll list is built from settings by <code>buildPidsToWatch()</code> (see <a href="#watcher-system">Which PIDs Get Polled</a>).
         </p>
         <p>
           <strong>C++ Android</strong>: the same table is walked by a single-shot <code>QTimer</code>
           (<code>sendNextAndroidInitCommand()</code> / <code>onAndroidInitStep()</code>): each command is written, the timer
           armed with that command's timeout, and the next command sent when the timer fires <em>regardless of whether a
-          reply arrived</em>. After <code>ATSP0</code> the code sends <code>0100</code>, waits 2 s and calls
+          reply arrived</em>. After <code>ATSP0</code> the code sends <code>0100</code>; while still connecting, each
+          supported-PID bitmap whose bit 32 is set chains the next range (<code>0120</code>, <code>0140</code>,
+          <code>0160</code>) so the supported set covers the extended PIDs too. 2 s after <code>0100</code> it calls
           <code>finalizeAndroidConnection()</code>.
         </p>
         <p>
@@ -252,7 +256,9 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           when <code>obdFastMode</code> is on (the default -- "poll as fast as possible, like <code>delay_cmds=0</code>") or
           <strong>50 ms</strong> otherwise. Each tick (<code>onPollTimer()</code>) sends the next PID in round-robin order with
           a <strong>500 ms</strong> timeout, parses it with <code>ELM327Protocol::parseResponse()</code> /
-          <code>decodePid()</code>, and emits <code>dataReceived</code>. Because <code>sendCommand()</code> blocks inside the
+          <code>decodePid()</code>, and emits <code>dataReceived</code>. The <code>ELM_VOLTAGE</code> pseudo-PID
+          (<code>kElmVoltageKey</code>) is special-cased: the tick sends <code>ATRV</code> instead and parses the
+          <code>"12.6V"</code> text reply with <code>parseElmVoltage()</code> into <code>elmVoltageChanged</code>. Because <code>sendCommand()</code> blocks inside the
           tick, the effective rate is one PID per adapter round-trip.
         </p>
         <p>
@@ -321,7 +327,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
         <table>
           <thead><tr><th>Concern</th><th>C++ behaviour</th></tr></thead>
           <tbody>
-            <tr><td>Command delay</td><td>Poll timer interval 0 ms (fast mode) / 50 ms; the worker's <code>setTimeout()</code> value is stored in <code>m_timeout</code> but never read -- per-command timeouts are hard-coded (init table, 3 s probe, 500 ms poll, 3-5 s diagnostics).</td></tr>
+            <tr><td>Command delay</td><td>Poll timer interval 0 ms (fast mode) / 50 ms. The worker's <code>setTimeout()</code> value (<code>m_timeout</code>, from <code>set_connection_timeout()</code>) bounds only the vehicle-verify RPM probe; the other per-command timeouts are hard-coded (init table, 500 ms poll, 3-5 s diagnostics).</td></tr>
             <tr><td>Protocol caching</td><td>None. <code>ATSP0</code> (auto) is sent on every init; the ELM327 does its own search.</td></tr>
             <tr><td>Adaptive timing</td><td><code>ATAT2</code> in the init table.</td></tr>
             <tr><td>Watchdog stamp</td><td>Every <code>dataReceived</code> updates <code>m_lastDataReceived</code> (cheap: one <code>qint64</code> store).</td></tr>
@@ -342,7 +348,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             <tr><td>Windows</td><td>All COM ports via <code>serial.tools.list_ports</code> / <code>QSerialPortInfo</code>; a port is included if its description contains bluetooth, obd, elm, serial or usb, or its name starts with <code>COM</code> (in practice: every COM port).</td></tr>
             <tr><td>macOS</td><td><code>/dev/tty.OBD*</code>, <code>/dev/tty.Bluetooth*</code>, <code>/dev/cu.OBD*</code>, <code>/dev/cu.Bluetooth*</code>, <code>/dev/tty.usbserial*</code>, <code>/dev/cu.usbserial*</code>, <code>/dev/tty.*ELM*</code>, <code>/dev/cu.*ELM*</code></td></tr>
             <tr><td>Linux / Pi</td><td><code>/dev/rfcomm*</code>, <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code> (<code>/dev/ttyS*</code> deliberately excluded: hardware UARTs are almost never OBD adapters and produced many false positives)</td></tr>
-            <tr><td>Android (C++)</td><td><code>listAndroidPairedDevices()</code>: MACs from <code>QBluetoothLocalDevice::connectedDevices()</code>, only after <code>m_androidPermissionGranted</code> is set. No active discovery -- <code>QBluetoothDeviceDiscoveryAgent</code> historically crashed on Android, and the bonded list is enough for "pair once, reconnect by MAC".</td></tr>
+            <tr><td>Android (C++)</td><td><code>listAndroidPairedDevices()</code>: the phone's bonded (paired) devices from <code>OctaveOBDBridge.bondedDevices()</code> (<code>BluetoothAdapter.getBondedDevices()</code> over JNI, entries <code>"MAC|name"</code>); the names are kept in <code>m_androidDeviceNames</code> so the adapter rows read <em>name · MAC</em>. The list is empty while Bluetooth is off or the runtime <code>BLUETOOTH_CONNECT</code> grant is missing -- the bridge requests it on the first Connect tap, and the 10 s scanner fills the rows in afterwards. No active discovery -- <code>QBluetoothDeviceDiscoveryAgent</code> historically crashed on Android, and the bonded list is enough for "pair once, reconnect by MAC".</td></tr>
           </tbody>
         </table>
         <p>
@@ -351,12 +357,13 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           connected and the configured port is now present -- reset the attempt counter and start a connection; if the
           configured port is absent it emits <code>"Device at X not found. Available: ..."</code> as the detail text.
         </p>
-        <div class="info-box warning">
-          <div class="info-box-title">Android adapter list is effectively empty</div>
-          <code>m_androidPermissionGranted</code> is only ever set inside <code>requestAndroidBluetoothPermission()</code>,
-          and nothing calls that function any more (the runtime permission request moved into the Java bridge in
-          <code>08e8245</code>). So <code>listAndroidPairedDevices()</code> returns nothing and the adapter rows on Android
-          never populate; users type the MAC into the manual entry field, which is what the per-OS hint tells them to do.
+        <div class="info-box info">
+          <div class="info-box-title">Android: pair first, then tap Connect once</div>
+          Until the app holds <code>BLUETOOTH_CONNECT</code> the bonded list comes back empty, so on a fresh install the
+          adapter rows are blank; the first Connect tap makes the Java bridge request the permission, after which the
+          paired adapters appear as <em>name · MAC</em> rows and can be tapped like any other adapter. The manual MAC entry
+          field remains as a fallback (the earlier C++ <code>requestAndroidBluetoothPermission()</code> path, which gated
+          the list behind Qt's permission cache, has been removed).
         </div>
 
         <!-- Unified adapter API -->
@@ -371,7 +378,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             <tr><th>Slot / Property</th><th>Signature</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>availableAdapters</code></td><td>property: list</td><td>List of <code>{name, identifier, kind}</code> maps built from the discovered ports. <code>kind</code> is classified by regex/prefix: <code>ble</code> (MAC), <code>serial-rfcomm</code> (<code>/dev/rfcomm</code>), <code>serial-usb</code> (<code>/dev/ttyUSB</code>, <code>/dev/ttyACM</code>), <code>tty</code> (<code>/dev/tty.</code>, <code>/dev/cu.</code>), <code>com</code> (<code>COM</code>), else <code>serial</code>. Names: <em>Bluetooth · MAC</em>, <em>Bluetooth (bound) · /dev/rfcommN</em>, <em>USB ELM327 · /dev/ttyUSBn</em>, <em>Serial · COMn</em>.</td></tr>
+            <tr><td><code>availableAdapters</code></td><td>property: list</td><td>List of <code>{name, identifier, kind}</code> maps built from the discovered ports. <code>kind</code> is classified by regex/prefix: <code>ble</code> (MAC), <code>serial-rfcomm</code> (<code>/dev/rfcomm</code>), <code>serial-usb</code> (<code>/dev/ttyUSB</code>, <code>/dev/ttyACM</code>), <code>tty</code> (<code>/dev/tty.</code>, <code>/dev/cu.</code>), <code>com</code> (<code>COM</code>), else <code>serial</code>. Names: <em>Bluetooth · MAC</em> (on Android <em>&lt;device name&gt; · MAC</em> when the bonded-device listing supplied a name), <em>Bluetooth (bound) · /dev/rfcommN</em>, <em>USB ELM327 · /dev/ttyUSBn</em>, <em>Serial · COMn</em>.</td></tr>
             <tr><td><code>availableAdaptersChanged</code></td><td>signal(list)</td><td>Emitted alongside <code>availablePortsChanged</code> with the rich shape.</td></tr>
             <tr><td><code>scan</code></td><td>()</td><td>Trigger a discovery sweep. Alias of <code>refresh_ports()</code> (C++) / <code>_scan_for_devices()</code> (Python).</td></tr>
             <tr><td><code>connect_to_adapter</code></td><td>(identifier: str)</td><td>One-shot connect: trims, classifies, logs <code>connect → &lt;name&gt;</code> to the connection log, saves the identifier with <code>save_obd_bluetooth_port()</code> (and <code>add_obd_saved_adapter()</code> for MACs), runs the rfcomm bind on Linux when given a MAC, then calls <code>force_connect()</code>. The QML calls this for adapter-row taps, saved-adapter chips and the manual-entry "Go" button.</td></tr>
@@ -446,7 +453,7 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           <tbody>
             <tr><td>Parameter signals on <code>OBDManager</code></td><td><strong>84</strong> <code>Signal(float)</code> (both backends)</td><td>83 command names + <code>ignitionTimingChanged</code>, which is emitted together with <code>timingAdvanceChanged</code> from the same PID (<code>_update_timing_combined</code> / the C++ dispatch lambda).</td></tr>
             <tr><td>Pollable commands, Python</td><td><strong>83</strong></td><td><code>_get_all_commands()</code>: 17 default-enabled + 66 extended <code>obd.commands.*</code>, each with its callback.</td></tr>
-            <tr><td>Pollable PIDs, C++</td><td><strong>61</strong> decodable, <strong>60</strong> selectable</td><td><code>ELM327Protocol::pidTable()</code> has 61 Mode-01 entries (17 default + 44 extended). The settings-name map <code>pidToCommand</code> in <code>startConnection()</code> lists 60 of them (see the gap note below).</td></tr>
+            <tr><td>Pollable PIDs, C++</td><td><strong>83</strong></td><td><code>ELM327Protocol::pidTable()</code> (and the Python twin's <code>PID_TABLE</code>) has 82 Mode-01 entries -- every python-obd mode-01 command, numbered as in python-obd's <code>commands.py</code> -- plus <code>ELM_VOLTAGE</code> under the pseudo-key <code>kElmVoltageKey</code> <code>{0, 0}</code> (the adapter's own <code>ATRV</code>). Each <code>PidEntry</code> carries the python-obd <code>commandName</code>, so the settings names, scan vocabulary and poll list all come from the one table.</td></tr>
             <tr><td>Setting names offered in the UI</td><td><strong>83</strong></td><td><code>get_all_parameter_names()</code> returns the same 83 names in both backends; the settings page and the scan compare against these.</td></tr>
             <tr><td><code>OBDParameterModel.allParameters</code></td><td><strong>92</strong></td><td>84 OBD ids (the 83 plus <code>IGNITION_TIMING</code>) + 8 BerryIMU ids. The "93" in <span class="file-path">docs/GAUGE_AUTHORING.md</span> and in QML comments is off by one.</td></tr>
           </tbody>
@@ -468,7 +475,7 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
             <tr><td>Mass Air Flow</td><td><code>MAF</code> / 01 10</td><td><code>massAirFlowChanged</code></td><td>(256A + B) / 100</td></tr>
             <tr><td>Vehicle Speed</td><td><code>SPEED</code> / 01 0D</td><td><code>speedMPHChanged</code></td><td>A * 0.621371 (km/h to mph; Python uses <code>r.value.to("mph")</code>)</td></tr>
             <tr><td>Engine RPM</td><td><code>RPM</code> / 01 0C</td><td><code>rpmChanged</code></td><td>(256A + B) / 4</td></tr>
-            <tr><td>Air/Fuel Ratio</td><td><code>COMMANDED_EQUIV_RATIO</code> / 01 44</td><td><code>airFuelRatioChanged</code></td><td>(256A + B) / 32768 -- Python multiplies by 14.7 (stoichiometric AFR); C++ emits the raw lambda ratio. <em>Parity gap.</em></td></tr>
+            <tr><td>Air/Fuel Ratio</td><td><code>COMMANDED_EQUIV_RATIO</code> / 01 44</td><td><code>airFuelRatioChanged</code></td><td>(256A + B) / 32768 &times; 14.7 -- the commanded lambda scaled to a gasoline AFR in both backends (<code>decAirFuelRatio</code> / <code>_air_fuel_ratio</code>; Python's <code>_update_afr</code> scales python-obd's ratio the same way). The AFR gauge spans 10-18.</td></tr>
             <tr><td>Fuel Level</td><td><code>FUEL_LEVEL</code> / 01 2F</td><td><code>fuelLevelChanged</code></td><td>A * 100 / 255</td></tr>
             <tr><td>Intake Manifold Pressure</td><td><code>INTAKE_PRESSURE</code> / 01 0B</td><td><code>intakeManifoldPressureChanged</code></td><td>A (kPa)</td></tr>
             <tr><td>Short Term Fuel Trim 1</td><td><code>SHORT_FUEL_TRIM_1</code> / 01 06</td><td><code>shortTermFuelTrimChanged</code></td><td>(A - 128) * 100 / 128</td></tr>
@@ -480,6 +487,7 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
         </table>
 
         <h3>Extended commands (66, disabled by default)</h3>
+        <p>PID numbers follow python-obd: narrow-band O2 <code>0x14</code>-<code>0x1B</code> (B1S1..B1S4, B2S1..B2S4), wide-range O2 voltage <code>0x24</code>-<code>0x2B</code> and current <code>0x34</code>-<code>0x3B</code> (bytes C/D: <code>(256C + D) &times; 8 / 65535</code> V, <code>(256C + D) / 256 - 128</code> mA), catalyst temperatures <code>0x3C</code> B1S1 / <code>0x3D</code> B2S1 / <code>0x3E</code> B1S2 / <code>0x3F</code> B2S2, throttle C <code>0x48</code>, accelerator E/F <code>0x4A</code>/<code>0x4B</code>, throttle actuator <code>0x4C</code>, evap absolute/alternate <code>0x53</code>/<code>0x54</code>, secondary O2 trims <code>0x55</code>-<code>0x58</code>, fuel-rail absolute pressure <code>0x59</code>.</p>
         <table>
           <thead>
             <tr><th>Category</th><th>Parameters</th></tr>
@@ -498,17 +506,16 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           </tbody>
         </table>
 
-        <div class="info-box warning">
-          <div class="info-box-title">C++ cannot poll 23 of the 83 names (parity gap)</div>
+        <div class="info-box info">
+          <div class="info-box-title">All 83 names poll on both backends</div>
           <p>
-            The C++ / pure-protocol PID table has no decoder for the four narrow-band O2 sensors S3/S4 (PIDs 18-1B), the
-            16 wide-range O2 voltage/current PIDs (24-2B, 34-3B), <code>ELM_VOLTAGE</code> (an <code>ATRV</code> AT command,
-            not a Mode-01 PID) or <code>FUEL_RAIL_PRESSURE_ABS</code> as a settings name. Enabling those in the settings page
-            has no effect on the C++ backend. In addition, <code>pidToCommand</code> maps PID <code>0x59</code> to
-            <code>LONG_O2_TRIM_B2</code>, while the decoder table (correctly, per SAE J1979, as its own comment notes) decodes
-            <code>0x59</code> as fuel-rail absolute pressure and emits <code>fuelRailPressureAbsChanged</code> -- so enabling
-            <em>Long O2 Trim B2</em> in C++ polls the wrong PID and lights up the <em>Fuel Rail Abs</em> parameter instead.
-            The Python backend, via python-obd, handles all 83.
+            Earlier C++ builds carried three hand-copied <code>pidToCommand</code> maps (desktop connect, scan, Android)
+            that covered only 60 of the names, mis-numbered several PIDs (O2 B1S3/B1S4 and B2S1-S4, the catalyst
+            temperatures, throttle/accelerator C-F, the evap pressures) and mapped <code>0x59</code> to
+            <code>LONG_O2_TRIM_B2</code>, so 22 parameter signals never fired in C++. The maps are gone: the single
+            <code>ELM327Protocol::buildPidTable()</code> now names every entry, <code>OBDManager::buildPidsToWatch()</code>
+            iterates it, and the narrow-band S3/S4 sensors, the 16 wide-range O2 PIDs, the secondary O2 trims,
+            <code>FUEL_RAIL_PRESSURE_ABS</code> and <code>ELM_VOLTAGE</code> all reach QML from the C++ backend too.
           </p>
         </div>
 
@@ -533,15 +540,19 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           touching the adapter -- the home screen calls it after <code>homeOBDParametersChanged</code> so newly enabled
           tiles show a value immediately.
         </p>
-        <h3>C++: PID list built once per connection</h3>
+        <h3>C++: <code>buildPidsToWatch()</code>, on connect and live</h3>
         <p>
-          <code>startConnection()</code> walks the static <code>pidToCommand</code> map, asks
-          <code>get_obd_parameter_enabled(name, isDefault)</code> for each, and hands the resulting
-          <code>QList&lt;PidKey&gt;</code> to the worker before the thread starts. The map iteration order is
-          <code>QHash</code> order, so the round-robin sequence is arbitrary but stable within a run.
-          <code>onSettingsParametersChanged()</code> only logs <em>"will take effect on next connection"</em>: enabling a
-          parameter in C++ requires a reconnect (Connect button, port change, or the next automatic reconnect).
-          <em>Parity gap with the Python hot-refresh.</em>
+          <code>buildPidsToWatch()</code> walks <code>ELM327Protocol::pidTable()</code>, asks
+          <code>get_obd_parameter_enabled(commandName, isDefault)</code> for each entry (the original 17 command names
+          default to on, as in Python's <code>_setup_watchers()</code>), sorts the result by PID so the round-robin order is
+          deterministic, and <code>startConnection()</code> hands the <code>QList&lt;PidKey&gt;</code> to the worker before
+          the thread starts. When the settings page toggles a parameter, <code>onSettingsParametersChanged()</code> now
+          mirrors the Python hot-refresh: while connected it rebuilds the list and queues
+          <code>OBDConnectionWorker::updatePidsToWatch()</code>, which swaps the list in place, starts polling if it was
+          paused on an empty list and pauses it if the list emptied -- no reconnect. On Android the same handler calls
+          <code>rebuildAndroidPollList()</code> and restarts the response-driven chain if it had died on an empty list.
+          While disconnected the change simply applies to the next connection, and in diagnostic mode it is deferred to the
+          reconnect that <code>exit_diagnostic_mode()</code> performs anyway.
         </p>
 
         <!-- Vehicle Scanning -->
@@ -565,11 +576,16 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           <li><strong>C++</strong>: <code>doScanVehicle()</code> on the worker pauses polling, sends <code>0100</code>,
             <code>0120</code>, <code>0140</code>, ... <code>01E0</code> (stopping at the first range whose bitmap does not
             set bit 32 = "next range supported"), collects the supported PID numbers with
-            <code>parseSupportedPids()</code>, and reports every <code>pidToCommand</code> entry whose PID number is in the
-            set. Polling resumes afterwards.</li>
-          <li><strong>Android</strong>: the automatic scan is never queued (it hangs off <code>onWorkerInitComplete</code>,
-            which the BLE path does not use) and a manual <code>scan_vehicle()</code> sets <code>m_isScanning</code> but has
-            no worker to run on -- see <a href="#android-ble">Android</a>.</li>
+            <code>parseSupportedPids()</code>, and reports the <code>commandName</code> of every PID-table entry whose PID
+            number is in the set (<code>ELM_VOLTAGE</code> is always included, as python-obd lists it among its base
+            commands); the result is sorted. Polling resumes afterwards.</li>
+          <li><strong>Android</strong>: no worker, so <code>scan_vehicle()</code> answers from the supported-PID bitmaps read
+            during connect (<code>ELM327Protocol::supportedCommandNames(m_androidSupportedPids)</code>), emitting the same
+            <code>[SCAN]</code> / <code>[INFO]</code> / <code>[OK]</code> / <code>[DONE]</code> lines and completing through
+            <code>onWorkerScanComplete()</code> (which clears <code>m_isScanning</code> and persists the list) -- the same
+            "answer from what connect already learned" approach as Python. An empty bitmap set reports <em>No supported
+            PIDs found</em>. The automatic post-connect scan is still desktop-only (it hangs off
+            <code>onWorkerInitComplete</code>); on Android the user starts it from the settings page.</li>
         </ul>
 
         <!-- Diagnostics -->
@@ -630,18 +646,21 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           <code>Activity</code>, calls <code>requestPermissions()</code> (request code 7301) so the system dialog appears,
           sets the error <em>"Requesting Bluetooth permission -- tap Allow, then tap Connect again"</em>, goes to state ERROR
           and returns false. Fresh installs (CI sideloads, Play builds) therefore get a working second tap instead of a
-          silent <code>SecurityException</code> from <code>connectGatt()</code>. The older C++
-          <code>requestAndroidBluetoothPermission()</code> (which wrestled Qt's <code>QBluetoothPermission</code> cache) is
-          still in the source but no longer called.
+          silent <code>SecurityException</code> from <code>connectGatt()</code>. The same grant unlocks
+          <code>bondedDevices()</code>, so the adapter list populates right after it. The older C++
+          <code>requestAndroidBluetoothPermission()</code> (which wrestled Qt's <code>QBluetoothPermission</code> cache) has
+          been removed.
         </p>
         <p>
           <strong>Writes</strong>: <code>writeAndroidBytes()</code> drops data unless the last seen state is READY and
           chunks every write to 20 bytes (the default 23-byte ATT MTU minus 3). <strong>Init</strong>: the timer-driven
           sequence described above, then <code>0100</code> and a 2 s wait. <strong>Finalize</strong>:
-          <code>m_connected = true</code>, <em>Connected</em>, progress 100, and the poll list is built from settings --
-          but only from the <strong>17 default commands</strong> (the Android <code>pidToCommand</code> map has no extended
-          entries), intersected with the PID-00/20/40/60 bitmaps if the vehicle answered them; an empty result falls back to
-          the 17 defaults. <strong>Polling</strong> is response-driven: <code>pollNextAndroidPid()</code> writes one request
+          <code>m_connected = true</code>, <em>Connected</em>, progress 100, and <code>rebuildAndroidPollList()</code> builds
+          the poll list: <code>buildPidsToWatch()</code> (every enabled name, extended ones included) intersected with the
+          PID-00/20/40/60 bitmaps if the vehicle answered them (<code>ELM_VOLTAGE</code> always passes); an empty result
+          falls back to the 17 defaults. Because connect chains <code>0120</code>/<code>0140</code>/<code>0160</code>, default
+          PIDs at or above <code>0x21</code> (<code>FUEL_LEVEL</code>, <code>CONTROL_MODULE_VOLTAGE</code>,
+          <code>OIL_TEMP</code>) survive the intersection and are polled. <strong>Polling</strong> is response-driven: <code>pollNextAndroidPid()</code> writes one request
           and arms a 500 ms single-shot watchdog; the next request goes out when a response is decoded or the watchdog
           fires. Ten consecutive watchdog fires (5 s stale) flush the response buffer. <strong>Reconnect</strong> after an
           unexpected DISCONNECTED/ERROR: up to 3 attempts, delay <code>min(2000 * n, 10000)</code> ms, counter reset on
@@ -650,11 +669,11 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
         <div class="info-box warning">
           <div class="info-box-title">What the Android path does not do</div>
           <p>
-            <code>read_dtc</code>, <code>read_current_dtc</code>, <code>read_status</code>, <code>clear_dtc</code>,
-            <code>read_freeze_frame</code>, <code>refresh_values</code> and <code>scan_vehicle</code> all forward to
-            <code>m_worker</code>, which is null on Android, so they are silent no-ops (and <code>scan_vehicle</code> leaves
-            <code>m_isScanning</code> stuck at <code>true</code>). <code>enter_diagnostic_mode</code> only stops the watchdog.
-            Extended PIDs are never polled on Android. The data watchdog and device scanner do not apply.
+            <code>read_dtc</code>, <code>read_current_dtc</code>, <code>read_status</code>, <code>clear_dtc</code> and
+            <code>read_freeze_frame</code> go through <code>invokeWorker()</code>, which logs <em>"no worker thread on this
+            transport, ignoring"</em> once per call and returns; <code>refresh_values</code> is likewise a no-op without a
+            worker. <code>enter_diagnostic_mode</code> only stops the watchdog. The data watchdog does not apply (the BLE
+            path has its own per-PID watchdog); the 10 s device scanner runs and is what refreshes the bonded-device rows.
           </p>
         </div>
 
@@ -663,24 +682,35 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
         <p>
           <span class="file-path">src/managers/elm327protocol.{h,cpp}</span> and its Python twin
           <span class="file-path">backend/elm327_protocol.py</span> are pure protocol code (no I/O) kept line-for-line
-          equivalent -- the same 61 PID entries, the same decoders, the same error tokens. The C++ one is what the
-          desktop worker and the Android path use; the Python one is a reference/parity module.
+          equivalent -- the same 83 PID entries (82 mode-01 commands plus <code>ELM_VOLTAGE</code>), the same python-obd
+          numbering and command names, the same decoders, the same error tokens. The C++ one is what the desktop worker
+          and the Android path use; the Python one is a reference/parity module that nothing imports at runtime.
         </p>
         <h3>PID table</h3>
         <p>
-          Maps <code>(mode, pid)</code> to <code>(name, signalName, decoder, expectedBytes)</code>. The decoder takes the data
-          bytes after the <code>41 XX</code> header:
+          Maps <code>(mode, pid)</code> to <code>(name, signalName, commandName, decoder, expectedBytes)</code>;
+          <code>commandName</code> is the python-obd command name, i.e. the settings key and the scan-result vocabulary.
+          The decoder takes the data bytes after the <code>41 XX</code> header:
         </p>
         <pre><code><span class="cmt">// C++</span>
 <span class="kw">static double</span> <span class="fn">decRpm</span>(<span class="kw">const</span> QVector&lt;uint8_t&gt; &amp;a) {
     <span class="kw">return</span> std::round((a[<span class="num">0</span>] * <span class="num">256.0</span> + a[<span class="num">1</span>]) / <span class="num">4.0</span> * <span class="num">10.0</span>) / <span class="num">10.0</span>;
 }
-t[{<span class="num">1</span>, <span class="num">0x0C</span>}] = {<span class="str">"RPM"</span>, <span class="str">"rpmChanged"</span>, decRpm, <span class="num">2</span>};
+t[{<span class="num">1</span>, <span class="num">0x0C</span>}] = {<span class="str">"RPM"</span>, <span class="str">"rpmChanged"</span>, <span class="str">"RPM"</span>, decRpm, <span class="num">2</span>};
+t[kElmVoltageKey] = {<span class="str">"ELM Voltage"</span>, <span class="str">"elmVoltageChanged"</span>, <span class="str">"ELM_VOLTAGE"</span>, <span class="kw">nullptr</span>, <span class="num">0</span>};   <span class="cmt">// {0, 0}: "ATRV", text reply</span>
 
 <span class="cmt"># Python</span>
 <span class="kw">def</span> <span class="fn">_rpm</span>(a):
     <span class="kw">return</span> round((a[<span class="num">0</span>] * <span class="num">256.0</span> + a[<span class="num">1</span>]) / <span class="num">4.0</span>, <span class="num">1</span>)
-(<span class="num">1</span>, <span class="num">0x0C</span>): (<span class="str">"RPM"</span>, <span class="str">"rpmChanged"</span>, _rpm, <span class="num">2</span>)</code></pre>
+(<span class="num">1</span>, <span class="num">0x0C</span>): (<span class="str">"RPM"</span>, <span class="str">"rpmChanged"</span>, <span class="str">"RPM"</span>, _rpm, <span class="num">2</span>)
+PID_TABLE[ELM_VOLTAGE_KEY] = (<span class="str">"ELM Voltage"</span>, <span class="str">"elmVoltageChanged"</span>, <span class="str">"ELM_VOLTAGE"</span>, <span class="kw">None</span>, <span class="num">0</span>)</code></pre>
+        <p>
+          The 16 wide-range O2 entries are generated in a loop (<code>O2_S1_WR_VOLTAGE</code> .. <code>O2_S8_WR_VOLTAGE</code> at
+          <code>0x24</code>-<code>0x2B</code>, <code>O2_S1_WR_CURRENT</code> .. <code>O2_S8_WR_CURRENT</code> at
+          <code>0x34</code>-<code>0x3B</code>, four data bytes each; the lambda ratio in bytes A/B is ignored and the
+          voltage / current is decoded from C/D exactly as python-obd's <code>sensor_voltage_big</code> /
+          <code>current_centered</code>).
+        </p>
         <h3>Functions</h3>
         <table>
           <thead>
@@ -689,7 +719,9 @@ t[{<span class="num">1</span>, <span class="num">0x0C</span>}] = {<span class="s
           <tbody>
             <tr><td><code>formatPidRequest(mode, pid)</code></td><td><code>format_pid_request</code></td><td><code>"%02X%02X\r"</code>, e.g. <code>010C\r</code>.</td></tr>
             <tr><td><code>parseResponse(raw)</code></td><td><code>parse_response</code></td><td>Rejects any line containing <code>NO DATA</code>, <code>UNABLE TO CONNECT</code>, <code>ERROR</code>, <code>?</code>, <code>STOPPED</code>, <code>BUS INIT: ...ERROR</code> (logged at debug), strips spaces, hex-decodes, and returns <code>(mode - 0x40, pid, data bytes)</code>; fewer than two bytes is "unparseable".</td></tr>
-            <tr><td><code>decodePid(mode, pid, bytes)</code></td><td><code>decode_pid</code></td><td>Looks up the table; a short response logs a WARNING with the byte counts; decoder exceptions log a WARNING (with <code>what()</code> / a traceback) and return nothing.</td></tr>
+            <tr><td><code>decodePid(mode, pid, bytes)</code></td><td><code>decode_pid</code></td><td>Looks up the table; a short response logs a WARNING with the byte counts; decoder exceptions log a WARNING (with <code>what()</code> / a traceback) and return nothing. The <code>ELM_VOLTAGE</code> entry has no decoder and returns nothing here.</td></tr>
+            <tr><td><code>elmVoltageRequest()</code>, <code>parseElmVoltage(raw)</code></td><td><code>ELM_VOLTAGE_REQUEST</code>, <code>parse_elm_voltage</code></td><td><code>"ATRV\r"</code> and its reply: lower-case, strip the trailing <code>v</code>, <code>float()</code> (python-obd's <code>elm_voltage()</code> rule); <code>"12.6V"</code> &rarr; 12.6, anything else logs at debug and returns nothing.</td></tr>
+            <tr><td><code>supportedCommandNames(set)</code></td><td><code>supported_command_names</code></td><td>Sorted python-obd command names of every table entry whose mode-01 PID is in the vehicle's supported set; <code>ELM_VOLTAGE</code> is always included.</td></tr>
             <tr><td><code>parseSupportedPids(bytes)</code></td><td><code>parse_supported_pids</code></td><td>32-bit bitmap, MSB first, into 1-based PID offsets relative to the queried base.</td></tr>
             <tr><td><code>parseDtcResponse(raw)</code></td><td><code>parse_dtc_response</code></td><td>Strips a leading <code>43</code>, reads 2-byte chunks, skips <code>0000</code>, builds <code>P/C/B/U</code> + 4 digits from the bit fields.</td></tr>
             <tr><td><code>defaultPids()</code></td><td><code>DEFAULT_PIDS</code></td><td>16 common PIDs. Present for parity; not used by the runtime poll list.</td></tr>
@@ -869,7 +901,8 @@ t[{<span class="num">1</span>, <span class="num">0x0C</span>}] = {<span class="s
             <tr><td><code>connectionDetail</code></td><td>str</td><td>both</td><td>Last detail message (cached from the signal so the settings card can bind declaratively; added in <code>78ab72c</code>).</td></tr>
             <tr><td><code>connectionProgress</code></td><td>int</td><td>both</td><td>Last progress percent.</td></tr>
             <tr><td><code>availableAdapters</code></td><td>list</td><td>both</td><td>Rich adapter list.</td></tr>
-            <tr><td><code>connected</code>, <code>connectionStatus</code></td><td>bool, str</td><td>C++ only</td><td><code>Q_PROPERTY</code> conveniences; <code>connectionStatus</code> reads <code>m_connectionStatus</code>, which nothing assigns, so it is always empty. No QML uses either.</td></tr>
+            <tr><td><code>connectionStatus</code></td><td>str</td><td>both</td><td>Last <code>connectionStatusChanged</code> value, initially <code>"Disconnected"</code> (cached from the signal like <code>connectionDetail</code>; the C++ cache connection is made first so handlers of the same signal already see the new value).</td></tr>
+            <tr><td><code>connected</code></td><td>bool</td><td>C++ only</td><td><code>Q_PROPERTY</code> convenience over <code>isConnected()</code>. No QML uses it.</td></tr>
           </tbody>
         </table>
 
@@ -885,12 +918,12 @@ t[{<span class="num">1</span>, <span class="num">0x0C</span>}] = {<span class="s
             <tr><td><code>reset_connection</code></td><td>()</td><td>Alias of <code>force_connect</code>; used by the settings page's Connect button.</td></tr>
             <tr><td><code>close</code></td><td>()</td><td>Sets the force-stop flag, stops timers, cleans up. Called from <code>aboutToQuit</code>.</td></tr>
             <tr><td><code>is_connected</code></td><td>() -&gt; bool</td><td>Connection flag. C++ also exposes camelCase <code>isConnected()</code>.</td></tr>
-            <tr><td><code>get_connection_status</code></td><td>() -&gt; str</td><td>C++: <code>"Connected"</code> / <code>"Not Connected"</code>. Python: <code>"No Connection"</code> or python-obd's status string (<code>"Car Connected"</code>, <code>"ELM Connected"</code>, ...). <em>The settings page colours its status dot from this value with a map keyed on the <code>connectionStatusChanged</code> vocabulary, which neither return set matches -- see the parity notes.</em></td></tr>
+            <tr><td><code>get_connection_status</code></td><td>() -&gt; str</td><td>The last <code>connectionStatusChanged</code> value in both backends (<code>"Disconnected"</code> before any attempt, then <code>"Connecting"</code>, <code>"Connected"</code>, <code>"No Vehicle"</code>, ...), so the settings page's status colour map keys on one vocabulary. The older C++ <code>"Not Connected"</code> and Python's python-obd status strings (<code>"No Connection"</code>, <code>"Car Connected"</code>, ...) are gone.</td></tr>
             <tr><td><code>scan</code>, <code>refresh_ports</code> (C++), <code>get_available_ports</code></td><td>() / () -&gt; list</td><td>Discovery sweep; the last also returns the port list.</td></tr>
             <tr><td><code>connect_to_adapter</code>, <code>platform_hint</code></td><td>(str) / () -&gt; str</td><td>See <a href="#unified-adapter-api">Unified Adapter API</a>.</td></tr>
             <tr><td><code>set_target_address</code></td><td>(str)</td><td>Persists the identifier via <code>save_obd_bluetooth_port</code>; the port-change debounce then reconnects. Fallback path in the QML when <code>connect_to_adapter</code> is absent.</td></tr>
             <tr><td><code>check_device_presence</code></td><td>() -&gt; bool</td><td>Re-checks the configured port and emits <code>devicePresenceChanged</code>.</td></tr>
-            <tr><td><code>set_connection_timeout</code></td><td>(int)</td><td>5-60 s; honoured by python-obd, stored but unused by the C++ worker.</td></tr>
+            <tr><td><code>set_connection_timeout</code></td><td>(int)</td><td>5-60 s (default 5): python-obd's <code>timeout=</code>, and in C++ the wait for the vehicle-verify RPM probe. Runtime only -- there is no <code>obdConnectionTimeout</code> settings key in either backend.</td></tr>
             <tr><td><code>set_auto_reconnect</code></td><td>(bool)</td><td>Deprecated no-op; use <code>obdAutoReconnectAttempts</code>.</td></tr>
             <tr><td><code>scan_vehicle</code>, <code>is_scanning</code>, <code>get_all_parameter_names</code>, <code>get_supported_commands</code>, <code>enable_scanned_parameters</code>, <code>enable_all_supported</code></td><td>various</td><td>See <a href="#vehicle-scanning">Vehicle Scanning</a>.</td></tr>
             <tr><td><code>enter_diagnostic_mode</code>, <code>exit_diagnostic_mode</code>, <code>is_diagnostic_mode</code>, <code>read_dtc</code>, <code>read_current_dtc</code>, <code>read_status</code>, <code>clear_dtc</code>, <code>read_freeze_frame</code>, <code>get_dtc_codes</code>, <code>get_dtc_count</code>, <code>get_mil_status</code>, <code>get_freeze_frame</code></td><td>various</td><td>See <a href="#diagnostics">Diagnostics</a>.</td></tr>
@@ -909,7 +942,8 @@ t[{<span class="num">1</span>, <span class="num">0x0C</span>}] = {<span class="s
           <li><strong>The worker owns the port.</strong> <code>QSerialPort</code> must live on the thread that reads it, and blocking <code>waitForReadyRead</code> inside the worker is simpler than an async state machine; the price is that every request from the main thread is a queued <code>invokeMethod</code>. The 2026-09-09 spin fixes (<a href="#port-lifecycle">above</a>) are all consequences of that choice: a port left open is a live notifier in that thread's event loop.</li>
           <li><strong>Release the port on every failure.</strong> Rather than trying to detect a dead rfcomm remote, the rule is "nothing may hold the port open while we are not actively talking to a live adapter" (<code>0404f7b</code>). It is a policy, not a heuristic, so it holds for USB and Bluetooth alike.</li>
           <li><strong>python-obd on the Python side.</strong> The Python backend is the tinkerer's backend; delegating protocol negotiation, unit handling and command definitions to python-obd keeps it small, at the cost of a Pint import (moved to first use) and a second sync connection for DTC work. The pure-Python <code>elm327_protocol.py</code> exists so the C++ decoders have a reviewable twin.</li>
-          <li><strong>Watchers, not a poll loop, in Python.</strong> <code>obd.Async</code> already runs a polling thread; OCTAVE just registers callbacks with <code>force=True</code> and re-registers them on settings changes. In C++ the equivalent list is fixed per connection because the worker copies it before the thread starts.</li>
+          <li><strong>Watchers, not a poll loop, in Python.</strong> <code>obd.Async</code> already runs a polling thread; OCTAVE just registers callbacks with <code>force=True</code> and re-registers them on settings changes. In C++ the worker copies the list before the thread starts and <code>updatePidsToWatch()</code> swaps it live on settings changes, so both backends apply parameter toggles without a reconnect.</li>
+          <li><strong>One PID table, python-obd's numbering.</strong> The C++ decoders used to sit beside three hand-copied name maps that drifted from each other and from python-obd (mis-numbered PIDs, a <code>0x59</code> mix-up, 23 names that could never be polled). Giving <code>PidEntry</code> a <code>commandName</code> column and iterating the table everywhere (<code>buildPidsToWatch()</code>, the scans, the Android list) made python-obd's <code>commands.py</code> the single reference for both backends, and the pure-Python twin exists so that agreement can be checked without a vehicle.</li>
           <li><strong>Diagnostics pause polling.</strong> ELM327 adapters are half-duplex request/response devices; interleaving Mode 03/04 traffic with a running PID loop corrupts both. Both backends therefore stop live data during DTC work and do a full reconnect afterwards -- the Python comment records that "simply calling <code>start()</code> on the old connection won't work reliably" after a sync connection shared the port.</li>
           <li><strong>Auto-reconnect defaults to off.</strong> The scanner-driven passive mode reconnects when a port appears, which is what happens when a Pi boots before the adapter pairs; unbounded retries against an adapter with no vehicle just spin the port (see the spin bug). Users who want retries set 1-10 attempts.</li>
           <li><strong>Unified adapter API.</strong> The settings page used to branch on <code>isAndroid</code>; moving MAC/COM/tty classification and the rfcomm bind into the managers made the page render identically everywhere and gave both backends a single connect entry point to test.</li>

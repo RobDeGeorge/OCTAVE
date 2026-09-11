@@ -106,8 +106,6 @@ class PhoneMirrorManager(QObject):
     the UI needs, and the settings that shape the session.
     """
 
-    error = Signal(str)
-
     # Session state (names kept from the original scrcpy-binary design;
     # PhoneMirrorView.qml depends on them)
     scrcpyStarted = Signal(int)   # non-zero handle when the stream is up

@@ -15,7 +15,7 @@ that's the single entry point that keeps settings, local media, Spotify,
 phone mirror, and ESP32 feedback all in sync.
 """
 
-from PySide6.QtCore import QObject, Slot
+from PySide6.QtCore import QObject, QTimer, Slot
 
 
 def to_linear(percent) -> float:
@@ -52,6 +52,14 @@ class VolumeController(QObject):
         self._phone_mirror = phone_mirror_manager
         self._esp32 = esp32_manager
 
+        # Spotify volume is debounced (300 ms trailing) to avoid 429 rate
+        # limiting when the slider/knob moves quickly — mirrors main.cpp.
+        self._pending_spotify_volume = 0
+        self._spotify_debounce = QTimer(self)
+        self._spotify_debounce.setSingleShot(True)
+        self._spotify_debounce.setInterval(300)
+        self._spotify_debounce.timeout.connect(self._flush_spotify_volume)
+
     @Slot(int)
     def applyVolume(self, percent: int) -> None:
         """Apply a volume percent (0-100) to every connected audio output.
@@ -67,12 +75,17 @@ class VolumeController(QObject):
             self._settings.setCurrentVolume(percent)
         if self._media is not None:
             self._media.setVolume(linear)
-        if self._spotify is not None and self._spotify.is_connected():
-            self._spotify.set_volume(percent)
+        if self._spotify is not None:
+            self._pending_spotify_volume = percent
+            self._spotify_debounce.start()
         if self._phone_mirror is not None:
             self._phone_mirror.setVolume(linear)
         if self._esp32 is not None:
             self._esp32.send_volume_update(percent)
+
+    def _flush_spotify_volume(self) -> None:
+        if self._spotify is not None and self._spotify.is_connected():
+            self._spotify.set_volume(self._pending_spotify_volume)
 
     @Slot(float, result=float)
     def toLinear(self, percent: float) -> float:

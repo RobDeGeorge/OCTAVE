@@ -106,9 +106,18 @@ void handler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
                                      where.isEmpty() ? QStringLiteral("-") : where, msg)
                                 .toUtf8();
 
-    // Terminal, as before the handler existed
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+    // stderr goes nowhere on a phone: hand the message to the handler we
+    // replaced (Qt's default) so it still reaches logcat / os_log.
+    if (g_previous)
+        g_previous(type, ctx, msg);
+#else
+    // Terminal, as before the handler existed. Deliberately NOT chained to
+    // g_previous here: Qt's default handler also prints to stderr and every
+    // line would show up twice — the file-format line above replaces it.
     std::fputs(line.constData(), stderr);
     std::fflush(stderr);
+#endif
 
     {
         QMutexLocker lock(&g_mutex);
@@ -119,7 +128,10 @@ void handler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
         if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg)
             g_error.write(line);
     }
-    // Qt aborts after a fatal message returns; the files are flushed per write.
+    // Qt aborts after a fatal message returns (SIGABRT -> crashHandler below
+    // appends the backtrace), so make sure everything is on disk first.
+    if (type == QtFatalMsg)
+        OctaveLog::flush();
 }
 
 #if defined(Q_OS_UNIX)
@@ -131,7 +143,9 @@ void writeRaw(int fd, const char *s)
 
 // Async-signal-safe as far as practical: raw write() of a fixed line plus
 // backtrace_symbols_fd(); then restore the default action and re-raise so
-// the OS still produces a core / tombstone.
+// the OS still produces a core / tombstone. No Qt in here — that includes
+// OctaveLog::flush() (QMutex + QFile); the log files need no flush anyway
+// because RotatingFile::write() flushes every line as it lands.
 void crashHandler(int sig)
 {
     const char *name = "signal";

@@ -12,12 +12,11 @@
 #include <QVariantMap>
 #include <QElapsedTimer>
 
+#include <algorithm>
+
 #ifdef Q_OS_ANDROID
-#include <QBluetoothLocalDevice>
-#include <QPermissions>
+#include <QJniEnvironment>
 #include <QJniObject>
-#include <QtCore/private/qandroidextras_p.h>
-#include <QCoreApplication>
 #endif
 
 // ===========================================================================
@@ -30,8 +29,12 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
 {
     buildSignalDispatch();
 
-    // Cache the latest detail / progress so the Q_PROPERTY readers reflect
-    // whatever was last emitted (emit sites are numerous; hook once here).
+    // Cache the latest status / detail / progress so the Q_PROPERTY readers
+    // reflect whatever was last emitted (emit sites are numerous; hook once
+    // here). Connected first so QML handlers of the same signal already see
+    // the new value in connectionStatus / get_connection_status().
+    connect(this, &OBDManager::connectionStatusChanged, this,
+            [this](const QString &status) { m_connectionStatus = status; });
     connect(this, &OBDManager::connectionStatusDetailChanged, this,
             [this](const QString &detail) { m_connectionDetail = detail; });
     connect(this, &OBDManager::connectionProgressChanged, this,
@@ -115,8 +118,8 @@ bool OBDManager::checkPortExists(const QString &port) const
 {
     if (detectPlatform() == Platform::Android) {
         // On Android, "port" is a Bluetooth MAC address. We don't probe the
-        // adapter here -- a real reachability test happens at connectToService
-        // time via QBluetoothSocket::error(). Just validate format.
+        // adapter here -- a real reachability test happens when
+        // OctaveOBDBridge.connect() issues connectGatt(). Just validate format.
         static const QRegularExpression macRe(
             QStringLiteral("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"));
         return macRe.match(port).hasMatch();
@@ -573,8 +576,8 @@ void OBDManager::startConnection()
     emit connectionProgressChanged(10);
 
 #ifdef Q_OS_ANDROID
-    // Android: skip the QSerialPort + worker-thread flow entirely; the
-    // QBluetoothSocket lives on this thread and is event-driven.
+    // Android: skip the QSerialPort + worker-thread flow entirely; the BLE
+    // link is driven from this thread through OctaveOBDBridge.java.
     startAndroidConnection();
     return;
 #endif
@@ -611,103 +614,7 @@ void OBDManager::startConnection()
     m_worker->setFastMode(fastMode);
     m_worker->setTimeout(m_connectionTimeout);
 
-    // Determine PIDs to watch based on settings
-    QList<PidKey> pidsToWatch;
-    const auto &pidTable = ELM327Protocol::pidTable();
-    // Map from PID table signal name back to a command-name key that matches
-    // settings. We use the same approach as Python: iterate pidTable, check settings.
-    // Build a reverse map from signal->command name for settings lookup.
-    // For simplicity, we use the PID table's human name as the command key.
-    // The Python code uses command names like "COOLANT_TEMP", "RPM", etc.
-    // We need a mapping from PidKey -> settings command name.
-    static const QHash<PidKey, QString> pidToCommand = {
-        {{1,0x05}, QStringLiteral("COOLANT_TEMP")},
-        {{1,0x42}, QStringLiteral("CONTROL_MODULE_VOLTAGE")},
-        {{1,0x04}, QStringLiteral("ENGINE_LOAD")},
-        {{1,0x11}, QStringLiteral("THROTTLE_POS")},
-        {{1,0x0F}, QStringLiteral("INTAKE_TEMP")},
-        {{1,0x0E}, QStringLiteral("TIMING_ADVANCE")},
-        {{1,0x10}, QStringLiteral("MAF")},
-        {{1,0x0D}, QStringLiteral("SPEED")},
-        {{1,0x0C}, QStringLiteral("RPM")},
-        {{1,0x44}, QStringLiteral("COMMANDED_EQUIV_RATIO")},
-        {{1,0x2F}, QStringLiteral("FUEL_LEVEL")},
-        {{1,0x0B}, QStringLiteral("INTAKE_PRESSURE")},
-        {{1,0x06}, QStringLiteral("SHORT_FUEL_TRIM_1")},
-        {{1,0x07}, QStringLiteral("LONG_FUEL_TRIM_1")},
-        {{1,0x14}, QStringLiteral("O2_B1S1")},
-        {{1,0x0A}, QStringLiteral("FUEL_PRESSURE")},
-        {{1,0x5C}, QStringLiteral("OIL_TEMP")},
-        {{1,0x1F}, QStringLiteral("RUN_TIME")},
-        {{1,0x21}, QStringLiteral("DISTANCE_W_MIL")},
-        {{1,0x22}, QStringLiteral("FUEL_RAIL_PRESSURE_VAC")},
-        {{1,0x23}, QStringLiteral("FUEL_RAIL_PRESSURE_DIRECT")},
-        {{1,0x33}, QStringLiteral("BAROMETRIC_PRESSURE")},
-        {{1,0x46}, QStringLiteral("AMBIANT_AIR_TEMP")},
-        {{1,0x45}, QStringLiteral("RELATIVE_THROTTLE_POS")},
-        {{1,0x47}, QStringLiteral("THROTTLE_POS_B")},
-        {{1,0x49}, QStringLiteral("ACCELERATOR_POS_D")},
-        {{1,0x3C}, QStringLiteral("CATALYST_TEMP_B1S1")},
-        {{1,0x3D}, QStringLiteral("CATALYST_TEMP_B1S2")},
-        {{1,0x32}, QStringLiteral("EVAP_VAPOR_PRESSURE")},
-        {{1,0x08}, QStringLiteral("SHORT_FUEL_TRIM_2")},
-        {{1,0x09}, QStringLiteral("LONG_FUEL_TRIM_2")},
-        {{1,0x15}, QStringLiteral("O2_B1S2")},
-        {{1,0x16}, QStringLiteral("O2_B2S1")},
-        {{1,0x17}, QStringLiteral("O2_B2S2")},
-        {{1,0x31}, QStringLiteral("DISTANCE_SINCE_DTC_CLEAR")},
-        {{1,0x30}, QStringLiteral("WARMUPS_SINCE_DTC_CLEAR")},
-        {{1,0x43}, QStringLiteral("ABSOLUTE_LOAD")},
-        {{1,0x2C}, QStringLiteral("COMMANDED_EGR")},
-        {{1,0x2D}, QStringLiteral("EGR_ERROR")},
-        {{1,0x52}, QStringLiteral("ETHANOL_PERCENT")},
-        {{1,0x3E}, QStringLiteral("CATALYST_TEMP_B2S1")},
-        {{1,0x3F}, QStringLiteral("CATALYST_TEMP_B2S2")},
-        {{1,0x4A}, QStringLiteral("THROTTLE_POS_C")},
-        {{1,0x4B}, QStringLiteral("ACCELERATOR_POS_E")},
-        {{1,0x4C}, QStringLiteral("ACCELERATOR_POS_F")},
-        {{1,0x4D}, QStringLiteral("RUN_TIME_MIL")},
-        {{1,0x4E}, QStringLiteral("TIME_SINCE_DTC_CLEARED")},
-        {{1,0x50}, QStringLiteral("MAX_MAF")},
-        {{1,0x51}, QStringLiteral("FUEL_TYPE")},
-        {{1,0x54}, QStringLiteral("EVAP_VAPOR_PRESSURE_ABS")},
-        {{1,0x55}, QStringLiteral("EVAP_VAPOR_PRESSURE_ALT")},
-        {{1,0x56}, QStringLiteral("SHORT_O2_TRIM_B1")},
-        {{1,0x57}, QStringLiteral("LONG_O2_TRIM_B1")},
-        {{1,0x58}, QStringLiteral("SHORT_O2_TRIM_B2")},
-        {{1,0x59}, QStringLiteral("LONG_O2_TRIM_B2")},
-        {{1,0x5A}, QStringLiteral("RELATIVE_ACCEL_POS")},
-        {{1,0x5B}, QStringLiteral("HYBRID_BATTERY_REMAINING")},
-        {{1,0x2E}, QStringLiteral("EVAPORATIVE_PURGE")},
-        {{1,0x5D}, QStringLiteral("FUEL_INJECT_TIMING")},
-        {{1,0x5E}, QStringLiteral("FUEL_RATE")},
-        {{1,0x4F}, QStringLiteral("THROTTLE_ACTUATOR")},
-    };
-
-    // Original 17 default-enabled command names
-    static const QSet<QString> defaultEnabled = {
-        QStringLiteral("COOLANT_TEMP"), QStringLiteral("CONTROL_MODULE_VOLTAGE"),
-        QStringLiteral("ENGINE_LOAD"), QStringLiteral("THROTTLE_POS"),
-        QStringLiteral("INTAKE_TEMP"), QStringLiteral("TIMING_ADVANCE"),
-        QStringLiteral("MAF"), QStringLiteral("SPEED"), QStringLiteral("RPM"),
-        QStringLiteral("COMMANDED_EQUIV_RATIO"), QStringLiteral("FUEL_LEVEL"),
-        QStringLiteral("INTAKE_PRESSURE"), QStringLiteral("SHORT_FUEL_TRIM_1"),
-        QStringLiteral("LONG_FUEL_TRIM_1"), QStringLiteral("O2_B1S1"),
-        QStringLiteral("FUEL_PRESSURE"), QStringLiteral("OIL_TEMP"),
-    };
-
-    for (auto it = pidToCommand.constBegin(); it != pidToCommand.constEnd(); ++it) {
-        const QString &cmdName = it.value();
-        bool isDefault = defaultEnabled.contains(cmdName);
-        bool shouldWatch = true;
-        if (m_settingsManager) {
-            shouldWatch = m_settingsManager->get_obd_parameter_enabled(cmdName, isDefault);
-        }
-        if (shouldWatch) {
-            pidsToWatch.append(it.key());
-        }
-    }
-
+    const QList<PidKey> pidsToWatch = buildPidsToWatch();
     m_hasActiveWatchers = !pidsToWatch.isEmpty();
     m_worker->setPidsToWatch(pidsToWatch);
 
@@ -777,6 +684,50 @@ void OBDManager::cleanupWorkerThread()
         m_workerThread->deleteLater();
         m_workerThread = nullptr;
     }
+}
+
+// The original 17 parameters default to enabled; everything else is opt-in
+// through the OBD settings page (same list as the Python _setup_watchers()).
+static const QSet<QString> &defaultEnabledCommands()
+{
+    static const QSet<QString> defaults = {
+        QStringLiteral("COOLANT_TEMP"), QStringLiteral("CONTROL_MODULE_VOLTAGE"),
+        QStringLiteral("ENGINE_LOAD"), QStringLiteral("THROTTLE_POS"),
+        QStringLiteral("INTAKE_TEMP"), QStringLiteral("TIMING_ADVANCE"),
+        QStringLiteral("MAF"), QStringLiteral("SPEED"), QStringLiteral("RPM"),
+        QStringLiteral("COMMANDED_EQUIV_RATIO"), QStringLiteral("FUEL_LEVEL"),
+        QStringLiteral("INTAKE_PRESSURE"), QStringLiteral("SHORT_FUEL_TRIM_1"),
+        QStringLiteral("LONG_FUEL_TRIM_1"), QStringLiteral("O2_B1S1"),
+        QStringLiteral("FUEL_PRESSURE"), QStringLiteral("OIL_TEMP"),
+    };
+    return defaults;
+}
+
+QList<PidKey> OBDManager::buildPidsToWatch() const
+{
+    QList<PidKey> pids;
+    const auto &table = ELM327Protocol::pidTable();
+    for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
+        const QString &cmdName = it.value().commandName;
+        const bool isDefault = defaultEnabledCommands().contains(cmdName);
+        const bool shouldWatch = m_settingsManager
+            ? m_settingsManager->get_obd_parameter_enabled(cmdName, isDefault)
+            : isDefault;
+        if (shouldWatch)
+            pids.append(it.key());
+    }
+    std::sort(pids.begin(), pids.end());  // deterministic poll order (by PID)
+    return pids;
+}
+
+bool OBDManager::invokeWorker(const char *method)
+{
+    if (!m_worker) {
+        qDebug() << "[OBD]" << method << "-- no worker thread on this transport, ignoring";
+        return false;
+    }
+    QMetaObject::invokeMethod(m_worker, method, Qt::QueuedConnection);
+    return true;
 }
 
 void OBDManager::scheduleAutoReconnect()
@@ -1028,8 +979,35 @@ void OBDManager::onPortChangeDebounce()
 
 void OBDManager::onSettingsParametersChanged()
 {
-    // If connected, tell worker to update its PID list (requires reconnect for now)
-    qDebug() << "[OBD] OBD parameters changed -- will take effect on next connection";
+    // Mirror of the Python _refresh_watchers(): swap the poll list in place,
+    // no reconnect.
+    if (!m_connected) {
+        qDebug() << "[OBD] OBD parameters changed -- will take effect on next connection";
+        return;
+    }
+    if (m_diagnosticMode) {
+        // Polling is deliberately paused; exit_diagnostic_mode() reconnects
+        // and rebuilds the list from settings anyway.
+        qDebug() << "[OBD] OBD parameters changed -- applied when diagnostic mode exits";
+        return;
+    }
+#ifdef Q_OS_ANDROID
+    rebuildAndroidPollList();
+    qDebug() << "[OBD] OBD parameters changed -- poll list refreshed live,"
+             << m_androidEnabledPids.size() << "PIDs";
+    // If the response-driven chain died on an empty list, restart it.
+    if (m_androidPolling && !m_androidEnabledPids.isEmpty() && !m_androidPollWatchdog.isActive())
+        pollNextAndroidPid();
+#else
+    if (!m_worker)
+        return;
+    const QList<PidKey> pids = buildPidsToWatch();
+    m_hasActiveWatchers = !pids.isEmpty();
+    qDebug() << "[OBD] OBD parameters changed -- poll list refreshed live," << pids.size() << "PIDs";
+    OBDConnectionWorker *worker = m_worker;
+    QMetaObject::invokeMethod(worker, [worker, pids]() { worker->updatePidsToWatch(pids); },
+                              Qt::QueuedConnection);
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -1085,9 +1063,10 @@ bool OBDManager::isConnected() const
 
 QString OBDManager::get_connection_status() const
 {
-    if (!m_connected)
-        return QStringLiteral("Not Connected");
-    return QStringLiteral("Connected");
+    // Same vocabulary as connectionStatusChanged (and the Python backend):
+    // "Disconnected", "Connecting", "Connected", "No Vehicle", ... so the
+    // QML status colour map keys on one set of strings.
+    return m_connectionStatus;
 }
 
 QString OBDManager::getConnectionStatus() const
@@ -1144,6 +1123,10 @@ QString OBDManager::kindForIdentifier(const QString &id) const
 QString OBDManager::displayNameForIdentifier(const QString &id) const
 {
     const QString kind = kindForIdentifier(id);
+#ifdef Q_OS_ANDROID
+    if (kind == QStringLiteral("ble") && m_androidDeviceNames.contains(id))
+        return QStringLiteral("%1 · %2").arg(m_androidDeviceNames.value(id), id);
+#endif
     if (kind == QStringLiteral("ble"))           return QStringLiteral("Bluetooth · %1").arg(id);
     if (kind == QStringLiteral("serial-rfcomm")) return QStringLiteral("Bluetooth (bound) · %1").arg(id);
     if (kind == QStringLiteral("serial-usb"))    return QStringLiteral("USB ELM327 · %1").arg(id);
@@ -1269,7 +1252,7 @@ void OBDManager::connect_to_adapter(const QString &identifier)
 
 #ifdef Q_OS_LINUX
     // On Linux/Pi, a MAC alone isn't openable — translate to /dev/rfcommN.
-    // (Android takes the MAC straight to QBluetoothSocket; Windows would need
+    // (Android hands the MAC to OctaveOBDBridge.connect(); Windows would need
     // a MAC→COM lookup which we punt on for now and let the user enter COM.)
     if (isMac) {
         const QString bound = ensureRfcommBound(trimmed);
@@ -1307,8 +1290,30 @@ void OBDManager::scan_vehicle()
     m_isScanning = true;
     emit scanProgressChanged(0, QStringLiteral("Starting vehicle scan..."));
 
-    if (m_worker)
-        QMetaObject::invokeMethod(m_worker, "doScanVehicle", Qt::QueuedConnection);
+#ifdef Q_OS_ANDROID
+    // No worker thread here: the supported-PID bitmaps were read during
+    // connect (queryAndroidSupportedPids), so answer from that cache the way
+    // the Python backend answers from python-obd's supported_commands.
+    emit scanOutputChanged(QStringLiteral("[SCAN] Starting vehicle PID scan..."));
+    if (m_androidSupportedPids.isEmpty()) {
+        emit scanOutputChanged(QStringLiteral("[WARN] No supported PIDs returned from vehicle"));
+        emit scanProgressChanged(100, QStringLiteral("No supported PIDs found"));
+        onWorkerScanComplete(QStringList());
+        return;
+    }
+    emit scanOutputChanged(QStringLiteral("[INFO] Vehicle reports %1 supported PIDs")
+                               .arg(m_androidSupportedPids.size()));
+    const QStringList names = ELM327Protocol::supportedCommandNames(m_androidSupportedPids);
+    for (const QString &n : names)
+        emit scanOutputChanged(QStringLiteral("[OK] %1").arg(n));
+    emit scanOutputChanged(QStringLiteral("[DONE] Scan complete!"));
+    onWorkerScanComplete(names);
+#else
+    if (!invokeWorker("doScanVehicle")) {
+        m_isScanning = false;
+        emit scanProgressChanged(0, QStringLiteral("Scan unavailable"));
+    }
+#endif
 }
 
 bool OBDManager::is_scanning() const
@@ -1508,8 +1513,7 @@ void OBDManager::read_dtc()
         emit dtcCodesChanged(QVariantList());
         return;
     }
-    if (m_worker)
-        QMetaObject::invokeMethod(m_worker, "doReadDtc", Qt::QueuedConnection);
+    invokeWorker("doReadDtc");
 }
 
 void OBDManager::read_current_dtc()
@@ -1518,8 +1522,7 @@ void OBDManager::read_current_dtc()
         qDebug() << "[OBD] Cannot read current DTCs -- not connected";
         return;
     }
-    if (m_worker)
-        QMetaObject::invokeMethod(m_worker, "doReadCurrentDtc", Qt::QueuedConnection);
+    invokeWorker("doReadCurrentDtc");
 }
 
 void OBDManager::read_status()
@@ -1528,8 +1531,7 @@ void OBDManager::read_status()
         qDebug() << "[OBD] Cannot read status -- not connected";
         return;
     }
-    if (m_worker)
-        QMetaObject::invokeMethod(m_worker, "doReadStatus", Qt::QueuedConnection);
+    invokeWorker("doReadStatus");
 }
 
 void OBDManager::clear_dtc()
@@ -1539,8 +1541,7 @@ void OBDManager::clear_dtc()
         emit dtcClearResult(false, QStringLiteral("Not connected to vehicle"));
         return;
     }
-    if (m_worker)
-        QMetaObject::invokeMethod(m_worker, "doClearDtc", Qt::QueuedConnection);
+    invokeWorker("doClearDtc");
 }
 
 void OBDManager::read_freeze_frame()
@@ -1549,8 +1550,7 @@ void OBDManager::read_freeze_frame()
         qDebug() << "[OBD] Cannot read freeze frame -- not connected";
         return;
     }
-    if (m_worker)
-        QMetaObject::invokeMethod(m_worker, "doReadFreezeFrame", Qt::QueuedConnection);
+    invokeWorker("doReadFreezeFrame");
 }
 
 // ---------------------------------------------------------------------------
@@ -1653,6 +1653,24 @@ void OBDConnectionWorker::setFastMode(bool fast) { m_fastMode = fast; }
 void OBDConnectionWorker::setTimeout(int seconds) { m_timeout = seconds; }
 void OBDConnectionWorker::setPidsToWatch(const QList<PidKey> &pids) { m_pidsToWatch = pids; }
 
+void OBDConnectionWorker::updatePidsToWatch(const QList<PidKey> &pids)
+{
+    m_pidsToWatch = pids;
+    m_currentPidIndex = 0;
+    if (!m_initialized)
+        return;  // doConnect() still running; startPolling() picks the list up
+    if (m_pidsToWatch.isEmpty()) {
+        if (m_polling) {
+            stopPolling();
+            qDebug() << "[OBD Worker] Poll list emptied -- polling paused";
+        }
+    } else if (!m_polling) {
+        startPolling();
+    } else {
+        qDebug() << "[OBD Worker] Poll list updated," << m_pidsToWatch.size() << "PIDs";
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Connection
 // ---------------------------------------------------------------------------
@@ -1690,9 +1708,10 @@ void OBDConnectionWorker::doConnect()
         return;
     }
 
-    // Try to read a PID to verify vehicle connection
-    // Send RPM request as a quick check
-    QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), 3000);
+    // Try to read a PID to verify vehicle connection. Send RPM request as a
+    // quick check, waiting up to the configured connection timeout (the
+    // python-obd `timeout=` the Python backend passes to obd.Async).
+    QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), m_timeout * 1000);
     if (response.isEmpty() || response.toUpper().contains(QStringLiteral("NO DATA")) ||
         response.toUpper().contains(QStringLiteral("UNABLE"))) {
         // Adapter is connected but no vehicle. Release the port: an open
@@ -1845,8 +1864,18 @@ void OBDConnectionWorker::onPollTimer()
         return;
 
     // Get next PID to poll
-    const PidKey &pid = m_pidsToWatch[m_currentPidIndex];
+    const PidKey pid = m_pidsToWatch[m_currentPidIndex];
     m_currentPidIndex = (m_currentPidIndex + 1) % m_pidsToWatch.size();
+
+    if (pid == kElmVoltageKey) {
+        // ELM_VOLTAGE is the adapter's own "ATRV" -- a text reply, not a PID.
+        QString response = sendCommand(ELM327Protocol::elmVoltageRequest(), 500);
+        if (response.isEmpty())
+            return;
+        if (auto volts = ELM327Protocol::parseElmVoltage(response))
+            emit dataReceived(QStringLiteral("elmVoltageChanged"), static_cast<float>(*volts));
+        return;
+    }
 
     // Send request and get response
     QByteArray request = ELM327Protocol::formatPidRequest(pid.first, pid.second);
@@ -2033,84 +2062,23 @@ void OBDConnectionWorker::doScanVehicle()
     const auto &table = ELM327Protocol::pidTable();
     QStringList supportedNames;
 
-    // We need to map PidKey -> command name for the result
-    // Reuse the same mapping from OBDManager::startConnection
-    static const QHash<PidKey, QString> pidToCommand = {
-        {{1,0x05}, QStringLiteral("COOLANT_TEMP")},
-        {{1,0x42}, QStringLiteral("CONTROL_MODULE_VOLTAGE")},
-        {{1,0x04}, QStringLiteral("ENGINE_LOAD")},
-        {{1,0x11}, QStringLiteral("THROTTLE_POS")},
-        {{1,0x0F}, QStringLiteral("INTAKE_TEMP")},
-        {{1,0x0E}, QStringLiteral("TIMING_ADVANCE")},
-        {{1,0x10}, QStringLiteral("MAF")},
-        {{1,0x0D}, QStringLiteral("SPEED")},
-        {{1,0x0C}, QStringLiteral("RPM")},
-        {{1,0x44}, QStringLiteral("COMMANDED_EQUIV_RATIO")},
-        {{1,0x2F}, QStringLiteral("FUEL_LEVEL")},
-        {{1,0x0B}, QStringLiteral("INTAKE_PRESSURE")},
-        {{1,0x06}, QStringLiteral("SHORT_FUEL_TRIM_1")},
-        {{1,0x07}, QStringLiteral("LONG_FUEL_TRIM_1")},
-        {{1,0x14}, QStringLiteral("O2_B1S1")},
-        {{1,0x0A}, QStringLiteral("FUEL_PRESSURE")},
-        {{1,0x5C}, QStringLiteral("OIL_TEMP")},
-        {{1,0x1F}, QStringLiteral("RUN_TIME")},
-        {{1,0x21}, QStringLiteral("DISTANCE_W_MIL")},
-        {{1,0x22}, QStringLiteral("FUEL_RAIL_PRESSURE_VAC")},
-        {{1,0x23}, QStringLiteral("FUEL_RAIL_PRESSURE_DIRECT")},
-        {{1,0x33}, QStringLiteral("BAROMETRIC_PRESSURE")},
-        {{1,0x46}, QStringLiteral("AMBIANT_AIR_TEMP")},
-        {{1,0x45}, QStringLiteral("RELATIVE_THROTTLE_POS")},
-        {{1,0x47}, QStringLiteral("THROTTLE_POS_B")},
-        {{1,0x49}, QStringLiteral("ACCELERATOR_POS_D")},
-        {{1,0x3C}, QStringLiteral("CATALYST_TEMP_B1S1")},
-        {{1,0x3D}, QStringLiteral("CATALYST_TEMP_B1S2")},
-        {{1,0x32}, QStringLiteral("EVAP_VAPOR_PRESSURE")},
-        {{1,0x08}, QStringLiteral("SHORT_FUEL_TRIM_2")},
-        {{1,0x09}, QStringLiteral("LONG_FUEL_TRIM_2")},
-        {{1,0x15}, QStringLiteral("O2_B1S2")},
-        {{1,0x16}, QStringLiteral("O2_B2S1")},
-        {{1,0x17}, QStringLiteral("O2_B2S2")},
-        {{1,0x31}, QStringLiteral("DISTANCE_SINCE_DTC_CLEAR")},
-        {{1,0x30}, QStringLiteral("WARMUPS_SINCE_DTC_CLEAR")},
-        {{1,0x43}, QStringLiteral("ABSOLUTE_LOAD")},
-        {{1,0x2C}, QStringLiteral("COMMANDED_EGR")},
-        {{1,0x2D}, QStringLiteral("EGR_ERROR")},
-        {{1,0x52}, QStringLiteral("ETHANOL_PERCENT")},
-        {{1,0x3E}, QStringLiteral("CATALYST_TEMP_B2S1")},
-        {{1,0x3F}, QStringLiteral("CATALYST_TEMP_B2S2")},
-        {{1,0x4A}, QStringLiteral("THROTTLE_POS_C")},
-        {{1,0x4B}, QStringLiteral("ACCELERATOR_POS_E")},
-        {{1,0x4C}, QStringLiteral("ACCELERATOR_POS_F")},
-        {{1,0x4D}, QStringLiteral("RUN_TIME_MIL")},
-        {{1,0x4E}, QStringLiteral("TIME_SINCE_DTC_CLEARED")},
-        {{1,0x50}, QStringLiteral("MAX_MAF")},
-        {{1,0x51}, QStringLiteral("FUEL_TYPE")},
-        {{1,0x54}, QStringLiteral("EVAP_VAPOR_PRESSURE_ABS")},
-        {{1,0x55}, QStringLiteral("EVAP_VAPOR_PRESSURE_ALT")},
-        {{1,0x56}, QStringLiteral("SHORT_O2_TRIM_B1")},
-        {{1,0x57}, QStringLiteral("LONG_O2_TRIM_B1")},
-        {{1,0x58}, QStringLiteral("SHORT_O2_TRIM_B2")},
-        {{1,0x59}, QStringLiteral("LONG_O2_TRIM_B2")},
-        {{1,0x5A}, QStringLiteral("RELATIVE_ACCEL_POS")},
-        {{1,0x5B}, QStringLiteral("HYBRID_BATTERY_REMAINING")},
-        {{1,0x2E}, QStringLiteral("EVAPORATIVE_PURGE")},
-        {{1,0x5D}, QStringLiteral("FUEL_INJECT_TIMING")},
-        {{1,0x5E}, QStringLiteral("FUEL_RATE")},
-        {{1,0x4F}, QStringLiteral("THROTTLE_ACTUATOR")},
-    };
-
-    int total = pidToCommand.size();
+    int total = table.size();
     int i = 0;
-    for (auto it = pidToCommand.constBegin(); it != pidToCommand.constEnd(); ++it, ++i) {
+    for (auto it = table.constBegin(); it != table.constEnd(); ++it, ++i) {
+        const QString &cmdName = it.value().commandName;
         int progress = static_cast<int>((static_cast<float>(i) / total) * 100.0f);
-        emit scanProgress(progress, QStringLiteral("Checking %1...").arg(it.value()));
+        emit scanProgress(progress, QStringLiteral("Checking %1...").arg(cmdName));
 
-        // Check if this PID is in the vehicle's supported set (mode 1, pid number)
-        if (supportedPids.contains(it.key().second)) {
-            supportedNames.append(it.value());
-            emit scanOutput(QStringLiteral("[OK] %1").arg(it.value()));
+        // Check if this PID is in the vehicle's supported set (mode 1, pid
+        // number). ELM_VOLTAGE is the adapter's own ATRV: always available,
+        // as in python-obd's base_commands().
+        const PidKey &key = it.key();
+        if (key == kElmVoltageKey || (key.first == 1 && supportedPids.contains(key.second))) {
+            supportedNames.append(cmdName);
+            emit scanOutput(QStringLiteral("[OK] %1").arg(cmdName));
         }
     }
+    supportedNames.sort();
 
     // Summary
     int unsupported = total - supportedNames.size();
@@ -2127,14 +2095,14 @@ void OBDConnectionWorker::doScanVehicle()
 }
 
 // ===========================================================================
-// Android Bluetooth RFCOMM implementation
+// Android BLE implementation
 //
-// On Android the QSerialPort/worker-thread flow is bypassed. QBluetoothSocket
-// runs on the main thread and is fully event-driven: connectToService()
-// returns immediately and we react to connected()/readyRead()/error() signals.
-// ELM327 init runs as a state machine via QTimer between AT commands; PID
-// polling is response-driven (next PID requested when the previous response
-// arrives). Mirrors the deleted Python AndroidOBDManager (commit 75b1d3f^).
+// On Android the QSerialPort/worker-thread flow is bypassed. The GATT link is
+// owned by OctaveOBDBridge.java; the main thread polls its state code and
+// notification queue on a 50 ms timer. ELM327 init runs as a state machine
+// via QTimer between AT commands; PID polling is response-driven (next PID
+// requested when the previous response arrives). Mirrors the deleted Python
+// AndroidOBDManager (commit 75b1d3f^).
 // ===========================================================================
 #ifdef Q_OS_ANDROID
 
@@ -2149,116 +2117,37 @@ void OBDManager::logAndroid(const QString &line)
 
 QStringList OBDManager::listAndroidPairedDevices()
 {
-    // Listing paired devices requires QBluetoothLocalDevice, which Qt's
-    // permission helper guards behind QBluetoothPermission::Access. If we
-    // haven't been granted Bluetooth at runtime yet, instantiating the
-    // local device just spams a warning every poll cycle. Skip until the
-    // user has actually triggered the permission flow via force_connect.
+    // BluetoothAdapter.getBondedDevices() through the Java bridge, which
+    // answers with an empty list until the runtime BLUETOOTH_CONNECT grant
+    // exists (OctaveOBDBridge.connect() requests it on the first Connect
+    // tap). Entries are "MAC|name"; names feed the adapter list rows.
     QStringList macs;
-    if (!m_androidPermissionGranted)
+    m_androidDeviceNames.clear();
+    QJniObject ctx = QNativeInterface::QAndroidApplication::context();
+    if (!ctx.isValid())
         return macs;
-    QBluetoothLocalDevice local;
-    if (!local.isValid())
+    QJniObject jArr = QJniObject::callStaticObjectMethod(
+        "org/octave/app/OctaveOBDBridge", "bondedDevices",
+        "(Landroid/content/Context;)[Ljava/lang/String;", ctx.object<jobject>());
+    if (!jArr.isValid())
         return macs;
-    const auto bonded = local.connectedDevices();
-    for (const QBluetoothAddress &addr : bonded)
-        macs.append(addr.toString());
-    return macs;
-}
-
-void OBDManager::requestAndroidBluetoothPermission(std::function<void(bool)> done)
-{
-    if (m_androidPermissionGranted) {
-        done(true);
-        return;
+    QJniEnvironment env;
+    jobjectArray arr = jArr.object<jobjectArray>();
+    const jsize n = env->GetArrayLength(arr);
+    for (jsize i = 0; i < n; ++i) {
+        jobject local = env->GetObjectArrayElement(arr, i);
+        const QString entry = QJniObject(local).toString();
+        env->DeleteLocalRef(local);
+        const int sep = entry.indexOf(QLatin1Char('|'));
+        const QString mac = (sep < 0 ? entry : entry.left(sep)).trimmed();
+        if (mac.isEmpty())
+            continue;
+        macs.append(mac);
+        const QString name = sep < 0 ? QString() : entry.mid(sep + 1).trimmed();
+        if (!name.isEmpty())
+            m_androidDeviceNames.insert(mac, name);
     }
-
-    // Qt 6.7's QBluetoothPermission helper has been observed to return
-    // PermissionStatus::Denied (and immediately fail requestPermission()
-    // synchronously without showing a dialog) even when the underlying
-    // Android grants for BLUETOOTH_CONNECT/BLUETOOTH_SCAN are present.
-    // Bypass it: check the system permission grants directly via
-    // QJniObject/Android Context, and if either is missing fall back to
-    // Qt's request flow (which DOES correctly pop the system dialog when
-    // the permission is first-time-undetermined).
-    auto isSystemGranted = [](const QString &perm) -> bool {
-#ifdef Q_OS_ANDROID
-        QJniObject context = QNativeInterface::QAndroidApplication::context();
-        if (!context.isValid()) return false;
-        QJniObject jPerm = QJniObject::fromString(perm);
-        // ContextCompat.checkSelfPermission would be cleaner but pulls in
-        // androidx; Context.checkSelfPermission has the same semantics on
-        // API 23+ (we target API 30+ via manifest).
-        jint result = context.callMethod<jint>(
-            "checkSelfPermission", "(Ljava/lang/String;)I", jPerm.object<jstring>());
-        // PackageManager.PERMISSION_GRANTED == 0
-        return result == 0;
-#else
-        Q_UNUSED(perm);
-        return true;
-#endif
-    };
-
-    bool connectGranted = isSystemGranted(QStringLiteral("android.permission.BLUETOOTH_CONNECT"));
-    bool scanGranted    = isSystemGranted(QStringLiteral("android.permission.BLUETOOTH_SCAN"));
-    bool advertiseGranted = isSystemGranted(QStringLiteral("android.permission.BLUETOOTH_ADVERTISE"));
-    logAndroid(QStringLiteral("system perms — CONNECT:%1 SCAN:%2 ADVERTISE:%3")
-        .arg(connectGranted ? QStringLiteral("yes") : QStringLiteral("NO"),
-             scanGranted    ? QStringLiteral("yes") : QStringLiteral("NO"),
-             advertiseGranted ? QStringLiteral("yes") : QStringLiteral("NO")));
-
-    // Compare against Qt's view via QtAndroidPrivate::checkPermission so we
-    // can see exactly which name Qt thinks is denied.
-    auto qtCheck = [](const QString &p) -> QString {
-#ifdef Q_OS_ANDROID
-        auto fut = QtAndroidPrivate::checkPermission(p);
-        fut.waitForFinished();
-        QtAndroidPrivate::PermissionResult r = fut.result();
-        if (r == QtAndroidPrivate::Authorized) return QStringLiteral("granted");
-        return QStringLiteral("DENIED");
-#else
-        Q_UNUSED(p);
-        return QStringLiteral("?");
-#endif
-    };
-    logAndroid(QStringLiteral("Qt perms — CONNECT:%1 SCAN:%2 ADVERTISE:%3")
-        .arg(qtCheck(QStringLiteral("android.permission.BLUETOOTH_CONNECT")),
-             qtCheck(QStringLiteral("android.permission.BLUETOOTH_SCAN")),
-             qtCheck(QStringLiteral("android.permission.BLUETOOTH_ADVERTISE"))));
-    logAndroid(QStringLiteral("Qt sdk version: %1")
-        .arg(QtAndroidPrivate::androidSdkVersion()));
-
-    // Always go through Qt's requestPermission(), even when the system grant
-    // is already present. Qt 6.7's QBluetoothPermission/QBluetoothLocalDevice
-    // have an internal cache that doesn't get updated by external `pm grant`
-    // or by silent grants from a previous request — they only flip to
-    // Granted when requestPermission() resolves to Granted in *this* process.
-    // QLowEnergyController checks the same cache before initializing the
-    // BLE adapter, so without this re-trigger every BLE connect fails with
-    // "Permissions not authorized" / "invalid adapter" / "Bluetooth disabled
-    // on phone" even when dumpsys clearly shows the runtime grants. When the
-    // system already says granted, requestPermission resolves synchronously
-    // with Granted (no dialog is shown), so this is essentially free.
-    QBluetoothPermission perm;
-    perm.setCommunicationModes(QBluetoothPermission::Access);
-    qApp->requestPermission(perm, this, [this, done, isSystemGranted](const QPermission &p) {
-        bool qtGranted = (p.status() == Qt::PermissionStatus::Granted);
-        // Backstop with a direct system check in case Qt's API is buggy.
-        bool sysGranted =
-            isSystemGranted(QStringLiteral("android.permission.BLUETOOTH_CONNECT"))
-         && isSystemGranted(QStringLiteral("android.permission.BLUETOOTH_SCAN"));
-        bool granted = qtGranted || sysGranted;
-        m_androidPermissionGranted = granted;
-        logAndroid(QStringLiteral("permission resolved — qt:%1 system:%2")
-            .arg(qtGranted  ? QStringLiteral("yes") : QStringLiteral("NO"),
-                 sysGranted ? QStringLiteral("yes") : QStringLiteral("NO")));
-        if (!granted) {
-            emit connectionStatusChanged(QStringLiteral("Bluetooth permission denied"));
-            emit connectionStatusDetailChanged(
-                QStringLiteral("Grant Bluetooth in Settings -> Apps -> OCTAVE -> Permissions"));
-        }
-        done(granted);
-    });
+    return macs;
 }
 
 void OBDManager::startAndroidConnection()
@@ -2526,59 +2415,7 @@ void OBDManager::finalizeAndroidConnection()
 
     // Build poll list from settings (same logic as desktop) intersected with
     // what the vehicle reports supporting via mode 01 PID 00/20/40/60.
-    static const QHash<PidKey, QString> pidToCommand = {
-        {{1,0x05}, QStringLiteral("COOLANT_TEMP")},
-        {{1,0x42}, QStringLiteral("CONTROL_MODULE_VOLTAGE")},
-        {{1,0x04}, QStringLiteral("ENGINE_LOAD")},
-        {{1,0x11}, QStringLiteral("THROTTLE_POS")},
-        {{1,0x0F}, QStringLiteral("INTAKE_TEMP")},
-        {{1,0x0E}, QStringLiteral("TIMING_ADVANCE")},
-        {{1,0x10}, QStringLiteral("MAF")},
-        {{1,0x0D}, QStringLiteral("SPEED")},
-        {{1,0x0C}, QStringLiteral("RPM")},
-        {{1,0x44}, QStringLiteral("COMMANDED_EQUIV_RATIO")},
-        {{1,0x2F}, QStringLiteral("FUEL_LEVEL")},
-        {{1,0x0B}, QStringLiteral("INTAKE_PRESSURE")},
-        {{1,0x06}, QStringLiteral("SHORT_FUEL_TRIM_1")},
-        {{1,0x07}, QStringLiteral("LONG_FUEL_TRIM_1")},
-        {{1,0x14}, QStringLiteral("O2_B1S1")},
-        {{1,0x0A}, QStringLiteral("FUEL_PRESSURE")},
-        {{1,0x5C}, QStringLiteral("OIL_TEMP")},
-    };
-    static const QSet<QString> defaultEnabled = {
-        QStringLiteral("COOLANT_TEMP"), QStringLiteral("CONTROL_MODULE_VOLTAGE"),
-        QStringLiteral("ENGINE_LOAD"), QStringLiteral("THROTTLE_POS"),
-        QStringLiteral("INTAKE_TEMP"), QStringLiteral("TIMING_ADVANCE"),
-        QStringLiteral("MAF"), QStringLiteral("SPEED"), QStringLiteral("RPM"),
-        QStringLiteral("COMMANDED_EQUIV_RATIO"), QStringLiteral("FUEL_LEVEL"),
-        QStringLiteral("INTAKE_PRESSURE"), QStringLiteral("SHORT_FUEL_TRIM_1"),
-        QStringLiteral("LONG_FUEL_TRIM_1"), QStringLiteral("O2_B1S1"),
-        QStringLiteral("FUEL_PRESSURE"), QStringLiteral("OIL_TEMP"),
-    };
-
-    m_androidEnabledPids.clear();
-    for (auto it = pidToCommand.constBegin(); it != pidToCommand.constEnd(); ++it) {
-        bool isDefault = defaultEnabled.contains(it.value());
-        bool watch = m_settingsManager
-            ? m_settingsManager->get_obd_parameter_enabled(it.value(), isDefault)
-            : isDefault;
-        if (!watch) continue;
-        // If the vehicle reported a supported set, filter to only those PIDs.
-        // (mode-1 PID number is the second of the pair.)
-        if (!m_androidSupportedPids.isEmpty() &&
-            !m_androidSupportedPids.contains(it.key().second))
-            continue;
-        m_androidEnabledPids.append(it.key());
-    }
-    if (m_androidEnabledPids.isEmpty()) {
-        // Vehicle didn't answer 0100 -- fall back to the default set so the
-        // user still sees readings. ELM327 will return NO DATA for unsupported
-        // PIDs which our code paths already ignore.
-        for (auto it = pidToCommand.constBegin(); it != pidToCommand.constEnd(); ++it) {
-            if (defaultEnabled.contains(it.value()))
-                m_androidEnabledPids.append(it.key());
-        }
-    }
+    rebuildAndroidPollList();
 
     m_androidPollIndex = 0;
     m_androidPolling = true;
@@ -2592,13 +2429,50 @@ void OBDManager::finalizeAndroidConnection()
     pollNextAndroidPid();
 }
 
+void OBDManager::rebuildAndroidPollList()
+{
+    QList<PidKey> pids = buildPidsToWatch();
+    // If the vehicle reported a supported set, filter to only those PIDs
+    // (mode-1 PID number is the second of the pair; ELM_VOLTAGE is the
+    // adapter's own ATRV and always available).
+    if (!m_androidSupportedPids.isEmpty()) {
+        QList<PidKey> filtered;
+        for (const PidKey &k : pids) {
+            if (k == kElmVoltageKey || m_androidSupportedPids.contains(k.second))
+                filtered.append(k);
+        }
+        pids = filtered;
+    }
+    if (pids.isEmpty()) {
+        // Vehicle didn't answer 0100 (or nothing enabled matched) -- fall
+        // back to the default set so the user still sees readings. ELM327
+        // will return NO DATA for unsupported PIDs which our code paths
+        // already ignore.
+        const auto &table = ELM327Protocol::pidTable();
+        for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
+            if (defaultEnabledCommands().contains(it.value().commandName))
+                pids.append(it.key());
+        }
+        std::sort(pids.begin(), pids.end());
+    }
+    m_androidEnabledPids = pids;
+    if (m_androidPollIndex >= m_androidEnabledPids.size())
+        m_androidPollIndex = 0;
+    m_hasActiveWatchers = !m_androidEnabledPids.isEmpty();
+}
+
 void OBDManager::pollNextAndroidPid()
 {
     if (!m_connected || !m_androidPolling || m_androidEnabledPids.isEmpty())
         return;
-    const PidKey &pid = m_androidEnabledPids[m_androidPollIndex];
+    const PidKey pid = m_androidEnabledPids[m_androidPollIndex];
     m_androidPollIndex = (m_androidPollIndex + 1) % m_androidEnabledPids.size();
-    writeAndroidBytes(ELM327Protocol::formatPidRequest(pid.first, pid.second));
+    // ELM_VOLTAGE is the adapter's "ATRV": text reply, parsed separately.
+    m_androidAwaitingElmVoltage = (pid == kElmVoltageKey);
+    if (m_androidAwaitingElmVoltage)
+        writeAndroidBytes(ELM327Protocol::elmVoltageRequest());
+    else
+        writeAndroidBytes(ELM327Protocol::formatPidRequest(pid.first, pid.second));
     m_androidPollWatchdog.start(500);
 }
 
@@ -2626,6 +2500,17 @@ void OBDManager::processAndroidResponse(const QString &response)
 
     m_androidStaleCount = 0;
 
+    if (m_androidAwaitingElmVoltage) {
+        m_androidAwaitingElmVoltage = false;
+        if (auto volts = ELM327Protocol::parseElmVoltage(response)) {
+            emitParameterSignal(QStringLiteral("elmVoltageChanged"), static_cast<float>(*volts));
+            m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
+        }
+        if (m_androidPolling)
+            pollNextAndroidPid();
+        return;
+    }
+
     auto parsed = ELM327Protocol::parseResponse(response);
     if (!parsed.has_value()) {
         if (m_androidPolling)
@@ -2639,6 +2524,12 @@ void OBDManager::processAndroidResponse(const QString &response)
         const auto pids = ELM327Protocol::parseSupportedPids(parsed->dataBytes);
         for (int p : pids)
             m_androidSupportedPids.insert(p + parsed->pid);
+        // Bit 32 of each bitmap announces the next range (0120, 0140, 0160):
+        // chain the request during the connect-time query so the supported
+        // set covers the extended PIDs (0x21-0x5E) too, like the desktop
+        // worker's querySupportedPids().
+        if (!m_connected && pids.contains(32) && parsed->pid < 0x60)
+            writeAndroidBytes(ELM327Protocol::formatPidRequest(1, parsed->pid + 0x20));
         if (m_androidPolling)
             pollNextAndroidPid();
         return;

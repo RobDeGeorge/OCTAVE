@@ -1,7 +1,7 @@
 # Android C++ Port
 
 **Status:** active — Phases 0–3 complete. OBD-over-BLE and YT Music search/download both shipped. Remaining work is Phase 4 (sideload polish).
-**Last updated:** 2026-05-07
+**Last updated:** 2026-09-11
 
 ## Why this is parked here
 
@@ -34,7 +34,7 @@ Single ABI (`arm64-v8a`) for now. Add `armeabi-v7a` only if a real target emerge
 
 ## Android-minimum manager matrix
 
-Mirror what Python's `main.py` + `backend/platform_config.py` already does: every manager always instantiated so QML context properties exist, hardware-absent ones stubbed to no-ops.
+Every manager is always instantiated so QML context properties exist; hardware-absent ones are stubbed to no-ops behind `#ifdef Q_OS_ANDROID` in `src/main.cpp`. (The former Python `backend/platform_config.py` gating module was deleted with the Python-on-Android path — Python is desktop-only and needs no Android gating.)
 
 | Manager (C++) | Android behavior | Notes |
 |---|---|---|
@@ -69,7 +69,7 @@ Follow `ANDROID_BUILD_SETUP.md` at repo root. Installs Qt for Android 6.11.0, An
    - Link `Qt6::Bluetooth`, `Qt6::Sensors`, `Qt6::CorePrivate` (for `QtAndroidPrivate` permissions API)
 3. Write stub managers (`src/managers/stubs/`): same public API as real ones, no-op implementations, emit "unavailable" signals where QML expects them.
 4. `src/main.cpp`: conditional `#ifdef Q_OS_ANDROID` to instantiate stubs in place of hardware managers.
-5. Mirror the Python parity for `spotify` exclusion: add `StubSpotifyManager` to the Python side too (`backend/platform_config.py` already has the gating pattern — extend it).
+5. Spotify exclusion is C++-only: gate it with `#ifdef Q_OS_ANDROID` in `src/main.cpp`. No Python mirror — Python is desktop-only, so its `SpotifyManager` stays unconditional.
 
 **Done when:** `cmake --build build-android --target apk && adb install` puts an app on both test devices that launches to the main menu. OBD/media/dashboards visible in UI, OBD disconnected.
 
@@ -109,9 +109,9 @@ Play Store submission. Write `TODO/android-play-store.md` at that point covering
 
 - `ANDROID_BUILD_SETUP.md` — user-facing toolchain install walkthrough at repo root.
 - `BUILD.md` — desktop build matrix, app-store build flag explanation.
-- `deployment/buildozer.spec` — Python APK's current manifest / permissions / requirements, reference for parity decisions.
+- `android/AndroidManifest.xml` — the C++ APK manifest / permissions (the Python `deployment/buildozer.spec` it used to mirror was deleted with the Python-on-Android path).
 - `backend/android_obd_manager.py` — Python BT OBD implementation, reference for JNI fallback if QtBluetooth fails in Phase 3.
-- `backend/platform_config.py` — Python's `IS_ANDROID` gating pattern, mirror on C++ side via `#ifdef Q_OS_ANDROID`.
+- `#ifdef Q_OS_ANDROID` / `#ifdef Q_OS_IOS` blocks in `src/main.cpp` and `src/managers/` — the live platform-gating pattern (the Python `backend/platform_config.py` it once mirrored was deleted).
 - `.private-notes.md` (gitignored) — NEXAS MAC for test sessions.
 
 ## Order of operations

@@ -37,14 +37,16 @@ signals:
     void actionTriggered(const QString &action);
     void connectionStatusChanged(const QString &status);
     void started();
-    void stopped();
+    // retryable=false when the failure is permanent (e.g. permission denied
+    // on the I2C device) and the manager must not schedule a retry.
+    void stopped(bool retryable);
 
 public slots:
     void run();
 
 private:
     // I2C helpers
-    bool openBus();
+    bool openBus(bool &permissionDenied);
     void closeBus();
     bool writeByteData(int addr, int reg, int value);
     int readByteData(int addr, int reg);
@@ -55,8 +57,9 @@ private:
     bool readChipId(uint16_t &chipId);
     bool initRegisters();
 
-    // Gesture reading
-    void readGestureRaw(uint8_t &flag0, uint8_t &flag1);
+    // Gesture reading — readGestureRaw returns false (flags zeroed) when the
+    // I2C transfer fails, so the loop can detect a dead bus.
+    bool readGestureRaw(uint8_t &flag0, uint8_t &flag1);
     QString decodeGesture(uint8_t flag0, uint8_t flag1) const;
     void flushSensor(double duration);
 
@@ -120,31 +123,36 @@ private:
 };
 
 #else // Q_OS_MOBILE — mobile stub
+// Every slot/signal/property below must keep the exact desktop signature:
+// QML binds the same names on both builds.
 
 #include <QObject>
 #include <QString>
 
+class SettingsManager;
+
 class GestureManager : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QString connectionStatus READ connectionStatus NOTIFY connectionStatusChanged)
+    Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
 public:
     explicit GestureManager(QObject *parent = nullptr) : QObject(parent) {}
-    void connect_settings_manager(QObject *) {}
-    void cleanup() {}
-    QString connectionStatus() const { return QStringLiteral("Disabled on mobile"); }
-
-public slots:
-    void setEnabled(bool) {}
-    void setCooldown(double) {}
-    void setGestureAction(const QString &, const QString &) {}
-    QString getGestureAction(const QString &) const { return {}; }
-    void resetMappingToDefaults() {}
-    QString getConnectionStatus() const { return QStringLiteral("Disabled on mobile"); }
+    void connect_settings_manager(SettingsManager *) {}
 
 signals:
-    void actionTriggered(const QString &);
-    void connectionStatusChanged();
+    void gestureDetected(const QString &gesture);
+    void actionTriggered(const QString &action);
+    void connectionStatusChanged(const QString &status);
+
+public slots:
+    QString getConnectionStatus() { return QStringLiteral("Disabled on mobile"); }
+    void setGestureAction(const QString &, const QString &) {}
+    QString getGestureAction(const QString &) { return QStringLiteral("none"); }
+    void resetMappingToDefaults() {}
+    void setEnabled(bool) {}
+    void setCooldown(int) {}
+    bool isEnabled() { return false; }
+    void cleanup() {}
 };
 
 #endif // Q_OS_MOBILE

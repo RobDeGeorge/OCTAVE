@@ -75,8 +75,11 @@ static double decVoltage(const QVector<uint8_t> &a) {
     return std::round((a[0] * 256.0 + a[1]) / 1000.0 * 100.0) / 100.0;
 }
 
-static double decEquivRatio(const QVector<uint8_t> &a) {
-    return std::round((a[0] * 256.0 + a[1]) / 32768.0 * 1000.0) / 1000.0;
+// Commanded equivalence ratio (lambda, ~1.0 at stoich) scaled to a gasoline
+// air/fuel ratio, matching the Python backend (`_update_afr` multiplies
+// python-obd's ratio by 14.7). OBDParameterModel's AFR gauge spans 10-18.
+static double decAirFuelRatio(const QVector<uint8_t> &a) {
+    return std::round((a[0] * 256.0 + a[1]) / 32768.0 * 14.7 * 100.0) / 100.0;
 }
 
 static double decUint16(const QVector<uint8_t> &a) {
@@ -95,12 +98,15 @@ static double decAbsEvap(const QVector<uint8_t> &a) {
     return std::round((a[0] * 256.0 + a[1]) / 200.0 * 100.0) / 100.0;
 }
 
+// Wide-range O2 (PIDs 0x24-0x2B / 0x34-0x3B): bytes A,B carry the lambda
+// ratio; the voltage / current live in bytes C,D. Same formulas as
+// python-obd's sensor_voltage_big and current_centered.
 static double decWrO2Voltage(const QVector<uint8_t> &a) {
-    return std::round(((a[0] * 256.0 + a[1]) * 2.0) / 65536.0 * 8.0 * 10000.0) / 10000.0;
+    return std::round((a[2] * 256.0 + a[3]) * 8.0 / 65535.0 * 10000.0) / 10000.0;
 }
 
 static double decWrO2Current(const QVector<uint8_t> &a) {
-    return std::round(((a[0] * 256.0 + a[1]) - 32768.0) / 256.0 * 10000.0) / 10000.0;
+    return std::round(((a[2] * 256.0 + a[3]) / 256.0 - 128.0) * 10000.0) / 10000.0;
 }
 
 static double decFuelRailAbs(const QVector<uint8_t> &a) {
@@ -125,74 +131,98 @@ static double decMaxMAF(const QVector<uint8_t> &a) {
 
 QHash<PidKey, PidEntry> ELM327Protocol::buildPidTable()
 {
+    // PID numbers, command names and decoders follow python-obd's
+    // commands.py (the Python backend's authoritative table) so both
+    // backends read the same bytes into the same signal.
     QHash<PidKey, PidEntry> t;
 
     // --- Default enabled PIDs (the 16+1 most common) ---
-    t[{1, 0x05}] = {"Coolant Temp",           "coolantTempChanged",             decOffset40,       1};
-    t[{1, 0x42}] = {"Control Module Voltage",  "voltageChanged",                decVoltage,        2};
-    t[{1, 0x04}] = {"Engine Load",             "engineLoadChanged",             decPct,            1};
-    t[{1, 0x11}] = {"Throttle Position",       "throttlePositionChanged",       decPct,            1};
-    t[{1, 0x0F}] = {"Intake Air Temp",         "intakeAirTempChanged",          decOffset40,       1};
-    t[{1, 0x0E}] = {"Timing Advance",          "timingAdvanceChanged",          decTiming,         1};
-    t[{1, 0x10}] = {"MAF",                     "massAirFlowChanged",            decMaf,            2};
-    t[{1, 0x0D}] = {"Speed",                   "speedMPHChanged",               decSpeedMPH,       1};
-    t[{1, 0x0C}] = {"RPM",                     "rpmChanged",                    decRpm,            2};
-    t[{1, 0x44}] = {"Commanded Equiv Ratio",   "airFuelRatioChanged",           decEquivRatio,     2};
-    t[{1, 0x2F}] = {"Fuel Level",              "fuelLevelChanged",              decPct,            1};
-    t[{1, 0x0B}] = {"Intake Manifold Pressure","intakeManifoldPressureChanged", decKpa,            1};
-    t[{1, 0x06}] = {"Short Term Fuel Trim 1",  "shortTermFuelTrimChanged",      decPctCentered,    1};
-    t[{1, 0x07}] = {"Long Term Fuel Trim 1",   "longTermFuelTrimChanged",       decPctCentered,    1};
-    t[{1, 0x14}] = {"O2 Sensor B1S1",          "oxygenSensorVoltageChanged",    decO2Voltage,      2};
-    t[{1, 0x0A}] = {"Fuel Pressure",           "fuelPressureChanged",           decFuelPressure,   1};
-    t[{1, 0x5C}] = {"Oil Temp",                "engineOilTempChanged",          decOffset40,       1};
+    t[{1, 0x05}] = {"Coolant Temp",           "coolantTempChanged",             "COOLANT_TEMP",              decOffset40,       1};
+    t[{1, 0x42}] = {"Control Module Voltage",  "voltageChanged",                "CONTROL_MODULE_VOLTAGE",    decVoltage,        2};
+    t[{1, 0x04}] = {"Engine Load",             "engineLoadChanged",             "ENGINE_LOAD",               decPct,            1};
+    t[{1, 0x11}] = {"Throttle Position",       "throttlePositionChanged",       "THROTTLE_POS",              decPct,            1};
+    t[{1, 0x0F}] = {"Intake Air Temp",         "intakeAirTempChanged",          "INTAKE_TEMP",               decOffset40,       1};
+    t[{1, 0x0E}] = {"Timing Advance",          "timingAdvanceChanged",          "TIMING_ADVANCE",            decTiming,         1};
+    t[{1, 0x10}] = {"MAF",                     "massAirFlowChanged",            "MAF",                       decMaf,            2};
+    t[{1, 0x0D}] = {"Speed",                   "speedMPHChanged",               "SPEED",                     decSpeedMPH,       1};
+    t[{1, 0x0C}] = {"RPM",                     "rpmChanged",                    "RPM",                       decRpm,            2};
+    t[{1, 0x44}] = {"Air/Fuel Ratio",          "airFuelRatioChanged",           "COMMANDED_EQUIV_RATIO",     decAirFuelRatio,   2};
+    t[{1, 0x2F}] = {"Fuel Level",              "fuelLevelChanged",              "FUEL_LEVEL",                decPct,            1};
+    t[{1, 0x0B}] = {"Intake Manifold Pressure","intakeManifoldPressureChanged", "INTAKE_PRESSURE",           decKpa,            1};
+    t[{1, 0x06}] = {"Short Term Fuel Trim 1",  "shortTermFuelTrimChanged",      "SHORT_FUEL_TRIM_1",         decPctCentered,    1};
+    t[{1, 0x07}] = {"Long Term Fuel Trim 1",   "longTermFuelTrimChanged",       "LONG_FUEL_TRIM_1",          decPctCentered,    1};
+    t[{1, 0x14}] = {"O2 Sensor B1S1",          "oxygenSensorVoltageChanged",    "O2_B1S1",                   decO2Voltage,      2};
+    t[{1, 0x0A}] = {"Fuel Pressure",           "fuelPressureChanged",           "FUEL_PRESSURE",             decFuelPressure,   1};
+    t[{1, 0x5C}] = {"Oil Temp",                "engineOilTempChanged",          "OIL_TEMP",                  decOffset40,       1};
 
     // --- Extended PIDs ---
-    t[{1, 0x1F}] = {"Run Time",                "runTimeChanged",                decUint16,         2};
-    t[{1, 0x21}] = {"Distance w/ MIL",         "distanceWithMILChanged",        decUint16,         2};
-    t[{1, 0x22}] = {"Fuel Rail Pressure (vac)", "fuelRailPressureChanged",      decFuelRailVac,    2};
-    t[{1, 0x23}] = {"Fuel Rail Pressure (direct)","fuelRailPressureDirectChanged",decFuelRailDirect,2};
-    t[{1, 0x33}] = {"Barometric Pressure",     "barometricPressureChanged",     decKpa,            1};
-    t[{1, 0x46}] = {"Ambient Air Temp",        "ambientAirTempChanged",         decOffset40,       1};
-    t[{1, 0x45}] = {"Relative Throttle Pos",   "relativeThrottlePosChanged",    decPct,            1};
-    t[{1, 0x47}] = {"Throttle Pos B",          "absoluteThrottlePosBChanged",   decPct,            1};
-    t[{1, 0x49}] = {"Accelerator Pos D",       "acceleratorPosChanged",         decPct,            1};
-    t[{1, 0x3C}] = {"Catalyst Temp B1S1",      "catalystTempB1S1Changed",       decCatalystTemp,   2};
-    t[{1, 0x3D}] = {"Catalyst Temp B1S2",      "catalystTempB1S2Changed",       decCatalystTemp,   2};
-    t[{1, 0x32}] = {"Evap Vapor Pressure",     "evapVaporPressureChanged",      decEvapPressure,   2};
-    t[{1, 0x08}] = {"Short Fuel Trim 2",       "shortFuelTrim2Changed",         decPctCentered,    1};
-    t[{1, 0x09}] = {"Long Fuel Trim 2",        "longFuelTrim2Changed",          decPctCentered,    1};
-    t[{1, 0x15}] = {"O2 B1S2",                 "o2SensorB1S2Changed",           decO2Voltage,      2};
-    t[{1, 0x16}] = {"O2 B2S1",                 "o2SensorB2S1Changed",           decO2Voltage,      2};
-    t[{1, 0x17}] = {"O2 B2S2",                 "o2SensorB2S2Changed",           decO2Voltage,      2};
-    t[{1, 0x31}] = {"Distance Since Codes Cleared","distanceSinceCodesCleared", decUint16,         2};
-    t[{1, 0x30}] = {"Warmups Since Codes Cleared","warmupsSinceCodesCleared",   decSimple,         1};
-    t[{1, 0x43}] = {"Absolute Load",           "absoluteLoadChanged",           decAbsoluteLoad,   2};
-    t[{1, 0x2C}] = {"Commanded EGR",           "commandedEGRChanged",           decPct,            1};
-    t[{1, 0x2D}] = {"EGR Error",               "egrErrorChanged",               decPctCentered,    1};
-    t[{1, 0x52}] = {"Ethanol Percent",         "ethanoPercentChanged",          decPct,            1};
-    t[{1, 0x3E}] = {"Catalyst Temp B2S1",      "catalystTempB2S1Changed",       decCatalystTemp,   2};
-    t[{1, 0x3F}] = {"Catalyst Temp B2S2",      "catalystTempB2S2Changed",       decCatalystTemp,   2};
-    t[{1, 0x4A}] = {"Throttle Pos C",          "throttlePosCChanged",           decPct,            1};
-    t[{1, 0x4B}] = {"Accelerator Pos E",       "acceleratorPosEChanged",        decPct,            1};
-    t[{1, 0x4C}] = {"Accelerator Pos F",       "acceleratorPosFChanged",        decPct,            1};
-    t[{1, 0x4D}] = {"Run Time MIL",            "runTimeMILChanged",             decUint16,         2};
-    t[{1, 0x4E}] = {"Time Since DTC Cleared",  "timeSinceDTCClearedChanged",    decUint16,         2};
-    t[{1, 0x50}] = {"Max MAF",                 "maxMAFChanged",                 decMaxMAF,         1};
-    t[{1, 0x51}] = {"Fuel Type",               "fuelTypeChanged",               decSimple,         1};
-    t[{1, 0x54}] = {"Evap Vapor Pressure Abs", "evapVaporPressureAbsChanged",   decAbsEvap,        2};
-    t[{1, 0x55}] = {"Evap Vapor Pressure Alt", "evapVaporPressureAltChanged",   decEvapPressure,   2};
-    t[{1, 0x56}] = {"Short O2 Trim B1",        "shortO2TrimB1Changed",          decPctCentered,    1};
-    t[{1, 0x57}] = {"Long O2 Trim B1",         "longO2TrimB1Changed",           decPctCentered,    1};
-    t[{1, 0x58}] = {"Short O2 Trim B2",        "shortO2TrimB2Changed",          decPctCentered,    1};
-    // PID 0x59 is Fuel Rail Absolute Pressure per SAE J1979. Both backends
-    // must agree — see the parity workflow in CLAUDE.md.
-    t[{1, 0x59}] = {"Fuel Rail Pressure Abs",  "fuelRailPressureAbsChanged",    decFuelRailAbs,    2};
-    t[{1, 0x5A}] = {"Relative Accel Pos",      "relativeAccelPosChanged",       decPct,            1};
-    t[{1, 0x5B}] = {"Hybrid Battery",          "hybridBatteryRemainingChanged", decPct,            1};
-    t[{1, 0x2E}] = {"Evaporative Purge",       "evaporativePurgeChanged",       decPct,            1};
-    t[{1, 0x5D}] = {"Fuel Inject Timing",      "fuelInjectTimingChanged",       decInjectTiming,   2};
-    t[{1, 0x5E}] = {"Fuel Rate",               "fuelRateChanged",               decFuelRate,       2};
-    t[{1, 0x4F}] = {"Throttle Actuator",       "throttleActuatorChanged",       decPct,            1};
+    t[{1, 0x1F}] = {"Run Time",                "runTimeChanged",                "RUN_TIME",                  decUint16,         2};
+    t[{1, 0x21}] = {"Distance w/ MIL",         "distanceWithMILChanged",        "DISTANCE_W_MIL",            decUint16,         2};
+    t[{1, 0x22}] = {"Fuel Rail Pressure (vac)", "fuelRailPressureChanged",      "FUEL_RAIL_PRESSURE_VAC",    decFuelRailVac,    2};
+    t[{1, 0x23}] = {"Fuel Rail Pressure (direct)","fuelRailPressureDirectChanged","FUEL_RAIL_PRESSURE_DIRECT",decFuelRailDirect, 2};
+    t[{1, 0x33}] = {"Barometric Pressure",     "barometricPressureChanged",     "BAROMETRIC_PRESSURE",       decKpa,            1};
+    t[{1, 0x46}] = {"Ambient Air Temp",        "ambientAirTempChanged",         "AMBIANT_AIR_TEMP",          decOffset40,       1};
+    t[{1, 0x45}] = {"Relative Throttle Pos",   "relativeThrottlePosChanged",    "RELATIVE_THROTTLE_POS",     decPct,            1};
+    t[{1, 0x47}] = {"Throttle Pos B",          "absoluteThrottlePosBChanged",   "THROTTLE_POS_B",            decPct,            1};
+    t[{1, 0x49}] = {"Accelerator Pos D",       "acceleratorPosChanged",         "ACCELERATOR_POS_D",         decPct,            1};
+    t[{1, 0x3C}] = {"Catalyst Temp B1S1",      "catalystTempB1S1Changed",       "CATALYST_TEMP_B1S1",        decCatalystTemp,   2};
+    t[{1, 0x3E}] = {"Catalyst Temp B1S2",      "catalystTempB1S2Changed",       "CATALYST_TEMP_B1S2",        decCatalystTemp,   2};
+    t[{1, 0x32}] = {"Evap Vapor Pressure",     "evapVaporPressureChanged",      "EVAP_VAPOR_PRESSURE",       decEvapPressure,   2};
+    t[{1, 0x08}] = {"Short Fuel Trim 2",       "shortFuelTrim2Changed",         "SHORT_FUEL_TRIM_2",         decPctCentered,    1};
+    t[{1, 0x09}] = {"Long Fuel Trim 2",        "longFuelTrim2Changed",          "LONG_FUEL_TRIM_2",          decPctCentered,    1};
+    t[{1, 0x15}] = {"O2 B1S2",                 "o2SensorB1S2Changed",           "O2_B1S2",                   decO2Voltage,      2};
+    t[{1, 0x18}] = {"O2 B2S1",                 "o2SensorB2S1Changed",           "O2_B2S1",                   decO2Voltage,      2};
+    t[{1, 0x19}] = {"O2 B2S2",                 "o2SensorB2S2Changed",           "O2_B2S2",                   decO2Voltage,      2};
+    t[{1, 0x31}] = {"Distance Since Codes Cleared","distanceSinceCodesCleared", "DISTANCE_SINCE_DTC_CLEAR",  decUint16,         2};
+    t[{1, 0x30}] = {"Warmups Since Codes Cleared","warmupsSinceCodesCleared",   "WARMUPS_SINCE_DTC_CLEAR",   decSimple,         1};
+    t[{1, 0x43}] = {"Absolute Load",           "absoluteLoadChanged",           "ABSOLUTE_LOAD",             decAbsoluteLoad,   2};
+    t[{1, 0x2C}] = {"Commanded EGR",           "commandedEGRChanged",           "COMMANDED_EGR",             decPct,            1};
+    t[{1, 0x2D}] = {"EGR Error",               "egrErrorChanged",               "EGR_ERROR",                 decPctCentered,    1};
+    t[{1, 0x52}] = {"Ethanol Percent",         "ethanoPercentChanged",          "ETHANOL_PERCENT",           decPct,            1};
+
+    // --- Additional narrowband O2 sensors (0x14-0x1B: B1S1..B1S4, B2S1..B2S4) ---
+    t[{1, 0x16}] = {"O2 B1S3",                 "o2SensorB1S3Changed",           "O2_B1S3",                   decO2Voltage,      2};
+    t[{1, 0x17}] = {"O2 B1S4",                 "o2SensorB1S4Changed",           "O2_B1S4",                   decO2Voltage,      2};
+    t[{1, 0x1A}] = {"O2 B2S3",                 "o2SensorB2S3Changed",           "O2_B2S3",                   decO2Voltage,      2};
+    t[{1, 0x1B}] = {"O2 B2S4",                 "o2SensorB2S4Changed",           "O2_B2S4",                   decO2Voltage,      2};
+
+    // --- Wide-range O2 sensors: voltage (0x24-0x2B), current (0x34-0x3B) ---
+    for (int n = 1; n <= 8; ++n) {
+        t[{1, 0x23 + n}] = {QStringLiteral("O2 S%1 WR Voltage").arg(n),
+                            QStringLiteral("o2S%1WRVoltageChanged").arg(n),
+                            QStringLiteral("O2_S%1_WR_VOLTAGE").arg(n),
+                            decWrO2Voltage, 4};
+        t[{1, 0x33 + n}] = {QStringLiteral("O2 S%1 WR Current").arg(n),
+                            QStringLiteral("o2S%1WRCurrentChanged").arg(n),
+                            QStringLiteral("O2_S%1_WR_CURRENT").arg(n),
+                            decWrO2Current, 4};
+    }
+
+    t[{1, 0x3D}] = {"Catalyst Temp B2S1",      "catalystTempB2S1Changed",       "CATALYST_TEMP_B2S1",        decCatalystTemp,   2};
+    t[{1, 0x3F}] = {"Catalyst Temp B2S2",      "catalystTempB2S2Changed",       "CATALYST_TEMP_B2S2",        decCatalystTemp,   2};
+    t[{1, 0x48}] = {"Throttle Pos C",          "throttlePosCChanged",           "THROTTLE_POS_C",            decPct,            1};
+    t[{1, 0x4A}] = {"Accelerator Pos E",       "acceleratorPosEChanged",        "ACCELERATOR_POS_E",         decPct,            1};
+    t[{1, 0x4B}] = {"Accelerator Pos F",       "acceleratorPosFChanged",        "ACCELERATOR_POS_F",         decPct,            1};
+    t[{1, 0x4C}] = {"Throttle Actuator",       "throttleActuatorChanged",       "THROTTLE_ACTUATOR",         decPct,            1};
+    t[{1, 0x4D}] = {"Run Time MIL",            "runTimeMILChanged",             "RUN_TIME_MIL",              decUint16,         2};
+    t[{1, 0x4E}] = {"Time Since DTC Cleared",  "timeSinceDTCClearedChanged",    "TIME_SINCE_DTC_CLEARED",    decUint16,         2};
+    t[{1, 0x50}] = {"Max MAF",                 "maxMAFChanged",                 "MAX_MAF",                   decMaxMAF,         1};
+    t[{1, 0x51}] = {"Fuel Type",               "fuelTypeChanged",               "FUEL_TYPE",                 decSimple,         1};
+    t[{1, 0x53}] = {"Evap Vapor Pressure Abs", "evapVaporPressureAbsChanged",   "EVAP_VAPOR_PRESSURE_ABS",   decAbsEvap,        2};
+    t[{1, 0x54}] = {"Evap Vapor Pressure Alt", "evapVaporPressureAltChanged",   "EVAP_VAPOR_PRESSURE_ALT",   decEvapPressure,   2};
+    t[{1, 0x55}] = {"Short O2 Trim B1",        "shortO2TrimB1Changed",          "SHORT_O2_TRIM_B1",          decPctCentered,    1};
+    t[{1, 0x56}] = {"Long O2 Trim B1",         "longO2TrimB1Changed",           "LONG_O2_TRIM_B1",           decPctCentered,    1};
+    t[{1, 0x57}] = {"Short O2 Trim B2",        "shortO2TrimB2Changed",          "SHORT_O2_TRIM_B2",          decPctCentered,    1};
+    t[{1, 0x58}] = {"Long O2 Trim B2",         "longO2TrimB2Changed",           "LONG_O2_TRIM_B2",           decPctCentered,    1};
+    t[{1, 0x59}] = {"Fuel Rail Pressure Abs",  "fuelRailPressureAbsChanged",    "FUEL_RAIL_PRESSURE_ABS",    decFuelRailAbs,    2};
+    t[{1, 0x5A}] = {"Relative Accel Pos",      "relativeAccelPosChanged",       "RELATIVE_ACCEL_POS",        decPct,            1};
+    t[{1, 0x5B}] = {"Hybrid Battery",          "hybridBatteryRemainingChanged", "HYBRID_BATTERY_REMAINING",  decPct,            1};
+    t[{1, 0x2E}] = {"Evaporative Purge",       "evaporativePurgeChanged",       "EVAPORATIVE_PURGE",         decPct,            1};
+    t[{1, 0x5D}] = {"Fuel Inject Timing",      "fuelInjectTimingChanged",       "FUEL_INJECT_TIMING",        decInjectTiming,   2};
+    t[{1, 0x5E}] = {"Fuel Rate",               "fuelRateChanged",               "FUEL_RATE",                 decFuelRate,       2};
+
+    // --- Adapter voltage ("ATRV"), decoded from text by parseElmVoltage() ---
+    t[kElmVoltageKey] = {"ELM Voltage",         "elmVoltageChanged",             "ELM_VOLTAGE",               nullptr,           0};
 
     return t;
 }
@@ -284,6 +314,8 @@ std::optional<DecodedPid> ELM327Protocol::decodePid(int mode, int pid,
         return std::nullopt;
 
     const PidEntry &entry = it.value();
+    if (!entry.decoder)
+        return std::nullopt;  // kElmVoltageKey: text reply, see parseElmVoltage()
     if (dataBytes.size() < entry.expectedBytes) {
         qCWarning(lcElm327).nospace() << "short response for " << entry.signalName << " (mode " << Qt::hex << mode
                                       << " pid " << pid << Qt::dec << "): " << dataBytes.size() << " of "
@@ -319,6 +351,28 @@ QSet<int> ELM327Protocol::parseSupportedPids(const QVector<uint8_t> &dataBytes)
             supported.insert(i + 1);
     }
     return supported;
+}
+
+QByteArray ELM327Protocol::elmVoltageRequest()
+{
+    return QByteArrayLiteral("ATRV\r");
+}
+
+std::optional<double> ELM327Protocol::parseElmVoltage(const QString &raw)
+{
+    // python-obd's elm_voltage(): lower-case, strip the 'v', float().
+    static const QRegularExpression voltRe(
+        QStringLiteral("^\\s*(\\d+(?:\\.\\d+)?)\\s*[vV]?\\s*$"));
+    const auto m = voltRe.match(raw);
+    if (!m.hasMatch()) {
+        qCDebug(lcElm327) << "unparseable ATRV reply:" << raw.trimmed().left(200);
+        return std::nullopt;
+    }
+    bool ok = false;
+    const double volts = m.captured(1).toDouble(&ok);
+    if (!ok)
+        return std::nullopt;
+    return volts;
 }
 
 QChar ELM327Protocol::dtcPrefix(int code)
@@ -391,6 +445,19 @@ QList<PidKey> ELM327Protocol::defaultPids()
         {1, 0x0A},  // Fuel Pressure
         {1, 0x5C},  // Oil Temp
     };
+}
+
+QStringList ELM327Protocol::supportedCommandNames(const QSet<int> &supportedPids)
+{
+    QStringList names;
+    const auto &table = pidTable();
+    for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
+        const PidKey &key = it.key();
+        if (key == kElmVoltageKey || (key.first == 1 && supportedPids.contains(key.second)))
+            names.append(it.value().commandName);
+    }
+    names.sort();
+    return names;
 }
 
 QStringList ELM327Protocol::allParameterNames()

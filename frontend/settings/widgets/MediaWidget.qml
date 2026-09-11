@@ -81,18 +81,8 @@ Item {
             }
 
             WidgetChip {
-                text: "Album Art"
-                onClicked: widgetRoot.navigateToSubSection("Album Art")
-            }
-
-            WidgetChip {
-                text: "Background"
-                onClicked: widgetRoot.navigateToSubSection("Background")
-            }
-
-            WidgetChip {
-                text: "Effects"
-                onClicked: widgetRoot.navigateToSubSection("Effects")
+                text: "Now Playing"
+                onClicked: widgetRoot.navigateToSubSection("Now Playing")
             }
 
             WidgetChip {

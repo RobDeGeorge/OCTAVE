@@ -264,10 +264,10 @@ DownloadManager
 
           <div class="info-box info">
             <div class="info-box-title">Pagination</div>
-            <code>ytmusicapi</code> has no offset parameter, so everything arrives in one batch. <code>search_more()</code>
-            (and the C++ alias <code>next_search_page()</code>) only emit <code>statusMessage("All results shown")</code>.
-            <span class="file-path">DownloadPage.qml</span> shows its "load more" row when the result count is a non-zero
-            multiple of 20, i.e. after a full Python page; the C++ limit of 25 never satisfies that test.
+            <code>ytmusicapi</code> has no offset parameter, so everything arrives in one batch and search is single-page on
+            both backends. The <code>search_more()</code> slot (and the C++ alias <code>next_search_page()</code>) still exists
+            and only emits <code>statusMessage("All results shown")</code>, but <span class="file-path">DownloadPage.qml</span> no
+            longer has a "Load More Results" footer or a <code>hasMoreResults</code> property, so nothing calls it.
           </div>
         </section>
 
@@ -456,15 +456,18 @@ C++ desktop                       C++ Android
           <ul>
             <li><strong>C++</strong> checks <code>_getYoutubeCookiesPath()</code> for every download and appends
               <code>--cookies &lt;path&gt;</code>; when absent it logs where to drop the file.</li>
-            <li><strong>Python</strong> checks once, in <code>_ensure_music_dl()</code>, and passes <code>cookie_file</code>
-              (yt-dlp's <code>cookiefile</code>). A file added later is picked up after <code>reset_engine()</code> or a
-              restart.</li>
+            <li><strong>Python</strong> passes <code>cookie_file</code> (yt-dlp's <code>cookiefile</code>) when
+              <code>_ensure_music_dl()</code> builds the engine, and <code>_refresh_cookies_file()</code> re-checks the path
+              before every <code>download_song()</code> / <code>download_from_url()</code>, pushing it into the live
+              downloader's settings and audio providers -- a file added mid-session is used by the next download, no
+              <code>reset_engine()</code> or restart needed. It logs "Using YouTube cookies from ..." or where to drop the
+              file, like C++.</li>
           </ul>
           <p>
             The README's troubleshooting entry (added in the same commit) positions VPNs as the usual cause -- YouTube
             blocklists most shared VPN exit IPs -- with cookies as the fallback for users who cannot leave the VPN: export
-            with the "Get cookies.txt LOCALLY" browser extension while logged in to YouTube, save under the name above, restart
-            OCTAVE. There is no in-app indication that the file was found; an in-app picker is parked in
+            with the "Get cookies.txt LOCALLY" browser extension while logged in to YouTube and save under the name above; the
+            next download picks it up. There is no in-app indication that the file was found; an in-app picker is parked in
             <span class="file-path">TODO/yt-cookies-file-picker.md</span>.
           </p>
         </section>
@@ -506,8 +509,12 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             most explorers. <code>_getDownloadedFiles()</code> scans both roots so <code>is_downloaded</code> tagging sees files
             wherever they live. <code>hasStorageAccess()</code> / <code>requestStorageAccess()</code> are exposed to QML
             (the latter opens Android's per-app "All files access" settings screen, since this permission has no runtime
-            dialog); no QML currently calls them, so the toggle is made manually in Android Settings. Commit
-            <code>d751c9d</code> introduced this so downloads "land in the user-picked folder".
+            dialog). <span class="file-path">DownloadPage.qml</span> routes every download (result row and the error-popup
+            retry) through its <code>startDownload(songJson)</code> function: on Android, when
+            <code>hasStorageAccess()</code> is false it calls <code>requestStorageAccess()</code>, sets the status text to
+            "Grant \"All files access\" in the settings screen, then tap download again" and returns; otherwise (and always on
+            Python and desktop C++, where access is unconditional) it calls <code>download_song()</code>. Commit
+            <code>d751c9d</code> introduced the storage split so downloads "land in the user-picked folder".
           </p>
         </section>
 
@@ -597,7 +604,7 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
               <tr><td><code>downloadProgress</code></td><td><code>str, float</code></td><td>song_id, progress (0.0 to 1.0)</td></tr>
               <tr><td><code>downloadComplete</code></td><td><code>str, str</code></td><td>song_id, file path -- download finished (also triggers a library rescan)</td></tr>
               <tr><td><code>downloadError</code></td><td><code>str, str, str</code></td><td>song_id, display name, error message (also used for cancellation in C++)</td></tr>
-              <tr><td><code>downloadQueueChanged</code></td><td>--</td><td>Queue state changed (emitted by C++; declared but never emitted by Python)</td></tr>
+              <tr><td><code>downloadQueueChanged</code></td><td>--</td><td>Queue state changed. C++ emits it on every queue mutation; Python has no explicit queue (the executor serialises work) and emits it when a download or URL download starts and again when it completes or fails, so QML bindings refresh identically</td></tr>
               <tr><td><code>downloadStatusChanged</code></td><td><code>str, str, str</code></td><td>song_id, field, value_json -- targeted patch</td></tr>
               <tr><td><code>statusMessage</code></td><td><code>str</code></td><td>General status text for the page footer</td></tr>
               <tr><td><code>isSearchingChanged</code></td><td><code>bool</code></td><td>Search state property changed</td></tr>
@@ -630,7 +637,7 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             </thead>
             <tbody>
               <tr><td><code>search(query)</code></td><td><code>str</code></td><td>both</td><td>Search by text (Python: or Spotify URL)</td></tr>
-              <tr><td><code>search_more()</code></td><td>--</td><td>both</td><td>Emits "All results shown"</td></tr>
+              <tr><td><code>search_more()</code></td><td>--</td><td>both</td><td>Emits "All results shown" (no QML caller since the "Load More Results" footer was removed)</td></tr>
               <tr><td><code>next_search_page()</code></td><td>--</td><td>C++</td><td>Same as <code>search_more()</code></td></tr>
               <tr><td><code>download_song(song_json)</code></td><td><code>str</code></td><td>both</td><td>Download a single song from its result JSON</td></tr>
               <tr><td><code>download(song_id, name)</code></td><td><code>str, str</code></td><td>C++</td><td>Convenience wrapper that builds minimal JSON and calls <code>download_song()</code></td></tr>
@@ -694,8 +701,8 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
               <tr><td>Threading</td><td>Async <code>QProcess</code> signals (a <code>QThread</code> per JNI call on Android)</td><td>Two-worker executor + 200&nbsp;ms poll timer</td></tr>
               <tr><td>Progress source</td><td>yt-dlp stdout percentage (download phase only); AAR progress poll on Android</td><td>Tracker covering download, conversion and tagging</td></tr>
               <tr><td>Tagging</td><td>TagLib + QNetworkAccessManager cover; mutagen script on Android</td><td>mutagen inside music_dl</td></tr>
-              <tr><td>Queue control</td><td>cancel / pause / resume / clear / queue snapshot</td><td>None (futures run to completion)</td></tr>
-              <tr><td>Cookies file</td><td>Checked per download</td><td>Checked once at engine init</td></tr>
+              <tr><td>Queue control</td><td>cancel / pause / resume / clear / queue snapshot</td><td>None (futures run to completion); <code>downloadQueueChanged</code> still fires on start and completion</td></tr>
+              <tr><td>Cookies file</td><td>Checked per download</td><td>Checked at engine init and re-checked per download (<code>_refresh_cookies_file()</code>)</td></tr>
               <tr><td>Library extensions</td><td>Includes <code>.mp4</code></td><td>Does not</td></tr>
               <tr><td>Android storage handling</td><td>All-files-access aware, scoped fallback</td><td>n/a (desktop only)</td></tr>
               <tr><td>App-store stub</td><td><code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td><td>n/a</td></tr>
@@ -727,7 +734,7 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
           <h3>Lazy engine initialisation</h3>
           <p><code>MusicDL</code> is built on the first search or download, not at startup, because it may initialise a Spotify
             client and reads settings that can still change; <code>reset_engine()</code> exists so a credential change can
-            force a rebuild without restarting.</p>
+            force a rebuild without restarting (the cookies file alone no longer needs it -- it is re-read per download).</p>
           <h3>A shared filename contract</h3>
           <p>The Python engine's <code>{artists} - {title}.{output-ext}</code> template and the C++
             <code>%(artist,uploader)s - %(title)s.%(ext)s</code> template are kept equivalent on purpose (comment in

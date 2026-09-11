@@ -142,12 +142,13 @@ keyring = lazy_module(<span class="str">"keyring"</span>)</code></pre>
           it on either backend.
         </p>
 
-        <div class="info-box warning">
-          <div class="info-box-title">Credentials are read at startup only</div>
-          Neither backend subscribes to <code>spotifyCredentialsChanged</code>. <code>has_credentials()</code> answers from
-          the copy captured at wiring time, so credentials typed into the settings page during a session are not seen by
-          <code>authenticate()</code> until OCTAVE is restarted (the Connect button reports "Spotify credentials not configured"
-          until then).
+        <div class="info-box info">
+          <div class="info-box-title">Credentials take effect immediately</div>
+          Both managers subscribe to <code>settingsManager.spotifyCredentialsChanged</code> when they are wired
+          (<code>setSettingsManager()</code> connects it to <code>loadCredentials()</code>; Python's
+          <code>connect_settings_manager()</code> connects it to <code>_load_credentials()</code>), so credentials typed into
+          the settings page during a session are seen by <code>has_credentials()</code> and <code>authenticate()</code>
+          straight away -- Connect works without a restart.
         </div>
 
         <div class="info-box warning">
@@ -513,7 +514,7 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
           </thead>
           <tbody>
             <tr><td><code>refresh_devices()</code></td><td>Async refresh; emits <code>devicesChanged(list)</code>, <code>activeDeviceChanged(name)</code> for the device flagged <code>is_active</code>, and a <code>statusProgress</code> line (<code>[FOUND] N device(s) available</code> or <code>[WARN] No devices found - open Spotify on a device</code>). Called after connect, when the Media settings section opens, and by the "Refresh devices" button.</td></tr>
-            <tr><td><code>set_active_device(device_id)</code></td><td>Transfers playback without starting it: <code>transfer_playback(device_id, force_play=False)</code> / <code>PUT /v1/me/player {"device_ids":[id],"play":false}</code>, then updates the cached active ID and emits <code>activeDeviceChanged</code>. In Python this spotipy call runs synchronously on the calling (GUI) thread -- it is the one API call that bypasses the executor.</td></tr>
+            <tr><td><code>set_active_device(device_id)</code></td><td>Transfers playback without starting it: <code>transfer_playback(device_id, force_play=False)</code> / <code>PUT /v1/me/player {"device_ids":[id],"play":false}</code>, then updates the cached active ID and emits <code>activeDeviceChanged(name)</code>. Asynchronous on both backends: Python submits the spotipy call to the executor and re-enters the GUI thread through the internal <code>_deviceTransferred</code> signal (<code>_handle_device_transferred</code>); a failure emits <code>errorOccurred("Device transfer failed: ...")</code>.</td></tr>
             <tr><td><code>get_devices()</code></td><td>Returns the cached list; MediaSettingsPage renders it as tappable rows.</td></tr>
           </tbody>
         </table>
@@ -538,8 +539,8 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
           </thead>
           <tbody>
             <tr><td><code>get_playlists()</code> / <code>get_spotify_playlist_names()</code></td><td>Cached list / just the names (MediaPlayer's playlist dropdown)</td></tr>
-            <tr><td><code>get_playlist_tracks(playlist_id)</code></td><td>Python only. Fetches a playlist's tracks through <code>GET /playlists/{id}/items</code> (the February 2026 Web API shape: 50 per page, paged with <code>sp.next()</code> up to 1000 entries, track under <code>item</code> with a <code>track</code> fallback, non-track entries skipped; only playlists the user owns or collaborates on are readable). Returns dicts with id, name, uri, artist, album, duration_ms, image. Runs synchronously on the calling thread.</td></tr>
-            <tr><td><code>select_spotify_playlist(playlist_id)</code></td><td>Looks up the name in the cached playlists, loads the tracks, sets the current playlist, emits <code>spotifyTracksChanged(list)</code> and <code>currentSpotifyPlaylistChanged(name)</code>. C++ performs the same paged fetch asynchronously via <code>fetchPlaylistItemsPage()</code>, which chains one <code>apiGet</code> per page (<code>kPageSize = 50</code>, <code>kMaxTracks = 1000</code>) and emits the signals only after the last page.</td></tr>
+            <tr><td><code>get_playlist_tracks(playlist_id)</code></td><td>Python only. Fetches a playlist's tracks through <code>GET /playlists/{id}/items</code> (the February 2026 Web API shape: 50 per page, paged with <code>sp.next()</code> up to 1000 entries, track under <code>item</code> with a <code>track</code> fallback, non-track entries skipped; only playlists the user owns or collaborates on are readable). Returns dicts with id, name, uri, artist, album, duration_ms, image. Runs synchronously on the calling thread (the shared page loop is <code>_fetch_playlist_tracks()</code>; QML never calls this slot -- it uses <code>select_spotify_playlist()</code>).</td></tr>
+            <tr><td><code>select_spotify_playlist(playlist_id)</code></td><td>Looks up the name in the cached playlists, loads the tracks, sets the current playlist, emits <code>spotifyTracksChanged(list)</code> and <code>currentSpotifyPlaylistChanged(name)</code>. Asynchronous on both backends: Python runs <code>_fetch_playlist_tracks()</code> (up to 20 sequential API pages) on the executor and applies the result on the GUI thread via the internal <code>_playlistTracksReady</code> signal (<code>_handle_playlist_tracks_result</code>); C++ performs the same paged fetch via <code>fetchPlaylistItemsPage()</code>, which chains one <code>apiGet</code> per page (<code>kPageSize = 50</code>, <code>kMaxTracks = 1000</code>). Both emit the signals only after the last page.</td></tr>
             <tr><td><code>get_spotify_tracks()</code>, <code>get_spotify_track_image/_artist/_album/_uri/_duration_formatted(name)</code></td><td>Per-track lookups by <em>track name</em> for the playlist view (duration formatted <code>M:SS</code>)</td></tr>
             <tr><td><code>get_spotify_playlist_id(name)</code>, <code>get_current_spotify_playlist_id/_name()</code>, <code>has_spotify_playlist_loaded()</code></td><td>Playlist identity helpers used by MediaPlayer to restore the selected playlist when the view reopens</td></tr>
           </tbody>
@@ -595,9 +596,10 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
           receives the raw 0-100 percent, not the quadratic linear value. In C++ (<span class="file-path">src/main.cpp</span>)
           the forward is debounced through a 300&nbsp;ms single-shot <code>QTimer</code> -- the comment says "to avoid 429
           rate limiting on desktop" -- and only fires when <code>is_connected()</code>. The Python
-          <code>VolumeController</code> (<span class="file-path">backend/volume_utils.py</span>) forwards every change
-          immediately when connected; each call is an executor job, so the UI never blocks, but a fast slider drag issues
-          one API request per tick.
+          <code>VolumeController</code> (<span class="file-path">backend/volume_utils.py</span>) does the same: it stores
+          the pending percent and (re)starts a 300&nbsp;ms single-shot <code>QTimer</code> whose
+          <code>_flush_spotify_volume()</code> calls <code>set_volume()</code> only when connected, so a fast slider drag or
+          knob spin becomes one trailing API request instead of one per tick.
         </p>
 
         <!-- Disconnect and Cleanup -->
@@ -759,10 +761,10 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
             <tr><td>Token refresh</td><td>Manual: 60&nbsp;s pre-expiry check before each call; the triggering call is dropped</td><td>spotipy refreshes inside <code>validate_token()</code>; the call proceeds</td></tr>
             <tr><td>Scopes</td><td>Includes <code>user-follow-read</code></td><td>Includes <code>playlist-read-collaborative</code></td></tr>
             <tr><td>OAuth callback response</td><td>Always 200 "Success!"</td><td>200 / 400 / 403 / 500</td></tr>
-            <tr><td>Playlist tracks</td><td>Async page chain in <code>fetchPlaylistItemsPage()</code></td><td>Synchronous <code>get_playlist_tracks()</code> on the GUI thread</td></tr>
-            <tr><td>Device transfer</td><td>Async <code>apiPut</code></td><td>Synchronous spotipy call on the GUI thread</td></tr>
+            <tr><td>Playlist tracks</td><td>Async page chain in <code>fetchPlaylistItemsPage()</code></td><td>Async: <code>_fetch_playlist_tracks()</code> on the executor, result relayed by <code>_playlistTracksReady</code> (the <code>get_playlist_tracks()</code> slot itself stays synchronous)</td></tr>
+            <tr><td>Device transfer</td><td>Async <code>apiPut</code></td><td>Async: executor job relayed by <code>_deviceTransferred</code></td></tr>
             <tr><td>Album-art colour extraction</td><td>Main thread, image in memory</td><td>Executor thread, temp file under <span class="file-path">backend/temp/</span></td></tr>
-            <tr><td>Volume forwarding</td><td>300&nbsp;ms debounce in <code>main.cpp</code></td><td>Immediate per change</td></tr>
+            <tr><td>Volume forwarding</td><td>300&nbsp;ms trailing debounce in <code>main.cpp</code></td><td>300&nbsp;ms trailing debounce in <code>VolumeController</code> (<span class="file-path">backend/volume_utils.py</span>)</td></tr>
             <tr><td>Extra slots</td><td><code>logout()</code></td><td><code>set_credentials()</code>, <code>get_playlist_tracks()</code></td></tr>
             <tr><td>Mobile</td><td>Stub class under <code>Q_OS_MOBILE</code></td><td>Not built for mobile</td></tr>
           </tbody>
@@ -809,10 +811,10 @@ self._interpolation_timer.timeout.connect(self._interpolate_position)</code></pr
           <code>item</code> key (falling back to <code>track</code>) after existing Development Mode apps were migrated on
           9&nbsp;March 2026 and playlist loading stopped working. The player and <code>/me/playlists</code> endpoints OCTAVE
           relies on were unchanged, so nothing else moved.</p>
-        <h3>Debounced volume (C++)</h3>
-        <p>The rotary encoder and slider can emit dozens of values per second. <code>main.cpp</code> coalesces them into one
-          Spotify request 300&nbsp;ms after the last change -- the comment cites HTTP 429 rate limiting -- while local media
-          volume is applied instantly.</p>
+        <h3>Debounced volume</h3>
+        <p>The rotary encoder and slider can emit dozens of values per second. <code>main.cpp</code> and the Python
+          <code>VolumeController</code> both coalesce them into one Spotify request 300&nbsp;ms after the last change -- the
+          comments cite HTTP 429 rate limiting -- while local media volume is applied instantly.</p>
 
         <!-- Related Pages -->
         <div class="related-pages" id="related">

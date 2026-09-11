@@ -118,7 +118,7 @@
             </tr>
             <tr>
               <td><strong>Backend</strong> (developer peer)</td>
-              <td>Python 3.10&ndash;3.11 / PySide6</td>
+              <td>Python 3.10+ / PySide6 6.8+</td>
               <td><code>backend/</code>, <code>main.py</code></td>
               <td>API-equivalent desktop backend (Linux / Windows / macOS / Raspberry&nbsp;Pi) for prototyping and hardware hacking with a REPL. Never packaged.</td>
             </tr>
@@ -223,7 +223,7 @@
             <tr><td>SpotifyManager</td><td><code>spotifymanager.{h,cpp}</code></td><td><code>spotify_manager.py</code></td><td><code>spotifyManager</code></td><td>Spotify Web API + OAuth2; stub on mobile</td></tr>
             <tr><td>OBDManager (+ ELM327)</td><td><code>obdmanager.{h,cpp}</code>, <code>elm327protocol.{h,cpp}</code></td><td><code>obd_manager.py</code> (python-obd)</td><td><code>obdManager</code></td><td>Vehicle diagnostics, 93 PIDs, DTCs; Android BLE via a JNI bridge</td></tr>
             <tr><td>ESP32VolumeManager</td><td><code>esp32volumemanager.{h,cpp}</code></td><td><code>esp32_volume_manager.py</code></td><td><code>esp32VolumeManager</code></td><td>Wireless rotary knob over USB serial (ESP-NOW pair); stub on mobile</td></tr>
-            <tr><td>BerryIMUManager</td><td><code>berryimumanager.{h,cpp}</code></td><td><code>berryimu_manager.py</code></td><td><code>berryIMU</code></td><td>9DOF Madgwick fusion over I²C; on Android re-implemented with QtSensors (accelerometer, compass, pressure)</td></tr>
+            <tr><td>BerryIMUManager</td><td><code>berryimumanager.{h,cpp}</code></td><td><code>berryimu_manager.py</code></td><td><code>berryIMU</code></td><td>Madgwick fusion (accel + gyro, 6DOF; magnetometer for heading only) over I²C; on Android re-implemented with QtSensors (accelerometer, compass, pressure)</td></tr>
             <tr><td>GestureManager</td><td><code>gesturemanager.{h,cpp}</code></td><td><code>gesture_manager.py</code></td><td><code>gestureSensor</code></td><td>PAJ7620U2 gesture sensor over I²C; stub on mobile</td></tr>
             <tr><td>AndroidAutoManager</td><td><code>androidautomanager.{h,cpp}</code></td><td><code>android_auto/manager.py</code></td><td><code>androidAutoManager</code></td><td>Google DHU launch + window capture; stub on mobile</td></tr>
             <tr><td>PhoneMirrorManager</td><td><code>phonemirrormanager.{h,cpp}</code> + <code>src/phone_mirror/scrcpyclient.{h,cpp}</code></td><td><code>phone_mirror/manager.py</code> + <code>scrcpy_client.py</code></td><td><code>phoneMirrorManager</code></td><td>Built-in scrcpy-protocol client; stub on mobile</td></tr>
@@ -346,11 +346,11 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           <li><strong>Phase 3</strong> &mdash; <code>SpotifyManager</code> (no-op stub class on mobile).</li>
           <li><strong>Phase 4</strong> &mdash; <code>OBDManager</code>, <code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>.</li>
           <li><strong>Phase 5</strong> &mdash; <code>AndroidAutoManager</code> + the <code>dhuframe</code> image provider, <code>PhoneMirrorManager</code> with its settings wiring (audio enable/gain, ducking &rarr; <code>MediaManager::setDucking</code>, phone-screen-off), <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;</code>, <code>DownloadManager</code> (+ <code>downloadComplete</code> &rarr; <code>scan_library(false)</code>).</li>
-          <li><strong>Volume fan-out</strong> &mdash; <code>VolumeController::volumeApplied</code> &rarr; <code>mediaManager.setVolume(linear)</code> and a 300&nbsp;ms single-shot debounce before <code>spotifyManager.set_volume(percent)</code> (avoids HTTP 429 from the Web API). Then <code>applyVolume(settingsManager.currentVolume())</code> restores the saved volume.</li>
+          <li><strong>Volume fan-out</strong> &mdash; <code>VolumeController::volumeApplied</code> &rarr; <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop only; the ESP32 manager rate-limits itself) and a 300&nbsp;ms single-shot debounce before <code>spotifyManager.set_volume(percent)</code> (avoids HTTP 429 from the Web API) &mdash; the same four outputs as <code>backend/volume_utils.py</code>. Then <code>applyVolume(settingsManager.currentVolume())</code> restores the saved volume.</li>
           <li><strong>QML import path</strong> &mdash; <code>assets:/frontend</code> on Android; on desktop <code>frontend/</code> next to the binary, or one directory up (so <code>build/octave</code> finds the checkout's <code>frontend/</code>).</li>
           <li><strong>Phase 6</strong> &mdash; <code>DashboardManager</code> with <code>setPresetsDir(frontend/dashboards/presets)</code> and <code>setUserDir(&lt;appdata&gt;/dashboards)</code>.</li>
           <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created. Then <code>setQuitOnLastWindowClosed(true)</code>.</li>
-          <li><strong>Hardware wiring</strong> &mdash; gesture actions &rarr; media / volume; ESP32 <code>volumeChangeRequested(float)</code> through a fractional accumulator; <code>muteToggleRequested</code>.</li>
+          <li><strong>Hardware wiring</strong> &mdash; gesture actions &rarr; media / volume; ESP32 <code>volumeChangeRequested(float)</code> through a fractional accumulator; <code>muteToggleRequested</code>; on desktop the ESP32 LED colour sync (<code>albumArtColorsChanged</code> in theme mode, <code>esp32LedStaticColorChanged</code> in static mode, <code>esp32LedColorModeChanged</code> re-sends the current colour, cyan <code>(0, 255, 255)</code> when a colour is missing or unparsable) and, 500&nbsp;ms after the knob reports "Connected", a push of the current volume, mute state and colour &mdash; mirroring <code>main.py</code>.</li>
           <li><strong>Signals</strong> &mdash; on Unix desktop, <code>SIGTERM</code>/<code>SIGINT</code> are turned into <code>QCoreApplication::quit()</code> with the self-pipe trick (<code>socketpair</code> + <code>QSocketNotifier</code>) so the <code>aboutToQuit</code> cleanup still runs under systemd or Ctrl-C.</li>
           <li><strong><code>app.exec()</code></strong>.</li>
         </ol>
@@ -361,7 +361,7 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           <li><strong>Arguments</strong> &mdash; <code>argparse</code> with <code>--debug</code> and <code>--profile</code> (<code>parse_known_args</code>, so Qt flags pass through).</li>
           <li><strong>Logging first</strong> &mdash; <code>setup_logging(debug=...)</code> runs before any backend import; it also installs the crash handlers and gives python-obd's logger the same handlers.</li>
           <li><strong>Imports</strong> &mdash; all managers are imported unconditionally; the Python backend is desktop-only, so there is no platform branching here. Heavy optional libraries are deferred via <code>backend/lazy_import.py</code> (see <a href="#design-decisions">why</a>).</li>
-          <li><strong><code>QApplication</code></strong> (from <code>QtWidgets</code>) &mdash; auto-scale is <code>availableSize().height() / 720</code>, clamped 0.4&ndash;3.0 (the C++ side uses the shorter edge; on a landscape desktop the two agree).</li>
+          <li><strong><code>QApplication</code></strong> (from <code>QtWidgets</code>) &mdash; auto-scale is <code>min(width, height) / 720</code> of <code>availableSize()</code>, clamped 0.4&ndash;3.0, the same shorter-edge rule as <code>src/main.cpp</code> (it used to divide the height alone).</li>
           <li><strong>Engine</strong> &mdash; <code>QQmlApplicationEngine</code>, <code>screenAutoScale</code>, <code>qmlRegisterType(EmbeddedDhuItem, ...)</code>, <code>frontend/</code> import path, <code>isAndroid = False</code>.</li>
           <li><strong>Managers in dependency order</strong> &mdash; <code>SettingsManager</code>; <code>UiWatchdog.start()</code>; <code>DiagnosticsManager</code>; <code>Clock</code>; <code>MediaManager</code>; <code>AudioAnalyzer</code>; (<code>obdManager</code> is registered later through <code>install_obd_manager()</code>); <code>SpotifyManager</code>; <code>AndroidAutoManager</code> + <code>engine.addImageProvider("dhuframe", ...)</code>; <code>PhoneMirrorManager</code> + settings wiring; <code>ESP32VolumeManager</code>; <code>VolumeController</code> (constructed with references to settings, media, Spotify, phone mirror and ESP32) and <code>applyVolume(currentVolume)</code>; <code>BerryIMUManager</code>; <code>GestureManager</code>; <code>NetworkManager</code>; <code>DownloadManager</code> (+ rescan on <code>downloadComplete</code>); <code>DashboardManager</code>.</li>
           <li><strong>Signal wiring</strong> &mdash; gesture actions, ESP32 accumulator + mute, ESP32 LED colour sync (album-art accent or static colour), initial ESP32 state 500&nbsp;ms after it connects.</li>
@@ -496,20 +496,17 @@ future = self._executor.submit(func, *args)</code></pre>
           </thead>
           <tbody>
             <tr><td>Local media</td><td><code>media_manager.setVolume(linear)</code></td><td><code>mediaManager.setVolume(linear)</code></td></tr>
-            <tr><td>Spotify</td><td><code>spotify_manager.set_volume(percent)</code> when connected (the Web API applies its own scale)</td><td>300&nbsp;ms debounce, then <code>set_volume(percent)</code> when connected</td></tr>
-            <tr><td>Phone mirror audio</td><td><code>phone_mirror_manager.setVolume(linear)</code></td><td><em>not connected</em> &mdash; see note</td></tr>
-            <tr><td>ESP32 LED ring</td><td><code>esp32_manager.send_volume_update(percent)</code></td><td><em>not connected</em>; the knob receives the current volume on its 2&nbsp;s keepalive from <code>settingsManager.currentVolume</code></td></tr>
+            <tr><td>Spotify</td><td>300&nbsp;ms trailing debounce (<code>QTimer</code> on the controller), then <code>spotify_manager.set_volume(percent)</code> when connected (the Web API applies its own scale)</td><td>300&nbsp;ms debounce in <code>main.cpp</code>, then <code>set_volume(percent)</code> when connected</td></tr>
+            <tr><td>Phone mirror audio</td><td><code>phone_mirror_manager.setVolume(linear)</code></td><td><code>phoneMirrorManager.setVolume(linear)</code></td></tr>
+            <tr><td>ESP32 LED ring</td><td><code>esp32_manager.send_volume_update(percent)</code></td><td><code>esp32VolumeManager.send_volume_update(percent)</code> (compiled out under <code>Q_OS_MOBILE</code>)</td></tr>
           </tbody>
         </table>
 
-        <div class="info-box warning">
-          <div class="info-box-title">Known parity gap (C++)</div>
-          <code>src/main.cpp</code> connects <code>volumeApplied</code> only to the media manager and the Spotify
-          debounce. <code>PhoneMirrorManager::setVolume()</code> is never called from the C++ main, so mirrored
-          phone audio stays at its default gain (<code>m_volume = 1.0f</code>) instead of following the slider, and
-          the ESP32 LED ring lags the slider by up to one keepalive. The Python controller applies all four outputs
-          immediately.
-        </div>
+        <p>
+          Both backends therefore drive the same four outputs from one call, and both debounce the Spotify leg so a
+          slider drag does not fire a Web API call per pixel (HTTP 429). The ESP32 manager adds its own 50&nbsp;ms
+          debounce on top, so the ring never sees more than 20 updates a second.
+        </p>
 
         <p>Every source of a volume change routes through the same entry point:</p>
 
@@ -623,7 +620,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           is authoritative (<code>loadSettings()</code> returns <code>m_settings</code> / <code>self._settings</code>
           without touching disk). Writes are <strong>coalesced</strong>: every setter calls <code>saveSettings()</code>,
           which updates memory, marks a pending flag and (re)starts a 500&nbsp;ms single-shot timer; when it fires,
-          <code>flushPendingSave()</code> / <code>flush_pending_save()</code> writes the whole object atomically
+          <code>flushPendingSave()</code> (the Python name too; <code>flush_pending_save()</code> remains as an alias) writes the whole object atomically
           (temp file + rename, with a file lock). OBD parameter selections have their own 800&nbsp;ms debounce. Both
           mains call the flush explicitly in their shutdown handler so nothing is lost on quit. See
           <a href="settings-manager.html">Settings Manager</a> for the registry, validation and every key.
@@ -712,7 +709,9 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           <code>OctaveLog::install(debug)</code> runs before <code>QGuiApplication</code> and installs a
           <code>qInstallMessageHandler</code> that routes every <code>qDebug</code>/<code>qCDebug</code>/<code>qInfo</code>/
           <code>qWarning</code>/<code>qCritical</code>/<code>qFatal</code> <em>and every QML <code>console.*</code> call</em>
-          into the same <code>logs/</code> directory while still echoing to stderr. Managers use
+          into the same <code>logs/</code> directory while still echoing to stderr on desktop (on Android and iOS,
+          where stderr goes nowhere, the line is handed to Qt's default handler instead so it reaches logcat /
+          <code>os_log</code>). Managers use
           <code>Q_LOGGING_CATEGORY</code> names that mirror the Python loggers (<code>octave.media</code>,
           <code>octave.spotify</code>, <code>octave.elm327</code>, <code>octave.dashboards</code>,
           <code>octave.ui_watchdog</code>, &hellip;). Without <code>--debug</code> the filter rule
@@ -731,7 +730,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         <h3>Crash handlers</h3>
         <ul>
           <li><strong>Python</strong> (<code>_install_crash_handlers</code>): <code>sys.excepthook</code> and <code>threading.excepthook</code> log unhandled exceptions with tracebacks to <code>octave-error.log</code>; <code>faulthandler</code> is enabled on a descriptor kept open for the process lifetime so a native fault (SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL) dumps every thread's Python stack there.</li>
-          <li><strong>C++</strong>: <code>SIGSEGV</code>/<code>SIGABRT</code>/<code>SIGFPE</code>/<code>SIGILL</code>/<code>SIGBUS</code> handlers write a <code>==== FATAL SIGSEGV ====</code> block and a <code>backtrace_symbols_fd</code> backtrace to <code>octave-cpp-error.log</code> over a raw descriptor opened at install time (no Qt in the signal path), then restore the default action and re-raise so the OS still produces its core / tombstone. Windows uses <code>SetUnhandledExceptionFilter</code> + <code>CaptureStackBackTrace</code>. Symbolise with <code>addr2line -e octave</code> against the same build. <code>qFatal</code> passes through the message handler first, so assertion text is on disk before the abort.</li>
+          <li><strong>C++</strong>: <code>SIGSEGV</code>/<code>SIGABRT</code>/<code>SIGFPE</code>/<code>SIGILL</code>/<code>SIGBUS</code> handlers write a <code>==== FATAL SIGSEGV ====</code> block and a <code>backtrace_symbols_fd</code> backtrace to <code>octave-cpp-error.log</code> over a raw descriptor opened at install time (no Qt in the signal path &mdash; not even <code>OctaveLog::flush()</code>, which the log files do not need because every line is flushed as it is written), then restore the default action and re-raise so the OS still produces its core / tombstone. Windows uses <code>SetUnhandledExceptionFilter</code> + <code>CaptureStackBackTrace</code>. Symbolise with <code>addr2line -e octave</code> against the same build. <code>qFatal</code> passes through the message handler first, which calls <code>OctaveLog::flush()</code> after a fatal message, so assertion text is on disk before the abort; the <code>aboutToQuit</code> handler calls the same flush last on a normal exit.</li>
         </ul>
 
         <h3>Getting logs out of the vehicle &mdash; <code>DiagnosticsManager</code></h3>
@@ -765,9 +764,10 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           <code>backend/perf_monitor.py</code>, <code>backend/perf_patches.py</code> and
           <code>backend/command_server.py</code> are listed in <code>.gitignore</code>, as is the whole
           <code>dev/</code> tree (<code>main_dev.py</code>, the mock OBD manager, MCP server, screenshot tooling).
-          They exist on the maintainers' machines but not in a fresh clone; <code>main.py</code> tolerates a missing
-          <code>perf_patches</code> with a warning but imports <code>perf_monitor</code> and <code>command_server</code>
-          unconditionally when <code>--profile</code> is passed. The C++ backend has no equivalent of any of them.
+          They exist on the maintainers' machines but not in a fresh clone; <code>setup_perf_profiling()</code> guards
+          all three imports, so <code>--profile</code> on a checkout without them logs a warning and skips the
+          performance monitor / command server instead of raising <code>ImportError</code>. The C++ backend has no
+          equivalent of any of them.
           See <a href="development.html">Development</a> and <a href="utilities.html">Utilities</a>.
         </div>
 
@@ -775,10 +775,9 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         <h2 id="signal-wiring">Signal Wiring Graph</h2>
         <p>
           Cross-manager signals are wired in the two mains. This is the central nervous system that connects
-          hardware inputs to software outputs. Python is shown; <code>src/main.cpp</code> wires the gesture, knob,
-          phone-mirror and download edges identically but, as of this writing, has <em>no</em> ESP32 LED colour
-          sync and no initial-state push on connect (<code>send_theme_color()</code> has no caller in the C++ tree),
-          in addition to the two missing volume outputs noted in the <a href="#volume-system">volume section</a>:
+          hardware inputs to software outputs. Python is shown; <code>src/main.cpp</code> wires every edge below the
+          same way (the ESP32 LED sync block and the volume fan-out to the phone mirror and knob are compiled out
+          under <code>Q_OS_MOBILE</code>, where those managers are stubs):
         </p>
 
         <div class="diagram">
@@ -794,7 +793,7 @@ handle_gesture_action()          handle_esp32_volume_change() / handle_esp32_mut
     └── volume_down ─► volumeController              ├── phoneMirrorManager.setVolume(linear)
                                                     └── esp32VolumeManager.send_volume_update(percent)
 
-                   ESP32 LED sync (main.py)
+                   ESP32 LED sync (main.py; same connections in main.cpp)
 settingsManager.albumArtColorsChanged ──────► sync_theme_to_esp32()    (theme mode: album accent)
 settingsManager.esp32LedStaticColorChanged ─► on_static_color_changed()
 settingsManager.esp32LedColorModeChanged ───► send_current_led_color()
@@ -825,7 +824,7 @@ downloadManager.downloadComplete ───────────► mediaManag
     spotify_manager.cleanup()
     android_auto_manager.cleanup()            <span class="cmt"># DHU, adb, head unit server</span>
     phone_mirror_manager.cleanup()
-    settings_manager.flush_pending_save()     <span class="cmt"># coalesced settings write</span>
+    settings_manager.flushPendingSave()       <span class="cmt"># coalesced settings write (flush_pending_save() is a legacy alias)</span>
     esp32_volume_manager.cleanup()
     berryimu_manager.cleanup()
     gesture_manager.cleanup()
@@ -842,6 +841,7 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
     mediaManager._save_playback_state();   <span class="cmt">// before the settings flush</span>
     mediaManager.flush_metadata_store();
     settingsManager.flushPendingSave();
+    OctaveLog::flush();                    <span class="cmt">// last: everything the cleanup logged reaches disk</span>
 });</code></pre>
 
         <p>

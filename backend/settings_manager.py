@@ -1,3 +1,4 @@
+import copy
 import json
 from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
 import os
@@ -112,7 +113,7 @@ SETTINGS_REGISTRY = {
     "color_transition_ms": {
         "key": "colorTransitionMs", "label": "Theme Transition Speed", "category": "displaySettings",
         "controlType": "slider", "saveSlot": "save_color_transition_ms",
-        "params": {"from": 0, "to": 5000, "stepSize": 100}
+        "params": {"from": 0, "to": 2000, "stepSize": 50}
     },
     "obd_fast_mode": {
         "key": "obdFastMode", "label": "OBD Fast Mode", "category": "obdSettings",
@@ -267,7 +268,7 @@ class SettingsManager(QObject):
         self._default_settings = {
             "deviceName": "Default Device",
             "themeSetting": "CosmicVoyager",
-            "fontSetting": "Google Sans",
+            "fontSetting": "GoogleSans Regular",  # display name Main.qml derives from GoogleSans-Regular.ttf
             "startUpVolume": 0.1,
             "showClock": True,
             "clockFormat24Hour": True,
@@ -412,20 +413,17 @@ class SettingsManager(QObject):
             "scrcpyPhoneScreenOff": True,  # Keep the phone's own panel dark while mirroring
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
-                "deviceSettings": True,
-                "mediaSettings": True,
                 "displaySettings": True,
+                "mediaSettings": True,
                 "obdSettings": True,
-                "androidAutoSettings": True,
-                "phoneMirrorSettings": True,
-                "volumeKnobSettings": False,  # Hidden by default - enable via double-click menu
-                "gestureSensorSettings": True,
+                "accessoriesSettings": True,
+                "deviceSettings": True,
                 "about": True
             },
             # ESP32 Volume Knob settings
             "esp32VolumeEnabled": True,
-            "esp32VolumePort": "COM7",
-            "esp32VolumeStepSize": 1,  # 1% per encoder tick for fine control
+            "esp32VolumePort": "",  # empty = auto-select the ESP32-S3 on startup
+            "esp32VolumeStepSize": 1.0,  # % per encoder tick; float so 0.25/0.5/0.75 survive validation
             "esp32AutoReconnect": True,
             "esp32LedSleepEnabled": True,  # LEDs turn off when OCTAVE closes
             "esp32LedColorMode": "theme",  # "theme" (follows album art) or "static"
@@ -496,6 +494,36 @@ class SettingsManager(QObject):
             self._settings["uiScale"] = 1.0
             self.save_settings(self._settings)
 
+        # Migrate: legacy "Google Sans" → "GoogleSans Regular". Main.qml derives
+        # the display name from the bundled GoogleSans-Regular.ttf and
+        # Style.setFont() rejects unknown names, so the old value silently left
+        # the app in the system font.
+        if self._settings.get("fontSetting") == "Google Sans":
+            logger.info("Migrating fontSetting from legacy 'Google Sans' to 'GoogleSans Regular'")
+            self._settings["fontSetting"] = "GoogleSans Regular"
+            self.save_settings(self._settings)
+
+        self._load_members_from_settings()
+
+        # Debounced disk write for every other setter (see save_settings)
+        self._settings_loaded = True
+        self._save_pending = False
+        self._save_timer = QTimer()
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(500)
+        self._save_timer.timeout.connect(self.flushPendingSave)
+
+        # Debounce timer for OBD parameter changes - batches rapid toggles
+        self._obd_params_dirty = False
+        self._obd_params_save_timer = QTimer()
+        self._obd_params_save_timer.setSingleShot(True)
+        self._obd_params_save_timer.setInterval(800)  # 800ms debounce
+        self._obd_params_save_timer.timeout.connect(self._flush_obd_parameters)
+
+    def _load_members_from_settings(self):
+        """Populate every cached member from self._settings (falling back to the
+        defaults). Runs once from the constructor and again from
+        reset_to_defaults() so no cached value can go stale."""
         # Initialize directory history
         self._directory_history = self._settings.get("directoryHistory", [])
 
@@ -565,11 +593,12 @@ class SettingsManager(QObject):
         self._scrcpy_phone_screen_off = bool(self._settings.get("scrcpyPhoneScreenOff", True))
 
         # Settings menu visibility
-        self._settings_menu_visibility = self._settings.get(
+        self._settings_menu_visibility = dict(self._settings.get(
             "settingsMenuVisibility",
             self._default_settings["settingsMenuVisibility"]
-        )
-        # Ensure all sections exist (in case new sections were added)
+        ))
+        # Ensure all sections exist; a section missing from the stored file is
+        # visible, matching is_settings_section_visible() / SettingsMenu.qml.
         for section in self._default_settings["settingsMenuVisibility"]:
             if section not in self._settings_menu_visibility:
                 self._settings_menu_visibility[section] = True
@@ -638,21 +667,6 @@ class SettingsManager(QObject):
                     self._obd_parameters[param] = value
         else:
             self._obd_parameters = self._default_settings["obdParameters"]
-
-        # Debounced disk write for every other setter (see save_settings)
-        self._settings_loaded = True
-        self._save_pending = False
-        self._save_timer = QTimer()
-        self._save_timer.setSingleShot(True)
-        self._save_timer.setInterval(500)
-        self._save_timer.timeout.connect(self.flush_pending_save)
-
-        # Debounce timer for OBD parameter changes - batches rapid toggles
-        self._obd_params_dirty = False
-        self._obd_params_save_timer = QTimer()
-        self._obd_params_save_timer.setSingleShot(True)
-        self._obd_params_save_timer.setInterval(800)  # 800ms debounce
-        self._obd_params_save_timer.timeout.connect(self._flush_obd_parameters)
 
         # Load persisted vehicle scan results
         self._supported_obd_parameters = self._settings.get("supportedOBDParameters", [])
@@ -770,7 +784,7 @@ class SettingsManager(QObject):
 
         Bursts (album colours per track, several toggles in a row, a slider
         drag) coalesce into a single atomic write, which also spares the SD
-        card on the Pi. flush_pending_save() forces the write (shutdown)."""
+        card on the Pi. flushPendingSave() forces the write (shutdown)."""
         self._settings = self._validate_settings(settings)
         if not getattr(self, "_settings_loaded", False):
             self._write_settings_to_disk(self._settings)   # constructor path
@@ -779,13 +793,18 @@ class SettingsManager(QObject):
         self._save_timer.start()
 
     @Slot()
-    def flush_pending_save(self):
+    def flushPendingSave(self):
         """Write any coalesced settings change to disk now (called at shutdown)."""
         if not getattr(self, "_save_pending", False):
             return
         self._save_timer.stop()
         self._save_pending = False
         self._write_settings_to_disk(self._settings)
+
+    @Slot()
+    def flush_pending_save(self):
+        """Legacy snake_case alias of flushPendingSave() (main.py shutdown path)."""
+        self.flushPendingSave()
 
     def _write_settings_to_disk(self, settings):
         """Save settings atomically with file locking. Callers pass an
@@ -997,7 +1016,8 @@ class SettingsManager(QObject):
     def save_start_volume(self, volume):
         logger.debug(f"Saving volume setting: {volume}")
         self._start_volume = volume
-        self.update_setting("startUpVolume", volume, self.startUpVolumeChanged)
+        self.update_setting("startUpVolume", volume)
+        self.startUpVolumeChanged.emit(str(volume))  # Signal(str), same as C++ QString::number()
         
     @Slot(bool)
     def save_show_clock(self, show):
@@ -1558,7 +1578,12 @@ class SettingsManager(QObject):
     @Slot(str)
     def set_last_settings_section(self, section):
         """Set last visited settings section"""
-        valid_sections = ["deviceSettings", "mediaSettings", "displaySettings", "obdSettings", "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings", "about"]
+        # Current SettingsMenu.qml pageModel sections, plus the legacy per-feature
+        # IDs that an older settingsConfigure.json may still carry.
+        valid_sections = [
+            "displaySettings", "mediaSettings", "obdSettings", "accessoriesSettings", "deviceSettings", "about",
+            "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings",
+        ]
         if section not in valid_sections:
             return
 
@@ -2260,199 +2285,90 @@ class SettingsManager(QObject):
 
     @Slot()
     def reset_to_defaults(self):
-        # Save default settings
-        self.save_settings(self._default_settings)
-        
-        # Reset existing settings
-        self._device_name = self._default_settings["deviceName"]
+        # Persist the defaults (deep copy so no cached nested dict aliases
+        # _default_settings), reload every cached member exactly as the
+        # constructor does, then notify QML of each property.
+        self.save_settings(copy.deepcopy(self._default_settings))
+        self._load_members_from_settings()
+
         self.deviceNameChanged.emit(self._device_name)
-        
-        self._theme_setting = self._default_settings["themeSetting"]
         self.themeSettingChanged.emit(self._theme_setting)
-
-        self._font_setting = self._default_settings["fontSetting"]
         self.fontSettingChanged.emit(self._font_setting)
-
-        self._start_volume = self._default_settings["startUpVolume"]
-        self.startUpVolumeChanged.emit(self._start_volume)
-        
-        self._show_clock = self._default_settings["showClock"]
+        self.startUpVolumeChanged.emit(str(self._start_volume))
+        self.currentVolumeChanged.emit(self._current_volume)
         self.showClockChanged.emit(self._show_clock)
-        
-        self._clock_format_24hour = self._default_settings["clockFormat24Hour"]
         self.clockFormatChanged.emit(self._clock_format_24hour)
-
-        self._clock_show_seconds = self._default_settings["clockShowSeconds"]
         self.clockShowSecondsChanged.emit(self._clock_show_seconds)
-
-        self._clock_size = self._default_settings["clockSize"]
         self.clockSizeChanged.emit(self._clock_size)
-        
-        self._background_grid = self._default_settings["backgroundGrid"]
         self.backgroundGridChanged.emit(self._background_grid)
-                
-        self._screen_width = self._default_settings["screenWidth"]
         self.screenWidthChanged.emit(self._screen_width)
-        
-        self._screen_height = self._default_settings["screenHeight"]
         self.screenHeightChanged.emit(self._screen_height)
-        
-        self._background_blur_radius = self._default_settings["backgroundBlurRadius"]
         self.backgroundBlurRadiusChanged.emit(self._background_blur_radius)
-        
-        self._ui_scale = self._default_settings["uiScale"]
         self.uiScaleChanged.emit(self._ui_scale)
-
-        self._color_transition_ms = self._default_settings["colorTransitionMs"]
         self.colorTransitionMsChanged.emit(self._color_transition_ms)
-
-        self._song_length_transition = self._default_settings["songLengthTransition"]
         self.songLengthTransitionChanged.emit(self._song_length_transition)
-
-        self._obd_bluetooth_port = self._default_settings["obdBluetoothPort"]
         self.obdBluetoothPortChanged.emit(self._obd_bluetooth_port)
-
-        self._obd_saved_adapters = self._default_settings["obdSavedAdapters"]
         self.obdSavedAdaptersChanged.emit(self._obd_saved_adapters)
-
-        self._obd_fast_mode = self._default_settings["obdFastMode"]
         self.obdFastModeChanged.emit(self._obd_fast_mode)
-
-        self._obd_auto_reconnect_attempts = self._default_settings["obdAutoReconnectAttempts"]
         self.obdAutoReconnectAttemptsChanged.emit(self._obd_auto_reconnect_attempts)
-
-        self._obd_parameters = self._default_settings["obdParameters"]
         self.obdParametersChanged.emit()
-
-        default_music = os.path.expanduser("~/Music")
-        self._media_folder = self._default_settings["mediaFolder"] or default_music
+        self.homeOBDParametersChanged.emit()
+        self.supportedOBDParametersChanged.emit()
         self.mediaFolderChanged.emit(self._media_folder)
-
-        self._fuel_tank_capacity = self._default_settings["fuelTankCapacity"]
+        self.directoryHistoryChanged.emit()
         self.fuelTankCapacityChanged.emit(self._fuel_tank_capacity)
-            
-        self._bottom_bar_orientation = self._default_settings["bottomBarOrientation"]
         self.bottomBarOrientationChanged.emit(self._bottom_bar_orientation)
-
-        self._show_bottom_bar_media_controls = self._default_settings["showBottomBarMediaControls"]
         self.showBottomBarMediaControlsChanged.emit(self._show_bottom_bar_media_controls)
-
-        self._auto_play_on_startup = self._default_settings["autoPlayOnStartup"]
+        self.spotifyCredentialsChanged.emit()
+        self.mediaSourceChanged.emit(self._media_source)
         self.autoPlayOnStartupChanged.emit(self._auto_play_on_startup)
-
-        self._last_played_song = self._default_settings["lastPlayedSong"]
+        self.persistShuffleStateChanged.emit(self._persist_shuffle_state)
+        self.lastShuffleStateChanged.emit(self._last_shuffle_state)
         self.lastPlayedSongChanged.emit(self._last_played_song)
-
-        self._last_played_position = self._default_settings["lastPlayedPosition"]
         self.lastPlayedPositionChanged.emit(self._last_played_position)
-
-        self._last_played_playlist = self._default_settings["lastPlayedPlaylist"]
         self.lastPlayedPlaylistChanged.emit(self._last_played_playlist)
-
-        self._music_button_default_page = self._default_settings["musicButtonDefaultPage"]
+        self.windowStateChanged.emit(self._window_state)
         self.musicButtonDefaultPageChanged.emit(self._music_button_default_page)
-
-        self._return_to_library_after_selection = self._default_settings["returnToLibraryAfterSelection"]
         self.returnToLibraryAfterSelectionChanged.emit(self._return_to_library_after_selection)
-
-        self._android_auto_enabled = self._default_settings["androidAutoEnabled"]
         self.androidAutoEnabledChanged.emit(self._android_auto_enabled)
-
-        self._phone_mirror_enabled = self._default_settings["phoneMirrorEnabled"]
         self.phoneMirrorEnabledChanged.emit(self._phone_mirror_enabled)
-
-        self._scrcpy_audio_enabled = self._default_settings["scrcpyAudioEnabled"]
         self.scrcpyAudioEnabledChanged.emit(self._scrcpy_audio_enabled)
-
-        self._scrcpy_display_size = self._default_settings["scrcpyDisplaySize"]
         self.scrcpyDisplaySizeChanged.emit(self._scrcpy_display_size)
-
-        self._scrcpy_audio_gain = self._default_settings["scrcpyAudioGain"]
         self.scrcpyAudioGainChanged.emit(self._scrcpy_audio_gain)
-
-        self._scrcpy_audio_duck_enabled = self._default_settings["scrcpyAudioDuckEnabled"]
         self.scrcpyAudioDuckEnabledChanged.emit(self._scrcpy_audio_duck_enabled)
-
-        self._scrcpy_audio_duck_level = self._default_settings["scrcpyAudioDuckLevel"]
         self.scrcpyAudioDuckLevelChanged.emit(self._scrcpy_audio_duck_level)
-
-        self._scrcpy_phone_screen_off = self._default_settings["scrcpyPhoneScreenOff"]
         self.scrcpyPhoneScreenOffChanged.emit(self._scrcpy_phone_screen_off)
-
-        self._settings_menu_visibility = self._default_settings["settingsMenuVisibility"].copy()
         self.settingsMenuVisibilityChanged.emit()
-
-        self._esp32_volume_enabled = self._default_settings["esp32VolumeEnabled"]
         self.esp32VolumeEnabledChanged.emit(self._esp32_volume_enabled)
-
-        self._esp32_volume_port = self._default_settings["esp32VolumePort"]
         self.esp32VolumePortChanged.emit(self._esp32_volume_port)
-
-        self._esp32_volume_step_size = self._default_settings["esp32VolumeStepSize"]
         self.esp32VolumeStepSizeChanged.emit(self._esp32_volume_step_size)
-
-        self._esp32_auto_reconnect = self._default_settings["esp32AutoReconnect"]
         self.esp32AutoReconnectChanged.emit(self._esp32_auto_reconnect)
-
-        self._esp32_led_sleep_enabled = self._default_settings["esp32LedSleepEnabled"]
         self.esp32LedSleepEnabledChanged.emit(self._esp32_led_sleep_enabled)
-
-        self._esp32_led_color_mode = self._default_settings["esp32LedColorMode"]
         self.esp32LedColorModeChanged.emit(self._esp32_led_color_mode)
-
-        self._esp32_led_static_color = self._default_settings["esp32LedStaticColor"]
         self.esp32LedStaticColorChanged.emit(self._esp32_led_static_color)
-
-        self._show_waveform_visualizer = self._default_settings["showWaveformVisualizer"]
         self.showWaveformVisualizerChanged.emit(self._show_waveform_visualizer)
-
-        self._imu_enabled = self._default_settings["imuEnabled"]
-        self.imuEnabledChanged.emit(self._imu_enabled)
-
-        self._gesture_sensor_enabled = self._default_settings["gestureSensorEnabled"]
-        self.gestureSensorEnabledChanged.emit(self._gesture_sensor_enabled)
-
-        self._gesture_mapping = self._default_settings["gestureMapping"].copy()
-        self.gestureMappingChanged.emit()
-
-        self._gesture_volume_step = self._default_settings["gestureVolumeStep"]
-        self.gestureVolumeStepChanged.emit(self._gesture_volume_step)
-
-        self._gesture_cooldown = self._default_settings["gestureCooldown"]
-        self.gestureCooldownChanged.emit(self._gesture_cooldown)
-
-        self._rounded_album_art = self._default_settings["roundedAlbumArt"]
+        self.show3DButtonTiltChanged.emit(self._show_3d_button_tilt)
+        self.show3DAlbumPreviewChanged.emit(self._show_3d_album_preview)
         self.roundedAlbumArtChanged.emit(self._rounded_album_art)
-
-        self._album_art_corner_radius = self._default_settings["albumArtCornerRadius"]
         self.albumArtCornerRadiusChanged.emit(self._album_art_corner_radius)
-
-        self._show_album_art_shadow = self._default_settings["showAlbumArtShadow"]
         self.showAlbumArtShadowChanged.emit(self._show_album_art_shadow)
-
-        self._vinyl_record_mode = self._default_settings["vinylRecordMode"]
         self.vinylRecordModeChanged.emit(self._vinyl_record_mode)
-
-        self._album_art_transition = self._default_settings["albumArtTransition"]
         self.albumArtTransitionChanged.emit(self._album_art_transition)
-
-        self._background_overlay_opacity = self._default_settings["backgroundOverlayOpacity"]
         self.backgroundOverlayOpacityChanged.emit(self._background_overlay_opacity)
-
-        self._side_card_opacity = self._default_settings["sideCardOpacity"]
         self.sideCardOpacityChanged.emit(self._side_card_opacity)
-
-        self._side_card_angle = self._default_settings["sideCardAngle"]
         self.sideCardAngleChanged.emit(self._side_card_angle)
-
-        self._button_tilt_duration = self._default_settings["buttonTiltDuration"]
         self.buttonTiltDurationChanged.emit(self._button_tilt_duration)
-
-        self._text_scroll_speed = self._default_settings["textScrollSpeed"]
         self.textScrollSpeedChanged.emit(self._text_scroll_speed)
-
-        self._pinned_settings = []
+        self.albumArtColorsChanged.emit(self._album_art_colors)
+        self.settingsLayoutStyleChanged.emit(self._settings_layout_style)
+        self.imuEnabledChanged.emit(self._imu_enabled)
+        self.gestureSensorEnabledChanged.emit(self._gesture_sensor_enabled)
+        self.gestureMappingChanged.emit()
+        self.gestureVolumeStepChanged.emit(self._gesture_volume_step)
+        self.gestureCooldownChanged.emit(self._gesture_cooldown)
         self.pinnedSettingsChanged.emit()
+        self.lastSettingsSectionChanged.emit(self._last_settings_section)
+        self.customThemesChanged.emit()
 
     # ==================== Git Commit Info ====================
 

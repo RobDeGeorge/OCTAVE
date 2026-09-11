@@ -79,7 +79,7 @@ AUDIO_CHANNELS = 2
 AUDIO_BYTES_PER_FRAME = AUDIO_CHANNELS * 2          # s16le
 AUDIO_CODEC_RAW = 0x00726177                       # "raw"
 AUDIO_STREAM_DISABLED = 0                          # device could not capture; video continues
-AUDIO_STREAM_ERROR = 1                             # configuration error; session must stop
+AUDIO_STREAM_ERROR = 1                             # configuration error; audio is skipped, video continues
 AUDIO_QUEUE_MAX_BYTES = AUDIO_SAMPLE_RATE * AUDIO_BYTES_PER_FRAME // 4   # ~250 ms of backlog before dropping
 # Sound detection (for ducking local media): a chunk counts as sound when its
 # peak, before gain, exceeds about -46 dBFS; a silent remote submix is exact
@@ -372,9 +372,6 @@ class ScrcpyClient(QObject):
     def take_back(self):
         """Leave the in-use state: the keeper wakes the phone if needed and re-applies the panel policy."""
         self._send(struct.pack(">B", MSG_OCTAVE_TAKE_BACK))
-
-    def set_display_power(self, on: bool):
-        self._send(struct.pack(">BB", MSG_SET_DISPLAY_POWER, 1 if on else 0))
 
     # ── internals ─────────────────────────────────────────────────────
 

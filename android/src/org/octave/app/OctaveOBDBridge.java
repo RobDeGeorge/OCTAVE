@@ -216,6 +216,34 @@ public class OctaveOBDBridge {
         }
     }
 
+    /**
+     * Bonded (paired) devices as "MAC|name" strings, for the adapter list on
+     * the OBD settings page. Returns an empty array while Bluetooth is off or
+     * the runtime BLUETOOTH_CONNECT grant is missing -- connect() requests
+     * that grant on the first Connect tap, so the list fills in afterwards.
+     */
+    public static String[] bondedDevices(Context ctx) {
+        if (ctx == null) return new String[0];
+        if (Build.VERSION.SDK_INT >= 31
+                && ctx.checkSelfPermission("android.permission.BLUETOOTH_CONNECT")
+                    != PackageManager.PERMISSION_GRANTED) {
+            return new String[0];
+        }
+        BluetoothManager bm = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter adapter = (bm == null) ? null : bm.getAdapter();
+        if (adapter == null || !adapter.isEnabled()) return new String[0];
+        List<String> out = new ArrayList<>();
+        try {
+            for (BluetoothDevice d : adapter.getBondedDevices()) {
+                String name = d.getName();
+                out.add(d.getAddress() + "|" + (name == null ? "" : name));
+            }
+        } catch (SecurityException e) {
+            setError("bondedDevices: SecurityException: " + e.getMessage());
+        }
+        return out.toArray(new String[0]);
+    }
+
     public static synchronized void disconnect() {
         if (currentGatt != null) {
             try {

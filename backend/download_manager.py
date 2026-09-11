@@ -36,6 +36,9 @@ class DownloadManager(QObject):
     downloadProgress = Signal(str, float)      # song_id, progress 0.0-1.0
     downloadComplete = Signal(str, str)        # song_id, file path
     downloadError = Signal(str, str, str)      # song_id, display name, error message
+    # Python has no explicit queue (the ThreadPoolExecutor serialises work);
+    # this fires whenever a download starts or finishes so QML bindings that
+    # listen for it refresh exactly as they do against the C++ queue.
     downloadQueueChanged = Signal()            # Queue updated
     downloadStatusChanged = Signal(str, str, str)  # song_id, field, value_json (patch without full re-emit)
 
@@ -140,6 +143,30 @@ class DownloadManager(QObject):
         """
         candidate = self._youtube_cookies_default_path()
         return candidate if os.path.exists(candidate) else None
+
+    def _refresh_cookies_file(self):
+        """Re-check the cookies file before every download (C++ checks per
+        download; the engine is created once, so push the current path into
+        its live downloader settings)."""
+        if self._music_dl is None:
+            return
+        cookies_path = self._get_youtube_cookies_path()
+        downloader = getattr(self._music_dl, "downloader", None)
+        if downloader is None:
+            return
+        if downloader.settings.get("cookie_file") == cookies_path:
+            return
+        downloader.settings["cookie_file"] = cookies_path
+        for provider in getattr(downloader, "audio_providers", []):
+            provider.cookie_file = cookies_path
+        if cookies_path:
+            logger.info("Using YouTube cookies from %s", cookies_path)
+        else:
+            logger.info(
+                "No YouTube cookies file found; downloads may hit bot wall. "
+                "Drop a cookies.txt at %s",
+                self._youtube_cookies_default_path(),
+            )
 
     def _ensure_music_dl(self) -> bool:
         """
@@ -306,6 +333,7 @@ class DownloadManager(QObject):
         """
         if not self._ensure_music_dl():
             return
+        self._refresh_cookies_file()
 
         try:
             song_data = json.loads(song_json)
@@ -329,6 +357,7 @@ class DownloadManager(QObject):
 
         self.statusMessage.emit(f"Queuing download: {song_name}")
         self.downloadStarted.emit(song_id, song_name)
+        self.downloadQueueChanged.emit()
 
         self._active_downloads += 1
         self.activeDownloadsChanged.emit(self._active_downloads)
@@ -353,8 +382,10 @@ class DownloadManager(QObject):
 
         if not self._ensure_music_dl():
             return
+        self._refresh_cookies_file()
 
         self.statusMessage.emit(f"Fetching: {url}")
+        self.downloadQueueChanged.emit()
 
         future = self._executor.submit(self._do_url_download, url.strip())
         self._pending_futures[f"url_{url[:30]}"] = future
@@ -702,12 +733,14 @@ class DownloadManager(QObject):
             logger.warning("Download failed: %s", song_name)
             self._mark_result_status_by_id(song_id, "is_failed", True)
             self._mark_result_status_by_id(song_id, "error_message", error_msg)
+        self.downloadQueueChanged.emit()
 
     def _handle_url_download_result(self, result: Dict[str, Any]):
         """Handle completed URL download (possibly multiple songs)."""
         if "error" in result:
             self.downloadError.emit("", "URL download", result["error"])
             self.statusMessage.emit(result["error"])
+            self.downloadQueueChanged.emit()
             return
 
         downloaded = result.get("results", [])
@@ -726,6 +759,7 @@ class DownloadManager(QObject):
         self.statusMessage.emit(
             f"Downloaded {success_count}/{total} song(s)"
         )
+        self.downloadQueueChanged.emit()
 
     # ─── Utility Slots for QML ────────────────────────────────────────
 

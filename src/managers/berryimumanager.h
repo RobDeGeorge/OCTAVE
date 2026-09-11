@@ -18,6 +18,9 @@ class SettingsManager;
 
 // ==================== Madgwick AHRS Filter ====================
 
+// Full MARG (9DOF) implementation, but the worker deliberately calls
+// update() with mx=my=mz=0 so only the 6DOF accel+gyro branch runs —
+// see the call site in BerryIMUWorker::run() for why.
 class MadgwickAHRS
 {
 public:
@@ -28,6 +31,9 @@ public:
                 double mx, double my, double mz,
                 double dt);
 
+    // Currently unused: the worker derives pitch/roll from the tared,
+    // yaw-stripped quaternion itself and heading from the raw magnetometer.
+    // Only meaningful for heading if 9DOF fusion is ever enabled.
     void getEuler(double &pitch, double &roll, double &heading) const;
 
     // Quaternion: [w, x, y, z]
@@ -66,14 +72,16 @@ signals:
     void baroTempChanged(float temp);
     void connectionStatusChanged(const QString &status);
     void started();
-    void stopped();
+    // retryable=false when the failure is permanent (e.g. permission denied
+    // on the I2C device) and the manager must not schedule a retry.
+    void stopped(bool retryable);
 
 public slots:
     void run();
 
 private:
     // I2C helpers
-    bool openBus();
+    bool openBus(bool &permissionDenied);
     void closeBus();
     bool initLSM6DSL();
     bool initLIS3MDL();
@@ -82,10 +90,11 @@ private:
     int readByteData(int addr, int reg);
     bool readBlockData(int addr, int reg, uint8_t *buf, int len);
 
-    // Sensor reads
-    void readAccel(double &ax, double &ay, double &az);
-    void readGyro(double &gx, double &gy, double &gz);
-    void readMag(double &mx, double &my, double &mz);
+    // Sensor reads — return false (and zero the outputs) when the I2C
+    // transfer fails, so the loop can detect a dead bus.
+    bool readAccel(double &ax, double &ay, double &az);
+    bool readGyro(double &gx, double &gy, double &gz);
+    bool readMag(double &mx, double &my, double &mz);
     void readBaro(double &pressure, double &temp, double &altitude);
 
     // Gyro calibration
@@ -193,6 +202,9 @@ private:
     QThread *m_workerThread;
     BerryIMUWorker *m_worker;
     bool m_active = true;
+    // Requested emit interval (s); applied to every worker we create so a
+    // setEmitRate() call before start or across a retry is not lost.
+    double m_emitInterval;
     bool m_running;
     bool m_enabled;
     bool m_shuttingDown;

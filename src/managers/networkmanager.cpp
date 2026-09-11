@@ -297,6 +297,10 @@ void NetworkManager::applySelfUpdate()
 
     m_updating = true;
 
+    // Relay setProgress() messages from the step machine to selfUpdateMessage
+    // (mirrors the timer Python's _submit_work() starts).
+    m_resultPollTimer->start();
+
     m_selfUpdateStatus = QStringLiteral("fetching");
     emit selfUpdateStatusChanged(m_selfUpdateStatus);
     m_selfUpdateMessage = QStringLiteral("Fetching latest changes...");
@@ -575,12 +579,15 @@ void NetworkManager::onNetworkNameCheckFinished()
                         }
                     }
                 }
+                // Neither WiFi nor Ethernet — report "" like Python does
+                clearNetworkName();
             });
             ethProc->start(QStringLiteral("nmcli"),
                            {QStringLiteral("-t"), QStringLiteral("-f"),
                             QStringLiteral("TYPE,STATE"), QStringLiteral("dev")});
             if (!ethProc->waitForStarted(5000)) {
                 ethProc->deleteLater();
+                clearNetworkName();
             }
             return; // Ethernet check is async — it will emit the signal itself
         }
@@ -605,12 +612,16 @@ void NetworkManager::onNetworkNameCheckFinished()
                         m_networkName = QStringLiteral("Ethernet");
                         emit networkNameChanged(m_networkName);
                     }
+                    return;
                 }
             }
+            // Neither WiFi nor Ethernet — report "" like Python does
+            clearNetworkName();
         });
         ethProc->start(QStringLiteral("ifconfig"), {QStringLiteral("en0")});
         if (!ethProc->waitForStarted(5000)) {
             ethProc->deleteLater();
+            clearNetworkName();
         }
         return;
     }
@@ -652,12 +663,15 @@ void NetworkManager::onNetworkNameCheckFinished()
                     }
                 }
             }
+            // Neither WiFi nor Ethernet — report "" like Python does
+            clearNetworkName();
         });
         ethProc->start(QStringLiteral("netsh"),
                        {QStringLiteral("interface"), QStringLiteral("show"),
                         QStringLiteral("interface")});
         if (!ethProc->waitForStarted(5000)) {
             ethProc->deleteLater();
+            clearNetworkName();
         }
         return;
     }
@@ -666,6 +680,14 @@ void NetworkManager::onNetworkNameCheckFinished()
     if (newName != m_networkName) {
         m_networkName = newName;
         emit networkNameChanged(newName);
+    }
+}
+
+void NetworkManager::clearNetworkName()
+{
+    if (!m_networkName.isEmpty()) {
+        m_networkName.clear();
+        emit networkNameChanged(m_networkName);
     }
 }
 

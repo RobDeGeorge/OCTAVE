@@ -115,19 +115,19 @@
           <li><strong>Windows:</strong> all COM ports; the ESP32-S3 by VID or "USB JTAG/serial debug unit" in the description.</li>
           <li><strong>C++ on every platform:</strong> <code>QSerialPortInfo::availablePorts()</code> with the same VID / keyword test; every enumerated port is listed.</li>
         </ul>
-        <div class="info-box warning">
-          <div class="info-box-title">First run: pick the port once</div>
-          The <code>esp32VolumePort</code> setting defaults to <code>"COM7"</code> in both backends, and the automatic
-          ESP32-S3 selection only runs when that setting is <em>empty</em>. On Linux and macOS a fresh install will
-          therefore try to open <code>COM7</code>, fail, exhaust its five reconnect attempts and then just keep scanning.
-          Select the recommended port in the Volume Knob settings; OCTAVE saves it and reconnects 500 ms later. From then on
-          it connects 3 s after every launch.
+        <div class="info-box info">
+          <div class="info-box-title">First run: the port is picked for you</div>
+          The <code>esp32VolumePort</code> setting defaults to <code>""</code> (empty) in both backends, and an empty setting
+          means "auto-select": on the first start OCTAVE scans, saves the detected ESP32-S3 port and connects. Only override it
+          in the Volume Knob settings if the scan picked the wrong device (OCTAVE saves the choice and reconnects 500 ms later).
+          A <code>settingsConfigure.json</code> written by an older build may still carry the former <code>"COM7"</code>
+          default; clear or change it there once. From then on it connects 3 s after every launch.
         </div>
 
         <h3>Connection behaviour</h3>
         <ul>
           <li>Startup: a 3 s delay, a port scan, then <code>connect_device()</code> if <code>esp32VolumeEnabled</code> is true.</li>
-          <li>Unplug: detected on read error (Python: any <code>SerialException</code>; C++: <code>QSerialPort::ResourceError</code>). With <code>esp32AutoReconnect</code> on, up to 5 attempts at 3, 6, 9, 10, 10 s (<code>min(10 s, 3 s &times; n)</code>); the Accessories page shows "Reconnecting in Ns... (n/5)" and finally "Max retries reached. Check connection." Pressing Connect there resets the counter.</li>
+          <li>Unplug: detected on read error (Python: any <code>SerialException</code>; C++: <code>QSerialPort::ResourceError</code>, <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code>, <code>WriteError</code>, or a keepalive write the port rejects). With <code>esp32AutoReconnect</code> on, up to 5 attempts at 3, 6, 9, 10, 10 s (<code>min(10 s, 3 s &times; n)</code>); the Accessories page shows "Reconnecting in Ns... (n/5)" and finally "Max retries reached. Check connection." Pressing Connect there resets the counter.</li>
           <li>While disconnected, a background scan every 10 s keeps the port list fresh.</li>
           <li>Changing the port or toggling the feature in settings disconnects / reconnects immediately.</li>
         </ul>
@@ -138,14 +138,12 @@
           <li><strong>Static</strong> (<code>"static"</code>): a fixed colour from the picker (<code>esp32LedStaticColor</code>, default <code>#00FFFF</code>).</li>
           <li><strong>LED sleep</strong> (<code>esp32LedSleepEnabled</code>, default on): the dongle turns its LEDs off after 5 s without traffic. OCTAVE implements "keep LEDs on" by sending a <code>V</code> keepalive every 2 s only when sleep is <em>off</em>; leaving sleep on means the ring also goes dark when OCTAVE exits.</li>
         </ul>
-        <div class="info-box info">
-          <div class="info-box-title">C++ build: LED colour and volume-to-LED are not wired yet</div>
-          The Python launcher (<span class="file-path">main.py</span>) sends the colour, the volume on every change, and an
-          initial volume / mute / colour sync 500 ms after connecting. <span class="file-path">src/main.cpp</span> only wires
-          the knob's input signals, so on the C++ build the ring receives <code>V</code> from keepalives (LED sleep off) and
-          <code>M</code> after a button press only. See the parity table on <a href="hardware-managers.html#parity">Hardware
-          Managers</a>.
-        </div>
+        <p>
+          Both launchers (<span class="file-path">main.py</span> and <span class="file-path">src/main.cpp</span>) send the colour
+          whenever it changes, the volume on every change through <code>volumeController</code>, and an initial volume / mute /
+          colour sync 500 ms after the dongle connects, so the ring matches the app on either backend. Details on
+          <a href="hardware-managers.html#esp32-leds">Hardware Managers &rarr; LED Feedback</a>.
+        </p>
 
         <h3>Serial permissions (Linux)</h3>
         <pre><code>sudo usermod -aG dialout $USER   <span class="cmt"># then log out and back in</span></code></pre>
@@ -177,9 +175,10 @@ i2cdetect -y 2
         <h3>I2C permissions</h3>
         <pre><code>sudo usermod -aG i2c $USER       <span class="cmt"># then log out and back in</span></code></pre>
         <p>
-          On a permission error the Python backend logs "<code>permission denied on /dev/i2c-2</code>", emits "Disconnected"
-          and deliberately does <strong>not</strong> retry (the fix needs a re-login). The C++ backend cannot tell a permission
-          failure from a missing device and retries it like any other open failure.
+          On a permission error both backends emit "Disconnected" and deliberately do <strong>not</strong> retry (the fix
+          needs a re-login): Python logs "<code>permission denied on /dev/i2c-2</code>", C++ logs
+          "<code>permission denied on /dev/i2c-2 - add the user to the i2c group; not retrying</code>". Toggle the sensor off
+          and on in Settings &rarr; Accessories (or restart) after fixing the group.
         </p>
 
         <!-- BerryIMU -->
@@ -251,8 +250,10 @@ i2cdetect -y 2
         <h3>If it does not connect</h3>
         <p>
           Retries: 5 attempts with linear backoff (5, 10, 15, 20, 25 s), then "max retries reached, giving up". Toggle
-          <em>IMU Sensor</em> off and on in Settings &rarr; Accessories to start again. Python does not retry permission
-          errors (see <a href="#i2c-bus">above</a>). The status text on that page mirrors the last emitted state:
+          <em>IMU Sensor</em> off and on in Settings &rarr; Accessories to start again. Neither backend retries permission
+          errors (see <a href="#i2c-bus">above</a>). A bus that dies mid-run (a loose wire) shows as "Error" followed by the
+          same retry cycle: Python on the first failed read, C++ after five consecutive failed reads. The status text on that
+          page mirrors the last emitted state:
           "Connected", "Disconnected", "Error" or "Disabled".
         </p>
 
@@ -378,10 +379,10 @@ i2cdetect -y 2
           <li><strong>Sensors:</strong> both I2C boards run from the SBC's 3.3 V rail.</li>
           <li><strong>ESP32 dongle:</strong> USB-powered by the host. The encoder unit needs its own supply.</li>
           <li><strong>Display:</strong> give it its own supply rather than the SBC's USB.</li>
-          <li><strong>I2C cable length:</strong> keep it short; I2C is not designed for long runs and the loop reads the bus ~172 times a second, so marginal wiring shows up as read errors (Python restarts the driver, C++ reads zeros).</li>
+          <li><strong>I2C cable length:</strong> keep it short; I2C is not designed for long runs and the loop reads the bus ~172 times a second, so marginal wiring shows up as read errors (Python restarts the driver on the first one; C++ skips the sample and restarts after five in a row).</li>
           <li><strong>Vibration and heat:</strong> strain-relieve connectors, keep electronics out of direct sun.</li>
           <li><strong>Grounding:</strong> common ground for the SBC, sensors and display; ground loops show up as noise on the accelerometer.</li>
-          <li><strong>OBD-II:</strong> unrelated to these sensors but shares the port list: the Bluetooth ELM327 is paired over rfcomm and its port set in OBD settings (<code>obdBluetoothPort</code>, empty by default); that port is hidden from the ESP32 picker.</li>
+          <li><strong>OBD-II:</strong> unrelated to these sensors but shares the port list: the Bluetooth ELM327 is paired over rfcomm and its port set in OBD settings (<code>obdBluetoothPort</code>, empty by default); that port is hidden from the ESP32 picker. On the Android build the same OBD settings page lists the phone's paired Bluetooth devices as "&lt;name&gt; &middot; &lt;MAC&gt;" once the Bluetooth permission has been granted on the first Connect tap, so the adapter is picked from the list rather than typed in.</li>
         </ul>
 
         <!-- Why -->
@@ -391,7 +392,7 @@ i2cdetect -y 2
           <li><strong>Text lines, not a binary frame.</strong> One printable command per line keeps the firmware trivial and lets you test with any serial terminal (<code>echo -e "V50\n" &gt; /dev/ttyACM0</code>, or type <code>+</code> to the port).</li>
           <li><strong>Bus 2 hard-coded.</strong> The constants were set for the reference board and never needed to move; the price is the overlay step above. If you need another bus, it is a one-line change in each of the four driver files.</li>
           <li><strong>Gyro bias measured at every start, tare on demand.</strong> Bias drifts with temperature, so it is re-measured each run; the mounting slope is a user decision, so it is a button rather than a config value, and it is deliberately not persisted.</li>
-          <li><strong>Retry, but not forever.</strong> Five linear-backoff attempts cover a bus that appears late at boot without hammering a bus that will never appear; a permission error is not retried in Python because only a re-login fixes it.</li>
+          <li><strong>Retry, but not forever.</strong> Five linear-backoff attempts cover a bus that appears late at boot without hammering a bus that will never appear; a permission error is not retried in either backend because only a re-login fixes it.</li>
           <li><strong>The driver, not the UI, decides the emit rate.</strong> Whatever page is showing, the sensor loop keeps the attitude current; only the rate of signals into QML changes, so the first frame after opening the car view is already right.</li>
         </ul>
 

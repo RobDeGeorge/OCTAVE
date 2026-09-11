@@ -12,6 +12,8 @@
 
 #include "androidautomanager.h"
 
+#include "phonemirrormanager.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -283,35 +285,12 @@ QString AndroidAutoManager::findAdbPath() const
     if (!m_cachedAdbPath.isEmpty())
         return m_cachedAdbPath;
 
-#ifdef Q_OS_WIN
-    const QString adbName = QStringLiteral("adb.exe");
-    QStringList candidates;
-
-    QString userProfile = qEnvironmentVariable("USERPROFILE");
-    if (!userProfile.isEmpty()) {
-        candidates << (userProfile + QStringLiteral("/Downloads/platform-tools/") + adbName);
-        candidates << (userProfile + QStringLiteral("/AppData/Local/Android/Sdk/platform-tools/") + adbName);
-    }
-    QString localAppData = qEnvironmentVariable("LOCALAPPDATA");
-    if (!localAppData.isEmpty())
-        candidates << (localAppData + QStringLiteral("/Android/Sdk/platform-tools/") + adbName);
-#else
-    const QString adbName = QStringLiteral("adb");
-    QStringList candidates;
-
-    candidates << (QDir::homePath() + QStringLiteral("/Android/Sdk/platform-tools/") + adbName);
-    candidates << (QDir::homePath() + QStringLiteral("/Library/Android/sdk/platform-tools/") + adbName);
-    candidates << QStringLiteral("/usr/bin/adb");
-    candidates << QStringLiteral("/usr/local/bin/adb");
-#endif
-
-    for (const QString &path : candidates) {
-        if (QFile::exists(path)) {
-            const_cast<AndroidAutoManager *>(this)->m_cachedAdbPath = path;
-            return path;
-        }
-    }
-    return {};
+    // Same discovery as PhoneMirrorManager (bundled platform-tools, PATH,
+    // common SDK locations) so both features drive the same adb binary.
+    const QString path = PhoneMirrorManager::findAdb();
+    if (!path.isEmpty())
+        const_cast<AndroidAutoManager *>(this)->m_cachedAdbPath = path;
+    return path;
 }
 
 // ─── ADB helpers ─────────────────────────────────────────────────────
@@ -408,8 +387,9 @@ bool AndroidAutoManager::setupAdbForward()
         return false;
     }
 
-    // Remove existing forwards
-    runAdb({QStringLiteral("forward"), QStringLiteral("--remove-all")}, 10000);
+    // Remove a stale DHU forward only — `--remove-all` would also tear down
+    // a live phone-mirror (localabstract:scrcpy_*) tunnel.
+    runAdb({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:5277")}, 10000);
 
     qCDebug(lcAndroidAuto) << "Running ADB forward:" << adb;
 
@@ -681,10 +661,10 @@ void AndroidAutoManager::cleanup()
 
     closeDhu();
 
-    // Clean up ADB port forwards
+    // Clean up the DHU port forward (only ours — phone mirror owns its own)
     QString adb = findAdbPath();
     if (!adb.isEmpty()) {
-        runAdb({QStringLiteral("forward"), QStringLiteral("--remove-all")},
+        runAdb({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:5277")},
                10000);
     }
 

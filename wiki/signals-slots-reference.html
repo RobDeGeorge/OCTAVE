@@ -92,10 +92,10 @@
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>deviceName</code></td><td><code>QString</code></td><td>read-only</td><td><code>deviceNameChanged</code></td><td>Name shown on the home screen / About page &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>fontSetting</code></td><td><code>QString</code></td><td>read-only</td><td><code>fontSettingChanged</code></td><td>UI font family &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>fontSetting</code></td><td><code>QString</code></td><td>read-only</td><td><code>fontSettingChanged</code></td><td>UI font family (default <code>"GoogleSans Regular"</code>; a stored legacy <code>"Google Sans"</code> is migrated at load) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>themeSetting</code></td><td><code>QString</code></td><td>read-only</td><td><code>themeSettingChanged</code></td><td>Active theme name (built-in or custom) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>uiScale</code></td><td><code>float</code></td><td>read-only</td><td><code>uiScaleChanged</code></td><td>Global UI scale factor multiplied with <code>screenAutoScale</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>colorTransitionMs</code></td><td><code>int</code></td><td>read-only</td><td><code>colorTransitionMsChanged</code></td><td>Duration of theme colour transitions in ms &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>colorTransitionMs</code></td><td><code>int</code></td><td>read-only</td><td><code>colorTransitionMsChanged</code></td><td>Duration of theme colour transitions in ms (registry slider 0&ndash;2000, step 50) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>songLengthTransition</code></td><td><code>bool</code></td><td>read-only</td><td><code>songLengthTransitionChanged</code></td><td>Spread the album-art colour transition over the length of the song &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>showClock</code></td><td><code>bool</code></td><td>read-only</td><td><code>showClockChanged</code></td><td>Show the clock in the bottom bar &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>clockFormat24Hour</code></td><td><code>bool</code></td><td>read-only</td><td><code>clockFormatChanged</code></td><td>24-hour clock (notify signal is <code>clockFormatChanged</code>) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -109,7 +109,7 @@
             <tr><td><code>showBottomBarMediaControls</code></td><td><code>bool</code></td><td>read-only</td><td><code>showBottomBarMediaControlsChanged</code></td><td>Show play/skip controls in the bottom bar &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>settingsLayoutStyle</code></td><td><code>QString</code></td><td>read-only</td><td><code>settingsLayoutStyleChanged</code></td><td>Which Settings*Layout.qml renders the menu: <code>"Carousel"</code>, <code>"Sidebar"</code>, <code>"Hub"</code>, <code>"Dashboard"</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>albumArtColors</code></td><td><code>QString</code></td><td>read-only</td><td><code>albumArtColorsChanged</code></td><td>JSON of the last extracted album-art palette (written by the media managers via <code>set_album_art_colors</code>) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>settingsMenuVisibility</code></td><td><code>QString</code></td><td>read-only</td><td><code>settingsMenuVisibilityChanged</code></td><td>JSON map of settings section id &rarr; visible &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>settingsMenuVisibility</code></td><td><code>QString</code></td><td>read-only</td><td><code>settingsMenuVisibilityChanged</code></td><td>JSON map of settings section id &rarr; visible (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>; a section missing from the file counts as visible in both backends) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>startUpVolume</code></td><td><code>float</code></td><td>read-only</td><td><code>startUpVolumeChanged</code></td><td>Volume percent applied at launch &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>currentVolume</code></td><td><code>int</code></td><td>read-only</td><td><code>currentVolumeChanged</code></td><td>Live volume percent (0&ndash;100); set only through <code>volumeController.applyVolume()</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>mediaFolder</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaFolderChanged</code></td><td>Root folder of the local music library &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -154,8 +154,8 @@
             <tr><td><code>scrcpyAudioDuckLevel</code></td><td><code>double</code></td><td>read-only</td><td><code>scrcpyAudioDuckLevelChanged</code></td><td>Duck factor (linear, e.g. 0.1 = -20 dB) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyPhoneScreenOff</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyPhoneScreenOffChanged</code></td><td>Keep the handset panel dark while mirroring &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32VolumeEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>esp32VolumeEnabledChanged</code></td><td>Enable the ESP32 rotary knob &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>esp32VolumePort</code></td><td><code>QString</code></td><td>read-only</td><td><code>esp32VolumePortChanged</code></td><td>Serial port of the ESP32 (<code>""</code> = auto-detect) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>esp32VolumeStepSize</code></td><td><code>double</code></td><td>read-only</td><td><code>esp32VolumeStepSizeChanged</code></td><td>Volume percent per encoder tick &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>esp32VolumePort</code></td><td><code>QString</code></td><td>read-only</td><td><code>esp32VolumePortChanged</code></td><td>Serial port of the ESP32 (default <code>""</code> = auto-select the ESP32-S3 at startup) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>esp32VolumeStepSize</code></td><td><code>double</code></td><td>read-only</td><td><code>esp32VolumeStepSizeChanged</code></td><td>Volume percent per encoder tick (float, default <code>1.0</code>; fractional steps such as 0.25 persist on both backends) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32AutoReconnect</code></td><td><code>bool</code></td><td>read-only</td><td><code>esp32AutoReconnectChanged</code></td><td>Reconnect automatically when the knob is unplugged/replugged &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32LedSleepEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>esp32LedSleepEnabledChanged</code></td><td>Let the knob LED sleep when idle &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32LedColorMode</code></td><td><code>QString</code></td><td>read-only</td><td><code>esp32LedColorModeChanged</code></td><td><code>"theme"</code> / <code>"static"</code> LED colour source &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -233,7 +233,7 @@
             <tr><td><code>save_spotify_credentials(QString clientId, QString clientSecret)</code></td><td><code>void</code></td><td>Store client id + secret (OS keychain on Python, settings file on C++); emits <code>spotifyCredentialsChanged</code></td></tr>
             <tr><td><code>clear_spotify_credentials()</code></td><td><code>void</code></td><td>Forget the Spotify client credentials</td></tr>
             <tr><td><code>save_window_state(QString state)</code></td><td><code>void</code></td><td>Persist the window mode; ignores values other than windowed / fullscreen / maximized</td></tr>
-            <tr><td><code>set_last_settings_section(QString section)</code></td><td><code>void</code></td><td>Persist which settings section was open; validated against the known section ids</td></tr>
+            <tr><td><code>set_last_settings_section(QString section)</code></td><td><code>void</code></td><td>Persist which settings section was open; accepts the six current section ids (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the legacy <code>androidAutoSettings</code> / <code>phoneMirrorSettings</code> / <code>volumeKnobSettings</code> / <code>gestureSensorSettings</code>; anything else is ignored</td></tr>
             <tr><td><code>save_settings_section_visibility(QString section, bool visible)</code></td><td><code>void</code></td><td>Show/hide one settings section in the hub; emits <code>settingsMenuVisibilityChanged</code></td></tr>
             <tr><td><code>save_android_auto_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>androidAutoEnabled</code>, then emit <code>androidAutoEnabledChanged</code></td></tr>
             <tr><td><code>save_phone_mirror_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>phoneMirrorEnabled</code>, then emit <code>phoneMirrorEnabledChanged</code></td></tr>
@@ -258,7 +258,7 @@
             <tr><td><code>save_gesture_volume_step(int step)</code></td><td><code>void</code></td><td>Validate and persist <code>gestureVolumeStep</code>, then emit <code>gestureVolumeStepChanged</code></td></tr>
             <tr><td><code>save_gesture_cooldown(int ms)</code></td><td><code>void</code></td><td>Validate and persist <code>gestureCooldown</code>, then emit <code>gestureCooldownChanged</code></td></tr>
             <tr><td><code>toggle_pin_setting(QString settingId)</code></td><td><code>void</code></td><td>Pin/unpin a registry setting id on the Quick Panel; emits <code>pinnedSettingsChanged</code></td></tr>
-            <tr><td><code>reset_to_defaults()</code></td><td><code>void</code></td><td>Write the factory defaults and re-emit every property signal</td></tr>
+            <tr><td><code>reset_to_defaults()</code></td><td><code>void</code></td><td>Write the factory defaults, reload every cached member from them exactly as the constructor does (C++ <code>populateMembers()</code>, Python <code>_load_members_from_settings()</code>) and emit every property signal</td></tr>
             <tr><td><code>save_setting(QString key, QVariant value)</code></td><td><code>void</code></td><td>Generic write of any key; emits <code>genericSettingChanged(key)</code> (typed properties are not refreshed)</td></tr>
             <tr><td><code>get_setting(QString key)</code> <span class="cmt">(Python takes 2 arg(s): key, default_value)</span></td><td><code>QVariant</code></td><td>Raw value of any key (<code>undefined</code>/null when missing). Python also accepts an optional <code>default_value</code></td></tr>
             <tr><td><code>get_setting_with_default(QString key, QVariant defaultValue)</code></td><td><code>QVariant</code></td><td>Raw value of any key, or <code>defaultValue</code> when missing</td></tr>
@@ -281,7 +281,7 @@
             <tr><td><code>get_window_state()</code></td><td><code>QString</code></td><td>Returns the current <code>windowState</code> value (same as the property)</td></tr>
             <tr><td><code>get_music_button_default_page()</code></td><td><code>QString</code></td><td>Returns the current <code>musicButtonDefaultPage</code> value (same as the property)</td></tr>
             <tr><td><code>get_return_to_library_after_selection()</code></td><td><code>bool</code></td><td>Returns the current <code>returnToLibraryAfterSelection</code> value (same as the property)</td></tr>
-            <tr><td><code>flushPendingSave()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>Write any coalesced (debounced) settings change to disk now; called at shutdown</td></tr>
+            <tr><td><code>flushPendingSave()</code></td><td><code>void</code></td><td>Write any coalesced (debounced) settings change to disk now; called at shutdown</td></tr>
             <tr><td><code>get_android_auto_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>androidAutoEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_phone_mirror_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>phoneMirrorEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_audio_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>scrcpyAudioEnabled</code> value (same as the property)</td></tr>
@@ -310,7 +310,7 @@
             <tr><td><code>get_git_commit_hash()</code></td><td><code>QString</code></td><td>Short HEAD hash of the checkout (<code>"unknown"</code> outside git)</td></tr>
             <tr><td><code>get_git_commit_date()</code></td><td><code>QString</code></td><td>Commit date of HEAD</td></tr>
             <tr><td><code>get_git_commit_message()</code></td><td><code>QString</code></td><td>Commit subject of HEAD</td></tr>
-            <tr><td><code>flush_pending_save()</code> <span class="platform-badge linux">Python only</span></td><td><code>void</code></td><td>Write any coalesced (debounced) settings change to disk now; called at shutdown</td></tr>
+            <tr><td><code>flush_pending_save()</code> <span class="platform-badge linux">Python only</span></td><td><code>void</code></td><td>Legacy snake_case alias of <code>flushPendingSave()</code></td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -509,7 +509,7 @@
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>applyVolume(int percent)</code></td><td><code>void</code></td><td>Clamp to 0&ndash;100, store in <code>settingsManager.currentVolume</code>, compute the quadratic-curve linear value and fan it out to every output (C++: via <code>volumeApplied</code>; Python: direct calls to media, Spotify, phone mirror and ESP32)</td></tr>
+            <tr><td><code>applyVolume(int percent)</code></td><td><code>void</code></td><td>Clamp to 0&ndash;100, store in <code>settingsManager.currentVolume</code>, compute the quadratic-curve linear value and fan it out to every output: media and phone mirror take the linear value, Spotify (debounced 300 ms trailing on both backends) and the ESP32 LED ring take the percent. C++ dispatches via <code>volumeApplied</code>; Python calls the managers directly</td></tr>
             <tr><td><code>toLinear(float percent)</code></td><td><code>float</code></td><td>Pure curve math (<code>(percent/100)^2</code>) for QML previews; does not dispatch</td></tr>
           </tbody>
         </table>
@@ -517,14 +517,14 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>volumeApplied(int percent, float linear)</code> <span class="platform-badge desktop">C++ only</span></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>main.cpp</code> connects it to <code>mediaManager.setVolume</code> and a 300 ms-debounced <code>spotifyManager.set_volume</code></td></tr>
+            <tr><td><code>volumeApplied(int percent, float linear)</code> <span class="platform-badge desktop">C++ only</span></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>main.cpp</code> connects it to <code>mediaManager.setVolume(linear)</code>, a 300 ms-debounced <code>spotifyManager.set_volume(percent)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out Python performs inside <code>applyVolume()</code></td></tr>
           </tbody>
         </table>
 
         <!-- MediaManager -->
         <h2 id="mediaManager">MediaManager <span class="cmt">&mdash; <code>mediaManager</code></span></h2>
         <p><span class="file-path">src/managers/mediamanager.h</span> / <span class="file-path">backend/media_manager.py</span> &mdash; QML context property <code>mediaManager</code></p>
-        <p>Local playback (MP3 / M4A / FLAC / OGG / OPUS / WAV) via QMediaPlayer: library scanning, playlists as sub-folders, tag metadata, cover extraction, palette extraction and playback-resume state.</p>
+        <p>Local playback (MP3 / M4A / MP4 / FLAC / OGG / OPUS / WAV) via QMediaPlayer: library scanning, playlists as sub-folders, tag metadata (TagLib on C++, mutagen on Python &mdash; title / artist / album for every format, WAV via its ID3 chunk), cover extraction (MP3, M4A/MP4, FLAC, Ogg Vorbis and Opus on both backends; WAV has no art), palette extraction and playback-resume state.</p>
         <h3>Invokables &amp; Slots</h3>
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
@@ -544,7 +544,7 @@
             <tr><td><code>setDucking(float factor)</code></td><td><code>void</code></td><td>Temporarily attenuate the output (1.0 = none, 0.1 = -20 dB) while the mirrored phone makes sound; independent of the user volume</td></tr>
             <tr><td><code>set_position(int positionMs)</code></td><td><code>void</code></td><td>Seek to a position in ms</td></tr>
             <tr><td><code>extract_colors_from_album_art(QString filename)</code></td><td><code>void</code></td><td>Run the palette extraction for a file and emit <code>albumColorsExtracted</code></td></tr>
-            <tr><td><code>scan_library(bool resetDisplayNames)</code> <span class="cmt">(Python types: ?)</span></td><td><code>void</code></td><td>Rescan the library root for audio files and playlists; <code>resetDisplayNames</code> also rebuilds cleaned display names</td></tr>
+            <tr><td><code>scan_library(bool resetDisplayNames)</code></td><td><code>void</code></td><td>Rescan the library root for audio files and playlists; <code>resetDisplayNames</code> also rebuilds cleaned display names (Python declares both the zero-arg and the <code>bool</code> <code>@Slot</code> overload)</td></tr>
             <tr><td><code>set_library_root(QString path)</code></td><td><code>void</code></td><td>Point the library at another folder (must exist) and rescan</td></tr>
             <tr><td><code>strip_filenames()</code></td><td><code>void</code></td><td>Rename files in the library to cleaned display names (progress via <code>scanProgress</code>)</td></tr>
             <tr><td><code>select_playlist(QString name)</code></td><td><code>void</code></td><td>Make a playlist (sub-folder or "All Music") the active song list</td></tr>
@@ -555,7 +555,7 @@
             <tr><td><code>play_downloaded_song(QString artist, QString name, QString playlist)</code></td><td><code>bool</code></td><td>Rescan, then play a freshly downloaded song by artist / name inside a playlist (used after DownloadManager finishes)</td></tr>
             <tr><td><code>play_file_at_path(QString filePath)</code></td><td><code>bool</code></td><td>Rescan, select the playlist containing the absolute path and play it</td></tr>
             <tr><td><code>invalidate_stats_cache()</code></td><td><code>void</code></td><td>Force the album / artist / total-duration stats to be recomputed on next read</td></tr>
-            <tr><td><code>get_media_files(bool emitSignal)</code> <span class="cmt">(Python types: ?)</span></td><td><code>QStringList</code></td><td>Filenames in the library; C++ can suppress the <code>mediaListChanged</code> emit with <code>emitSignal=false</code> (Python takes no argument from QML)</td></tr>
+            <tr><td><code>get_media_files(bool emitSignal)</code></td><td><code>QStringList</code></td><td>Filenames in the library; <code>emitSignal=false</code> suppresses the <code>mediaListChanged</code> emit (Python declares both the zero-arg and the <code>bool</code> <code>@Slot</code> overload)</td></tr>
             <tr><td><code>get_formatted_duration(QString filename)</code></td><td><code>QString</code></td><td>Track duration as <code>M:SS</code> (reads tags on demand)</td></tr>
             <tr><td><code>get_band(QString filename)</code></td><td><code>QString</code></td><td>Artist from tags</td></tr>
             <tr><td><code>get_album(QString filename)</code></td><td><code>QString</code></td><td>Album from tags</td></tr>
@@ -592,7 +592,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>playbackStateChanged(int state)</code></td><td>QMediaPlayer playback state as an int (stopped / playing / paused)</td></tr>
+            <tr><td><code>playbackStateChanged(int state)</code></td><td>QMediaPlayer playback state as an int: 0 stopped, 1 playing, 2 paused (forwarded from <code>QMediaPlayer::playbackStateChanged</code> on both backends)</td></tr>
             <tr><td><code>playStateChanged(bool playing)</code></td><td><code>true</code> when playing, <code>false</code> on pause/stop</td></tr>
             <tr><td><code>currentMediaChanged(QString filename)</code></td><td>Filename of the track that just started</td></tr>
             <tr><td><code>mediaListChanged(QStringList files)</code></td><td>The visible song list (current playlist) was replaced</td></tr>
@@ -617,7 +617,7 @@
         <!-- AudioAnalyzer -->
         <h2 id="audioAnalyzer">AudioAnalyzer <span class="cmt">&mdash; <code>audioAnalyzer</code></span></h2>
         <p><span class="file-path">src/managers/audioanalyzer.h</span> / <span class="file-path">backend/audio_analyzer.py</span> &mdash; QML context property <code>audioAnalyzer</code></p>
-        <p>Pre-computes FFT bar levels for the waveform visualizer and replays them at the playback position.</p>
+        <p>Pre-computes FFT bar levels for the waveform visualizer and replays them at the playback position. Both backends decode to 8 kHz mono and bin the 0&ndash;4 kHz magnitudes into 96 logarithmic bands, each at least one FFT bin wide (the first bands are linear until the log curve overtakes them, so no bar is permanently 0).</p>
         <h3>Invokables &amp; Slots</h3>
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
@@ -644,7 +644,7 @@
         <!-- SpotifyManager -->
         <h2 id="spotifyManager">SpotifyManager <span class="cmt">&mdash; <code>spotifyManager</code></span></h2>
         <p><span class="file-path">src/managers/spotifymanager.h</span> / <span class="file-path">backend/spotify_manager.py</span> &mdash; QML context property <code>spotifyManager</code></p>
-        <p>Spotify Web API client (OAuth2 with a local redirect server on port 8888; spotipy on Python, QNetworkAccessManager on C++). Controls Spotify Connect devices and browses the user's playlists.</p>
+        <p>Spotify Web API client (OAuth2 with a local redirect server on port 8888; spotipy on Python, QNetworkAccessManager on C++). Controls Spotify Connect devices and browses the user's playlists. Both managers subscribe to <code>settingsManager.spotifyCredentialsChanged</code>, so credentials saved in Settings take effect without a restart.</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile (Android/iOS) C++ builds compile a no-op stub instead: every signal and QML-called method exists, but <code>is_connected()</code> is always <code>false</code>. Stub-only differences: a <code>connected</code> property, <code>get_spotify_playlist_names()</code> returns <code>QVariantList</code>, <code>get_next_track_info()</code>/<code>get_previous_track_info()</code> return <code>QVariantMap</code>, and <code>logout()</code>, <code>play()</code>, <code>get_volume()</code>, <code>get_playlists()</code>, <code>get_spotify_tracks()</code>, <code>is_available()</code>, <code>cleanup()</code>, <code>connect_settings_manager()</code> are absent.</div>
         <h3>Invokables &amp; Slots</h3>
         <table>
@@ -664,8 +664,8 @@
             <tr><td><code>toggle_shuffle()</code></td><td><code>void</code></td><td>Toggle shuffle</td></tr>
             <tr><td><code>play_uri(QString uri)</code></td><td><code>void</code></td><td>Start a track URI within the selected playlist context</td></tr>
             <tr><td><code>refresh_devices()</code></td><td><code>void</code></td><td>Re-fetch Spotify Connect devices; emits <code>devicesChanged</code></td></tr>
-            <tr><td><code>set_active_device(QString deviceId)</code></td><td><code>void</code></td><td>Transfer playback to a device id</td></tr>
-            <tr><td><code>select_spotify_playlist(QString playlistId)</code></td><td><code>void</code></td><td>Load the tracks of a playlist id; emits <code>spotifyTracksChanged</code> and <code>currentSpotifyPlaylistChanged</code></td></tr>
+            <tr><td><code>set_active_device(QString deviceId)</code></td><td><code>void</code></td><td>Transfer playback to a device id; asynchronous on both backends (Python: executor + queued signal), result via <code>activeDeviceChanged</code></td></tr>
+            <tr><td><code>select_spotify_playlist(QString playlistId)</code></td><td><code>void</code></td><td>Load the tracks of a playlist id on the worker pool (asynchronous on both backends); emits <code>spotifyTracksChanged</code> and <code>currentSpotifyPlaylistChanged</code> when they arrive</td></tr>
             <tr><td><code>is_available()</code></td><td><code>bool</code></td><td>C++: always <code>true</code>; Python: <code>true</code> when spotipy is importable</td></tr>
             <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Authenticated and polling</td></tr>
             <tr><td><code>is_playing()</code></td><td><code>bool</code></td><td>Play state</td></tr>
@@ -696,7 +696,7 @@
             <tr><td><code>get_previous_track_info()</code></td><td><code>QString</code></td><td>JSON of the track before the current one</td></tr>
             <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Stop timers and drop the session at exit</td></tr>
             <tr><td><code>set_credentials(str client_id, str client_secret)</code> <span class="platform-badge linux">Python only</span></td><td><code>void</code></td><td>Store client id + secret via SettingsManager (QML uses <code>settingsManager.save_spotify_credentials</code> instead)</td></tr>
-            <tr><td><code>get_playlist_tracks(str playlist_id)</code> <span class="platform-badge linux">Python only</span></td><td><code>list</code></td><td>Fetch and return the tracks of a playlist id synchronously (page size 50, February-2026 <code>/items</code> endpoint)</td></tr>
+            <tr><td><code>get_playlist_tracks(str playlist_id)</code> <span class="platform-badge linux">Python only</span></td><td><code>list</code></td><td>Fetch and return the tracks of a playlist id synchronously (blocks the caller; page size 50, February-2026 <code>/items</code> endpoint). QML uses <code>select_spotify_playlist()</code> instead</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -726,17 +726,17 @@
         <!-- OBDManager -->
         <h2 id="obdManager">OBDManager <span class="cmt">&mdash; <code>obdManager</code></span></h2>
         <p><span class="file-path">src/managers/obdmanager.h</span> / <span class="file-path">backend/obd_manager.py</span> &mdash; QML context property <code>obdManager</code></p>
-        <p>OBD-II diagnostics over an ELM327 adapter: USB / Bluetooth serial on desktop (worker thread), BLE GATT on Android. Every PID has its own <code>&lt;name&gt;Changed(float)</code> signal so QML gauges bind directly.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class bypasses the serial worker and talks BLE through <code>OctaveOBDBridge.java</code> (JNI); the QML-facing API is identical.</div>
+        <p>OBD-II diagnostics over an ELM327 adapter: USB / Bluetooth serial on desktop (worker thread), BLE GATT on Android. Every PID has its own <code>&lt;name&gt;Changed(float)</code> signal so QML gauges bind directly. PID numbers, command names and decoders follow python-obd on both backends (C++ <code>ELM327Protocol::buildPidTable()</code> carries all 82 mode-01 commands plus <code>ELM_VOLTAGE</code>), and parameter toggles in Settings take effect on a live connection without reconnecting (C++ swaps the worker's poll list via <code>updatePidsToWatch()</code>, Android via <code>rebuildAndroidPollList()</code>).</p>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class bypasses the serial worker and talks BLE through <code>OctaveOBDBridge.java</code> (JNI); the QML-facing API is identical. Connect chains the <code>0100</code> / <code>0120</code> / <code>0140</code> / <code>0160</code> supported-PID bitmaps so default PIDs above 0x20 (fuel level, module voltage, oil temperature) are polled, and the bridge requests <code>BLUETOOTH_CONNECT</code> on the first Connect tap (the former <code>requestAndroidBluetoothPermission()</code> helper is gone).</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>connected</code> <span class="platform-badge desktop">C++ only</span></td><td><code>bool</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td>True while the adapter is connected and initialised</td></tr>
-            <tr><td><code>connectionStatus</code> <span class="platform-badge desktop">C++ only</span></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td>Status text (<code>"Connected"</code>, <code>"Connecting"</code>, <code>"Disconnected"</code>, <code>"Error"</code>)</td></tr>
+            <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td>Last <code>connectionStatusChanged</code> value (<code>"Disconnected"</code> initially; <code>"Connecting"</code>, <code>"Connected"</code>, <code>"No Vehicle"</code>, <code>"Reconnecting"</code>, <code>"Connection Failed"</code>, <code>"Stale Connection"</code>, <code>"Device Lost"</code>, <code>"Error"</code>, &hellip;); cached from the signal on both backends</td></tr>
             <tr><td><code>connectionDetail</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusDetailChanged</code></td><td>Last <code>connectionStatusDetailChanged</code> message, bound by the Connection card</td></tr>
             <tr><td><code>connectionProgress</code></td><td><code>int</code></td><td>read-only</td><td><code>connectionProgressChanged</code></td><td>Last <code>connectionProgressChanged</code> percent (0&ndash;100)</td></tr>
-            <tr><td><code>availableAdapters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>availableAdaptersChanged</code></td><td>Rich <code>[{name, identifier, kind}, &hellip;]</code> list bound by the OBD settings page; <code>kind</code> is <code>ble</code>, <code>serial-rfcomm</code>, <code>serial-usb</code>, <code>com</code>, <code>tty</code> or <code>serial</code></td></tr>
+            <tr><td><code>availableAdapters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>availableAdaptersChanged</code></td><td>Rich <code>[{name, identifier, kind}, &hellip;]</code> list bound by the OBD settings page; <code>kind</code> is <code>ble</code>, <code>serial-rfcomm</code>, <code>serial-usb</code>, <code>com</code>, <code>tty</code> or <code>serial</code>. On Android the list is the phone's bonded devices from <code>OctaveOBDBridge.bondedDevices()</code>, named <code>"&lt;name&gt; &middot; &lt;MAC&gt;"</code>; it stays empty until <code>BLUETOOTH_CONNECT</code> is granted, which the bridge requests on the first Connect tap</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -750,7 +750,7 @@
             <tr><td><code>force_connect()</code></td><td><code>void</code></td><td>Reset the attempt counter, clear any wedged in-progress flag and connect now</td></tr>
             <tr><td><code>close()</code></td><td><code>void</code></td><td>Disconnect, stop scanning/watchdog timers and suppress auto-reconnect</td></tr>
             <tr><td><code>reset_connection()</code></td><td><code>void</code></td><td>Alias of <code>force_connect()</code></td></tr>
-            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>Status text</td></tr>
+            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>Same value as the <code>connectionStatus</code> property &mdash; the <code>connectionStatusChanged</code> vocabulary on both backends (Python no longer returns python-obd's <code>"Car Connected"</code> / <code>"No Connection"</code>, C++ no longer <code>"Not Connected"</code>); the settings-page status dot keys its colour map on it</td></tr>
             <tr><td><code>getConnectionStatus()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>QString</code></td><td>camelCase alias backing the <code>connectionStatus</code> property</td></tr>
             <tr><td><code>refresh_ports()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>Run the port discovery sweep now</td></tr>
             <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>Sweep and return the plain port list</td></tr>
@@ -758,7 +758,7 @@
             <tr><td><code>availableAdapters()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>QVariantList</code></td><td>Getter for the <code>availableAdapters</code> property</td></tr>
             <tr><td><code>connect_to_adapter(QString identifier)</code></td><td><code>void</code></td><td>Single entry point of the OBD settings page: normalise the identifier (MAC / <code>/dev</code> path / COM), save it, <code>rfcomm bind</code> on Linux when given a MAC, then <code>force_connect()</code></td></tr>
             <tr><td><code>platform_hint()</code></td><td><code>QString</code></td><td><code>"linux"</code> / <code>"macos"</code> / <code>"windows"</code> / <code>"android"</code> / <code>"ios"</code>; drives hint copy only, never structural branching</td></tr>
-            <tr><td><code>scan_vehicle()</code></td><td><code>void</code></td><td>Probe every known PID on the worker thread; progress via <code>scanProgressChanged</code>/<code>scanOutputChanged</code>, result via <code>scanCompleteChanged</code></td></tr>
+            <tr><td><code>scan_vehicle()</code></td><td><code>void</code></td><td>Probe every known PID on the worker thread (Android: answer from the supported-PID bitmaps read at connect time); progress via <code>scanProgressChanged</code>/<code>scanOutputChanged</code>, result via <code>scanCompleteChanged</code></td></tr>
             <tr><td><code>is_scanning()</code></td><td><code>bool</code></td><td>A vehicle scan is running</td></tr>
             <tr><td><code>get_all_parameter_names()</code></td><td><code>QStringList</code></td><td>Every PID command name the manager knows (<code>COOLANT_TEMP</code>, <code>RPM</code>, &hellip;)</td></tr>
             <tr><td><code>get_supported_commands()</code></td><td><code>QVariantList</code></td><td>PID names found by the last scan</td></tr>
@@ -767,7 +767,7 @@
             <tr><td><code>enter_diagnostic_mode()</code></td><td><code>void</code></td><td>Pause live polling so DTC commands get the bus</td></tr>
             <tr><td><code>exit_diagnostic_mode()</code></td><td><code>void</code></td><td>Resume live polling (after a short delay)</td></tr>
             <tr><td><code>is_diagnostic_mode()</code></td><td><code>bool</code></td><td>Diagnostic mode active</td></tr>
-            <tr><td><code>read_dtc()</code></td><td><code>void</code></td><td>Read stored DTCs (Mode 03) &rarr; <code>dtcCodesChanged</code>, <code>dtcCountChanged</code></td></tr>
+            <tr><td><code>read_dtc()</code></td><td><code>void</code></td><td>Read stored DTCs (Mode 03) &rarr; <code>dtcCodesChanged</code>, <code>dtcCountChanged</code>. This and the four DTC / status / freeze-frame slots below run on the desktop worker thread; on Android (no worker) they log once and return</td></tr>
             <tr><td><code>read_current_dtc()</code></td><td><code>void</code></td><td>Read pending DTCs (Mode 07)</td></tr>
             <tr><td><code>read_status()</code></td><td><code>void</code></td><td>Read MIL state and DTC count (Mode 01 PID 01) &rarr; <code>milStatusChanged</code>, <code>dtcCountChanged</code></td></tr>
             <tr><td><code>clear_dtc()</code></td><td><code>void</code></td><td>Clear codes (Mode 04) &rarr; <code>dtcClearResult</code></td></tr>
@@ -798,7 +798,7 @@
             <tr><td><code>open_bluetooth_settings()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>Desktop: no-op. Android: opens the system Bluetooth settings</td></tr>
             <tr><td><code>set_target_address(QString address)</code></td><td><code>void</code></td><td>Persist the identifier as <code>obdBluetoothPort</code>; the saved-port watcher then reconnects</td></tr>
             <tr><td><code>set_auto_reconnect(bool enabled)</code></td><td><code>void</code></td><td>Deprecated no-op &mdash; use <code>settingsManager.obdAutoReconnectAttempts</code></td></tr>
-            <tr><td><code>set_connection_timeout(int timeoutSeconds)</code></td><td><code>void</code></td><td>Connection timeout in seconds (clamped 5&ndash;60)</td></tr>
+            <tr><td><code>set_connection_timeout(int timeoutSeconds)</code></td><td><code>void</code></td><td>Connection timeout in seconds (clamped 5&ndash;60); on C++ it also bounds the vehicle-verify RPM request after ELM327 init (no <code>obdConnectionTimeout</code> settings key exists in either backend)</td></tr>
             <tr><td><code>check_device_presence()</code></td><td><code>bool</code></td><td>Check whether the configured port exists; emits <code>devicePresenceChanged</code></td></tr>
           </tbody>
         </table>
@@ -815,7 +815,7 @@
             <tr><td><code>massAirFlowChanged(float value)</code></td><td>MAF &mdash; Mode 1 PID 0x10 (g/s)</td></tr>
             <tr><td><code>speedMPHChanged(float value)</code></td><td>Speed &mdash; Mode 1 PID 0x0D (mph)</td></tr>
             <tr><td><code>rpmChanged(float value)</code></td><td>RPM &mdash; Mode 1 PID 0x0C (rpm)</td></tr>
-            <tr><td><code>airFuelRatioChanged(float value)</code></td><td>Commanded Equiv Ratio &mdash; Mode 1 PID 0x44 (ratio)</td></tr>
+            <tr><td><code>airFuelRatioChanged(float value)</code></td><td>Air/Fuel Ratio &mdash; Mode 1 PID 0x44: commanded equivalence ratio (lambda) &times; 14.7 on both backends</td></tr>
             <tr><td><code>fuelLevelChanged(float value)</code></td><td>Fuel Level &mdash; Mode 1 PID 0x2F (%)</td></tr>
             <tr><td><code>intakeManifoldPressureChanged(float value)</code></td><td>Intake Manifold Pressure &mdash; Mode 1 PID 0x0B (kPa)</td></tr>
             <tr><td><code>shortTermFuelTrimChanged(float value)</code></td><td>Short Term Fuel Trim 1 &mdash; Mode 1 PID 0x06 (%)</td></tr>
@@ -834,45 +834,45 @@
             <tr><td><code>absoluteThrottlePosBChanged(float value)</code></td><td>Throttle Pos B &mdash; Mode 1 PID 0x47 (%)</td></tr>
             <tr><td><code>acceleratorPosChanged(float value)</code></td><td>Accelerator Pos D &mdash; Mode 1 PID 0x49 (%)</td></tr>
             <tr><td><code>catalystTempB1S1Changed(float value)</code></td><td>Catalyst Temp B1S1 &mdash; Mode 1 PID 0x3C (&deg;C)</td></tr>
-            <tr><td><code>catalystTempB1S2Changed(float value)</code></td><td>Catalyst Temp B1S2 &mdash; Mode 1 PID 0x3D (&deg;C)</td></tr>
+            <tr><td><code>catalystTempB1S2Changed(float value)</code></td><td>Catalyst Temp B1S2 &mdash; Mode 1 PID 0x3E (&deg;C)</td></tr>
             <tr><td><code>evapVaporPressureChanged(float value)</code></td><td>Evap Vapor Pressure &mdash; Mode 1 PID 0x32</td></tr>
             <tr><td><code>shortFuelTrim2Changed(float value)</code></td><td>Short Fuel Trim 2 &mdash; Mode 1 PID 0x08 (%)</td></tr>
             <tr><td><code>longFuelTrim2Changed(float value)</code></td><td>Long Fuel Trim 2 &mdash; Mode 1 PID 0x09 (%)</td></tr>
             <tr><td><code>o2SensorB1S2Changed(float value)</code></td><td>O2 B1S2 &mdash; Mode 1 PID 0x15</td></tr>
-            <tr><td><code>o2SensorB2S1Changed(float value)</code></td><td>O2 B2S1 &mdash; Mode 1 PID 0x16</td></tr>
-            <tr><td><code>o2SensorB2S2Changed(float value)</code></td><td>O2 B2S2 &mdash; Mode 1 PID 0x17</td></tr>
+            <tr><td><code>o2SensorB2S1Changed(float value)</code></td><td>O2 B2S1 &mdash; Mode 1 PID 0x18 (V)</td></tr>
+            <tr><td><code>o2SensorB2S2Changed(float value)</code></td><td>O2 B2S2 &mdash; Mode 1 PID 0x19 (V)</td></tr>
             <tr><td><code>distanceSinceCodesCleared(float value)</code></td><td>Distance Since Codes Cleared &mdash; Mode 1 PID 0x31 (km)</td></tr>
             <tr><td><code>warmupsSinceCodesCleared(float value)</code></td><td>Warmups Since Codes Cleared &mdash; Mode 1 PID 0x30</td></tr>
             <tr><td><code>absoluteLoadChanged(float value)</code></td><td>Absolute Load &mdash; Mode 1 PID 0x43 (%)</td></tr>
             <tr><td><code>commandedEGRChanged(float value)</code></td><td>Commanded EGR &mdash; Mode 1 PID 0x2C (%)</td></tr>
             <tr><td><code>egrErrorChanged(float value)</code></td><td>EGR Error &mdash; Mode 1 PID 0x2D</td></tr>
             <tr><td><code>ethanoPercentChanged(float value)</code></td><td>Ethanol Percent &mdash; Mode 1 PID 0x52</td></tr>
-            <tr><td><code>o2SensorB1S3Changed(float value)</code></td><td>O2 B1S3 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2SensorB1S4Changed(float value)</code></td><td>O2 B1S4 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2SensorB2S3Changed(float value)</code></td><td>O2 B2S3 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2SensorB2S4Changed(float value)</code></td><td>O2 B2S4 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S1WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 1 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S2WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 2 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S3WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 3 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S4WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 4 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S5WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 5 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S6WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 6 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S7WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 7 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S8WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 8 voltage. <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S1WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 1 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S2WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 2 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S3WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 3 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S4WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 4 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S5WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 5 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S6WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 6 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S7WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 7 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>o2S8WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 8 current (mA). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
-            <tr><td><code>catalystTempB2S1Changed(float value)</code></td><td>Catalyst Temp B2S1 &mdash; Mode 1 PID 0x3E (&deg;C)</td></tr>
+            <tr><td><code>o2SensorB1S3Changed(float value)</code></td><td>O2 B1S3 &mdash; Mode 1 PID 0x16 (V)</td></tr>
+            <tr><td><code>o2SensorB1S4Changed(float value)</code></td><td>O2 B1S4 &mdash; Mode 1 PID 0x17 (V)</td></tr>
+            <tr><td><code>o2SensorB2S3Changed(float value)</code></td><td>O2 B2S3 &mdash; Mode 1 PID 0x1A (V)</td></tr>
+            <tr><td><code>o2SensorB2S4Changed(float value)</code></td><td>O2 B2S4 &mdash; Mode 1 PID 0x1B (V)</td></tr>
+            <tr><td><code>o2S1WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 1 voltage &mdash; Mode 1 PID 0x24 (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S2WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 2 voltage &mdash; Mode 1 PID 0x25 (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S3WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 3 voltage &mdash; Mode 1 PID 0x26 (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S4WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 4 voltage &mdash; Mode 1 PID 0x27 (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S5WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 5 voltage &mdash; Mode 1 PID 0x28 (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S6WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 6 voltage &mdash; Mode 1 PID 0x29 (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S7WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 7 voltage &mdash; Mode 1 PID 0x2A (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S8WRVoltageChanged(float value)</code></td><td>Wide-range O2 sensor 8 voltage &mdash; Mode 1 PID 0x2B (bytes C/D &times; 8 / 65535 V)</td></tr>
+            <tr><td><code>o2S1WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 1 current &mdash; Mode 1 PID 0x34 (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>o2S2WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 2 current &mdash; Mode 1 PID 0x35 (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>o2S3WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 3 current &mdash; Mode 1 PID 0x36 (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>o2S4WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 4 current &mdash; Mode 1 PID 0x37 (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>o2S5WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 5 current &mdash; Mode 1 PID 0x38 (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>o2S6WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 6 current &mdash; Mode 1 PID 0x39 (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>o2S7WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 7 current &mdash; Mode 1 PID 0x3A (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>o2S8WRCurrentChanged(float value)</code></td><td>Wide-range O2 sensor 8 current &mdash; Mode 1 PID 0x3B (bytes C/D / 256 &minus; 128 mA)</td></tr>
+            <tr><td><code>catalystTempB2S1Changed(float value)</code></td><td>Catalyst Temp B2S1 &mdash; Mode 1 PID 0x3D (&deg;C)</td></tr>
             <tr><td><code>catalystTempB2S2Changed(float value)</code></td><td>Catalyst Temp B2S2 &mdash; Mode 1 PID 0x3F (&deg;C)</td></tr>
-            <tr><td><code>throttlePosCChanged(float value)</code></td><td>Throttle Pos C &mdash; Mode 1 PID 0x4A (%)</td></tr>
-            <tr><td><code>acceleratorPosEChanged(float value)</code></td><td>Accelerator Pos E &mdash; Mode 1 PID 0x4B (%)</td></tr>
-            <tr><td><code>acceleratorPosFChanged(float value)</code></td><td>Accelerator Pos F &mdash; Mode 1 PID 0x4C (%)</td></tr>
-            <tr><td><code>throttleActuatorChanged(float value)</code></td><td>Throttle Actuator &mdash; Mode 1 PID 0x4F (%)</td></tr>
+            <tr><td><code>throttlePosCChanged(float value)</code></td><td>Throttle Pos C &mdash; Mode 1 PID 0x48 (%)</td></tr>
+            <tr><td><code>acceleratorPosEChanged(float value)</code></td><td>Accelerator Pos E &mdash; Mode 1 PID 0x4A (%)</td></tr>
+            <tr><td><code>acceleratorPosFChanged(float value)</code></td><td>Accelerator Pos F &mdash; Mode 1 PID 0x4B (%)</td></tr>
+            <tr><td><code>throttleActuatorChanged(float value)</code></td><td>Throttle Actuator &mdash; Mode 1 PID 0x4C (%)</td></tr>
             <tr><td><code>evaporativePurgeChanged(float value)</code></td><td>Evaporative Purge &mdash; Mode 1 PID 0x2E (%)</td></tr>
             <tr><td><code>fuelRailPressureAbsChanged(float value)</code></td><td>Fuel Rail Pressure Abs &mdash; Mode 1 PID 0x59 (kPa)</td></tr>
             <tr><td><code>fuelInjectTimingChanged(float value)</code></td><td>Fuel Inject Timing &mdash; Mode 1 PID 0x5D</td></tr>
@@ -881,15 +881,15 @@
             <tr><td><code>timeSinceDTCClearedChanged(float value)</code></td><td>Time Since DTC Cleared &mdash; Mode 1 PID 0x4E (min)</td></tr>
             <tr><td><code>maxMAFChanged(float value)</code></td><td>Max MAF &mdash; Mode 1 PID 0x50</td></tr>
             <tr><td><code>fuelTypeChanged(float value)</code></td><td>Fuel Type &mdash; Mode 1 PID 0x51</td></tr>
-            <tr><td><code>evapVaporPressureAbsChanged(float value)</code></td><td>Evap Vapor Pressure Abs &mdash; Mode 1 PID 0x54</td></tr>
-            <tr><td><code>evapVaporPressureAltChanged(float value)</code></td><td>Evap Vapor Pressure Alt &mdash; Mode 1 PID 0x55</td></tr>
-            <tr><td><code>shortO2TrimB1Changed(float value)</code></td><td>Short O2 Trim B1 &mdash; Mode 1 PID 0x56 (%)</td></tr>
-            <tr><td><code>longO2TrimB1Changed(float value)</code></td><td>Long O2 Trim B1 &mdash; Mode 1 PID 0x57 (%)</td></tr>
-            <tr><td><code>shortO2TrimB2Changed(float value)</code></td><td>Short O2 Trim B2 &mdash; Mode 1 PID 0x58 (%)</td></tr>
-            <tr><td><code>longO2TrimB2Changed(float value)</code></td><td>Long O2 Trim B2 (%). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
+            <tr><td><code>evapVaporPressureAbsChanged(float value)</code></td><td>Evap Vapor Pressure Abs &mdash; Mode 1 PID 0x53</td></tr>
+            <tr><td><code>evapVaporPressureAltChanged(float value)</code></td><td>Evap Vapor Pressure Alt &mdash; Mode 1 PID 0x54</td></tr>
+            <tr><td><code>shortO2TrimB1Changed(float value)</code></td><td>Short O2 Trim B1 &mdash; Mode 1 PID 0x55 (%)</td></tr>
+            <tr><td><code>longO2TrimB1Changed(float value)</code></td><td>Long O2 Trim B1 &mdash; Mode 1 PID 0x56 (%)</td></tr>
+            <tr><td><code>shortO2TrimB2Changed(float value)</code></td><td>Short O2 Trim B2 &mdash; Mode 1 PID 0x57 (%)</td></tr>
+            <tr><td><code>longO2TrimB2Changed(float value)</code></td><td>Long O2 Trim B2 &mdash; Mode 1 PID 0x58 (%)</td></tr>
             <tr><td><code>relativeAccelPosChanged(float value)</code></td><td>Relative Accel Pos &mdash; Mode 1 PID 0x5A (%)</td></tr>
             <tr><td><code>hybridBatteryRemainingChanged(float value)</code></td><td>Hybrid Battery &mdash; Mode 1 PID 0x5B</td></tr>
-            <tr><td><code>elmVoltageChanged(float value)</code></td><td>ELM327 adapter supply voltage (ATRV). <strong>C++: declared for binding compatibility only &mdash; no decoder in the ELM327 PID table, so it never fires.</strong> Python emits it through python-obd</td></tr>
+            <tr><td><code>elmVoltageChanged(float value)</code></td><td>ELM327 adapter supply voltage (V) from the adapter's own <code>ATRV</code> command (text reply such as <code>12.6V</code>); polled like a PID on both backends</td></tr>
             <tr><td><code>connectionStatusChanged(QString status)</code></td><td>Status text changed</td></tr>
             <tr><td><code>connectionStatusDetailChanged(QString detail)</code></td><td>Detailed status message</td></tr>
             <tr><td><code>connectionProgressChanged(int progress)</code></td><td>Connection progress percent</td></tr>
@@ -912,8 +912,8 @@
         <!-- ESP32VolumeManager -->
         <h2 id="esp32VolumeManager">ESP32VolumeManager <span class="cmt">&mdash; <code>esp32VolumeManager</code></span></h2>
         <p><span class="file-path">src/managers/esp32volumemanager.h</span> / <span class="file-path">backend/esp32_volume_manager.py</span> &mdash; QML context property <code>esp32VolumeManager</code></p>
-        <p>Wireless rotary encoder over USB serial (115200 baud). Encoder ticks and button presses arrive as signals; <code>main</code> routes them through VolumeController.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ builds compile a stub with only <code>is_connected()</code>, <code>get_connection_detail()</code> ("Not available on mobile"), <code>get_ports_with_descriptions()</code> (returns an empty <code>QVariantList</code>, not JSON), <code>connect_device()</code>, <code>reset_reconnect_attempts()</code>, the five signals above plus an extra <code>connectionStateChanged()</code>. No properties &mdash; QML guards with <code>typeof esp32VolumeManager</code>.</div>
+        <p>Wireless rotary encoder over USB serial (115200 baud). Encoder ticks and button presses arrive as signals; <code>main</code> routes them through VolumeController, and pushes volume (<code>send_volume_update</code>), mute (<code>send_mute_state</code>) and the LED ring colour (<code>send_theme_color</code>: album-art accent in <code>"theme"</code> mode, <code>esp32LedStaticColor</code> in <code>"static"</code> mode, cyan fallback) back to the knob &mdash; including a full push 500 ms after the knob connects &mdash; on both backends. C++ treats <code>ResourceError</code>, <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code>, <code>WriteError</code> and a rejected keepalive write as a lost link and auto-reconnects, matching Python's <code>SerialException</code> handling.</p>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ builds compile a no-op stub with the same signatures as desktop: all four properties, every slot below (<code>get_ports_with_descriptions()</code> returns the JSON string <code>"[]"</code>, <code>get_connection_status()</code> <code>"Disconnected"</code>, <code>get_connection_detail()</code> <code>"Not available on mobile"</code>, <code>is_connected()</code> <code>false</code>) and the five signals. QML still guards with <code>typeof esp32VolumeManager</code>.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -955,8 +955,8 @@
         <!-- BerryIMUManager -->
         <h2 id="berryIMU">BerryIMUManager <span class="cmt">&mdash; <code>berryIMU</code></span></h2>
         <p><span class="file-path">src/managers/berryimumanager.h</span> / <span class="file-path">backend/berryimu_manager.py</span> &mdash; QML context property <code>berryIMU</code></p>
-        <p>BerryIMU v3 (LSM6DSL accel/gyro, LIS3MDL mag, BMP388 baro) over I2C with a Madgwick 9DOF AHRS on a worker thread. The Android build reads Qt Sensors instead.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>The Android C++ build is a full QtSensors implementation with the identical API (status text <code>"Unavailable"</code> instead of <code>"Disconnected"</code>).</div>
+        <p>BerryIMU v3 (LSM6DSL accel/gyro, LIS3MDL mag, BMP388 baro) over I2C with a Madgwick AHRS on a worker thread (accel + gyro fusion only; the magnetometer feeds the heading readout). The Android build reads Qt Sensors instead. Five consecutive failed I2C block reads mark the bus dead (C++): status <code>"Error"</code>, then the usual retry / back-off. A permission-denied bus (<code>EACCES</code> / <code>EPERM</code>, Python <code>PermissionError</code>) logs a warning once (C++: <code>permission denied on /dev/i2c-N - add the user to the i2c group; not retrying</code>), emits <code>"Disconnected"</code> and does not retry, on both backends.</p>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>The Android C++ build is a full QtSensors implementation with the identical API: <code>setEnabled()</code> persists <code>imuEnabled</code> like desktop (a persisted &ldquo;off&rdquo; stops the sensors when the SettingsManager is attached), <code>connectionStatusChanged</code> reports <code>"Connected"</code>, <code>"Unavailable"</code> or <code>"Disabled"</code>, <code>setEmitRate()</code> clamps to the same 10&ndash;120 Hz, and <code>orientationChanged</code> is synthesised as a yaw-stripped quaternion from the tared pitch / roll so CarMenu sees one convention.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -972,10 +972,10 @@
             <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>Status text</td></tr>
             <tr><td><code>setEnabled(bool enabled)</code></td><td><code>void</code></td><td>Start/stop the sensor and persist <code>imuEnabled</code></td></tr>
             <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>Enabled flag</td></tr>
-            <tr><td><code>setEmitRate(int hz)</code></td><td><code>void</code></td><td>Signal rate in Hz (clamped 10&ndash;120)</td></tr>
+            <tr><td><code>setEmitRate(int hz)</code></td><td><code>void</code></td><td>Signal rate in Hz (clamped 10&ndash;120); C++ keeps the value and applies it to every worker it creates, so a call before start or across a retry is not lost</td></tr>
             <tr><td><code>setActive(bool active)</code></td><td><code>void</code></td><td>Main.qml sets <code>true</code> while a sensor page is showing; <code>false</code> drops the worker to a 5 Hz idle rate</td></tr>
-            <tr><td><code>calibrateTare()</code></td><td><code>void</code></td><td>Take the current orientation as the zero reference (CarMenu ZERO)</td></tr>
-            <tr><td><code>resetTare()</code></td><td><code>void</code></td><td>Clear the tare (CarMenu RESET)</td></tr>
+            <tr><td><code>calibrateTare()</code></td><td><code>void</code></td><td>Take the current orientation as the zero reference (CarMenu ZERO). Raises a request that the read thread services on its next pass on both backends; ignored with a log line when the loop is not running</td></tr>
+            <tr><td><code>resetTare()</code></td><td><code>void</code></td><td>Clear the tare (CarMenu RESET); serviced on the read thread while running, applied immediately otherwise</td></tr>
             <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Stop the worker thread and close the I2C bus</td></tr>
           </tbody>
         </table>
@@ -983,7 +983,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>orientationChanged(float w, float x, float y, float z)</code></td><td>Quaternion (w, x, y, z) from the Madgwick AHRS for the 3D vehicle model</td></tr>
+            <tr><td><code>orientationChanged(float w, float x, float y, float z)</code></td><td>Tared, yaw-stripped quaternion (w, x, y, z) from the Madgwick AHRS for the 3D vehicle model (Android: built from the tared pitch / roll)</td></tr>
             <tr><td><code>pitchChanged(float pitch)</code></td><td>Pitch in degrees</td></tr>
             <tr><td><code>rollChanged(float roll)</code></td><td>Roll in degrees</td></tr>
             <tr><td><code>headingChanged(float heading)</code></td><td>Compass heading 0&ndash;360</td></tr>
@@ -992,7 +992,7 @@
             <tr><td><code>lateralGChanged(float g)</code></td><td>Side-to-side g</td></tr>
             <tr><td><code>longitudinalGChanged(float g)</code></td><td>Front-to-back g</td></tr>
             <tr><td><code>baroTempChanged(float temp)</code></td><td>Barometer temperature</td></tr>
-            <tr><td><code>connectionStatusChanged(QString status)</code></td><td><code>"Connected"</code> / <code>"Disconnected"</code> (Android: <code>"Unavailable"</code>)</td></tr>
+            <tr><td><code>connectionStatusChanged(QString status)</code></td><td><code>"Connected"</code> / <code>"Disconnected"</code> / <code>"Error"</code> (Android: <code>"Connected"</code> / <code>"Unavailable"</code> / <code>"Disabled"</code>)</td></tr>
             <tr><td><code>hasTemperatureChanged(bool has)</code></td><td>Notify for <code>hasTemperature</code></td></tr>
           </tbody>
         </table>
@@ -1000,8 +1000,8 @@
         <!-- GestureManager -->
         <h2 id="gestureSensor">GestureManager <span class="cmt">&mdash; <code>gestureSensor</code></span></h2>
         <p><span class="file-path">src/managers/gesturemanager.h</span> / <span class="file-path">backend/gesture_manager.py</span> &mdash; QML context property <code>gestureSensor</code></p>
-        <p>PAJ7620U2 I2C gesture sensor on a worker thread; gestures map to media actions.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub: <code>connectionStatus</code> property, <code>setEnabled</code>, <code>setCooldown(double)</code>, <code>setGestureAction</code>, <code>getGestureAction</code>, <code>resetMappingToDefaults</code>, <code>getConnectionStatus</code> ("Disabled on mobile"), signals <code>actionTriggered</code> and an argument-less <code>connectionStatusChanged()</code>. <code>gestureDetected</code>, <code>isEnabled</code> and <code>cleanup</code> are absent.</div>
+        <p>PAJ7620U2 I2C gesture sensor on a worker thread; gestures map to media actions. Directional / rotation / wave gestures are confirmed by a second register read 20 ms later: the sample is accepted when the re-read agrees or is empty (the sensor clears its flags on read) and discarded when it shows a different gesture, on both backends. Five consecutive failed register reads mark the bus dead (C++): status <code>"Error"</code>, then retry / back-off. A permission-denied bus (<code>EACCES</code> / <code>EPERM</code>, Python <code>PermissionError</code>) logs a warning once (C++: <code>permission denied on /dev/i2c-N - add the user to the i2c group; not retrying</code>), emits <code>"Disconnected"</code> and does not retry, on both backends.</p>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub keeps the desktop signatures: <code>connectionStatus</code> property, every slot below (<code>getConnectionStatus()</code> returns <code>"Disabled on mobile"</code>, <code>getGestureAction()</code> <code>"none"</code>, <code>isEnabled()</code> <code>false</code>, <code>setCooldown(int)</code>) and the three signals including <code>gestureDetected</code> and <code>connectionStatusChanged(QString)</code>.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1036,7 +1036,7 @@
         <!-- AndroidAutoManager -->
         <h2 id="androidAutoManager">AndroidAutoManager <span class="cmt">&mdash; <code>androidAutoManager</code></span></h2>
         <p><span class="file-path">src/managers/androidautomanager.h</span> / <span class="file-path">backend/android_auto/manager.py</span> &mdash; QML context property <code>androidAutoManager</code></p>
-        <p>Android Auto via Google's Desktop Head Unit: launches DHU, hides its window and streams captured frames to QML through the <code>image://dhuframe/</code> provider.</p>
+        <p>Android Auto via Google's Desktop Head Unit: launches DHU, hides its window and streams captured frames to QML through the <code>image://dhuframe/</code> provider. adb is found by the same discovery as Phone Mirror (bundled platform-tools &rarr; <code>PATH</code> &rarr; SDK locations; C++ <code>PhoneMirrorManager::findAdb()</code>, Python <code>_find_adb</code>), and only its own <code>tcp:5277</code> forward is removed on setup / cleanup so a live mirror tunnel survives.</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub exposes only <code>isDhuInstalled</code> / <code>isDhuEmbedded</code> (constant <code>false</code>), <code>launchDhuSeamless()</code> (false), <code>closeDhu()</code> and the <code>dhuEmbeddedChanged</code>, <code>error</code>, <code>dhuWindowReady</code> signals.</div>
         <h3>Properties</h3>
         <table>
@@ -1108,7 +1108,7 @@
         <!-- PhoneMirrorManager -->
         <h2 id="phoneMirrorManager">PhoneMirrorManager <span class="cmt">&mdash; <code>phoneMirrorManager</code></span></h2>
         <p><span class="file-path">src/managers/phonemirrormanager.h</span> / <span class="file-path">backend/phone_mirror/manager.py</span> &mdash; QML context property <code>phoneMirrorManager</code></p>
-        <p>Built-in scrcpy-protocol client (see <a href="phone-mirror-android-auto.html">Phone Mirror</a>): pushes <span class="file-path">tools/phone-server/octave-phone-server</span> over adb, decodes H.264 itself and injects touch. Desktop only; the mobile build registers a stub.</p>
+        <p>Built-in scrcpy-protocol client (see <a href="phone-mirror-android-auto.html">Phone Mirror</a>): pushes <span class="file-path">tools/phone-server/octave-phone-server</span> over adb, decodes H.264 itself and injects touch. Desktop only; the mobile build registers a stub. adb discovery (<code>findAdb()</code>, public static in C++) is shared with AndroidAutoManager; on Windows every adb / server process goes through <code>ScrcpyClient::hideConsoleWindow()</code> so no console flashes. Errors are reported through <code>scrcpyError</code> only &mdash; there is no separate <code>error</code> signal in either backend.</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub keeps every property (all <code>CONSTANT</code>), every signal except <code>phoneAsleepChanged</code> / <code>phoneInUseChanged</code>, and every slot except <code>describeDeviceState</code>, <code>getDeviceSerial</code>, <code>getDeviceName</code>, <code>getDeviceResolution</code>, <code>getDeviceSdk</code> and <code>cleanup</code>.</div>
         <h3>Properties</h3>
         <table>
@@ -1165,7 +1165,6 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>error(QString message)</code></td><td>Generic error message</td></tr>
             <tr><td><code>scrcpyStarted(int handle)</code></td><td>Session started (the handle is always 1 with the built-in client)</td></tr>
             <tr><td><code>scrcpyStopped()</code></td><td>Session ended</td></tr>
             <tr><td><code>scrcpyError(QString message)</code></td><td>Session failed to start / died; carries <code>describeDeviceState()</code>-style text</td></tr>
@@ -1304,23 +1303,20 @@
         </table>
 
         <h2 id="parity-gaps">Known parity gaps</h2>
-        <p>Differences found between the two backends on desktop (mechanically diffed from the headers and modules on 2026-09-10). None of them is hit by the current QML &mdash; every member the frontend references exists in both backends &mdash; but they are drift that the parity rule in <span class="file-path">CLAUDE.md</span> says should be closed.</p>
+        <p>Differences found between the two backends on desktop (mechanically diffed from the headers and modules on 2026-09-10, re-checked 2026-09-11). None of them is hit by the current QML &mdash; every member the frontend references exists in both backends &mdash; but they are drift that the parity rule in <span class="file-path">CLAUDE.md</span> says should be closed.</p>
         <table>
           <thead><tr><th>Manager</th><th>Member</th><th>Gap</th></tr></thead>
           <tbody>
-            <tr><td><code>settingsManager</code></td><td><code>flushPendingSave()</code> / <code>flush_pending_save()</code></td><td>Same behaviour, different name: C++ is camelCase, Python is snake_case. Only backend shutdown code calls it.</td></tr>
             <tr><td><code>settingsManager</code></td><td><code>get_setting(key)</code></td><td>Python accepts an optional second <code>default_value</code>; C++ has the separate <code>get_setting_with_default()</code> (Python has that too).</td></tr>
             <tr><td><code>settingsManager</code></td><td><code>startUpVolumeChanged</code></td><td>Both emit a <em>string</em> although the property is <code>float</code>.</td></tr>
             <tr><td><code>networkManager</code></td><td><code>cleanup()</code></td><td>Public slot in C++; plain (non-Slot) method in Python. Not callable from QML on Python.</td></tr>
-            <tr><td><code>volumeController</code></td><td><code>volumeApplied(int, float)</code></td><td>C++ only. Python dispatches to the managers directly inside <code>applyVolume()</code> instead of emitting a signal.</td></tr>
+            <tr><td><code>volumeController</code></td><td><code>volumeApplied(int, float)</code></td><td>C++ only. Python dispatches to the same four outputs directly inside <code>applyVolume()</code> instead of emitting a signal.</td></tr>
             <tr><td><code>mediaManager</code></td><td><code>_save_playback_state()</code>, <code>_clear_temp_files()</code></td><td>Python declares them <code>@Slot</code> too, but underscore-prefixed names are treated as private here; both backends expose them.</td></tr>
-            <tr><td><code>mediaManager</code></td><td><code>get_media_files(bool)</code>, <code>scan_library(bool)</code></td><td>C++ takes an optional bool; the Python <code>@Slot</code> is declared without argument types, so QML can only call the zero-arg form on Python.</td></tr>
             <tr><td><code>spotifyManager</code></td><td><code>logout()</code></td><td>C++ only (<code>disconnect()</code> is the shared name and is an alias of it).</td></tr>
             <tr><td><code>spotifyManager</code></td><td><code>set_credentials(str, str)</code>, <code>get_playlist_tracks(str)</code></td><td>Python only. QML saves credentials through <code>settingsManager.save_spotify_credentials()</code>.</td></tr>
             <tr><td><code>spotifyManager</code></td><td><code>get_spotify_track_*(name)</code></td><td>C++ takes <code>QVariant</code>, Python <code>str</code> &mdash; harmless from QML.</td></tr>
-            <tr><td><code>obdManager</code></td><td>22 sensor signals: <code>o2SensorB1S3/B1S4/B2S3/B2S4Changed</code>, <code>o2S1&ndash;8WRVoltageChanged</code>, <code>o2S1&ndash;8WRCurrentChanged</code>, <code>longO2TrimB2Changed</code>, <code>elmVoltageChanged</code></td><td>Declared in both backends, but the C++ ELM327 PID table (<span class="file-path">src/managers/elm327protocol.cpp</span>) has no decoder for them, so they never fire on C++; Python emits them via python-obd. Gauges bound to these PIDs stay at 0 on the shipped binary.</td></tr>
-            <tr><td><code>obdManager</code></td><td><code>connected</code>, <code>connectionStatus</code> properties</td><td>C++ only. Python exposes the same state only through <code>is_connected()</code> / <code>get_connection_status()</code> and the <code>connectionStatusChanged</code> signal.</td></tr>
-            <tr><td><code>obdManager</code></td><td><code>isConnected()</code>, <code>getConnectionStatus()</code>, <code>availableAdapters()</code></td><td>C++ camelCase getters backing the properties; Python has only the snake_case forms / the property.</td></tr>
+            <tr><td><code>obdManager</code></td><td><code>connected</code> property</td><td>C++ only. Python exposes the flag through <code>is_connected()</code> and the <code>connectionStatusChanged</code> signal (it does have the <code>connectionStatus</code> property).</td></tr>
+            <tr><td><code>obdManager</code></td><td><code>isConnected()</code>, <code>getConnectionStatus()</code>, <code>availableAdapters()</code></td><td>C++ camelCase getters backing the properties; Python has only the snake_case forms / the properties.</td></tr>
             <tr><td><code>obdManager</code></td><td><code>connect_obd()</code>, <code>refresh_ports()</code>, <code>open_bluetooth_settings()</code></td><td>C++ only. Python has <code>scan()</code> (same as <code>refresh_ports</code>) and <code>reconnect()</code> / <code>force_connect()</code>.</td></tr>
             <tr><td><code>phoneMirrorManager</code></td><td><code>describeDeviceState(str)</code></td><td>Public slot in C++; static helper (not a Slot) in Python.</td></tr>
             <tr><td><code>dhuCapture</code></td><td><code>sendMouseEvent(int, int, bool)</code></td><td>Python only.</td></tr>

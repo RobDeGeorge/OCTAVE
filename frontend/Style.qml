@@ -1071,7 +1071,7 @@ QtObject {
     Behavior on hoverColor { ColorAnimation { duration: colorTransitionMs } }
     property color hoverPausedColor: activeTheme.states.paused
     Behavior on hoverPausedColor { ColorAnimation { duration: colorTransitionMs } }
-    property color hoverPlayingColor: activeTheme.states.paused
+    property color hoverPlayingColor: activeTheme.states.playing
     Behavior on hoverPlayingColor { ColorAnimation { duration: colorTransitionMs } }
     property color pausedHighlightColor: activeTheme.states.paused
     Behavior on pausedHighlightColor { ColorAnimation { duration: colorTransitionMs } }

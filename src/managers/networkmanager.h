@@ -90,6 +90,7 @@ private slots:
     void onConnectivityCheckFinished();
     void onNetworkNameCheckFinished();
     void onUpdateCheckReplyFinished();
+    void clearNetworkName();
     void onSelfUpdateStepFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
 private:

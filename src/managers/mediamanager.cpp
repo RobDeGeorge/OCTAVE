@@ -32,6 +32,7 @@
 #include <taglib/flacpicture.h>
 #include <taglib/oggfile.h>
 #include <taglib/vorbisfile.h>
+#include <taglib/opusfile.h>
 #include <taglib/xiphcomment.h>
 #endif // Q_OS_MOBILE
 
@@ -42,6 +43,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <random>
 
 #include <QLoggingCategory>
@@ -158,6 +160,8 @@ MediaManager::MediaManager(QObject *parent)
     connect(m_player, &QMediaPlayer::positionChanged, this, &MediaManager::positionChanged);
     connect(m_player, &QMediaPlayer::mediaStatusChanged, this, &MediaManager::_handle_media_status);
     connect(m_player, &QMediaPlayer::errorOccurred, this, &MediaManager::_handle_player_error);
+    connect(m_player, &QMediaPlayer::playbackStateChanged, this,
+            [this](QMediaPlayer::PlaybackState state) { emit playbackStateChanged(static_cast<int>(state)); });
 
     // Position timer (100 ms) as a safety net for backends whose
     // QMediaPlayer::positionChanged is coarse. It only runs while playing so
@@ -872,11 +876,20 @@ QString MediaManager::_extract_album_art_flac(const QString &filePath, const QSt
 
 QString MediaManager::_extract_album_art_ogg(const QString &filePath, const QString &albumId)
 {
-    TagLib::Ogg::Vorbis::File file(filePath.toUtf8().constData());
-    if (!file.isValid())
+    // .ogg is Vorbis, .opus is an Opus stream in the same Ogg container. Both
+    // keep the cover in a XiphComment, but TagLib::Ogg::Vorbis::File rejects
+    // an Opus stream (no Vorbis identification header), so pick the reader by
+    // extension; the picture handling below is shared.
+    const QString suffix = QFileInfo(filePath).suffix().toLower();
+    std::unique_ptr<TagLib::Ogg::File> file;
+    if (suffix == QStringLiteral("opus"))
+        file = std::make_unique<TagLib::Ogg::Opus::File>(filePath.toUtf8().constData());
+    else
+        file = std::make_unique<TagLib::Ogg::Vorbis::File>(filePath.toUtf8().constData());
+    if (!file->isValid())
         return {};
 
-    TagLib::Ogg::XiphComment *xiph = file.tag();
+    auto *xiph = dynamic_cast<TagLib::Ogg::XiphComment *>(file->tag());
     if (!xiph)
         return {};
 

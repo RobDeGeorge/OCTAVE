@@ -23,6 +23,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 
 from backend.logging_config import get_logger
+from backend.phone_mirror.manager import _find_adb
 
 logger = get_logger(__name__)
 
@@ -102,30 +103,13 @@ class AndroidAutoManager(QObject):
         return None
 
     def _find_adb_path(self) -> Optional[Path]:
-        """Find ADB executable path."""
-        system = platform.system()
+        """Find ADB executable path.
 
-        if system == "Windows":
-            adb_name = "adb.exe"
-            search_paths = [
-                Path(os.environ.get("USERPROFILE", "")) / "Downloads" / "platform-tools" / adb_name,
-                Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk" / "platform-tools" / adb_name,
-                Path(os.environ.get("USERPROFILE", "")) / "AppData" / "Local" / "Android" / "Sdk" / "platform-tools" / adb_name,
-            ]
-        else:
-            adb_name = "adb"
-            search_paths = [
-                Path.home() / "Android" / "Sdk" / "platform-tools" / adb_name,
-                Path.home() / "Library" / "Android" / "sdk" / "platform-tools" / adb_name,
-                Path("/usr/bin") / adb_name,
-                Path("/usr/local/bin") / adb_name,
-            ]
-
-        for path in search_paths:
-            if path.exists():
-                return path
-
-        return None
+        Same discovery as PhoneMirrorManager (bundled platform-tools, PATH,
+        common SDK locations) so both features drive the same adb binary.
+        """
+        found = _find_adb()
+        return Path(found) if found else None
 
     def _is_headunit_server_running(self, adb_path) -> bool:
         """Check if the head unit server is already running on the phone."""
@@ -194,9 +178,10 @@ class AndroidAutoManager(QObject):
             return False
 
         try:
-            # Remove existing forwards first
+            # Remove a stale DHU forward only — `--remove-all` would also
+            # tear down a live phone-mirror (localabstract:scrcpy_*) tunnel.
             subprocess.run(
-                [str(adb_path), "forward", "--remove-all"],
+                [str(adb_path), "forward", "--remove", "tcp:5277"],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -562,11 +547,11 @@ After installation, click "Launch Android Auto" button."""
 
         self.closeDhu()
 
-        # Clean up ADB port forwards
+        # Clean up the DHU port forward (only ours — phone mirror owns its own)
         adb_path = self._find_adb_path()
         if adb_path:
             subprocess.run(
-                [str(adb_path), "forward", "--remove-all"],
+                [str(adb_path), "forward", "--remove", "tcp:5277"],
                 capture_output=True,
                 text=True,
                 timeout=10

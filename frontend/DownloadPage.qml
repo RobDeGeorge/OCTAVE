@@ -34,7 +34,20 @@ Item {
     property bool isSearching: false
     property string statusText: "Search for songs to download"
     property bool statusVisible: true
-    property bool hasMoreResults: false
+
+    // Start a download, first making sure the app may write to the target
+    // folder. Only the C++ backend exposes hasStorageAccess()/
+    // requestStorageAccess() (Android "All files access"); on Python and on
+    // desktop C++ hasStorageAccess() is always true.
+    function startDownload(songJson) {
+        if (isAndroid && typeof downloadManager.hasStorageAccess === "function"
+                && !downloadManager.hasStorageAccess()) {
+            downloadManager.requestStorageAccess()
+            downloadPage.statusText = "Grant \"All files access\" in the settings screen, then tap download again"
+            return
+        }
+        downloadManager.download_song(songJson)
+    }
 
     onStatusTextChanged: {
         downloadPage.statusVisible = true
@@ -94,11 +107,8 @@ Item {
             try {
                 var results = JSON.parse(jsonStr)
                 downloadPage.searchResults = results
-                // If we got a full page (20), there are probably more
-                downloadPage.hasMoreResults = (results.length % 20 === 0) && results.length > 0
             } catch (e) {
                 downloadPage.searchResults = []
-                downloadPage.hasMoreResults = false
             }
         }
 
@@ -855,7 +865,7 @@ Item {
                             errorPopup.songJson = JSON.stringify(modelData)
                             errorPopup.open()
                         } else {
-                            downloadManager.download_song(JSON.stringify(modelData))
+                            downloadPage.startDownload(JSON.stringify(modelData))
                         }
                     }
 
@@ -1098,45 +1108,6 @@ Item {
                                 visible: modelData.is_failed === true && !modelData.is_downloaded
                             }
 
-                        }
-                    }
-                }
-
-                // ─── Load More footer ───────────────────────────
-
-                footer: Item {
-                    width: resultsListView.width - dp(14)
-                    height: downloadPage.hasMoreResults ? dp(52) : 0
-                    visible: downloadPage.hasMoreResults
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.topMargin: dp(6)
-                        color: loadMoreMouse.containsMouse
-                            ? Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.15)
-                            : cardColor
-                        border.color: cardBorderColor
-                        border.width: 1
-                        radius: dp(8)
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: downloadPage.isSearching ? "Loading..." : "Load More Results"
-                            font.family: downloadPage.globalFont
-                            font.pixelSize: dp(13)
-                            font.weight: Font.DemiBold
-                            color: accentColor
-                        }
-
-                        MouseArea {
-                            id: loadMoreMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            enabled: !downloadPage.isSearching
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                downloadManager.search_more()
-                            }
                         }
                     }
                 }
@@ -1539,7 +1510,7 @@ Item {
                         anchors.fill: parent
                         onClicked: {
                             if (errorPopup.songJson.length > 0) {
-                                downloadManager.download_song(errorPopup.songJson)
+                                downloadPage.startDownload(errorPopup.songJson)
                             }
                             errorPopup.close()
                         }

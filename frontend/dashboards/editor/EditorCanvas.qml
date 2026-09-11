@@ -39,8 +39,14 @@ Item {
     signal backgroundTapped()
 
     // ── Grid geometry (matches DashboardRenderer defaults) ──────────────
-    readonly property real _margin: dp(20)
-    readonly property real _spacing: dp(16)
+    // Optional per-spec overrides (dp, same keys as the JSON spec); undefined
+    // keeps the renderer defaults.
+    property var margins: undefined
+    property var spacing: undefined
+    readonly property real _margin:
+        (margins !== undefined && margins !== null) ? dp(margins) : dp(20)
+    readonly property real _spacing:
+        (spacing !== undefined && spacing !== null) ? dp(spacing) : dp(16)
     readonly property real _cellW: Math.max(1,
         (width  - 2 * _margin - _spacing * (gridColumns - 1)) / gridColumns)
     readonly property real _cellH: Math.max(1,

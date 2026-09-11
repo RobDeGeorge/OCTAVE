@@ -2,7 +2,13 @@
 ELM327/OBD-II Protocol Handler — pure Python, no I/O.
 
 Handles command formatting, response parsing, and PID decoding.
-Used by AndroidOBDManager for Bluetooth ELM327 communication.
+
+Desktop reference / parity twin of the C++ ``ELM327Protocol``
+(src/managers/elm327protocol.{h,cpp}). The running Python app talks to the
+adapter through python-obd instead, so nothing imports this module at
+runtime; it exists so the PID table, decoders and parsers can be diffed and
+exercised in plain Python. PID numbers and command names follow python-obd's
+commands.py — keep this file, the C++ table and that table in agreement.
 """
 
 from backend.logging_config import get_logger
@@ -88,8 +94,10 @@ def _catalyst_temp(a):
 def _voltage(a):
     return round((a[0] * 256.0 + a[1]) / 1000.0, 2)
 
-def _equiv_ratio(a):
-    return round((a[0] * 256.0 + a[1]) / 32768.0, 3)
+def _air_fuel_ratio(a):
+    # Commanded equivalence ratio (lambda) scaled to a gasoline AFR, matching
+    # OBDManager._update_afr (python-obd ratio * 14.7).
+    return round((a[0] * 256.0 + a[1]) / 32768.0 * 14.7, 2)
 
 def _uint16(a):
     return float(a[0] * 256 + a[1])
@@ -103,84 +111,111 @@ def _inject_timing(a):
 def _abs_evap(a):
     return round((a[0] * 256.0 + a[1]) / 200.0, 2)
 
+# Wide-range O2 (PIDs 0x24-0x2B / 0x34-0x3B): bytes A,B carry the lambda
+# ratio; the voltage / current live in bytes C,D (python-obd's
+# sensor_voltage_big and current_centered).
 def _wr_o2_voltage(a):
-    return round(((a[0] * 256.0 + a[1]) * 2.0) / 65536.0 * 8.0, 4)
+    return round((a[2] * 256.0 + a[3]) * 8.0 / 65535.0, 4)
 
 def _wr_o2_current(a):
-    return round(((a[0] * 256.0 + a[1]) - 32768.0) / 256.0, 4)
+    return round((a[2] * 256.0 + a[3]) / 256.0 - 128.0, 4)
 
 def _fuel_rail_abs(a):
     return round((a[0] * 256.0 + a[1]) * 10.0, 1)
 
 
-# Core PID table: (mode, pid) → (name, signal_name, decoder, num_bytes)
-# signal_name is the name of the Changed signal on the OBD manager (e.g., "rpmChanged")
+# Core PID table: (mode, pid) → (name, signal_name, command_name, decoder, num_bytes)
+# signal_name is the name of the Changed signal on the OBD manager (e.g., "rpmChanged");
+# command_name is the python-obd command name (settings key / scan vocabulary).
 PID_TABLE = {
-    # --- Default enabled PIDs (the 16 most common) ---
-    (1, 0x05): ("Coolant Temp", "coolantTempChanged", _offset40, 1),
-    (1, 0x42): ("Control Module Voltage", "voltageChanged", _voltage, 2),
-    (1, 0x04): ("Engine Load", "engineLoadChanged", _pct, 1),
-    (1, 0x11): ("Throttle Position", "throttlePositionChanged", _pct, 1),
-    (1, 0x0F): ("Intake Air Temp", "intakeAirTempChanged", _offset40, 1),
-    (1, 0x0E): ("Timing Advance", "timingAdvanceChanged", _timing, 1),
-    (1, 0x10): ("MAF", "massAirFlowChanged", _maf, 2),
-    (1, 0x0D): ("Speed", "speedMPHChanged", lambda a: round(a[0] * 0.621371, 1), 1),  # km/h → mph
-    (1, 0x0C): ("RPM", "rpmChanged", _rpm, 2),
-    (1, 0x44): ("Commanded Equiv Ratio", "airFuelRatioChanged", _equiv_ratio, 2),
-    (1, 0x2F): ("Fuel Level", "fuelLevelChanged", _pct, 1),
-    (1, 0x0B): ("Intake Manifold Pressure", "intakeManifoldPressureChanged", _kpa, 1),
-    (1, 0x06): ("Short Term Fuel Trim 1", "shortTermFuelTrimChanged", _pct_centered, 1),
-    (1, 0x07): ("Long Term Fuel Trim 1", "longTermFuelTrimChanged", _pct_centered, 1),
-    (1, 0x14): ("O2 Sensor B1S1", "oxygenSensorVoltageChanged", _o2_voltage, 2),
-    (1, 0x0A): ("Fuel Pressure", "fuelPressureChanged", _fuel_pressure, 1),
-    (1, 0x5C): ("Oil Temp", "engineOilTempChanged", _offset40, 1),
+    # --- Default enabled PIDs (the 16+1 most common) ---
+    (1, 0x05): ("Coolant Temp", "coolantTempChanged", "COOLANT_TEMP", _offset40, 1),
+    (1, 0x42): ("Control Module Voltage", "voltageChanged", "CONTROL_MODULE_VOLTAGE", _voltage, 2),
+    (1, 0x04): ("Engine Load", "engineLoadChanged", "ENGINE_LOAD", _pct, 1),
+    (1, 0x11): ("Throttle Position", "throttlePositionChanged", "THROTTLE_POS", _pct, 1),
+    (1, 0x0F): ("Intake Air Temp", "intakeAirTempChanged", "INTAKE_TEMP", _offset40, 1),
+    (1, 0x0E): ("Timing Advance", "timingAdvanceChanged", "TIMING_ADVANCE", _timing, 1),
+    (1, 0x10): ("MAF", "massAirFlowChanged", "MAF", _maf, 2),
+    (1, 0x0D): ("Speed", "speedMPHChanged", "SPEED", lambda a: round(a[0] * 0.621371, 1), 1),  # km/h → mph
+    (1, 0x0C): ("RPM", "rpmChanged", "RPM", _rpm, 2),
+    (1, 0x44): ("Air/Fuel Ratio", "airFuelRatioChanged", "COMMANDED_EQUIV_RATIO", _air_fuel_ratio, 2),
+    (1, 0x2F): ("Fuel Level", "fuelLevelChanged", "FUEL_LEVEL", _pct, 1),
+    (1, 0x0B): ("Intake Manifold Pressure", "intakeManifoldPressureChanged", "INTAKE_PRESSURE", _kpa, 1),
+    (1, 0x06): ("Short Term Fuel Trim 1", "shortTermFuelTrimChanged", "SHORT_FUEL_TRIM_1", _pct_centered, 1),
+    (1, 0x07): ("Long Term Fuel Trim 1", "longTermFuelTrimChanged", "LONG_FUEL_TRIM_1", _pct_centered, 1),
+    (1, 0x14): ("O2 Sensor B1S1", "oxygenSensorVoltageChanged", "O2_B1S1", _o2_voltage, 2),
+    (1, 0x0A): ("Fuel Pressure", "fuelPressureChanged", "FUEL_PRESSURE", _fuel_pressure, 1),
+    (1, 0x5C): ("Oil Temp", "engineOilTempChanged", "OIL_TEMP", _offset40, 1),
 
     # --- Extended PIDs ---
-    (1, 0x1F): ("Run Time", "runTimeChanged", _uint16, 2),
-    (1, 0x21): ("Distance w/ MIL", "distanceWithMILChanged", _uint16, 2),
-    (1, 0x22): ("Fuel Rail Pressure (vac)", "fuelRailPressureChanged", _fuel_rail_vac, 2),
-    (1, 0x23): ("Fuel Rail Pressure (direct)", "fuelRailPressureDirectChanged", _fuel_rail_direct, 2),
-    (1, 0x33): ("Barometric Pressure", "barometricPressureChanged", _kpa, 1),
-    (1, 0x46): ("Ambient Air Temp", "ambientAirTempChanged", _offset40, 1),
-    (1, 0x45): ("Relative Throttle Pos", "relativeThrottlePosChanged", _pct, 1),
-    (1, 0x47): ("Throttle Pos B", "absoluteThrottlePosBChanged", _pct, 1),
-    (1, 0x49): ("Accelerator Pos D", "acceleratorPosChanged", _pct, 1),
-    (1, 0x3C): ("Catalyst Temp B1S1", "catalystTempB1S1Changed", _catalyst_temp, 2),
-    (1, 0x3D): ("Catalyst Temp B1S2", "catalystTempB1S2Changed", _catalyst_temp, 2),
-    (1, 0x32): ("Evap Vapor Pressure", "evapVaporPressureChanged", _evap_pressure, 2),
-    (1, 0x08): ("Short Fuel Trim 2", "shortFuelTrim2Changed", _pct_centered, 1),
-    (1, 0x09): ("Long Fuel Trim 2", "longFuelTrim2Changed", _pct_centered, 1),
-    (1, 0x15): ("O2 B1S2", "o2SensorB1S2Changed", _o2_voltage, 2),
-    (1, 0x16): ("O2 B2S1", "o2SensorB2S1Changed", _o2_voltage, 2),
-    (1, 0x17): ("O2 B2S2", "o2SensorB2S2Changed", _o2_voltage, 2),
-    (1, 0x31): ("Distance Since Codes Cleared", "distanceSinceCodesCleared", _uint16, 2),
-    (1, 0x30): ("Warmups Since Codes Cleared", "warmupsSinceCodesCleared", _simple, 1),
-    (1, 0x43): ("Absolute Load", "absoluteLoadChanged", lambda a: round((a[0]*256+a[1])*100.0/255.0, 1), 2),
-    (1, 0x2C): ("Commanded EGR", "commandedEGRChanged", _pct, 1),
-    (1, 0x2D): ("EGR Error", "egrErrorChanged", _pct_centered, 1),
-    (1, 0x52): ("Ethanol Percent", "ethanoPercentChanged", _pct, 1),
-    (1, 0x3E): ("Catalyst Temp B2S1", "catalystTempB2S1Changed", _catalyst_temp, 2),
-    (1, 0x3F): ("Catalyst Temp B2S2", "catalystTempB2S2Changed", _catalyst_temp, 2),
-    (1, 0x4A): ("Throttle Pos C", "throttlePosCChanged", _pct, 1),
-    (1, 0x4B): ("Accelerator Pos E", "acceleratorPosEChanged", _pct, 1),
-    (1, 0x4C): ("Accelerator Pos F", "acceleratorPosFChanged", _pct, 1),
-    (1, 0x4D): ("Run Time MIL", "runTimeMILChanged", _uint16, 2),
-    (1, 0x4E): ("Time Since DTC Cleared", "timeSinceDTCClearedChanged", _uint16, 2),
-    (1, 0x50): ("Max MAF", "maxMAFChanged", lambda a: float(a[0] * 10), 1),
-    (1, 0x51): ("Fuel Type", "fuelTypeChanged", _simple, 1),
-    (1, 0x54): ("Evap Vapor Pressure Abs", "evapVaporPressureAbsChanged", _abs_evap, 2),
-    (1, 0x55): ("Evap Vapor Pressure Alt", "evapVaporPressureAltChanged", _evap_pressure, 2),
-    (1, 0x56): ("Short O2 Trim B1", "shortO2TrimB1Changed", _pct_centered, 1),
-    (1, 0x57): ("Long O2 Trim B1", "longO2TrimB1Changed", _pct_centered, 1),
-    (1, 0x58): ("Short O2 Trim B2", "shortO2TrimB2Changed", _pct_centered, 1),
-    (1, 0x59): ("Fuel Rail Pressure Abs", "fuelRailPressureAbsChanged", _fuel_rail_abs, 2),
-    (1, 0x5A): ("Relative Accel Pos", "relativeAccelPosChanged", _pct, 1),
-    (1, 0x5B): ("Hybrid Battery", "hybridBatteryRemainingChanged", _pct, 1),
-    (1, 0x2E): ("Evaporative Purge", "evaporativePurgeChanged", _pct, 1),
-    (1, 0x5D): ("Fuel Inject Timing", "fuelInjectTimingChanged", _inject_timing, 2),
-    (1, 0x5E): ("Fuel Rate", "fuelRateChanged", _fuel_rate, 2),
-    (1, 0x4F): ("Throttle Actuator", "throttleActuatorChanged", _pct, 1),
+    (1, 0x1F): ("Run Time", "runTimeChanged", "RUN_TIME", _uint16, 2),
+    (1, 0x21): ("Distance w/ MIL", "distanceWithMILChanged", "DISTANCE_W_MIL", _uint16, 2),
+    (1, 0x22): ("Fuel Rail Pressure (vac)", "fuelRailPressureChanged", "FUEL_RAIL_PRESSURE_VAC", _fuel_rail_vac, 2),
+    (1, 0x23): ("Fuel Rail Pressure (direct)", "fuelRailPressureDirectChanged", "FUEL_RAIL_PRESSURE_DIRECT", _fuel_rail_direct, 2),
+    (1, 0x33): ("Barometric Pressure", "barometricPressureChanged", "BAROMETRIC_PRESSURE", _kpa, 1),
+    (1, 0x46): ("Ambient Air Temp", "ambientAirTempChanged", "AMBIANT_AIR_TEMP", _offset40, 1),
+    (1, 0x45): ("Relative Throttle Pos", "relativeThrottlePosChanged", "RELATIVE_THROTTLE_POS", _pct, 1),
+    (1, 0x47): ("Throttle Pos B", "absoluteThrottlePosBChanged", "THROTTLE_POS_B", _pct, 1),
+    (1, 0x49): ("Accelerator Pos D", "acceleratorPosChanged", "ACCELERATOR_POS_D", _pct, 1),
+    (1, 0x3C): ("Catalyst Temp B1S1", "catalystTempB1S1Changed", "CATALYST_TEMP_B1S1", _catalyst_temp, 2),
+    (1, 0x3E): ("Catalyst Temp B1S2", "catalystTempB1S2Changed", "CATALYST_TEMP_B1S2", _catalyst_temp, 2),
+    (1, 0x32): ("Evap Vapor Pressure", "evapVaporPressureChanged", "EVAP_VAPOR_PRESSURE", _evap_pressure, 2),
+    (1, 0x08): ("Short Fuel Trim 2", "shortFuelTrim2Changed", "SHORT_FUEL_TRIM_2", _pct_centered, 1),
+    (1, 0x09): ("Long Fuel Trim 2", "longFuelTrim2Changed", "LONG_FUEL_TRIM_2", _pct_centered, 1),
+    (1, 0x15): ("O2 B1S2", "o2SensorB1S2Changed", "O2_B1S2", _o2_voltage, 2),
+    (1, 0x18): ("O2 B2S1", "o2SensorB2S1Changed", "O2_B2S1", _o2_voltage, 2),
+    (1, 0x19): ("O2 B2S2", "o2SensorB2S2Changed", "O2_B2S2", _o2_voltage, 2),
+    (1, 0x31): ("Distance Since Codes Cleared", "distanceSinceCodesCleared", "DISTANCE_SINCE_DTC_CLEAR", _uint16, 2),
+    (1, 0x30): ("Warmups Since Codes Cleared", "warmupsSinceCodesCleared", "WARMUPS_SINCE_DTC_CLEAR", _simple, 1),
+    (1, 0x43): ("Absolute Load", "absoluteLoadChanged", "ABSOLUTE_LOAD", lambda a: round((a[0]*256+a[1])*100.0/255.0, 1), 2),
+    (1, 0x2C): ("Commanded EGR", "commandedEGRChanged", "COMMANDED_EGR", _pct, 1),
+    (1, 0x2D): ("EGR Error", "egrErrorChanged", "EGR_ERROR", _pct_centered, 1),
+    (1, 0x52): ("Ethanol Percent", "ethanoPercentChanged", "ETHANOL_PERCENT", _pct, 1),
+
+    # --- Additional narrowband O2 sensors (0x14-0x1B: B1S1..B1S4, B2S1..B2S4) ---
+    (1, 0x16): ("O2 B1S3", "o2SensorB1S3Changed", "O2_B1S3", _o2_voltage, 2),
+    (1, 0x17): ("O2 B1S4", "o2SensorB1S4Changed", "O2_B1S4", _o2_voltage, 2),
+    (1, 0x1A): ("O2 B2S3", "o2SensorB2S3Changed", "O2_B2S3", _o2_voltage, 2),
+    (1, 0x1B): ("O2 B2S4", "o2SensorB2S4Changed", "O2_B2S4", _o2_voltage, 2),
+
+    (1, 0x3D): ("Catalyst Temp B2S1", "catalystTempB2S1Changed", "CATALYST_TEMP_B2S1", _catalyst_temp, 2),
+    (1, 0x3F): ("Catalyst Temp B2S2", "catalystTempB2S2Changed", "CATALYST_TEMP_B2S2", _catalyst_temp, 2),
+    (1, 0x48): ("Throttle Pos C", "throttlePosCChanged", "THROTTLE_POS_C", _pct, 1),
+    (1, 0x4A): ("Accelerator Pos E", "acceleratorPosEChanged", "ACCELERATOR_POS_E", _pct, 1),
+    (1, 0x4B): ("Accelerator Pos F", "acceleratorPosFChanged", "ACCELERATOR_POS_F", _pct, 1),
+    (1, 0x4C): ("Throttle Actuator", "throttleActuatorChanged", "THROTTLE_ACTUATOR", _pct, 1),
+    (1, 0x4D): ("Run Time MIL", "runTimeMILChanged", "RUN_TIME_MIL", _uint16, 2),
+    (1, 0x4E): ("Time Since DTC Cleared", "timeSinceDTCClearedChanged", "TIME_SINCE_DTC_CLEARED", _uint16, 2),
+    (1, 0x50): ("Max MAF", "maxMAFChanged", "MAX_MAF", lambda a: float(a[0] * 10), 1),
+    (1, 0x51): ("Fuel Type", "fuelTypeChanged", "FUEL_TYPE", _simple, 1),
+    (1, 0x53): ("Evap Vapor Pressure Abs", "evapVaporPressureAbsChanged", "EVAP_VAPOR_PRESSURE_ABS", _abs_evap, 2),
+    (1, 0x54): ("Evap Vapor Pressure Alt", "evapVaporPressureAltChanged", "EVAP_VAPOR_PRESSURE_ALT", _evap_pressure, 2),
+    (1, 0x55): ("Short O2 Trim B1", "shortO2TrimB1Changed", "SHORT_O2_TRIM_B1", _pct_centered, 1),
+    (1, 0x56): ("Long O2 Trim B1", "longO2TrimB1Changed", "LONG_O2_TRIM_B1", _pct_centered, 1),
+    (1, 0x57): ("Short O2 Trim B2", "shortO2TrimB2Changed", "SHORT_O2_TRIM_B2", _pct_centered, 1),
+    (1, 0x58): ("Long O2 Trim B2", "longO2TrimB2Changed", "LONG_O2_TRIM_B2", _pct_centered, 1),
+    (1, 0x59): ("Fuel Rail Pressure Abs", "fuelRailPressureAbsChanged", "FUEL_RAIL_PRESSURE_ABS", _fuel_rail_abs, 2),
+    (1, 0x5A): ("Relative Accel Pos", "relativeAccelPosChanged", "RELATIVE_ACCEL_POS", _pct, 1),
+    (1, 0x5B): ("Hybrid Battery", "hybridBatteryRemainingChanged", "HYBRID_BATTERY_REMAINING", _pct, 1),
+    (1, 0x2E): ("Evaporative Purge", "evaporativePurgeChanged", "EVAPORATIVE_PURGE", _pct, 1),
+    (1, 0x5D): ("Fuel Inject Timing", "fuelInjectTimingChanged", "FUEL_INJECT_TIMING", _inject_timing, 2),
+    (1, 0x5E): ("Fuel Rate", "fuelRateChanged", "FUEL_RATE", _fuel_rate, 2),
 }
+
+# Wide-range O2 sensors: voltage (0x24-0x2B), current (0x34-0x3B)
+for _n in range(1, 9):
+    PID_TABLE[(1, 0x23 + _n)] = (f"O2 S{_n} WR Voltage", f"o2S{_n}WRVoltageChanged",
+                                 f"O2_S{_n}_WR_VOLTAGE", _wr_o2_voltage, 4)
+    PID_TABLE[(1, 0x33 + _n)] = (f"O2 S{_n} WR Current", f"o2S{_n}WRCurrentChanged",
+                                 f"O2_S{_n}_WR_CURRENT", _wr_o2_current, 4)
+
+# Pseudo-PID for python-obd's ELM_VOLTAGE: the adapter's own "ATRV" command,
+# answered with text such as "12.6V" — see parse_elm_voltage(). Mirrors
+# kElmVoltageKey in the C++ header.
+ELM_VOLTAGE_KEY = (0, 0)
+ELM_VOLTAGE_REQUEST = b"ATRV\r"
+PID_TABLE[ELM_VOLTAGE_KEY] = ("ELM Voltage", "elmVoltageChanged", "ELM_VOLTAGE", None, 0)
+
 
 # Default PIDs to poll (most commonly supported)
 DEFAULT_PIDS = [
@@ -206,6 +241,27 @@ DEFAULT_PIDS = [
 def format_pid_request(mode, pid):
     """Format an OBD-II PID request. Returns bytes."""
     return f"{mode:02X}{pid:02X}\r".encode()
+
+
+def parse_elm_voltage(raw):
+    """Parse an ATRV reply ("12.6V", "12.6") into volts; None if not a voltage.
+
+    Same rule as python-obd's elm_voltage(): lower-case, strip the 'v', float().
+    """
+    text = raw.strip().lower().rstrip("v").strip()
+    try:
+        return float(text)
+    except ValueError:
+        logger.debug(f"unparseable ATRV reply: {raw.strip()[:200]}")
+        return None
+
+
+def supported_command_names(supported_pids):
+    """python-obd command names of every table entry whose mode-01 PID is in
+    ``supported_pids``. ELM_VOLTAGE is always included (a python-obd base command)."""
+    names = [entry[2] for key, entry in PID_TABLE.items()
+             if key == ELM_VOLTAGE_KEY or (key[0] == 1 and key[1] in supported_pids)]
+    return sorted(names)
 
 
 def parse_response(raw):
@@ -250,7 +306,9 @@ def decode_pid(mode, pid, data_bytes):
     if key not in PID_TABLE:
         return None
 
-    name, signal_name, decoder, expected_bytes = PID_TABLE[key]
+    name, signal_name, _command, decoder, expected_bytes = PID_TABLE[key]
+    if decoder is None:
+        return None  # ELM_VOLTAGE_KEY: text reply, see parse_elm_voltage()
     if len(data_bytes) < expected_bytes:
         logger.warning(f"short response for {signal_name} (mode {mode:02X} pid {pid:02X}): "
                        f"{len(data_bytes)} of {expected_bytes} bytes")
