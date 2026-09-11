@@ -82,6 +82,10 @@ Fifty-plus OBD-II parameters, a set of gauge primitives (circular, arc, bar, lin
 
 Set an RPM flag and the entire screen strobes when the engine crosses it, whatever page is showing. It is the one thing in OCTAVE built to be impossible to miss, so it gets its own clip and appears nowhere else on this page.
 
+<p align="center">
+  <img src="frontend/assets/readme/shiftlight_strobe.png" alt="Mid-flash: the Sport dashboard washed red at 6300 RPM" width="700">
+</p>
+
 ### Your phone on the dash
 
 <p align="center">
@@ -96,7 +100,7 @@ Plug in an Android phone and OCTAVE mirrors a DeX-style desktop onto the head un
   <img src="frontend/assets/readme/jeep.webp" alt="A rigged 3D Jeep TJ: doors, hood and tailgate open, lights on, steering and wheels turning, tilted by the real IMU" width="900">
 </p>
 
-A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels, rolled and pitched in real time by the BerryIMU on the dash. (The bench it was shot on is not level, hence the angle.) Heading, altitude and cabin temperature come from the same sensor.
+A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels, rolled and pitched in real time by the BerryIMU on the dash. Heading, altitude and cabin temperature come from the same sensor.
 
 <p align="center">
   <img src="frontend/assets/readme/jeep_open.png" alt="Jeep with doors and hood open" width="49%">
