@@ -290,6 +290,7 @@ Item {
 
                 // Tare button — zero out current orientation
                 Rectangle {
+                    objectName: "imuZero"
                     width: dp(70)
                     height: dp(30)
                     radius: 5
@@ -313,6 +314,7 @@ Item {
 
                 // Reset tare
                 Rectangle {
+                    objectName: "imuReset"
                     width: dp(70)
                     height: dp(30)
                     radius: 5
