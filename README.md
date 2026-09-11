@@ -5,9 +5,9 @@
 ### Open-source car infotainment · carputer · DIY head unit
 **Raspberry Pi · Desktop · Android — fully programmable, hackable, MIT-licensed.**
 
-<img src="frontend/assets/readme/drive.webp" alt="OCTAVE home page: album art beside live speed and RPM during a full-throttle pull" width="800">
+<img src="frontend/assets/readme/drive.webp" alt="OCTAVE on the dash of a 2003 Jeep TJ: album art beside live speed and RPM during a full-throttle pull" width="900">
 
-<sub>Home page under a full-throttle pull, hard brake and a throttle blip. Every clip in this README is recorded from the app itself.</sub>
+<sub>Recorded on the head unit in the author's Jeep TJ, an Orange Pi 5 driving a 2560x1080 dash display. Every clip and screenshot in this README was captured from the running app; the theme is following the album art.</sub>
 
 [![Latest Release](https://img.shields.io/github/v/release/WayBetterSolutions/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/WayBetterSolutions/OCTAVE/releases/latest)
 [![Stars](https://img.shields.io/github/stars/WayBetterSolutions/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/WayBetterSolutions/OCTAVE/stargazers)
@@ -42,13 +42,15 @@ It's not really a product. It's more like vanilla Minecraft — I'll keep the ba
 
 ## See It
 
-### Music that colors the whole interface
+Everything below was shot on the real rig with the music playing. Each clip has a different song behind it, and since the **Album Art Capture** theme is on, the whole interface takes its colours from whatever is playing.
+
+### Music that colours the whole interface
 
 <p align="center">
-  <img src="frontend/assets/readme/media.webp" alt="Media room and player: the accent colour, glow and background follow each album's art as tracks change" width="800">
+  <img src="frontend/assets/readme/media.webp" alt="Media room and player: accent, glow and background follow each album's art as tracks change" width="900">
 </p>
 
-Every accent, glow and background is pulled from the album art of whatever is playing. Skip a track and the whole UI recolours. Local MP3/M4A/FLAC, Spotify, and a built-in downloader that pairs Spotify metadata with YouTube audio.
+Skip a track and the UI recolours. Local MP3/M4A/FLAC with a live waveform, Spotify, and a built-in downloader that pairs Spotify metadata with YouTube audio.
 
 <p align="center">
   <img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room with waveform, controls and album art" width="49%">
@@ -58,24 +60,45 @@ Every accent, glow and background is pulled from the album art of whatever is pl
 ### Gauges and dashboards you build yourself
 
 <p align="center">
-  <img src="frontend/assets/readme/dashboards.webp" alt="Dashboard chooser with live miniatures, then Sport, Performance, TJ Wrangler and Full Grid dashboards under load" width="800">
+  <img src="frontend/assets/readme/dashboards.webp" alt="Dashboard chooser with live miniatures, then Sport, Performance, TJ Wrangler and Full Grid dashboards under load" width="900">
 </p>
 
-Fifty-plus OBD-II parameters, a set of gauge primitives (circular, arc, bar, linear, digital, sparkline, warning light), and full-screen dashboards defined in JSON or built in the in-app drag-and-drop editor. Pick one from a chooser that shows every dashboard as a live miniature.
+Fifty-plus OBD-II parameters, a set of gauge primitives (circular, arc, bar, linear, digital, sparkline, warning light), and full-screen dashboards defined in JSON or built in the in-app drag-and-drop editor. The chooser shows every dashboard as a live miniature. The "TJ Wrangler 4.0" one is the author's daily layout.
 
 <p align="center">
   <img src="frontend/assets/readme/dashboards_sport.png" alt="Sport dashboard: big speed readout and RPM arc" width="49%">
   <img src="frontend/assets/readme/dashboards_fullgrid.png" alt="Full Grid dashboard: eight circular gauges" width="49%">
 </p>
 <p align="center">
-  <img src="frontend/assets/readme/dashboards_performance.png" alt="Performance dashboard with warning lights and bar gauges" width="49%">
+  <img src="frontend/assets/readme/dashboards_tj_wrangler.png" alt="TJ Wrangler 4.0 dashboard: fuel trims, O2 sensors, timing and pressures for a 4.0 inline six" width="49%">
   <img src="frontend/assets/readme/dashboards_chooser.png" alt="Dashboard chooser with live miniatures of every dashboard" width="49%">
+</p>
+
+### Your phone on the dash
+
+<p align="center">
+  <img src="frontend/assets/readme/mirror_live.png" alt="A Samsung phone's DeX desktop mirrored onto the head unit over USB" width="700">
+</p>
+
+Plug in an Android phone and OCTAVE mirrors a DeX-style desktop onto the head unit through a built-in scrcpy-protocol client. Nothing to install on the phone, no companion app. The phone's own screen stays dark in the cradle, a power press is undone before you notice, unlocking the phone hands it back to you, and a USB blip keeps whatever you had open instead of resetting to the home screen.
+
+### The vehicle, live
+
+<p align="center">
+  <img src="frontend/assets/readme/jeep.webp" alt="A rigged 3D Jeep TJ: doors, hood and tailgate open, lights on, steering and wheels turning, tilted by the real IMU" width="900">
+</p>
+
+A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels, rolled and pitched in real time by the BerryIMU on the dash. (The bench it was shot on is not level, hence the angle.) Heading, altitude and cabin temperature come from the same sensor.
+
+<p align="center">
+  <img src="frontend/assets/readme/jeep_open.png" alt="Jeep with doors and hood open" width="49%">
+  <img src="frontend/assets/readme/jeep_lights.png" alt="Jeep with headlights, fog, brake and reverse lights on" width="49%">
 </p>
 
 ### The whole thing, page by page
 
 <p align="center">
-  <img src="frontend/assets/readme/tour.webp" alt="A pass through the home page, media room, media player, OBD parameter cards, sensors, vehicle view and settings" width="800">
+  <img src="frontend/assets/readme/tour.webp" alt="A pass through the home page, media room, media player, OBD parameter cards, sensors, vehicle view and settings" width="900">
 </p>
 
 <p align="center">
@@ -84,11 +107,9 @@ Fifty-plus OBD-II parameters, a set of gauge primitives (circular, arc, bar, lin
   <img src="frontend/assets/readme/tour_settings.png" alt="Settings" width="32%">
 </p>
 
-### Your phone on the dash
-
-Plug in an Android phone and OCTAVE mirrors a DeX-style desktop onto the head unit through a built-in scrcpy-protocol client — no scrcpy install, no companion app. The phone's own screen can stay dark in the cradle, a power press is undone before you notice, unlocking the phone hands it back to you, and a USB blip keeps whatever you had open instead of resetting to the home screen.
-
-<!-- rig captures land here: frontend/assets/readme/rig/ -->
+<p align="center">
+  <img src="frontend/assets/readme/settings.webp" alt="Settings sections: display, media, OBD, accessories, device, about" width="900">
+</p>
 
 ## Who This Is For
 
