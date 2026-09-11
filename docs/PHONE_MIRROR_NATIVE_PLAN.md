@@ -26,7 +26,7 @@ OCTAVE (`adb` and the scrcpy server jar).
 - Bundled server: originally upstream `scrcpy-server-v3.3.4`; since the fork it is
   `tools/phone-server/octave-phone-server`, built from `phone_server/` (package
   `org.octave.phoneserver`, version `3.3.4-octave`), sha256
-  `6590dbca39fe146127ea5382e843b7fe00a33e4ce028fdf2601d995859f827cd`. Apache-2.0, LICENSE + NOTICE alongside.
+  `06e5c153a0909b3c84961d1ee4ce2dda428b52e031405e13fe708b09adc8cf84`. Apache-2.0, LICENSE + NOTICE alongside.
 
 ## Phase 1 hardware results (Python client, commit 8c04adf, Orange Pi)
 

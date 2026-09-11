@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Network Manager</div>
           <h1 class="page-title">Network Manager</h1>
-          <p class="page-subtitle">WiFi connectivity detection, GitHub-based update checking, and self-update capability</p>
+          <p class="page-subtitle">Connectivity polling with offline backoff, ancestry-aware GitHub update checks, and git-based self-update for source checkouts</p>
         </div>
 
         <nav class="toc">
@@ -21,7 +21,7 @@
           <ul class="toc-list">
             <li><a href="#overview">Overview</a></li>
             <li><a href="#architecture">Architecture</a></li>
-            <li><a href="#connectivity">WiFi Connectivity Detection</a></li>
+            <li><a href="#connectivity">Connectivity Detection</a></li>
             <li><a href="#update-checking">Update Checking Mechanism</a></li>
             <li><a href="#self-update">Self-Update System</a></li>
             <li><a href="#app-restart">Application Restart</a></li>
@@ -30,6 +30,8 @@
             <li><a href="#properties">Properties Reference</a></li>
             <li><a href="#slots">Slots Reference</a></li>
             <li><a href="#integration">System Integration</a></li>
+            <li><a href="#backend-differences">C++ vs Python Differences</a></li>
+            <li><a href="#design-decisions">Design Decisions</a></li>
           </ul>
         </nav>
 
@@ -37,57 +39,73 @@
         <section id="overview">
           <h2>Overview</h2>
           <p>
-            The <strong>NetworkManager</strong> is responsible for three core functions within OCTAVE: detecting
-            network connectivity status, checking for application updates via the GitHub API, and performing
-            git-based self-updates when running from source. It is defined in
+            The <strong>NetworkManager</strong> has three jobs: report whether the head unit is online (and on which
+            network), tell the user when the <code>main</code> branch on GitHub has moved past the running commit, and --
+            when OCTAVE runs from a git checkout -- pull that update in place and restart. It is defined in
             <span class="file-path">src/managers/networkmanager.{h,cpp}</span> (C++) and
             <span class="file-path">backend/network_manager.py</span> (Python) and registered as the QML context
             property <code>networkManager</code> in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>.
-            The sections below describe the Python implementation; the C++ port exposes the same properties, signals,
-            slots, and status strings.
+            Both backends expose the same properties, signals, slots and status strings; where the mechanics differ the
+            sections below say so.
           </p>
 
           <div class="info-box info">
             <div class="info-box-title">Thread Safety</div>
-            In the Python backend all blocking I/O operations (subprocess calls, HTTP requests) run on a background
-            <code>ThreadPoolExecutor</code> with a single worker. Results are polled back to the main Qt thread
-            via a <code>QTimer</code> at 250ms intervals, ensuring signals are always emitted on the main thread.
-            The C++ backend needs no worker thread: it uses asynchronous <code>QProcess</code> and
-            <code>QNetworkAccessManager</code> calls whose completion slots run on the main thread (only the short
-            <code>git status</code> / <code>merge-base</code> queries that gate the destructive self-update run synchronously).
+            In the Python backend every blocking operation (subprocess calls, HTTP requests) runs on a
+            <code>ThreadPoolExecutor</code> with a single worker, and results are polled back on the main thread by a
+            250&nbsp;ms <code>QTimer</code> so Qt signals are only ever emitted from the GUI thread. The C++ backend has no
+            worker thread: it uses asynchronous <code>QProcess</code> and <code>QNetworkAccessManager</code> whose
+            completion slots already run on the main thread. The only synchronous calls in C++ are the short git queries
+            (<code>runGitSync()</code>: <code>status --porcelain</code>, <code>cat-file</code>, <code>merge-base</code>,
+            <code>rev-list</code>, and the rollback <code>reset --hard</code>) -- the header comment says they run on the
+            GUI thread "deliberately: they gate a destructive action, so their answer must be current at the moment of the
+            click".
           </div>
 
           <p>
-            The manager targets the GitHub repository <code>WayBetterSolutions/OCTAVE</code> and compares the
-            local git HEAD against the remote <code>main</code> branch to determine update availability.
+            The manager targets the GitHub repository <code>WayBetterSolutions/OCTAVE</code> (<code>GITHUB_REPO</code>)
+            and compares the local git <code>HEAD</code> against the tip of the remote <code>main</code> branch.
           </p>
         </section>
 
         <!-- Architecture -->
         <section id="architecture">
           <h2>Architecture</h2>
+          <p>Python:</p>
           <div class="diagram">
-NetworkManager
+NetworkManager (backend/network_manager.py)
   |
-  |-- ThreadPoolExecutor (1 worker)
-  |     |-- _do_network_check()      Network name + internet check
-  |     |-- _do_update_check_sync()  GitHub API comparison
-  |     |-- _do_self_update_sync()   git fetch + reset + verify
+  |-- ThreadPoolExecutor (1 worker)  -- one job at a time (_pending_future)
+  |     |-- _do_network_check()       nmcli/networksetup/netsh + generate_204
+  |     |-- _do_update_check_sync()   GitHub API + git ancestry queries
+  |     |-- _do_self_update_sync()    fetch / reset / py_compile / pip / log
   |
-  |-- QTimer (_poll_timer)           30s network polling
-  |-- QTimer (_result_poll_timer)    250ms result/progress polling
+  |-- QTimer _poll_timer              30 s online, 120 s after 3 misses
+  |-- QTimer _result_poll_timer       250 ms: future done? progress message?
+  |-- QTimer.singleShot(2000)         _startup_probe: git --version + first check
   |
-  |-- Signals --> QML
-        networkNameChanged(str)
-        isConnectedChanged(bool)
-        updateStatusChanged(str)
-        selfUpdateStatusChanged(str)
+  |-- Signals --> QML (all emitted from the main thread)
+          </div>
+          <p>C++:</p>
+          <div class="diagram">
+NetworkManager (src/managers/networkmanager.cpp)
+  |
+  |-- QNetworkAccessManager m_nam     generate_204 probe, GitHub API (async replies)
+  |-- QProcess m_networkNameProcess   nmcli / networksetup / netsh (async)
+  |-- QProcess m_gitProcess           self-update step machine (async, one step at a time)
+  |-- runGitSync()                    short blocking git queries that gate the reset
+  |
+  |-- QTimer m_pollTimer              kPollOnlineMs 30000 / kPollOfflineMs 120000
+  |-- QTimer m_resultPollTimer        250 ms progress relay (see Self-Update)
+  |-- QTimer::singleShot(2000)        checkCanSelfUpdate() + refreshNetworkStatus()
+  |
+  |-- busy flags: m_networkCheckBusy, m_updateCheckBusy, m_updating
           </div>
 
-          <h3>Background Work Pattern</h3>
+          <h3>Background Work Pattern (Python)</h3>
           <p>
-            Only one background job runs at a time. The <code>_submit_work()</code> method accepts a callable
-            and a result type tag, submits to the executor, and starts the result poll timer:
+            Only one background job runs at a time. <code>_submit_work()</code> takes a callable and a result-type tag,
+            submits it to the executor, and starts the result poll timer:
           </p>
           <pre><code><span class="kw">def</span> <span class="fn">_submit_work</span>(<span class="prop">self</span>, fn, result_type):
     <span class="str">"""Submit blocking work to the thread pool. Only one job at a time."""</span>
@@ -97,67 +115,84 @@ NetworkManager
     <span class="prop">self</span>._pending_future._result_type = result_type
     <span class="prop">self</span>._result_poll_timer.start()</code></pre>
           <p>
-            When the poll timer fires, <code>_check_pending_result()</code> checks if the future is done,
-            extracts the result, and routes it to the appropriate handler based on the <code>_result_type</code>
-            tag: <code>"network_status"</code>, <code>"update_check"</code>, or <code>"self_update"</code>.
+            Each tick of <code>_check_pending_result()</code> first relays any pending progress message, then -- if the
+            future is done -- stops the timer, unwraps the result and routes it by tag: <code>"network_status"</code>,
+            <code>"update_check"</code> or <code>"self_update"</code>. An exception from the job maps to
+            <code>updateStatus = "error"</code> ("Could not reach GitHub") or <code>selfUpdateStatus = "error"</code>
+            ("Update failed unexpectedly"). A consequence of the single slot: a network poll that lands while a self-update is
+            running is silently skipped.
+          </p>
+          <p>
+            The C++ port instead keeps one busy flag per activity (<code>m_networkCheckBusy</code>,
+            <code>m_updateCheckBusy</code>, <code>m_updating</code>), so a connectivity probe and an update check can be in
+            flight at the same time.
           </p>
         </section>
 
         <!-- Connectivity -->
         <section id="connectivity">
-          <h2>WiFi Connectivity Detection</h2>
+          <h2>Connectivity Detection</h2>
           <p>
-            Network status is polled every <strong>30 seconds</strong> via <code>_poll_timer</code> while online;
-            after three consecutive failed probes the interval backs off to <strong>2 minutes</strong> (a car with no
-            internet should not pay for an HTTPS timeout twice a minute) and returns to 30&nbsp;s on the first success.
-            The initial check runs 2 seconds after startup to let the UI load first; the <code>git --version</code> probe
-            behind <code>canSelfUpdate</code> runs at the same moment rather than in the constructor. Each check runs two
-            operations on the worker thread:
+            Network status is polled every <strong>30 seconds</strong> while online. After <strong>three consecutive failed
+            probes</strong> the interval backs off to <strong>2 minutes</strong> and returns to 30&nbsp;s on the first success
+            (<code>POLL_ONLINE_MS</code> / <code>POLL_OFFLINE_MS</code> / <code>OFFLINE_STREAK_FOR_BACKOFF</code> in Python,
+            <code>kPollOnlineMs</code> / <code>kPollOfflineMs</code> / <code>kOfflineStreakForBackoff</code> in C++). The
+            first probe runs 2&nbsp;s after startup so the UI can paint first; the <code>git --version</code> probe behind
+            <code>canSelfUpdate</code> runs at that same moment rather than in the constructor. Python runs the name lookup
+            and the internet probe sequentially inside one worker job; C++ starts them in parallel.
           </p>
 
           <h3>Network Name Detection</h3>
           <p>
-            The static method <code>_get_network_name_sync()</code> uses platform-specific commands to
-            determine the active connection name:
+            <code>_get_network_name_sync()</code> (Python) / <code>startNetworkNameCheck()</code> +
+            <code>onNetworkNameCheckFinished()</code> (C++) shell out to the platform's network tool. The WiFi command runs
+            first; if it yields no SSID a second command looks for a wired link and reports the literal string
+            <code>"Ethernet"</code>.
           </p>
 
           <table>
             <thead>
-              <tr><th>Platform</th><th>Method</th><th>Command</th></tr>
+              <tr><th>Platform</th><th>WiFi SSID</th><th>Wired fallback</th></tr>
             </thead>
             <tbody>
               <tr>
                 <td><span class="platform-badge linux">Linux</span></td>
-                <td>NetworkManager CLI</td>
-                <td><code>nmcli -t -f ACTIVE,SSID dev wifi</code></td>
+                <td><code>nmcli -t -f ACTIVE,SSID dev wifi</code> -- first line starting <code>yes:</code></td>
+                <td><code>nmcli -t -f TYPE,STATE dev</code> -- a line containing both <code>ethernet</code> and <code>connected</code></td>
               </tr>
               <tr>
                 <td><span class="platform-badge desktop">macOS</span></td>
-                <td>networksetup</td>
-                <td><code>networksetup -getairportnetwork en0</code></td>
+                <td><code>networksetup -getairportnetwork en0</code> -- text after <code>Current Wi-Fi Network: </code></td>
+                <td><code>ifconfig en0</code> -- output contains <code>status: active</code></td>
               </tr>
               <tr>
                 <td><span class="platform-badge desktop">Windows</span></td>
-                <td>netsh</td>
-                <td><code>netsh wlan show interfaces</code></td>
+                <td><code>netsh wlan show interfaces</code> -- first <code>SSID</code> line that is not <code>BSSID</code></td>
+                <td><code>netsh interface show interface</code> -- a line containing <code>Connected</code> and <code>Ethernet</code></td>
               </tr>
               <tr>
                 <td><span class="platform-badge android">Android</span></td>
-                <td>dumpsys</td>
-                <td><code>dumpsys wifi</code> (rooted devices)</td>
+                <td colspan="2">C++ only: no command is run; <code>networkName</code> is set to the fixed string <code>"WiFi"</code>. (The Python backend is desktop-only.)</td>
               </tr>
             </tbody>
           </table>
 
-          <p>Each platform also has a fallback check for wired Ethernet connections. All subprocess calls use a 5-second timeout.</p>
+          <p>Python gives every subprocess a 5-second timeout. C++ waits up to 5&nbsp;s for the process to <em>start</em>
+            (<code>waitForStarted(5000)</code>) and otherwise lets it run to completion asynchronously; a name check that is
+            still running when the next poll fires is simply skipped. One behavioural difference: when neither WiFi nor
+            Ethernet is found, Python reports an empty name, whereas the C++ wired-fallback lambda only writes
+            <code>"Ethernet"</code> on success and leaves the previously reported SSID in place.</p>
 
           <h3>Internet Connectivity Check</h3>
           <p>
-            The <code>_check_internet_sync()</code> method makes a lightweight HTTP request to Google's
-            204-response endpoint:
+            Reachability is a single HTTPS GET of Google's <code>generate_204</code> endpoint (a captive-portal probe URL
+            that returns an empty 204). Python uses <code>urllib</code> with a 5&nbsp;s timeout; C++ uses
+            <code>QNetworkAccessManager</code> with <code>setTransferTimeout(5000)</code> and treats any
+            <code>QNetworkReply</code> error as offline.
           </p>
           <pre><code><span class="kw">@staticmethod</span>
 <span class="kw">def</span> <span class="fn">_check_internet_sync</span>():
+    <span class="str">"""Check if the device has internet connectivity."""</span>
     <span class="kw">try</span>:
         urllib.request.urlopen(<span class="str">"https://clients3.google.com/generate_204"</span>, timeout=<span class="num">5</span>)
         <span class="kw">return</span> <span class="num">True</span>
@@ -167,9 +202,9 @@ NetworkManager
 
           <h3>Auto Update Check on First Connect</h3>
           <p>
-            When connectivity is first detected (<code>_auto_update_checked</code> flag), the manager
-            automatically triggers <code>checkForUpdates()</code> with a 500ms delay. This ensures users
-            are notified of available updates as soon as the system comes online.
+            The first time a probe succeeds (<code>_auto_update_checked</code> / <code>m_autoUpdateChecked</code>) the
+            manager schedules <code>checkForUpdates()</code> 500&nbsp;ms later. The flag is never reset, so this happens once
+            per process; later checks are user-initiated from the About page.
           </p>
         </section>
 
@@ -177,48 +212,104 @@ NetworkManager
         <section id="update-checking">
           <h2>Update Checking Mechanism</h2>
           <p>
-            The update checker compares the local git commit hash against the latest commit on the
-            <code>main</code> branch of the GitHub repository.
+            The update checker is git-based: it compares the local <code>HEAD</code> against the latest commit on the
+            <code>main</code> branch and asks git how the two are related. There is no release-tag or version-number
+            comparison, which has a consequence for packaged builds (see the box below).
           </p>
 
           <h3>Step-by-Step Flow</h3>
           <ol class="steps">
             <li>
-              <strong>Get local commit hash</strong> -- Runs <code>git rev-parse --short HEAD</code>
-              from the repository root directory to get the 7-character short hash.
+              <strong>Connectivity gate (Python only)</strong> -- <code>_do_update_check_sync()</code> re-runs the
+              <code>generate_204</code> probe and returns <code>"error"</code> / "No internet connection" without touching
+              git or GitHub when offline. C++ goes straight to the next step and reports "Could not reach GitHub" if the
+              request fails.
             </li>
             <li>
-              <strong>Query GitHub API</strong> -- Fetches <code>https://api.github.com/repos/WayBetterSolutions/OCTAVE/commits/main</code>
-              with a <code>User-Agent: OCTAVE-Updater</code> header.
+              <strong>Get local commit hash</strong> -- <code>git rev-parse --short HEAD</code> in the repository root.
+              Python derives the root as the parent of <span class="file-path">backend/</span>; C++ uses
+              <code>repoDir()</code> = <code>QCoreApplication::applicationDirPath() + "/.."</code>, which assumes the binary
+              lives one level below the checkout (e.g. <span class="file-path">build/octave</span>). Failure yields
+              <code>"error"</code> / "Could not determine local version".
             </li>
             <li>
-              <strong>Classify the relationship</strong> -- Truncates the remote SHA to 7 characters. A bare
-              inequality test cannot distinguish "behind" from "ahead", so the check also asks git how the two
-              commits relate: if the remote commit is already an ancestor of local <code>HEAD</code>, the checkout
-              is <em>ahead</em> (a dev build), not out of date. If the remote commit is unknown locally but local
-              commits exist that the last-fetched <code>origin/main</code> lacks, the branch has <em>diverged</em>.
+              <strong>Query GitHub API</strong> -- <code>GET https://api.github.com/repos/WayBetterSolutions/OCTAVE/commits/main</code>
+              with a <code>User-Agent: OCTAVE-Updater</code> header and a 10&nbsp;s timeout. The response's <code>sha</code> is
+              truncated to 7 characters; the first line of <code>commit.message</code> becomes <code>remoteCommitMsg</code>.
             </li>
             <li>
-              <strong>Emit result</strong> -- Sets <code>updateStatus</code> to one of: <code>"up-to-date"</code>,
-              <code>"update-available"</code>, <code>"ahead"</code>, <code>"diverged"</code>, or <code>"error"</code>.
-              Also populates the remote commit hash and message, and refreshes <code>workingTreeDirty</code>.
+              <strong>Classify the relationship</strong> -- <code>_local_vs_remote_sync()</code> / <code>localVsRemote()</code>
+              returns one of <code>same</code>, <code>ahead</code>, <code>diverged</code>, <code>behind</code> (see below),
+              and the working tree is checked for uncommitted changes at the same time.
+            </li>
+            <li>
+              <strong>Emit result</strong> -- <code>updateStatus</code> becomes <code>"up-to-date"</code>,
+              <code>"ahead"</code>, <code>"diverged"</code> or <code>"update-available"</code> with a matching
+              <code>updateMessage</code>; <code>remoteCommit</code>, <code>remoteCommitMsg</code> and
+              <code>workingTreeDirty</code> are refreshed. Both backends log
+              <code>local=… remote=… relation=… dirty=… status=…</code> at info level.
             </li>
           </ol>
 
+          <h3>Ancestry-Aware Classification</h3>
+          <p>
+            A bare <code>remote != local</code> test cannot tell "behind" from "ahead". Before commit <code>0c29e64</code> a
+            source checkout with local commits reported an update to a commit <em>older</em> than <code>HEAD</code>, and the
+            self-update path would then have hard-reset onto it. The classifier now asks git:
+          </p>
+          <pre><code><span class="kw">@classmethod</span>
+<span class="kw">def</span> <span class="fn">_local_vs_remote_sync</span>(cls, remote_short, local_short):
+    <span class="kw">if not</span> remote_short:
+        <span class="kw">return</span> <span class="str">"behind"</span>
+    <span class="kw">if</span> remote_short == local_short:
+        <span class="kw">return</span> <span class="str">"same"</span>
+
+    <span class="cmt"># Do we even have the remote commit locally? If the object is missing we</span>
+    <span class="cmt"># cannot be a descendant of it, so this is a normal "remote moved ahead".</span>
+    have_remote, _ = cls._run_git_sync([<span class="str">'cat-file'</span>, <span class="str">'-e'</span>, f<span class="str">'{remote_short}^{{commit}}'</span>], timeout=<span class="num">5</span>)
+    <span class="kw">if</span> have_remote:
+        is_ancestor, _ = cls._run_git_sync(
+            [<span class="str">'merge-base'</span>, <span class="str">'--is-ancestor'</span>, remote_short, <span class="str">'HEAD'</span>], timeout=<span class="num">5</span>)
+        <span class="kw">if</span> is_ancestor:
+            <span class="kw">return</span> <span class="str">"ahead"</span>  <span class="cmt"># remote commit is already in our history</span>
+
+    <span class="cmt"># Remote commit is unknown to us. If we also carry commits the last-fetched</span>
+    <span class="cmt"># origin/main lacks, both sides moved -- that is a divergence, not an update.</span>
+    ok, count = cls._run_git_sync([<span class="str">'rev-list'</span>, <span class="str">'--count'</span>, <span class="str">'origin/main..HEAD'</span>], timeout=<span class="num">5</span>)
+    <span class="kw">if</span> ok <span class="kw">and</span> count.isdigit() <span class="kw">and</span> int(count) &gt; <span class="num">0</span>:
+        <span class="kw">return</span> <span class="str">"diverged"</span>
+
+    <span class="kw">return</span> <span class="str">"behind"</span></code></pre>
+          <p>
+            The C++ <code>localVsRemote()</code> runs the same three git commands through <code>runGitSync()</code>. Note
+            that the <code>diverged</code> test compares against the <em>last-fetched</em> <code>origin/main</code>; the
+            check itself never fetches.
+          </p>
+
           <h3>Update Status Values</h3>
           <pre><code><span class="cmt"># updateStatus can be one of:</span>
+<span class="str">""</span>                  <span class="cmt"># No check has run yet (About page hides the status row)</span>
 <span class="str">"checking"</span>          <span class="cmt"># Currently checking</span>
 <span class="str">"up-to-date"</span>        <span class="cmt"># Local matches remote</span>
 <span class="str">"update-available"</span>  <span class="cmt"># Local is strictly behind the remote</span>
 <span class="str">"ahead"</span>             <span class="cmt"># Source checkout with local commits (dev build)</span>
 <span class="str">"diverged"</span>          <span class="cmt"># Both sides moved -- not a safe update</span>
-<span class="str">"error"</span>             <span class="cmt"># Check failed (no internet, API error)</span></code></pre>
+<span class="str">"error"</span>             <span class="cmt"># Check failed (no internet, API error, not a git checkout)</span></code></pre>
 
           <p>
-            Only <code>"update-available"</code> raises the update badge and offers the self-update button.
-            <code>"ahead"</code> and <code>"diverged"</code> are normal states when running from the source
-            tree and must never trigger an "update" that would move the checkout backwards.
+            Only <code>"update-available"</code> raises the badge on the settings button
+            (<span class="file-path">frontend/BottomBar.qml</span>, <span class="file-path">frontend/SettingsMenu.qml</span>) and
+            offers the self-update button. <code>"ahead"</code> and <code>"diverged"</code> are normal states when running
+            from the source tree and must never trigger an "update" that would move the checkout backwards.
           </p>
+
+          <div class="info-box warning">
+            <div class="info-box-title">Packaged builds always report "error"</div>
+            An AppImage, <code>.dmg</code>, <code>.exe</code> or <code>.apk</code> has no <code>.git</code> next to it, so
+            <code>git rev-parse</code> fails in step 2 and the About page shows "Could not determine local version". The
+            update check is a source-checkout feature today; there is no fallback that compares the build's version tag
+            against GitHub releases.
+          </div>
         </section>
 
         <!-- Self-Update -->
@@ -227,10 +318,11 @@ NetworkManager
 
           <div class="info-box warning">
             <div class="info-box-title">Availability</div>
-            Self-update is only available when running from a git checkout. The <code>canSelfUpdate</code> property
-            checks that <code>git</code> is on the PATH (Python additionally requires a non-frozen interpreter; C++
-            additionally requires a <code>.git</code> directory next to the executable's repo root). Packaged builds
-            (AppImage, <code>.dmg</code>, <code>.exe</code>, Android) report <code>false</code>.
+            Self-update is only available when running from a git checkout. <code>canSelfUpdate</code> is probed 2&nbsp;s
+            after startup: Python requires <code>git --version</code> to succeed and the interpreter not to be frozen
+            (<code>sys.frozen</code>); C++ additionally requires a <code>.git</code> directory in <code>repoDir()</code> and
+            returns <code>false</code> unconditionally on Android. Packaged builds therefore report <code>false</code> and
+            the About page shows its "not available" card instead.
           </div>
 
           <div class="info-box warning">
@@ -239,58 +331,83 @@ NetworkManager
             to tracked files. <code>applySelfUpdate()</code> therefore re-verifies state at the moment it is
             called -- not from the cached update status, which may be minutes stale -- and refuses to run when:
             <ul>
-              <li>the working tree is dirty (<code>git status --porcelain</code> is non-empty), or</li>
+              <li>the working tree is dirty (<code>git status --porcelain</code> is non-empty) --
+                  <code>selfUpdateMessage</code> "Uncommitted changes — commit or stash them first", or</li>
               <li><code>updateStatus</code> is <code>"ahead"</code> or <code>"diverged"</code>, since resetting
-                  would discard local commits.</li>
+                  would discard local commits -- "Local commits would be lost — refusing to reset".</li>
             </ul>
             If git itself cannot be queried, the tree is assumed dirty -- the safe default is the one that
-            destroys nothing. The UI additionally hides the update button while
-            <code>workingTreeDirty</code> is true.
+            destroys nothing. The About page additionally hides the update button while
+            <code>workingTreeDirty</code> is true and shows a "commit or stash first" warning instead.
           </div>
 
           <h3>Pre-Conditions</h3>
           <pre><code><span class="kw">@staticmethod</span>
 <span class="kw">def</span> <span class="fn">_check_can_self_update</span>():
+    <span class="str">"""Check if self-update is possible (requires git, not a frozen PyInstaller build)."""</span>
     <span class="kw">if</span> <span class="fn">getattr</span>(sys, <span class="str">'frozen'</span>, <span class="num">False</span>):
         <span class="kw">return</span> <span class="num">False</span>
-    <span class="cmt"># Check git is available</span>
-    result = subprocess.run([<span class="str">'git'</span>, <span class="str">'--version'</span>], ...)
-    <span class="kw">return</span> result.returncode == <span class="num">0</span></code></pre>
+    <span class="kw">try</span>:
+        result = subprocess.run(
+            [<span class="str">'git'</span>, <span class="str">'--version'</span>],
+            capture_output=<span class="num">True</span>, text=<span class="num">True</span>, timeout=<span class="num">5</span>
+        )
+        <span class="kw">return</span> result.returncode == <span class="num">0</span>
+    <span class="kw">except</span> Exception:
+        <span class="kw">return</span> <span class="num">False</span></code></pre>
 
-          <h3>Update Pipeline (5 Steps)</h3>
+          <h3>Update Pipeline</h3>
           <p>
-            The <code>_do_self_update_sync()</code> method executes a multi-step pipeline with full rollback
-            capability. A double-tap guard (<code>_updating</code> flag) prevents concurrent update attempts.
+            Python runs <code>_do_self_update_sync()</code> as one worker job. C++ implements the same sequence as a
+            <strong>step machine</strong> (<code>runSelfUpdateStep()</code> / <code>onSelfUpdateStepFinished()</code>): each
+            step starts one <code>QProcess</code> and the <code>finished</code> slot starts the next. A double-tap guard
+            (<code>_updating</code> / <code>m_updating</code>) prevents concurrent update attempts.
           </p>
 
           <ol class="steps">
             <li>
-              <strong>Save rollback point</strong> -- Captures the current full commit hash via
-              <code>git rev-parse HEAD</code>. This is used to roll back if any subsequent step fails.
+              <strong>Save rollback point</strong> -- <code>git rev-parse HEAD</code> captures the full current hash
+              (progress "Saving rollback point..."). A failure here is not fatal; the update proceeds without rollback.
             </li>
             <li>
-              <strong>Fetch latest changes</strong> -- Runs <code>git fetch origin main</code> with a
-              60-second timeout. Progress message: "Fetching latest changes..."
+              <strong>Fetch latest changes</strong> -- <code>git fetch origin main</code> (Python timeout 60&nbsp;s; C++ none).
+              Progress "Fetching latest changes...". Failure ends with "Fetch failed: &lt;stderr&gt;".
             </li>
             <li>
-              <strong>Apply update</strong> -- Runs <code>git reset --hard origin/main</code> with a
-              30-second timeout. This moves the working tree to the latest remote state.
+              <strong>Apply update</strong> -- <code>git reset --hard origin/main</code> (Python timeout 30&nbsp;s). Progress
+              "Applying update...". Failure ends with "Apply failed: &lt;stderr&gt;".
             </li>
             <li>
-              <strong>Pre-flight verification</strong> -- Compiles <span class="file-path">main.py</span>
-              with <code>py_compile</code> to catch syntax errors. If the new code fails to parse,
-              the update is <strong>automatically rolled back</strong> to the saved commit.
+              <strong>Pre-flight verification</strong> -- if <span class="file-path">main.py</span> exists, compile it with
+              <code>py_compile</code> (Python uses <code>sys.executable</code>, C++ runs <code>python3</code>; 15&nbsp;s timeout in
+              Python). Progress "Verifying new code...". If the new code fails to parse the update is
+              <strong>rolled back</strong> to the saved commit and ends with "Update rolled back — new code failed syntax
+              check". C++ skips the step when there is no <span class="file-path">main.py</span>.
             </li>
             <li>
-              <strong>Install dependencies</strong> -- Locates the venv pip executable and runs
-              <code>pip install -r requirements.txt</code> with a 10-minute timeout. Dependency install
-              failures are logged but do not trigger a rollback, since the code update already succeeded.
+              <strong>Install dependencies</strong> -- locate the venv pip (<span class="file-path">venv/bin/pip</span> or
+              <span class="file-path">venv/Scripts/pip.exe</span>) and run <code>pip install -r requirements.txt</code>
+              (Python timeout 600&nbsp;s). Progress "Installing dependencies...". Failures are logged and the first 120
+              characters of stderr become a "(Some dependencies may need manual install)" suffix on the final message, but
+              they do not roll back -- the code update already succeeded. A missing pip or
+              <span class="file-path">requirements.txt</span> skips the step with a warning.
+            </li>
+            <li>
+              <strong>Confirm</strong> -- <code>git log -1 --format=%h %s</code> produces the final message
+              "Update applied. Now on: &lt;hash&gt; &lt;subject&gt;" and <code>selfUpdateStatus</code> becomes
+              <code>"restart-required"</code>; <code>updateStatus</code> flips to <code>"up-to-date"</code> with
+              "Update applied — restart to complete".
             </li>
           </ol>
 
           <h3>Rollback Mechanism</h3>
           <p>
-            On any failure (syntax check, timeout, unexpected exception), the manager rolls back:
+            Rollback is <code>git reset --hard &lt;old_commit&gt;</code> (30&nbsp;s timeout) and is a no-op when step 1 failed to
+            record a hash. Python rolls back on the syntax-check failure, on any <code>subprocess.TimeoutExpired</code>
+            ("Update timed out and was rolled back") and on any other exception ("Update failed and was rolled back: ...");
+            a failed fetch or reset returns its error without a rollback call. C++ calls <code>rollback()</code> on fetch,
+            reset and syntax-check failures, and on a git process that fails to start during steps 1-2; later steps that
+            fail to start are skipped ("Update applied (some steps skipped)").
           </p>
           <pre><code><span class="kw">if</span> old_commit:
     subprocess.run(
@@ -301,15 +418,20 @@ NetworkManager
 
           <h3>Progress Reporting</h3>
           <p>
-            Worker thread progress is relayed through a thread-safe mechanism. The worker calls
-            <code>_set_progress(msg)</code> which stores the message under a lock, and the main-thread
-            poll timer picks it up and emits <code>selfUpdateMessageChanged</code>.
+            Worker-side progress is relayed through a lock-protected message slot. The worker calls
+            <code>_set_progress(msg)</code> / <code>setProgress(msg)</code>, and the 250&nbsp;ms result poll timer on the main
+            thread picks the message up and emits <code>selfUpdateMessageChanged</code>. In Python the timer is started by
+            <code>_submit_work()</code>, so every step's message reaches the About page. The C++ port creates the same
+            <code>m_resultPollTimer</code> but nothing calls <code>start()</code> on it; as a result only the initial
+            "Fetching latest changes..." (set directly in <code>applySelfUpdate()</code>) and the final message from
+            <code>finishSelfUpdate()</code> are visible in the C++ build -- the intermediate "Applying update...",
+            "Verifying new code..." and "Installing dependencies..." texts are stored but never relayed.
           </p>
 
           <h3>Self-Update Status Values</h3>
-          <pre><code><span class="str">"idle"</span>              <span class="cmt"># No update in progress</span>
-<span class="str">"fetching"</span>          <span class="cmt"># Downloading changes</span>
-<span class="str">"error"</span>             <span class="cmt"># Update failed (with rollback)</span>
+          <pre><code><span class="str">"idle"</span>              <span class="cmt"># No update in progress (initial value)</span>
+<span class="str">"fetching"</span>          <span class="cmt"># Pipeline running (About page shows a spinner + selfUpdateMessage)</span>
+<span class="str">"error"</span>             <span class="cmt"># Refused, failed, or rolled back -- message says which</span>
 <span class="str">"restart-required"</span>  <span class="cmt"># Update applied, restart needed</span></code></pre>
         </section>
 
@@ -317,20 +439,23 @@ NetworkManager
         <section id="app-restart">
           <h2>Application Restart</h2>
           <p>
-            After a successful self-update, the user can trigger <code>restartApp()</code> from QML.
-            This performs a pre-flight syntax check on <span class="file-path">main.py</span> before
-            restarting. The restart mechanism is platform-dependent:
+            After a successful self-update the About page offers <code>restartApp()</code>. Both backends first run a
+            pre-flight <code>py_compile</code> of <span class="file-path">main.py</span> (Python always; C++ only when the file
+            exists next to the repo root, using <code>python3</code>) and abort with <code>selfUpdateStatus = "error"</code> /
+            "Restart aborted — code has errors" if it fails. The restart itself is platform-dependent:
           </p>
           <ul>
-            <li><strong>Windows:</strong> Spawns a new process with <code>subprocess.Popen</code>, then calls <code>QApplication.quit()</code></li>
-            <li><strong>Unix (Linux/macOS):</strong> Connects <code>os.execv</code> to the <code>aboutToQuit</code> signal, then calls <code>QApplication.quit()</code>. This replaces the current process in-place after cleanup.</li>
-            <li><strong>C++ backend:</strong> Launches a fresh copy of the executable with <code>QProcess::startDetached()</code> on every platform, then quits.</li>
+            <li><strong>Python, Windows:</strong> <code>subprocess.Popen([python, main.py, *argv])</code>, then <code>QApplication.quit()</code></li>
+            <li><strong>Python, Linux/macOS:</strong> <code>os.execv</code> is connected to <code>aboutToQuit</code>, then <code>quit()</code>. The current process is replaced in place once manager cleanup has run.</li>
+            <li><strong>C++, Windows:</strong> <code>QProcess::startDetached(appPath, args)</code> immediately, then <code>QCoreApplication::quit()</code></li>
+            <li><strong>C++, Linux/macOS:</strong> the same <code>startDetached()</code> deferred to <code>aboutToQuit</code>, then <code>quit()</code> (a new process rather than <code>execv</code>).</li>
           </ul>
 
           <div class="info-box danger">
             <div class="info-box-title">Restart Safety</div>
             If the pre-flight syntax check fails, the restart is aborted and the user is notified
-            via <code>selfUpdateMessage</code>. This prevents booting into broken code.
+            via <code>selfUpdateMessage</code>. This prevents booting into broken code. (For the C++ binary the check only
+            covers the Python entry point in a mixed checkout; it cannot validate the compiled executable.)
           </div>
         </section>
 
@@ -338,10 +463,12 @@ NetworkManager
         <section id="device-shutdown">
           <h2>Device Shutdown</h2>
           <p>
-            The <code>shutdown_device()</code> slot provides a clean shutdown sequence for vehicle-mounted
-            installations: it schedules an OS power-off command and then quits the OCTAVE application.
+            The <code>shutdown_device()</code> slot (the power button on
+            <span class="file-path">frontend/settings/DeviceSettingsPage.qml</span>) gives vehicle-mounted installs a clean
+            power-off: it launches the OS shutdown command detached and then quits OCTAVE, so the
+            <code>aboutToQuit</code> cleanup runs before the OS goes down.
           </p>
-          <pre><code><span class="cmt"># Platform-specific shutdown commands:</span>
+          <pre><code><span class="cmt"># Platform-specific shutdown commands (Popen / QProcess::startDetached):</span>
 Linux:   systemctl --no-block poweroff
 macOS:   sudo shutdown -h +0
 Windows: shutdown /s /t 5</code></pre>
@@ -377,12 +504,12 @@ Windows: shutdown /s /t 5</code></pre>
               <tr><th>Property</th><th>Type</th><th>Notify Signal</th><th>Description</th></tr>
             </thead>
             <tbody>
-              <tr><td><code>networkName</code></td><td><code>str</code></td><td><code>networkNameChanged</code></td><td>Current WiFi SSID or "Ethernet"</td></tr>
+              <tr><td><code>networkName</code></td><td><code>str</code></td><td><code>networkNameChanged</code></td><td>Current WiFi SSID or "Ethernet" ("WiFi" on Android)</td></tr>
               <tr><td><code>isConnected</code></td><td><code>bool</code></td><td><code>isConnectedChanged</code></td><td>True if internet is reachable</td></tr>
               <tr><td><code>updateStatus</code></td><td><code>str</code></td><td><code>updateStatusChanged</code></td><td>Current update check status</td></tr>
               <tr><td><code>updateMessage</code></td><td><code>str</code></td><td><code>updateMessageChanged</code></td><td>Human-readable update message</td></tr>
               <tr><td><code>remoteCommit</code></td><td><code>str</code></td><td><code>remoteCommitChanged</code></td><td>Latest remote commit short hash</td></tr>
-              <tr><td><code>remoteCommitMsg</code></td><td><code>str</code></td><td><code>remoteCommitMsgChanged</code></td><td>Latest remote commit message</td></tr>
+              <tr><td><code>remoteCommitMsg</code></td><td><code>str</code></td><td><code>remoteCommitMsgChanged</code></td><td>Latest remote commit message (first line)</td></tr>
               <tr><td><code>workingTreeDirty</code></td><td><code>bool</code></td><td><code>workingTreeDirtyChanged</code></td><td>Checkout has uncommitted changes; self-update is refused while true</td></tr>
               <tr><td><code>selfUpdateStatus</code></td><td><code>str</code></td><td><code>selfUpdateStatusChanged</code></td><td>Self-update state</td></tr>
               <tr><td><code>selfUpdateMessage</code></td><td><code>str</code></td><td><code>selfUpdateMessageChanged</code></td><td>Self-update progress message</td></tr>
@@ -399,12 +526,12 @@ Windows: shutdown /s /t 5</code></pre>
               <tr><th>Slot</th><th>Parameters</th><th>Description</th></tr>
             </thead>
             <tbody>
-              <tr><td><code>refreshNetwork()</code></td><td>--</td><td>Manually trigger a network status check</td></tr>
-              <tr><td><code>checkForUpdates()</code></td><td>--</td><td>Start a GitHub update check</td></tr>
-              <tr><td><code>applySelfUpdate()</code></td><td>--</td><td>Begin the git self-update pipeline</td></tr>
+              <tr><td><code>refreshNetwork()</code></td><td>--</td><td>Manually trigger a network status check (Device settings "refresh")</td></tr>
+              <tr><td><code>checkForUpdates()</code></td><td>--</td><td>Start a GitHub update check (About page button; also auto-run once on first connectivity)</td></tr>
+              <tr><td><code>applySelfUpdate()</code></td><td>--</td><td>Begin the git self-update pipeline after re-checking the preconditions</td></tr>
               <tr><td><code>restartApp()</code></td><td>--</td><td>Restart the OCTAVE application</td></tr>
               <tr><td><code>shutdown_device()</code></td><td>--</td><td>Shut down the host OS and quit OCTAVE</td></tr>
-              <tr><td><code>cleanup()</code></td><td>--</td><td>Stop timers (and the Python thread pool) at exit</td></tr>
+              <tr><td><code>cleanup()</code></td><td>--</td><td>Stop timers (Python: shut down the executor; C++: kill any running git / probe processes) at exit</td></tr>
             </tbody>
           </table>
         </section>
@@ -412,31 +539,34 @@ Windows: shutdown /s /t 5</code></pre>
         <!-- Integration -->
         <section id="integration">
           <h2>System Integration</h2>
-          <p>
-            The NetworkManager is registered in <span class="file-path">main.py</span> as a QML context property:
-          </p>
-          <pre><code>engine.rootContext().setContextProperty(<span class="str">"networkManager"</span>, network_manager)</code></pre>
-          <p>
-            QML views access it directly for network status display and update management:
-          </p>
-          <pre><code><span class="cmt">// Check for updates from QML</span>
-networkManager.checkForUpdates()
+          <p>Registration:</p>
+          <pre><code><span class="cmt">// src/main.cpp</span>
+NetworkManager networkManager;
+ctx-&gt;setContextProperty(<span class="str">"networkManager"</span>, &amp;networkManager);
 
-<span class="cmt">// Display network name</span>
-Text { text: networkManager.networkName }
+<span class="cmt"># main.py</span>
+network_manager = NetworkManager()
+engine.rootContext().setContextProperty(<span class="str">"networkManager"</span>, network_manager)</code></pre>
 
-<span class="cmt">// Show update notification</span>
-<span class="kw">visible</span>: networkManager.updateStatus === <span class="str">"update-available"</span>
-
-<span class="cmt">// Apply update and restart</span>
-networkManager.applySelfUpdate()
-<span class="cmt">// When selfUpdateStatus === "restart-required":</span>
-networkManager.restartApp()</code></pre>
+          <h3>QML Consumers</h3>
+          <table>
+            <thead>
+              <tr><th>QML file</th><th>Uses</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="file-path">frontend/settings/AboutPage.qml</span></td><td>"Check for Updates" button (disabled while <code>updateStatus === "checking"</code>), colour-coded status row with <code>updateMessage</code>, remote commit hash + message card, the self-update card (hidden while <code>workingTreeDirty</code>, replaced by a "commit or stash" warning), progress / error / restart-required states driven by <code>selfUpdateStatus</code> and <code>selfUpdateMessage</code>, and a "not available" card when <code>!canSelfUpdate</code></td></tr>
+              <tr><td><span class="file-path">frontend/BottomBar.qml</span>, <span class="file-path">frontend/SettingsMenu.qml</span></td><td>Pulsing badge on the settings button while <code>updateStatus === "update-available"</code></td></tr>
+              <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>Green/red dot from <code>isConnected</code>, <code>networkName</code> ("Not Connected" / "No internet access" texts), <code>refreshNetwork()</code>, and the power-off button calling <code>shutdown_device()</code></td></tr>
+            </tbody>
+          </table>
+          <p>All bindings are guarded with <code>networkManager &amp;&amp; ...</code> so the pages also load when the context
+            property is absent.</p>
 
           <h3>Cleanup</h3>
           <p>
-            The <code>cleanup()</code> method stops both QTimers and shuts down the thread pool. It should
-            be called from the application's <code>aboutToQuit</code> handler.
+            <code>cleanup()</code> is called from the <code>aboutToQuit</code> handler in both entry points. It stops both
+            timers; Python additionally calls <code>executor.shutdown(wait=False)</code>, C++ kills and waits (3&nbsp;s each)
+            on any still-running git, connectivity or network-name process.
           </p>
 
           <h3>Timers Summary</h3>
@@ -445,15 +575,86 @@ networkManager.restartApp()</code></pre>
               <tr><th>Timer</th><th>Interval</th><th>Purpose</th></tr>
             </thead>
             <tbody>
-              <tr><td><code>_poll_timer</code></td><td>30,000ms</td><td>Periodic network status check</td></tr>
-              <tr><td><code>_result_poll_timer</code></td><td>250ms</td><td>Poll for background task completion and progress</td></tr>
+              <tr><td><code>_poll_timer</code> / <code>m_pollTimer</code></td><td>30,000 ms online; 120,000 ms after three consecutive misses</td><td>Periodic network status check</td></tr>
+              <tr><td><code>_result_poll_timer</code> / <code>m_resultPollTimer</code></td><td>250 ms while a job runs</td><td>Poll for background task completion and relay progress text (not started in C++, see above)</td></tr>
+              <tr><td>startup single-shot</td><td>2,000 ms, once</td><td><code>git --version</code> probe for <code>canSelfUpdate</code> + first network check</td></tr>
+              <tr><td>auto-update single-shot</td><td>500 ms, once</td><td><code>checkForUpdates()</code> after the first successful probe</td></tr>
             </tbody>
           </table>
+        </section>
+
+        <!-- Backend differences -->
+        <section id="backend-differences">
+          <h2>C++ vs Python Differences</h2>
+          <table>
+            <thead>
+              <tr><th>Topic</th><th>C++</th><th>Python</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Concurrency model</td><td>Async <code>QProcess</code> / <code>QNetworkAccessManager</code>, per-activity busy flags; short git queries run synchronously on the GUI thread</td><td>Single-worker executor, one job at a time, 250&nbsp;ms result polling</td></tr>
+              <tr><td>Repo root</td><td><code>applicationDirPath()/..</code></td><td>Parent of <span class="file-path">backend/</span></td></tr>
+              <tr><td><code>canSelfUpdate</code></td><td>git on PATH <em>and</em> <code>.git</code> present; always false on Android</td><td>git on PATH and not <code>sys.frozen</code></td></tr>
+              <tr><td>Update check connectivity gate</td><td>None (request error → "Could not reach GitHub")</td><td>Probe first → "No internet connection"</td></tr>
+              <tr><td>Name/connectivity probes</td><td>Parallel; Android reports fixed "WiFi"; stale SSID kept when nothing is found</td><td>Sequential; empty string when nothing is found</td></tr>
+              <tr><td>Step timeouts</td><td>None on fetch / reset / pip (only 5&nbsp;s to start a process)</td><td>60 s fetch, 30 s reset, 15 s py_compile, 600 s pip</td></tr>
+              <tr><td>Rollback triggers</td><td>fetch, reset, syntax-check failures, git failing to start in steps 1-2</td><td>syntax-check failure, timeout, unexpected exception</td></tr>
+              <tr><td>Progress relay</td><td>Timer never started; only first and last messages shown</td><td>Every step's message shown</td></tr>
+              <tr><td>Unix restart</td><td>Detached new process on <code>aboutToQuit</code></td><td><code>os.execv</code> on <code>aboutToQuit</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Design decisions -->
+        <section id="design-decisions">
+          <h2>Design Decisions</h2>
+          <h3>Never emit from a worker thread</h3>
+          <p>The Python class runs its subprocess and HTTP work on a single-worker executor and hands results back through
+            a main-thread <code>QTimer</code> rather than emitting signals from the worker (the constructor comment: "avoids
+            emitting signals from worker thread"). The same 250&nbsp;ms relay carries progress text, so the worker never
+            touches a Qt object. The C++ port gets the same guarantee for free from Qt's asynchronous process and network
+            classes, which is why it has no worker thread at all.</p>
+          <h3>Back off when the car is offline</h3>
+          <p>Commit <code>ee5a23e</code> introduced the 30&nbsp;s → 2&nbsp;min backoff after three misses and moved the
+            <code>git --version</code> probe off the constructor. The source comment states the motivation: "a car with no
+            internet should not pay for an HTTPS timeout twice a minute forever." Recovery is immediate on the first
+            successful probe, so a hotspot that comes back is noticed within one cycle.</p>
+          <h3>Ancestry-aware update classification</h3>
+          <p>Commit <code>0c29e64</code> replaced the hash-inequality test with the <code>same / ahead / diverged / behind</code>
+            classifier after a dev checkout with local commits was offered an "update" to an older commit. The
+            <code>cat-file -e</code> check comes first because an unknown remote object can never be an ancestor of
+            <code>HEAD</code>, which avoids a misleading <code>merge-base</code> failure on the common "remote moved ahead"
+            case.</p>
+          <h3>Re-verify at click time; assume the worst when git is silent</h3>
+          <p>Because step 2 is a hard reset, <code>applySelfUpdate()</code> re-runs <code>git status --porcelain</code> at the
+            moment of the tap instead of trusting a check that may be minutes old ("the tree can be dirtied, or commits
+            made, long after the last check ran"). If git cannot be queried the tree is treated as dirty -- "the safe default
+            when we cannot tell is the one that refuses to destroy anything". <code>workingTreeDirty</code> is exposed as a
+            property purely so the UI can hide the button before it "eats real work" (header comment).</p>
+          <h3>Synchronous git only where it gates destruction (C++)</h3>
+          <p>The C++ header explains why <code>runGitSync()</code> blocks the GUI thread: the queries are short, and their
+            answer must be current at the instant of the click, not whatever an async check last cached. Everything else --
+            probes, the GitHub request, each update step -- stays asynchronous.</p>
+          <h3>Verify before trusting the new code</h3>
+          <p>A syntax error in a freshly pulled <span class="file-path">main.py</span> would leave the head unit unable to
+            boot, so the pipeline compiles it and rolls back on failure, and <code>restartApp()</code> repeats the check
+            before exec'ing. Dependency install failures deliberately do <em>not</em> roll back: the code update already
+            succeeded and "most deps are likely already installed from the prior version" (comment in
+            <code>_do_self_update_sync</code>).</p>
+          <h3>One automatic check, then user-driven</h3>
+          <p>The update check runs once on first connectivity (500&nbsp;ms later, so the connectivity state has settled) and
+            afterwards only from the About page. There is no periodic polling of GitHub, which keeps the API call count
+            negligible and avoids surprising the driver with a badge mid-journey.</p>
+          <h3>Git as the update channel</h3>
+          <p>The self-updater is <code>git fetch</code> + <code>git reset --hard</code> + <code>pip install</code>, which is
+            exactly what a tinkerer running from a checkout would type. It intentionally does not try to replace a packaged
+            binary; <code>canSelfUpdate</code> is false there and the About page says so.</p>
         </section>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a class="related-link" href="architecture.html">Architecture Overview</a>
+          <a class="related-link" href="settings-ui.html">Settings UI</a>
+          <a class="related-link" href="building.html">Building</a>
           <a class="related-link" href="getting-started.html">Getting Started</a>
         </div>
 

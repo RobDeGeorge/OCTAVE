@@ -13,66 +13,115 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Frontend Overview</div>
           <h1 class="page-title">Frontend Overview</h1>
-          <p class="page-subtitle">QML architecture, Main.qml structure, page routing, and the bridge between Python managers and the UI</p>
+          <p class="page-subtitle">QML architecture, the file inventory under <span class="file-path">frontend/</span>, Main.qml structure, page routing, scaling, effects, shaders, and the bridge between the two backends and the UI</p>
         </div>
 
         <nav class="toc">
           <h3>On This Page</h3>
           <ul class="toc-list">
             <li><a href="#architecture">QML Architecture Overview</a></li>
+            <li><a href="#file-inventory">File Inventory</a></li>
             <li><a href="#main-qml">Main.qml Structure</a></li>
             <li><a href="#window-management">Window Management</a></li>
             <li><a href="#page-routing">Page Routing Mechanism</a></li>
-            <li><a href="#import-path">Import Path Setup</a></li>
-            <li><a href="#context-properties">Accessing Python Managers</a></li>
+            <li><a href="#imu-gating">IMU Rate Gating from the StackView</a></li>
+            <li><a href="#import-path">Import Path and Singletons</a></li>
+            <li><a href="#controls-style">Qt Quick Controls "Basic" Style</a></li>
+            <li><a href="#context-properties">Accessing Backend Managers</a></li>
+            <li><a href="#typeof-guards">Guarding Backend Differences with typeof</a></li>
+            <li><a href="#gui-scale">GUI Scale</a></li>
             <li><a href="#font-loading">Dynamic Font Loading</a></li>
             <li><a href="#album-art-capture">Album Art Capture Pipeline</a></li>
-            <li><a href="#shift-light">Shift Light Logic</a></li>
+            <li><a href="#shift-light">Shift Light Overlays</a></li>
+            <li><a href="#settings-connections">Settings Manager Connections</a></li>
+            <li><a href="#drop-shadows">Drop Shadows</a></li>
+            <li><a href="#graphical-effects">Graphical Effects: Qt5Compat vs MultiEffect</a></li>
+            <li><a href="#shaders">Shaders</a></li>
+            <li><a href="#objectnames">objectName Conventions for Dev Scripting</a></li>
+            <li><a href="#keyboard">Keyboard Handling</a></li>
+            <li><a href="#initialization">Initialization Sequence</a></li>
+            <li><a href="#design-decisions">Design Decisions</a></li>
           </ul>
         </nav>
 
         <!-- Architecture Overview -->
         <h2 id="architecture">QML Architecture Overview</h2>
 
-        <p>OCTAVE's frontend is built with <strong>Qt Quick 2.15</strong> (QML). The QML layer handles all visual presentation, animations, and user interaction. Business logic lives in backend manager classes &mdash; C++ / Qt 6 in <code>src/</code> (the shipped binary) or the parallel Python / PySide6 backend in <code>backend/</code> &mdash; that are exposed to QML as <strong>context properties</strong>. The frontend works identically against either backend.</p>
+        <p>OCTAVE's frontend is Qt Quick / QML. Most files import <code>QtQuick 2.15</code>; the 3D vehicle files (<span class="file-path">CarMenu.qml</span>, <span class="file-path">JeepVehicle.qml</span>, <span class="file-path">JeepHinge.qml</span>, <span class="file-path">JeepLamp.qml</span>, <span class="file-path">JeepLink.qml</span>) use unversioned Qt 6 imports and <code>QtQuick3D</code>. The QML layer handles all visual presentation, animation, and interaction. Business logic lives in backend manager classes &mdash; C++ / Qt 6 in <span class="file-path">src/</span> (the shipped binary) or the parallel Python / PySide6 backend in <span class="file-path">backend/</span> &mdash; exposed to QML as <strong>context properties</strong>. The same <span class="file-path">frontend/</span> directory is loaded at runtime by both backends; no QML file knows which one is running.</p>
 
         <div class="diagram">
 <pre>
  ApplicationWindow (Main.qml)
- +-------------------------------------------+
- |  mainContainer (Item)                     |
- |  +---------------------------------------+|
- |  |  StackView (page navigation)          ||
- |  |  +-----------------------------------+||
- |  |  | MainMenu.qml (initialItem)        |||
- |  |  | MediaPlayer.qml                   |||
- |  |  | MediaRoom.qml                     |||
- |  |  | OBDMenu.qml                       |||
- |  |  | SettingsMenu.qml                  |||
- |  |  | ...                               |||
- |  |  +-----------------------------------+||
- |  +---------------------------------------+|
- |  |  BottomBar.qml (persistent nav+media) ||
- |  +---------------------------------------+|
- |  |  globalFullScreenFlash (z: 999999)    ||
- |  +---------------------------------------+|
- +-------------------------------------------+
+ +--------------------------------------------------------------+
+ |  mainContainer (Item, anchors.fill)                          |
+ |  +--------------------------------------------------------+  |
+ |  | StackView  id: stackView  objectName: "stackView"  z:1 |  |
+ |  |   initialItem: MainMenu                                |  |
+ |  |   pushed lazily: MediaRoom, MediaPlayer, DownloadPage, |  |
+ |  |     OBDHome, OBDMenu, OBDDiagnostics, SensorHome,      |  |
+ |  |     SensorMenu, CarMenu, ClockMenu, SettingsMenu,      |  |
+ |  |     PhoneMirrorView, AndroidAutoView,                  |  |
+ |  |     dashboards/editor/DashboardEditor                  |  |
+ |  +--------------------------------------------------------+  |
+ |  | bottomBarShadow / sideBarShadow (gradient strips)  z:2 |  |
+ |  +--------------------------------------------------------+  |
+ |  | BottomBar (persistent nav + transport + volume)    z:0 |  |
+ |  +--------------------------------------------------------+  |
+ |  | NowPlayingStudio (window-level overlay)            z:5 |  |
+ |  +--------------------------------------------------------+  |
+ |  | globalFullScreenFlash (Rectangle)             z:999999 |  |
+ |  | globalAuraFlash (4 edge gradients)            z:999999 |  |
+ |  +--------------------------------------------------------+  |
+ +--------------------------------------------------------------+
+ |  FolderListModel (assets/fonts) + dynamic FontLoaders         |
+ |  Timers: navReloadTimer (150 ms), globalFlashTimer            |
+ +--------------------------------------------------------------+
 </pre>
         </div>
 
         <p>Key architectural points:</p>
         <ul>
-          <li><strong>Single window</strong> &mdash; one <code>ApplicationWindow</code> hosts everything</li>
-          <li><strong>StackView navigation</strong> &mdash; pages are pushed/popped onto a stack; no router library</li>
-          <li><strong>Persistent BottomBar</strong> &mdash; always visible below (or beside) the StackView</li>
-          <li><strong>Singleton design tokens</strong> &mdash; <span class="file-path">Style.qml</span>, <span class="file-path">Spacing.qml</span>, and <span class="file-path">EnvironmentTheme.qml</span> are <code>pragma Singleton</code> objects</li>
-          <li><strong>No page transitions</strong> &mdash; all StackView enter/exit transitions are set to <code>null</code> for performance</li>
+          <li><strong>Single window</strong> &mdash; one <code>ApplicationWindow</code> hosts everything, including full-window overlays (Now Playing Studio, shift-light flash). There are no secondary windows or dialogs.</li>
+          <li><strong>StackView navigation</strong> &mdash; pages are pushed/popped on a <code>StackView</code>; there is no router. Every page except <code>MainMenu</code> is instantiated on demand with <code>Qt.createComponent()</code>.</li>
+          <li><strong>Persistent BottomBar</strong> &mdash; always visible below (horizontal) or to the left of (vertical "side" mode) the StackView. See <a href="bottom-bar.html">Bottom Bar</a>.</li>
+          <li><strong>Singletons declared in qmldir</strong> &mdash; <code>Style</code>, <code>Spacing</code>, <code>EnvironmentTheme</code>, <code>OBDParameterModel</code>, and <code>dashboards/WidgetCatalog</code> are <code>pragma Singleton</code> objects.</li>
+          <li><strong>No page transitions</strong> &mdash; all six StackView transitions (<code>pushEnter/Exit</code>, <code>popEnter/Exit</code>, <code>replaceEnter/Exit</code>) are <code>null</code>.</li>
+          <li><strong>No global z-order tricks</strong> beyond the ones in the diagram: the StackView sits above the BottomBar (<code>z: 1</code> vs <code>0</code>), shadows at <code>z: 2</code>, the studio at <code>z: 5</code>, overlays at <code>z: 999999</code>.</li>
         </ul>
+
+        <!-- File inventory -->
+        <h2 id="file-inventory">File Inventory</h2>
+
+        <p>Everything the UI needs lives under <span class="file-path">frontend/</span>. The top level is flat; only settings, gauges, dashboards, shaders and assets get subdirectories.</p>
+
+        <table>
+          <thead><tr><th>File</th><th>Role</th><th>Documented in</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">Main.qml</span></td><td>ApplicationWindow, StackView, overlays, font scan, shift light, navigation helpers</td><td>this page</td></tr>
+            <tr><td><span class="file-path">qmldir</span></td><td>Registers the five singletons (see <a href="#import-path">Import Path</a>)</td><td>this page</td></tr>
+            <tr><td><span class="file-path">Style.qml</span>, <span class="file-path">Spacing.qml</span>, <span class="file-path">EnvironmentTheme.qml</span></td><td>Design-token singletons: colors/fonts/themes, scaled dimensions, structural tokens</td><td><a href="theme-system.html">Theme System</a>, <a href="#gui-scale">GUI Scale</a></td></tr>
+            <tr><td><span class="file-path">BottomBar.qml</span></td><td>Persistent navigation, transport, volume</td><td><a href="bottom-bar.html">Bottom Bar</a></td></tr>
+            <tr><td><span class="file-path">MainMenu.qml</span>, <span class="file-path">HomeOBDView.qml</span></td><td>Home screen and its OBD card grid</td><td><a href="pages.html#mainmenu">Pages</a>, <a href="components.html#home-obd-view">Components</a></td></tr>
+            <tr><td><span class="file-path">MediaRoom.qml</span>, <span class="file-path">MediaPlayer.qml</span>, <span class="file-path">DownloadPage.qml</span></td><td>Now-playing view, library browser, YouTube Music search/download</td><td><a href="pages.html">Pages</a></td></tr>
+            <tr><td><span class="file-path">NowPlayingStudio.qml</span></td><td>Window-level immersive editor for Now Playing visuals</td><td><a href="pages.html#nowplayingstudio">Pages</a></td></tr>
+            <tr><td><span class="file-path">AlbumArtCarousel.qml</span>, <span class="file-path">CoverflowCard.qml</span>, <span class="file-path">LazyImage.qml</span>, <span class="file-path">ThemedIcon.qml</span>, <span class="file-path">GalleryTile.qml</span>, <span class="file-path">CornerBrackets.qml</span>, <span class="file-path">TerminalFeedback.qml</span></td><td>Reusable components</td><td><a href="components.html">Components</a></td></tr>
+            <tr><td><span class="file-path">OBDHome.qml</span>, <span class="file-path">OBDMenu.qml</span>, <span class="file-path">OBDDiagnostics.qml</span>, <span class="file-path">OBDParameterModel.qml</span></td><td>OBD hub, live gauges/dashboards, DTC reader, PID singleton</td><td><a href="pages.html">Pages</a>, <a href="components.html#obd-parameter-model">Components</a></td></tr>
+            <tr><td><span class="file-path">SensorHome.qml</span>, <span class="file-path">SensorMenu.qml</span>, <span class="file-path">SensorCard.qml</span>, <span class="file-path">GForceDisplay.qml</span></td><td>Sensor hub, IMU readouts, sensor cards</td><td><a href="pages.html">Pages</a>, <a href="components.html">Components</a></td></tr>
+            <tr><td><span class="file-path">CarMenu.qml</span>, <span class="file-path">JeepVehicle.qml</span>, <span class="file-path">JeepHinge.qml</span>, <span class="file-path">JeepLamp.qml</span>, <span class="file-path">JeepLink.qml</span>, <span class="file-path">JeepSteering.js</span></td><td>Quick3D vehicle-attitude view and the rigged Jeep TJ</td><td><a href="pages.html#carmenu">Pages</a>, <a href="components.html#jeep-rig">Components</a></td></tr>
+            <tr><td><span class="file-path">ClockMenu.qml</span></td><td>Digital + analog clock page (reachable only through <code>navigateTo</code>)</td><td><a href="pages.html#clockmenu">Pages</a></td></tr>
+            <tr><td><span class="file-path">PhoneMirrorView.qml</span>, <span class="file-path">AndroidAutoView.qml</span></td><td>Phone mirroring and Android Auto DHU views</td><td><a href="pages.html">Pages</a>, <a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a></td></tr>
+            <tr><td><span class="file-path">SettingsMenu.qml</span> + <span class="file-path">SettingsHubLayout.qml</span>, <span class="file-path">SettingsSidebarLayout.qml</span>, <span class="file-path">SettingsCarouselLayout.qml</span>, <span class="file-path">SettingsDashboardLayout.qml</span></td><td>Settings orchestrator and its four selectable layouts</td><td><a href="pages.html#settingsmenu">Pages</a>, <a href="settings-ui.html">Settings UI</a></td></tr>
+            <tr><td><span class="file-path">settings/</span> (pages, cards, toggles, sliders, <span class="file-path">widgets/</span>)</td><td>Settings pages and the settings component library</td><td><a href="settings-ui.html">Settings UI</a></td></tr>
+            <tr><td><span class="file-path">gauges/</span>, <span class="file-path">dashboards/</span> (<span class="file-path">DashboardRenderer.qml</span>, <span class="file-path">WidgetCatalog.qml</span>, <span class="file-path">editor/</span>, <span class="file-path">presets/</span>, <span class="file-path">widgets/</span>)</td><td>Gauge primitives, JSON-driven dashboards, the in-app editor</td><td><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a></td></tr>
+            <tr><td><span class="file-path">shaders/</span></td><td><span class="file-path">dissolve_squares.frag</span> source, its compiled <span class="file-path">.qsb</span>, and <span class="file-path">shaders.qrc</span></td><td><a href="#shaders">Shaders</a></td></tr>
+            <tr><td><span class="file-path">assets/</span></td><td>Flat-white SVG icons (<code>*_button.svg</code>, <code>tile_*.svg</code>, <code>cat_*.svg</code>), <span class="file-path">missing_art.png</span>, <span class="file-path">fonts/</span> (GoogleSans-Regular.ttf, JetBrainsMono-Regular.ttf), <span class="file-path">jeep_tj/</span> (rig parts), <span class="file-path">jeep_tj_2003.glb</span> (monolithic preview), <span class="file-path">vehicle_studio.hdr</span>, <span class="file-path">readme/</span> (README screenshots and <code>.webp</code> clips produced by the screenshot sweeper), <span class="file-path">-src/</span> (Illustrator <code>.ai</code> design sources for the logo and transport icons), <span class="file-path">Isabela/</span> (an older set of seven transport/clock SVGs that nothing references any more)</td><td>this page, <a href="components.html#jeep-rig">Components</a></td></tr>
+          </tbody>
+        </table>
 
         <!-- Main.qml Structure -->
         <h2 id="main-qml">Main.qml Structure</h2>
 
-        <p>The entry point file <span class="file-path">frontend/Main.qml</span> is an <code>ApplicationWindow</code> that orchestrates the entire UI. Here is its top-level declaration:</p>
+        <p><span class="file-path">frontend/Main.qml</span> is an <code>ApplicationWindow</code> that orchestrates the entire UI. Its top-level declaration:</p>
 
         <pre><code><span class="kw">import</span> QtQuick <span class="num">2.15</span>
 <span class="kw">import</span> QtQuick.Controls <span class="num">2.15</span>
@@ -88,58 +137,71 @@
     <span class="prop">minimumHeight</span>: <span class="num">300</span>
     <span class="prop">font.family</span>: App.Style.fontFamily !== <span class="str">""</span>
         ? App.Style.fontFamily : systemDefaultFont
+
+    <span class="cmt">// Desktop: saved size. Android: leave unset so the OS owns sizing</span>
+    <span class="cmt">// (a hardcoded size defeats the display-cutout pillarboxing).</span>
+    <span class="prop">width</span>: isAndroid ? <span class="kw">undefined</span> : screenWidth
+    <span class="prop">height</span>: isAndroid ? <span class="kw">undefined</span> : screenHeight
 }</code></pre>
 
-        <p>The window stores a captured <code>systemDefaultFont</code> at startup, before any custom fonts are applied. This ensures there is always a valid fallback.</p>
+        <p>The window captures <code>systemDefaultFont</code> (its own <code>font.family</code>) in <code>Component.onCompleted</code> before any custom font is applied, and also stores it in <code>Style.systemDefaultFont</code>, so <code>Style.fontFamily</code> always resolves to a real family.</p>
 
         <h3>Key Properties</h3>
 
         <table>
           <thead><tr><th>Property</th><th>Source</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td><code>deviceName</code></td><td>settingsManager.deviceName</td><td>Window title</td></tr>
-            <tr><td><code>theme</code></td><td>settingsManager.themeSetting</td><td>Current color theme name</td></tr>
-            <tr><td><code>screenWidth / screenHeight</code></td><td>settingsManager</td><td>Persisted window dimensions</td></tr>
-            <tr><td><code>isVerticalLayout</code></td><td>settingsManager.bottomBarOrientation</td><td>Side bar vs bottom bar mode</td></tr>
-            <tr><td><code>currentRpm</code></td><td>obdManager.rpmChanged signal</td><td>Live RPM for shift light overlay</td></tr>
-            <tr><td><code>shiftLightFlags</code></td><td>settingsManager (JSON array)</td><td>RPM threshold + color flag definitions</td></tr>
+            <tr><td><code>deviceName</code></td><td><code>settingsManager.deviceName</code></td><td>Window title</td></tr>
+            <tr><td><code>theme</code>, <code>fontSetting</code></td><td><code>settingsManager.themeSetting</code> / <code>fontSetting</code></td><td>Mirrors of the saved theme and font names</td></tr>
+            <tr><td><code>startUpVolume</code>, <code>showClock</code>, <code>clockFormat24Hour</code>, <code>clockSize</code>, <code>lastSettingsSection</code></td><td><code>settingsManager</code></td><td>Mirrors kept on the window for child pages</td></tr>
+            <tr><td><code>screenWidth</code> / <code>screenHeight</code></td><td><code>settingsManager.screenWidth</code> / <code>screenHeight</code> (defaults 1280&times;720)</td><td>Persisted window dimensions</td></tr>
+            <tr><td><code>isVerticalLayout</code></td><td><code>settingsManager.bottomBarOrientation === "side"</code></td><td>Side bar vs bottom bar mode</td></tr>
+            <tr><td><code>nowPlayingStudioOpen</code>, <code>nowPlayingStudioOriginRect</code></td><td><code>openNowPlayingStudio(rect)</code> / <code>closeNowPlayingStudio()</code></td><td>Drive the studio overlay and its hero-morph origin</td></tr>
+            <tr><td><code>currentRpm</code></td><td><code>obdManager.rpmChanged</code> (connected by hand)</td><td>Live RPM for the shift-light overlays</td></tr>
+            <tr><td><code>shiftLightFlags</code>, <code>activeShiftFlag</code>, <code>shiftLightFlashVisible</code>, <code>shiftLightEnabled</code>, <code>fullScreenFlashOpacity</code></td><td><code>rpm_flags</code>, <code>rpm_shift_light_enabled</code>, <code>rpm_fullscreen_flash_opacity</code> generic settings</td><td>Shift-light state (see <a href="#shift-light">below</a>)</td></tr>
+            <tr><td><code>loadedFonts</code>, <code>fontLoaders</code>, <code>pendingFontLoads</code>, <code>pendingFontData</code></td><td>font scan</td><td>Dynamic <code>FontLoader</code> bookkeeping</td></tr>
           </tbody>
         </table>
 
         <!-- Window Management -->
         <h2 id="window-management">Window Management</h2>
 
-        <p>Window dimensions are persisted bidirectionally. On startup, Main.qml reads saved dimensions from <code>settingsManager</code>. On resize, it writes them back:</p>
+        <p>Window dimensions are persisted bidirectionally on desktop. On resize, <code>onWidthChanged</code> / <code>onHeightChanged</code> write back to the settings manager and recompute <code>Spacing</code>:</p>
 
         <pre><code><span class="fn">onWidthChanged</span>: {
-    <span class="kw">if</span> (settingsManager && width > <span class="num">0</span> && width >= minimumWidth) {
+    <span class="kw">if</span> (settingsManager &amp;&amp; width &gt; <span class="num">0</span> &amp;&amp; width &gt;= minimumWidth) {
         settingsManager.<span class="fn">save_screen_width</span>(width)
         screenWidth = width
         App.Spacing.<span class="fn">updateDimensions</span>(width, height)
     }
 }</code></pre>
 
-        <p>The <code>Spacing.updateDimensions()</code> call recalculates all percentage-based layout values. Window state (fullscreen, maximized, normal) is also saved and restored:</p>
-
-        <pre><code><span class="cmt">// Restore window state</span>
-<span class="kw">let</span> savedState = settingsManager.<span class="fn">get_window_state</span>()
-<span class="kw">if</span> (savedState === <span class="str">"fullscreen"</span>)
-    mainWindow.visibility = Window.FullScreen
-<span class="kw">else if</span> (savedState === <span class="str">"maximized"</span>)
-    mainWindow.visibility = Window.Maximized</code></pre>
+        <p>The reverse direction (settings page &rarr; window) is a <code>Connections</code> block on <code>settingsManager</code> handling <code>onScreenWidthChanged</code> / <code>onScreenHeightChanged</code>; both are skipped when <code>isAndroid</code>. Window state (fullscreen / maximized / normal) is restored in <code>Component.onCompleted</code> from <code>settingsManager.get_window_state()</code>.</p>
 
         <div class="info-box info">
-          <strong>Cleanup on Close:</strong> The <code>onClosing</code> handler saves playback state, clears temp files, and cleans up Spotify before the window closes.
+          <div class="info-box-title">Cleanup on Close</div>
+          The <code>onClosing</code> handler calls <code>mediaManager._save_playback_state()</code> and <code>spotifyManager.cleanup()</code>, then accepts the close. Nothing else is torn down from QML; managers clean up from their backend destructors / <code>aboutToQuit</code>.
         </div>
 
         <!-- Page Routing -->
         <h2 id="page-routing">Page Routing Mechanism</h2>
 
-        <p>OCTAVE uses Qt's <code>StackView</code> for page navigation. The initial item is <code>MainMenu</code>:</p>
+        <p>OCTAVE uses Qt's <code>StackView</code> for page navigation. The only statically instantiated page is the home screen:</p>
 
         <pre><code><span class="cls">StackView</span> {
     <span class="prop">id</span>: stackView
     <span class="prop">objectName</span>: <span class="str">"stackView"</span>
+    <span class="prop">z</span>: <span class="num">1</span>
+
+    <span class="cmt">// Cached DownloadPage — created once, reused across all navigations</span>
+    <span class="prop">property var</span> _cachedDownloadPage: <span class="kw">null</span>
+
+    <span class="prop">anchors</span> {
+        <span class="prop">left</span>: isVerticalLayout ? bottomBar.right : parent.left
+        <span class="prop">right</span>: parent.right
+        <span class="prop">top</span>: parent.top
+        <span class="prop">bottom</span>: isVerticalLayout ? parent.bottom : bottomBar.top
+    }
 
     <span class="prop">initialItem</span>: <span class="cls">MainMenu</span> {
         <span class="prop">stackView</span>: stackView
@@ -147,295 +209,382 @@
         <span class="prop">windowHeight</span>: mainWindow.height
     }
 
-    <span class="cmt">// Disable all transitions for performance</span>
-    <span class="prop">pushEnter</span>: <span class="kw">null</span>
-    <span class="prop">pushExit</span>: <span class="kw">null</span>
-    <span class="prop">popEnter</span>: <span class="kw">null</span>
-    <span class="prop">popExit</span>: <span class="kw">null</span>
+    <span class="prop">pushEnter</span>: <span class="kw">null</span>;  <span class="prop">pushExit</span>: <span class="kw">null</span>
+    <span class="prop">popEnter</span>: <span class="kw">null</span>;   <span class="prop">popExit</span>: <span class="kw">null</span>
+    <span class="prop">replaceEnter</span>: <span class="kw">null</span>; <span class="prop">replaceExit</span>: <span class="kw">null</span>
 }</code></pre>
 
-        <p>Pages push themselves onto the stack by creating components dynamically. For example, navigating to OBD from the BottomBar:</p>
+        <h3>Lazy loading</h3>
+        <p>Every other page is loaded on demand: the caller runs <code>Qt.createComponent("Foo.qml")</code>, checks <code>component.status === Component.Ready</code>, creates the object with <code>stackView</code> as parent and the page's required properties, then pushes it. There is no preloading of pages and no <code>Loader</code> in Main.qml; a page that is popped is destroyed (the StackView owns it). The one exception is <code>DownloadPage</code>, which <code>MediaRoom.openDownloadPage()</code> and <code>MediaPlayer.openDownloadPage()</code> create once with a <code>null</code> parent and cache on <code>stackView._cachedDownloadPage</code>; later calls pop back to it if it is already on the stack, or push the cached instance again. BottomBar navigation to OBD is representative:</p>
 
-        <pre><code><span class="kw">var</span> component = Qt.<span class="fn">createComponent</span>(<span class="str">"OBDMenu.qml"</span>)
-<span class="kw">var</span> page = component.<span class="fn">createObject</span>(stackView, {
-    <span class="prop">stackView</span>: bottomBar.stackView,
-    <span class="prop">mainWindow</span>: stackView.parent.Window.window
-})
-stackView.<span class="fn">push</span>(page)</code></pre>
+        <pre><code><span class="kw">var</span> component = Qt.<span class="fn">createComponent</span>(<span class="str">"OBDHome.qml"</span>)
+<span class="kw">if</span> (component.status === Component.Ready) {
+    <span class="kw">var</span> page = component.<span class="fn">createObject</span>(stackView, {
+        <span class="prop">stackView</span>: bottomBar.stackView,
+        <span class="prop">mainWindow</span>: stackView.parent.Window.window
+    })
+    <span class="kw">if</span> (page) stackView.<span class="fn">push</span>(page)
+}</code></pre>
 
-        <p>The <code>navigateTo()</code> function provides a complete page map for remote/programmatic navigation:</p>
+        <p>Pages declare what they need: <code>MediaPlayer</code>, <code>OBDHome</code>, <code>OBDMenu</code>, <code>OBDDiagnostics</code>, <code>SensorHome</code>, <code>SensorMenu</code> and <code>ClockMenu</code> use <code>required property StackView stackView</code> and <code>required property ApplicationWindow mainWindow</code>; <code>CarMenu</code> requires only <code>stackView</code>; <code>SettingsMenu</code> additionally requires <code>string initialSection</code>; <code>MainMenu</code>, <code>MediaRoom</code>, <code>DownloadPage</code>, <code>PhoneMirrorView</code> and <code>AndroidAutoView</code> use plain (optional) properties. A <code>createObject()</code> that omits a required property returns <code>null</code>, which is why every call site checks the result.</p>
+
+        <h3>Programmatic navigation</h3>
+        <p><code>navigateTo(pageName)</code> holds a page map used by the Python command server (<code>backend/command_server.py</code>, enabled with <code>python main.py --profile</code>) and the screenshot sweeper:</p>
 
         <pre><code><span class="kw">function</span> <span class="fn">navigateTo</span>(pageName) {
     <span class="kw">var</span> pageMap = {
-        <span class="str">"MainMenu.qml"</span>:    { file: <span class="str">"MainMenu.qml"</span>,    props: { ... } },
-        <span class="str">"MediaRoom.qml"</span>:   { file: <span class="str">"MediaRoom.qml"</span>,   props: { ... } },
-        <span class="str">"MediaPlayer.qml"</span>: { file: <span class="str">"MediaPlayer.qml"</span>, props: { ... } },
-        <span class="str">"OBDMenu.qml"</span>:     { file: <span class="str">"OBDMenu.qml"</span>,     props: { ... } },
-        <span class="cmt">// ... 12 pages total</span>
-    }
+        <span class="str">"MainMenu.qml"</span>:        { file: <span class="str">"MainMenu.qml"</span>,        props: { stackView, windowWidth, windowHeight } },
+        <span class="str">"MediaRoom.qml"</span>:       { file: <span class="str">"MediaRoom.qml"</span>,       props: { stackView } },
+        <span class="str">"MediaPlayer.qml"</span>:     { file: <span class="str">"MediaPlayer.qml"</span>,     props: { stackView, mainWindow } },
+        <span class="str">"OBDHome.qml"</span>:         { ... }, <span class="str">"OBDMenu.qml"</span>: { ... }, <span class="str">"OBDDiagnostics.qml"</span>: { ... },
+        <span class="str">"SettingsMenu.qml"</span>:    { file: <span class="str">"SettingsMenu.qml"</span>,    props: { stackView, mainWindow, initialSection: <span class="str">"displaySettings"</span> } },
+        <span class="str">"PhoneMirrorView.qml"</span>: { ... }, <span class="str">"AndroidAutoView.qml"</span>: { ... },
+        <span class="str">"SensorHome.qml"</span>:      { ... }, <span class="str">"SensorMenu.qml"</span>: { ... }, <span class="str">"CarMenu.qml"</span>: { ... },
+        <span class="str">"DownloadPage.qml"</span>:    { file: <span class="str">"DownloadPage.qml"</span>,    props: { stackView } },
+        <span class="str">"ClockMenu.qml"</span>:       { file: <span class="str">"ClockMenu.qml"</span>,       props: { stackView } }
+    }   <span class="cmt">// 14 entries</span>
+    ...
 }</code></pre>
 
-        <p>There are also <code>navigateHome()</code> (pops to root) and <code>navigateBack()</code> (pops one) helper functions, primarily used by a Python command server for performance testing.</p>
+        <p>Companion helpers: <code>navigateHome()</code> (<code>stackView.pop(null)</code>), <code>navigateBack()</code> (pops one if <code>depth &gt; 1</code>), and <code>navigateToSettings(section)</code>, which exists because <code>SettingsMenu</code> has a required <code>initialSection</code>; if Settings is already the current page it calls <code>currentItem.navigateToCategory(section)</code> instead of stacking a second copy. Pages are also pushed by string path in two places (<code>MainMenu</code> pushes <code>"OBDMenu.qml"</code>; <code>OBDMenu</code> pushes <code>"dashboards/editor/DashboardEditor.qml"</code>).</p>
 
-        <h3>StackView Anchoring</h3>
+        <div class="info-box warning">
+          <div class="info-box-title">Known gap: the ClockMenu entry cannot load</div>
+          <span class="file-path">ClockMenu.qml</span> declares <code>required property ApplicationWindow mainWindow</code>, but the <code>navigateTo</code> map passes only <code>stackView</code>, so <code>createObject()</code> returns <code>null</code> and the push is skipped. Nothing else in the UI navigates to ClockMenu (tapping the BottomBar clock pushes <code>SensorHome.qml</code>, not the clock page), so the page is currently unreachable. The same defect was fixed for <code>SensorMenu.qml</code> in commit <code>0c29e64</code>.
+        </div>
 
-        <p>The StackView adapts its anchoring based on bottom bar orientation:</p>
+        <h3>StackView anchoring</h3>
+        <p>When the bottom bar is vertical (side mode) the StackView fills from the bar's right edge to the window's right edge; when horizontal, from the top of the window to the bar's top. The BottomBar itself re-anchors in its <code>onIsVerticalChanged</code> handler in Main.qml (width <code>parent.width * 0.1</code> when vertical; height <code>parent.height * Spacing.bottomBarHeightPercent</code> when horizontal).</p>
 
-        <pre><code><span class="prop">anchors</span> {
-    <span class="prop">left</span>: isVerticalLayout ? bottomBar.right : parent.left
-    <span class="prop">right</span>: parent.right
-    <span class="prop">top</span>: parent.top
-    <span class="prop">bottom</span>: isVerticalLayout ? parent.bottom : bottomBar.top
+        <!-- IMU gating -->
+        <h2 id="imu-gating">IMU Rate Gating from the StackView</h2>
+
+        <p>The BerryIMU worker samples the I&sup2;C sensors at a ~200&nbsp;Hz target on its own thread and <em>emits</em> seven signals per tick into QML at 60&nbsp;Hz (<code>EMIT_INTERVAL = 0.016</code> in both backends). Pushing ~440 queued signals per second into pages that do not display them pegged the QML thread (the comment in <span class="file-path">OBDParameterModel.qml</span> records 100&nbsp;% CPU while idle on the Orange Pi), so Main.qml decides from the current page whether the full-rate stream is needed and calls <code>berryIMU.setActive(bool)</code>. Sampling and Madgwick fusion continue at full rate; only the emission into QML drops to <code>IDLE_EMIT_INTERVAL = 0.2</code> (5&nbsp;Hz) so the settings status stays fresh (commit <code>94d61be</code>). The rule, in a <code>Connections</code> block on <code>stackView</code>:</p>
+
+        <pre><code><span class="kw">function</span> <span class="fn">updateSensorConsumers</span>() {
+    <span class="kw">if</span> (<span class="kw">typeof</span> berryIMU === <span class="str">"undefined"</span> || !berryIMU || !stackView.currentItem)
+        <span class="kw">return</span>
+    <span class="kw">var</span> n = stackView.currentItem.objectName
+    berryIMU.<span class="fn">setActive</span>(n === <span class="str">"carMenu"</span> || n === <span class="str">"sensorMenu"</span> || n === <span class="str">"sensorHome"</span>
+                       || n === <span class="str">"obdMenu"</span> || (n === <span class="str">"mainMenu"</span> &amp;&amp; <span class="fn">_homeShowsImuParam</span>()))
 }</code></pre>
 
-        <p>When the bottom bar is vertical (side mode), the StackView fills from the bar's right edge to the window's right edge. When horizontal, it fills from the top to the bar's top edge.</p>
+        <p><code>_homeShowsImuParam()</code> checks <code>settingsManager.get_home_obd_parameters()</code> for any of <code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>, <code>LONGITUDINAL_G</code>, <code>BARO_TEMP</code> &mdash; the IMU-fed entries of <code>OBDParameterModel</code>. The handler runs on <code>onCurrentItemChanged</code> and once at completion. The same handler closes the Now Playing Studio if the user navigates while it is open. This is why page <code>objectName</code>s matter: the gating is keyed on them (commits <code>94d61be</code>, <code>2fef514</code>).</p>
 
         <!-- Import Path -->
-        <h2 id="import-path">Import Path Setup</h2>
+        <h2 id="import-path">Import Path and Singletons</h2>
 
-        <p>The Python launcher adds <span class="file-path">frontend/</span> to the QML import path in <span class="file-path">main.py</span>. This means any QML file in <span class="file-path">frontend/</span> can be imported by name without a path prefix. The <code>import "." as App</code> pattern used throughout the codebase creates a namespace alias:</p>
+        <p>Both launchers add <span class="file-path">frontend/</span> to the QML import path and load <span class="file-path">frontend/Main.qml</span> from the filesystem &mdash; the QML is <em>not</em> compiled into the C++ binary:</p>
 
-        <pre><code><span class="kw">import</span> <span class="str">"."</span> <span class="kw">as</span> App
+        <pre><code><span class="cmt">// src/main.cpp — desktop: frontend/ next to the binary or one level up (build/ -&gt; repo root)</span>
+engine.<span class="fn">addImportPath</span>(frontendDir.<span class="fn">absolutePath</span>());
+engine.<span class="fn">load</span>(QUrl::<span class="fn">fromLocalFile</span>(frontendDir.<span class="fn">absoluteFilePath</span>(<span class="str">"Main.qml"</span>)));
+<span class="cmt">// src/main.cpp — Android: frontend/ is bundled as assets</span>
+engine.<span class="fn">addImportPath</span>(QStringLiteral(<span class="str">"assets:/frontend"</span>));
+engine.<span class="fn">load</span>(QUrl(QStringLiteral(<span class="str">"assets:/frontend/Main.qml"</span>)));
 
-<span class="cmt">// Access singletons via the App namespace</span>
-App.Style.backgroundColor
-App.Spacing.dp(<span class="num">10</span>)
-App.EnvironmentTheme.active.cardRadius</code></pre>
+<span class="cmt"># main.py</span>
+engine.<span class="fn">addImportPath</span>(os.path.<span class="fn">join</span>(os.path.<span class="fn">dirname</span>(os.path.<span class="fn">abspath</span>(__file__)), <span class="str">"frontend"</span>))
+engine.<span class="fn">load</span>(QUrl.<span class="fn">fromLocalFile</span>(qml_file))   <span class="cmt"># in load_main_qml()</span></code></pre>
 
-        <p>Settings sub-components use <code>import ".." as App</code> since they are one directory deeper.</p>
+        <p><span class="file-path">CMakeLists.txt</span> sets <code>QT_QML_IMPORT_PATH</code> to the same directory for tooling (qmllint) and, on Android, <code>QT_QML_ROOT_PATH</code> so the frontend is packed into the APK. Because the directory is on the import path, any QML file in it is importable by type name, and <span class="file-path">frontend/qmldir</span> declares the singletons:</p>
+
+        <pre><code>singleton Style 1.0 Style.qml
+singleton Spacing 1.0 Spacing.qml
+singleton EnvironmentTheme 1.0 EnvironmentTheme.qml
+singleton OBDParameterModel 1.0 OBDParameterModel.qml
+singleton WidgetCatalog 1.0 dashboards/WidgetCatalog.qml</code></pre>
+
+        <p>Files at the top level use <code>import "." as App</code> and reach the singletons as <code>App.Style</code>, <code>App.Spacing</code>, <code>App.EnvironmentTheme</code>, <code>App.OBDParameterModel</code>; <span class="file-path">settings/</span> files use <code>import ".." as App</code>, and <span class="file-path">dashboards/widgets/</span> use <code>import "../.." as App</code>. Icon paths are built from <code>Style.assetBase</code> (a <code>readonly property url</code> resolved in <span class="file-path">frontend/</span>) so subdirectory callers never guess <code>../</code> depth. <code>EnvironmentTheme</code> now exposes a single fixed <code>active</code> object (the "Standard" look); the earlier Spacecraft / Deep Sea presets were removed and every <code>EnvironmentTheme.active.X</code> flag such as <code>cornerBrackets</code>, <code>terminalScanlines</code> or <code>cardGlassEffect</code> is permanently <code>false</code>.</p>
+
+        <!-- Controls style -->
+        <h2 id="controls-style">Qt Quick Controls "Basic" Style</h2>
+
+        <p>Both backends force the Qt Quick Controls style to <strong>Basic</strong> before the engine is created &mdash; <code>QQuickStyle::setStyle("Basic")</code> in <span class="file-path">src/main.cpp</span>, <code>os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"</code> at the very top of <span class="file-path">main.py</span>. Both comments give the same reason &mdash; "required for full Slider customization" (C++) / "allows Slider customization" (Python): the app replaces the <code>background</code>, <code>handle</code> and <code>contentItem</code> of its sliders, toggles and popups, which platform styles do not allow. Five files also import <code>QtQuick.Controls.Basic</code> explicitly (<span class="file-path">MainMenu.qml</span>, <span class="file-path">MediaRoom.qml</span>, <span class="file-path">BottomBar.qml</span>, <span class="file-path">AndroidAutoView.qml</span>, <span class="file-path">PhoneMirrorView.qml</span>) so their customised controls resolve to the Basic implementations regardless of the platform default.</p>
 
         <!-- Context Properties -->
-        <h2 id="context-properties">Accessing Python Managers (Context Properties)</h2>
+        <h2 id="context-properties">Accessing Backend Managers (Context Properties)</h2>
 
-        <p>Backend managers are registered as QML context properties in <span class="file-path">main.py</span>. They appear as global variables in every QML file:</p>
+        <p>Backend managers are registered as QML context properties before <code>Main.qml</code> loads &mdash; in <span class="file-path">src/main.cpp</span> via <code>ctx-&gt;setContextProperty(...)</code> and in <span class="file-path">main.py</span> via <code>engine.rootContext().setContextProperty(...)</code>. They appear as globals in every QML file:</p>
 
-        <pre><code><span class="cmt"># In main.py (Python)</span>
-engine.rootContext().<span class="fn">setContextProperty</span>(<span class="str">"mediaManager"</span>, media_manager)
-engine.rootContext().<span class="fn">setContextProperty</span>(<span class="str">"spotifyManager"</span>, spotify_manager)
-engine.rootContext().<span class="fn">setContextProperty</span>(<span class="str">"settingsManager"</span>, settings_manager)
-engine.rootContext().<span class="fn">setContextProperty</span>(<span class="str">"obdManager"</span>, obd_manager)</code></pre>
-
-        <p>In QML, these are consumed directly:</p>
-
-        <pre><code><span class="cmt">// Call Python slots</span>
+        <pre><code><span class="cmt">// Call slots / invokables</span>
 mediaManager.<span class="fn">next_track</span>()
 spotifyManager.<span class="fn">toggle_play</span>()
 settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 
-<span class="cmt">// Read Python properties</span>
+<span class="cmt">// Read properties</span>
 <span class="prop">text</span>: settingsManager.deviceName
 
-<span class="cmt">// Connect to Python signals via Connections</span>
+<span class="cmt">// React to signals</span>
 <span class="cls">Connections</span> {
     <span class="prop">target</span>: mediaManager
-    <span class="kw">function</span> <span class="fn">onMetadataChanged</span>(title, artist, album) { ... }
+    <span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) { ... }
 }</code></pre>
 
-        <p>The main managers available in QML are:</p>
+        <p>Registered names (identical in both backends; the class name is the same in C++ and Python):</p>
 
         <table>
-          <thead><tr><th>Context Property</th><th>Python Class</th><th>Purpose</th></tr></thead>
+          <thead><tr><th>Context Property</th><th>Class</th><th>Purpose</th></tr></thead>
           <tbody>
             <tr><td><code>settingsManager</code></td><td>SettingsManager</td><td>All persistent settings, theme, layout</td></tr>
-            <tr><td><code>mediaManager</code></td><td>MediaManager</td><td>Local MP3 playback, playlists, metadata</td></tr>
-            <tr><td><code>spotifyManager</code></td><td>SpotifyManager</td><td>Spotify API integration</td></tr>
-            <tr><td><code>obdManager</code></td><td>OBDManager</td><td>OBD-II vehicle diagnostics</td></tr>
+            <tr><td><code>diagnosticsManager</code></td><td>DiagnosticsManager</td><td>Read / export logs from the head unit (Settings &gt; About)</td></tr>
+            <tr><td><code>clock</code></td><td>Clock</td><td><code>timeChanged(str)</code> time string in the saved format</td></tr>
+            <tr><td><code>networkManager</code></td><td>NetworkManager</td><td>Connectivity, update checks</td></tr>
+            <tr><td><code>volumeController</code></td><td>VolumeController</td><td>Quadratic volume curve + dispatch to every output</td></tr>
+            <tr><td><code>mediaManager</code></td><td>MediaManager</td><td>Local playback, library, playlists, metadata, album art</td></tr>
             <tr><td><code>audioAnalyzer</code></td><td>AudioAnalyzer</td><td>FFT waveform visualization</td></tr>
-            <tr><td><code>phoneMirrorManager</code></td><td>PhoneMirrorManager</td><td>Phone screen mirroring (scrcpy)</td></tr>
-            <tr><td><code>androidAutoManager</code></td><td>AndroidAutoManager</td><td>Android Auto via DHU</td></tr>
-            <tr><td><code>berryIMU</code></td><td>BerryIMUManager</td><td>Accelerometer/gyro/magnetometer</td></tr>
-            <tr><td><code>downloadManager</code></td><td>DownloadManager</td><td>YouTube music downloads</td></tr>
-            <tr><td><code>networkManager</code></td><td>NetworkManager</td><td>Update checks, connectivity</td></tr>
+            <tr><td><code>spotifyManager</code></td><td>SpotifyManager</td><td>Spotify Web API (no-op stub on mobile)</td></tr>
+            <tr><td><code>obdManager</code></td><td>OBDManager</td><td>OBD-II live data and DTCs (Python installs it via <code>install_obd_manager()</code> so <code>dev/</code> can inject a mock)</td></tr>
+            <tr><td><code>esp32VolumeManager</code></td><td>ESP32VolumeManager</td><td>Wireless rotary encoder</td></tr>
+            <tr><td><code>berryIMU</code></td><td>BerryIMUManager</td><td>Accelerometer / gyro / magnetometer / barometer</td></tr>
+            <tr><td><code>gestureSensor</code></td><td>GestureManager</td><td>PAJ7620U2 gesture sensor</td></tr>
+            <tr><td><code>androidAutoManager</code></td><td>AndroidAutoManager</td><td>Android Auto via DHU (C++ also registers the <code>dhuframe</code> image provider)</td></tr>
+            <tr><td><code>phoneMirrorManager</code></td><td>PhoneMirrorManager</td><td>Built-in scrcpy-protocol client</td></tr>
+            <tr><td><code>downloadManager</code></td><td>DownloadManager</td><td>YouTube Music search / download (compiled out of app-store C++ builds)</td></tr>
+            <tr><td><code>dashboardManager</code></td><td>DashboardManager</td><td>Dashboard presets + user JSON dashboards</td></tr>
+            <tr><td><code>screenAutoScale</code></td><td><em>real</em></td><td>Screen-detected scale factor (see <a href="#gui-scale">GUI Scale</a>)</td></tr>
+            <tr><td><code>isAndroid</code></td><td><em>bool</em></td><td><code>true</code> only in the Android C++ build; always <code>false</code> from Python</td></tr>
+            <tr><td><code>perfMonitor</code></td><td>PerfMonitor</td><td>Python only, only with <code>--profile</code></td></tr>
           </tbody>
         </table>
+
+        <p>Two custom QML types are registered rather than exposed as properties: <code>qmlRegisterType(EmbeddedDhuItem, "OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem")</code> in both backends (see <a href="pages.html#androidauto">AndroidAutoView</a>). Phone mirroring no longer registers a type: the QML <code>VideoOutput</code> hands its <code>videoSink</code> to <code>phoneMirrorManager.videoSink</code>.</p>
+
+        <!-- typeof -->
+        <h2 id="typeof-guards">Guarding Backend Differences with typeof</h2>
+
+        <p>Context properties that exist in one build but not another are referenced through <code>typeof x !== "undefined"</code> so a missing global is a falsy branch rather than a ReferenceError. The pattern also appears as <code>target: (typeof foo !== "undefined" &amp;&amp; foo) ? foo : null</code> on <code>Connections</code> blocks. Where it is used today:</p>
+
+        <ul>
+          <li><code>isAndroid</code> &mdash; BottomBar hides the Android Auto and Phone Mirror buttons when <code>isAndroid</code> is true; <code>SettingsMenu.buildHubModel()</code> drops <code>desktopOnly</code> pages (Accessories) on Android.</li>
+          <li><code>screenAutoScale</code> &mdash; Main.qml only applies it if defined.</li>
+          <li><code>berryIMU</code> &mdash; Main.qml's gating, <code>OBDParameterModel</code>'s IMU <code>Connections</code>, the Accessories settings page.</li>
+          <li><code>dashboardManager</code> &mdash; OBDMenu builds its registry with the built-in "grid" sentinel alone when the manager is absent; <span class="file-path">dashboards/editor/DashboardEditor.qml</span> guards its save/load and draft-rescue paths the same way.</li>
+          <li><code>esp32VolumeManager</code>, <code>gestureSensor</code>, <code>diagnosticsManager</code>, <code>spotifyManager</code>, <code>mediaManager</code>, <code>settingsManager</code> &mdash; settings pages, hub widgets, and the two dashboard media widgets.</li>
+          <li><code>typeof obj.method === "function"</code> &mdash; feature probes on items and managers: <code>currentItem.navigateToHub</code>, <code>mainWindow.openNowPlayingStudio</code>, <code>roomLoader.item.previewTrackTransition</code>, and in the OBD settings page <code>obdManager.connect_to_adapter</code> / <code>set_target_address</code> / <code>platform_hint</code>.</li>
+        </ul>
+
+        <p>Everything else assumes the manager exists, per the parity rule in <span class="file-path">CLAUDE.md</span>: a QML binding may only reference a symbol both backends expose, unless it is mobile-only.</p>
+
+        <!-- GUI scale -->
+        <h2 id="gui-scale">GUI Scale</h2>
+
+        <p>All sizes in the UI are derived from two multipliers held in the <code>Spacing</code> singleton:</p>
+
+        <pre><code><span class="prop">property real</span> globalScale: <span class="num">1.0</span>        <span class="cmt">// user preference (settingsManager.uiScale)</span>
+<span class="prop">property real</span> autoScaleFactor: <span class="num">1.0</span>    <span class="cmt">// screen detection (screenAutoScale)</span>
+<span class="prop">property real</span> effectiveScale: autoScaleFactor * globalScale
+<span class="prop">property real</span> baseScale: <span class="num">0.6</span> * globalScale   <span class="cmt">// for percentage-based properties</span>
+
+<span class="kw">function</span> <span class="fn">dp</span>(size)          { <span class="kw">return</span> Math.<span class="fn">round</span>(size * effectiveScale) }
+<span class="kw">function</span> <span class="fn">dpMin</span>(size, floor) { <span class="kw">return</span> Math.<span class="fn">max</span>(floor, Math.<span class="fn">round</span>(size * effectiveScale)) }</code></pre>
+
+        <p><code>screenAutoScale</code> is computed by the launcher as <em>available screen size / 720</em>, clamped to <code>[0.4, 3.0]</code>. C++ uses the <strong>shorter</strong> edge so the factor is orientation-independent (Android reports the natural portrait size even when locked landscape); Python uses <code>availableSize().height()</code>. Main.qml applies it as <code>Spacing.autoScaleFactor</code> and then sets <code>Spacing.globalScale = settingsManager.uiScale</code>. Percentage-based tokens (<code>overallMargin</code>, <code>overallText</code>, <code>settingsNavWidth</code>, &hellip;) are recomputed from <code>applicationWidth/Height</code> whenever <code>Spacing.updateDimensions(w, h)</code> is called.</p>
+
+        <div class="info-box warning">
+          <div class="info-box-title">Why almost every file has its own dp() / dpMin()</div>
+          Qt on Android loads QML singletons from <code>assets:/</code> with their <em>functions</em> un-callable (properties still work). So each page and component defines a local <code>function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }</code> with identical math to <code>Spacing.dp</code>, and <code>Style.assetBase</code> is a property rather than a function for the same reason. The comment block in <span class="file-path">MediaPlayer.qml</span> documents the bug; the two-line wrapper is copied verbatim into ~40 files.
+        </div>
 
         <!-- Font Loading -->
         <h2 id="font-loading">Dynamic Font Loading</h2>
 
-        <p>Main.qml scans for custom fonts at startup using a <code>FolderListModel</code>:</p>
-
-        <pre><code><span class="cls">FolderListModel</span> {
-    <span class="prop">id</span>: fontFolderModel
-    <span class="prop">folder</span>: Qt.<span class="fn">resolvedUrl</span>(<span class="str">"assets/fonts"</span>)
-    <span class="prop">nameFilters</span>: [<span class="str">"*.ttf"</span>, <span class="str">"*.otf"</span>, <span class="str">"*.TTF"</span>, <span class="str">"*.OTF"</span>]
-}</code></pre>
-
-        <p>For each font file found, a <code>FontLoader</code> is dynamically created. Once all fonts are loaded, they are registered with <code>Style.registerFonts()</code> which makes them available in the settings UI font picker. The saved font preference is then applied via <code>Style.setFont()</code>.</p>
+        <p>Main.qml scans <span class="file-path">frontend/assets/fonts</span> with a <code>FolderListModel</code> (filters <code>*.ttf</code>, <code>*.otf</code>, upper-case variants; sorted by name). For each file it creates a <code>FontLoader</code> from an inline <code>Component</code>, derives a display name from the filename (extension stripped, <code>-</code>/<code>_</code> &rarr; space, so <code>JetBrainsMono-Regular.ttf</code> becomes "JetBrainsMono Regular"), and tracks async loads with <code>pendingFontLoads</code>. When the count reaches zero, <code>Style.registerFonts(names, familyMap)</code> publishes the list for the settings font picker and <code>Style.setFont(settingsManager.fontSetting)</code> applies the saved choice. Two fonts ship in the repo: GoogleSans-Regular and JetBrainsMono-Regular.</p>
 
         <!-- Album Art Capture -->
         <h2 id="album-art-capture">Album Art Capture Pipeline</h2>
 
-        <p>When the "Album Art Capture" theme is active, album art colors are extracted and applied to the entire UI in real time. Main.qml connects to multiple signal sources:</p>
+        <p>When the "Album Art Capture" theme is active, colors extracted from the current album art become the UI palette. Main.qml listens on three sources:</p>
 
-        <pre><code><span class="cmt">// From mediaManager (local media)</span>
-<span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) {
-    App.Style.<span class="fn">updateAlbumArtTheme</span>(themeJson)
+        <pre><code><span class="cmt">// settingsManager.albumArtColorsChanged — reads the property, not the argument</span>
+<span class="kw">function</span> <span class="fn">onAlbumArtColorsChanged</span>(themeJson) {
+    <span class="kw">var</span> colors = settingsManager.albumArtColors
+    <span class="kw">if</span> (colors &amp;&amp; colors.length &gt; <span class="num">0</span>) App.Style.<span class="fn">updateAlbumArtTheme</span>(colors)
 }
-
-<span class="cmt">// From spotifyManager (Spotify)</span>
-<span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) {
-    lastAppliedAlbumArtColors = themeJson
-    App.Style.<span class="fn">updateAlbumArtTheme</span>(themeJson)
-}
-
-<span class="cmt">// Duration-based transition speed</span>
+<span class="cmt">// mediaManager.albumColorsExtracted (local) and spotifyManager.albumColorsExtracted</span>
+<span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) { App.Style.<span class="fn">updateAlbumArtTheme</span>(themeJson) }
+<span class="cmt">// Duration-based transition speed on both media managers</span>
 <span class="kw">function</span> <span class="fn">onDurationChanged</span>(durationMs) {
-    <span class="kw">if</span> (settingsManager.songLengthTransition && durationMs > <span class="num">0</span>)
+    <span class="kw">if</span> (settingsManager.songLengthTransition &amp;&amp; durationMs &gt; <span class="num">0</span>)
         App.Style.colorTransitionMs = durationMs
 }</code></pre>
 
-        <p>The <code>songLengthTransition</code> feature makes color transitions match the song duration, creating a slow ambient color shift throughout playback.</p>
+        <p>At startup, if the saved theme is Album Art Capture and <code>settingsManager.albumArtColors</code> is non-empty, Main.qml primes <code>Style.updateAlbumArtTheme()</code> <em>before</em> <code>setThemeInstant()</code> so the placeholder palette never paints. Manual theme switches are always instant (<code>Style.setThemeInstant</code>); the transition duration only applies to album-art-driven shifts. The comment on the settings handler records why it reads the property instead of the signal argument: signal arguments were observed not to pass reliably through <code>Connections</code> under PySide6.</p>
 
         <!-- Shift Light -->
-        <h2 id="shift-light">Shift Light Logic</h2>
+        <h2 id="shift-light">Shift Light Overlays</h2>
 
-        <p>Main.qml implements a full-screen RPM shift light overlay for track/racing use. The system works as follows:</p>
+        <p>Main.qml implements the window-wide part of the RPM shift light (the per-card light on the home screen lives in <a href="components.html#home-obd-view">HomeOBDView</a>):</p>
 
         <ol class="steps">
-          <li><strong>Load flags</strong> &mdash; <code>loadShiftLightFlags()</code> reads RPM threshold definitions from settings as a JSON array. Each flag has <code>rpmLow</code>, <code>rpmHigh</code>, <code>color</code>, <code>flash</code>, <code>flashSpeed</code>, <code>fullScreenFlash</code>, and <code>fullScreenFlashOpacity</code> properties.</li>
-          <li><strong>Track RPM</strong> &mdash; <code>obdManager.rpmChanged</code> signal updates <code>currentRpm</code>.</li>
-          <li><strong>Find active flag</strong> &mdash; <code>findActiveFlag()</code> iterates flags from highest to lowest priority, selecting the first whose RPM range contains the current value.</li>
-          <li><strong>Flash overlay</strong> &mdash; A <code>Rectangle</code> at z-index 999999 covers the entire UI. It is visible only when the active flag has <code>fullScreenFlash === true</code>.</li>
-          <li><strong>Flash timer</strong> &mdash; A <code>Timer</code> toggles visibility at the flag's <code>flashSpeed</code> interval to create a flashing effect.</li>
+          <li><strong>Load flags</strong> &mdash; <code>loadShiftLightFlags()</code> parses the <code>rpm_flags</code> generic setting (JSON array). Each flag may carry <code>rpmLow</code>/<code>rpmHigh</code> (or legacy <code>rpm</code>), <code>color</code>, <code>flash</code>, <code>flashSpeed</code>, <code>fullScreenFlash</code>, <code>fullScreenFlashOpacity</code>, <code>auraFlash</code>, <code>auraFlashOpacity</code>, <code>auraSpread</code>. Flags reload whenever <code>settingsManager.genericSettingChanged(key)</code> fires with a key starting <code>rpm_</code>.</li>
+          <li><strong>Track RPM</strong> &mdash; <code>obdManager.rpmChanged.connect(...)</code> is made by hand in <code>Component.onCompleted</code> and updates <code>currentRpm</code>.</li>
+          <li><strong>Find the active flag</strong> &mdash; <code>findActiveFlag()</code> walks the array from last (highest priority) to first and picks the first whose range contains <code>currentRpm</code>.</li>
+          <li><strong>Full-screen flash</strong> &mdash; <code>globalFullScreenFlash</code> is a <code>Rectangle</code> filling <code>mainContainer</code> at <code>z: 999999</code>, <code>enabled: false</code> so input passes through, colored with the flag's color, opacity from the flag's <code>fullScreenFlashOpacity</code> or the global <code>rpm_fullscreen_flash_opacity</code> (default 0.5).</li>
+          <li><strong>Aura flash</strong> &mdash; <code>globalAuraFlash</code> paints four edge gradients (top/bottom/left/right) whose depth is <code>auraSpread</code> &times; the window size (default 0.18) at <code>auraFlashOpacity</code> (default 0.6), shown when the flag has <code>auraFlash === true</code>.</li>
+          <li><strong>Flash timer</strong> &mdash; <code>globalFlashTimer</code> runs while the active flag has <code>flash === true</code>, toggling <code>shiftLightFlashVisible</code> every <code>flashSpeed</code> ms; <code>onActiveShiftFlagChanged</code> resets visibility to true.</li>
         </ol>
 
-        <pre><code><span class="cls">Rectangle</span> {
-    <span class="prop">id</span>: globalFullScreenFlash
-    <span class="prop">anchors.fill</span>: parent
-    <span class="prop">z</span>: <span class="num">999999</span>
-    <span class="prop">visible</span>: mainWindow.shiftLightEnabled &&
-             mainWindow.activeShiftFlag !== <span class="kw">null</span> &&
-             mainWindow.activeShiftFlag.fullScreenFlash === <span class="kw">true</span> &&
-             mainWindow.shiftLightFlashVisible
-    <span class="prop">color</span>: mainWindow.activeShiftFlag
-        ? mainWindow.activeShiftFlag.color : <span class="str">"transparent"</span>
-    <span class="prop">enabled</span>: <span class="kw">false</span>  <span class="cmt">// Allow clicks to pass through</span>
-}</code></pre>
-
-        <div class="info-box warning">
-          <strong>Performance Note:</strong> The flash overlay is deliberately placed as the <em>last child</em> of <code>mainContainer</code> so it renders on top without requiring a separate window or popup, which ensures cross-platform compatibility.
+        <div class="info-box info">
+          <div class="info-box-title">Why the overlays are children of mainContainer</div>
+          The comment in Main.qml explains the placement: the overlay is inside <code>mainContainer</code> as the last children so it renders above the StackView and BottomBar without a separate window or <code>Popup</code>, which keeps it working identically on every platform.
         </div>
 
         <!-- Settings Connections -->
         <h2 id="settings-connections">Settings Manager Connections</h2>
 
-        <p>Main.qml has an extensive <code>Connections</code> block that reacts to settings changes in real time. These handlers keep the UI synchronized with the backend state:</p>
+        <p>A <code>Connections { target: settingsManager }</code> block keeps the window in sync with settings changed elsewhere:</p>
 
-        <h3>Theme and Appearance</h3>
-        <pre><code><span class="kw">function</span> <span class="fn">onThemeSettingChanged</span>() {
-    <span class="kw">var</span> newTheme = settingsManager.themeSetting
-    App.Style.<span class="fn">setTheme</span>(newTheme)
-    <span class="cmt">// If Album Art Capture, extract colors from current song</span>
-    <span class="kw">if</span> (newTheme === <span class="str">"Album Art Capture"</span> && mediaManager) {
-        <span class="kw">var</span> currentFile = mediaManager.<span class="fn">get_current_file</span>()
-        <span class="kw">if</span> (currentFile)
-            mediaManager.<span class="fn">extract_colors_from_album_art</span>(currentFile)
-    }
-}
+        <ul>
+          <li><code>onThemeSettingChanged</code> &mdash; <code>Style.setThemeInstant(newTheme)</code>; if the new theme is Album Art Capture and a local file is playing, <code>mediaManager.extract_colors_from_album_art(currentFile)</code>.</li>
+          <li><code>onFontSettingChanged</code> &mdash; <code>Style.setFont(...)</code>.</li>
+          <li><code>onSongLengthTransitionChanged</code> &mdash; when the feature is turned off, restore <code>Style.colorTransitionMs = settingsManager.colorTransitionMs</code>.</li>
+          <li><code>onBottomBarOrientationChanged</code> &mdash; updates <code>isVerticalLayout</code> and <code>bottomBar.isVertical</code>, re-asserts <code>stackView.z = 1; bottomBar.z = 0</code>, and if the current page is Settings, restarts <code>navReloadTimer</code> (150&nbsp;ms), which <code>stackView.replace()</code>s the Settings page with a fresh instance on the same section (<code>pendingSection</code>).</li>
+          <li><code>onScreenWidthChanged</code> / <code>onScreenHeightChanged</code> &mdash; resize the window (desktop only).</li>
+          <li><code>onAlbumArtColorsChanged</code> &mdash; see <a href="#album-art-capture">above</a>.</li>
+        </ul>
 
-<span class="kw">function</span> <span class="fn">onFontSettingChanged</span>() {
-    App.Style.<span class="fn">setFont</span>(settingsManager.fontSetting)
-}</code></pre>
-
-        <h3>Song Length Transition</h3>
-        <p>When song-length color transitions are disabled, the saved manual transition speed is restored:</p>
-        <pre><code><span class="kw">function</span> <span class="fn">onSongLengthTransitionChanged</span>() {
-    <span class="kw">if</span> (!settingsManager.songLengthTransition) {
-        App.Style.colorTransitionMs = settingsManager.colorTransitionMs
-    }
-}</code></pre>
-
-        <h3>Bottom Bar Orientation</h3>
-        <p>When the bar switches between bottom and side mode, the entire settings page is reloaded after a 150ms delay to account for the layout change:</p>
-
-        <pre><code><span class="kw">function</span> <span class="fn">onBottomBarOrientationChanged</span>() {
-    isVerticalLayout = settingsManager.bottomBarOrientation === <span class="str">"side"</span>
-    bottomBar.isVertical = isVerticalLayout
-
-    <span class="cmt">// If on settings page, reload it after layout settles</span>
-    <span class="kw">if</span> (stackView.currentItem &&
-        stackView.currentItem.objectName === <span class="str">"settingsMenu"</span>) {
-        navReloadTimer.<span class="fn">restart</span>()
-    }
-}</code></pre>
-
-        <h3>Custom Theme Hot-Reload</h3>
-        <p>Custom themes are rebuilt atomically to avoid a flash where the active theme temporarily disappears:</p>
-
-        <pre><code>settingsManager.customThemesChanged.<span class="fn">connect</span>(<span class="kw">function</span>() {
-    <span class="kw">var</span> newCustomThemes = {}
-    <span class="kw">let</span> customThemes = settingsManager.customThemes
-    customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(themeName) {
-        <span class="kw">let</span> themeJSON = settingsManager.<span class="fn">get_custom_theme</span>(themeName)
-        newCustomThemes[themeName] = JSON.<span class="fn">parse</span>(themeJSON)
-    })
-    <span class="cmt">// Assign in one shot to avoid briefly clearing active theme</span>
-    App.Style.customThemes = newCustomThemes
-    App.Style.<span class="fn">customThemesUpdated</span>()
-})</code></pre>
+        <p>Custom themes are hot-reloaded from a hand-made <code>settingsManager.customThemesChanged.connect(...)</code>: the whole <code>Style.customThemes</code> object is rebuilt and assigned in one shot (assigning an empty object first would briefly make the active custom theme fall back to SolarizedLight), then <code>Style.customThemesUpdated()</code> is emitted so pickers refresh. Main.qml also exposes <code>updateDeviceName()</code>, <code>updateTheme()</code>, <code>updateFont()</code>, <code>updateStartupVolume()</code> and <code>updateScreenDimensions()</code> for pages that want to write through the window.</p>
 
         <!-- Drop Shadows -->
         <h2 id="drop-shadows">Drop Shadows</h2>
 
-        <p>Main.qml renders drop shadows between the StackView and the BottomBar for visual depth. Two shadow rectangles exist &mdash; one for each orientation:</p>
+        <p>The separation between the StackView and the BottomBar is a 12-px gradient strip, not a <code>DropShadow</code> effect &mdash; one <code>Rectangle</code> per orientation at <code>z: 2</code>:</p>
 
-        <pre><code><span class="cmt">// Bottom shadow (horizontal mode)</span>
-<span class="cls">Rectangle</span> {
-    <span class="prop">id</span>: bottomBarShadow
-    <span class="prop">visible</span>: !isVerticalLayout
-    <span class="prop">anchors.bottom</span>: bottomBar.top
-    <span class="prop">height</span>: <span class="num">12</span>
+        <pre><code><span class="cls">Rectangle</span> {   <span class="cmt">// horizontal mode</span>
+    <span class="prop">id</span>: bottomBarShadow; <span class="prop">visible</span>: !isVerticalLayout
+    <span class="prop">anchors.bottom</span>: bottomBar.top; <span class="prop">height</span>: <span class="num">12</span>
     <span class="prop">gradient</span>: <span class="cls">Gradient</span> {
         <span class="cls">GradientStop</span> { <span class="prop">position</span>: <span class="num">0.0</span>; <span class="prop">color</span>: <span class="str">"transparent"</span> }
         <span class="cls">GradientStop</span> { <span class="prop">position</span>: <span class="num">1.0</span>; <span class="prop">color</span>: <span class="str">"#30000000"</span> }
     }
 }
-
-<span class="cmt">// Side shadow (vertical mode)</span>
-<span class="cls">Rectangle</span> {
-    <span class="prop">id</span>: sideBarShadow
-    <span class="prop">visible</span>: isVerticalLayout
-    <span class="prop">anchors.left</span>: bottomBar.right
-    <span class="prop">width</span>: <span class="num">12</span>
-    <span class="prop">gradient</span>: <span class="cls">Gradient</span> {
-        <span class="prop">orientation</span>: Gradient.Horizontal
-        <span class="cls">GradientStop</span> { <span class="prop">position</span>: <span class="num">0.0</span>; <span class="prop">color</span>: <span class="str">"#30000000"</span> }
-        <span class="cls">GradientStop</span> { <span class="prop">position</span>: <span class="num">1.0</span>; <span class="prop">color</span>: <span class="str">"transparent"</span> }
-    }
+<span class="cls">Rectangle</span> {   <span class="cmt">// side mode</span>
+    <span class="prop">id</span>: sideBarShadow; <span class="prop">visible</span>: isVerticalLayout
+    <span class="prop">anchors.left</span>: bottomBar.right; <span class="prop">width</span>: <span class="num">12</span>
+    <span class="prop">gradient</span>: <span class="cls">Gradient</span> { <span class="prop">orientation</span>: Gradient.Horizontal; ... }
 }</code></pre>
 
-        <!-- Component Initialization -->
+        <!-- Effects -->
+        <h2 id="graphical-effects">Graphical Effects: Qt5Compat vs MultiEffect</h2>
+
+        <p>Two effect modules coexist:</p>
+        <ul>
+          <li><code>Qt5Compat.GraphicalEffects</code> supplies <code>DropShadow</code>, <code>OpacityMask</code> and <code>ColorOverlay</code>. It is imported by <span class="file-path">AlbumArtCarousel</span>, <span class="file-path">CoverflowCard</span>, <span class="file-path">ThemedIcon</span>, <span class="file-path">MainMenu</span>, <span class="file-path">MediaRoom</span>, <span class="file-path">MediaPlayer</span>, <span class="file-path">DownloadPage</span>, <span class="file-path">OBDMenu</span>, <span class="file-path">BottomBar</span> and several settings components. <code>DropShadow</code> appears in <span class="file-path">MediaRoom.qml</span> (6), <span class="file-path">OBDMenu.qml</span> (6), <span class="file-path">settings/AccessoriesSettingsPage.qml</span> (6), <span class="file-path">BottomBar.qml</span> (2), <span class="file-path">settings/SettingsChips.qml</span> (2), and once each in <span class="file-path">CoverflowCard.qml</span>, <span class="file-path">MainMenu.qml</span>, <span class="file-path">settings/SettingsToggle.qml</span>, <span class="file-path">settings/MediaSettingsPage.qml</span> &mdash; 26 in total. The album-art shadow is the only one gated by a user setting (<code>showAlbumArtShadow</code> &rarr; <code>CoverflowCard.showShadow</code>), and it is rendered as a <code>layer.effect</code> whose <code>layer.live</code> is switched off while any carousel animation runs. <span class="file-path">MediaPlayer.qml</span> and <span class="file-path">ThemedIcon.qml</span> deliberately avoid the effect: the song rows fake depth with an 8&nbsp;% opacity <code>Rectangle</code> ("using Rectangle instead of effects"), and the icon shadow is a second offset <code>ColorOverlay</code>, "not a blur, so there is no per-frame cost".</li>
+          <li><code>QtQuick.Effects</code> (<code>MultiEffect</code>) is used for the two blurred album-art backgrounds, in <span class="file-path">MainMenu.qml</span> and <span class="file-path">MediaRoom.qml</span>, with <code>blurMax: 64</code> and <code>blur: min(1, settingsManager.backgroundBlurRadius / 64)</code>.</li>
+        </ul>
+
+        <div class="info-box info">
+          <div class="info-box-title">Why blur moved to MultiEffect (commit 3058922)</div>
+          <code>GaussianBlur</code> is implemented as a <code>.qml</code> file inside Qt5Compat.GraphicalEffects; <code>androiddeployqt</code> only bundles the C++ plugin of that module, so the QML-only type failed with "Type unavailable" and crashed the Android build at startup. The commit message states that C++-implemented types (<code>DropShadow</code>, <code>Glow</code>, <code>OpacityMask</code>) were unaffected, so only the two blur sites were ported to <code>MultiEffect</code>, a native Qt 6 module that deploys reliably. CI installs the <code>qt5compat</code> and <code>qtshadertools</code> modules for the same reason (commits <code>4cace0c</code>, <code>a89b4ef</code>).
+        </div>
+
+        <!-- Shaders -->
+        <h2 id="shaders">Shaders</h2>
+
+        <p>There is one custom shader. <span class="file-path">frontend/shaders/dissolve_squares.frag</span> is a GLSL 4.40 fragment shader used by <code>AlbumArtCarousel</code>'s "Dissolve" transition: it hashes each cell of a <code>gridSize</code>&times;<code>gridSize</code> grid over the texture coordinates to a pseudo-random threshold and reveals the new art with <code>smoothstep(r - smoothness, r + smoothness, progress)</code>, so squares pop in at random as <code>progress</code> runs 0&rarr;1. The uniform block carries <code>qt_Matrix</code>, <code>qt_Opacity</code>, <code>progress</code>, <code>gridSize</code>, <code>smoothness</code>; the sampler is the hidden <code>Image</code> holding the incoming art. One <code>ShaderEffect</code> with a single draw call replaced an earlier 400-item grid of Rectangles.</p>
+
+        <p>Qt 6's RHI does not compile GLSL at runtime; <code>ShaderEffect.fragmentShader</code> must point at a pre-compiled <span class="file-path">.qsb</span> bundle. The committed <span class="file-path">dissolve_squares.frag.qsb</span> contains six variants &mdash; SPIR-V 1.0, GLSL ES 100, GLSL 120, GLSL 150, HLSL 5.0 and MSL 1.2 (checked with <code>qsb -d</code>) &mdash; which is what the standard invocation produces:</p>
+
+        <pre><code>qsb --glsl <span class="str">"100 es,120,150"</span> --hlsl 50 --msl 12 \
+    -o frontend/shaders/dissolve_squares.frag.qsb frontend/shaders/dissolve_squares.frag</code></pre>
+
+        <p><code>qsb</code> ships with the Qt Shader Tools module (<code>qtshadertools</code>). Regenerate the bundle whenever the <span class="file-path">.frag</span> changes and commit both files; there is no build step that does it.</p>
+
+        <p>How the bundle is located differs by platform, in <span class="file-path">AlbumArtCarousel.qml</span>:</p>
+        <pre><code><span class="prop">fragmentShader</span>: Qt.platform.os === <span class="str">"android"</span>
+    ? <span class="str">"qrc:/shaders/dissolve_squares.frag.qsb"</span>
+    : <span class="str">"shaders/dissolve_squares.frag.qsb"</span></code></pre>
+        <p>On desktop (both backends) the path resolves relative to the QML file on disk. On Android the QML is served from <code>assets:/</code>, which the RHI ShaderEffect rejects (only <code>qrc:/</code> or local files), so <span class="file-path">CMakeLists.txt</span> compiles the <span class="file-path">.qsb</span> into the executable with <code>qt_add_resources(octave "shaders" PREFIX "/shaders" ...)</code>. <span class="file-path">frontend/shaders/shaders.qrc</span> lists the same file for tooling; Python never touches it.</p>
+
+        <!-- objectName -->
+        <h2 id="objectnames">objectName Conventions for Dev Scripting</h2>
+
+        <p><code>objectName</code>s exist for two consumers: Main.qml and BottomBar navigation logic (which pages are "OBD" or "sensor" pages, whether Settings is current, IMU gating), and the developer command server (<span class="file-path">backend/command_server.py</span>, Python <code>--profile</code> builds) that drives the running app for the screenshot sweeper (<code>python -m dev.screenshots</code>) and MCP tools. The server walks <code>window.contentItem()</code> recursively &mdash; so items inside <code>Popup</code>s under <code>Overlay</code> are found too &mdash; and matches on <code>objectName</code> (preferring a visible match); its <code>find_item</code>, <code>list_items</code>, <code>get_prop</code>, <code>set_prop</code>, <code>call</code>, <code>click</code> and <code>drag</code> actions all key on it, <code>"root"</code> resolves to the ApplicationWindow, and <code>get_current_page</code> reads <code>stackView.currentItem.objectName</code> through the <code>"stackView"</code> name (<code>navigate</code>, <code>open_settings</code>, <code>go_back</code> and <code>go_home</code> call the <code>navigateTo</code> / <code>navigateToSettings</code> / <code>navigateBack</code> / <code>navigateHome</code> functions above). Conventions in use:</p>
+
+        <table>
+          <thead><tr><th>Convention</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td>Page root = camelCase file name</td><td><code>mainMenu</code>, <code>mediaRoom</code>, <code>mediaPlayer</code>, <code>downloadPage</code>, <code>obdHome</code>, <code>obdMenu</code>, <code>obdDiagnostics</code>, <code>sensorHome</code>, <code>sensorMenu</code>, <code>carMenu</code>, <code>settingsMenu</code>; <code>phoneMirrorView</code> is assigned by BottomBar at <code>createObject</code> time; <code>AndroidAutoView</code> and <code>ClockMenu</code> have none</td></tr>
+            <tr><td>Prefix families for hub buttons</td><td>BottomBar tests <code>name.indexOf("obd") === 0</code> and <code>name.indexOf("sensor") === 0 || name === "carMenu"</code> to decide "pop back to the hub" vs "jump to the remembered subpage"</td></tr>
+            <tr><td>Scriptable controls on a page</td><td>OBDMenu: <code>dashboardsButton</code>, <code>newDashboardButton</code>, <code>resumeDraftButton</code>, <code>chooserScroll</code>, <code>dashCard_&lt;id&gt;</code>, <code>dashCard_&lt;id&gt;_&lt;action&gt;</code>; CarMenu: <code>imuZero</code>, <code>imuReset</code>, <code>jeepControl_&lt;key&gt;</code>, <code>jeepOpenAll</code>, <code>jeepSteering</code>, <code>centerWheels</code>, <code>jeepSpinWheels</code>, <code>jeepWheelSpeed</code></td></tr>
+            <tr><td>3D scene nodes</td><td><code>jeepVehicle</code>, <code>driverHinge</code>, <code>passengerHinge</code>, <code>glassHinge</code>, <code>gateHinge</code>, <code>hoodHinge</code>, <code>driverWheel</code> / <code>passengerWheel</code> (steering knuckles), <code>driverFrontSpin</code> / <code>passengerFrontSpin</code> / <code>driverRearSpin</code> / <code>passengerRearSpin</code> (axle spin), <code>pitmanArm</code>, <code>dragLink</code>, <code>tieRodDriver</code> / <code>tieRodCenter</code> / <code>tieRodPassenger</code>, lamps (<code>fogLight</code>, <code>brakeLight</code>, <code>reverseLight</code>, <code>thirdBrakeLight</code>, <code>headlightGlow</code>/<code>headlightBeam</code>), each <code>JeepLamp</code>'s children <code>&lt;name&gt;Glow</code> / <code>&lt;name&gt;Beam</code></td></tr>
+            <tr><td>Scriptable functions instead of names</td><td><code>OBDMenu.openDashboardChooser()</code> / <code>closeDashboardChooser()</code> are called through the server's <code>call</code> action; settings cards are looked up by <code>objectName</code> set from their tile title (<code>SettingsMenu.findChildByObjectName</code>)</td></tr>
+          </tbody>
+        </table>
+
+        <p>Commit <code>19d8904</code> added <code>imuZero</code> / <code>imuReset</code> precisely so a script can level the vehicle view before a capture; commit <code>2fef514</code> added <code>mainMenu</code> for the IMU gating check.</p>
+
+        <!-- Keyboard -->
+        <h2 id="keyboard">Keyboard Handling</h2>
+
+        <p>Main.qml installs no <code>Keys</code> handlers and no <code>Shortcut</code>s; the head unit is touch-first. Keyboard input reaches only focused text fields (search box and playlist-name fields in <span class="file-path">DownloadPage</span> and <span class="file-path">MediaPlayer</span>, which call <code>forceActiveFocus()</code> when opened) and <code>Popup</code>s with <code>closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside</code> (the album-art popup in MediaRoom; the playlist dropdown, song/playlist action menus and new-playlist dialog in MediaPlayer; the playlist dropdown, error and new-playlist popups in DownloadPage; the dashboard chooser, primitives gallery and RPM settings popups in OBDMenu; the volume popups in BottomBar; <code>SettingsChips</code> and the OBD settings adapter popup), so Escape closes them. <span class="file-path">DownloadPage</span> also draws its own on-screen keyboard (<code>onScreenKeyboard</code> Rectangle, toggled by <code>showKeyboard</code>) for touch-only installs. Developer keyboard controls (simulated OBD, etc.) live in the gitignored <span class="file-path">dev/</span> tree (<code>python -m dev.main_dev</code>), not in <span class="file-path">frontend/</span>.</p>
+
+        <!-- Initialization -->
         <h2 id="initialization">Initialization Sequence</h2>
 
-        <p>The <code>Component.onCompleted</code> handler in Main.qml performs a carefully ordered startup sequence:</p>
+        <p><code>Component.onCompleted</code> in Main.qml runs, in order:</p>
 
         <ol class="steps">
-          <li><strong>Capture system font</strong> &mdash; Store the default font family before any custom fonts are loaded</li>
-          <li><strong>Load custom themes</strong> &mdash; Must happen before <code>setTheme()</code> so saved custom themes are available</li>
-          <li><strong>Apply theme</strong> &mdash; Set the saved color theme</li>
-          <li><strong>Load dimensions</strong> &mdash; Restore window width/height from settings</li>
-          <li><strong>Initialize Spacing</strong> &mdash; Update dimension-dependent layout calculations</li>
-          <li><strong>Set auto-scale</strong> &mdash; Apply screen detection scale factor</li>
-          <li><strong>Set UI scale</strong> &mdash; Apply user preference multiplier</li>
-          <li><strong>Load environment</strong> &mdash; Apply the shape/effect preset</li>
-          <li><strong>Load color transition speed</strong></li>
-          <li><strong>Connect media manager</strong> &mdash; Wire up settings manager to media manager</li>
-          <li><strong>Initialize orientation</strong> &mdash; Set bottom bar mode</li>
-          <li><strong>Restore window state</strong> &mdash; Fullscreen, maximized, or normal</li>
-          <li><strong>Load shift light flags</strong> &mdash; For the RPM overlay</li>
-          <li><strong>Connect RPM signal</strong> &mdash; Manually connect <code>obdManager.rpmChanged</code> for reliability</li>
+          <li><strong>Capture system font</strong> &mdash; <code>systemDefaultFont = font.family</code>, mirrored to <code>Style.systemDefaultFont</code>.</li>
+          <li><strong>Load custom themes</strong> &mdash; every name in <code>settingsManager.customThemes</code> is fetched with <code>get_custom_theme()</code> and added via <code>Style.addCustomTheme()</code>; this must precede <code>setTheme</code> so a saved custom theme resolves.</li>
+          <li><strong>Prime album-art palette</strong> if the saved theme is Album Art Capture, then <strong>apply the theme</strong> with <code>Style.setThemeInstant()</code>.</li>
+          <li><strong>Load dimensions</strong> &mdash; width/height from settings (skipped on Android).</li>
+          <li><strong>Initialize Spacing</strong> &mdash; <code>Spacing.updateDimensions(width, height)</code>, then <code>autoScaleFactor = screenAutoScale</code>, then <code>globalScale = settingsManager.uiScale</code>.</li>
+          <li><strong>Color transition speed</strong> &mdash; <code>Style.colorTransitionMs = settingsManager.colorTransitionMs</code>.</li>
+          <li><strong>Connect media manager</strong> &mdash; <code>mediaManager.connect_settings_manager(settingsManager)</code>.</li>
+          <li><strong>Orientation</strong> &mdash; <code>isVerticalLayout</code> from <code>bottomBarOrientation</code>.</li>
+          <li><strong>Restore window state</strong> &mdash; fullscreen / maximized.</li>
+          <li><strong>Custom-theme hot reload</strong> &mdash; connect <code>customThemesChanged</code>.</li>
+          <li><strong>Shift light</strong> &mdash; <code>loadShiftLightFlags()</code>, then connect <code>obdManager.rpmChanged</code> by hand.</li>
         </ol>
 
+        <p>Fonts load independently, driven by the <code>FolderListModel</code>'s <code>onStatusChanged</code> / <code>onCountChanged</code>; the IMU gating handler runs from its own <code>Component.onCompleted</code>.</p>
+
         <div class="info-box warning">
-          <strong>Signal Connection Order:</strong> The <code>obdManager.rpmChanged</code> signal is connected manually in <code>Component.onCompleted</code> rather than via a <code>Connections</code> block. This is a workaround for better reliability with PySide6 signal handling.
+          <div class="info-box-title">Signal connections made by hand</div>
+          <code>obdManager.rpmChanged</code> and <code>settingsManager.customThemesChanged</code> are connected with <code>.connect()</code> in JavaScript rather than through <code>Connections</code> blocks. The comments cite reliability of PySide6 signal delivery; the pattern predates the C++ backend and works with both.
         </div>
+
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Design Decisions</h2>
+
+        <p>The reasons below are taken from code comments, commit messages and <span class="file-path">CLAUDE.md</span>, not inferred.</p>
+
+        <h3>One Main.qml, one StackView, pages created on demand</h3>
+        <p>A single window with a StackView keeps the persistent BottomBar, the shift-light overlays and the Now Playing Studio in one scene graph, so overlays render above every page without secondary windows (the placement comment on <code>globalFullScreenFlash</code> calls this out as the cross-platform requirement). Pages are instantiated with <code>Qt.createComponent()</code> only when navigated to, so an install without the optional QtQuick3D module still boots &mdash; <code>SensorHome</code> probes <code>CarMenu.qml</code> once and greys its card out rather than the app failing at load (CMake comment, commit <code>0c29e64</code>). All six StackView transitions are <code>null</code> ("Disable transitions for better performance"). The DownloadPage is the one cached page ("created once, reused across all navigations"): its search results and download queue are page state, so it is parked on the StackView and re-entered with a refreshed playlist list rather than rebuilt.</p>
+
+        <h3>Context properties, not a QML module of registered types</h3>
+        <p>Managers are plain <code>QObject</code>s registered by name in both launchers so the identical <span class="file-path">frontend/</span> tree runs against C++ or Python; QML never imports a backend module. The parity rule in <span class="file-path">CLAUDE.md</span> makes the context-property name part of the contract (same class name, same slots/signals/properties in both backends). Registration happens before <code>engine.load()</code> because bindings evaluate on first load (the <code>dashboardManager</code> comment in both launchers). The only registered <em>type</em> is <code>EmbeddedDhuItem</code> in the <code>OCTAVE.AndroidAuto 1.0</code> module, because the DHU window has to be reparented into a real scene item; everything else is a context property.</p>
+
+        <h3>"Basic" controls style</h3>
+        <p>Set in both launchers with the same comment: Basic allows full Slider customisation. Platform styles (Fusion, Material, native) reserve parts of their delegates; Basic lets every <code>background</code> / <code>handle</code> / <code>contentItem</code> be replaced, which the themed sliders, toggles and popups depend on.</p>
+
+        <h3>Explicit image decoding and warm caches</h3>
+        <p>The media views control decoding rather than leaving it to the scene graph: <code>MediaRoom</code> pre-decodes prev/next album art in hidden 1&times;1 <code>Image</code>s with <code>cache: true</code> on the next event-loop tick after a track change, using one batched <code>get_neighbor_album_arts()</code> call that the comment says "halves PySide6 bridge crossings" and keeps backend calls off the animation frame; <code>CoverflowCard</code> decodes at <code>2 &times; artSize</code> and turns off <code>smooth</code> while animating; <code>ThemedIcon</code> supersamples SVGs at 2&times; "so edges stay crisp when the tile scales up"; <code>MediaPlayer</code>'s list uses plain <code>Image</code>s with <code>sourceSize</code> 1.5&times; inside a <code>ListView</code> with <code>reuseItems</code>. <code>LazyImage</code> exists as a visibility-gated thumbnail loader but is not instantiated anywhere at present. Heavy work such as FFT analysis is deferred until the carousel's <code>settled</code> signal so it never competes with animation frames.</p>
+
+        <h3>Quick3D for the car view</h3>
+        <p>The vehicle-attitude view needs a real 3D scene: IMU orientation arrives as a quaternion and is applied directly to a <code>Node</code> (no gimbal lock), the rigged Jeep has hinged doors, hood, tailgate, steering linkage and spinning wheels, and reflections come from an HDR light probe. QtQuick3D provides that with GLB loading through <code>RuntimeLoader</code>. It is deliberately optional: CMake links it when found, CI packages the <code>assetimporters</code> plugin so the glb parser ships, and the QML degrades (greyed card, "Requires the QtQuick3D module") when it is absent. See <a href="pages.html#carmenu">CarMenu</a> and <a href="components.html#jeep-rig">the Jeep rig</a>.</p>
+
+        <h3>objectName everywhere a script might look</h3>
+        <p>OCTAVE is daily-driven in a vehicle, so verification is done against the real running app: the command server locates items by <code>objectName</code>, clicks them and grabs the window, and the README/wiki screenshots are produced that way. Naming the page roots also gives the BottomBar and the IMU gating a stable key that does not depend on object identity or file URLs.</p>
+
+        <h3>Local dp() wrappers and property-only singletons</h3>
+        <p>An Android bug makes singleton functions un-callable when QML is served from <code>assets:/</code>. Rather than fork the QML for mobile, every file carries a two-line local <code>dp()</code>, and anything a singleton must offer to Android is a property (<code>Spacing.effectiveScale</code>, <code>Style.assetBase</code>).</p>
+
+        <h3>typeof guards only where a backend legitimately differs</h3>
+        <p>Because both backends must expose the same API on desktop, QML checks for a manager's existence only for genuinely optional or mobile-absent globals (<code>isAndroid</code>, hardware managers, <code>dashboardManager</code>, <code>diagnosticsManager</code>); everything else binds directly, so a missing symbol surfaces as a loud error during the parity build instead of silently disabling a feature.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
-          <a href="bottom-bar.html" class="related-link">Bottom Bar</a>
           <a href="pages.html" class="related-link">Pages</a>
+          <a href="components.html" class="related-link">Components</a>
+          <a href="bottom-bar.html" class="related-link">Bottom Bar</a>
           <a href="theme-system.html" class="related-link">Theme System</a>
+          <a href="settings-ui.html" class="related-link">Settings UI</a>
+          <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
           <a href="architecture.html" class="related-link">Architecture</a>
+          <a href="development.html" class="related-link">Development</a>
         </div>
 
       </div>

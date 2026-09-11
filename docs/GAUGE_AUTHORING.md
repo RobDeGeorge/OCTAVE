@@ -283,7 +283,7 @@ As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRe
 
 Required fields: `id`, `label`, `schema`, `cells`. Optional: `gridColumns` (default 12), `gridRows` (default 6), `margins` (default 20 dp, outer padding), `spacing` (default 16 dp, gap between cells).
 
-Per cell: `type` matches a widget file in `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SparklineGauge`, `WarningLight`). `paramId` must be one of §6 — an unknown id is logged by `DashboardRenderer` and the widget is left unbound; an unknown `type` is logged and the cell is skipped. `props` keys must be exposed `Q_PROPERTY` on the widget — unknown keys are silently skipped. `"NaN"` (string) decodes to JS `NaN` since JSON can't encode it natively.
+Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge primitives in `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SparklineGauge`, `WarningLight`, and the self-binding `GForceGauge` and `CompassGauge`, which ignore `paramId`) plus the media widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`, no `paramId`). `paramId` must be one of §6 — an unknown id is logged by `DashboardRenderer` and the widget is left unbound; an unknown `type` is logged and the cell is skipped. `props` keys must be exposed `Q_PROPERTY` on the widget — unknown keys are silently skipped. `"NaN"` (string) decodes to JS `NaN` since JSON can't encode it natively.
 
 ### 5.2 Add a built-in preset
 
@@ -311,8 +311,9 @@ set, palette metadata, and curated editable props all come from the
 - macOS: `~/Library/Application Support/OCTAVE/dashboards/my-board.json`
 - Windows: `%APPDATA%/OCTAVE/dashboards/my-board.json`
 
-The app re-scans when `DashboardManager.refresh()` is called; for a hand-dropped
-file, restart the app or call `dashboardManager.refresh()` from QML.
+Both backends watch the user dashboards directory, so a hand-dropped file
+appears in the chooser within about a second (see §5.4 Hot reload); no restart
+is needed. `dashboardManager.refresh()` forces an immediate rescan.
 
 ### 5.4 Registry rules
 
@@ -327,7 +328,7 @@ The pre-Phase-2 path — create `frontend/dashboards/MyDashboard.qml` and regist
 
 ---
 
-## 6. All 93 PIDs
+## 6. All 92 parameter IDs (18 core + 66 extended OBD + 8 IMU)
 
 Copy `id` verbatim into `paramId`. `min`/`max` listed are what the primitive
 will default to. **Source of truth:** `frontend/OBDParameterModel.qml` —
@@ -356,7 +357,7 @@ update this table when that file changes.
 | `FUEL_PRESSURE`           | Fuel Pressure     | kPa     |    0 |  765 |
 | `IGNITION_TIMING`         | Ignition Timing   | °       |  -10 |   60 |
 
-### Extended (75 more)
+### Extended (66 more)
 
 Time & distance: `RUN_TIME`, `RUN_TIME_MIL`, `DISTANCE_W_MIL`,
 `DISTANCE_SINCE_DTC_CLEAR`, `WARMUPS_SINCE_DTC_CLEAR`,
@@ -494,7 +495,8 @@ frontend/
 │       ├── sport.json         big speed + RPM dial + vitals strip
 │       ├── minimal.json       three round gauges: speed, RPM, fuel
 │       ├── fullgrid.json      4×2 grid of compact round gauges
-│       └── performance.json   arc speed + sparklines + warning lights
+│       ├── performance.json   arc speed + sparklines + warning lights
+│       └── tj-wrangler.json   "TJ Wrangler 4.0": 17-cell board from the Orange Pi rig
 ├── OBDParameterModel.qml      singleton aggregator (SOURCE OF TRUTH for PIDs)
 └── OBDMenu.qml                hosts DashboardRenderer, the chooser popup, and
                                a Primitives Gallery dev screen

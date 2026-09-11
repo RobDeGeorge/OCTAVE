@@ -15,7 +15,9 @@
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Architecture</div>
           <h1 class="page-title">Architecture Overview</h1>
           <p class="page-subtitle">
-            System design, communication patterns, threading model, and how all the pieces fit together.
+            System design, the two backends, communication patterns, threading model, startup order,
+            observability, and the reasoning behind each of those choices &mdash; verified against
+            <code>src/main.cpp</code>, <code>main.py</code> and the manager sources.
           </p>
         </div>
 
@@ -25,67 +27,80 @@
             <li><a href="#high-level">High-Level Architecture</a></li>
             <li><a href="#backend-frontend">Backend / Frontend Split</a></li>
             <li><a href="#manager-pattern">The Manager Pattern</a></li>
-            <li><a href="#communication">Python-QML Communication</a></li>
+            <li class="toc-h3"><a href="#all-managers">All Managers (both backends)</a></li>
+            <li><a href="#communication">Backend-QML Communication</a></li>
             <li class="toc-h3"><a href="#context-properties">Context Properties</a></li>
             <li class="toc-h3"><a href="#signals-slots">Signals and Slots</a></li>
             <li class="toc-h3"><a href="#properties">Qt Properties</a></li>
             <li class="toc-h3"><a href="#qml-types">Custom QML Types</a></li>
             <li><a href="#startup">Application Startup Sequence</a></li>
+            <li class="toc-h3"><a href="#startup-cpp">C++ (src/main.cpp)</a></li>
+            <li class="toc-h3"><a href="#startup-python">Python (main.py)</a></li>
             <li><a href="#threading">Threading Model</a></li>
-            <li class="toc-h3"><a href="#thread-obd">OBD Thread Worker</a></li>
-            <li class="toc-h3"><a href="#thread-pool">ThreadPoolExecutor</a></li>
-            <li class="toc-h3"><a href="#thread-timer">QTimer Polling</a></li>
+            <li class="toc-h3"><a href="#thread-obd">OBD Worker Thread</a></li>
+            <li class="toc-h3"><a href="#thread-pool">Thread Pools and QtConcurrent</a></li>
+            <li class="toc-h3"><a href="#thread-sensors">Sensor Read Loops</a></li>
+            <li class="toc-h3"><a href="#thread-watchdog">UI Watchdog</a></li>
             <li><a href="#volume-system">Volume System</a></li>
-            <li><a href="#image-providers">Image Providers</a></li>
+            <li><a href="#video">Video into QML: Image Provider vs QVideoSink</a></li>
+            <li><a href="#phone-server">The Phone Server Fork</a></li>
             <li><a href="#settings-persistence">Settings Persistence</a></li>
-            <li><a href="#logging">Logging System</a></li>
+            <li><a href="#dashboards">Dashboards: JSON Specs + DashboardManager</a></li>
+            <li><a href="#vehicle-3d">The 3D Vehicle (CarMenu)</a></li>
+            <li><a href="#logging">Logging, Crash Handlers and Diagnostics</a></li>
+            <li><a href="#dev-tooling">Profiling and the Command Server</a></li>
             <li><a href="#signal-wiring">Signal Wiring Graph</a></li>
-            <li><a href="#cleanup">Shutdown & Cleanup</a></li>
+            <li><a href="#cleanup">Shutdown &amp; Cleanup</a></li>
+            <li><a href="#design-decisions">Design Decisions &mdash; Why It Is Built This Way</a></li>
           </ul>
         </nav>
 
         <!-- High-Level Architecture -->
         <h2 id="high-level">High-Level Architecture</h2>
         <p>
-          OCTAVE follows a clean <strong>backend/frontend separation</strong> connected by Qt's
-          signals and slots mechanism. OCTAVE maintains <strong>two parallel backends</strong> that
-          expose the same API to the shared frontend: a <strong>C++ / Qt 6</strong> backend
-          (<code>src/</code>) &mdash; the only shipped binary on every platform &mdash; and a
-          <strong>Python / PySide6</strong> backend (<code>backend/</code>) used for desktop development
-          and tinkering. Either one handles all business logic, hardware communication, API calls, and
-          data processing; the QML frontend handles all rendering, animation, and user interaction, and
-          works identically against either backend.
+          OCTAVE is a <strong>backend/frontend split</strong> joined by Qt's signals and slots. There are
+          <strong>two parallel backends</strong> that expose the same API surface to one shared QML frontend:
+          a <strong>C++ / Qt 6</strong> backend in <code>src/</code> &mdash; the only binary that ships on every
+          platform (Windows <code>.exe</code>, macOS <code>.dmg</code>, Linux x86_64 and aarch64 AppImages,
+          Android <code>.apk</code>) &mdash; and a <strong>Python / PySide6</strong> backend in <code>backend/</code>
+          + <code>main.py</code> used for desktop development, prototyping and hardware hacking. Either backend
+          owns all business logic, hardware I/O, network calls and data processing; the QML frontend in
+          <code>frontend/</code> owns rendering, animation and interaction, and works identically against either.
         </p>
 
         <div class="diagram">
-┌─────────────────────────────────────────────────────────────────┐
-│                        OCTAVE Application                       │
-│                                                                 │
-│  ┌──────────────────────┐    Signals/Slots    ┌──────────────┐ │
-│  │   Backend (C++ / Py)  │ ◄────────────────► │  QML Frontend │ │
-│  │                       │   Context Props     │              │ │
-│  │  ┌─────────────────┐ │                     │  Main.qml    │ │
-│  │  │ SettingsManager  │ │                     │  MediaPlayer │ │
-│  │  │ MediaManager     │ │                     │  OBDMenu     │ │
-│  │  │ SpotifyManager   │ │                     │  CarMenu     │ │
-│  │  │ OBDManager       │ │                     │  Settings/*  │ │
-│  │  │ NetworkManager   │ │                     │  BottomBar   │ │
-│  │  │ DownloadManager  │ │                     │  ...         │ │
-│  │  │ ESP32VolumeMgr   │ │                     └──────────────┘ │
-│  │  │ BerryIMUManager  │ │                                      │
-│  │  │ GestureManager   │ │    ┌───────────────────────────────┐ │
-│  │  │ AndroidAutoMgr   │ │    │      Image Providers          │ │
-│  │  │ PhoneMirrorMgr   │ │    │  dhuframe (Android Auto)      │ │
-│  │  │ AudioAnalyzer    │ │    │  QVideoSink (Phone Mirror)   │ │
-│  │  │ Clock            │ │    └───────────────────────────────┘ │
-│  │  └─────────────────┘ │                                      │
-│  └──────────────────────┘                                      │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │             Qt 6 Runtime  (C++  ·  or PySide6)             │  │
-│  │   (QGuiApplication / QApplication) → QQmlEngine → Event Loop│  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘</div>
+┌────────────────────────────────────────────────────────────────────────┐
+│                           OCTAVE Application                           │
+│                                                                        │
+│  ┌────────────────────────────┐   Signals / Slots   ┌───────────────┐  │
+│  │  Backend (C++ src/  ·or·   │ ◄─────────────────► │  QML Frontend │  │
+│  │           Python backend/) │   Context Props     │  frontend/    │  │
+│  │                            │                     │               │  │
+│  │  SettingsManager  Clock    │                     │  Main.qml     │  │
+│  │  DiagnosticsManager        │                     │  MainMenu     │  │
+│  │  VolumeController          │                     │  MediaRoom    │  │
+│  │  MediaManager AudioAnalyzer│                     │  MediaPlayer  │  │
+│  │  SpotifyManager            │                     │  OBDMenu      │  │
+│  │  OBDManager (+ELM327)      │                     │  dashboards/  │  │
+│  │  NetworkManager            │                     │  gauges/      │  │
+│  │  DownloadManager           │                     │  CarMenu +    │  │
+│  │  ESP32VolumeManager        │                     │   JeepVehicle │  │
+│  │  BerryIMUManager           │                     │  SensorMenu   │  │
+│  │  GestureManager            │                     │  Settings/*   │  │
+│  │  AndroidAutoManager        │                     │  BottomBar    │  │
+│  │  PhoneMirrorManager        │                     │  ...          │  │
+│  │  DashboardManager          │                     └───────────────┘  │
+│  │  UiWatchdog (no QML API)   │                                        │
+│  └────────────────────────────┘   ┌──────────────────────────────────┐ │
+│                                   │  Video paths into the scene graph│ │
+│                                   │  image://dhuframe  (Android Auto)│ │
+│                                   │  QVideoSink        (Phone Mirror)│ │
+│                                   └──────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Qt 6 runtime — QGuiApplication (C++) / QApplication (PySide6)   │  │
+│  │  → QQmlApplicationEngine → event loop                            │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘</div>
 
         <!-- Backend / Frontend Split -->
         <h2 id="backend-frontend">Backend / Frontend Split</h2>
@@ -97,334 +112,404 @@
           <tbody>
             <tr>
               <td><strong>Backend</strong> (shipped)</td>
-              <td>C++ / Qt 6</td>
-              <td><code>src/</code></td>
-              <td>Business logic, hardware I/O, API calls, data processing, state management &mdash; the only binary shipped on every platform</td>
+              <td>C++17 / Qt 6.7.3 (CMake 3.21+)</td>
+              <td><code>src/managers/</code>, <code>src/util/</code>, <code>src/phone_mirror/</code>, <code>src/items/</code>, <code>src/platform/</code></td>
+              <td>Business logic, hardware I/O, API calls, data processing, state &mdash; the only binary distributed on every platform, and the <em>only</em> backend on Android</td>
             </tr>
             <tr>
-              <td><strong>Backend</strong> (dev peer)</td>
-              <td>Python 3.8+ / PySide6</td>
-              <td><code>backend/</code></td>
-              <td>API-equivalent backend for desktop development, prototyping, and Raspberry&nbsp;Pi tinkering</td>
+              <td><strong>Backend</strong> (developer peer)</td>
+              <td>Python 3.10&ndash;3.11 / PySide6</td>
+              <td><code>backend/</code>, <code>main.py</code></td>
+              <td>API-equivalent desktop backend (Linux / Windows / macOS / Raspberry&nbsp;Pi) for prototyping and hardware hacking with a REPL. Never packaged.</td>
             </tr>
             <tr>
               <td><strong>Frontend</strong></td>
-              <td>QML (Qt Quick 2.15)</td>
+              <td>QML (Qt Quick, Qt Quick 3D for the vehicle view)</td>
               <td><code>frontend/</code></td>
-              <td>UI rendering, animations, user interaction, layout &mdash; identical against either backend</td>
+              <td>UI rendering, animation, interaction, layout &mdash; loaded from disk at runtime by both backends (Android bundles it as <code>assets:/frontend</code>)</td>
             </tr>
             <tr>
               <td><strong>Bridge</strong></td>
-              <td>C++ main / PySide6</td>
               <td><code>src/main.cpp</code> &middot; <code>main.py</code></td>
-              <td>Registers managers as context properties, wires signals, manages lifecycle</td>
+              <td>repo root / <code>src/</code></td>
+              <td>Instantiates managers, registers context properties and custom types, wires cross-manager signals, owns shutdown</td>
             </tr>
           </tbody>
         </table>
 
         <p>
-          The backend never touches the UI directly. The frontend never makes API calls or accesses
-          hardware. All communication goes through Qt's signal/slot mechanism, which is thread-safe
-          and decoupled.
+          The backend never touches the UI directly. The frontend never makes API calls or opens hardware.
+          The only contract between them is the set of context-property names, signals, slots and properties &mdash;
+          which is exactly why the two backends must expose the same surface (see
+          <a href="#design-decisions">Design Decisions</a>).
         </p>
+
+        <div class="info-box info">
+          <div class="info-box-title">Parity is the rule on desktop; mobile is C++-only</div>
+          Every C++ manager in <code>src/managers/foo.{h,cpp}</code> has a Python peer at
+          <code>backend/foo.py</code> with the same class name, context-property name, slots, signals, properties
+          and on-disk JSON formats. Android/iOS-specific code lives behind <code>#ifdef Q_OS_ANDROID</code> /
+          <code>Q_OS_MOBILE</code> in C++ and has <em>no</em> Python mirror. QML must not know which backend is
+          running beyond <code>typeof fooManager !== "undefined"</code> guards for features legitimately absent on
+          one platform.
+        </div>
 
         <!-- The Manager Pattern -->
         <h2 id="manager-pattern">The Manager Pattern</h2>
         <p>
-          Every backend feature is encapsulated in a <strong>manager class</strong> that inherits from
-          <code>QObject</code>. This is the fundamental pattern used throughout OCTAVE:
+          Every backend feature is a <strong>manager class</strong> inheriting <code>QObject</code>. In C++ it
+          exposes state through <code>Q_PROPERTY</code>, <code>Q_INVOKABLE</code> / public slots and signals; in
+          Python through the <code>Property</code>, <code>Slot</code> and <code>Signal</code> decorators. The two
+          spellings of the same thing:
         </p>
 
-        <pre><code><span class="kw">from</span> PySide6.QtCore <span class="kw">import</span> QObject, Signal, Slot, Property
+        <pre><code><span class="cmt">// C++ — src/managers/examplemanager.h</span>
+<span class="kw">class</span> <span class="cls">ExampleManager</span> : <span class="kw">public</span> QObject {
+    Q_OBJECT
+    Q_PROPERTY(<span class="kw">int</span> value READ value NOTIFY valueChanged)
+<span class="kw">public</span>:
+    <span class="kw">int</span> <span class="fn">value</span>() <span class="kw">const</span> { <span class="kw">return</span> m_value; }
+<span class="kw">public slots</span>:
+    <span class="kw">void</span> <span class="fn">setValue</span>(<span class="kw">int</span> v) { m_value = v; <span class="kw">emit</span> valueChanged(v); }
+<span class="kw">signals</span>:
+    <span class="kw">void</span> <span class="fn">valueChanged</span>(<span class="kw">int</span>);
+<span class="kw">private</span>:
+    <span class="kw">int</span> m_value = <span class="num">0</span>;
+};</code></pre>
+
+        <pre><code><span class="cmt"># Python — backend/example_manager.py</span>
+<span class="kw">from</span> PySide6.QtCore <span class="kw">import</span> QObject, Signal, Slot, Property
 
 <span class="kw">class</span> <span class="cls">ExampleManager</span>(QObject):
-    <span class="cmt"># Signals — emitted when state changes, QML listens to these</span>
-    valueChanged = Signal(<span class="cls">int</span>)
+    valueChanged = Signal(<span class="cls">int</span>)          <span class="cmt"># QML listens to these</span>
 
     <span class="kw">def</span> <span class="fn">__init__</span>(self):
         <span class="fn">super</span>().__init__()
         self._value = <span class="num">0</span>
 
-    <span class="cmt"># Slots — callable from QML</span>
-    @Slot(<span class="cls">int</span>)
+    @Slot(<span class="cls">int</span>)                          <span class="cmt"># callable from QML</span>
     <span class="kw">def</span> <span class="fn">setValue</span>(self, v):
         self._value = v
         self.valueChanged.emit(v)
 
-    <span class="cmt"># Properties — bindable from QML</span>
-    @Property(<span class="cls">int</span>, notify=valueChanged)
+    @Property(<span class="cls">int</span>, notify=valueChanged)  <span class="cmt"># bindable from QML</span>
     <span class="kw">def</span> <span class="fn">value</span>(self):
         <span class="kw">return</span> self._value</code></pre>
 
         <p>Key principles:</p>
         <ul>
-          <li><strong>Signals</strong> notify the UI when backend state changes</li>
-          <li><strong>Slots</strong> are Python methods callable from QML</li>
-          <li><strong>Properties</strong> expose readable (and optionally writable) values to QML with automatic binding</li>
-          <li>Managers are <strong>self-contained</strong> &mdash; each owns its state and logic</li>
-          <li>Cross-manager communication goes through <strong>signal wiring</strong> in <code>main.py</code></li>
+          <li><strong>Signals</strong> notify the UI (and other managers) when backend state changes</li>
+          <li><strong>Slots</strong> are methods QML can call &mdash; method names are shared across backends even where they break the C++ naming convention (<code>next_track</code>, <code>scan_library</code>, <code>connect_settings_manager</code>)</li>
+          <li><strong>Properties</strong> expose values with automatic binding updates</li>
+          <li>Managers are <strong>self-contained</strong>: each owns its state, timers and threads</li>
+          <li>Cross-manager communication is wired centrally in <code>main.cpp</code> / <code>main.py</code>, not by managers reaching into each other &mdash; with one deliberate exception, <code>SettingsManager</code>, which is handed to managers that need it (<code>connect_settings_manager()</code> / <code>setSettingsManager()</code> / constructor argument)</li>
         </ul>
 
-        <h3>All Managers</h3>
+        <h3 id="all-managers">All Managers (both backends)</h3>
+        <p>Every row below is registered by <em>both</em> mains under the same context-property name. Mobile stubs are
+          header-level <code>#else // Q_OS_MOBILE</code> classes with the same API so QML bindings stay valid.</p>
         <table>
           <thead>
-            <tr><th>Manager</th><th>File</th><th>QML Context Property</th><th>Purpose</th></tr>
+            <tr><th>Class</th><th>C++ (<code>src/managers/</code>)</th><th>Python (<code>backend/</code>)</th><th>Context property</th><th>Purpose</th></tr>
           </thead>
           <tbody>
-            <tr><td>SettingsManager</td><td><code>settings_manager.py</code></td><td><code>settingsManager</code></td><td>Central settings store</td></tr>
-            <tr><td>Clock</td><td><code>clock.py</code></td><td><code>clock</code></td><td>Real-time clock</td></tr>
-            <tr><td>MediaManager</td><td><code>media_manager.py</code></td><td><code>mediaManager</code></td><td>Local audio playback</td></tr>
-            <tr><td>AudioAnalyzer</td><td><code>audio_analyzer.py</code></td><td><code>audioAnalyzer</code></td><td>FFT waveform visualization</td></tr>
-            <tr><td>OBDManager</td><td><code>obd_manager.py</code></td><td><code>obdManager</code></td><td>Vehicle diagnostics</td></tr>
-            <tr><td>SpotifyManager</td><td><code>spotify_manager.py</code></td><td><code>spotifyManager</code></td><td>Spotify API</td></tr>
-            <tr><td>AndroidAutoManager</td><td><code>android_auto/manager.py</code></td><td><code>androidAutoManager</code></td><td>Android Auto DHU</td></tr>
-            <tr><td>PhoneMirrorManager</td><td><code>phone_mirror/manager.py</code></td><td><code>phoneMirrorManager</code></td><td>Phone screen mirroring</td></tr>
-            <tr><td>ESP32VolumeManager</td><td><code>esp32_volume_manager.py</code></td><td><code>esp32VolumeManager</code></td><td>Wireless volume knob</td></tr>
-            <tr><td>BerryIMUManager</td><td><code>berryimu_manager.py</code></td><td><code>berryIMU</code></td><td>IMU sensor fusion</td></tr>
-            <tr><td>GestureManager</td><td><code>gesture_manager.py</code></td><td><code>gestureSensor</code></td><td>Gesture recognition</td></tr>
-            <tr><td>NetworkManager</td><td><code>network_manager.py</code></td><td><code>networkManager</code></td><td>WiFi & updates</td></tr>
-            <tr><td>DownloadManager</td><td><code>download_manager.py</code></td><td><code>downloadManager</code></td><td>Music download</td></tr>
-            <tr><td>DashboardManager</td><td><code>dashboard_manager.py</code></td><td><code>dashboardManager</code></td><td>JSON gauge dashboards (presets + user)</td></tr>
-            <tr><td>VolumeController</td><td><code>volume_utils.py</code></td><td><code>volumeController</code></td><td>Single entry point for the volume curve</td></tr>
+            <tr><td>SettingsManager</td><td><code>settingsmanager.{h,cpp}</code></td><td><code>settings_manager.py</code></td><td><code>settingsManager</code></td><td>Central settings store, JSON persistence, <code>getAppDataDir()</code></td></tr>
+            <tr><td>DiagnosticsManager</td><td><code>diagnosticsmanager.{h,cpp}</code></td><td><code>diagnostics_manager.py</code></td><td><code>diagnosticsManager</code></td><td>Read / copy / export the log files from the head unit (Settings &rarr; About)</td></tr>
+            <tr><td>Clock</td><td><code>clock.{h,cpp}</code></td><td><code>clock.py</code></td><td><code>clock</code></td><td>Real-time clock, format from settings</td></tr>
+            <tr><td>NetworkManager</td><td><code>networkmanager.{h,cpp}</code></td><td><code>network_manager.py</code></td><td><code>networkManager</code></td><td>WiFi status, GitHub update check, git-based self-update + restart</td></tr>
+            <tr><td>VolumeController</td><td><code>volumecontroller.{h,cpp}</code></td><td><code>volume_utils.py</code></td><td><code>volumeController</code></td><td>Single entry point for the quadratic volume curve</td></tr>
+            <tr><td>MediaManager</td><td><code>mediamanager.{h,cpp}</code></td><td><code>media_manager.py</code></td><td><code>mediaManager</code></td><td>Local playback (QMediaPlayer), library scan, album art + colours, persistent metadata store</td></tr>
+            <tr><td>AudioAnalyzer</td><td><code>audioanalyzer.{h,cpp}</code></td><td><code>audio_analyzer.py</code></td><td><code>audioAnalyzer</code></td><td>96-bar FFT waveform (QAudioDecoder + radix-2 FFT / PyAV + numpy)</td></tr>
+            <tr><td>SpotifyManager</td><td><code>spotifymanager.{h,cpp}</code></td><td><code>spotify_manager.py</code></td><td><code>spotifyManager</code></td><td>Spotify Web API + OAuth2; stub on mobile</td></tr>
+            <tr><td>OBDManager (+ ELM327)</td><td><code>obdmanager.{h,cpp}</code>, <code>elm327protocol.{h,cpp}</code></td><td><code>obd_manager.py</code> (python-obd)</td><td><code>obdManager</code></td><td>Vehicle diagnostics, 93 PIDs, DTCs; Android BLE via a JNI bridge</td></tr>
+            <tr><td>ESP32VolumeManager</td><td><code>esp32volumemanager.{h,cpp}</code></td><td><code>esp32_volume_manager.py</code></td><td><code>esp32VolumeManager</code></td><td>Wireless rotary knob over USB serial (ESP-NOW pair); stub on mobile</td></tr>
+            <tr><td>BerryIMUManager</td><td><code>berryimumanager.{h,cpp}</code></td><td><code>berryimu_manager.py</code></td><td><code>berryIMU</code></td><td>9DOF Madgwick fusion over I²C; on Android re-implemented with QtSensors (accelerometer, compass, pressure)</td></tr>
+            <tr><td>GestureManager</td><td><code>gesturemanager.{h,cpp}</code></td><td><code>gesture_manager.py</code></td><td><code>gestureSensor</code></td><td>PAJ7620U2 gesture sensor over I²C; stub on mobile</td></tr>
+            <tr><td>AndroidAutoManager</td><td><code>androidautomanager.{h,cpp}</code></td><td><code>android_auto/manager.py</code></td><td><code>androidAutoManager</code></td><td>Google DHU launch + window capture; stub on mobile</td></tr>
+            <tr><td>PhoneMirrorManager</td><td><code>phonemirrormanager.{h,cpp}</code> + <code>src/phone_mirror/scrcpyclient.{h,cpp}</code></td><td><code>phone_mirror/manager.py</code> + <code>scrcpy_client.py</code></td><td><code>phoneMirrorManager</code></td><td>Built-in scrcpy-protocol client; stub on mobile</td></tr>
+            <tr><td>DownloadManager</td><td><code>downloadmanager.{h,cpp}</code></td><td><code>download_manager.py</code> + <code>music_dl/</code></td><td><code>downloadManager</code></td><td>Music search + yt-dlp download; compiled out with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
+            <tr><td>DashboardManager</td><td><code>dashboardmanager.{h,cpp}</code></td><td><code>dashboard_manager.py</code></td><td><code>dashboardManager</code></td><td>Built-in preset + user JSON dashboards, save / delete / duplicate, hot reload</td></tr>
+            <tr><td>UiWatchdog</td><td><code>src/util/uiwatchdog.{h,cpp}</code></td><td><code>ui_watchdog.py</code></td><td><em>none</em> (internal)</td><td>Logs a blocked GUI thread</td></tr>
           </tbody>
         </table>
 
+        <p>
+          Scalar context properties registered alongside the managers: <code>screenAutoScale</code> (see
+          <a href="#startup">startup</a>) and <code>isAndroid</code> (<code>true</code> only in the Android C++ build;
+          always <code>false</code> from <code>main.py</code>). With <code>--profile</code> the Python backend also
+          registers <code>perfMonitor</code>.
+        </p>
+
         <!-- Communication -->
-        <h2 id="communication">Python-QML Communication</h2>
+        <h2 id="communication">Backend-QML Communication</h2>
 
         <h3 id="context-properties">Context Properties</h3>
         <p>
-          Backend managers are registered as <strong>QML context properties</strong> in <code>main.py</code>.
-          This makes them globally accessible in every QML file without imports:
+          Managers are registered as <strong>QML context properties</strong> on the engine's root context. That makes
+          them globally visible in every QML file without an import:
         </p>
 
-        <pre><code><span class="cmt"># Python (main.py) — register a manager</span>
+        <pre><code><span class="cmt">// C++ (src/main.cpp)</span>
+QQmlContext *ctx = engine.rootContext();
+ctx-&gt;setContextProperty(<span class="str">"mediaManager"</span>, &amp;mediaManager);
+
+<span class="cmt"># Python (main.py)</span>
 engine.rootContext().setContextProperty(<span class="str">"mediaManager"</span>, media_manager)</code></pre>
 
-        <pre><code><span class="cmt">// QML — access it directly, no import needed</span>
+        <pre><code><span class="cmt">// QML — identical against either backend</span>
 Button {
     onClicked: mediaManager.next_track()
 }
-
 Text {
-    text: mediaManager.currentTrackTitle
+    text: mediaManager.get_display_name(mediaManager.get_current_file())
 }</code></pre>
 
         <p>
-          Context properties are the primary bridge between Python and QML. Every manager listed above
-          is accessible in QML by its context property name.
+          Every context property must exist before <code>engine.load(Main.qml)</code>: bindings are evaluated at
+          first load, and an unregistered name is an error, not a late binding. Both mains therefore register
+          every manager (including <code>dashboardManager</code>, the last one) ahead of the load, and
+          <code>main.py</code> exposes <code>install_obd_manager()</code> so the dev runtime can substitute a
+          mock OBD manager before the QML is loaded.
         </p>
 
         <h3 id="signals-slots">Signals and Slots</h3>
         <p>
-          <strong>Signals</strong> are the notification mechanism. When something changes in Python,
-          a signal fires. QML can bind to signals declaratively:
+          <strong>Signals</strong> are the notification mechanism. QML reacts to them declaratively:
         </p>
 
-        <pre><code><span class="cmt">// QML — react to a Python signal</span>
+        <pre><code><span class="cmt">// QML — react to a backend signal</span>
 Connections {
     target: mediaManager
-    <span class="kw">function</span> onCurrentTrackChanged() {
-        <span class="cmt">// Update UI when the track changes</span>
-        albumArt.source = mediaManager.albumArtPath
+    <span class="kw">function</span> onCurrentMediaChanged(filename) {
+        albumArt.source = mediaManager.get_album_art(filename)
     }
 }</code></pre>
 
-        <p>
-          <strong>Slots</strong> are Python methods that QML can call. Decorated with <code>@Slot()</code>:
-        </p>
+        <p><strong>Slots</strong> are methods QML calls. C++ uses <code>public slots:</code> or
+          <code>Q_INVOKABLE</code>; Python uses <code>@Slot()</code>, with <code>result=</code> for return values:</p>
 
-        <pre><code><span class="cmt"># Python — define a slot</span>
-@Slot()
-<span class="kw">def</span> <span class="fn">next_track</span>(self):
-    <span class="cmt"># ... advance to next track</span>
-    self.currentTrackChanged.emit()</code></pre>
+        <pre><code><span class="cmt">// C++</span>
+Q_INVOKABLE QVariant <span class="fn">loadDashboard</span>(<span class="kw">const</span> QString &amp;id);
+
+<span class="cmt"># Python</span>
+@Slot(<span class="cls">str</span>, result=<span class="str">'QVariant'</span>)
+<span class="kw">def</span> <span class="fn">loadDashboard</span>(self, dashboard_id):
+    ...</code></pre>
 
         <h3 id="properties">Qt Properties</h3>
         <p>
-          Properties combine a getter, an optional setter, and a notification signal into a single
-          bindable value. QML automatically updates bindings when the notify signal fires:
+          Properties combine a getter, an optional setter and a notify signal into one bindable value. QML
+          re-evaluates any binding that reads the property when its notify signal fires. <code>CONSTANT</code> /
+          <code>constant=True</code> properties (e.g. <code>diagnosticsManager.logDir</code>) never notify and are read once.
         </p>
-
-        <pre><code><span class="cmt"># Python — define a property</span>
-@Property(<span class="cls">str</span>, notify=currentTrackTitleChanged)
-<span class="kw">def</span> <span class="fn">currentTrackTitle</span>(self):
-    <span class="kw">return</span> self._current_title</code></pre>
-
-        <pre><code><span class="cmt">// QML — bind to it (auto-updates when signal fires)</span>
-Text {
-    text: mediaManager.currentTrackTitle
-}</code></pre>
 
         <h3 id="qml-types">Custom QML Types</h3>
         <p>
-          Some components need to be embedded directly as QML items (not just context properties).
-          These are registered with <code>qmlRegisterType</code>:
+          One component is embedded as a QML <em>item</em> rather than a context property: the Android Auto
+          frame item, registered with <code>qmlRegisterType</code> under the <code>OCTAVE.AndroidAuto</code> module:
         </p>
 
-        <pre><code><span class="cmt"># Python (main.py)</span>
-qmlRegisterType(EmbeddedDhuItem, <span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>)
+        <pre><code><span class="cmt">// C++ (src/main.cpp) — src/items/embeddeddhuitem.h, a QQuickItem</span>
+qmlRegisterType&lt;EmbeddedDhuItem&gt;(<span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>);
 
-        <pre><code><span class="cmt">// QML — use as a component</span>
+<span class="cmt"># Python (main.py) — backend/android_auto/embedded_dhu.py, a QQuickItem</span>
+qmlRegisterType(EmbeddedDhuItem, <span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>)</code></pre>
+
+        <pre><code><span class="cmt">// QML</span>
 <span class="kw">import</span> OCTAVE.AndroidAuto <span class="num">1.0</span>
 
-EmbeddedDhuItem {
-    anchors.fill: parent
-}</code></pre>
+EmbeddedDhuItem { anchors.fill: parent }</code></pre>
 
-        <p>These are used for video frame embedding where the Python side renders frames directly
-          into the QML scene graph.</p>
+        <p>
+          Phone mirroring does <em>not</em> use a custom type any more: it binds a stock <code>VideoOutput</code>'s
+          <code>videoSink</code> to <code>phoneMirrorManager.videoSink</code> (see <a href="#video">video paths</a>).
+          The frontend's own singletons (<code>Style</code>, <code>Spacing</code>, <code>EnvironmentTheme</code>,
+          <code>OBDParameterModel</code>, <code>WidgetCatalog</code>) are declared in <code>frontend/qmldir</code>.
+        </p>
 
         <!-- Startup Sequence -->
         <h2 id="startup">Application Startup Sequence</h2>
-        <span class="file-path">main.py</span>
+        <p>
+          The two mains follow the same shape &mdash; logging first, then settings, then everything that depends
+          on settings, then signal wiring, then <code>Main.qml</code> &mdash; but the details differ and are
+          documented separately so neither is misread as the other.
+        </p>
 
-        <p>The startup sequence in <code>main.py</code> follows a strict order:</p>
-
+        <h3 id="startup-cpp">C++ &mdash; <span class="file-path">src/main.cpp</span></h3>
         <ol class="steps">
-          <li>
-            <strong>Environment</strong> &mdash; Sets <code>QT_QUICK_CONTROLS_STYLE=Basic</code>
-            (required for full slider customization). The Python backend is desktop-only; Android and iOS
-            run the C++ tree.
-          </li>
-          <li>
-            <strong>Argument parsing</strong> &mdash; <code>--debug</code> enables verbose logging.
-            <code>--profile</code> enables performance monitoring. Skipped on Android.
-          </li>
-          <li>
-            <strong>Logging initialization</strong> &mdash; <code>setup_logging()</code> must run
-            before any other imports that might log.
-          </li>
-          <li>
-            <strong>Conditional imports</strong> &mdash; On Android, hardware managers are replaced
-            with stubs from <code>backend.stubs</code>. Android-specific OBD and sensor managers
-            are imported instead.
-          </li>
-          <li>
-            <strong>QApplication creation</strong> &mdash; Creates the Qt application and detects
-            screen size for auto-scaling (height / 720.0, clamped to 0.4&ndash;3.0).
-          </li>
-          <li>
-            <strong>QML engine setup</strong> &mdash; Creates <code>QQmlApplicationEngine</code>,
-            registers custom QML types, adds <code>frontend/</code> to the import path.
-          </li>
-          <li>
-            <strong>Manager instantiation</strong> &mdash; Each manager is created and registered
-            as a context property, in dependency order (SettingsManager first, since others depend on it).
-          </li>
-          <li>
-            <strong>Signal wiring</strong> (desktop only) &mdash; Connects gesture actions to media/volume,
-            ESP32 volume changes to all outputs, theme colors to LED, download completion to library rescan.
-          </li>
-          <li>
-            <strong>QML load</strong> &mdash; Loads <code>frontend/Main.qml</code>. Exits if no
-            root objects were created (fatal QML error).
-          </li>
-          <li>
-            <strong>Optional profiling</strong> &mdash; If <code>--profile</code>, starts PerfMonitor,
-            CommandServer, and applies hot-path instrumentation.
-          </li>
-          <li>
-            <strong>Event loop</strong> &mdash; <code>app.exec()</code> runs the Qt event loop until
-            the application quits.
-          </li>
+          <li><strong>Logging + crash handlers first</strong> &mdash; <code>argv</code> is scanned for <code>--debug</code> and <code>OctaveLog::install(debug)</code> runs <em>before</em> <code>QGuiApplication</code> exists, so anything a manager constructor logs (and any crash) reaches the files.</li>
+          <li><strong>QGuiApplication</strong> &mdash; organization/application name <code>OCTAVE</code>; <code>QQuickStyle::setStyle("Basic")</code> so sliders are fully customisable.</li>
+          <li><strong>Auto-scale</strong> &mdash; <code>screenAutoScale = min(width, height) / 720</code>, clamped to 0.4&ndash;3.0. It scales off the <em>shorter</em> edge because Android reports the natural (portrait) size even when the app is locked landscape; using height alone gave a ~3&times; factor there.</li>
+          <li><strong>Scalar context properties</strong> &mdash; <code>screenAutoScale</code>, <code>isAndroid</code>.</li>
+          <li><strong>Phase 1</strong> &mdash; <code>SettingsManager</code> (everything depends on it), <code>UiWatchdog</code> started, <code>DiagnosticsManager</code>, <code>Clock</code>, <code>NetworkManager</code>, <code>VolumeController</code>.</li>
+          <li><strong>Phase 2</strong> &mdash; <code>MediaManager</code>, <code>AudioAnalyzer</code>. On Android the youtubedl-android bridge is initialised off-thread with <code>QtConcurrent::run</code> (first launch extracts Python + yt-dlp + ffmpeg, 10&ndash;20&nbsp;s) and runtime permissions (<code>READ_MEDIA_AUDIO</code>, <code>BLUETOOTH_CONNECT</code>, <code>BLUETOOTH_SCAN</code>, &hellip;) are requested; a granted audio permission triggers a library scan.</li>
+          <li><strong>Phase 3</strong> &mdash; <code>SpotifyManager</code> (no-op stub class on mobile).</li>
+          <li><strong>Phase 4</strong> &mdash; <code>OBDManager</code>, <code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>.</li>
+          <li><strong>Phase 5</strong> &mdash; <code>AndroidAutoManager</code> + the <code>dhuframe</code> image provider, <code>PhoneMirrorManager</code> with its settings wiring (audio enable/gain, ducking &rarr; <code>MediaManager::setDucking</code>, phone-screen-off), <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;</code>, <code>DownloadManager</code> (+ <code>downloadComplete</code> &rarr; <code>scan_library(false)</code>).</li>
+          <li><strong>Volume fan-out</strong> &mdash; <code>VolumeController::volumeApplied</code> &rarr; <code>mediaManager.setVolume(linear)</code> and a 300&nbsp;ms single-shot debounce before <code>spotifyManager.set_volume(percent)</code> (avoids HTTP 429 from the Web API). Then <code>applyVolume(settingsManager.currentVolume())</code> restores the saved volume.</li>
+          <li><strong>QML import path</strong> &mdash; <code>assets:/frontend</code> on Android; on desktop <code>frontend/</code> next to the binary, or one directory up (so <code>build/octave</code> finds the checkout's <code>frontend/</code>).</li>
+          <li><strong>Phase 6</strong> &mdash; <code>DashboardManager</code> with <code>setPresetsDir(frontend/dashboards/presets)</code> and <code>setUserDir(&lt;appdata&gt;/dashboards)</code>.</li>
+          <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created. Then <code>setQuitOnLastWindowClosed(true)</code>.</li>
+          <li><strong>Hardware wiring</strong> &mdash; gesture actions &rarr; media / volume; ESP32 <code>volumeChangeRequested(float)</code> through a fractional accumulator; <code>muteToggleRequested</code>.</li>
+          <li><strong>Signals</strong> &mdash; on Unix desktop, <code>SIGTERM</code>/<code>SIGINT</code> are turned into <code>QCoreApplication::quit()</code> with the self-pipe trick (<code>socketpair</code> + <code>QSocketNotifier</code>) so the <code>aboutToQuit</code> cleanup still runs under systemd or Ctrl-C.</li>
+          <li><strong><code>app.exec()</code></strong>.</li>
         </ol>
+
+        <h3 id="startup-python">Python &mdash; <span class="file-path">main.py</span></h3>
+        <ol class="steps">
+          <li><strong>Environment</strong> &mdash; <code>QT_QUICK_CONTROLS_STYLE=Basic</code> is set before any Qt import.</li>
+          <li><strong>Arguments</strong> &mdash; <code>argparse</code> with <code>--debug</code> and <code>--profile</code> (<code>parse_known_args</code>, so Qt flags pass through).</li>
+          <li><strong>Logging first</strong> &mdash; <code>setup_logging(debug=...)</code> runs before any backend import; it also installs the crash handlers and gives python-obd's logger the same handlers.</li>
+          <li><strong>Imports</strong> &mdash; all managers are imported unconditionally; the Python backend is desktop-only, so there is no platform branching here. Heavy optional libraries are deferred via <code>backend/lazy_import.py</code> (see <a href="#design-decisions">why</a>).</li>
+          <li><strong><code>QApplication</code></strong> (from <code>QtWidgets</code>) &mdash; auto-scale is <code>availableSize().height() / 720</code>, clamped 0.4&ndash;3.0 (the C++ side uses the shorter edge; on a landscape desktop the two agree).</li>
+          <li><strong>Engine</strong> &mdash; <code>QQmlApplicationEngine</code>, <code>screenAutoScale</code>, <code>qmlRegisterType(EmbeddedDhuItem, ...)</code>, <code>frontend/</code> import path, <code>isAndroid = False</code>.</li>
+          <li><strong>Managers in dependency order</strong> &mdash; <code>SettingsManager</code>; <code>UiWatchdog.start()</code>; <code>DiagnosticsManager</code>; <code>Clock</code>; <code>MediaManager</code>; <code>AudioAnalyzer</code>; (<code>obdManager</code> is registered later through <code>install_obd_manager()</code>); <code>SpotifyManager</code>; <code>AndroidAutoManager</code> + <code>engine.addImageProvider("dhuframe", ...)</code>; <code>PhoneMirrorManager</code> + settings wiring; <code>ESP32VolumeManager</code>; <code>VolumeController</code> (constructed with references to settings, media, Spotify, phone mirror and ESP32) and <code>applyVolume(currentVolume)</code>; <code>BerryIMUManager</code>; <code>GestureManager</code>; <code>NetworkManager</code>; <code>DownloadManager</code> (+ rescan on <code>downloadComplete</code>); <code>DashboardManager</code>.</li>
+          <li><strong>Signal wiring</strong> &mdash; gesture actions, ESP32 accumulator + mute, ESP32 LED colour sync (album-art accent or static colour), initial ESP32 state 500&nbsp;ms after it connects.</li>
+          <li><strong>Shutdown hooks</strong> &mdash; <code>cleanup_on_quit()</code> on <code>aboutToQuit</code>; <code>SIGTERM</code>/<code>SIGINT</code> call <code>app.quit()</code>, with a 500&nbsp;ms no-op <code>QTimer</code> so the interpreter gets a chance to run the signal handler while blocked in <code>app.exec()</code>.</li>
+          <li><strong><code>__main__</code></strong> &mdash; <code>install_obd_manager(OBDManager(settings_manager))</code>, <code>load_main_qml()</code> (exits <code>-1</code> without root objects), <code>setup_perf_profiling()</code> if <code>--profile</code>, <code>app.exec()</code>.</li>
+        </ol>
+
+        <div class="info-box info">
+          <div class="info-box-title">Why the OBD manager is installed late in Python</div>
+          <code>main.py</code> is importable: <code>dev/dev_runtime.py</code> imports it, calls
+          <code>install_obd_manager(MockOBDManager(...))</code> and then <code>load_main_qml()</code>. Keeping the
+          registration behind a function (and the QML load behind another) lets developer mode swap in simulated
+          OBD data without patching the production entry point. The headless boot test (<code>tests/test_boot.py</code>)
+          runs the real <code>__main__</code> path offscreen.
+        </div>
 
         <!-- Threading -->
         <h2 id="threading">Threading Model</h2>
         <p>
-          OCTAVE's UI runs on the Qt main thread (event loop). All heavy I/O is offloaded to
-          background threads to prevent UI freezes. Three patterns are used:
+          The UI runs on the Qt main thread. Anything that can block &mdash; serial and I²C I/O, HTTP, decoding,
+          subprocesses &mdash; is moved off it, and results come back <em>only</em> through queued signals or
+          main-thread timers. The mechanisms differ per backend and per manager:
         </p>
 
-        <h3 id="thread-obd">1. QThread Worker (OBD Connection)</h3>
+        <table>
+          <thead>
+            <tr><th>Manager</th><th>C++</th><th>Python</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>OBD</td><td><code>OBDConnectionWorker</code> on a dedicated <code>QThread</code> owns the <code>QSerialPort</code> and a poll <code>QTimer</code> (interval 0 in fast mode, 50&nbsp;ms otherwise). Android: the main thread owns the BLE link through the <code>OctaveOBDBridge</code> JNI class; no worker thread.</td><td><code>OBDConnectionWorker</code> moved to a <code>QThread</code> for the blocking connect; python-obd's <code>obd.Async</code> (<code>delay_cmds=0</code>) runs its own polling thread; DTC reads, vehicle scan and the connection monitor use daemon <code>threading.Thread</code>s.</td></tr>
+            <tr><td>Spotify</td><td>Asynchronous <code>QNetworkAccessManager</code> replies on the main thread; <code>QTcpServer</code> on <code>127.0.0.1:8888</code> for the OAuth redirect; poll + interpolation <code>QTimer</code>s.</td><td><code>ThreadPoolExecutor(max_workers=2)</code> for API calls; a one-shot <code>HTTPServer</code> thread on port 8888 for the OAuth callback; poll + interpolation <code>QTimer</code>s.</td></tr>
+            <tr><td>Network</td><td><code>QNetworkAccessManager</code> + <code>QProcess</code> (<code>git</code>) with <code>QTimer</code>s.</td><td><code>ThreadPoolExecutor(max_workers=1)</code> + a result-poll <code>QTimer</code>.</td></tr>
+            <tr><td>Download</td><td><code>QtConcurrent::run</code> for search; yt-dlp as a <code>QProcess</code>; on Android a <code>QTimer</code> polls the JNI bridge for progress.</td><td><code>ThreadPoolExecutor(max_workers=2)</code> + poll <code>QTimer</code>; yt-dlp / ytmusicapi through the vendored <code>music_dl</code> package.</td></tr>
+            <tr><td>Media</td><td><code>QtConcurrent::run</code> for album-colour extraction and for the library scan's art and tag jobs; several <code>QTimer</code>s (position, state save, pre-cache, metadata-store save).</td><td>A daemon thread for album colours; timers as in C++.</td></tr>
+            <tr><td>AudioAnalyzer</td><td><code>QtConcurrent::run</code> decodes with <code>QAudioDecoder</code> and runs an in-house radix-2 FFT; never touches GUI objects.</td><td><code>ThreadPoolExecutor(max_workers=1)</code>; PyAV decode + numpy FFT.</td></tr>
+            <tr><td>BerryIMU / Gesture</td><td>Worker <code>QObject</code> on its own <code>QThread</code> doing <code>ioctl</code> I²C reads (<code>/dev/i2c-N</code>).</td><td>Daemon <code>threading.Thread</code> read loops over <code>smbus2</code>.</td></tr>
+            <tr><td>ESP32 knob</td><td>Event-driven <code>QSerialPort::readyRead</code> on the main thread; reconnect / scan / keepalive / send-debounce <code>QTimer</code>s.</td><td>Daemon read thread over <code>pyserial</code>; same timers (scan 10&nbsp;s, keepalive 2&nbsp;s, 50&nbsp;ms send debounce, 3&nbsp;s startup delay).</td></tr>
+            <tr><td>Phone mirror</td><td><code>ScrcpyClient</code> runs the video/audio socket loops on a <code>std::thread</code>, decodes with libavcodec and pushes <code>QVideoFrame</code>s to the sink.</td><td><code>threading.Thread</code>s for video, audio, device messages and server log; PyAV decode.</td></tr>
+            <tr><td>UI watchdog</td><td><code>QThread</code> pinging the GUI thread.</td><td>Daemon <code>threading.Thread</code> pinging the GUI thread.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="thread-obd">OBD Worker Thread</h3>
         <p>
-          The OBD connection process is long-running (5&ndash;30 seconds) and uses a dedicated
-          <code>QThread</code> with a worker object. Progress is reported via signals:
+          Connecting to an ELM327 takes seconds (reset, protocol negotiation, supported-PID discovery), so it runs
+          on a worker and reports progress by signal. Both backends use the same worker name and progress signals:
         </p>
 
         <div class="diagram">
-Main Thread                    OBD Worker Thread
+Main Thread                    OBD Worker Thread (QThread)
     │                               │
     │── create worker ──────────────►│
     │   moveToThread(thread)        │
     │   thread.start()              │
-    │                               │── connect to ELM327
-    │◄── progressChanged(20%) ──────│
+    │                               │── open port, ATZ / ATE0 ...
+    │◄── connectionProgress(20, …) ─│
     │                               │── negotiate protocol
-    │◄── progressChanged(60%) ──────│
+    │◄── connectionProgress(60, …) ─│
     │                               │── query supported PIDs
-    │◄── progressChanged(100%) ─────│
+    │◄── connectionProgress(100, …)─│
     │◄── connectionComplete ────────│
     │                               │
-    │   (polling via QTimer)        │── read OBD values
-    │◄── dataChanged ──────────────│
-    │                               │</div>
+    │   (watchdog QTimer on main)   │── poll loop: TX cmd / RX reply
+    │◄── value signals ─────────────│   (C++: QTimer on the worker;
+    │                               │    Python: obd.Async thread)</div>
 
-        <h3 id="thread-pool">2. ThreadPoolExecutor (Spotify, Network, Download)</h3>
         <p>
-          Short-lived API calls use Python's <code>concurrent.futures.ThreadPoolExecutor</code>.
-          The result is marshalled back to the Qt main thread via a <code>QTimer</code> or
-          signal emission:
+          In C++ every command and reply is logged on the <code>octave.elm327</code> category
+          (<code>TX ...</code> / <code>RX ... (N ms)</code>); Python routes python-obd's own
+          <code>write:</code>/<code>read:</code> DEBUG lines into OCTAVE's handlers. Either way a failed session leaves
+          a protocol transcript in the debug log (see <a href="#logging">logging</a>).
         </p>
 
-        <pre><code><span class="cmt"># Typical pattern (SpotifyManager)</span>
-<span class="kw">from</span> concurrent.futures <span class="kw">import</span> ThreadPoolExecutor
-
-<span class="kw">class</span> <span class="cls">SpotifyManager</span>(QObject):
-    <span class="kw">def</span> <span class="fn">__init__</span>(self):
-        self._executor = ThreadPoolExecutor(max_workers=<span class="num">2</span>)
-
-    <span class="kw">def</span> <span class="fn">_api_call</span>(self, func, *args):
-        future = self._executor.submit(func, *args)
-        future.add_done_callback(self._on_result)</code></pre>
-
-        <h3 id="thread-timer">3. QTimer Polling (Sensors, ESP32)</h3>
+        <h3 id="thread-pool">Thread Pools and QtConcurrent</h3>
         <p>
-          Hardware sensors are polled at regular intervals using <code>QTimer</code>. This keeps
-          sensor reading on the main thread but at controlled intervals (typically 50&ndash;200ms):
+          Short-lived work with a single result (an API call, a decode, a colour extraction) uses a pool rather
+          than a hand-rolled thread: <code>concurrent.futures.ThreadPoolExecutor</code> in Python,
+          <code>QtConcurrent::run</code> + <code>QFutureWatcher</code> in C++. Python marshals results back with a
+          <code>QTimer</code> that polls the futures; C++ gets <code>QFutureWatcher::finished</code> on the main thread.
         </p>
 
-        <pre><code><span class="cmt"># BerryIMU polling (main thread, timer-driven)</span>
-self._timer = QTimer()
-self._timer.timeout.connect(self._read_sensors)
-self._timer.start(<span class="num">50</span>)  <span class="cmt"># 20 Hz</span></code></pre>
+        <pre><code><span class="cmt">// C++ — MediaManager colour extraction</span>
+<span class="kw">auto</span> *watcher = <span class="kw">new</span> QFutureWatcher&lt;QVariantMap&gt;(<span class="kw">this</span>);
+watcher-&gt;setFuture(QtConcurrent::run([<span class="kw">this</span>, imagePath]() {
+    <span class="kw">return</span> _extract_album_colors(imagePath);
+}));
 
-        <div class="info-box info">
-          <div class="info-box-title">Why QTimer for Sensors?</div>
-          I2C reads are fast (&lt;1ms) so they don't block the UI at 20 Hz. Using a QTimer avoids
-          the complexity of cross-thread signal marshalling for high-frequency data. The 50ms interval
-          is tuned for smooth UI updates without excessive CPU usage.
-        </div>
+<span class="cmt"># Python — SpotifyManager</span>
+self._executor = ThreadPoolExecutor(max_workers=<span class="num">2</span>)
+future = self._executor.submit(func, *args)</code></pre>
+
+        <h3 id="thread-sensors">Sensor Read Loops</h3>
+        <p>
+          The I²C sensors are read in a loop on their own thread in <em>both</em> backends (a
+          <code>BerryIMUWorker</code> / gesture worker on a <code>QThread</code> in C++; daemon threads in Python),
+          with values delivered to the main thread by signal. <code>QTimer</code>s are used for the surrounding
+          lifecycle &mdash; delayed start (1&nbsp;s after construction), retry back-off, reconnect, the ESP32's
+          10&nbsp;s port scan and 2&nbsp;s keepalive &mdash; not for the sampling itself.
+        </p>
+
+        <h3 id="thread-watchdog">UI Watchdog</h3>
+        <p>
+          <code>UiWatchdog</code> (<code>src/util/uiwatchdog.cpp</code> / <code>backend/ui_watchdog.py</code>) is started
+          right after <code>SettingsManager</code> in both mains and stopped first in cleanup. A worker thread posts
+          a queued call to the GUI thread every 2&nbsp;s and records when it is answered; if the GUI thread has been
+          silent for more than 5&nbsp;s it logs <code>UI thread blocked for N s and counting</code> on
+          <code>octave.ui_watchdog</code>, then <code>responsive again after N s</code> when the loop drains. It is
+          purely observational &mdash; it never kills or restarts anything.
+        </p>
 
         <!-- Volume System -->
         <h2 id="volume-system">Volume System</h2>
         <p>
-          Volume uses a <strong>quadratic curve</strong> (y = x²) to match human perception. The raw
-          0&ndash;100 slider value is transformed before being applied to linear audio outputs:
+          Volume uses a <strong>quadratic curve</strong>: the 0&ndash;100 slider percent becomes a linear
+          0.0&ndash;1.0 gain through
         </p>
 
-        <pre><code>linear = (percent / <span class="num">100.0</span>) ** <span class="num">2.0</span></code></pre>
-
-        <p>
-          The curve math and its dispatch logic both live in <span class="file-path">backend/volume_utils.py</span>.
-          Before this module existed, the curve was hardcoded in ~9 call sites across <code>main.py</code> and QML;
-          changing the curve meant editing every site in lockstep. Now the math lives in <code>to_linear()</code>
-          and every source of a volume change funnels through a single <code>VolumeController.applyVolume(percent)</code>
-          entry point.
-        </p>
+        <pre><code>linear = (percent / <span class="num">100.0</span>) ** <span class="num">2.0</span>      <span class="cmt"># backend/volume_utils.py  to_linear()</span>
+<span class="cmt">// src/managers/volumecontroller.cpp  VolumeController::toLinearStatic()</span></code></pre>
 
         <p>
-          <code>VolumeController</code> is a <code>QObject</code> instantiated in <span class="file-path">main.py</span>
-          with references to every audio output manager and registered as the QML context property
-          <code>volumeController</code>. A call to <code>applyVolume(percent)</code>:
+          The curve and its dispatch live in exactly one class per backend, <code>VolumeController</code>, registered
+          as <code>volumeController</code>. Before it existed the curve was hard-coded in about nine call sites across
+          <code>main.py</code> and QML, and changing it meant editing every site in lockstep.
+          <code>applyVolume(percent)</code> clamps, stores the raw percent in <code>SettingsManager</code>
+          (<code>setCurrentVolume</code>, idempotent), computes the linear value and fans it out:
         </p>
-        <ul>
-          <li>stores the raw percent in <code>settings_manager.setCurrentVolume()</code> (idempotent if unchanged)</li>
-          <li>applies <code>to_linear(percent)</code> to <code>media_manager.setVolume()</code> and <code>phone_mirror_manager.setVolume()</code></li>
-          <li>forwards the raw percent to <code>spotify_manager.set_volume()</code> (Spotify Web API applies its own curve)</li>
-          <li>sends the raw percent to <code>esp32_manager.send_volume_update()</code> for the LED ring display</li>
-        </ul>
+
+        <table>
+          <thead>
+            <tr><th>Output</th><th>Python (<code>VolumeController</code> holds references)</th><th>C++ (<code>volumeApplied(percent, linear)</code> signal, wired in <code>main.cpp</code>)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Local media</td><td><code>media_manager.setVolume(linear)</code></td><td><code>mediaManager.setVolume(linear)</code></td></tr>
+            <tr><td>Spotify</td><td><code>spotify_manager.set_volume(percent)</code> when connected (the Web API applies its own scale)</td><td>300&nbsp;ms debounce, then <code>set_volume(percent)</code> when connected</td></tr>
+            <tr><td>Phone mirror audio</td><td><code>phone_mirror_manager.setVolume(linear)</code></td><td><em>not connected</em> &mdash; see note</td></tr>
+            <tr><td>ESP32 LED ring</td><td><code>esp32_manager.send_volume_update(percent)</code></td><td><em>not connected</em>; the knob receives the current volume on its 2&nbsp;s keepalive from <code>settingsManager.currentVolume</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="info-box warning">
+          <div class="info-box-title">Known parity gap (C++)</div>
+          <code>src/main.cpp</code> connects <code>volumeApplied</code> only to the media manager and the Spotify
+          debounce. <code>PhoneMirrorManager::setVolume()</code> is never called from the C++ main, so mirrored
+          phone audio stays at its default gain (<code>m_volume = 1.0f</code>) instead of following the slider, and
+          the ESP32 LED ring lags the slider by up to one keepalive. The Python controller applies all four outputs
+          immediately.
+        </div>
 
         <p>Every source of a volume change routes through the same entry point:</p>
 
@@ -433,66 +518,92 @@ self._timer.start(<span class="num">50</span>)  <span class="cmt"># 20 Hz</span>
             <tr><th>Source</th><th>Call</th></tr>
           </thead>
           <tbody>
-            <tr>
-              <td>UI Slider (BottomBar or MediaRoom)</td>
-              <td><code>volumeController.applyVolume(Math.round(value))</code> from QML</td>
-            </tr>
-            <tr>
-              <td>ESP32 Knob</td>
-              <td>Serial &rarr; <code>volumeChangeRequested</code> signal &rarr; <code>handle_esp32_volume_change()</code> &rarr; <code>volume_controller.applyVolume()</code></td>
-            </tr>
-            <tr>
-              <td>Gesture Sensor</td>
-              <td>I2C &rarr; <code>actionTriggered("volume_up"/"volume_down")</code> &rarr; <code>handle_gesture_action()</code> &rarr; <code>volume_controller.applyVolume()</code></td>
-            </tr>
-            <tr>
-              <td>Startup</td>
-              <td><code>main.py</code> calls <code>volume_controller.applyVolume(settings_manager.currentVolume)</code> once after all managers are constructed, restoring the saved volume to every output. QML's <code>Component.onCompleted</code> repeats this idempotently.</td>
-            </tr>
+            <tr><td>UI sliders (<code>BottomBar.qml</code>, <code>MediaRoom.qml</code>)</td><td><code>volumeController.applyVolume(Math.round(value))</code></td></tr>
+            <tr><td>ESP32 knob</td><td>Serial &rarr; <code>volumeChangeRequested(delta)</code> &rarr; accumulator in main &rarr; <code>applyVolume(currentVolume + change)</code></td></tr>
+            <tr><td>Gesture sensor</td><td>I²C &rarr; <code>actionTriggered("volume_up"/"volume_down")</code> &rarr; <code>applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></td></tr>
+            <tr><td>Startup</td><td>Both mains call <code>applyVolume(settingsManager.currentVolume)</code> once, after the outputs exist</td></tr>
           </tbody>
         </table>
 
-        <p>The volume accumulator pattern handles sub-integer ESP32 deltas:</p>
-        <pre><code><span class="cmt"># ESP32 sends fractional deltas; accumulate until >= 1.0</span>
+        <p>The knob sends fractional deltas; both mains accumulate them until a whole step is available:</p>
+        <pre><code><span class="cmt"># main.py (the C++ lambda in main.cpp is the same shape with a static float)</span>
 _volume_accumulator += delta
-<span class="kw">if</span> abs(_volume_accumulator) >= <span class="num">1.0</span>:
+<span class="kw">if</span> abs(_volume_accumulator) &gt;= <span class="num">1.0</span>:
     change = <span class="cls">int</span>(_volume_accumulator)
     _volume_accumulator -= change
     volume_controller.applyVolume(settings_manager.currentVolume + change)</code></pre>
 
         <div class="info-box">
           <strong>Rule:</strong> never call <code>mediaManager.setVolume()</code>, <code>spotifyManager.set_volume()</code>,
-          <code>phoneMirrorManager.setVolume()</code>, or <code>esp32VolumeManager.send_volume_update()</code> directly
-          for a new user-driven volume change. Always go through <code>volumeController.applyVolume()</code>, or the
-          outputs will drift out of sync.
+          <code>phoneMirrorManager.setVolume()</code> or <code>esp32VolumeManager.send_volume_update()</code> directly for a
+          user-driven change, and never re-implement the curve. Go through <code>volumeController.applyVolume()</code>
+          (or <code>toLinear()</code> for pure math in QML). <code>tests/test_smoke.py::test_volume_curve_math</code>
+          guards the curve.
         </div>
 
-        <!-- Image Providers -->
-        <h2 id="image-providers">Image Providers</h2>
-        <p>
-          Video frames from Android Auto and Phone Mirror are streamed directly to QML via custom
-          <code>QQuickImageProvider</code> subclasses. This avoids writing frames to disk:
-        </p>
+        <!-- Video paths -->
+        <h2 id="video">Video into QML: Image Provider vs QVideoSink</h2>
+        <p>Two external video sources reach the scene graph by two different mechanisms, chosen by how the frames arrive:</p>
 
-        <pre><code><span class="cmt"># Registration (main.py)</span>
+        <h3>Android Auto &mdash; <code>image://dhuframe</code></h3>
+        <p>
+          Google's Desktop Head Unit is a separate process with its own window. OCTAVE launches it and
+          <em>captures the window</em> (C++: <code>QScreen::grabWindow()</code>; Python: Win32 <code>PrintWindow</code>
+          &mdash; the Python capture path is Windows-only and emits an error elsewhere). Captured frames are plain
+          <code>QImage</code>s, so a <code>QQuickImageProvider</code> named <code>dhuframe</code> serves the latest
+          one and QML re-requests it:
+        </p>
+        <pre><code><span class="cmt">// C++</span>
+engine.addImageProvider(QStringLiteral(<span class="str">"dhuframe"</span>), androidAutoManager.frameProvider());
+<span class="cmt"># Python</span>
 engine.addImageProvider(<span class="str">"dhuframe"</span>, android_auto_manager._dhu_capture.frame_provider)
-</code></pre>
 
-        <pre><code><span class="cmt">// QML — request frames via image:// protocol</span>
-Image {
-    source: <span class="str">"image://dhuframe/frame"</span>
-    cache: <span class="kw">false</span>
-}</code></pre>
+<span class="cmt">// QML</span>
+Image { source: <span class="str">"image://dhuframe/frame"</span>; cache: <span class="kw">false</span> }</code></pre>
 
+        <h3>Phone mirror &mdash; <code>QVideoSink</code></h3>
         <p>
-          The image provider returns the latest captured frame on each request. QML periodically
-          re-requests the image (via source binding or timer) to get new frames.
+          The phone streams H.264 over a TCP socket that OCTAVE decodes itself (libavcodec in C++, PyAV in Python).
+          Decoded YUV420P planes are wrapped in a <code>QVideoFrame</code> without an RGB conversion and pushed to the
+          <code>QVideoSink</code> that QML's <code>VideoOutput</code> exposes, so the GPU does the colour conversion
+          and the frame never becomes a <code>QImage</code>:
         </p>
+        <pre><code><span class="cmt">// QML (PhoneMirrorView.qml) — inside the VideoOutput</span>
+Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirrorManager.videoSink = videoSink</code></pre>
+        <p>
+          <code>videoSink</code> is a <code>Q_PROPERTY(QObject*)</code> / <code>Property(QObject)</code> on
+          <code>PhoneMirrorManager</code> in both backends. Audio comes over a second socket as PCM and is played
+          through a <code>QAudioSink</code> with a client-side gain (<code>scrcpyAudioGain</code>); sound detected in
+          that PCM drives <code>duckingChanged</code> &rarr; <code>MediaManager.setDucking()</code> so local music dips
+          under navigation prompts.
+        </p>
+
+        <!-- Phone server -->
+        <h2 id="phone-server">The Phone Server Fork</h2>
+        <p>
+          The Java program that runs on the phone during mirroring is OCTAVE's own fork of the scrcpy server
+          (Apache-2.0, forked at v3.3.4, package <code>org.octave.phoneserver</code>), source in
+          <span class="file-path">phone_server/</span>. The prebuilt jar
+          <span class="file-path">tools/phone-server/octave-phone-server</span> is committed alongside it with its
+          LICENSE and NOTICE; the C++ build embeds all three as Qt resources (<code>:/phone-server/</code>) and writes
+          the jar to a temp file at runtime, so no packaging target has to carry a loose file. Both clients push the
+          jar over <code>adb</code> every session (the server's clean-up helper deletes it from
+          <code>/data/local/tmp</code> once it is running) and speak the scrcpy 3.x protocol to it.
+        </p>
+        <ul>
+          <li>The version string must agree in three places or the server refuses to start: <code>SCRCPY_VERSION_NAME</code> in <code>phone_server/build_without_gradle.sh</code>, <code>kServerVersion</code> in <code>src/phone_mirror/scrcpyclient.h</code>, <code>SERVER_VERSION</code> in <code>backend/phone_mirror/scrcpy_client.py</code> &mdash; all <code>3.3.4-octave</code>.</li>
+          <li>The <code>phone-server</code> CI job rebuilds the jar from source on every push and fails if the committed jar does not carry the expected package and version (a byte-level difference is reported as a warning because javac/d8 output differs across toolchains).</li>
+          <li><code>adb</code> itself is bundled: <code>scripts/fetch_platform_tools.py</code> downloads Google's pinned platform-tools (SHA-256 verified) into the gitignored <code>tools/platform-tools/&lt;os&gt;/</code>, and CI ships it beside the binary. Google publishes no aarch64 build, so ARM boards fall back to the distro's <code>adb</code>.</li>
+          <li>Protocol byte layouts are documented in <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>; re-verify them against <code>DesktopConnection</code>, <code>control/ControlMessageReader</code> and <code>device/Streamer</code> when pulling upstream changes.</li>
+        </ul>
 
         <!-- Settings Persistence -->
         <h2 id="settings-persistence">Settings Persistence</h2>
         <p>
-          All user settings are stored in <code>settingsConfigure.json</code> at OS-specific paths:
+          All user settings live in one JSON file, <code>settingsConfigure.json</code>, under the directory returned by
+          <code>get_app_data_dir()</code> / <code>SettingsManager::getAppDataDir()</code>. The same directory holds
+          <code>logs/</code>, <code>dashboards/</code> (user dashboards), <code>metadata_cache.json</code> (the media
+          manager's persistent tag/cover store) and, on C++, <code>.spotify_token_cache</code>.
         </p>
 
         <table>
@@ -500,170 +611,364 @@ Image {
             <tr><th>Platform</th><th>Path</th></tr>
           </thead>
           <tbody>
-            <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\settingsConfigure.json</code></td></tr>
-            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/settingsConfigure.json</code></td></tr>
-            <tr><td>Linux</td><td><code>~/.config/OCTAVE/settingsConfigure.json</code></td></tr>
-            <tr><td>Android</td><td><code>&lt;app_dir&gt;/OCTAVE/settingsConfigure.json</code></td></tr>
+            <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\</code></td></tr>
+            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/</code></td></tr>
+            <tr><td>Linux / Raspberry Pi</td><td><code>$XDG_CONFIG_HOME/OCTAVE/</code>, default <code>~/.config/OCTAVE/</code></td></tr>
+            <tr><td>Android (C++)</td><td>Same code path as Linux: <code>QDir::homePath() + "/.config/OCTAVE/"</code>, which resolves inside the app's private storage</td></tr>
           </tbody>
         </table>
 
         <p>
-          The <code>SettingsManager</code> reads this file on startup and writes changes immediately
-          when any setting is modified. It uses a signal-driven property system where each setting
-          has a getter, setter, signal, and metadata (control type, valid range, etc.). See
-          <a href="settings-manager.html">Settings Manager</a> for the full deep dive.
+          Reads happen <em>once</em>: after the constructor has loaded and validated the file, the in-memory object
+          is authoritative (<code>loadSettings()</code> returns <code>m_settings</code> / <code>self._settings</code>
+          without touching disk). Writes are <strong>coalesced</strong>: every setter calls <code>saveSettings()</code>,
+          which updates memory, marks a pending flag and (re)starts a 500&nbsp;ms single-shot timer; when it fires,
+          <code>flushPendingSave()</code> / <code>flush_pending_save()</code> writes the whole object atomically
+          (temp file + rename, with a file lock). OBD parameter selections have their own 800&nbsp;ms debounce. Both
+          mains call the flush explicitly in their shutdown handler so nothing is lost on quit. See
+          <a href="settings-manager.html">Settings Manager</a> for the registry, validation and every key.
         </p>
 
-        <!-- Logging System -->
-        <h2 id="logging">Logging System</h2>
-        <span class="file-path">backend/logging_config.py</span>
-
+        <!-- Dashboards -->
+        <h2 id="dashboards">Dashboards: JSON Specs + DashboardManager</h2>
         <p>
-          OCTAVE uses Python's <code>logging</code> module with hierarchical loggers under the
-          <code>octave.*</code> namespace. All loggers are obtained via <code>get_logger(__name__)</code>,
-          which maps module paths to clean names:
+          OBD dashboards are <strong>data, not code</strong>. A dashboard is a JSON object with <code>id</code>,
+          <code>label</code>, <code>schema</code>, a grid size and a list of cells, each naming a widget type from
+          <code>frontend/dashboards/WidgetCatalog.qml</code>, a PID id from <code>OBDParameterModel</code>, a grid
+          rectangle and per-widget props:
+        </p>
+        <pre><code>{
+  <span class="prop">"id"</span>: <span class="str">"sport"</span>, <span class="prop">"label"</span>: <span class="str">"Sport"</span>, <span class="prop">"schema"</span>: <span class="num">1</span>,
+  <span class="prop">"gridColumns"</span>: <span class="num">12</span>, <span class="prop">"gridRows"</span>: <span class="num">8</span>,
+  <span class="prop">"cells"</span>: [
+    { <span class="prop">"type"</span>: <span class="str">"DigitalReadout"</span>, <span class="prop">"paramId"</span>: <span class="str">"SPEED"</span>,
+      <span class="prop">"col"</span>: <span class="num">0</span>, <span class="prop">"row"</span>: <span class="num">0</span>, <span class="prop">"colSpan"</span>: <span class="num">6</span>, <span class="prop">"rowSpan"</span>: <span class="num">7</span>,
+      <span class="prop">"props"</span>: { <span class="prop">"valueScale"</span>: <span class="num">7.0</span>, <span class="prop">"padDigits"</span>: <span class="num">3</span> } },
+    ...
+  ]
+}</code></pre>
+        <ul>
+          <li><strong>Sources</strong> &mdash; built-in presets in <code>frontend/dashboards/presets/</code> (<code>fullgrid</code>, <code>minimal</code>, <code>performance</code>, <code>sport</code>, <code>tj-wrangler</code>) and user files in <code>&lt;appdata&gt;/dashboards/</code>. Ids must be unique across both; a user file that collides with a built-in id is rejected at load.</li>
+          <li><strong>API</strong> (identical in <code>dashboardmanager.h</code> and <code>dashboard_manager.py</code>) &mdash; <code>dashboards</code> property (list of <code>{id, label, builtIn, path}</code>, built-ins first), <code>loadDashboard(id)</code>, <code>isBuiltIn(id)</code>, <code>saveDashboard(spec)</code>, <code>deleteDashboard(id)</code>, <code>duplicateDashboard(sourceId, newLabel)</code>, <code>refresh()</code>, <code>dashboardsChanged</code>.</li>
+          <li><strong>Hot reload</strong> &mdash; a <code>QFileSystemWatcher</code> on the user directory, debounced and compared against a (name, mtime, size) signature so OCTAVE's own atomic saves do not double-fire.</li>
+          <li><strong>Rendering</strong> &mdash; <code>frontend/dashboards/DashboardRenderer.qml</code> instantiates the cells from the spec; the chooser in <code>OBDMenu.qml</code> shows every dashboard as a live miniature; <code>frontend/dashboards/editor/DashboardEditor.qml</code> is the in-app drag-and-drop editor (pure QML on top of the manager's save/duplicate/delete; an abandoned draft is rescued into settings and offered on the next chooser open).</li>
+          <li><strong>Primitives</strong> &mdash; <code>frontend/gauges/</code>: <code>CircularGauge</code>, <code>ArcGauge</code>, <code>BarGauge</code>, <code>LinearGauge</code>, <code>DigitalReadout</code>, <code>SparklineGauge</code>, <code>WarningLight</code>, plus the self-binding <code>GForceGauge</code> and <code>CompassGauge</code>.</li>
+        </ul>
+        <p>The full spec (binding API, every prop, all 92 parameter ids, recipes) is <span class="file-path">docs/GAUGE_AUTHORING.md</span>; the wiki page is <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</p>
+
+        <!-- 3D vehicle -->
+        <h2 id="vehicle-3d">The 3D Vehicle (CarMenu)</h2>
+        <p>
+          <code>frontend/CarMenu.qml</code> shows a rigged 2003 Jeep TJ (<code>frontend/JeepVehicle.qml</code>) in a
+          Qt Quick 3D scene, rolled and pitched live by <code>berryIMU</code>, with working doors, hood, rear glass,
+          tailgate, lights, steering and spinning wheels. The model is an original reconstruction: the full
+          <code>frontend/assets/jeep_tj_2003.glb</code> plus per-part GLBs under <code>frontend/assets/jeep_tj/</code>
+          with generated <code>Rig.js</code> / <code>rig.json</code> pivot metadata, built by
+          <code>tools/vehicle/build_jeep_tj.py</code> (Blender 4.2, not needed at runtime). The photo references and
+          the corrections they informed are catalogued in <span class="file-path">docs/vehicle/references.md</span>.
+        </p>
+        <p>
+          Qt Quick 3D is <strong>optional at build time</strong>: <code>CMakeLists.txt</code> probes for it, and
+          <code>frontend/SensorHome.qml</code> probes by creating the <code>CarMenu.qml</code> component and greys out
+          the "3D View" card with "Requires the QtQuick3D module" when it fails. <code>RuntimeLoader</code> also needs
+          Qt's assimp asset-import plugin; on distro Qt that is often a separate package (see <code>BUILD.md</code>).
+          <code>JeepVehicle.qml</code> assembles the part GLBs with public Qt APIs rather than reaching into an
+          imported scene's internals, so a rebuild of the asset set does not break the QML.
         </p>
 
+        <!-- Logging -->
+        <h2 id="logging">Logging, Crash Handlers and Diagnostics</h2>
+        <p>
+          OCTAVE runs in a car with no console attached, so "it was in the terminal" is not observability. Both
+          backends therefore write rotating log files, leave a trace on crash, notice a hung UI, and let the user
+          get the files off the head unit from the screen.
+        </p>
+
+        <h3>Python &mdash; <span class="file-path">backend/logging_config.py</span></h3>
+        <p>
+          Python's <code>logging</code> with hierarchical loggers under <code>octave.*</code>, obtained through
+          <code>get_logger(__name__)</code>, which maps module paths to clean names
+          (<code>backend.obd_manager</code> &rarr; <code>octave.obd</code>, <code>backend.media_manager</code> &rarr;
+          <code>octave.media</code>, <code>__main__</code> &rarr; <code>octave.app</code>, anything else &rarr;
+          <code>octave.&lt;module&gt;</code>). python-obd's <code>obd</code> logger is given the same handlers so its
+          per-command <code>write:</code>/<code>read:</code> lines become the ELM327 transcript.
+        </p>
         <table>
-          <thead>
-            <tr><th>Module</th><th>Logger Name</th></tr>
-          </thead>
+          <thead><tr><th>File</th><th>Level</th><th>Max size</th><th>Backups</th></tr></thead>
           <tbody>
-            <tr><td><code>backend.obd_manager</code></td><td><code>octave.obd</code></td></tr>
-            <tr><td><code>backend.media_manager</code></td><td><code>octave.media</code></td></tr>
-            <tr><td><code>backend.spotify_manager</code></td><td><code>octave.spotify</code></td></tr>
-            <tr><td><code>backend.settings_manager</code></td><td><code>octave.settings</code></td></tr>
-            <tr><td><code>__main__</code></td><td><code>octave.app</code></td></tr>
+            <tr><td><code>octave.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td></tr>
+            <tr><td><code>octave-error.log</code></td><td>ERROR+ and crash dumps</td><td>2 MB</td><td>5</td></tr>
+            <tr><td><code>octave-debug.log</code></td><td>DEBUG+ (only with <code>--debug</code>)</td><td>10 MB</td><td>2</td></tr>
           </tbody>
         </table>
+        <p>Maximum on disk: ~32 MB without debug, ~62 MB with. Formats:</p>
+        <pre><code><span class="cmt"># Console</span>
+<span class="str">14:23:45 | INFO    | octave.media              | Library scan complete</span>
+<span class="cmt"># File (adds source location)</span>
+<span class="str">2026-04-07 14:23:45 | INFO    | octave.media | media_manager.py:234 | scan_library() | Library scan complete</span></code></pre>
 
-        <h3>Log Files</h3>
-        <p>Rotating log files are stored in the <code>logs/</code> subdirectory of the config path:</p>
-
-        <table>
-          <thead>
-            <tr><th>File</th><th>Level</th><th>Max Size</th><th>Backups</th><th>Total Max</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>octave.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td><td>~20 MB</td></tr>
-            <tr><td><code>octave-error.log</code></td><td>ERROR+</td><td>2 MB</td><td>5</td><td>~12 MB</td></tr>
-            <tr><td><code>octave-debug.log</code></td><td>DEBUG+</td><td>10 MB</td><td>2</td><td>~30 MB</td></tr>
-          </tbody>
-        </table>
-        <h3>C++ build</h3>
+        <h3>C++ &mdash; <span class="file-path">src/util/logger.cpp</span></h3>
         <p>
-          The C++ build logs to the same directory through <code>src/util/logger.cpp</code>, installed in
-          <code>main()</code> before the <code>QGuiApplication</code> exists: a <code>qInstallMessageHandler</code> routes
-          every <code>qDebug</code>/<code>qCDebug</code>/<code>qInfo</code>/<code>qWarning</code>/<code>qCritical</code>/<code>qFatal</code>
-          <em>and every QML <code>console.*</code> call</em> into rotating files (same sizes as the Python ones), while
-          still echoing to stderr. Lines are <code>date time | LEVEL | category | file:line | message</code>; QML lines
-          carry the .qml file and line. <code>--debug</code> enables category debug output and the debug file;
-          without it debug messages are filtered at the source.
+          <code>OctaveLog::install(debug)</code> runs before <code>QGuiApplication</code> and installs a
+          <code>qInstallMessageHandler</code> that routes every <code>qDebug</code>/<code>qCDebug</code>/<code>qInfo</code>/
+          <code>qWarning</code>/<code>qCritical</code>/<code>qFatal</code> <em>and every QML <code>console.*</code> call</em>
+          into the same <code>logs/</code> directory while still echoing to stderr. Managers use
+          <code>Q_LOGGING_CATEGORY</code> names that mirror the Python loggers (<code>octave.media</code>,
+          <code>octave.spotify</code>, <code>octave.elm327</code>, <code>octave.dashboards</code>,
+          <code>octave.ui_watchdog</code>, &hellip;). Without <code>--debug</code> the filter rule
+          <code>*.debug=false</code> discards debug messages at the source, so they cost nothing.
         </p>
         <table>
-          <thead>
-            <tr><th>File</th><th>Level</th><th>Max Size</th><th>Backups</th></tr>
-          </thead>
+          <thead><tr><th>File</th><th>Level</th><th>Max size</th><th>Backups</th></tr></thead>
           <tbody>
             <tr><td><code>octave-cpp.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td></tr>
             <tr><td><code>octave-cpp-error.log</code></td><td>WARNING+ and crash backtraces</td><td>2 MB</td><td>5</td></tr>
             <tr><td><code>octave-cpp-debug.log</code></td><td>DEBUG+ (only with <code>--debug</code>)</td><td>10 MB</td><td>2</td></tr>
           </tbody>
         </table>
-        <h3>Getting logs out of the vehicle</h3>
-        <p>
-          Settings &rarr; About &rarr; <strong>Diagnostics</strong> (<code>DiagnosticsManager</code>, both backends) shows the
-          last 200 lines of the running backend's log with its errors, and offers Copy (clipboard), Export logs (every log
-          file plus a device-info.txt into <code>Downloads/OCTAVE-logs-&lt;timestamp&gt;/</code>, so on the Android head unit
-          they can be attached from any mail or files app) and, on desktop, Open folder.
-        </p>
-        <h3>UI watchdog</h3>
-        <p>
-          A hung event loop is logged rather than lost: <code>UiWatchdog</code> (<code>src/util/uiwatchdog.cpp</code> /
-          <code>backend/ui_watchdog.py</code>, started in both mains) pings the GUI thread from a worker every 2&nbsp;s and
-          logs <code>UI thread blocked for N s and counting</code> on the <code>octave.ui_watchdog</code> category once the
-          GUI thread has been silent for 5&nbsp;s, then <code>responsive again after N s</code> when it recovers. Legitimate
-          slow work (a large library scan, dashboard JSON load) stays under the threshold; anything above it is worth a look.
-        </p>
+        <pre><code><span class="str">2026-09-10 12:00:00.123 | INFO    | octave.media | mediamanager.cpp:123 | Library scan complete</span></code></pre>
+
         <h3>Crash handlers</h3>
+        <ul>
+          <li><strong>Python</strong> (<code>_install_crash_handlers</code>): <code>sys.excepthook</code> and <code>threading.excepthook</code> log unhandled exceptions with tracebacks to <code>octave-error.log</code>; <code>faulthandler</code> is enabled on a descriptor kept open for the process lifetime so a native fault (SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL) dumps every thread's Python stack there.</li>
+          <li><strong>C++</strong>: <code>SIGSEGV</code>/<code>SIGABRT</code>/<code>SIGFPE</code>/<code>SIGILL</code>/<code>SIGBUS</code> handlers write a <code>==== FATAL SIGSEGV ====</code> block and a <code>backtrace_symbols_fd</code> backtrace to <code>octave-cpp-error.log</code> over a raw descriptor opened at install time (no Qt in the signal path), then restore the default action and re-raise so the OS still produces its core / tombstone. Windows uses <code>SetUnhandledExceptionFilter</code> + <code>CaptureStackBackTrace</code>. Symbolise with <code>addr2line -e octave</code> against the same build. <code>qFatal</code> passes through the message handler first, so assertion text is on disk before the abort.</li>
+        </ul>
+
+        <h3>Getting logs out of the vehicle &mdash; <code>DiagnosticsManager</code></h3>
         <p>
-          Both backends leave a trace when they die. Python (<code>logging_config._install_crash_handlers</code>):
-          <code>sys.excepthook</code> and <code>threading.excepthook</code> log unhandled exceptions with their traceback
-          to <code>octave-error.log</code>, and <code>faulthandler</code> dumps every thread's Python stack to the same file
-          on a native fault. C++: <code>SIGSEGV</code>/<code>SIGABRT</code>/<code>SIGFPE</code>/<code>SIGILL</code>/<code>SIGBUS</code>
-          write a <code>==== FATAL SIGSEGV ====</code> block with a <code>backtrace_symbols_fd</code> backtrace to
-          <code>octave-cpp-error.log</code> over a raw descriptor (no Qt in the signal path), then re-raise so the OS still
-          produces its core / tombstone; Windows uses <code>SetUnhandledExceptionFilter</code> with
-          <code>CaptureStackBackTrace</code>. Symbolise addresses with <code>addr2line -e octave</code> against the same build.
-          <code>qFatal</code> goes through the message handler first, so assertion messages are on disk before the abort.
+          Settings &rarr; About &rarr; Diagnostics (<code>frontend/settings/AboutPage.qml</code>) is backed by
+          <code>diagnosticsManager</code> in both backends: <code>recentLogLines(200)</code> shows the tail of the
+          running backend's main log followed by its error log; <code>copyLogsToClipboard(400)</code> prepends a
+          version/device header; <code>exportLogs()</code> copies every current and rotated log file plus a
+          <code>device-info.txt</code> into <code>&lt;Downloads&gt;/OCTAVE-logs-&lt;timestamp&gt;/</code> (so on the Android
+          head unit they can be attached from any mail or files app) and updates <code>lastExportPath</code>;
+          <code>openLogFolder()</code> opens the directory in the OS file manager where <code>canOpenFolder</code> is
+          true. Constant properties <code>logDir</code>, <code>appVersion</code> (from <code>OCTAVE_VERSION</code> /
+          <code>backend/version.py</code>, both <code>0.9.0</code>), <code>backendName</code> ("C++" / "Python") and
+          <code>deviceInfo</code> feed the page header.
         </p>
 
+        <!-- Dev tooling -->
+        <h2 id="dev-tooling">Profiling and the Command Server</h2>
         <p>
-          The debug log is only created when running with <code>--debug</code>. Total max disk
-          usage: ~62 MB with debug, ~32 MB without.
+          <code>python main.py --profile</code> calls <code>setup_perf_profiling()</code> after the QML is loaded. It
+          creates a <code>PerfMonitor</code> (event-loop latency, GIL contention probe, per-slot timings, CPU/memory
+          via <code>psutil</code> when installed) writing CSV and log files to <code>dev/perf/logs/</code>, registers it
+          as the <code>perfMonitor</code> context property, starts a <code>CommandServer</code> &mdash; a threaded TCP
+          server on <code>127.0.0.1:9876</code> that accepts newline-delimited JSON actions and executes UI-driving
+          ones (navigate, click, drag, capture, record) on the GUI thread through a <code>NavigationBridge</code> with
+          <code>BlockingQueuedConnection</code> &mdash; and applies <code>perf_patches.apply_patches()</code> to wrap
+          hot methods with timers. Both are stopped on <code>aboutToQuit</code> and the report is printed.
         </p>
-
-        <h3>Log Formats</h3>
-        <pre><code><span class="cmt"># Console format</span>
-<span class="str">14:23:45 | INFO    | octave.media              | Library scan complete</span>
-
-<span class="cmt"># File format (includes source location)</span>
-<span class="str">2026-04-07 14:23:45 | INFO    | octave.media | media_manager.py:234 | scan_library() | Library scan complete</span></code></pre>
+        <div class="info-box warning">
+          <div class="info-box-title">These modules are developer-local</div>
+          <code>backend/perf_monitor.py</code>, <code>backend/perf_patches.py</code> and
+          <code>backend/command_server.py</code> are listed in <code>.gitignore</code>, as is the whole
+          <code>dev/</code> tree (<code>main_dev.py</code>, the mock OBD manager, MCP server, screenshot tooling).
+          They exist on the maintainers' machines but not in a fresh clone; <code>main.py</code> tolerates a missing
+          <code>perf_patches</code> with a warning but imports <code>perf_monitor</code> and <code>command_server</code>
+          unconditionally when <code>--profile</code> is passed. The C++ backend has no equivalent of any of them.
+          See <a href="development.html">Development</a> and <a href="utilities.html">Utilities</a>.
+        </div>
 
         <!-- Signal Wiring -->
         <h2 id="signal-wiring">Signal Wiring Graph</h2>
         <p>
-          Cross-manager signals are wired in <code>main.py</code> (desktop only). This is the central
-          nervous system that connects hardware inputs to software outputs:
+          Cross-manager signals are wired in the two mains. This is the central nervous system that connects
+          hardware inputs to software outputs. Python is shown; <code>src/main.cpp</code> wires the gesture, knob,
+          phone-mirror and download edges identically but, as of this writing, has <em>no</em> ESP32 LED colour
+          sync and no initial-state push on connect (<code>send_theme_color()</code> has no caller in the C++ tree),
+          in addition to the two missing volume outputs noted in the <a href="#volume-system">volume section</a>:
         </p>
 
         <div class="diagram">
 Gesture Sensor                       ESP32 Volume Knob
-    │                                     │
-    │ actionTriggered                     │ volumeChangeRequested
+    │ actionTriggered                     │ volumeChangeRequested(delta) / muteToggleRequested
     ▼                                     ▼
-handle_gesture_action()          handle_esp32_volume_change()
-    │                                     │
-    ├── next_track ──► mediaManager       ├── settingsManager.setCurrentVolume()
-    ├── prev_track ──► mediaManager       ├── mediaManager.setVolume(log)
-    ├── play_pause ──► mediaManager       ├── spotifyManager.set_volume()
-    ├── mute ──────► mediaManager         ├── phoneMirrorManager.setVolume(log)
-    ├── vol_up ────► all outputs          └── esp32VolumeManager.send_volume_update()
-    └── vol_down ──► all outputs
+handle_gesture_action()          handle_esp32_volume_change() / handle_esp32_mute_toggle()
+    ├── next_track ──► mediaManager       ├── accumulate ≥ 1.0
+    ├── previous_track ► mediaManager     └── volumeController.applyVolume()
+    ├── play_pause ──► mediaManager                 ├── settingsManager.setCurrentVolume()
+    ├── mute_toggle ─► mediaManager                 ├── mediaManager.setVolume(linear)
+    ├── volume_up ───► volumeController              ├── spotifyManager.set_volume(percent)
+    └── volume_down ─► volumeController              ├── phoneMirrorManager.setVolume(linear)
+                                                    └── esp32VolumeManager.send_volume_update(percent)
 
-                   ESP32 LED Sync
-                       │
-settingsManager.albumArtColorsChanged ──► sync_theme_to_esp32()
-settingsManager.esp32LedStaticColorChanged ──► on_static_color_changed()
-settingsManager.esp32LedColorModeChanged ──► on_color_mode_changed()
-esp32VolumeManager.connectionStatusChanged ──► send initial state
+                   ESP32 LED sync (main.py)
+settingsManager.albumArtColorsChanged ──────► sync_theme_to_esp32()    (theme mode: album accent)
+settingsManager.esp32LedStaticColorChanged ─► on_static_color_changed()
+settingsManager.esp32LedColorModeChanged ───► send_current_led_color()
+esp32VolumeManager.connectionStatusChanged ─► initial volume / mute / colour after 500 ms
+
+                   Phone mirror ↔ settings / media
+settingsManager.scrcpyAudioGainChanged ─────► phoneMirrorManager.setAudioGain()
+settingsManager.scrcpyAudioDuck*Changed ────► phoneMirrorManager.setAudioDuck*()
+settingsManager.scrcpyPhoneScreenOffChanged ► phoneMirrorManager.setPhoneScreenOff()
+phoneMirrorManager.duckingChanged ──────────► mediaManager.setDucking()
 
                    Download → Library
-                       │
-downloadManager.downloadComplete ──► mediaManager.scan_library()</div>
+downloadManager.downloadComplete ───────────► mediaManager.scan_library(reset_display_names=False)</div>
 
         <!-- Cleanup -->
-        <h2 id="cleanup">Shutdown & Cleanup</h2>
+        <h2 id="cleanup">Shutdown &amp; Cleanup</h2>
         <p>
-          When the application exits, <code>cleanup_on_quit()</code> is connected to
-          <code>app.aboutToQuit</code>. It saves state and stops all background operations:
+          Both mains connect a cleanup handler to <code>aboutToQuit</code>. The watchdog stops first (its worker
+          posts to a QObject that Qt is about to destroy), child processes and hardware go next, and the two
+          coalesced stores are flushed last:
         </p>
 
-        <pre><code><span class="kw">def</span> <span class="fn">cleanup_on_quit</span>():
-    media_manager._save_playback_state_now()  <span class="cmt"># Save current position</span>
-    media_manager._clear_temp_files()          <span class="cmt"># Remove temp audio files</span>
-    spotify_manager.cleanup()                  <span class="cmt"># Stop Spotify polling</span>
-    android_auto_manager.cleanup()             <span class="cmt"># Stop DHU, ADB, head unit</span>
-    phone_mirror_manager.cleanup()             <span class="cmt"># Stop scrcpy process</span>
-    esp32_volume_manager.cleanup()             <span class="cmt"># Disconnect ESP32</span>
-    berryimu_manager.cleanup()                 <span class="cmt"># Stop sensor reading</span>
-    gesture_manager.cleanup()                  <span class="cmt"># Stop gesture polling</span>
-    network_manager.cleanup()                  <span class="cmt"># Stop network polling</span>
-    download_manager.cleanup()                 <span class="cmt"># Clean up download engine</span></code></pre>
+        <pre><code><span class="cmt"># main.py</span>
+<span class="kw">def</span> <span class="fn">cleanup_on_quit</span>():
+    ui_watchdog.stop()
+    media_manager._save_playback_state_now()
+    media_manager.flush_metadata_store()      <span class="cmt"># persistent tag/cover store</span>
+    spotify_manager.cleanup()
+    android_auto_manager.cleanup()            <span class="cmt"># DHU, adb, head unit server</span>
+    phone_mirror_manager.cleanup()
+    settings_manager.flush_pending_save()     <span class="cmt"># coalesced settings write</span>
+    esp32_volume_manager.cleanup()
+    berryimu_manager.cleanup()
+    gesture_manager.cleanup()
+    network_manager.cleanup()
+    download_manager.cleanup()</code></pre>
+
+        <pre><code><span class="cmt">// src/main.cpp</span>
+QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
+    uiWatchdog.stop();
+    androidAutoManager.cleanup();  phoneMirrorManager.cleanup();
+    esp32VolumeManager.cleanup();  berryIMU.cleanup();  gestureSensor.cleanup();
+    spotifyManager.cleanup();      obdManager.close();
+    downloadManager.cleanup();     networkManager.cleanup();
+    mediaManager._save_playback_state();   <span class="cmt">// before the settings flush</span>
+    mediaManager.flush_metadata_store();
+    settingsManager.flushPendingSave();
+});</code></pre>
 
         <p>
-          If profiling is enabled, the <code>PerfMonitor</code> and <code>CommandServer</code> are
-          also stopped, and the performance report is printed to console.
+          <code>SIGTERM</code>/<code>SIGINT</code> reach this handler too (self-pipe in C++, a periodic timer in Python),
+          otherwise <code>adb</code> forwards, the DHU and the phone server would be orphaned when a launcher script or
+          systemd stops the app. With <code>--profile</code> the Python side also stops the command server and the
+          perf monitor and prints the report.
+        </p>
+
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Design Decisions &mdash; Why It Is Built This Way</h2>
+        <p>Each rationale below is taken from a code comment, <code>CLAUDE.md</code>, <code>BUILD.md</code> or a design doc in the repository, not inferred.</p>
+
+        <h3>Two backends, one frontend</h3>
+        <p>
+          C++ is the sole distribution path because every shipped artefact &mdash; including the Android APK, where
+          Python cannot go &mdash; is built from one CMake tree by one CI matrix. Python stays alive on desktop
+          because on a Pi with a new sensor on the I²C bus "a Python REPL beats a compile cycle" (README), and
+          because most managers are a few hundred lines a newcomer can read in one sitting. The cost is the parity
+          rule: a change in one backend is ported to the other in the same change set, matching class names,
+          context-property names, method and signal names, property types and JSON formats, so the QML never
+          learns which backend is running. The historical Python&rarr;C++ rewrite plan is superseded by this policy;
+          Python is not slated for deletion. Python-on-Android (buildozer / p4a) was removed and must not return.
+        </p>
+
+        <h3>A manager per feature, registered as a context property</h3>
+        <p>
+          One <code>QObject</code> per feature keeps ownership obvious: each manager owns its state, timers and
+          threads and cleans them up in <code>cleanup()</code>. Context properties (rather than QML singletons or
+          <code>qmlRegisterSingletonInstance</code>) were chosen so the objects are constructed in a controlled order
+          in one place, can be handed to each other before the QML exists (<code>Clock(settingsManager)</code>,
+          <code>connect_settings_manager()</code>), can be swapped by the dev runtime
+          (<code>install_obd_manager()</code>), and are reachable in every QML file with no import. Custom QML
+          <em>types</em> are reserved for things that must be items in the scene graph (the DHU frame item).
+        </p>
+
+        <h3>Mobile stubs in the headers instead of <code>typeof</code> checks everywhere</h3>
+        <p>
+          On Android the desktop-only managers (Spotify, ESP32, IMU I²C, gesture, phone mirror, Android Auto) are
+          replaced by <code>#else // Q_OS_MOBILE</code> stub classes with the same properties and slots. The stubs
+          never emit, so the wiring in <code>main.cpp</code> is unconditional and QML bindings stay valid without a
+          platform check at every use site. <code>Q_OS_MOBILE</code> is defined by CMake for Android (and later iOS).
+        </p>
+
+        <h3>Threading rule: I/O off the main thread, results only by queued signal</h3>
+        <p>
+          The OBD connect, the sensor read loops, decoding and HTTP all run elsewhere because a 30&nbsp;ms stall is
+          visible on a dashboard gauge. Managers never call into QML from a worker; they emit signals, and Qt
+          delivers them queued on the GUI thread. Python additionally uses timer-polled futures where a callback
+          would otherwise run on the pool thread. The UI watchdog exists because a frozen head unit in a car has
+          nobody watching a terminal.
+        </p>
+
+        <h3>Settings in memory, one coalesced atomic write</h3>
+        <p>
+          Re-reading the JSON per key "cost a parse + validate on every slider release and every track change, and
+          always returned what we had just written" (<code>settingsmanager.cpp</code>). The in-memory copy is now
+          authoritative and disk writes are debounced 500&nbsp;ms and written temp-file-then-rename, which also
+          "spares the SD card on the Pi". The one shared file format is why both backends can be pointed at the same
+          config directory.
+        </p>
+
+        <h3>Volume curve in one place</h3>
+        <p>
+          A quadratic curve gives a more natural perceptual response than linear at low volume, but every output
+          must apply the <em>same</em> curve or they drift apart as the slider moves. Centralising both the math and
+          the dispatch in <code>VolumeController</code> means a curve change is a one-line edit and a new output is
+          one more connection, and the smoke test pins the numbers. C++ chose a signal fan-out
+          (<code>volumeApplied</code>) rather than holding pointers so the controller could be constructed in
+          Phase&nbsp;1 before the outputs existed.
+        </p>
+
+        <h3>Lazy imports in the Python backend</h3>
+        <p>
+          <code>obd</code> pulls in pint, <code>spotipy</code> pulls in redis, <code>numpy</code>/<code>av</code> load
+          large native extensions, and none are needed until the user connects an adapter, logs in or plays a track.
+          Importing them eagerly "cost about a second before the first frame on the Orange Pi", so
+          <code>backend/lazy_import.py</code> returns a proxy that imports on first attribute access
+          (<code>obd = lazy_module("obd")</code>) and <code>available(name)</code> answers "is it installed" without
+          importing. Used by <code>obd_manager</code>, <code>spotify_manager</code>, <code>audio_analyzer</code> and the
+          phone-mirror client.
+        </p>
+
+        <h3>Image provider for the DHU, <code>QVideoSink</code> for the phone</h3>
+        <p>
+          The DHU is a foreign window that can only be <em>captured</em>, producing <code>QImage</code>s at a timer
+          rate; an image provider is the natural fit. The phone mirror is a stream OCTAVE decodes itself, so it hands
+          YUV frames straight to the video sink and skips both the RGB conversion and the disk. Qt's own FFmpeg
+          backend was rejected for the mirror because it refuses a raw Annex-B H.264 <code>QIODevice</code>
+          (<code>docs/PHONE_MIRROR_NATIVE_PLAN.md</code>, Phase&nbsp;0); libavcodec / PyAV decode at 12&ndash;15&nbsp;%
+          of one RK3588 core and paint the first frame in about a second.
+        </p>
+
+        <h3>Fork the phone server, bundle adb</h3>
+        <p>
+          The goal of the native mirror was "no user-installed dependencies": no scrcpy binary, no v4l2loopback, no
+          ffmpeg on PATH, no <code>adb shell input</code> for touch. Forking the server (package renamed, version
+          <code>3.3.4-octave</code>) lets OCTAVE change the phone side (the keeper that survives locks and cable
+          blips, the screen-off policy) while CI guarantees the committed jar matches the source, and bundling
+          platform-tools means a fresh install mirrors a phone with nothing else installed.
+        </p>
+
+        <h3>Dashboards as JSON, primitives as QML</h3>
+        <p>
+          Hand-written dashboard QML files could not be created by the user in the car. Moving the layout into a
+          JSON spec rendered by <code>DashboardRenderer</code> made the in-app editor possible (pure QML on top of
+          <code>saveDashboard</code>/<code>duplicateDashboard</code>/<code>deleteDashboard</code>), keeps built-ins and
+          user files in the same format, and lets a file dropped into the user directory appear without a restart.
+          The gauge primitives stay as QML because that is where the drawing belongs; the spec only names them.
+        </p>
+
+        <h3>QML loaded from disk, not compiled in</h3>
+        <p>
+          <code>frontend/</code> is added to the import path and <code>Main.qml</code> is loaded from the file system
+          (from <code>assets:/frontend</code> on Android) so the same directory serves both backends and a QML edit
+          does not require a rebuild. The one exception is the <code>.qsb</code> shader, which must be a Qt resource
+          because RHI's <code>ShaderEffect</code> rejects <code>assets:/</code> URIs on Android.
+        </p>
+
+        <h3>Observability first</h3>
+        <p>
+          Logging is installed before the application object, crash handlers use raw descriptors so they work when
+          Qt cannot, the watchdog records stalls, and <code>DiagnosticsManager</code> exists so the driver can export
+          the logs from the screen. All of that follows from OCTAVE being daily-driven in a vehicle: in-car
+          reliability and after-the-fact debuggability are first-order requirements, not polish. Errors are still
+          logged rather than shown in the UI by design; an in-app notification layer is parked in
+          <code>TODO/error-notification-ui.md</code>.
         </p>
 
         <!-- Related Pages -->
@@ -675,8 +980,12 @@ downloadManager.downloadComplete ──► mediaManager.scan_library()</div>
             <a href="media-manager.html" class="related-link">Media Manager</a>
             <a href="obd-manager.html" class="related-link">OBD Manager</a>
             <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
+            <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
+            <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
             <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
-            <a href="signals-slots-reference.html" class="related-link">Signals & Slots API</a>
+            <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
+            <a href="building.html" class="related-link">Building &amp; CI/CD</a>
+            <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
           </div>
         </div>
 

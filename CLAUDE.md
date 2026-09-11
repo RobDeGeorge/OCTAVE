@@ -69,7 +69,7 @@ ruff check .
 QT_QPA_PLATFORM=offscreen pytest tests/
 ```
 
-A minimal smoke test suite lives in `tests/` and runs in CI on every push and PR to `main`. Ruff runs in warn-only mode during Phase 1 cleanup — see the TODO in `.github/workflows/build.yml` for when to flip critical rules (E722, F821) to blocking.
+A minimal smoke test suite lives in `tests/` and runs in CI on every push and PR to `main`. Ruff runs in warn-only mode (`continue-on-error` on the `lint` job in `.github/workflows/build.yml`); flipping critical rules (E722, F821) to blocking is deferred until the Phase 1 cleanup lands.
 
 ## Architecture
 
@@ -169,7 +169,7 @@ Volume uses a **quadratic curve** (`(volume/100)^2.0`) for the UI percent → li
 Heavy I/O runs on worker threads to avoid blocking the UI:
 - OBD connection uses a dedicated `QThread` worker with progress signals
 - Spotify API calls use a thread pool (`ThreadPoolExecutor` in Python, `QThreadPool` + `QtConcurrent` in C++)
-- Sensor polling (BerryIMU, gesture, ESP32) uses `QTimer`-based intervals
+- I²C sensors (BerryIMU, gesture) are read in a loop on their own thread (`QThread` worker in C++, daemon thread in Python; the IMU loop is paced at 200 Hz) and deliver values to the GUI thread by signal; `QTimer`s only drive lifecycle (delayed start, retry back-off). The ESP32 knob uses `QSerialPort::readyRead` in C++ and a blocking-read thread in Python
 
 ### Image Providers
 
@@ -185,9 +185,8 @@ User settings stored in `settingsConfigure.json` at OS-specific paths:
 ### Logging
 
 Rotating log files in `logs/` subdirectory of the config path:
-- `octave.log` — General (5 MB, 3 backups)
-- `octave-error.log` — Errors only (2 MB, 5 backups)
-- `octave-debug.log` — Debug mode only via `--debug` flag
+- Python: `octave.log` — General (5 MB, 3 backups); `octave-error.log` — ERROR+ (2 MB, 5 backups); `octave-debug.log` — Debug mode only via `--debug` flag (10 MB, 2 backups)
+- C++: `octave-cpp.log`, `octave-cpp-error.log` (WARNING+ plus crash backtraces), `octave-cpp-debug.log` — same sizes and backup counts (`src/util/logger.cpp`)
 
 ### Build & CI
 
@@ -223,15 +222,15 @@ If you are unsure which page to update, `wiki/index.html` lists all pages. Rebui
 
 ## Phone server (`phone_server/`)
 
-The Java program that runs on the phone during mirroring is OCTAVE's fork of the scrcpy server (Apache-2.0, forked at v3.3.4, package `org.octave.phoneserver`). Both backends push the prebuilt jar `tools/phone-server/octave-phone-server` over adb and speak the scrcpy 3.x protocol to it (`backend/phone_mirror/scrcpy_client.py`, `src/phone_mirror/scrcpyclient.{h,cpp}`). After editing anything under `phone_server/src`, rebuild the jar with `phone_server/build_without_gradle.sh` (see `BUILD.md`) and commit it together with the source — the `phone-server` CI job fails when they differ. The version string in `build_without_gradle.sh` (`SCRCPY_VERSION_NAME`) must equal `SERVER_VERSION` / `kServerVersion` in both clients; the server refuses a mismatch. Protocol byte layouts live in `docs/PHONE_MIRROR_NATIVE_PLAN.md`; when pulling upstream scrcpy changes, re-verify them against `phone_server/src/main/java/org/octave/phoneserver/` (`DesktopConnection`, `control/ControlMessageReader`, `device/Streamer`).
+The Java program that runs on the phone during mirroring is OCTAVE's fork of the scrcpy server (Apache-2.0, forked at v3.3.4, package `org.octave.phoneserver`). Both backends push the prebuilt jar `tools/phone-server/octave-phone-server` over adb and speak the scrcpy 3.x protocol to it (`backend/phone_mirror/scrcpy_client.py`, `src/phone_mirror/scrcpyclient.{h,cpp}`). After editing anything under `phone_server/src`, rebuild the jar with `phone_server/build_without_gradle.sh` (see `BUILD.md`) and commit it together with the source — the `phone-server` CI job rebuilds the jar, fails if either jar lacks the `org/octave/phoneserver/Server` class or the version string, and warns when the two hashes differ. The version string in `build_without_gradle.sh` (`SCRCPY_VERSION_NAME`) must equal `SERVER_VERSION` / `kServerVersion` in both clients; the server refuses a mismatch. Protocol byte layouts live in `docs/PHONE_MIRROR_NATIVE_PLAN.md`; when pulling upstream scrcpy changes, re-verify them against `phone_server/src/main/java/org/octave/phoneserver/` (`DesktopConnection`, `control/ControlMessageReader`, `device/Streamer`).
 
 ## Gauges & Dashboards
 
-Custom OBD gauges and dashboards live under `frontend/gauges/` (reusable primitives: `CircularGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `ArcGauge`, `SparklineGauge`, `WarningLight`) and `frontend/dashboards/` (full-screen compositions). Entry point: a square "Dashboards" icon button at the top-right of `OBDMenu.qml` opens a modal chooser popup with scaled live miniatures of every registered dashboard. A secondary "Primitives Gallery" button inside the chooser opens a showcase of every widget with hardcoded demo values — temporary dev screen, see `TODO/dashboards-roadmap.md`.
+Custom OBD gauges and dashboards live under `frontend/gauges/` (reusable primitives: `CircularGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `ArcGauge`, `SparklineGauge`, `WarningLight`, plus the self-binding `GForceGauge` and `CompassGauge`; media widgets `NowPlayingWidget` / `MediaControlsWidget` live in `frontend/dashboards/widgets/`) and `frontend/dashboards/` (full-screen compositions). Entry point: a square "Dashboards" icon button at the top-right of `OBDMenu.qml` opens a modal chooser popup with scaled live miniatures of every registered dashboard. A secondary "Primitives Gallery" button inside the chooser opens a showcase of every widget with hardcoded demo values — temporary dev screen, see `TODO/dashboards-roadmap.md`.
 
 The long-term plan is a three-phase path from hand-written dashboard QMLs → JSON-defined dashboards + `DashboardManager` (C++) → in-app drag-drop editor ("Tony Hawk create-a-park for dashboards"). Full plan: `TODO/dashboards-roadmap.md`.
 
-**When the user asks you to build a new gauge or dashboard, read `docs/GAUGE_AUTHORING.md` first.** It is the complete, stand-alone spec: shared binding API, every primitive's props with defaults, theme tokens, angle math for needles, the full list of 93 supported PID IDs, and step-by-step recipes for adding a new dashboard or primitive. Treat that doc as the source of truth and update it in the same commit whenever you change the gauge API or add/remove a primitive.
+**When the user asks you to build a new gauge or dashboard, read `docs/GAUGE_AUTHORING.md` first.** It is the complete, stand-alone spec: shared binding API, every primitive's props with defaults, theme tokens, angle math for needles, the full list of 92 supported parameter IDs, and step-by-step recipes for adding a new dashboard or primitive. Treat that doc as the source of truth and update it in the same commit whenever you change the gauge API or add/remove a primitive.
 
 ## TODO folder
 

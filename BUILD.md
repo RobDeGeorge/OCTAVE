@@ -69,7 +69,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Outputs: `build/octave`. CI packages this into a portable `OCTAVE-<version>-x86_64.AppImage` via `packaging/linux/build-appimage.sh` (see [CI parity](#ci-parity)) — no local installer needed for development.
+Outputs: `build/octave`. CI packages this into a portable `OCTAVE-<version>-linux-x86_64.AppImage` via `packaging/linux/build-appimage.sh` (see [CI parity](#ci-parity)) — no local installer needed for development.
 
 On Rhea's desktop, **Mod+D → OCTAVE** launches the native app from the Dropbox
 checkout through `scripts/octave-desktop.sh`. Each launch incrementally builds
@@ -89,7 +89,7 @@ To produce an AppImage locally (matches CI's layout, but linked against your dis
 sudo apt-get install -y libtag1-dev libavcodec-dev libavutil-dev libfuse2 wget file
 
 bash packaging/linux/build-appimage.sh
-# -> dist/OCTAVE-<version>-x86_64.AppImage
+# -> dist/OCTAVE-<version>-linux-x86_64.AppImage
 ```
 
 On Arch the bundled `linuxdeploy` `strip` rejects modern `.relr.dyn` ELF sections; pass `NO_STRIP=1` and expect a slightly larger artifact. AppImages built on Arch will not run on Ubuntu/Debian (newer glibc) — for distributable builds, let CI on `ubuntu-22.04` produce the AppImage.
@@ -110,7 +110,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Outputs: `build/octave.app`. CI runs `macdeployqt` and `hdiutil` to produce the `.dmg`.
+Outputs: `build/octave.app`. CI runs `macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg` to produce `OCTAVE-<version>-macos.dmg`.
 
 ### Windows
 
@@ -132,7 +132,9 @@ CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7
 > changing the source with
 > `ANDROID_HOME=~/Android/Sdk ANDROID_PLATFORM=36 ANDROID_BUILD_TOOLS=36.0.0 bash phone_server/build_without_gradle.sh`
 > (needs `platforms;android-36`, `build-tools;36.0.0`, a JDK). The `phone-server` CI job rebuilds it
-> on every push and fails if the committed jar differs from the source.
+> on every push; it fails if either jar lacks the `org/octave/phoneserver/Server` class or the
+> `3.3.4-octave` version string, and prints a warning when the two hashes differ (JDK output is
+> not byte-reproducible across versions).
 >
 > **adb is bundled, not required from the user.** `python scripts/fetch_platform_tools.py`
 > downloads Google's pinned platform-tools (SHA-256 verified) into `tools/platform-tools/<os>/`;
@@ -142,7 +144,7 @@ CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7
 >
 > **FFmpeg (libavcodec/libavutil) is optional on every platform.** It provides the H.264
 > decoder for the built-in phone-mirror client (`phoneMirrorManager.nativeAvailable`).
-> Without it OCTAVE still builds; phone mirroring then needs the external scrcpy binary.
+> Without it OCTAVE still builds, but phone mirroring is unavailable (there is no external-scrcpy fallback any more).
 > CMake prints `Built-in phone mirror decoder (libavcodec): ON/OFF` at configure time.
 
 ```powershell
@@ -156,7 +158,7 @@ cmake -S . -B build `
 cmake --build build --config Release -j
 ```
 
-Outputs: `build/Release/octave.exe`. CI runs `windeployqt` then `iscc.exe build_scripts/installer_windows.iss` to produce `OCTAVE_Setup_<version>.exe`.
+Outputs: `build/Release/octave.exe`. CI runs `windeployqt` then `iscc.exe build_scripts/installer_windows.iss` to produce `OCTAVE-<version>-windows-x86_64.exe`.
 
 ---
 
@@ -271,14 +273,14 @@ qt-cmake -S . -B build-android \
     -DCMAKE_BUILD_TYPE=Debug \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM=android-30 \
-    -DOCTAVE_ENABLE_DOWNLOADS=OFF \
     -DQT_ANDROID_SIGN_APK=OFF
+    # add -DOCTAVE_ENABLE_DOWNLOADS=OFF only for a Play Store build; sideload/CI keep downloads ON
 
 cmake --build build-android --target apk -j
 adb install build-android/android-build/build/outputs/apk/debug/android-build-debug.apk
 ```
 
-If `INSTALL_FAILED_UPDATE_INCOMPATIBLE`: a release-signed APK of the same package is already installed. `adb uninstall org.OCTAVE` first.
+If `INSTALL_FAILED_UPDATE_INCOMPATIBLE`: a release-signed APK of the same package is already installed. `adb uninstall org.octave.app` first.
 
 ### Enabling USB debugging on devices
 
@@ -353,10 +355,11 @@ The Python backend is **never** packaged or shipped. There is no PyInstaller pip
 
 | Platform | Runner | Build command | Output |
 |---|---|---|---|
-| Windows | `windows-latest` | `cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=…/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release` then `iscc.exe build_scripts/installer_windows.iss` | `OCTAVE_Setup_<v>.exe` |
-| macOS | `macos-latest` | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` then `macdeployqt` + `hdiutil` | `OCTAVE.dmg` |
-| Linux | `ubuntu-22.04` | `bash packaging/linux/build-appimage.sh` (CMake Release + `linuxdeploy` + `linuxdeploy-plugin-qt`) | `OCTAVE-<v>-x86_64.AppImage` |
-| Android | `ubuntu-22.04` | `qt-cmake -S . -B build-android …` then `cmake --build build-android --target apk` | `OCTAVE.apk` |
+| Windows | `windows-latest` | `cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=…/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_BUILD_TYPE=Release` then `iscc.exe build_scripts/installer_windows.iss` | `OCTAVE-<v>-windows-x86_64.exe` |
+| macOS | `macos-14` | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` then `macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg` | `OCTAVE-<v>-macos.dmg` |
+| Linux x86_64 | `ubuntu-22.04` | `bash packaging/linux/build-appimage.sh` (CMake Release + `linuxdeploy` + `linuxdeploy-plugin-qt`) | `OCTAVE-<v>-linux-x86_64.AppImage` |
+| Linux aarch64 | `ubuntu-22.04-arm` | same script; Qt's GStreamer media plugin is dropped after the build (jammy lacks libgstphotography) | `OCTAVE-<v>-linux-aarch64.AppImage` |
+| Android | `ubuntu-22.04` | `qt-cmake -S . -B build-android …` then `cmake --build build-android --target apk`, signed with a per-run keystore (v1+v2+v3) | `OCTAVE-<v>-android-arm64-v8a.apk` |
 
 **Pinned versions** (matched locally for parity):
 
@@ -365,8 +368,8 @@ The Python backend is **never** packaged or shipped. There is no PyInstaller pip
 | Qt | 6.7.3 |
 | JDK | 17 |
 | Android NDK | 26.1.10909125 |
-| Android SDK platform | 34 |
-| Android Build-Tools | 35.0.0 |
+| Android SDK platform | 33 (`platforms;android-33`; the phone-server job uses 36) |
+| Android Build-Tools | 33.0.2 (phone-server job: 36.0.0, JDK 21) |
 | CMake | 3.21+ (latest stable in CI) |
 
-If a local build matches the pinned versions above, the same commands will produce the same artifacts as CI. Releases are cut on `v*` tag push and attach all 4 installers to a single GitHub Release.
+If a local build matches the pinned versions above, the same commands will produce the same artifacts as CI. Releases are cut on `v*` tag push and attach all five artifacts (`.exe`, `.dmg`, two AppImages, `.apk`) to a single GitHub Release.

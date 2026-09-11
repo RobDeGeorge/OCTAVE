@@ -8,7 +8,7 @@
 
 ## Current state (baseline)
 
-The smoke test suite at `tests/test_smoke.py` runs 19 tests in CI on every push / PR:
+The smoke test suite at `tests/test_smoke.py` runs 21 tests in CI on every push / PR:
 
 - **16 import tests** (one per backend module) — catches syntax errors, missing dependencies, top-level crashes
 - **QApplication init test** — proves headless Qt startup works

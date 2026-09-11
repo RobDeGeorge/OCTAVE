@@ -13,259 +13,395 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Hardware Setup</div>
           <h1 class="page-title">Hardware Setup</h1>
-          <p class="page-subtitle">Wiring, firmware, mounting, and configuration for all OCTAVE hardware peripherals.</p>
+          <p class="page-subtitle">Wiring, serial protocol, I2C bus, permissions, mounts and first-run verification for the ESP32 volume knob, BerryIMU v3 and PAJ7620U2 gesture sensor.</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
+            <li><a href="#platforms">What Works Where</a></li>
             <li><a href="#esp32-volume">ESP32 Wireless Volume Knob</a></li>
+            <li><a href="#i2c-bus">I2C Bus 2 &amp; Permissions</a></li>
             <li><a href="#berryimu">BerryIMU v3 IMU Sensor</a></li>
             <li><a href="#gesture-sensor">PAJ7620U2 Gesture Sensor</a></li>
+            <li><a href="#verify">Verifying the Install (Log Lines)</a></li>
             <li><a href="#3d-mounts">3D Printed Mounts</a></li>
-            <li><a href="#power">Power Supply Considerations</a></li>
-            <li><a href="#installation-tips">Vehicle Installation Tips</a></li>
+            <li><a href="#power">Power &amp; Vehicle Installation</a></li>
+            <li><a href="#why">Why It Is Set Up This Way</a></li>
           </ul>
         </nav>
 
+        <!-- Platforms -->
+        <h2 id="platforms">What Works Where</h2>
+        <p>
+          This page is the physical-side companion to <a href="hardware-managers.html">Hardware Managers</a>, which
+          documents the driver code. Both backends (C++ in <span class="file-path">src/managers/</span>, Python in
+          <span class="file-path">backend/</span>) implement the same protocols, so the wiring below applies to either.
+        </p>
+        <table>
+          <thead><tr><th>Peripheral</th><th>Linux / Raspberry Pi / Orange Pi</th><th>Windows / macOS</th><th>Android</th></tr></thead>
+          <tbody>
+            <tr><td>ESP32 volume knob (USB serial)</td><td>Yes</td><td>Yes</td><td>No (stub)</td></tr>
+            <tr><td>BerryIMU v3 (I2C)</td><td>Yes</td><td>No &mdash; reports "Disconnected" and never retries</td><td>Replaced by the phone's own sensors (QtSensors)</td></tr>
+            <tr><td>PAJ7620U2 gesture sensor (I2C)</td><td>Yes</td><td>No &mdash; reports "Disconnected" and never retries</td><td>No (stub, "Disabled on mobile")</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The I2C drivers use Linux <code>/dev/i2c-*</code> devices (Python through <code>smbus2</code>, which
+          <span class="file-path">requirements.txt</span> installs only on Linux; C++ through <code>ioctl(I2C_SLAVE)</code>
+          inside <code>#ifdef Q_OS_LINUX</code>). The reference installation that the timing numbers in the code were
+          measured on is an <strong>Orange Pi 5 Plus</strong>.
+        </p>
+
         <!-- ESP32 Volume Knob -->
         <h2 id="esp32-volume">ESP32 Wireless Volume Knob</h2>
-        <span class="platform-badge all">All Platforms</span>
-        <p>The volume knob uses a two-ESP32 architecture with ESP-NOW for wireless communication. A remote encoder unit sends commands to a USB receiver dongle plugged into the computer running OCTAVE.</p>
+        <span class="platform-badge linux">Linux</span>
+        <span class="platform-badge desktop">Windows</span>
+        <span class="platform-badge desktop">macOS</span>
+        <p>
+          Two ESP32 boards: a remote <em>encoder unit</em> (rotary encoder + push button) and an <em>ESP32-S3 receiver
+          dongle</em> plugged into the computer over USB. The encoder talks to the dongle over ESP-NOW; the dongle
+          re-emits the commands as text lines on its USB serial port and drives an LED ring from the replies. OCTAVE only
+          sees the dongle's serial port.
+        </p>
 
         <h3>Architecture</h3>
-        <div class="diagram">
-<pre>
-  [Rotary Encoder]          ESP-NOW (2.4GHz)         [USB Serial]
-  [  + Button    ] ----> [ESP32 Dev Board] ~~~~> [ESP32-S3 Dongle] ----> Computer
-  [  + LED Ring  ]         "Encoder Unit"            "Receiver"          (OCTAVE)
-                          Sends: +, -, M           Forwards to USB
-                                                    at 115200 baud
-</pre>
+        <pre class="diagram">
+  [Rotary Encoder]          ESP-NOW (2.4 GHz)        [USB Serial]
+  [  + Button    ] ----&gt; [ESP32 Dev Board] ~~~~&gt; [ESP32-S3 Dongle] ----&gt; Computer
+                          "Encoder Unit"           "Receiver"           (OCTAVE)
+                          Sends: +, -, M           + LED ring          115200 8N1
+                                                   Forwards to USB
+        </pre>
+        <div class="info-box warning">
+          <div class="info-box-title">Firmware is not in this repository</div>
+          There are no ESP32 sketches under the OCTAVE tree. The table below is the protocol the two OCTAVE backends
+          implement (<span class="file-path">backend/esp32_volume_manager.py</span>,
+          <span class="file-path">src/managers/esp32volumemanager.cpp</span>); any firmware that speaks it will work.
         </div>
 
         <h3>Serial Protocol</h3>
-        <p>The ESP32-S3 receiver forwards simple text commands over USB serial at <strong>115200 baud</strong>:</p>
+        <p>
+          <strong>115200 baud, 8 data bits, no parity, 1 stop bit, no flow control</strong>. Every command is one ASCII line
+          terminated by <code>\n</code>; OCTAVE trims and upper-cases incoming lines before parsing.
+        </p>
         <table>
-          <thead><tr><th>Command</th><th>Direction</th><th>Description</th></tr></thead>
+          <thead><tr><th>Line</th><th>Direction</th><th>Meaning</th></tr></thead>
           <tbody>
-            <tr><td><code>+</code> or <code>+N</code></td><td>ESP32 -> OCTAVE</td><td>Volume up (N ticks clockwise)</td></tr>
-            <tr><td><code>-</code> or <code>-N</code></td><td>ESP32 -> OCTAVE</td><td>Volume down (N ticks counter-clockwise)</td></tr>
-            <tr><td><code>M</code></td><td>ESP32 -> OCTAVE</td><td>Mute toggle (encoder button press)</td></tr>
-            <tr><td><code>P</code></td><td>ESP32 -> OCTAVE</td><td>Play/pause (double-click, not yet implemented)</td></tr>
-            <tr><td><code>V##</code></td><td>OCTAVE -> ESP32</td><td>Current volume level (0-100) for LED display</td></tr>
-            <tr><td><code>M0</code> / <code>M1</code></td><td>OCTAVE -> ESP32</td><td>Mute state (0=unmuted, 1=muted)</td></tr>
-            <tr><td><code>C###,###,###</code></td><td>OCTAVE -> ESP32</td><td>Theme RGB color for LED ring (e.g., C255,128,0)</td></tr>
+            <tr><td><code>+</code> or <code>+N</code></td><td>Dongle &rarr; OCTAVE</td><td>Volume up by 1 or N encoder ticks</td></tr>
+            <tr><td><code>-</code> or <code>-N</code></td><td>Dongle &rarr; OCTAVE</td><td>Volume down by 1 or N ticks</td></tr>
+            <tr><td><code>M</code></td><td>Dongle &rarr; OCTAVE</td><td>Mute toggle (button press)</td></tr>
+            <tr><td><code>P</code></td><td>Dongle &rarr; OCTAVE</td><td>Reserved for play/pause (double-click); accepted and logged, no action</td></tr>
+            <tr><td><code>V&lt;0-100&gt;</code></td><td>OCTAVE &rarr; Dongle</td><td>Current volume percent for the LED ring (debounced to at most 20/s; also used as the 2 s keepalive)</td></tr>
+            <tr><td><code>M0</code> / <code>M1</code></td><td>OCTAVE &rarr; Dongle</td><td>Mute indicator off / on</td></tr>
+            <tr><td><code>C&lt;r&gt;,&lt;g&gt;,&lt;b&gt;</code></td><td>OCTAVE &rarr; Dongle</td><td>LED colour, e.g. <code>C255,128,0</code></td></tr>
           </tbody>
         </table>
+        <p>
+          Each tick is multiplied by the <code>esp32VolumeStepSize</code> setting (default 1 %, adjustable 0.25&ndash;10 %
+          in the Volume Knob settings); fractional results accumulate until a whole percent is available, then
+          <code>volumeController.applyVolume()</code> moves every audio output together.
+        </p>
 
-        <h3>ESP32-S3 Auto-Detection</h3>
-        <p>OCTAVE automatically detects ESP32-S3 USB devices by checking for the Espressif VID <code>303A</code> in USB hardware IDs. Platform-specific port scanning:</p>
+        <h3>Detection and port selection</h3>
+        <p>
+          The dongle is recognised by Espressif's USB vendor ID <code>0x303A</code> (or "JTAG" / "ESP32-S3" in the port
+          description) and listed first, labelled "<code>&lt;port&gt; - ESP32-S3 (Recommended)</code>", in
+          <strong>Settings &rarr; Accessories &rarr; Volume Knob</strong>. The OBD serial port is never offered.
+        </p>
         <ul>
-          <li><strong>Windows:</strong> Scans COM ports, looks for VID 303A or "USB JTAG/serial debug unit" in description</li>
-          <li><strong>macOS:</strong> Checks <code>/dev/tty.usbserial*</code>, <code>/dev/cu.usbmodem*</code>, etc.</li>
-          <li><strong>Linux:</strong> Checks <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code></li>
+          <li><strong>Linux:</strong> Python matches the VID via pyserial and adds every <code>/dev/ttyUSB*</code> and <code>/dev/ttyACM*</code> device.</li>
+          <li><strong>macOS:</strong> VID match plus <code>/dev/tty.usbserial*</code>, <code>/dev/cu.usbserial*</code>, <code>/dev/tty.usbmodem*</code>, <code>/dev/cu.usbmodem*</code>, <code>/dev/tty.SLAB*</code>, <code>/dev/cu.SLAB*</code>, <code>/dev/tty.wchusbserial*</code>, <code>/dev/cu.wchusbserial*</code>.</li>
+          <li><strong>Windows:</strong> all COM ports; the ESP32-S3 by VID or "USB JTAG/serial debug unit" in the description.</li>
+          <li><strong>C++ on every platform:</strong> <code>QSerialPortInfo::availablePorts()</code> with the same VID / keyword test; every enumerated port is listed.</li>
         </ul>
-
-        <div class="info-box info">
-          <strong>Auto-Connect:</strong> On startup, OCTAVE waits 3 seconds, scans for devices, and auto-selects the ESP32-S3 port if no port is configured. The OBD port is filtered out to avoid conflicts.
+        <div class="info-box warning">
+          <div class="info-box-title">First run: pick the port once</div>
+          The <code>esp32VolumePort</code> setting defaults to <code>"COM7"</code> in both backends, and the automatic
+          ESP32-S3 selection only runs when that setting is <em>empty</em>. On Linux and macOS a fresh install will
+          therefore try to open <code>COM7</code>, fail, exhaust its five reconnect attempts and then just keep scanning.
+          Select the recommended port in the Volume Knob settings; OCTAVE saves it and reconnects 500 ms later. From then on
+          it connects 3 s after every launch.
         </div>
 
-        <h3>Reconnection Behavior</h3>
+        <h3>Connection behaviour</h3>
         <ul>
-          <li>Max 5 reconnect attempts with exponential backoff (3s, 6s, 9s... max 10s)</li>
-          <li>Background port scanning every 10 seconds when disconnected</li>
-          <li>Keepalive timer sends volume updates every 2 seconds to prevent ESP32 LED timeout (5s)</li>
-          <li>Volume updates rate-limited to 20/sec (50ms debounce) to prevent LED flickering</li>
+          <li>Startup: a 3 s delay, a port scan, then <code>connect_device()</code> if <code>esp32VolumeEnabled</code> is true.</li>
+          <li>Unplug: detected on read error (Python: any <code>SerialException</code>; C++: <code>QSerialPort::ResourceError</code>). With <code>esp32AutoReconnect</code> on, up to 5 attempts at 3, 6, 9, 10, 10 s (<code>min(10 s, 3 s &times; n)</code>); the Accessories page shows "Reconnecting in Ns... (n/5)" and finally "Max retries reached. Check connection." Pressing Connect there resets the counter.</li>
+          <li>While disconnected, a background scan every 10 s keeps the port list fresh.</li>
+          <li>Changing the port or toggling the feature in settings disconnects / reconnects immediately.</li>
         </ul>
 
-        <h3>LED Modes</h3>
+        <h3>LED ring modes</h3>
         <ul>
-          <li><strong>Theme mode:</strong> LED color follows album art extracted theme colors</li>
-          <li><strong>Static mode:</strong> LED uses a fixed user-chosen color</li>
-          <li><strong>Sleep mode:</strong> LEDs turn off after ESP32 timeout when OCTAVE stops sending keepalives</li>
+          <li><strong>Theme</strong> (<code>esp32LedColorMode = "theme"</code>, default): the accent colour extracted from the current album art is sent as <code>C</code> whenever the theme changes.</li>
+          <li><strong>Static</strong> (<code>"static"</code>): a fixed colour from the picker (<code>esp32LedStaticColor</code>, default <code>#00FFFF</code>).</li>
+          <li><strong>LED sleep</strong> (<code>esp32LedSleepEnabled</code>, default on): the dongle turns its LEDs off after 5 s without traffic. OCTAVE implements "keep LEDs on" by sending a <code>V</code> keepalive every 2 s only when sleep is <em>off</em>; leaving sleep on means the ring also goes dark when OCTAVE exits.</li>
         </ul>
+        <div class="info-box info">
+          <div class="info-box-title">C++ build: LED colour and volume-to-LED are not wired yet</div>
+          The Python launcher (<span class="file-path">main.py</span>) sends the colour, the volume on every change, and an
+          initial volume / mute / colour sync 500 ms after connecting. <span class="file-path">src/main.cpp</span> only wires
+          the knob's input signals, so on the C++ build the ring receives <code>V</code> from keepalives (LED sleep off) and
+          <code>M</code> after a button press only. See the parity table on <a href="hardware-managers.html#parity">Hardware
+          Managers</a>.
+        </div>
+
+        <h3>Serial permissions (Linux)</h3>
+        <pre><code>sudo usermod -aG dialout $USER   <span class="cmt"># then log out and back in</span></code></pre>
+
+        <!-- I2C bus -->
+        <h2 id="i2c-bus">I2C Bus 2 &amp; Permissions</h2>
+        <span class="platform-badge linux">Linux only</span>
+        <p>
+          Both I2C drivers hard-code <strong>bus 2</strong> (<code>I2C_BUS = 2</code> in
+          <span class="file-path">backend/berryimu_manager.py</span>, <span class="file-path">backend/gesture_manager.py</span>,
+          <span class="file-path">src/managers/berryimumanager.cpp</span>, <span class="file-path">src/managers/gesturemanager.cpp</span>).
+          There is no setting or command-line flag to change it: the sensors must be reachable as <code>/dev/i2c-2</code>.
+        </p>
+        <div class="info-box warning">
+          <div class="info-box-title">Make sure <code>/dev/i2c-2</code> exists before launching</div>
+          Which header pins carry <code>i2c-2</code> is a property of the board and its device-tree configuration, not of
+          OCTAVE. On boards where the default header bus is a different number, enable a second bus (or remap one) with a
+          device-tree overlay in your boot configuration, reboot, and confirm with <code>ls /dev/i2c-2</code>. Without it
+          Python logs "<code>/dev/i2c-2 not found</code>" and C++ "<code>failed to open /dev/i2c-2</code>"; both then retry
+          five times (5, 10, 15, 20, 25 s) and give up.
+        </div>
+        <p>Both sensors share the bus. With everything wired and powered, the scan should show all four addresses:</p>
+        <pre><code>sudo apt install i2c-tools        <span class="cmt"># if needed</span>
+i2cdetect -y 2
+<span class="cmt">#  0x1c  LIS3MDL  (BerryIMU magnetometer)</span>
+<span class="cmt">#  0x6a  LSM6DSL  (BerryIMU accelerometer + gyroscope)</span>
+<span class="cmt">#  0x73  PAJ7620U2 (gesture sensor)</span>
+<span class="cmt">#  0x77  BMP388   (BerryIMU barometer)</span></code></pre>
+        <h3>I2C permissions</h3>
+        <pre><code>sudo usermod -aG i2c $USER       <span class="cmt"># then log out and back in</span></code></pre>
+        <p>
+          On a permission error the Python backend logs "<code>permission denied on /dev/i2c-2</code>", emits "Disconnected"
+          and deliberately does <strong>not</strong> retry (the fix needs a re-login). The C++ backend cannot tell a permission
+          failure from a missing device and retries it like any other open failure.
+        </p>
 
         <!-- BerryIMU -->
         <h2 id="berryimu">BerryIMU v3 IMU Sensor</h2>
-        <span class="platform-badge linux">Linux / Raspberry Pi</span>
-        <p>The BerryIMU v3 provides 10 degrees of freedom (accelerometer, gyroscope, magnetometer, barometer) over I2C. OCTAVE uses Madgwick 9DOF AHRS for sensor fusion, outputting a quaternion directly to the QML 3D model.</p>
+        <span class="platform-badge linux">Linux / Raspberry Pi / Orange Pi</span>
+        <p>
+          The BerryIMU v3 carries an LSM6DSL accelerometer/gyroscope, a LIS3MDL magnetometer and a BMP388 barometer. OCTAVE
+          fuses accelerometer + gyroscope with a Madgwick filter into a quaternion that rotates the Jeep model on
+          <code>CarMenu</code>, and derives pitch, roll, compass heading, G-forces, altitude and cabin temperature for the
+          sensor page, dashboards and home cards.
+        </p>
 
-        <h3>I2C Wiring</h3>
-        <div class="diagram">
-<pre>
-  BerryIMU v3                  Raspberry Pi / SBC
-  +-----------+                +-----------------+
-  |  VCC  (1) |----[ 3.3V ]---|  Pin 1 (3.3V)   |
-  |  GND  (2) |----[ GND  ]---|  Pin 6 (GND)    |
-  |  SDA  (3) |----[ SDA  ]---|  Pin 3 (GPIO2)  |   I2C Bus 2
-  |  SCL  (4) |----[ SCL  ]---|  Pin 5 (GPIO3)  |
-  +-----------+                +-----------------+
-</pre>
-        </div>
+        <h3>Wiring</h3>
+        <pre class="diagram">
+  BerryIMU v3                    Single-board computer
+  +-----------+                  +---------------------------+
+  |  3V3      |------------------|  3.3 V                    |
+  |  GND      |------------------|  GND                      |
+  |  SDA      |------------------|  SDA of the bus that is   |   /dev/i2c-2
+  |  SCL      |------------------|  SCL   exposed as i2c-2   |
+  +-----------+                  +---------------------------+
+        </pre>
+        <p>Four wires. Keep the run short and away from ignition wiring.</p>
 
-        <h3>I2C Chip Addresses</h3>
+        <h3>I2C addresses and initialisation</h3>
         <table>
-          <thead><tr><th>Chip</th><th>Address</th><th>Function</th><th>Init Rate</th></tr></thead>
+          <thead><tr><th>Chip</th><th>Address</th><th>Function</th><th>Configured as (register &larr; value)</th></tr></thead>
           <tbody>
-            <tr><td>LSM6DSL</td><td><code>0x6A</code></td><td>Accelerometer + Gyroscope</td><td>416 Hz, +/-4g, 245 dps</td></tr>
-            <tr><td>LIS3MDL</td><td><code>0x1C</code></td><td>Magnetometer</td><td>155 Hz, +/-8 gauss</td></tr>
-            <tr><td>BMP388</td><td><code>0x77</code></td><td>Barometer + Temperature</td><td>Continuous mode with 21-byte calibration</td></tr>
+            <tr><td>LSM6DSL</td><td><code>0x6A</code></td><td>Accelerometer + gyroscope</td><td><code>0x10 &larr; 0x68</code> (accel 416 Hz, &plusmn;4 g), <code>0x11 &larr; 0x60</code> (gyro 416 Hz, 245 dps), <code>0x12 &larr; 0x44</code> (BDU + auto-increment)</td></tr>
+            <tr><td>LIS3MDL</td><td><code>0x1C</code></td><td>Magnetometer (heading only)</td><td><code>0x20 &larr; 0xFE</code> (ultra-high performance, 155 Hz), <code>0x21 &larr; 0x20</code> (&plusmn;8 gauss), <code>0x22 &larr; 0x00</code> (continuous), <code>0x23 &larr; 0x0C</code> (ultra-high performance Z)</td></tr>
+            <tr><td>BMP388</td><td><code>0x77</code></td><td>Pressure + temperature</td><td>21 calibration bytes read from <code>0x31</code>; <code>0x1C &larr; 0x03</code>, <code>0x1D &larr; 0x02</code>, <code>0x1B &larr; 0x33</code>; 50 ms settle; read every 200 ms</td></tr>
           </tbody>
         </table>
+        <p>Full register map, scale factors and the compensation math: <a href="hardware-managers.html#imu-sensors">Hardware Managers &rarr; I2C Sensor Chips</a>.</p>
 
-        <h3>Madgwick AHRS Filter</h3>
-        <p>The Madgwick filter fuses all 9 axes into a single quaternion, avoiding gimbal lock entirely. Key parameters:</p>
+        <h3>Filter and rates</h3>
         <ul>
-          <li><strong>Beta (gain):</strong> 0.03 (lower = smoother, higher = more responsive)</li>
-          <li><strong>Gyro deadband:</strong> 0.4 deg/s (zeros out noise when stationary)</li>
-          <li><strong>Sample interval:</strong> ~200 Hz (5ms read-loop period; sleeps out the remainder, never spins)</li>
-          <li><strong>Emit interval:</strong> ~60 Hz (16ms between signal emissions)</li>
+          <li><strong>Sample loop:</strong> 5 ms period (200 Hz target); the three I2C reads take ~4.3 ms on the Orange Pi 5 Plus so it settles around 172 Hz. Sleeps out the remainder, never spins.</li>
+          <li><strong>Madgwick beta:</strong> 0.03. <strong>Gyro deadband:</strong> 0.4 dps; the filter is only stepped while some axis is moving, so a parked vehicle's model does not creep.</li>
+          <li><strong>Fusion inputs:</strong> gyroscope + accelerometer (6DOF). The magnetometer is read but used only for the compass heading (<code>atan2(my, mx)</code>); yaw is stripped from the quaternion before it reaches the model.</li>
+          <li><strong>Emission:</strong> ~60 Hz by default (<code>sensorEmitRate</code>, 10&ndash;120 Hz in Settings &rarr; Accessories &rarr; IMU Sensor); automatically 5 Hz while no page shows the values (car view, sensor pages, OBD dashboards, or a home card bound to an IMU parameter).</li>
+          <li><strong>Barometer:</strong> 5 Hz. Altitude is computed against standard sea level (1013.25 hPa), so it is a relative figure, not a surveyed elevation.</li>
         </ul>
 
-        <h3>Mounting Orientation</h3>
-        <div class="info-box tip">
-          <strong>Tare Calibration:</strong> Mount the BerryIMU in any orientation, then use the "Calibrate Tare" button in the sensor page to set the current position as zero reference. The tare offset is stored as a quaternion and applied to all subsequent readings.
-        </div>
-
-        <div class="info-box warning">
-          <div class="info-box-title">Enable I2C bus 2 first</div>
-          OCTAVE opens the BerryIMU and PAJ7620 on <strong>I2C bus 2</strong> (<code>/dev/i2c-2</code>),
-          which is <em>not</em> exposed on the Raspberry Pi's GPIO header by default &mdash; pins 3/5 are
-          <code>i2c-1</code> out of the box. Expose bus 2 with a device-tree overlay in
-          <code>/boot/firmware/config.txt</code> (e.g. an <code>i2c-gpio</code> overlay mapping SDA/SCL to
-          your wired pins), reboot, and confirm <code>ls /dev/i2c-2</code> succeeds before launching &mdash;
-          otherwise the sensors fail with &ldquo;device not found.&rdquo;
-        </div>
-
-        <h3>Startup Sequence</h3>
+        <h3>Startup sequence</h3>
         <ol class="steps">
-          <li>1 second delay after app start (QTimer.singleShot)</li>
-          <li>Open I2C bus 2 via smbus2</li>
-          <li>Initialize LSM6DSL (accel 416Hz +/-4g, gyro 416Hz 245dps, BDU + auto-increment)</li>
-          <li>Initialize LIS3MDL (ultra-high perf 155Hz, +/-8 gauss, continuous)</li>
-          <li>Initialize BMP388 (read 21-byte calibration, enable continuous mode)</li>
-          <li>Calibrate gyro bias (samples at rest)</li>
-          <li>Start background read thread (daemon)</li>
+          <li>1 s after the app starts, the manager checks <code>imuEnabled</code> and opens <code>/dev/i2c-2</code>.</li>
+          <li>Initialises LSM6DSL, LIS3MDL and BMP388 (reading the barometer calibration).</li>
+          <li>Emits <strong>"Connected"</strong> and starts the read thread.</li>
+          <li>The thread first samples the gyroscope 200 times over ~1 s to measure its bias &mdash; <strong>keep the vehicle still for the first second</strong> after the status turns green, or the model will drift until the next restart or re-enable.</li>
+          <li>The paced read loop begins; the first barometer read happens on the first iteration so altitude is available immediately.</li>
         </ol>
 
-        <h3>Reconnection</h3>
-        <p>If initialization fails, OCTAVE retries up to 5 times with linear backoff (5s, 10s, 15s, 20s, 25s). Permission errors do not trigger retries (user must fix I2C permissions).</p>
+        <h3>Mounting orientation, ZERO and RESET</h3>
+        <div class="info-box tip">
+          <div class="info-box-title">Level the vehicle with ZERO</div>
+          Mount the board rigidly in any orientation, park on level ground, then press <strong>ZERO</strong> (on
+          <code>CarMenu</code> next to the LIVE badge, or at the bottom of <code>SensorMenu</code>). The current tilt is
+          captured as a tare quaternion and the current accelerometer reading as the G-force zero, so the model sits flat and
+          lateral / longitudinal G read 0. <strong>RESET</strong> clears it. The tare is held in memory only: it is not saved
+          to settings and starts from identity on every launch, so re-zero after each start.
+        </div>
+        <p>
+          The sensor's Z axis should point up (or down) for the yaw-stripping to behave as intended: OCTAVE removes rotation
+          about the sensor Z axis and treats the remaining tilt as pitch/roll. The on-screen remap to Qt Quick 3D is
+          <code>Qt.quaternion(w, y, z, x)</code> in <span class="file-path">frontend/CarMenu.qml</span>.
+        </p>
+
+        <h3>If it does not connect</h3>
+        <p>
+          Retries: 5 attempts with linear backoff (5, 10, 15, 20, 25 s), then "max retries reached, giving up". Toggle
+          <em>IMU Sensor</em> off and on in Settings &rarr; Accessories to start again. Python does not retry permission
+          errors (see <a href="#i2c-bus">above</a>). The status text on that page mirrors the last emitted state:
+          "Connected", "Disconnected", "Error" or "Disabled".
+        </p>
 
         <!-- Gesture Sensor -->
         <h2 id="gesture-sensor">PAJ7620U2 Gesture Sensor</h2>
-        <span class="platform-badge linux">Linux / Raspberry Pi</span>
-        <p>The PAJ7620U2 is a 9-gesture recognition sensor that detects hand motions for touchless control. It communicates over I2C and is polled at ~50Hz.</p>
+        <span class="platform-badge linux">Linux / Raspberry Pi / Orange Pi</span>
+        <p>
+          The PAJ7620U2 recognises nine hand gestures in front of its IR emitter. OCTAVE polls it at ~50 Hz on a worker
+          thread and turns each gesture into a media / volume action.
+        </p>
 
-        <h3>I2C Wiring</h3>
-        <div class="diagram">
-<pre>
-  PAJ7620U2                    Raspberry Pi / SBC
-  +-----------+                +-----------------+
-  |  VCC  (1) |----[ 3.3V ]---|  Pin 1 (3.3V)   |
-  |  GND  (2) |----[ GND  ]---|  Pin 6 (GND)    |
-  |  SDA  (3) |----[ SDA  ]---|  Pin 3 (GPIO2)  |   I2C Bus 2
-  |  SCL  (4) |----[ SCL  ]---|  Pin 5 (GPIO3)  |
-  +-----------+                +-----------------+
+        <h3>Wiring</h3>
+        <pre class="diagram">
+  PAJ7620U2                      Single-board computer
+  +-----------+                  +---------------------------+
+  |  VCC      |------------------|  3.3 V                    |
+  |  GND      |------------------|  GND                      |
+  |  SDA      |------------------|  SDA of the bus that is   |   /dev/i2c-2
+  |  SCL      |------------------|  SCL   exposed as i2c-2   |   (shared with BerryIMU)
+  +-----------+                  +---------------------------+
 
-  I2C Address: 0x73
-  Chip ID: 0x7620 (verified on init)
-</pre>
-        </div>
+  I2C address: 0x73     Chip ID: 0x7620 (verified at start)
+        </pre>
 
-        <h3>Supported Gestures</h3>
+        <h3>Gestures and default actions</h3>
         <table>
-          <thead><tr><th>Gesture</th><th>Register Flag</th><th>Default Action</th></tr></thead>
+          <thead><tr><th>Gesture</th><th>Flag</th><th>Default action</th></tr></thead>
           <tbody>
-            <tr><td>RIGHT</td><td>0x01 (reg 0x43)</td><td>next_track</td></tr>
-            <tr><td>LEFT</td><td>0x02 (reg 0x43)</td><td>previous_track</td></tr>
-            <tr><td>UP</td><td>0x04 (reg 0x43)</td><td>volume_up</td></tr>
-            <tr><td>DOWN</td><td>0x08 (reg 0x43)</td><td>volume_down</td></tr>
-            <tr><td>FORWARD</td><td>0x10 (reg 0x43)</td><td>play_pause</td></tr>
-            <tr><td>BACKWARD</td><td>0x20 (reg 0x43)</td><td>mute_toggle</td></tr>
-            <tr><td>CLOCKWISE</td><td>0x40 (reg 0x43)</td><td>volume_up</td></tr>
-            <tr><td>COUNTER-CLOCKWISE</td><td>0x80 (reg 0x43)</td><td>volume_down</td></tr>
-            <tr><td>WAVE</td><td>0x01 (reg 0x44)</td><td>play_pause</td></tr>
+            <tr><td>RIGHT</td><td>reg <code>0x43</code> bit <code>0x01</code></td><td><code>next_track</code></td></tr>
+            <tr><td>LEFT</td><td>reg <code>0x43</code> bit <code>0x02</code></td><td><code>previous_track</code></td></tr>
+            <tr><td>UP</td><td>reg <code>0x43</code> bit <code>0x04</code></td><td><code>volume_up</code></td></tr>
+            <tr><td>DOWN</td><td>reg <code>0x43</code> bit <code>0x08</code></td><td><code>volume_down</code></td></tr>
+            <tr><td>FORWARD</td><td>reg <code>0x43</code> bit <code>0x10</code></td><td><code>play_pause</code></td></tr>
+            <tr><td>BACKWARD</td><td>reg <code>0x43</code> bit <code>0x20</code></td><td><code>mute_toggle</code></td></tr>
+            <tr><td>CLOCKWISE</td><td>reg <code>0x43</code> bit <code>0x40</code></td><td><code>volume_up</code></td></tr>
+            <tr><td>COUNTER-CLOCKWISE</td><td>reg <code>0x43</code> bit <code>0x80</code></td><td><code>volume_down</code></td></tr>
+            <tr><td>WAVE</td><td>reg <code>0x44</code> bit <code>0x01</code></td><td><code>play_pause</code></td></tr>
           </tbody>
         </table>
+        <p>
+          Remap any gesture in <strong>Settings &rarr; Accessories &rarr; Gesture Sensor &rarr; Mapping</strong> (actions:
+          Next Track, Previous Track, Volume Up, Volume Down, Play / Pause, Mute Toggle, Disabled). <code>volume_up</code> /
+          <code>volume_down</code> move by <code>gestureVolumeStep</code> (default 5 %, 1&ndash;100).
+        </p>
 
-        <h3>Two-Pass Gesture Disambiguation</h3>
-        <p>Forward and backward gestures are compound motions that the sensor initially reports as directional. The driver uses a two-pass approach:</p>
-        <ol class="steps">
-          <li>Detect initial gesture flag</li>
-          <li>If FORWARD: wait 300ms, re-read. If a directional gesture followed, use that instead.</li>
-          <li>If BACKWARD: wait 400ms, re-read. Same disambiguation logic.</li>
-          <li>For directional/rotation gestures: confirm with a second read after 20ms to reject glitches</li>
-          <li>After confirming, flush sensor for 100ms to prevent echo/ghost detections</li>
-        </ol>
-
-        <h3>Timing Parameters</h3>
+        <h3>Timing</h3>
         <ul>
-          <li><strong>Poll interval:</strong> 20ms (~50Hz)</li>
-          <li><strong>Cooldown between gestures:</strong> 300ms (configurable via settings)</li>
-          <li><strong>Forward wait:</strong> 300ms</li>
-          <li><strong>Backward wait:</strong> 400ms</li>
-          <li><strong>Post-flush duration:</strong> 100ms</li>
+          <li><strong>Poll interval:</strong> 20 ms (~50 Hz).</li>
+          <li><strong>Cooldown:</strong> <code>gestureCooldown</code>, default 300 ms (100&ndash;2000 ms in 50 ms steps) &mdash; gestures inside the window are ignored.</li>
+          <li><strong>Forward / backward settle:</strong> 300 ms / 400 ms. An approach or retreat that turns out to be a swipe is re-read after the wait and reported as the swipe; otherwise as FORWARD / BACKWARD. These two gestures therefore respond a little later than swipes.</li>
+          <li><strong>Post-flush:</strong> 100 ms of read-and-discard after every accepted gesture, so one motion never fires twice.</li>
         </ul>
 
-        <h3>Initialization</h3>
-        <p>The sensor requires writing 220 register pairs from the DFRobot reference initialization table. The driver verifies chip ID <code>0x7620</code> before proceeding. A wakeup sequence is used to bring the sensor out of sleep.</p>
+        <h3>Initialisation</h3>
+        <p>
+          Wake-up write to the bank-select register (<code>0xEF &larr; 0x00</code>, retried once after 50 ms), chip-ID check
+          (<code>0x00</code>/<code>0x01</code> must read <code>0x7620</code>), then the DFRobot reference table of 219
+          register writes across banks 0 and 1, then back to bank 0. A wrong chip ID is logged as
+          "<code>Expected chip ID 0x7620, got 0x&hellip;</code>" &mdash; a reading of <code>0x0000</code> or <code>0xFFFF</code>
+          means the sensor is not answering (wiring, power, or wrong bus).
+        </p>
 
-        <h3>Mounting Position</h3>
+        <h3>Mounting</h3>
         <div class="info-box tip">
-          <strong>Optimal Position:</strong> Mount the gesture sensor facing the driver, approximately 30-50cm away, at chest height. Ensure no obstructions in the sensor's field of view. The sensor works best with open-hand gestures at moderate speed.
+          <div class="info-box-title">Face the user, keep the view clear</div>
+          Mount the sensor pointing at where the hand will be, with nothing between them, out of direct sunlight on the
+          lens (it is an IR sensor). OCTAVE does not tune the sensor's range or sensitivity beyond the reference init table;
+          if swipes register as FORWARD/BACKWARD or vice-versa, adjust the mounting distance rather than the software, and
+          raise <code>gestureCooldown</code> if a single motion triggers twice.
         </div>
+
+        <!-- Verify -->
+        <h2 id="verify">Verifying the Install (Log Lines)</h2>
+        <p>
+          Run with <code>--debug</code> (Python) or watch <code>octave.log</code> (see <a href="troubleshooting.html">Troubleshooting</a>
+          for log locations). C++ logging categories: <code>octave.esp32volume</code>, <code>octave.berryimu</code>,
+          <code>octave.gesture</code>. A healthy start looks like this:
+        </p>
+        <table>
+          <thead><tr><th>Peripheral</th><th>Expect</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="3">ESP32</td><td><code>detected ESP32-S3 on /dev/ttyACM0</code></td><td>VID 0x303A found in the scan</td></tr>
+            <tr><td><code>connected to /dev/ttyACM0</code></td><td>Port open; the read loop / readyRead handler is live</td></tr>
+            <tr><td><code>keepalive timer started (sleep disabled)</code> or <code>&hellip;NOT started (sleep enabled)</code></td><td>Reflects <code>esp32LedSleepEnabled</code></td></tr>
+            <tr><td rowspan="4">BerryIMU</td><td><code>all sensors initialized successfully</code></td><td>All three chips answered their init writes</td></tr>
+            <tr><td><code>gyro calibrated - bias x=&hellip; y=&hellip; z=&hellip; dps</code></td><td>~1 s after connect; large values mean the vehicle moved during calibration</td></tr>
+            <tr><td><code>first emit - pitch=&hellip; roll=&hellip; heading=&hellip; g=&hellip; q=[&hellip;]</code></td><td>First values reached QML; <code>g</code> should be near 1.0 at rest</td></tr>
+            <tr><td><code>baro - alt=&hellip;m temp=&hellip;C</code></td><td>Logged once on the first barometer read</td></tr>
+            <tr><td rowspan="2">Gesture</td><td><code>PAJ7620U2 initialized (chip ID: 0x7620)</code></td><td>Chip present and configured</td></tr>
+            <tr><td><code>RIGHT -&gt; next_track (#1)</code></td><td>A gesture was accepted and its action dispatched</td></tr>
+          </tbody>
+        </table>
+        <p>
+          On shutdown each manager logs "<code>cleaning up...</code>" and the I2C loops "<code>read loop exited after N
+          reads</code>" / "<code>&hellip; after N gestures</code>".
+        </p>
 
         <!-- 3D Printed Mounts -->
         <h2 id="3d-mounts">3D Printed Mounts</h2>
-        <p>The <span class="file-path">hardware/</span> directory contains 3D model files for vehicle-specific mounting brackets.</p>
+        <p>The <span class="file-path">hardware/</span> directory holds vehicle-specific mounting parts.</p>
 
-        <h3>2003 Jeep TJ Media Console</h3>
-        <p>Located in <span class="file-path">hardware/2003-jeep-tj/media-console/</span>:</p>
+        <h3>2003 Jeep TJ media console</h3>
+        <p><span class="file-path">hardware/2003-jeep-tj/media-console/</span>:</p>
         <table>
           <thead><tr><th>File</th><th>Format</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>bracket-for-screen.STL</code></td><td>STL (3D print)</td><td>Screen mounting bracket for the dash</td></tr>
-            <tr><td><code>bracket-for-screen.SLDPRT</code></td><td>SolidWorks</td><td>Source CAD file for the screen bracket</td></tr>
-            <tr><td><code>media-console-bracket-mk2.STL</code></td><td>STL (3D print)</td><td>Mk2 revision of the full media console bracket</td></tr>
-            <tr><td><code>media-console-bracket-mk2.SLDPRT</code></td><td>SolidWorks</td><td>Source CAD file for the Mk2 bracket</td></tr>
+            <tr><td><code>bracket-for-screen.STL</code></td><td>STL (print-ready)</td><td>Screen mounting bracket</td></tr>
+            <tr><td><code>bracket-for-screen.SLDPRT</code></td><td>SolidWorks part</td><td>Source for the screen bracket</td></tr>
+            <tr><td><code>media-console-bracket-mk2.STL</code></td><td>STL (print-ready)</td><td>Mk2 media-console bracket</td></tr>
+            <tr><td><code>media-console-bracket-mk2.SLDPRT</code></td><td>SolidWorks part</td><td>Source for the Mk2 bracket</td></tr>
           </tbody>
         </table>
+        <p>
+          No slicer profile is checked in; choose a filament rated for cabin heat. The Jeep TJ itself is also the vehicle
+          rendered on <code>CarMenu</code> (see <a href="pages.html#carmenu">Pages &rarr; CarMenu</a>).
+        </p>
 
-        <div class="info-box info">
-          <strong>Print Settings:</strong> Recommended: PETG or ABS filament for heat resistance in a vehicle cabin. 0.2mm layer height, 40% infill. The Mk2 bracket is the improved version with better fitment.
-        </div>
-
-        <!-- Power Supply -->
-        <h2 id="power">Power Supply Considerations</h2>
+        <!-- Power -->
+        <h2 id="power">Power &amp; Vehicle Installation</h2>
+        <p>General guidance for a permanent in-vehicle install; none of this is enforced by the software.</p>
         <ul>
-          <li><strong>Raspberry Pi:</strong> Use a regulated 5V supply rated for at least 3A. Vehicle 12V must be stepped down with a buck converter. Avoid powering from the vehicle's USB ports (insufficient current).</li>
-          <li><strong>BerryIMU / PAJ7620U2:</strong> Both run on 3.3V from the Pi's GPIO header. Total I2C bus current is minimal (&lt;50mA).</li>
-          <li><strong>ESP32 Volume Knob:</strong> The receiver dongle is USB-powered from the host computer. The encoder unit needs its own 3.3V or 5V supply (battery or vehicle power).</li>
-          <li><strong>Display:</strong> Ensure the display has a separate power feed or is rated for the current draw. HDMI displays for Pi typically need their own 5V supply.</li>
+          <li><strong>SBC power:</strong> feed the board from a regulated buck converter on switched 12 V, not from a vehicle USB socket. Sudden power loss can corrupt the boot medium; a supercapacitor or UPS HAT with a graceful-shutdown trigger is the usual answer. OCTAVE runs its cleanup (<code>esp32VolumeManager.cleanup()</code>, <code>berryIMU.cleanup()</code>, <code>gestureSensor.cleanup()</code>) on SIGTERM / SIGINT as well as on window close, so a shutdown script that signals the process closes the ports cleanly.</li>
+          <li><strong>Sensors:</strong> both I2C boards run from the SBC's 3.3 V rail.</li>
+          <li><strong>ESP32 dongle:</strong> USB-powered by the host. The encoder unit needs its own supply.</li>
+          <li><strong>Display:</strong> give it its own supply rather than the SBC's USB.</li>
+          <li><strong>I2C cable length:</strong> keep it short; I2C is not designed for long runs and the loop reads the bus ~172 times a second, so marginal wiring shows up as read errors (Python restarts the driver, C++ reads zeros).</li>
+          <li><strong>Vibration and heat:</strong> strain-relieve connectors, keep electronics out of direct sun.</li>
+          <li><strong>Grounding:</strong> common ground for the SBC, sensors and display; ground loops show up as noise on the accelerometer.</li>
+          <li><strong>OBD-II:</strong> unrelated to these sensors but shares the port list: the Bluetooth ELM327 is paired over rfcomm and its port set in OBD settings (<code>obdBluetoothPort</code>, empty by default); that port is hidden from the ESP32 picker.</li>
         </ul>
 
-        <div class="info-box warning">
-          <strong>Vehicle Power:</strong> Always use a proper voltage regulator and consider adding a capacitor to smooth out voltage spikes from the alternator. Sudden power loss can corrupt the SD card on a Raspberry Pi. Consider a UPS HAT or supercapacitor-based graceful shutdown circuit.
-        </div>
-
-        <!-- Installation Tips -->
-        <h2 id="installation-tips">Vehicle Installation Tips</h2>
-        <ol class="steps">
-          <li><strong>I2C Cable Length:</strong> Keep I2C cables under 30cm for reliable communication. Use shielded cable if running near power wires.</li>
-          <li><strong>Vibration:</strong> Secure all connections with hot glue or cable ties. Vibration can cause intermittent I2C failures.</li>
-          <li><strong>Heat:</strong> Vehicle cabins can exceed 60C in summer. Use heat-rated filament for 3D prints and keep electronics out of direct sunlight.</li>
-          <li><strong>Grounding:</strong> Ensure a common ground between all components. Ground loops cause sensor noise.</li>
-          <li><strong>I2C Permissions:</strong> On Linux, add your user to the <code>i2c</code> group: <code>sudo usermod -aG i2c $USER</code></li>
-          <li><strong>Serial Permissions:</strong> For ESP32 USB, add user to <code>dialout</code> group: <code>sudo usermod -aG dialout $USER</code></li>
-          <li><strong>OBD-II:</strong> The Bluetooth OBD adapter connects via rfcomm. Pair the adapter first, then set the port in settings (default: <code>/dev/rfcomm0</code>).</li>
-        </ol>
+        <!-- Why -->
+        <h2 id="why">Why It Is Set Up This Way</h2>
+        <ul>
+          <li><strong>A USB dongle instead of a wired knob.</strong> The manager's docstring describes the two-board design: the encoder is wireless over ESP-NOW and the ESP32-S3 dongle turns that into plain USB serial, so the knob can sit anywhere in the cabin and the host needs nothing but a serial port &mdash; which is also why the same code runs on Windows and macOS.</li>
+          <li><strong>Text lines, not a binary frame.</strong> One printable command per line keeps the firmware trivial and lets you test with any serial terminal (<code>echo -e "V50\n" &gt; /dev/ttyACM0</code>, or type <code>+</code> to the port).</li>
+          <li><strong>Bus 2 hard-coded.</strong> The constants were set for the reference board and never needed to move; the price is the overlay step above. If you need another bus, it is a one-line change in each of the four driver files.</li>
+          <li><strong>Gyro bias measured at every start, tare on demand.</strong> Bias drifts with temperature, so it is re-measured each run; the mounting slope is a user decision, so it is a button rather than a config value, and it is deliberately not persisted.</li>
+          <li><strong>Retry, but not forever.</strong> Five linear-backoff attempts cover a bus that appears late at boot without hammering a bus that will never appear; a permission error is not retried in Python because only a re-login fixes it.</li>
+          <li><strong>The driver, not the UI, decides the emit rate.</strong> Whatever page is showing, the sensor loop keeps the attitude current; only the rate of signals into QML changes, so the first frame after opening the car view is already right.</li>
+        </ul>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
+          <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
           <a href="settings-reference.html" class="related-link">Settings Reference</a>
           <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
           <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
+          <a href="pages.html" class="related-link">Pages (CarMenu, SensorMenu)</a>
         </div>
       </div>
     </div>

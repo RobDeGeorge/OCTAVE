@@ -13,19 +13,21 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Building &amp; Distribution</div>
           <h1 class="page-title">Building &amp; Distribution</h1>
-          <p class="page-subtitle">CMake / Qt 6 build of the shipped C++ binary, per-platform packaging, the GitHub Actions matrix, and the Python developer backend.</p>
+          <p class="page-subtitle">CMake / Qt 6 build of the shipped C++ binary, per-platform packaging, the GitHub Actions matrix, the Python developer backend, and why the pipeline is shaped the way it is.</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
             <li><a href="#quick-start">Quick Start</a></li>
-            <li><a href="#cmake-options">CMake Options</a></li>
+            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#cmake-options">CMake Options &amp; Layout</a></li>
             <li><a href="#windows">Windows Build</a></li>
             <li><a href="#macos">macOS Build</a></li>
             <li><a href="#linux">Linux Build</a></li>
             <li><a href="#ci-cd">GitHub Actions CI/CD</a></li>
             <li><a href="#android">Android APK Build</a></li>
+            <li><a href="#phone-server">Phone Server Jar &amp; adb</a></li>
             <li><a href="#python">Python Developer Backend</a></li>
             <li><a href="#troubleshooting">Build Troubleshooting</a></li>
           </ul>
@@ -33,13 +35,14 @@
 
         <!-- Quick Start -->
         <h2 id="quick-start">Quick Start</h2>
-        <p>Every shipped binary (Windows <code>.exe</code>, macOS <code>.dmg</code>, Linux AppImages, Android <code>.apk</code>) is built from the C++ / Qt 6 tree in <span class="file-path">src/</span> with CMake. There is no PyInstaller pipeline &mdash; the Python backend is never packaged (see <a href="#python">below</a>).</p>
+        <p>Every shipped binary (Windows <code>.exe</code>, macOS <code>.dmg</code>, Linux x86_64 and aarch64 AppImages, Android <code>.apk</code>) is built from the C++ / Qt 6 tree in <span class="file-path">src/</span> with CMake. There is no PyInstaller pipeline, no <code>.deb</code>, no Flatpak and no Buildozer &mdash; the Python backend is never packaged (see <a href="#python">below</a>).</p>
         <pre><code><span class="cmt"># Configure + build (Debug, current platform)</span>
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
 
 <span class="cmt"># Run</span>
-./build/octave            <span class="cmt"># Linux/macOS</span>
+./build/octave            <span class="cmt"># Linux/macOS (QML loads from the checkout's frontend/)</span>
+./build/octave --debug    <span class="cmt"># the only C++ command-line flag: DEBUG-level logging + octave-cpp-debug.log</span>
 ./build/Debug/octave.exe  <span class="cmt"># Windows MSVC multi-config</span>
 
 <span class="cmt"># App store build (downloads feature stripped out)</span>
@@ -47,19 +50,57 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_ENABLE_DOWNLOADS=OFF
 cmake --build build -j</code></pre>
 
         <div class="info-box info">
-          <strong>Requirements (all desktops):</strong> CMake 3.21+, <strong>Qt 6.7.3</strong> (the CI-pinned version; other 6.7.x / 6.8.x will likely work but are untested), a C++17 compiler (GCC 11+ / Clang 14+ / MSVC 2022), and Ninja recommended on Linux/macOS (<code>cmake -G Ninja</code>). Qt Quick 3D is optional at build time &mdash; without it the app still builds and the "3D View" card on the Sensors hub greys itself out. Full per-platform package lists live in <span class="file-path">BUILD.md</span>.
+          <div class="info-box-title">Requirements (all desktops)</div>
+          CMake 3.21+ (<code>cmake_minimum_required</code> in <span class="file-path">CMakeLists.txt</span>), <strong>Qt 6.7.3</strong> (the CI-pinned version; other 6.7.x / 6.8.x will likely work but are untested), a C++17 compiler (GCC 11+ / Clang 14+ / MSVC 2022), <strong>TagLib</strong> (required on every desktop platform &mdash; <code>find_package(taglib CONFIG)</code> from vcpkg on Windows, <code>pkg-config taglib</code> elsewhere; Android skips it and uses Qt's metadata fallback), and Ninja recommended on Linux/macOS (<code>cmake -G Ninja</code>). FFmpeg (libavcodec/libavutil) and Qt Quick 3D are optional &mdash; see <a href="#cmake-options">CMake Options</a>. Full per-platform package lists live in <span class="file-path">BUILD.md</span>.
         </div>
 
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Design Decisions</h2>
+        <p>The build and release pipeline has been rewritten several times. The reasons behind its current shape are recorded here so they are not re-litigated by accident. Sources: <span class="file-path">CLAUDE.md</span>, comments in <span class="file-path">CMakeLists.txt</span> and <span class="file-path">.github/workflows/build.yml</span>, and the commit messages named below.</p>
+
+        <h3>Why C++ is the only shipped binary</h3>
+        <p>Commit <code>8211ba8</code> ("ci: drop Python build jobs &mdash; C++ is the only shipped binary") removed the PyInstaller <code>build-windows</code> / <code>build-macos</code> / <code>build-linux</code> jobs. Every release artifact on every platform now comes from <span class="file-path">src/</span>, which gives one packaging story (CMake + Qt's own deploy tools), native performance on the Orange Pi / Raspberry Pi head unit, and a mobile path &mdash; the Android APK is a Qt-for-Android build; there is no Python-on-Android and the buildozer / python-for-android files must not be reintroduced (<span class="file-path">CLAUDE.md</span>). The <code>release</code> job in the workflow carries the same note: "The Python tree is a developer/tinkerer backend ... only C++ ships."</p>
+
+        <h3>Why the Python backend stays</h3>
+        <p><span class="file-path">CLAUDE.md</span> is explicit that the two backends are deliberate, not a half-finished migration: Python stays for "tinkering, accessibility, rapid prototyping, and hardware hacking on Raspberry Pi / single-board setups where a Python REPL is invaluable". The README makes the same argument ("On a Pi with a new sensor on the I&sup2;C bus, a Python REPL beats a compile cycle"). The cost is the parity rule &mdash; every desktop feature lands in both trees in the same change set &mdash; and CI keeps the Python side honest with <code>lint</code> and <code>test</code> on every push even though nothing Python is packaged. The original Python&rarr;C++ migration plan (<span class="file-path">.claude/plans/wondrous-toasting-biscuit.md</span>) is superseded.</p>
+
+        <h3>Why AppImage rather than .deb on Linux</h3>
+        <p>v0.9 briefly shipped a <code>.deb</code> (commit <code>fdb7d94</code>). It "installed cleanly but launched a window-less process": the package staged the QML tree at <code>usr/share/octave/frontend/</code>, which the binary's <code>applicationDirPath()/../frontend</code> lookup in <span class="file-path">src/main.cpp</span> never finds. Commit <code>14811c5</code> replaced the .deb job with <span class="file-path">packaging/linux/build-appimage.sh</span>, whose AppDir layout mirrors the runtime lookup exactly (<code>usr/bin/octave</code> + <code>usr/frontend/</code>), and <code>b9ca3be</code> switched the docs. An AppImage also carries the pinned Qt 6.7.3 with it &mdash; distro Qt 6.2 on Ubuntu 22.04 cannot run the frontend at all (see <a href="#cmake-options">CMake Options</a>) &mdash; and the same script produces the aarch64 image for the Orange Pi with no packaging-format work per distro. Flatpak and app-store variants remain deferred (<span class="file-path">TODO/ci-multiplatform-builds.md</span>).</p>
+
+        <h3>Why the Linux artifact matters more than the others</h3>
+        <p>The vehicle head unit is an Orange Pi 5 Plus (aarch64). The <code>cpp-build-linux-arm64</code> job exists specifically so that board gets a first-class binary built against the same Qt 6.7.3 as every other target (workflow comment: "the actual vehicle hardware"). It needed two extra decisions: Google publishes no aarch64 <code>adb</code>, so that build relies on the distro's <code>adb</code> on PATH, and the arm64 Qt package's GStreamer media plugin depends on <code>libgstphotography</code>, which jammy does not ship &mdash; OCTAVE uses Qt's FFmpeg media backend anyway, so the plugin is deleted after the CMake configure and before <code>linuxdeploy-plugin-qt</code> walks <code>plugins/</code> (<code>OCTAVE_DROP_QT_PLUGINS</code>, commits <code>39dd25b</code> and <code>10a6afa</code>; it must be after configure because Qt's CMake config refuses to configure when a listed plugin file is missing).</p>
+
+        <h3>Why the phone-server jar is committed</h3>
+        <p><span class="file-path">phone_server/</span> is OCTAVE's fork of the scrcpy server (Apache-2.0, forked at v3.3.4, package <code>org.octave.phoneserver</code>). Building it needs a JDK plus Android <code>platforms;android-36</code> and <code>build-tools;36.0.0</code> &mdash; a toolchain no desktop CI runner or Windows/macOS developer otherwise has. Committing the prebuilt <span class="file-path">tools/phone-server/octave-phone-server</span> lets <span class="file-path">CMakeLists.txt</span> embed it as a Qt resource (<code>qrc:/phone-server/</code>, "written to a temp file at runtime, so no packaging target has to carry it as a loose file"), and lets the Python backend push the identical bytes. The <code>phone-server</code> CI job rebuilds from source on every push to prove the jar is not stale: it fails if either jar lacks the <code>org.octave.phoneserver.Server</code> class or the <code>3.3.4-octave</code> version string, and only <em>warns</em> on a hash mismatch, because javac/d8 output differs between toolchain versions (commit <code>2a971ff</code>: the first strict byte comparison failed when CI built with JDK 17 against a JDK 21 jar &mdash; hence the job pins JDK 21).</p>
+
+        <h3>Why adb is bundled but not scrcpy</h3>
+        <p>Commit <code>7a8c8b8</code> removed every external phone-mirror path (scrcpy binary, v4l2loopback, window grab, about 3,000 lines). OCTAVE speaks the scrcpy protocol itself, so the only third-party pieces are the phone server above and <code>adb</code>. <span class="file-path">scripts/fetch_platform_tools.py</span> downloads Google's pinned platform-tools (<code>37.0.1</code>, SHA-256 verified) and keeps only the files <code>adb</code> needs plus Google's <code>NOTICE.txt</code>; CI ships that directory next to the executable so users install nothing.</p>
+
+        <h3>Why one artifact naming scheme</h3>
+        <p>Commit <code>d7812ff</code> unified four conventions into <code>OCTAVE-&lt;version&gt;-&lt;platform&gt;[-&lt;arch&gt;].&lt;ext&gt;</code> with the leading <code>v</code> stripped from the tag. The Inno Setup <code>OutputBaseFilename</code>, the macdeployqt rename step, the AppImage script and the APK staging copy all follow it, and the workflow's artifact globs and release file list depend on it.</p>
+
+        <h3>Why macOS builds on <code>macos-14</code></h3>
+        <p>The macOS 15 SDK on <code>macos-latest</code> drops the AGL framework that Qt 6.7.3's OpenGL support still links (<code>ld: framework 'AGL' not found</code>). The job is pinned to <code>macos-14</code> / Xcode 15 until Qt is bumped to 6.8+ (commit <code>f559afc</code>).</p>
+
+        <h3>Why Qt 6.7.3 specifically</h3>
+        <p>Qt 6.8+ moved behind a login-gated download channel; 6.7.3 is the newest release available through <code>aqtinstall</code>'s public mirror path, which is what both CI (<code>jurplel/install-qt-action@v4</code>) and the documented local setup use (<span class="file-path">BUILD.md</span>). Every job pins <code>version: '6.7.3'</code>.</p>
+
         <!-- CMake options -->
-        <h2 id="cmake-options">CMake Options</h2>
+        <h2 id="cmake-options">CMake Options &amp; Layout</h2>
+        <p><span class="file-path">CMakeLists.txt</span> declares <code>project(OCTAVE VERSION 0.9.0)</code>; the version is compiled in as <code>OCTAVE_VERSION</code>. Every source file is listed explicitly in the <code>qt_add_executable(octave ...)</code> call &mdash; a new manager means two new lines there.</p>
         <table>
-          <thead><tr><th>Option</th><th>Default</th><th>Effect</th></tr></thead>
+          <thead><tr><th>Option / define</th><th>Default</th><th>Effect</th></tr></thead>
           <tbody>
-            <tr><td><code>OCTAVE_ENABLE_DOWNLOADS</code></td><td><code>ON</code></td><td>Compiles in <code>DownloadManager</code> (yt-dlp music download). Pass <code>-DOCTAVE_ENABLE_DOWNLOADS=OFF</code> for app-store / Android builds.</td></tr>
-            <tr><td><code>OCTAVE_HAVE_FFMPEG</code></td><td>auto-detected</td><td>Set by CMake when libavcodec / libavutil are found (pkg-config or vcpkg). Provides the H.264 decoder for the built-in phone-mirror client; without it OCTAVE still builds but <code>phoneMirrorManager.nativeAvailable</code> is false. CMake prints <code>Built-in phone mirror decoder (libavcodec): ON/OFF</code> at configure time.</td></tr>
+            <tr><td><code>OCTAVE_ENABLE_DOWNLOADS</code></td><td><code>ON</code> (desktop <em>and</em> Android)</td><td>Compiles in <code>DownloadManager</code> (yt-dlp music download). Pass <code>-DOCTAVE_ENABLE_DOWNLOADS=OFF</code> for app-store builds &mdash; yt-dlp is forbidden on the Apple, Microsoft and Play stores. On Android the default stays ON for sideload APKs, where downloads run through the <code>youtubedl-android</code> AAR (Python + yt-dlp + ffmpeg bundled by <span class="file-path">android/build.gradle</span>); CI's APK is built with downloads ON.</td></tr>
+            <tr><td><code>OCTAVE_HAVE_FFMPEG</code></td><td>auto-detected</td><td>Set when libavcodec / libavutil are found (vcpkg <code>find_package(FFMPEG)</code> on Windows, <code>pkg-config libavcodec libavutil</code> elsewhere; never on Android). Provides the H.264 decoder for the built-in phone-mirror client; without it OCTAVE still builds but <code>phoneMirrorManager.nativeAvailable</code> is false. CMake prints <code>Built-in phone mirror decoder (libavcodec): ON/OFF</code> at configure time.</td></tr>
+            <tr><td><code>Qt6Quick3D_FOUND</code></td><td>probed (<code>find_package(Qt6 QUIET COMPONENTS Quick3D)</code>)</td><td>Backs the 3D vehicle view in <code>CarMenu.qml</code>. Optional: the QML is loaded lazily and <code>SensorHome</code> greys out the "3D View" card when the module is absent. Linking it when present is what makes windeployqt / macdeployqt / androiddeployqt / linuxdeploy bundle the QML module. When found, CMake writes <code>build/qt_plugins_path.txt</code> so the AppImage script can copy the <code>assetimporters</code> plugin dir (linuxdeploy-plugin-qt does not know that category).</td></tr>
+            <tr><td><code>Q_OS_MOBILE</code></td><td>defined when <code>ANDROID</code></td><td>Activates the existing <code>#ifndef Q_OS_MOBILE</code> guards so desktop-only code is not compiled on mobile (iOS would reuse it).</td></tr>
           </tbody>
         </table>
-        <p>Qt components linked: Core, Gui, Qml, Quick, QuickControls2, Multimedia, Network, Concurrent, NetworkAuth, SerialPort, Bluetooth (+ Sensors on mobile); Quick3D is probed with <code>find_package(Qt6 QUIET COMPONENTS Quick3D)</code>. The QML frontend additionally needs <code>QtQuick.Effects</code> (Qt &ge; 6.5) and <code>Qt5Compat.GraphicalEffects</code> at runtime &mdash; distro Qt 6.2 (Ubuntu 22.04) links fine and then fails at <code>Main.qml</code> load.</p>
+        <p>Qt components linked: Core, Gui, Qml, Quick, QuickControls2, Multimedia, Network, Concurrent, NetworkAuth, SerialPort, Bluetooth; on Android additionally Sensors and <code>Qt6::CorePrivate</code> (for <code>QtAndroidPrivate::requestPermission</code>). The QML frontend additionally needs <code>QtQuick.Effects</code> (Qt &ge; 6.5) and <code>Qt5Compat.GraphicalEffects</code> at runtime (both imported by <span class="file-path">frontend/MainMenu.qml</span>) &mdash; distro Qt 6.2 (Ubuntu 22.04) links fine and then fails at <code>Main.qml</code> load, which is why every CI job installs the <code>qt5compat qtquick3d qtshadertools</code> modules.</p>
+
+        <h3>Resources vs. filesystem</h3>
+        <p>Only two things are compiled into the binary as Qt resources: the <code>.qsb</code> shader <code>frontend/shaders/dissolve_squares.frag.qsb</code> (<code>qrc:/shaders/</code> &mdash; Qt RHI's <code>ShaderEffect</code> rejects <code>assets:/</code> URIs on Android, so QML branches on <code>Qt.platform.os</code>) and the phone-server jar with its LICENSE / NOTICE (<code>qrc:/phone-server/</code>). Everything else in <span class="file-path">frontend/</span> is loaded from the filesystem at runtime so the tree stays shared with the Python backend. <span class="file-path">src/main.cpp</span> resolves it as <code>applicationDirPath()/frontend</code>, then <code>applicationDirPath()/../frontend</code> (the <code>build/</code> case), and on Android as <code>assets:/frontend</code>; every packaging layout must preserve that relationship.</p>
 
         <!-- Windows -->
         <h2 id="windows">Windows Build</h2>
@@ -68,21 +109,23 @@ cmake --build build -j</code></pre>
         <h3>Requirements</h3>
         <ul>
           <li>Visual Studio 2022 with the "Desktop development with C++" workload</li>
-          <li>Qt 6.7.3 (<code>msvc2019_64</code> or <code>msvc2022_64</code>) via the Qt online installer</li>
-          <li>vcpkg for <code>taglib</code> and <code>ffmpeg[core,avcodec]</code></li>
-          <li>(CI only) <a href="https://jrsoftware.org/isdl.php">Inno Setup 6</a> for the installer</li>
+          <li>Qt 6.7.3 (<code>msvc2019_64</code> or <code>msvc2022_64</code>) via the Qt online installer; CI uses <code>win64_msvc2019_64</code> with modules <code>qtmultimedia qtnetworkauth qtserialport qtconnectivity qtquick3d qt5compat qtshadertools qtquicktimeline</code> (<code>qtquicktimeline</code> because windeployqt fails on QtQuick3D without it)</li>
+          <li>vcpkg for <code>taglib:x64-windows</code> and <code>ffmpeg[core,avcodec]:x64-windows</code></li>
+          <li>(CI only) Inno Setup 6 &mdash; pre-installed on <code>windows-latest</code> as <code>ISCC.exe</code></li>
         </ul>
         <pre><code>cmake -S . -B build `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DVCPKG_TARGET_TRIPLET=x64-windows `
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j</code></pre>
 
-        <h3>Output</h3>
+        <h3>Output and CI packaging</h3>
         <ul>
-          <li><code>build\Release\octave.exe</code> &mdash; the built executable</li>
-          <li><code>dist\OCTAVE-&lt;version&gt;-windows-x86_64.exe</code> &mdash; Inno Setup installer produced by CI (<code>windeployqt</code> then <code>iscc.exe build_scripts/installer_windows.iss</code>)</li>
+          <li><code>build\Release\octave.exe</code> &mdash; the built executable (multi-config MSVC; single-config generators drop it in <code>build\</code>)</li>
+          <li>CI stages <code>dist\OCTAVE\</code>: the exe, vcpkg's <code>tag.dll</code> / <code>avcodec-*.dll</code> / <code>avutil-*.dll</code> / <code>swresample-*.dll</code>, <code>platform-tools\adb.exe</code> (+ <code>AdbWinApi.dll</code>, <code>AdbWinUsbApi.dll</code>, <code>libwinpthread-1.dll</code>), then <code>windeployqt --qmldir frontend --release</code>, then renames the exe to <code>OCTAVE.exe</code> because the <code>.iss</code> expects the capitalised name</li>
+          <li><code>dist\OCTAVE-&lt;version&gt;-windows-x86_64.exe</code> &mdash; Inno Setup installer. CI patches <code>#define MyAppVersion</code> in <span class="file-path">build_scripts/installer_windows.iss</span> from the git tag (fallback <code>0.9.0</code> on a manual dispatch) before running <code>ISCC.exe</code></li>
         </ul>
-        <p><span class="file-path">build_scripts/installer_windows.iss</span> is the only file left in <code>build_scripts/</code>; it creates the Start Menu shortcuts and uninstaller.</p>
+        <p><span class="file-path">build_scripts/installer_windows.iss</span> is the only file left in <code>build_scripts/</code>. It installs to Program Files (admin, Windows 10+), creates Start Menu / optional desktop shortcuts, checks the registry for the VC++ 2015&ndash;2022 runtime and shows an informational message with the download link if it is missing, and &mdash; note &mdash; its <code>[UninstallDelete]</code> section removes <code>%APPDATA%\OCTAVE</code> (settings, dashboards, logs) on uninstall.</p>
 
         <!-- macOS -->
         <h2 id="macos">macOS Build</h2>
@@ -91,8 +134,8 @@ cmake --build build --config Release -j</code></pre>
         <h3>Requirements</h3>
         <ul>
           <li>Xcode Command Line Tools (<code>xcode-select --install</code>)</li>
-          <li>Qt 6.7.3 (Apple Silicon and Intel), e.g. via <code>aqt install-qt mac desktop 6.7.3 -O ~/Qt -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline</code></li>
-          <li>TagLib and FFmpeg (Homebrew) for tag reading and the phone-mirror decoder</li>
+          <li>Qt 6.7.3 (Apple Silicon and Intel), e.g. <code>aqt install-qt mac desktop 6.7.3 -O ~/Qt -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline</code></li>
+          <li><code>brew install taglib ffmpeg pkg-config</code> for tag reading and the phone-mirror decoder</li>
         </ul>
         <pre><code><span class="kw">export</span> PATH=<span class="str">"$HOME/Qt/6.7.3/macos/bin:$PATH"</span>
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -100,12 +143,13 @@ cmake --build build -j</code></pre>
 
         <h3>Output</h3>
         <ul>
-          <li><code>build/octave.app</code> &mdash; application bundle</li>
-          <li><code>dist/OCTAVE-&lt;version&gt;-macos.dmg</code> &mdash; produced by CI with <code>macdeployqt</code> + <code>hdiutil</code>; bundled <code>adb</code> lands in <code>Contents/Resources/platform-tools/</code></li>
+          <li><code>build/octave.app</code> &mdash; <span class="file-path">CMakeLists.txt</span> sets <code>MACOSX_BUNDLE</code> explicitly (bundle id <code>com.waybettersolutions.octave</code>, name <code>OCTAVE</code>); without it <code>qt_add_executable</code> would emit a bare ELF-style binary that macdeployqt cannot bundle</li>
+          <li><code>dist/OCTAVE-&lt;version&gt;-macos.dmg</code> &mdash; CI renames the bundle to <code>OCTAVE.app</code>, copies <code>adb</code> into <code>Contents/Resources/platform-tools/</code>, runs <code>macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg</code> (macdeployqt creates the DMG itself) and renames the result (version fallback <code>0.0.0</code>)</li>
         </ul>
 
         <div class="info-box warning">
-          <strong>Code Signing:</strong> Unsigned macOS apps trigger Gatekeeper warnings. Users can bypass with <code>xattr -cr /Applications/OCTAVE.app</code>. For distribution, sign with a Developer ID certificate.
+          <div class="info-box-title">Code signing</div>
+          The bundle is unsigned, so Gatekeeper reports it as damaged. Users can bypass with <code>xattr -cr /Applications/OCTAVE.app</code>. For distribution, sign with a Developer ID certificate. iOS is not wired at all (no toolchain in CMake, no CI job &mdash; <span class="file-path">BUILD.md</span>, <em>iOS build</em>).
         </div>
 
         <!-- Linux -->
@@ -115,7 +159,7 @@ cmake --build build -j</code></pre>
         <h3>Requirements</h3>
         <ul>
           <li>Build essentials, CMake, Ninja, pkg-config, and the X11/XCB dev libraries listed in <span class="file-path">BUILD.md</span></li>
-          <li>Qt 6.7.3 via the Qt online installer or <code>aqtinstall</code> (distro Qt 6.2 cannot run OCTAVE &mdash; see <a href="#cmake-options">CMake Options</a>)</li>
+          <li>Qt 6.7.3 via the Qt online installer or <code>aqtinstall</code> (<code>aqt install-qt linux desktop 6.7.3 linux_gcc_64 ...</code>; <code>linux_arm64</code> for ARM boards). Distro Qt 6.2 cannot run OCTAVE &mdash; see <a href="#cmake-options">CMake Options</a></li>
           <li>For a local AppImage on Ubuntu 22.04: <code>libtag1-dev libavcodec-dev libavutil-dev libfuse2 wget file</code></li>
         </ul>
         <pre><code>cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -128,110 +172,139 @@ bash packaging/linux/build-appimage.sh
         <h3>Output</h3>
         <ul>
           <li><code>build/octave</code> &mdash; the built executable; QML and assets load from the checkout's <code>frontend/</code></li>
-          <li><code>dist/OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code> / <code>-linux-aarch64.AppImage</code> &mdash; portable single-file AppImages (the aarch64 one is built by the <code>cpp-build-linux-arm64</code> job for Orange Pi / Raspberry Pi class hardware; Google ships no aarch64 <code>adb</code>, so that build uses the distro's <code>adb</code> on PATH)</li>
+          <li><code>dist/OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code> / <code>-linux-aarch64.AppImage</code> &mdash; portable single-file AppImages. The version comes from <code>OCTAVE_VERSION</code> (CI passes the tag), else <code>GITHUB_REF_NAME</code>, else the <code>project()</code> version in <span class="file-path">CMakeLists.txt</span></li>
         </ul>
 
-        <h3>AppImage Structure</h3>
-        <p><span class="file-path">packaging/linux/build-appimage.sh</span> runs a Release CMake build, then <code>linuxdeploy</code> + <code>linuxdeploy-plugin-qt</code> (both vendored under <code>packaging/linux/tools/</code>). The layout must match the binary's runtime asset lookup in <code>src/main.cpp</code>:</p>
+        <h3>AppImage structure</h3>
+        <p><span class="file-path">packaging/linux/build-appimage.sh</span> does a Release Ninja build into <code>build-appimage/</code>, stages <code>AppDir/</code>, then runs <code>linuxdeploy</code> + <code>linuxdeploy-plugin-qt</code>. Both tools are downloaded on first use from their <code>continuous</code> release tag into <code>packaging/linux/tools/</code> (gitignored, as are <code>build-appimage/</code>, <code>AppDir/</code> and <code>dist/</code>). The layout must match the runtime asset lookup in <code>src/main.cpp</code>:</p>
         <pre><code>AppDir/
+  AppRun                    <span class="cmt"># custom: exports LD_LIBRARY_PATH, QT_PLUGIN_PATH and</span>
+                            <span class="cmt">#   QML2_IMPORT_PATH=usr/qml:usr/frontend (linuxdeploy's own AppRun only knows usr/qml)</span>
   usr/bin/octave            <span class="cmt"># applicationDirPath()</span>
+  usr/bin/platform-tools/   <span class="cmt"># adb, if scripts/fetch_platform_tools.py ran first</span>
   usr/frontend/             <span class="cmt"># ../frontend relative to the binary -- the QML tree</span>
-  usr/lib/, usr/plugins/, usr/qml/   <span class="cmt"># Qt runtime deployed by linuxdeploy-plugin-qt</span></code></pre>
-        <p>Putting the QML tree anywhere else breaks the lookup and the app exits silently with no window. On Arch the bundled <code>strip</code> rejects modern <code>.relr.dyn</code> sections &mdash; pass <code>NO_STRIP=1</code>. AppImages built on Arch will not run on Ubuntu/Debian (newer glibc); let CI on <code>ubuntu-22.04</code> produce distributable ones.</p>
+                            <span class="cmt">#   (assets/-src and assets/readme are stripped: not runtime assets)</span>
+  usr/lib/, usr/plugins/, usr/qml/   <span class="cmt"># Qt runtime deployed by linuxdeploy-plugin-qt</span>
+  usr/plugins/assetimporters/        <span class="cmt"># copied by the script from the path CMake recorded (Quick3D's assimp loader)</span></code></pre>
+        <p>Other details of the script: it bundles <code>libtag.so</code> explicitly via <code>--library</code> because linuxdeploy occasionally misses it (avoiding an <code>awk ... exit</code> SIGPIPE that <code>set -o pipefail</code> would turn into an abort &mdash; commit <code>0ab7f14</code>), reuses a project icon if one exists or writes a placeholder SVG, sets <code>QML_SOURCES_PATHS</code> so the Qt plugin scans <code>usr/frontend</code> for imports, and honours <code>QMAKE</code> (CI points it at install-qt-action's <code>qmake6</code> so the plugin does not fall back to a system Qt 5 stub) and <code>OCTAVE_DROP_QT_PLUGINS</code> (space-separated paths under Qt's <code>plugins/</code> to delete after the CMake build and before deployment). Putting the QML tree anywhere else breaks the lookup and the app exits silently with no window. On Arch the bundled <code>strip</code> rejects modern <code>.relr.dyn</code> sections &mdash; pass <code>NO_STRIP=1</code>. AppImages built on Arch will not run on Ubuntu/Debian (newer glibc); let CI on <code>ubuntu-22.04</code> produce distributable ones.</p>
 
         <h3>Desktop launcher (development machines)</h3>
-        <p><span class="file-path">scripts/octave-desktop.sh</span> installs a <code>~/.local/share/applications/octave-dropbox.desktop</code> entry that incrementally builds the checkout into <code>build-desktop-&lt;hostname&gt;/</code> and runs it, so a Dropbox-synced tree can be launched from the desktop menu without clobbering another machine's CMake cache. Build failures raise a desktop notification; the log is in <code>~/.local/state/octave/desktop-launch.log</code>.</p>
+        <p><span class="file-path">scripts/octave-desktop.sh</span> builds and launches the native app straight from a Dropbox-synced checkout (a <code>~/.local/share/applications/octave-dropbox.desktop</code> menu entry points at it; <span class="file-path">BUILD.md</span> describes the Mod+D binding). It configures once into <code>build-desktop-&lt;hostname&gt;/</code> (Release) so two machines syncing the same tree never share a CMake cache, then runs an incremental <code>cmake --build --target octave --parallel 4</code> (bounded so a desktop launch cannot exhaust memory) and <code>exec</code>s the binary. Since commit <code>037f753</code> the configure step passes <code>-DQt6_DIR="$(/usr/bin/qmake6 -query QT_INSTALL_LIBS)/cmake/Qt6"</code> because the CMake package registry could otherwise select an installed Android kit for the desktop build. A <code>flock</code> on <code>~/.local/state/octave/desktop-build.lock</code> stops two menu clicks from building concurrently; failures raise a desktop notification and the log is <code>~/.local/state/octave/desktop-launch.log</code> (<code>$XDG_STATE_HOME</code> honoured). <span class="file-path">.gitignore</span> covers <code>build/</code>, <code>build-desktop-*/</code>, <code>build-rhea/</code>, <code>build-android/</code> and <code>build-appimage/</code>.</p>
+        <p>Two older Pi launcher scripts also live in <span class="file-path">scripts/</span>: <code>octave-start.sh</code> (activates the venv and runs the Python backend with <code>DISPLAY=:0</code> and <code>MESA_GL_VERSION_OVERRIDE=3.3</code>) and <code>octave-update.sh</code> (a <code>git fetch</code> + <code>reset --hard origin/main</code> with 10 s timeouts that skips silently when offline). Both hardcode <code>/home/rob/Roxy/octave</code> and are specific to the original Raspberry Pi installation.</p>
 
         <!-- CI/CD -->
         <h2 id="ci-cd">GitHub Actions CI/CD</h2>
-        <p><span class="file-path">.github/workflows/build.yml</span></p>
+        <p><span class="file-path">.github/workflows/build.yml</span> (single workflow, "Build OCTAVE")</p>
 
         <h3>Triggers</h3>
         <ul>
-          <li><strong>Every push / PR to <code>main</code>:</strong> <code>lint</code>, <code>test</code>, <code>phone-server</code>, <code>cpp-compile-check</code></li>
-          <li><strong>Version tags <code>v*</code> or manual <code>workflow_dispatch</code>:</strong> the five <code>cpp-build-*</code> jobs (gated on <code>lint</code> + <code>test</code>)</li>
-          <li><strong>Version tags only:</strong> <code>release</code></li>
+          <li><strong>Every push / PR to <code>main</code>:</strong> <code>lint</code>, <code>test</code>, <code>cpp-compile-check</code>, <code>phone-server</code> (all four are independent; none is gated on another)</li>
+          <li><strong>Version tags <code>v*</code> or manual <code>workflow_dispatch</code>:</strong> the five <code>cpp-build-*</code> jobs, each with <code>needs: [lint, test]</code></li>
+          <li><strong>Version tags only:</strong> <code>release</code>, which needs all five build jobs</li>
         </ul>
 
         <h3>Jobs</h3>
         <table>
           <thead><tr><th>Job</th><th>Runner</th><th>What it does / artifact</th><th>Retention</th></tr></thead>
           <tbody>
-            <tr><td>lint</td><td>ubuntu-22.04</td><td>ruff over the Python tree (Python 3.11); full ruleset warn-only, <code>E722</code>/<code>F821</code> blocking</td><td>&mdash;</td></tr>
-            <tr><td>test</td><td>ubuntu-22.04</td><td>headless pytest smoke suite (<code>QT_QPA_PLATFORM=offscreen pytest tests/</code>)</td><td>&mdash;</td></tr>
-            <tr><td>phone-server</td><td>ubuntu-22.04</td><td>rebuilds <code>tools/phone-server/octave-phone-server</code> from <code>phone_server/src</code> (JDK 21, Android SDK) and fails if the committed jar differs; uploads <code>octave-phone-server</code></td><td>&mdash;</td></tr>
-            <tr><td>cpp-compile-check</td><td>ubuntu-22.04</td><td>CMake configure + build with Qt 6.7.3, then <code>qmllint</code> over <code>frontend/</code> (fails on QML errors, not warnings)</td><td>&mdash;</td></tr>
-            <tr><td>cpp-build-windows</td><td>windows-latest</td><td><code>OCTAVE-Windows-cpp</code>: <code>OCTAVE-&lt;v&gt;-windows-x86_64.exe</code> (vcpkg taglib + ffmpeg, windeployqt, Inno Setup)</td><td>30 days</td></tr>
-            <tr><td>cpp-build-macos</td><td>macos-14</td><td><code>OCTAVE-macOS-cpp-App</code> (.app zip) and <code>OCTAVE-macOS-cpp-DMG</code>: <code>OCTAVE-&lt;v&gt;-macos.dmg</code></td><td>30 days</td></tr>
-            <tr><td>cpp-build-linux</td><td>ubuntu-22.04</td><td><code>OCTAVE-Linux-cpp-AppImage</code>: <code>OCTAVE-&lt;v&gt;-linux-x86_64.AppImage</code></td><td>30 days</td></tr>
-            <tr><td>cpp-build-linux-arm64</td><td>ubuntu-22.04-arm</td><td><code>OCTAVE-Linux-arm64-cpp-AppImage</code>: <code>OCTAVE-&lt;v&gt;-linux-aarch64.AppImage</code></td><td>30 days</td></tr>
-            <tr><td>cpp-build-android</td><td>ubuntu-22.04</td><td><code>OCTAVE-Android-APK</code>: <code>OCTAVE-&lt;v&gt;-android-arm64-v8a.apk</code> (JDK 17, NDK r26b, Qt 6.7.3 host + android_arm64_v8a, test-keystore signed)</td><td>30 days</td></tr>
-            <tr><td>release</td><td>ubuntu-latest</td><td>GitHub Release with the five installers (the macOS .app zip stays a workflow artifact)</td><td>Permanent</td></tr>
+            <tr><td>lint</td><td>ubuntu-22.04</td><td>Python 3.11, <code>pip install ruff==0.15.10</code>; <code>ruff check . || true</code> (full ruleset, warn-only) then <code>ruff check . --select E722,F821</code> (blocking)</td><td>&mdash;</td></tr>
+            <tr><td>test</td><td>ubuntu-22.04</td><td>Python 3.11; installs the runtime XCB/GL/pulse libs, <code>requirements.txt</code> and pytest, then <code>QT_QPA_PLATFORM=offscreen pytest tests/ -v</code> (21 tests: module imports, offscreen QApplication, volume curve, safe manager construction, dashboard presets, and a 12 s <code>main.py</code> boot test)</td><td>&mdash;</td></tr>
+            <tr><td>cpp-compile-check</td><td>ubuntu-22.04</td><td>apt build deps + Qt 6.7.3 (<code>jurplel/install-qt-action@v4</code>, cached, modules <code>qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools</code>), <code>cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug</code> + build, then <code>qmllint -I frontend --json</code> over every <code>frontend/**/*.qml</code>. qmllint exits non-zero on plain warnings, so the step runs it with <code>find -exec ... +</code> (not xargs, which would abort on exit 255), parses the JSON and fails only on <code>"type": "critical"</code> entries (syntax errors, unresolvable imports)</td><td>&mdash;</td></tr>
+            <tr><td>phone-server</td><td>ubuntu-22.04</td><td>Temurin JDK 21, <code>android-actions/setup-android@v3</code>, <code>platforms;android-36</code> + <code>build-tools;36.0.0</code>; runs <span class="file-path">phone_server/build_without_gradle.sh</span>, then checks both the fresh jar and <span class="file-path">tools/phone-server/octave-phone-server</span> contain <code>org/octave/phoneserver/Server</code> and <code>3.3.4-octave</code> (hard failure), prints both SHA-256s and emits a <code>::warning::</code> if they are not byte-identical; uploads the fresh build as <code>octave-phone-server</code></td><td>30 days</td></tr>
+            <tr><td>cpp-build-windows</td><td>windows-latest</td><td><code>OCTAVE-Windows-cpp</code>: <code>OCTAVE-&lt;v&gt;-windows-x86_64.exe</code> (Qt <code>win64_msvc2019_64</code>, vcpkg taglib + ffmpeg, adb fetch, windeployqt, Inno Setup; <code>if-no-files-found: error</code>)</td><td>30 days</td></tr>
+            <tr><td>cpp-build-macos</td><td>macos-14</td><td><code>OCTAVE-macOS-cpp-App</code> (the <code>.app</code> directory) and <code>OCTAVE-macOS-cpp-DMG</code>: <code>OCTAVE-&lt;v&gt;-macos.dmg</code> (Homebrew taglib/ffmpeg, adb fetch, <code>macdeployqt -dmg</code>)</td><td>30 days</td></tr>
+            <tr><td>cpp-build-linux</td><td>ubuntu-22.04</td><td><code>OCTAVE-Linux-cpp-AppImage</code>: <code>OCTAVE-&lt;v&gt;-linux-x86_64.AppImage</code> (adb fetch, <code>build-appimage.sh</code> with <code>QMAKE</code> and <code>OCTAVE_VERSION</code> set)</td><td>30 days</td></tr>
+            <tr><td>cpp-build-linux-arm64</td><td>ubuntu-22.04-arm</td><td><code>OCTAVE-Linux-arm64-cpp-AppImage</code>: <code>OCTAVE-&lt;v&gt;-linux-aarch64.AppImage</code> (Qt host <code>linux_arm64</code> + <code>qtquicktimeline</code>, extra <code>libavformat/libswresample/libswscale</code> and GStreamer runtime libs, <code>OCTAVE_DROP_QT_PLUGINS=multimedia/libgstreamermediaplugin.so</code>, no adb fetch)</td><td>30 days</td></tr>
+            <tr><td>cpp-build-android</td><td>ubuntu-22.04</td><td><code>OCTAVE-Android-APK</code>: <code>OCTAVE-&lt;v&gt;-android-arm64-v8a.apk</code> &mdash; see <a href="#android">Android</a> for the full step list</td><td>30 days</td></tr>
+            <tr><td>release</td><td>ubuntu-latest</td><td><code>softprops/action-gh-release@v2</code> with <code>generate_release_notes: true</code> and <code>contents: write</code>; attaches the five installers (the macOS <code>.app</code> artifact stays on the run page to keep the Releases page tidy)</td><td>Permanent</td></tr>
           </tbody>
         </table>
 
-        <h3>Linux System Dependencies</h3>
-        <p>The compile-check job installs these packages before configuring (the AppImage jobs add the Qt dev packages listed in the header of <code>packaging/linux/build-appimage.sh</code>):</p>
+        <h3>Linux system dependencies</h3>
+        <p>The compile-check and x86_64 AppImage jobs install (the AppImage job adds <code>libfuse2 wget file</code>):</p>
         <pre><code>sudo apt-get install -y \
+  build-essential cmake ninja-build pkg-config \
   libtag1-dev libavcodec-dev libavutil-dev libgl1-mesa-dev libegl1-mesa-dev \
   libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
   libpulse-dev libssl-dev</code></pre>
+        <p>The aarch64 job additionally installs <code>libavformat-dev libswresample-dev libswscale-dev libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libgstreamer-plugins-bad1.0-0</code>, because the arm64 Qt package does not bundle ffmpeg libraries and linuxdeploy-plugin-qt resolves the multimedia plugin's and QtQuick3D's dependencies at deploy time. The <code>test</code> job needs only runtime libs (<code>libxcb-xinerama0 libxcb-cursor0 libxkbcommon0 libgl1-mesa-glx libegl1 libpulse0</code>).</p>
 
-        <h3>Release Job</h3>
-        <p>The release job runs only on version tags, after all five build jobs. It downloads their artifacts and creates a GitHub Release with auto-generated release notes using <code>softprops/action-gh-release@v2</code>, attaching the Windows installer, macOS DMG, both AppImages and the APK.</p>
-
-        <h3>Phone mirror bundling</h3>
-        <p>
-          No scrcpy binary is bundled or required. The C++ binary embeds OCTAVE's phone <em>server</em> jar
-          (<code>tools/phone-server/</code>, built from <code>phone_server/</code>) as a Qt resource and CI ships Google's <code>adb</code> next to the executable
-          (<code>python scripts/fetch_platform_tools.py</code>, pinned and SHA-256 verified). libavcodec is an optional
-          build dependency for the H.264 decoder; without it <code>phoneMirrorManager.nativeAvailable</code> is false.
-          After editing <code>phone_server/src</code>, rebuild the jar with <code>phone_server/build_without_gradle.sh</code> and commit it with the source &mdash; the <code>phone-server</code> job fails when they differ, and <code>SCRCPY_VERSION_NAME</code> must equal both clients' server version (<code>3.3.4-octave</code>).
-        </p>
+        <h3>Release job</h3>
+        <p>Runs only on version tags, after all five build jobs. It downloads their artifacts into <code>artifacts/</code> and creates a GitHub Release with auto-generated notes, attaching <code>OCTAVE-*-windows-x86_64.exe</code>, <code>OCTAVE-*-macos.dmg</code>, both AppImages and the APK. <span class="file-path">TODO/ci-multiplatform-builds.md</span> tracks what is left of the release process itself (cutting v0.9.0, a nightly prerelease, an optional workflow split).</p>
 
         <!-- Android -->
         <h2 id="android">Android APK Build</h2>
         <span class="platform-badge android">Android</span>
-        <p>The Android <code>.apk</code> is built from the <strong>C++ / Qt 6</strong> tree in <span class="file-path">src/</span> using Qt's <code>qt-cmake</code> cross-compile wrapper &mdash; not from Python. The Python backend is desktop-only and is never packaged for mobile; platform-specific behavior is gated behind <code>#ifdef Q_OS_ANDROID</code> in the C++ managers. (The former Buildozer / python-for-android path has been removed.)</p>
+        <p>The Android <code>.apk</code> is built from the <strong>C++ / Qt 6</strong> tree using Qt's <code>qt-cmake</code> cross-compile wrapper (or a plain <code>cmake</code> with Qt's <code>qt.toolchain.cmake</code>, as CI does). The Python backend is desktop-only and is never packaged for mobile; platform-specific behaviour is gated behind <code>#ifdef Q_OS_ANDROID</code> in the C++ managers, with the Java side in <span class="file-path">android/src/org/octave/app/</span> (<code>OctaveOBDBridge.java</code> for Bluetooth/BLE OBD, <code>OctaveMediaBridge.java</code> for the bundled Python / yt-dlp runtime). The former Buildozer / python-for-android path has been removed.</p>
         <pre><code>qt-cmake -S . -B build-android \
     -DCMAKE_BUILD_TYPE=Debug \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM=android-30 \
-    -DOCTAVE_ENABLE_DOWNLOADS=OFF \
     -DQT_ANDROID_SIGN_APK=OFF
+    <span class="cmt"># add -DOCTAVE_ENABLE_DOWNLOADS=OFF only for a Play Store build; sideload builds (and CI) keep downloads ON</span>
 
 cmake --build build-android --target apk -j
 adb install build-android/android-build/build/outputs/apk/debug/android-build-debug.apk</code></pre>
+        <p>Packaging facts from <span class="file-path">CMakeLists.txt</span> and <span class="file-path">android/</span>: package <code>org.octave.app</code>; single ABI <code>arm64-v8a</code>; <code>minSdk 30</code>, <code>targetSdk 33</code> (capped by AGP 7.4.1, Qt 6.7.3's target Gradle plugin &mdash; bump with Qt 6.8+); <code>QT_ANDROID_PACKAGE_SOURCE_DIR = android/</code>; <code>QT_QML_ROOT_PATH = frontend/</code> so the runtime-loaded QML is findable at <code>assets:/frontend/</code>; <code>android/assets/frontend</code> and <code>android/assets/scripts</code> are symlinks into the repo for development. Spotify is excluded from the Android build (desktop-only, <span class="file-path">TODO/android-cpp-port.md</span>). LGPL Qt is dynamically linked.</p>
 
-        <div class="info-box info">
-          <strong>Full toolchain:</strong> See <span class="file-path">BUILD.md</span> (<em>Android build</em>) for the complete setup &mdash; Qt for Android 6.7.3, OpenJDK 17, Android SDK + NDK <code>26.1.10909125</code>, and APK signing. A condensed walkthrough is on the <a href="getting-started.html#platform-android">Getting Started</a> page. iOS is not yet wired (no toolchain in CMake, no CI job).
+        <h3>What the CI job does</h3>
+        <ol class="steps">
+          <li>Temurin JDK 17 (AGP 7.4.1 needs 17, not 11 or 21), host Qt 6.7.3 (<code>linux/desktop</code>) and target Qt 6.7.3 (<code>android_arm64_v8a</code>), both with <code>qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d</code></li>
+          <li><code>android-actions/setup-android@v3</code>, then <code>ndk;26.1.10909125</code>, <code>platforms;android-33</code>, <code>build-tools;33.0.2</code></li>
+          <li>Restores a Gradle cache keyed on <code>android/build.gradle</code> + <code>gradle.properties</code> so repeat runs survive Maven Central's intermittent 429s</li>
+          <li>Runs <span class="file-path">scripts/build-android-pylib-bundle.sh</span> to produce <code>android/assets/python-packages/ytmusic-bundle.zip</code> (ytmusicapi + requests + their pure-Python deps, native <code>.so</code>/<code>.pyd</code> stripped). The AAR-shipped Python has no pip; <code>OctaveMediaBridge</code> extracts this zip on first launch and runs <code>scripts/ytmusic_search.py</code> from it. Without it YouTube Music search silently fails on the device</li>
+          <li>Dereferences the <code>android/assets/frontend</code> and <code>scripts</code> symlinks into real copies &mdash; APKs cannot contain symlinks; the entries become 0-byte files and the app dies with "Failed to load Main.qml"</li>
+          <li><code>cmake -S . -B build-android -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$QT_ROOT_DIR/lib/cmake/Qt6/qt.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-30 -DQT_HOST_PATH=$HOST_QT</code></li>
+          <li><code>cmake --build build-android --target apk -j</code>, retried up to four times with 20 s doubling backoff (Maven Central rate-limits runner IPs on the <code>youtubedl-android</code> AAR fetch)</li>
+          <li>Signs the unsigned release APK: generates a <em>fresh</em> RSA keystore, <code>zipalign -p 4</code>, <code>apksigner sign</code> with v1 + v2 + v3 schemes all forced on (apksigner's v3-only default for minSdk &ge; 28 makes many sideload installers report "package appears to be invalid"), <code>apksigner verify</code>, then stages <code>dist/OCTAVE-&lt;v&gt;-android-arm64-v8a.apk</code> (version fallback <code>dev</code>)</li>
+        </ol>
+        <div class="info-box warning">
+          <div class="info-box-title">Signing identity changes every release</div>
+          Because the keystore is generated per run, Android refuses to update an installed OCTAVE from one release to the next (<code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>) &mdash; users must <code>adb uninstall org.octave.app</code> (or uninstall from Settings) first, and the Play Store cannot be targeted. Persisting one keystore as a GitHub Secret is <span class="file-path">TODO/android-signing-keystore.md</span>; a working TLS backend (OpenSSL bundling) is <span class="file-path">TODO/android-openssl-bundling.md</span>.
         </div>
+        <div class="info-box info">
+          <div class="info-box-title">Full local toolchain</div>
+          See <span class="file-path">BUILD.md</span> (<em>Android build</em>) for the complete local setup &mdash; Qt for Android 6.7.3 via <code>aqtinstall</code>, OpenJDK 17, Android SDK + NDK <code>26.1.10909125</code>, the environment variables (<code>QT_HOST_PATH</code> is mandatory for the cross-compile), device USB debugging and a troubleshooting table. A condensed walkthrough is on the <a href="getting-started.html#platform-android">Getting Started</a> page; the port's remaining work is in <span class="file-path">TODO/android-cpp-port.md</span>.
+        </div>
+
+        <!-- Phone server / adb -->
+        <h2 id="phone-server">Phone Server Jar &amp; adb</h2>
+        <p>No scrcpy binary is bundled or required. Two small Apache-2.0 pieces ship inside OCTAVE:</p>
+        <ul>
+          <li><strong>The phone server</strong> &mdash; <span class="file-path">phone_server/</span> (Java, <code>org.octave.phoneserver</code>) built into <span class="file-path">tools/phone-server/octave-phone-server</span>, embedded in the C++ binary as a resource and pushed by the Python backend from the same file. After editing <code>phone_server/src</code>, rebuild with <code>ANDROID_HOME=~/Android/Sdk ANDROID_PLATFORM=36 ANDROID_BUILD_TOOLS=36.0.0 bash phone_server/build_without_gradle.sh</code> (JDK 21 to match CI; the script compiles with <code>javac -source 1.8 -target 1.8</code>, generates the AIDL stubs, dexes with <code>d8</code> and writes the jar to <code>build_manual/</code> or <code>$BUILD_DIR</code>) and commit it together with the source. The version string <code>SCRCPY_VERSION_NAME=3.3.4-octave</code> in the script must equal <code>SERVER_VERSION</code> in <span class="file-path">backend/phone_mirror/scrcpy_client.py</span> and <code>kServerVersion</code> in <span class="file-path">src/phone_mirror/scrcpyclient.cpp</span> (both <code>3.3.4-octave</code>); the server refuses a mismatch. Protocol byte layouts live in <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>.</li>
+          <li><strong>adb</strong> &mdash; <code>python scripts/fetch_platform_tools.py [--os linux|windows|darwin | --all] [--dest DIR]</code> downloads Google's platform-tools <code>37.0.1</code>, verifies the SHA-256 recorded in the script, and extracts only <code>adb</code> (+ <code>lib64/libc++.so</code> on Linux, the three DLLs on Windows), <code>NOTICE.txt</code> and <code>source.properties</code> into <span class="file-path">tools/platform-tools/&lt;os&gt;/</span> (gitignored). CI ships that next to the executable: <code>platform-tools/</code> beside <code>OCTAVE.exe</code>, <code>usr/bin/platform-tools/</code> in the AppImage, <code>Contents/Resources/platform-tools/</code> in the bundle. Google publishes x86_64 only, so ARM boards fall back to the distro's <code>adb</code> on PATH.</li>
+        </ul>
+        <p>libavcodec is an optional build dependency for the H.264 decoder; without it <code>phoneMirrorManager.nativeAvailable</code> is false and there is no fallback path any more.</p>
 
         <!-- Python -->
         <h2 id="python">Python Developer Backend</h2>
         <p>The Python tree (<span class="file-path">backend/</span> + <span class="file-path">main.py</span>) is a peer backend for tinkering on desktop and Raspberry Pi / Orange Pi. It has <strong>no build pipeline</strong>: run it from a checkout.</p>
-        <pre><code><span class="fn">python</span> setup.py              <span class="cmt"># create venv, install requirements.txt, launch</span>
+        <pre><code><span class="fn">python</span> setup.py              <span class="cmt"># create venv, install requirements.txt, launch (installs distro packages on Linux via sudo)</span>
 <span class="fn">python</span> setup.py --no-run     <span class="cmt"># setup only</span>
-<span class="fn">python</span> main.py               <span class="cmt"># run (venv activated); --debug / --profile</span>
-<span class="fn">python</span> -m dev.main_dev       <span class="cmt"># dev mode: simulated OBD + keyboard controls</span></code></pre>
+<span class="fn">python</span> main.py               <span class="cmt"># run (venv activated); --debug adds octave-debug.log, --profile starts the perf monitor + command server</span>
+<span class="fn">python</span> -m dev.main_dev       <span class="cmt"># dev mode: simulated OBD + keyboard controls (dev/ is gitignored -- developer machines only)</span></code></pre>
+        <p><span class="file-path">setup.py</span> detects the platform (including Raspberry Pi via the device-tree model and WSL via <code>/proc/version</code>), installs the Qt runtime libraries for Arch / Fedora / Debian families, recreates the venv if it was made on another OS or has a broken pip, installs <span class="file-path">requirements.txt</span> (PySide6, mutagen, numpy, python-obd, spotipy, keyring, av, requests, pyserial, smbus2 on Linux, yt-dlp, ytmusicapi, rapidfuzz) and <code>execv</code>s <code>main.py</code>. It checks for Python 3.8+, while <span class="file-path">pyproject.toml</span> declares <code>requires-python = ">=3.10,&lt;3.12"</code> and CI runs 3.11 &mdash; treat 3.10/3.11 as the supported range.</p>
         <p>Do not reintroduce <code>build_scripts/build.py</code>, <code>octave.spec</code>, <code>requirements-build.txt</code>, per-platform <code>build_*.{sh,bat}</code> wrappers, or the Buildozer spec &mdash; they were removed deliberately.</p>
 
         <!-- Troubleshooting -->
         <h2 id="troubleshooting">Build Troubleshooting</h2>
 
+        <h3>CMake configures against the Android kit on a desktop build</h3>
+        <p>With Qt for Android installed, the CMake package registry can resolve <code>find_package(Qt6)</code> to the Android kit and the desktop build fails at configure. Pass the desktop kit explicitly: <code>-DQt6_DIR="$(qmake6 -query QT_INSTALL_LIBS)/cmake/Qt6"</code> (what <span class="file-path">scripts/octave-desktop.sh</span> does). The AppImage script has the mirror-image problem for its <code>assetimporters</code> copy, which is why CMake records the real plugin path in <code>build/qt_plugins_path.txt</code>.</p>
+
         <h3>"DLL not found" on Windows</h3>
-        <p>Install the Visual C++ Redistributable: <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe">Download link</a></p>
+        <p>Install the Visual C++ Redistributable: <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe">Download link</a>. The installer already warns when the registry shows no VC++ runtime.</p>
 
         <h3>"App is damaged" on macOS</h3>
         <pre><code>xattr -cr /Applications/OCTAVE.app</code></pre>
 
         <h3>App links but exits at Main.qml load</h3>
-        <p>The Qt you built against lacks <code>QtQuick.Effects</code> or <code>Qt5Compat.GraphicalEffects</code> (both imported by <code>frontend/MainMenu.qml</code>). Use the pinned Qt 6.7.3 with the <code>qt5compat</code> module rather than distro Qt 6.2.</p>
+        <p>The Qt you built against lacks <code>QtQuick.Effects</code> or <code>Qt5Compat.GraphicalEffects</code> (both imported by <code>frontend/MainMenu.qml</code>), or the packaged QML tree is not at <code>&lt;binary dir&gt;/frontend</code> or <code>&lt;binary dir&gt;/../frontend</code>. Use the pinned Qt 6.7.3 with the <code>qt5compat</code> module rather than distro Qt 6.2, and keep the AppDir layout above.</p>
 
         <h3>3D vehicle model does not load</h3>
-        <p><code>Failed to load asset import plugin with key: "assimp"</code> means Qt Quick 3D is present but its assimp import plugin is not &mdash; on Arch, <code>qt6-quick3d</code> additionally needs the <code>assimp</code> package.</p>
+        <p><code>Failed to load asset import plugin with key: "assimp"</code> means Qt Quick 3D is present but its assimp import plugin is not &mdash; on Arch, <code>qt6-quick3d</code> additionally needs the <code>assimp</code> package; in an AppImage it means <code>usr/plugins/assetimporters/</code> was not copied (CMake did not find Quick3D at configure time).</p>
 
-        <h3>AppImage Won't Run</h3>
+        <h3>AppImage won't run</h3>
         <pre><code><span class="cmt"># Make executable</span>
 chmod +x OCTAVE-&lt;version&gt;-linux-x86_64.AppImage
 
@@ -239,7 +312,19 @@ chmod +x OCTAVE-&lt;version&gt;-linux-x86_64.AppImage
 ./OCTAVE-&lt;version&gt;-linux-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun</code></pre>
 
-        <h3>Dropbox Sync Interference</h3>
+        <h3>arm64 AppImage build aborts in linuxdeploy-plugin-qt</h3>
+        <p>An unresolved <code>libgstphotography</code> dependency from Qt's GStreamer plugin. Set <code>OCTAVE_DROP_QT_PLUGINS=multimedia/libgstreamermediaplugin.so</code> as the CI job does; OCTAVE uses the FFmpeg media backend and does not need the plugin.</p>
+
+        <h3>Android: INSTALL_FAILED_UPDATE_INCOMPATIBLE / "package appears to be invalid"</h3>
+        <p>The first is a signing-key change (every CI release uses a new keystore, and a local debug build differs from both): <code>adb uninstall org.octave.app</code>, then install. The second is a v3-only signature on some sideload installers; CI forces v1+v2+v3, so a locally signed APK should do the same.</p>
+
+        <h3>Android APK build fails fetching the youtubedl-android AAR (HTTP 429)</h3>
+        <p>Maven Central rate-limiting. CI retries four times with backoff and caches <code>~/.gradle</code>; locally, just re-run <code>cmake --build build-android --target apk</code>.</p>
+
+        <h3>qmllint fails locally on warnings</h3>
+        <p><code>qmllint</code> exits 255 on plain warnings. CI only fails on <code>critical</code> entries &mdash; reproduce with <code>find frontend -name '*.qml' -exec qmllint -I frontend --json qmllint.json {} +</code> and inspect the JSON rather than the exit code.</p>
+
+        <h3>Dropbox sync interference</h3>
         <p>CMake caches are machine-specific. If the checkout is Dropbox-synced between machines, build into a per-host directory (as <code>scripts/octave-desktop.sh</code> does with <code>build-desktop-&lt;hostname&gt;/</code>) rather than sharing <code>build/</code>.</p>
 
         <div class="related-pages">
@@ -247,6 +332,8 @@ chmod +x OCTAVE-&lt;version&gt;-linux-x86_64.AppImage
           <a href="getting-started.html" class="related-link">Getting Started</a>
           <a href="development.html" class="related-link">Development Guide</a>
           <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
+          <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
+          <a href="architecture.html" class="related-link">Architecture Overview</a>
         </div>
       </div>
     </div>

@@ -13,199 +13,294 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Theme System</div>
           <h1 class="page-title">Theme System</h1>
-          <p class="page-subtitle">Dynamic theming with Style.qml, environment presets via EnvironmentTheme.qml, and responsive layout scaling from Spacing.qml</p>
+          <p class="page-subtitle">Style.qml colour themes and fonts, Album Art Capture (k-means palettes from cover art in both backends), colour transitions, the single-preset EnvironmentTheme, Spacing.qml layout scaling and the GUI scale slider, and the ThemedIcon SVG tinting pipeline</p>
         </div>
 
         <nav class="toc">
           <h3>On This Page</h3>
           <ul class="toc-list">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#style-qml">Style.qml &mdash; Color Themes</a></li>
+            <li><a href="#style-qml">Style.qml &mdash; Theme Resolution</a></li>
             <li><a href="#builtin-themes">Built-in Themes</a></li>
-            <li><a href="#custom-themes">Custom Themes</a></li>
+            <li><a href="#theme-object">Theme Object Structure</a></li>
+            <li><a href="#theme-picker">Theme Picker and Swatch Chips</a></li>
+            <li><a href="#custom-themes">Custom (Saved Album Art) Themes</a></li>
             <li><a href="#album-art-capture">Album Art Capture</a></li>
-            <li><a href="#color-tokens">Color Token Reference</a></li>
-            <li><a href="#transitions">Color Transitions</a></li>
-            <li><a href="#environment-theme">EnvironmentTheme.qml &mdash; UI Shape Presets</a></li>
-            <li><a href="#env-presets">Environment Presets</a></li>
+            <li><a href="#color-tokens">Colour Token Reference</a></li>
+            <li><a href="#transitions">Colour Transitions</a></li>
+            <li><a href="#font-system">Font System</a></li>
+            <li><a href="#environment-theme">EnvironmentTheme.qml &mdash; Structural Tokens</a></li>
             <li><a href="#spacing-qml">Spacing.qml &mdash; Layout Scaling</a></li>
             <li><a href="#scaling-functions">Scaling Functions</a></li>
+            <li><a href="#gui-scale">GUI Scale Slider and Auto-Scale</a></li>
+            <li><a href="#themed-icon">ThemedIcon and the SVG Assets</a></li>
+            <li><a href="#consuming-themes">How Components Consume the Theme</a></li>
             <li><a href="#customization">Customization Guide</a></li>
+            <li><a href="#design-decisions">Design Decisions</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
 
-        <p>OCTAVE's theming is powered by three <code>pragma Singleton</code> QML objects that collectively control every visual aspect of the UI:</p>
+        <p>OCTAVE's look is driven by three <code>pragma Singleton</code> QML objects declared in <span class="file-path">frontend/qmldir</span> and imported everywhere as <code>App.*</code> (<code>import "." as App</code> from <span class="file-path">frontend/</span>, <code>import ".." as App</code> from <span class="file-path">frontend/settings/</span>). Files that live in <span class="file-path">frontend/</span> itself can also reference them unqualified (<span class="file-path">SettingsMenu.qml</span> writes <code>Style.assetBase</code>).</p>
 
-        <div class="diagram">
-<pre>
- +------------------+    +---------------------+    +------------------+
- | Style.qml        |    | EnvironmentTheme.qml|    | Spacing.qml      |
- |                  |    |                     |    |                  |
- | COLORS           |    | SHAPES              |    | SIZES            |
- | - base, accent   |    | - card radius       |    | - dp(), dpMin()  |
- | - text, sliders  |    | - button style      |    | - scaledSize()   |
- | - obd, bottombar |    | - slider ticks      |    | - scalePx()      |
- | - transitions    |    | - corner brackets   |    | - percentage     |
- | - album art      |    | - scanline effects  |    |   properties     |
- +------------------+    +---------------------+    +------------------+
-        |                        |                         |
-        +------------------------+-------------------------+
-                                 |
-                    All accessed via App.* namespace
-</pre>
-        </div>
+        <pre class="diagram">
+ +----------------------+   +------------------------+   +----------------------+
+ | Style.qml            |   | EnvironmentTheme.qml   |   | Spacing.qml          |
+ |                      |   |                        |   |                      |
+ | COLOURS + FONTS      |   | STRUCTURE (one preset) |   | SIZES                |
+ | - 17 built-in themes |   | - cardRadius, chip /   |   | - dp(), dpMin()      |
+ | - custom themes      |   |   button / switch radii|   | - scaledSize()       |
+ | - Album Art Capture  |   | - feature flags, all   |   | - scalePx()          |
+ | - ~60 colour tokens, |   |   false in "Standard"  |   | - percentage tokens  |
+ |   each with Behavior |   |                        |   |   for every screen   |
+ | - fontFamily, fonts  |   |                        |   | - globalScale / auto |
+ | - assetBase URL      |   |                        |   |   scale factors      |
+ +----------------------+   +------------------------+   +----------------------+
+            |                          |                            |
+            +--------------------------+----------------------------+
+                                       |
+                 Wired at startup by frontend/Main.qml from settingsManager
+                 (themeSetting, fontSetting, uiScale, colorTransitionMs, ...)
+        </pre>
+
+        <p>The backends own persistence only. <code>SettingsManager</code> (both C++ and Python) stores <code>themeSetting</code>, <code>fontSetting</code>, <code>uiScale</code>, <code>colorTransitionMs</code>, <code>songLengthTransition</code>, <code>customThemes</code> and <code>albumArtColors</code>; <code>MediaManager</code> and <code>SpotifyManager</code> produce Album Art Capture palettes. Everything else is QML.</p>
 
         <!-- Style.qml -->
-        <h2 id="style-qml">Style.qml &mdash; Color Themes</h2>
+        <h2 id="style-qml">Style.qml &mdash; Theme Resolution</h2>
 
-        <p><span class="file-path">frontend/Style.qml</span> is the central color theme store. It defines built-in themes, supports custom themes loaded from settings, and provides the Album Art Capture feature.</p>
-
-        <h3>Theme Resolution</h3>
-
-        <p>The <code>activeTheme</code> property drives all color bindings. It resolves in priority order:</p>
+        <p><span class="file-path">frontend/Style.qml</span> (about 1200 lines) holds the built-in palettes, the custom-theme map, the live album-art palette, the font registry, and one reactive colour property per UI token. The <code>activeTheme</code> object is what every token binds to, resolved in priority order:</p>
 
         <pre><code><span class="prop">property var</span> activeTheme: {
-    <span class="cmt">// 1. Album Art Capture (dynamic, real-time)</span>
-    <span class="kw">if</span> (currentTheme === <span class="str">"Album Art Capture"</span> && albumArtTheme)
+    <span class="cmt">// 1. Album Art Capture with a live palette</span>
+    <span class="kw">if</span> (currentTheme === <span class="str">"Album Art Capture"</span> &amp;&amp; albumArtTheme)
         <span class="kw">return</span> albumArtTheme
-
-    <span class="cmt">// 2. Custom themes (loaded from settings)</span>
+    <span class="cmt">// 2. Custom themes saved by the user</span>
     <span class="kw">if</span> (customThemes[currentTheme])
         <span class="kw">return</span> customThemes[currentTheme]
-
-    <span class="cmt">// 3. Built-in themes</span>
+    <span class="cmt">// 3. Built-in themes, with a hard fallback</span>
     <span class="kw">return</span> themes[currentTheme] || themes[<span class="str">"SolarizedLight"</span>]
 }</code></pre>
+
+        <p>Two setters exist. <code>setTheme(name)</code> validates the name against <code>themes</code> and <code>customThemes</code>, records <code>lastStaticTheme</code> (unless the name is Album Art Capture, in which case it arms <code>_firstAlbumArtUpdate</code>) and assigns <code>currentTheme</code>, letting the <code>Behavior</code>s animate. <code>setThemeInstant(name)</code> does the same but zeroes <code>colorTransitionMs</code> for the duration of the switch and restores it with <code>Qt.callLater</code>. Main.qml uses <code>setThemeInstant</code> for the startup load and for every manual theme change; the Display page's chips call <code>setTheme</code> after persisting through <code>settingsManager.save_theme_setting()</code>.</p>
+
+        <p>Other public members: <code>getAllThemeNames()</code> (built-ins minus "Album Art Capture", plus custom names), <code>getLightThemeNames()</code> / <code>getDarkThemeNames()</code>, <code>addCustomTheme(name, obj)</code> (emits <code>customThemesUpdated</code>), <code>updateAlbumArtTheme(json)</code>, <code>isAlbumArtCaptureActive</code>, <code>lastStaticTheme</code>, and the read-only URL <code>assetBase</code> (<code>Qt.resolvedUrl("assets/")</code>).</p>
 
         <!-- Built-in Themes -->
         <h2 id="builtin-themes">Built-in Themes</h2>
 
-        <p>OCTAVE ships with 9 built-in themes. Each is a JavaScript object with a standardized structure:</p>
+        <p>Seventeen palettes are defined in the <code>themes</code> map: eight light, eight dark, plus the "Album Art Capture" placeholder. The picker order below is hand-tuned in <code>lightThemeNames</code> / <code>darkThemeNames</code> ("so the swatch palette flows nicely"). The default on a fresh install is <code>CosmicVoyager</code> in both backends (<code>themeSetting</code> default in <span class="file-path">src/managers/settingsmanager.cpp</span> and <span class="file-path">backend/settings_manager.py</span>).</p>
 
+        <h3>Light</h3>
         <table>
-          <thead><tr><th>Theme</th><th>Base</th><th>Accent</th><th>Character</th></tr></thead>
+          <thead><tr><th>Theme</th><th>base</th><th>baseAlt</th><th>accent</th><th>text.primary</th></tr></thead>
           <tbody>
-            <tr><td>SolarizedLight</td><td><code>#FDF6E3</code></td><td><code>#268BD2</code></td><td>Warm cream with blue accents</td></tr>
-            <tr><td>NeonMatrix</td><td><code>#0C0C0C</code></td><td><code>#00FF41</code></td><td>Black with green terminal glow</td></tr>
-            <tr><td>CosmicVoyager</td><td><code>#0A0E17</code></td><td><code>#00BFFF</code></td><td>Deep space with cyan highlights</td></tr>
-            <tr><td>TechnoRetro</td><td><code>#1E1014</code></td><td><code>#FF00AA</code></td><td>Dark with hot pink neon</td></tr>
-            <tr><td>AutumnCascade</td><td><code>#2D1E12</code></td><td><code>#E67E22</code></td><td>Warm brown with orange</td></tr>
-            <tr><td>VividGradient</td><td><code>#12001A</code></td><td><code>#C837AB</code></td><td>Deep purple with magenta</td></tr>
-            <tr><td>DesertOasis</td><td><code>#201007</code></td><td><code>#D2B48C</code></td><td>Dark earth with tan/sage</td></tr>
-            <tr><td>QuantumNebula</td><td><code>#0F0F1A</code></td><td><code>#9C27B0</code></td><td>Dark indigo with purple/cyan</td></tr>
-            <tr><td>Album Art Capture</td><td><code>#1a1a2e</code></td><td><code>#e94560</code></td><td>Dynamic (placeholder colors shown)</td></tr>
+            <tr><td>SolarizedLight</td><td><code>#FDF6E3</code></td><td><code>#EEE8D5</code></td><td><code>#268BD2</code></td><td><code>#073642</code></td></tr>
+            <tr><td>ArcticChill</td><td><code>#F0F4F8</code></td><td><code>#DCE5EE</code></td><td><code>#0EA5E9</code></td><td><code>#0F2942</code></td></tr>
+            <tr><td>Parchment</td><td><code>#F5EBD8</code></td><td><code>#E8DBC1</code></td><td><code>#8B4513</code></td><td><code>#2A1A0A</code></td></tr>
+            <tr><td>Sunshine</td><td><code>#FFFCF2</code></td><td><code>#FFF6D8</code></td><td><code>#F97316</code></td><td><code>#3A1E03</code></td></tr>
+            <tr><td>MintGarden</td><td><code>#F0F9F4</code></td><td><code>#DDF0E2</code></td><td><code>#16A34A</code></td><td><code>#0F2A1A</code></td></tr>
+            <tr><td>RoseQuartz</td><td><code>#FBF2F4</code></td><td><code>#F5E0E5</code></td><td><code>#BE185D</code></td><td><code>#3A0E1F</code></td></tr>
+            <tr><td>LavenderMist</td><td><code>#F5F3FA</code></td><td><code>#E9E4F2</code></td><td><code>#6D28D9</code></td><td><code>#1F0E3D</code></td></tr>
+            <tr><td>SlateCloud</td><td><code>#F1F5F9</code></td><td><code>#E2E8F0</code></td><td><code>#475569</code></td><td><code>#0F172A</code></td></tr>
           </tbody>
         </table>
 
-        <h3>Theme Object Structure</h3>
+        <h3>Dark</h3>
+        <table>
+          <thead><tr><th>Theme</th><th>base</th><th>baseAlt</th><th>accent</th><th>text.primary</th></tr></thead>
+          <tbody>
+            <tr><td>AmberConsole</td><td><code>#000000</code></td><td><code>#0A0A0A</code></td><td><code>#FFB000</code></td><td><code>#FFE89C</code></td></tr>
+            <tr><td>NeonMatrix</td><td><code>#0C0C0C</code></td><td><code>#161616</code></td><td><code>#00FF41</code></td><td><code>#CCFFCC</code></td></tr>
+            <tr><td>ForestEmerald</td><td><code>#0A1A14</code></td><td><code>#122620</code></td><td><code>#10B981</code></td><td><code>#D1FAE5</code></td></tr>
+            <tr><td>CosmicVoyager (default)</td><td><code>#0A0E17</code></td><td><code>#151C29</code></td><td><code>#00BFFF</code></td><td><code>#E0F2FF</code></td></tr>
+            <tr><td>TechnoRetro</td><td><code>#1E1014</code></td><td><code>#2A1B22</code></td><td><code>#FF00AA</code></td><td><code>#F5E0FF</code></td></tr>
+            <tr><td>QuantumNebula</td><td><code>#0F0F1A</code></td><td><code>#17172A</code></td><td><code>#9C27B0</code></td><td><code>#F0E6FF</code></td></tr>
+            <tr><td>CrimsonEmber</td><td><code>#1A0808</code></td><td><code>#241010</code></td><td><code>#DC2626</code></td><td><code>#FFE4E4</code></td></tr>
+            <tr><td>AutumnCascade</td><td><code>#2D1E12</code></td><td><code>#3E2918</code></td><td><code>#E67E22</code></td><td><code>#FDF2E9</code></td></tr>
+          </tbody>
+        </table>
+
+        <h3>Placeholder</h3>
+        <table>
+          <thead><tr><th>Theme</th><th>base</th><th>baseAlt</th><th>accent</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td>Album Art Capture</td><td><code>#1a1a2e</code></td><td><code>#16213e</code></td><td><code>#e94560</code></td><td>Only used when no palette has been extracted yet; excluded from <code>getAllThemeNames()</code> and surfaced as a toggle, not a chip.</td></tr>
+          </tbody>
+        </table>
+
+        <p>Themes differ in how much per-button variety they carry. The eight themes added with the swatch redesign (commit <code>7ac3c31</code>: ArcticChill, Parchment, Sunshine, MintGarden, RoseQuartz, LavenderMist, SlateCloud, AmberConsole, plus CrimsonEmber and ForestEmerald) give each bottom-bar destination its own hue, while SolarizedLight and NeonMatrix tint every button with the accent.</p>
+
+        <!-- Theme object -->
+        <h2 id="theme-object">Theme Object Structure</h2>
+
+        <p>Every theme &mdash; built-in, custom, or extracted &mdash; is a plain object with the same ten top-level keys. <code>MediaManager::_generate_theme_from_colors()</code> in both backends emits exactly this shape as JSON, which is why an extracted palette can be dropped straight into <code>activeTheme</code>:</p>
 
         <pre><code>{
-    <span class="str">"base"</span>: <span class="str">"#0C0C0C"</span>,           <span class="cmt">// Primary background</span>
-    <span class="str">"baseAlt"</span>: <span class="str">"#161616"</span>,        <span class="cmt">// Secondary background</span>
-    <span class="str">"accent"</span>: <span class="str">"#00FF41"</span>,         <span class="cmt">// Primary accent color</span>
-    <span class="str">"text"</span>: {
-        <span class="str">"primary"</span>: <span class="str">"#CCFFCC"</span>,     <span class="cmt">// Main text</span>
-        <span class="str">"secondary"</span>: <span class="str">"#88CC88"</span>   <span class="cmt">// Subdued text</span>
-    },
-    <span class="str">"states"</span>: {
-        <span class="str">"hover"</span>: <span class="str">"#202020"</span>,       <span class="cmt">// Hover background</span>
-        <span class="str">"paused"</span>: <span class="str">"#1C1C1C"</span>,     <span class="cmt">// Paused track highlight</span>
-        <span class="str">"playing"</span>: <span class="str">"#282828"</span>     <span class="cmt">// Playing track highlight</span>
-    },
-    <span class="str">"sliders"</span>: {
-        <span class="str">"volume"</span>: <span class="str">"#00FF41"</span>,     <span class="cmt">// Volume slider fill</span>
-        <span class="str">"media"</span>: <span class="str">"#88CC88"</span>,      <span class="cmt">// Media room slider</span>
-        <span class="str">"settings"</span>: <span class="str">"#00FF41"</span>   <span class="cmt">// Settings sliders</span>
-    },
+    <span class="str">"base"</span>: <span class="str">"#0C0C0C"</span>,            <span class="cmt">// backgroundColor, sidebarColor, rowBackgroundColor</span>
+    <span class="str">"baseAlt"</span>: <span class="str">"#161616"</span>,         <span class="cmt">// headerBackgroundColor, contentColor, bottom bar gradient</span>
+    <span class="str">"accent"</span>: <span class="str">"#00FF41"</span>,          <span class="cmt">// accent, clockTextColor, metadataColor, active toggles</span>
+    <span class="str">"text"</span>:    { <span class="str">"primary"</span>: <span class="str">"#CCFFCC"</span>, <span class="str">"secondary"</span>: <span class="str">"#88CC88"</span> },
+    <span class="str">"states"</span>:  { <span class="str">"hover"</span>: <span class="str">"#202020"</span>, <span class="str">"paused"</span>: <span class="str">"#1C1C1C"</span>, <span class="str">"playing"</span>: <span class="str">"#282828"</span> },
+    <span class="str">"sliders"</span>: { <span class="str">"volume"</span>: <span class="str">"#00FF41"</span>, <span class="str">"media"</span>: <span class="str">"#88CC88"</span>, <span class="str">"settings"</span>: <span class="str">"#00FF41"</span> },
     <span class="str">"bottombar"</span>: {
-        <span class="str">"previous"</span>: <span class="str">"#00FF41"</span>,   <span class="cmt">// Each button has its own color</span>
-        <span class="str">"play"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"pause"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"next"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"volume"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"shuffle"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"toggleShade"</span>: <span class="str">"#202020"</span>,
-        <span class="str">"homeButton"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"obdButton"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"mediaButton"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"settingsButton"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"androidAutoButton"</span>: <span class="str">"#00FF41"</span>,
-        <span class="str">"phoneMirrorButton"</span>: <span class="str">"#00FF41"</span>
+        <span class="str">"previous"</span>, <span class="str">"play"</span>, <span class="str">"pause"</span>, <span class="str">"next"</span>, <span class="str">"volume"</span>, <span class="str">"shuffle"</span>, <span class="str">"toggleShade"</span>,
+        <span class="str">"homeButton"</span>, <span class="str">"obdButton"</span>, <span class="str">"mediaButton"</span>, <span class="str">"sensorButton"</span>,
+        <span class="str">"settingsButton"</span>, <span class="str">"androidAutoButton"</span>, <span class="str">"phoneMirrorButton"</span>
     },
-    <span class="str">"mediaroom"</span>: { ... },       <span class="cmt">// MediaRoom button colors</span>
-    <span class="str">"mainmenu"</span>: { <span class="str">"mediaContainer"</span>: <span class="str">"#005500"</span> },
-    <span class="str">"obd"</span>: {
-        <span class="str">"boxBackground"</span>: <span class="str">"#161616"</span>,
-        <span class="str">"barColor"</span>: <span class="str">"#33FF66"</span>
-    }
+    <span class="str">"mediaroom"</span>: { <span class="str">"previous"</span>, <span class="str">"play"</span>, <span class="str">"pause"</span>, <span class="str">"next"</span>, <span class="str">"left"</span>, <span class="str">"right"</span>, <span class="str">"shuffle"</span>, <span class="str">"toggleShade"</span> },
+    <span class="str">"mainmenu"</span>:  { <span class="str">"mediaContainer"</span>: <span class="str">"#005500"</span> },
+    <span class="str">"obd"</span>:       { <span class="str">"boxBackground"</span>: <span class="str">"#161616"</span>, <span class="str">"barColor"</span>: <span class="str">"#33FF66"</span> }
+    <span class="cmt">// optional: "obd.labelColor", "obd.valueColor", "status": { connected, disconnected, ... }, "albumArt"</span>
 }</code></pre>
 
-        <!-- Custom Themes -->
-        <h2 id="custom-themes">Custom Themes</h2>
+        <p>No shipped theme defines <code>status</code>, <code>obd.labelColor</code> or <code>obd.valueColor</code>; the tokens that read them fall back to fixed colours or to the text colours. <code>bottombar.sensorButton</code> was added in commit <code>6735de5</code> ("sensor button now affected by theme colors") to every built-in theme and to both backends' palette generators; <code>Style.bottomBarSensorButton</code> falls back to <code>homeButton</code> so older persisted album-art JSON without the key still tints the icon.</p>
 
-        <p>Users can create custom themes that are stored in <code>settingsConfigure.json</code>. They are loaded at startup in <code>Main.qml</code>:</p>
+        <!-- Picker -->
+        <h2 id="theme-picker">Theme Picker and Swatch Chips</h2>
+
+        <p>The picker lives in Display &rarr; Appearance (<span class="file-path">frontend/settings/DisplaySettingsPage.qml</span>) and is built from three <code>SettingsChips</code> rows (see <a href="settings-ui.html#components">Settings UI &rarr; Reusable Components</a>):</p>
+
+        <ul>
+          <li><strong>Light</strong> and <strong>Dark</strong> rows use <code>App.Style.getLightThemeNames()</code> / <code>getDarkThemeNames()</code>. Each chip is a square swatch whose <code>chipPalettes[name]</code> is the array <code>[accent, baseAlt, base]</code> drawn as three horizontal bands, top to bottom, by <code>buildThemeChipPalettes()</code>.</li>
+          <li><strong>Album Art Theme</strong> (visible only when the user has saved one) lists <code>settingsManager.customThemes</code>; a theme that carries an <code>albumArt</code> URL renders as an image chip (<code>chipImages</code>), otherwise it falls back to a palette swatch. These chips are <code>deletableItems</code>: press-and-hold opens the confirmation popup, and deleting the active theme first switches to <code>CosmicVoyager</code>.</li>
+        </ul>
+
+        <p>The highlighted chip is <code>activeThemeName</code>: when Album Art Capture is on it shows <code>App.Style.lastStaticTheme</code> (the theme "borrowed" behind the live palette, defaulting to CosmicVoyager). Picking any chip calls <code>save_theme_setting(name)</code> + <code>App.Style.setTheme(name)</code>, which implicitly turns Album Art Capture off.</p>
+
+        <p>Below the chips a <code>SettingSubcategory</code> titled "Album Art Capture" carries the on/off switch (<code>togglable: true</code>, checked when <code>themeSetting === "Album Art Capture"</code>). Turning it on stores the current theme in <code>lastStaticTheme</code>, saves the setting, calls <code>setTheme</code> and immediately asks <code>mediaManager.extract_colors_from_album_art(get_current_file())</code>; turning it off restores <code>lastStaticTheme</code>. Its body holds the "Transition Speed" slider and the "Match Song Length" toggle described under <a href="#transitions">Colour Transitions</a>.</p>
+
+        <!-- Custom Themes -->
+        <h2 id="custom-themes">Custom (Saved Album Art) Themes</h2>
+
+        <p>Custom themes are created from the Media Room: while Album Art Capture is active, the album-art popup's "Save as Theme" button (<span class="file-path">frontend/MediaRoom.qml</span>) calls</p>
+
+        <pre><code>settingsManager.<span class="fn">save_custom_theme</span>(themeName, JSON.<span class="fn">stringify</span>(App.Style.albumArtTheme), mediaRoom.currentAlbumArt)</code></pre>
+
+        <p>using the album name (or the track name, or "Custom Theme") as the key. Both backends copy the cover image into the app data directory, add its <code>file://</code> URL as the theme's <code>albumArt</code> key, and store the object under <code>customThemes</code> in <span class="file-path">settingsConfigure.json</span>. <code>get_custom_theme(name)</code> returns the JSON and <code>delete_custom_theme(name)</code> removes it (and its copied art).</p>
+
+        <p>Main.qml loads them <em>before</em> applying the saved theme so that a custom theme selected last session passes the <code>setTheme</code> guard:</p>
 
         <pre><code><span class="kw">let</span> customThemes = settingsManager.customThemes
 customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(themeName) {
-    <span class="kw">let</span> themeJSON = settingsManager.<span class="fn">get_custom_theme</span>(themeName)
-    <span class="kw">let</span> themeObj = JSON.<span class="fn">parse</span>(themeJSON)
+    <span class="kw">let</span> themeObj = JSON.<span class="fn">parse</span>(settingsManager.<span class="fn">get_custom_theme</span>(themeName))
     App.Style.<span class="fn">addCustomTheme</span>(themeName, themeObj)
 })</code></pre>
 
-        <p>When custom themes change at runtime (via the <code>customThemesChanged</code> signal), the entire custom themes map is rebuilt atomically to avoid briefly clearing the active theme.</p>
+        <p>On <code>settingsManager.customThemesChanged</code> the whole map is rebuilt into a new object and assigned in one shot &mdash; the comment explains that clearing and refilling would briefly make <code>activeTheme</code> fall back to SolarizedLight if a custom theme is active. The Display page listens to <code>App.Style.customThemesUpdated</code> to refresh chip options, palettes, images and the deletable list.</p>
 
         <!-- Album Art Capture -->
         <h2 id="album-art-capture">Album Art Capture</h2>
 
-        <p>The "Album Art Capture" theme extracts dominant colors from the current song's album art and generates a full theme object dynamically. The pipeline:</p>
+        <p>"Album Art Capture" turns the current cover into a full theme. The work is split between the backends (image analysis, palette generation, persistence) and QML (applying and animating the result).</p>
 
+        <h3>Triggers</h3>
+        <ul>
+          <li>Selecting the mode: <code>Main.qml onThemeSettingChanged</code> and the Display-page toggle both call <code>mediaManager.extract_colors_from_album_art(mediaManager.get_current_file())</code>. Inside the backend, <code>_on_theme_changed()</code> also sets <code>m_albumArtCaptureActive</code> / <code>_album_art_capture_active</code>.</li>
+          <li>Track change while active: <code>_on_media_changed_for_theme(filename)</code> (local files) or the Spotify manager's track-changed path, which calls <code>extractColorsFromUrl()</code> / <code>_extract_colors_from_url()</code> and skips an image URL it has already processed.</li>
+          <li>Startup: a one-second timer (<code>_extract_colors_on_startup</code>) re-extracts for the restored track if the mode is active.</li>
+        </ul>
+
+        <h3>Extraction Algorithm (identical in C++ and Python)</h3>
         <ol class="steps">
-          <li>A new track starts playing in <code>mediaManager</code> or <code>spotifyManager</code></li>
-          <li>Python extracts dominant colors from the album art image</li>
-          <li>A complete theme JSON is generated and emitted via <code>albumColorsExtracted(themeJson)</code> signal</li>
-          <li>Main.qml receives the signal and calls <code>Style.updateAlbumArtTheme(themeJson)</code></li>
-          <li>Style.qml parses the JSON, stores it as <code>albumArtTheme</code>, forces <code>activeTheme</code> to re-evaluate by toggling <code>currentTheme</code></li>
-          <li>All color properties with <code>Behavior on</code> animations smoothly transition to the new palette</li>
+          <li>Load the cover with <code>QImage</code>, convert to <code>Format_RGBA8888</code>, scale to 50&times;50 ignoring aspect ratio &mdash; 2500 RGB samples.</li>
+          <li>Run k-means with <code>k = 5</code>, at most 10 iterations, centroids seeded from a random generator fixed at seed 42, stopping early when no centroid moves by more than 1 per channel. (The Python version uses a local <code>random.Random(42)</code>; a comment notes that seeding the global module had made every later <code>random.shuffle()</code> in the process deterministic.)</li>
+          <li>Sort the five centroids by vibrancy (HSV saturation &times; value), most vibrant first.</li>
+          <li>Average the luminance (<code>0.299R + 0.587G + 0.114B</code>) of the first 1000 pixels; below 0.5 the image is "dark" and the generated theme uses dark bases.</li>
+          <li><code>_generate_theme_from_colors(colors, isDark)</code> derives the accents (primary: saturation &times;1.4, brightness &times;1.2; secondary &times;1.3/&times;1.15; tertiary &times;1.25/&times;1.1; quaternary &times;1.2/&times;1.05), dimmer nav variants (&times;0.7 and &times;0.75 brightness), picks white or near-black text with WCAG relative-luminance contrast checks, and assembles the ten-key theme object above. Distinct accents are assigned per bottom-bar button (OBD = quaternary, media = secondary, settings = tertiary, sensor = primary) so the bar stays legible.</li>
         </ol>
 
+        <h3>Threading and Delivery</h3>
+        <p>The C++ manager runs the extraction with <code>QtConcurrent::run</code> and a <code>QFutureWatcher</code>; Python uses a daemon <code>threading.Thread</code> and a queued <code>_colorsReady</code> signal. Both keep a job counter so that a fast skip through several tracks applies only the last palette, and both ignore a repeat request for the same file within 2&nbsp;s (the restore-playback path and the startup timer ask for the same track). The comment in the Python code gives the cost: about 0.3&nbsp;s on a desktop, closer to a second on a Raspberry Pi &mdash; hence the worker thread.</p>
+
+        <p>When the manager has a settings manager attached (always, in both entry points) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as <code>albumArtColors</code> and emits <code>albumArtColorsChanged</code>. Main.qml's handler reads the <code>albumArtColors</code> property (the comment notes PySide6 signal arguments did not reliably pass through <code>Connections</code>) and calls <code>App.Style.updateAlbumArtTheme(json)</code>. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> / <code>spotifyManager</code> is the fallback when no settings manager is connected; Main.qml handles it too.</p>
+
+        <h3>Applying in Style.qml</h3>
+        <pre><code><span class="kw">function</span> <span class="fn">updateAlbumArtTheme</span>(themeJson) {
+    <span class="kw">let</span> newTheme = JSON.<span class="fn">parse</span>(themeJson)
+    albumArtTheme = newTheme
+    <span class="kw">if</span> (currentTheme === <span class="str">"Album Art Capture"</span>) {
+        <span class="cmt">// First paint after entering Album Art mode is instant — only</span>
+        <span class="cmt">// subsequent song changes fade with the configured speed.</span>
+        <span class="kw">var</span> instantFirst = _firstAlbumArtUpdate
+        <span class="kw">var</span> savedDuration = colorTransitionMs
+        <span class="kw">if</span> (instantFirst) colorTransitionMs = <span class="num">0</span>
+        <span class="cmt">// Force activeTheme to re-evaluate by toggling currentTheme</span>
+        <span class="kw">let</span> savedTheme = currentTheme
+        currentTheme = <span class="str">""</span>
+        currentTheme = savedTheme
+        <span class="kw">if</span> (instantFirst) {
+            _firstAlbumArtUpdate = <span class="kw">false</span>
+            Qt.<span class="fn">callLater</span>(<span class="kw">function</span>() { colorTransitionMs = savedDuration })
+        }
+        <span class="fn">albumArtThemeUpdated</span>()
+    }
+}</code></pre>
+
+        <p>Because <code>albumArtTheme</code> is a <code>var</code> holding a fresh object, assigning it does not by itself re-trigger the <code>activeTheme</code> binding; the <code>currentTheme</code> toggle forces it. At startup Main.qml primes <code>albumArtTheme</code> from the persisted <code>settingsManager.albumArtColors</code> <em>before</em> calling <code>setThemeInstant("Album Art Capture")</code>, so the placeholder palette never paints.</p>
+
         <!-- Color Tokens -->
-        <h2 id="color-tokens">Color Token Reference</h2>
+        <h2 id="color-tokens">Colour Token Reference</h2>
 
-        <p>Style.qml exposes these reactive color properties, all with <code>Behavior on { ColorAnimation { duration: colorTransitionMs } }</code>:</p>
+        <p>Every property below is declared as <code>property color X: activeTheme...</code> followed by <code>Behavior on X { ColorAnimation { duration: colorTransitionMs } }</code>. This is the complete list.</p>
 
-        <h3>Background Colors</h3>
+        <h3>Surfaces</h3>
         <table>
-          <thead><tr><th>Property</th><th>Source</th></tr></thead>
+          <thead><tr><th>Token</th><th>Source</th></tr></thead>
           <tbody>
-            <tr><td><code>backgroundColor</code></td><td><code>activeTheme.base</code></td></tr>
-            <tr><td><code>headerBackgroundColor</code></td><td><code>activeTheme.baseAlt</code></td></tr>
-            <tr><td><code>sidebarColor</code></td><td><code>activeTheme.base</code></td></tr>
-            <tr><td><code>contentColor</code></td><td><code>activeTheme.baseAlt</code></td></tr>
-            <tr><td><code>bottomBarGradientStart</code></td><td><code>activeTheme.base</code></td></tr>
-            <tr><td><code>bottomBarGradientEnd</code></td><td><code>activeTheme.baseAlt</code></td></tr>
-            <tr><td><code>obdBoxBackground</code></td><td><code>activeTheme.obd.boxBackground</code></td></tr>
+            <tr><td><code>backgroundColor</code>, <code>rowBackgroundColor</code>, <code>sidebarColor</code>, <code>bottomBarGradientStart</code></td><td><code>base</code></td></tr>
+            <tr><td><code>headerBackgroundColor</code>, <code>contentColor</code>, <code>bottomBarGradientEnd</code></td><td><code>baseAlt</code></td></tr>
+            <tr><td><code>hoverColor</code></td><td><code>states.hover</code></td></tr>
+            <tr><td><code>hoverPausedColor</code>, <code>pausedHighlightColor</code></td><td><code>states.paused</code></td></tr>
+            <tr><td><code>hoverPlayingColor</code></td><td><code>states.paused</code> (not <code>states.playing</code> &mdash; as written in the source)</td></tr>
+            <tr><td><code>playingHighlightColor</code></td><td><code>states.playing</code></td></tr>
+            <tr><td><code>bottomBarToggleShade</code></td><td><code>bottombar.toggleShade</code></td></tr>
+            <tr><td><code>mediaRoomToggleShade</code></td><td><code>mediaroom.toggleShade</code></td></tr>
+            <tr><td><code>mediaContentArea</code></td><td><code>mainmenu.mediaContainer</code></td></tr>
+            <tr><td><code>obdBoxBackground</code></td><td><code>obd.boxBackground</code></td></tr>
           </tbody>
         </table>
 
-        <h3>Text Colors</h3>
+        <h3>Text and Accent</h3>
         <table>
-          <thead><tr><th>Property</th><th>Source</th></tr></thead>
+          <thead><tr><th>Token</th><th>Source</th></tr></thead>
           <tbody>
-            <tr><td><code>primaryTextColor</code></td><td><code>activeTheme.text.primary</code></td></tr>
-            <tr><td><code>secondaryTextColor</code></td><td><code>activeTheme.text.secondary</code></td></tr>
-            <tr><td><code>clockTextColor</code></td><td><code>activeTheme.accent</code></td></tr>
-            <tr><td><code>metadataColor</code></td><td><code>activeTheme.accent</code></td></tr>
-            <tr><td><code>obdLabelColor</code></td><td><code>activeTheme.obd.labelColor</code> (fallback: <code>secondaryTextColor</code>)</td></tr>
-            <tr><td><code>obdValueColor</code></td><td><code>activeTheme.obd.valueColor</code> (fallback: <code>primaryTextColor</code>)</td></tr>
+            <tr><td><code>primaryTextColor</code>, <code>headerTextColor</code></td><td><code>text.primary</code></td></tr>
+            <tr><td><code>secondaryTextColor</code></td><td><code>text.secondary</code></td></tr>
+            <tr><td><code>accent</code>, <code>clockTextColor</code>, <code>metadataColor</code>, <code>bottomBarActiveToggleButton</code></td><td><code>accent</code></td></tr>
+            <tr><td><code>obdLabelColor</code></td><td><code>obd.labelColor</code>, else <code>secondaryTextColor</code></td></tr>
+            <tr><td><code>obdValueColor</code></td><td><code>obd.valueColor</code>, else <code>primaryTextColor</code></td></tr>
           </tbody>
         </table>
 
-        <h3>Status Colors</h3>
+        <h3>Bottom Bar and Media Room Icons</h3>
         <table>
-          <thead><tr><th>Property</th><th>Default</th></tr></thead>
+          <thead><tr><th>Token</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td><code>bottomBarPreviousButton</code>, <code>bottomBarPlayButton</code>, <code>bottomBarPauseButton</code>, <code>bottomBarNextButton</code>, <code>bottomBarVolumeButton</code>, <code>bottomBarShuffleButton</code></td><td><code>bottombar.previous / play / pause / next / volume / shuffle</code></td></tr>
+            <tr><td><code>bottomBarHomeButton</code>, <code>bottomBarOBDButton</code>, <code>bottomBarMediaButton</code>, <code>bottomBarSettingsButton</code>, <code>bottomBarAndroidAutoButton</code>, <code>bottomBarPhoneMirrorButton</code></td><td><code>bottombar.homeButton / obdButton / mediaButton / settingsButton / androidAutoButton / phoneMirrorButton</code></td></tr>
+            <tr><td><code>bottomBarSensorButton</code></td><td><code>bottombar.sensorButton || bottombar.homeButton</code></td></tr>
+            <tr><td><code>mediaRoomPreviousButton</code>, <code>mediaRoomPlayButton</code>, <code>mediaRoomPauseButton</code>, <code>mediaRoomNextButton</code>, <code>mediaRoomLeftButton</code>, <code>mediaRoomRightButton</code></td><td><code>mediaroom.previous / play / pause / next / left / right</code></td></tr>
+            <tr><td><code>mediaRoomToggleButton</code></td><td><code>mediaroom.shuffle</code></td></tr>
+          </tbody>
+        </table>
+
+        <h3>Sliders and Bars</h3>
+        <table>
+          <thead><tr><th>Token</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td><code>volumeSliderColor</code>, <code>mediaRoomSeekColor</code></td><td><code>sliders.volume</code></td></tr>
+            <tr><td><code>mediaRoomSlider</code></td><td><code>sliders.media</code></td></tr>
+            <tr><td><code>settingsSliderColor</code></td><td><code>sliders.settings</code></td></tr>
+            <tr><td><code>obdBarColor</code></td><td><code>obd.barColor</code></td></tr>
+          </tbody>
+        </table>
+
+        <h3>Status Colours</h3>
+        <p>Read from an optional <code>status</code> object; every shipped theme uses the fallback.</p>
+        <table>
+          <thead><tr><th>Token</th><th>Fallback</th></tr></thead>
           <tbody>
             <tr><td><code>statusConnected</code></td><td><code>#44AA44</code></td></tr>
             <tr><td><code>statusDisconnected</code></td><td><code>#AA4444</code></td></tr>
@@ -217,202 +312,288 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
           </tbody>
         </table>
 
-        <div class="info-box tip">
-          <strong>OBD Color Tokens:</strong> The OBD pages have their own dedicated color tokens (<code>obdBoxBackground</code>, <code>obdBarColor</code>, <code>obdLabelColor</code>, <code>obdValueColor</code>) because OBD cards need contrast tuning independent of the main background.
+        <!-- Transitions -->
+        <h2 id="transitions">Colour Transitions</h2>
+
+        <p><code>colorTransitionMs</code> (default 1000, persisted as <code>settingsManager.colorTransitionMs</code> and loaded by Main.qml at startup) is the duration of every token's <code>ColorAnimation</code>. In practice it only governs album-art driven shifts on song change: startup and manual theme picks go through <code>setThemeInstant()</code>, and the first paint after entering Album Art Capture is forced instant by <code>_firstAlbumArtUpdate</code>.</p>
+
+        <ul>
+          <li><strong>Transition Speed</strong> slider (Display &rarr; Appearance &rarr; Album Art Capture): 0&ndash;2000&nbsp;ms in steps of 50, "0 = instant". Moves are debounced 100&nbsp;ms before <code>save_color_transition_ms()</code> and <code>App.Style.colorTransitionMs</code> are updated.</li>
+          <li><strong>Match Song Length</strong> toggle (<code>songLengthTransition</code>): Main.qml's <code>Connections</code> on <code>mediaManager.durationChanged</code> / <code>spotifyManager.durationChanged</code> set <code>colorTransitionMs = durationMs</code>, so the palette drifts across the whole track. Turning it off restores the saved value from <code>settingsManager.colorTransitionMs</code>.</li>
+        </ul>
+
+        <div class="info-box warning">
+          <div class="info-box-title">Performance</div>
+          Each <code>Behavior on</code> is an animation object; with roughly sixty colour tokens a palette change runs sixty <code>ColorAnimation</code>s in parallel. This is fine on desktop and acceptable on the Pi-class head units, and a transition speed of 0 makes theme shifts free.
         </div>
 
-        <!-- Transitions -->
-        <h2 id="transitions">Color Transitions</h2>
+        <!-- Font System -->
+        <h2 id="font-system">Font System</h2>
 
-        <p>Every color property in Style.qml has a <code>Behavior on</code> that creates smooth animated transitions:</p>
+        <p><code>App.Style.fontFamily</code> is the family used by every <code>Text</code> in the app (the root <code>ApplicationWindow</code> also binds <code>font.family</code> to it):</p>
 
-        <pre><code><span class="prop">property color</span> backgroundColor: activeTheme.base
-<span class="cls">Behavior on</span> backgroundColor {
-    <span class="cls">ColorAnimation</span> { <span class="prop">duration</span>: colorTransitionMs }
-}</code></pre>
+        <pre><code><span class="prop">property string</span> fontFamily: currentFont === <span class="str">"System Default"</span>
+    ? systemDefaultFont
+    : (fontFamilyMap[currentFont] || systemDefaultFont)</code></pre>
 
-        <p>The <code>colorTransitionMs</code> property defaults to 1000ms but can be dynamically set to match the current song's duration when <code>songLengthTransition</code> is enabled, creating an ambient color shift that spans the entire track.</p>
+        <p>Discovery happens in <span class="file-path">Main.qml</span>. A <code>FolderListModel</code> scans <span class="file-path">frontend/assets/fonts/</span> for <code>*.ttf</code> / <code>*.otf</code>, creates one <code>FontLoader</code> per file, and when all have finished calls <code>App.Style.registerFonts(fontNames, familyMap)</code>. Display names are derived from filenames &mdash; the extension is stripped and <code>-</code> / <code>_</code> become spaces &mdash; and mapped to the family name Qt reports (<code>loader.name</code>), because the two frequently differ. The shipped files are <code>GoogleSans-Regular.ttf</code> and <code>JetBrainsMono-Regular.ttf</code>, so the picker offers "System Default", "GoogleSans Regular" and "JetBrainsMono Regular". After registration Main.qml applies <code>settingsManager.fontSetting</code> with <code>App.Style.setFont()</code>, which accepts only names present in <code>availableFonts</code> (or "System Default") and otherwise leaves <code>currentFont</code> unchanged.</p>
+
+        <p>The Font picker (Display &rarr; Appearance &rarr; Font) is a <code>SettingsChips</code> row with <code>chipFonts</code>: each chip renders the first word of its own name in that font (<code>fontSizeMode: Text.Fit</code>, minimum <code>dp(8)</code>) so the user sees the typeface before choosing it. Selecting a chip calls <code>save_font_setting()</code> and <code>App.Style.setFont()</code>; the <code>fontChanged</code> signal fires for components that need to react beyond the property binding.</p>
+
+        <div class="info-box warning">
+          <div class="info-box-title">Default Font Name Mismatch</div>
+          Both backends default <code>fontSetting</code> to <code>"Google Sans"</code>, but the display name derived from <code>GoogleSans-Regular.ttf</code> is <code>"GoogleSans Regular"</code>. <code>setFont("Google Sans")</code> therefore fails the <code>availableFonts</code> check on a fresh install and the UI renders in the system font until a chip is picked.
+        </div>
 
         <!-- EnvironmentTheme -->
-        <h2 id="environment-theme">EnvironmentTheme.qml &mdash; UI Shape Presets</h2>
+        <h2 id="environment-theme">EnvironmentTheme.qml &mdash; Structural Tokens</h2>
 
-        <p><span class="file-path">frontend/EnvironmentTheme.qml</span> controls the <em>shape</em> and <em>visual effects</em> of UI components, independent of color. It defines environment presets that change border radii, enable special effects like scanlines and corner brackets, and alter the visual personality of the UI.</p>
-
-        <pre><code><span class="kw">pragma</span> Singleton
-<span class="cls">QtObject</span> {
-    <span class="prop">property string</span> currentEnvironment: <span class="str">"Standard"</span>
-    <span class="kw">signal</span> <span class="fn">environmentChanged</span>()
-
-    <span class="prop">property var</span> active: environments[currentEnvironment]
-        || environments[<span class="str">"Standard"</span>]
-
-    <span class="kw">function</span> <span class="fn">setEnvironment</span>(name) {
-        <span class="kw">if</span> (environments[name]) {
-            currentEnvironment = name
-            <span class="fn">environmentChanged</span>()
-        }
-    }
-}</code></pre>
-
-        <!-- Environment Presets -->
-        <h2 id="env-presets">Environment Presets</h2>
-
-        <p>Three presets are defined, each controlling dozens of visual parameters:</p>
-
-        <h3>Standard</h3>
-        <p>Clean, modern defaults. Rounded corners (12px cards), solid buttons, no special effects.</p>
-
-        <h3>Spacecraft</h3>
-        <p>Military/HUD aesthetic with sharp corners (2px), corner brackets, animated dividers, glow borders, tick marks, uppercase labels, scanline overlays, and pulsing elements.</p>
-
-        <h3>Deep Sea</h3>
-        <p>Organic, fluid aesthetic with large radii (16px), glass effects, sonar ping animations, floating bubbles in the sidebar, and subtle accent borders.</p>
-
-        <h3>Key Properties by Category</h3>
+        <p><span class="file-path">frontend/EnvironmentTheme.qml</span> exposes one read-only object, <code>active</code>, holding the radii, widths and feature flags that the settings component library reads as <code>App.EnvironmentTheme.active.*</code>. There is no longer a picker or a map of presets. The header comment records the history: OCTAVE once shipped selectable "environments" (Spacecraft, Deep Sea) with their own canvas effect layers; they were never finished, the picker was removed, and only the "Standard" values remain. The singleton was kept so the roughly forty existing bindings keep working unchanged, and the comment says to restore a map plus a notifiable current-environment property if presets are ever revived (the old ones are in git history: <code>af2e804</code> added them, <code>484bc76</code> removed the last picker files).</p>
 
         <table>
-          <thead><tr><th>Category</th><th>Properties</th><th>Standard</th><th>Spacecraft</th><th>Deep Sea</th></tr></thead>
+          <thead><tr><th>Group</th><th>Key</th><th>Value</th></tr></thead>
           <tbody>
-            <tr><td>Card</td><td><code>cardRadius</code></td><td>12</td><td>2</td><td>16</td></tr>
-            <tr><td>Card</td><td><code>cornerBrackets</code></td><td>false</td><td>true</td><td>false</td></tr>
-            <tr><td>Card</td><td><code>accentBorder</code></td><td>false</td><td>true</td><td>true</td></tr>
-            <tr><td>Button</td><td><code>buttonRadius</code></td><td>6</td><td>2</td><td>12</td></tr>
-            <tr><td>Button</td><td><code>buttonGlowBorder</code></td><td>false</td><td>true</td><td>false</td></tr>
-            <tr><td>Slider</td><td><code>sliderTickMarks</code></td><td>false</td><td>true</td><td>false</td></tr>
-            <tr><td>Slider</td><td><code>sliderHandleGlow</code></td><td>false</td><td>true</td><td>true</td></tr>
-            <tr><td>Labels</td><td><code>labelUppercase</code></td><td>false</td><td>true</td><td>false</td></tr>
-            <tr><td>Terminal</td><td><code>terminalScanlines</code></td><td>false</td><td>true</td><td>false</td></tr>
-            <tr><td>Effects</td><td><code>scanlineOverlay</code></td><td>false</td><td>true</td><td>false</td></tr>
-            <tr><td>Effects</td><td><code>cardGlassEffect</code></td><td>false</td><td>false</td><td>true</td></tr>
-            <tr><td>Effects</td><td><code>sidebarBubbles</code></td><td>false</td><td>false</td><td>true</td></tr>
+            <tr><td>Hub card</td><td><code>hubCardRadius</code></td><td>12</td></tr>
+            <tr><td>Card</td><td><code>cardRadius</code> / <code>cornerBrackets</code> / <code>accentBorder</code> / <code>accentBorderOpacity</code></td><td>12 / false / false / 0</td></tr>
+            <tr><td>Divider</td><td><code>dividerAnimated</code> / <code>dividerGradient</code> / <code>dividerHeight</code></td><td>false / false / 1</td></tr>
+            <tr><td>Button</td><td><code>buttonRadius</code> / <code>buttonGlowBorder</code> / <code>buttonSolidFill</code></td><td>6 / false / true</td></tr>
+            <tr><td>Slider</td><td><code>sliderTickMarks</code> / <code>sliderHandleGlow</code> / <code>sliderHandleRadius</code></td><td>false / false / -1 (use <code>Spacing.overallSliderRadius</code>)</td></tr>
+            <tr><td>Switch (compact toggle)</td><td><code>switchRadius</code> / <code>switchKnobRadius</code></td><td>8 / 6</td></tr>
+            <tr><td>Toggle (full toggle)</td><td><code>toggleTrackRadius</code> / <code>toggleHandleRadius</code> / <code>toggleRectShadow</code></td><td>10 / 8 / false</td></tr>
+            <tr><td>Labels</td><td><code>labelUppercase</code> / <code>labelLetterSpacing</code></td><td>false / 0</td></tr>
+            <tr><td>Value display</td><td><code>valueDisplayBrackets</code> / <code>valueAccentColor</code></td><td>false / false</td></tr>
+            <tr><td>Sidebar / nav</td><td><code>sidebarGrid</code> / <code>navItemRadius</code> / <code>navAccentBarWidth</code> / <code>navAccentBarFullHeight</code></td><td>false / 8 / 3 / false</td></tr>
+            <tr><td>Chips</td><td><code>chipRadius</code> / <code>chipAccentBorder</code></td><td>8 / false</td></tr>
+            <tr><td>Section header</td><td><code>sectionHeaderLines</code></td><td>false</td></tr>
+            <tr><td>Text field</td><td><code>textFieldRadius</code> / <code>textFieldCornerMarks</code></td><td>4 / false</td></tr>
+            <tr><td>Dropdown / checkbox</td><td><code>dropdownRadius</code> / <code>checkboxRadius</code></td><td>4 / 4</td></tr>
+            <tr><td>Segmented control</td><td><code>segmentGlowBar</code></td><td>false</td></tr>
+            <tr><td>Radio</td><td><code>radioSquare</code></td><td>false</td></tr>
+            <tr><td>Terminal</td><td><code>terminalRadius</code> / <code>terminalAccentBorder</code> / <code>terminalCornerBrackets</code> / <code>terminalScanlines</code> / <code>terminalHeaderAccent</code> / <code>terminalAccentScroll</code></td><td>4 / false / false / false / false / false</td></tr>
+            <tr><td>Enhanced effects</td><td><code>scanlineOverlay</code> / <code>pulsingElements</code> / <code>contentHudLines</code> / <code>dividerDiamondRotate</code></td><td>all false</td></tr>
+            <tr><td>Deep Sea effects</td><td><code>sidebarBubbles</code> / <code>contentSonar</code> / <code>dividerSonarPing</code> / <code>cardGlassEffect</code></td><td>all false</td></tr>
           </tbody>
         </table>
+
+        <p>The components still contain the code paths those flags enable (corner brackets, HUD lines, glow borders, tick marks, the sonar and pulse variants of <code>SettingsDivider</code>, and so on), all inert. Commit <code>6735de5</code> tightened the Standard values &mdash; switch/toggle/chip radii went from "pill" (<code>-1</code>) to fixed 8/6/10/8/8 &mdash; which is the source of the slightly squared switches in today's UI.</p>
 
         <!-- Spacing.qml -->
         <h2 id="spacing-qml">Spacing.qml &mdash; Layout Scaling</h2>
 
-        <p><span class="file-path">frontend/Spacing.qml</span> handles responsive layout. All sizes are derived from <code>applicationWidth</code> and <code>applicationHeight</code> through percentage-based calculations and scale factors.</p>
+        <p><span class="file-path">frontend/Spacing.qml</span> turns the window size into pixel values. Main.qml calls <code>App.Spacing.updateDimensions(width, height)</code> at startup and on every resize; <code>applicationWidth</code> / <code>applicationHeight</code> feed dozens of derived <code>int</code> properties.</p>
 
         <h3>Scale Factor Chain</h3>
+        <pre><code><span class="prop">property real</span> globalScale: <span class="num">1.0</span>        <span class="cmt">// user preference (settingsManager.uiScale)</span>
+<span class="prop">property real</span> autoScaleFactor: <span class="num">1.0</span>   <span class="cmt">// screen detection (screenAutoScale context property)</span>
+<span class="prop">property real</span> effectiveScale: autoScaleFactor * globalScale   <span class="cmt">// for dp()</span>
+<span class="prop">property real</span> baseScale: <span class="num">0.6</span> * globalScale                  <span class="cmt">// for scaledSize()</span>
+<span class="prop">property real</span> textScale: <span class="num">1.0</span>          <span class="cmt">// multiplies overallText only</span>
+<span class="prop">property real</span> controlScale: <span class="num">1.0</span>       <span class="cmt">// declared, unused</span></code></pre>
 
-        <pre><code><span class="prop">property real</span> globalScale: <span class="num">1.0</span>       <span class="cmt">// User preference multiplier</span>
-<span class="prop">property real</span> autoScaleFactor: <span class="num">1.0</span>  <span class="cmt">// Auto-detected from screen</span>
-<span class="prop">property real</span> effectiveScale: autoScaleFactor * globalScale
-<span class="prop">property real</span> baseScale: <span class="num">0.6</span> * globalScale</code></pre>
+        <p>Two families of value exist. Hard-coded pixel sizes written for a 720p design (<code>dp(140)</code>, <code>dp(8)</code>) use <code>effectiveScale</code>, which includes screen auto-detection. Percentage tokens (<code>0.125</code> of the window height for the bottom bar) already follow the screen size, so they only receive the original 0.6 design factor and the user's multiplier through <code>baseScale</code>.</p>
 
-        <p><code>effectiveScale</code> is used by <code>dp()</code> for hardcoded pixel values designed at 720p. <code>baseScale</code> is used by <code>scaledSize()</code> for percentage-based properties that already adapt to screen size.</p>
+        <h3>Token Groups</h3>
+        <table>
+          <thead><tr><th>Group</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td>Core</td><td><code>overallMargin</code> (1&nbsp;%), <code>overallText</code> (4.5&nbsp;% &times; <code>textScale</code>), <code>overallSpacing</code> (5&nbsp;%), <code>overallSliderWidth/Height</code> (6&nbsp;%), <code>overallSliderRadius</code> (3&nbsp;%), <code>overallRadius</code> (1&nbsp;%) &mdash; all of the shorter window edge</td></tr>
+            <tr><td>Section spacing</td><td><code>sectionSpacing</code> (5&nbsp;%), <code>rowSpacing</code> (1.5&nbsp;%), <code>columnSpacing</code> (2&nbsp;%)</td></tr>
+            <tr><td>Bottom bar</td><td><code>bottomBarHeight</code>, per-button widths derived from <code>normalButtonSize</code> = 0.085 (see <a href="bottom-bar.html#sizing">Bottom Bar &rarr; Sizing Tokens</a>)</td></tr>
+            <tr><td>Media room / media player</td><td>Album art 60&nbsp;%, play button 30&nbsp;%, header/row heights, column widths, text sizes</td></tr>
+            <tr><td>Settings</td><td><code>settingsNavWidth</code> (30&nbsp;% of width), <code>settingsButtonHeight</code> (20&nbsp;% of height), <code>settingsContentMargin</code> (5&nbsp;%), <code>formElementHeight</code> (10&nbsp;% of height), <code>settingsHubGridSpacing</code> (2&nbsp;%), <code>settingsHubCardHeight</code> (22&nbsp;%), <code>settingsCarouselCardWidth/Height</code> (78&nbsp;% / 82&nbsp;%, not passed through <code>scaledSize</code>)</td></tr>
+            <tr><td>Main menu</td><td>OBD text/data sizes, song/artist/time text, play and nav button sizes, slider height and handle</td></tr>
+          </tbody>
+        </table>
 
         <!-- Scaling Functions -->
         <h2 id="scaling-functions">Scaling Functions</h2>
 
-        <h3>dp(size) &mdash; Density-Independent Pixels</h3>
-        <pre><code><span class="kw">function</span> <span class="fn">dp</span>(size) {
-    <span class="kw">return</span> Math.<span class="fn">round</span>(size * effectiveScale)
+        <pre><code><span class="kw">function</span> <span class="fn">dp</span>(size)            { <span class="kw">return</span> Math.<span class="fn">round</span>(size * effectiveScale) }
+<span class="kw">function</span> <span class="fn">dpMin</span>(size, floor)  { <span class="kw">return</span> Math.<span class="fn">max</span>(floor, Math.<span class="fn">round</span>(size * effectiveScale)) }
+<span class="kw">function</span> <span class="fn">scaledSize</span>(baseSize){ <span class="kw">return</span> Math.<span class="fn">round</span>(baseSize * baseScale) }
+<span class="kw">function</span> <span class="fn">scalePx</span>(size)       { <span class="kw">return</span> Math.<span class="fn">round</span>(size * baseScale * (Math.<span class="fn">min</span>(applicationWidth, applicationHeight) / <span class="num">1000</span>)) }
+<span class="kw">function</span> <span class="fn">updateDimensions</span>(width, height) { applicationWidth = width; applicationHeight = height; <span class="fn">dimensionsChanged</span>() }</code></pre>
+
+        <ul>
+          <li><code>dp()</code> converts a 720p reference pixel value. <code>dpMin()</code> adds a floor, used for radii that must never go sub-pixel (<code>dpMin(8, 2)</code>).</li>
+          <li><code>scaledSize()</code> is applied to the percentage tokens inside Spacing.qml itself.</li>
+          <li><code>scalePx()</code> scales relative to the shorter edge per 1000&nbsp;px.</li>
+          <li><code>dimensionsChanged</code> is a <code>var</code> property holding an empty function, not a QML signal; callers can replace it with a callback.</li>
+        </ul>
+
+        <div class="info-box tip">
+          <div class="info-box-title">Why Every File Has Its Own dp()</div>
+          Almost no QML file calls <code>App.Spacing.dp()</code>. Each declares <code>function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }</code> locally because singleton <em>functions</em> misbehave on Qt for Android (see the comment in <span class="file-path">Style.qml</span> next to <code>assetBase</code>). Only singleton <em>properties</em> are read across the boundary.
+        </div>
+
+        <!-- GUI scale -->
+        <h2 id="gui-scale">GUI Scale Slider and Auto-Scale</h2>
+
+        <p><strong>Auto-scale.</strong> Both entry points compute <code>screenAutoScale</code> before QML loads and expose it as a context property; Main.qml copies it into <code>App.Spacing.autoScaleFactor</code>. <span class="file-path">src/main.cpp</span> divides the <em>shorter</em> edge of <code>primaryScreen()->availableSize()</code> by 720 and clamps to [0.4, 3.0]; the comment explains that Android reports the natural portrait size even when the app is locked landscape, and using the height alone produced a roughly 3&times; factor there. <span class="file-path">main.py</span> uses <code>available.height() / 720.0</code> with the same clamp (desktop-only, where height is normally the shorter edge).</p>
+
+        <p><strong>User scale.</strong> <code>settingsManager.uiScale</code> (default 1.0) is loaded into <code>App.Spacing.globalScale</code> at startup. Both backends migrate a stored value of exactly 0.6 (the old design factor that used to be persisted) to 1.0. The slider lives in Display &rarr; Layout &rarr; "UI Scaling":</p>
+
+        <pre><code><span class="cls">SettingsSlider</span> {
+    <span class="prop">from</span>: <span class="num">0.5</span>; <span class="prop">to</span>: <span class="num">2.0</span>; <span class="prop">stepSize</span>: <span class="num">0.05</span>
+    <span class="prop">value</span>: App.Spacing.globalScale
+
+    <span class="cmt">// Commit on release only. Updating globalScale mid-drag re-lays out</span>
+    <span class="cmt">// the slider itself (track + handle scale with globalScale), so the</span>
+    <span class="cmt">// handle jumps relative to the finger.</span>
+    <span class="prop">onPressedChanged</span>: {
+        <span class="kw">if</span> (!pressed &amp;&amp; settingsManager) {
+            settingsManager.<span class="fn">save_ui_scale</span>(value)
+            App.Spacing.globalScale = value
+        }
+    }
 }</code></pre>
-        <p>Converts a reference pixel value (designed at 720p) to the actual screen resolution.</p>
 
-        <h3>dpMin(size, floor) &mdash; With Minimum</h3>
-        <pre><code><span class="kw">function</span> <span class="fn">dpMin</span>(size, floor) {
-    <span class="kw">return</span> Math.<span class="fn">max</span>(floor, Math.<span class="fn">round</span>(size * effectiveScale))
-}</code></pre>
-        <p>Same as <code>dp()</code> but with a minimum value. Used for border radii that should never go sub-pixel.</p>
+        <p>Commit <code>fe567f3</code> ("fix gui scale slider in frontend") replaced a 100&nbsp;ms debounce with this commit-on-release rule; the <code>ValueDisplay</code> next to it still shows the live percentage as feedback. The hub layouts show the same number as "Scale: 100%".</p>
 
-        <h3>scaledSize(baseSize) &mdash; Percentage Scaling</h3>
-        <pre><code><span class="kw">function</span> <span class="fn">scaledSize</span>(baseSize) {
-    <span class="kw">return</span> Math.<span class="fn">round</span>(baseSize * baseScale)
-}</code></pre>
-        <p>Applied to percentage-based properties. The input is already proportional to screen size, so only the design factor (0.6) and user preference are applied.</p>
+        <!-- ThemedIcon -->
+        <h2 id="themed-icon">ThemedIcon and the SVG Assets</h2>
 
-        <h3>Key Calculated Properties</h3>
-        <p>Spacing.qml computes dozens of pixel values from percentage properties. Examples:</p>
+        <p><span class="file-path">frontend/ThemedIcon.qml</span> packages the hidden-<code>Image</code>-plus-<code>ColorOverlay</code> pattern that the bottom bar hand-rolls at every button:</p>
 
-        <pre><code><span class="cmt">// Bottom bar sizing</span>
-<span class="prop">property int</span> bottomBarHeight:
-    <span class="fn">scaledSize</span>(applicationHeight * <span class="num">0.125</span>)
+        <table>
+          <thead><tr><th>Property</th><th>Default</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>source</code> (url)</td><td>""</td><td>A single-fill SVG; relative paths resolve against the importing file, so callers use <code>App.Style.assetBase + "tile_x.svg"</code></td></tr>
+            <tr><td><code>color</code></td><td><code>#FFFFFF</code></td><td>Tint applied to every opaque pixel (tiles pass <code>App.Style.accent</code>)</td></tr>
+            <tr><td><code>shadow</code>, <code>shadowColor</code>, <code>shadowOffsetX/Y</code></td><td>true, 40&nbsp;% black, 1, 2</td><td>A second <code>ColorOverlay</code> of the same image, offset &mdash; "cheap, not a blur, no per-frame cost"</td></tr>
+            <tr><td><code>fillRatio</code></td><td>1.0</td><td>Fraction of the item used by the image (the bottom bar's buttons use 0.7)</td></tr>
+          </tbody>
+        </table>
 
-<span class="cmt">// Button sizes (from min dimension)</span>
-<span class="prop">property int</span> bottomBarPlayButtonWidth:
-    <span class="fn">scaledSize</span>(Math.<span class="fn">min</span>(applicationWidth, applicationHeight) * <span class="num">0.1275</span>)
+        <p>The image is rendered at <code>sourceSize = 2&times;</code> its display size with <code>mipmap: true</code>, which keeps SVG edges crisp when the tile scales up. Both overlays are hidden until <code>Image.Ready</code>.</p>
 
-<span class="cmt">// Grid spacing</span>
-<span class="prop">property int</span> sectionSpacing:
-    <span class="fn">scaledSize</span>(Math.<span class="fn">min</span>(applicationWidth, applicationHeight) * <span class="num">0.05</span>)</code></pre>
+        <p>The assets it draws were added in commit <code>93d0fc9</code> as 22 flat white SVGs (<code>&lt;g fill="#FFFFFF"&gt;</code>) in <span class="file-path">frontend/assets/</span>: category icons <code>cat_display.svg</code>, <code>cat_about.svg</code> and the tile set <code>tile_layout</code>, <code>tile_window</code>, <code>tile_appearance</code>, <code>tile_clock</code>, <code>tile_library</code>, <code>tile_playback</code>, <code>tile_now_playing</code>, <code>tile_spotify</code>, <code>tile_connection</code>, <code>tile_adapters</code>, <code>tile_tuning</code>, <code>tile_parameters</code>, <code>tile_volume_knob</code>, <code>tile_imu</code>, <code>tile_gesture</code>, <code>tile_phone_dock</code>, <code>tile_device_name</code>, <code>tile_network</code>, <code>tile_power</code>. The bottom-bar icons (<code>home_button</code>, <code>obd_button</code>, <code>media_button</code>, <code>sensor_button</code>, <code>settings_button</code>, <code>android_auto_button</code>, <code>phone_mirror_button</code>, transport and mute icons) follow the same single-fill rule; a second colour in an asset would collapse into the tint.</p>
+
+        <!-- How Components Consume Themes -->
+        <h2 id="consuming-themes">How Components Consume the Theme</h2>
+
+        <pre><code><span class="cmt">// Colour: binds to an animated token</span>
+<span class="prop">color</span>: App.Style.backgroundColor
+<span class="prop">color</span>: Qt.<span class="fn">rgba</span>(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, <span class="num">0.2</span>)   <span class="cmt">// translucent accent</span>
+
+<span class="cmt">// Structure: reads a fixed EnvironmentTheme value, scaled</span>
+<span class="prop">radius</span>: <span class="fn">dpMin</span>(App.EnvironmentTheme.active.cardRadius, <span class="num">2</span>)
+<span class="prop">visible</span>: App.EnvironmentTheme.active.cornerBrackets      <span class="cmt">// always false today</span>
+
+<span class="cmt">// Typography</span>
+<span class="prop">font.family</span>: App.Style.fontFamily
+<span class="prop">font.pixelSize</span>: App.Spacing.overallText * <span class="num">1.5</span>
+
+<span class="cmt">// Icons</span>
+App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span class="str">"tile_layout.svg"</span>; <span class="prop">color</span>: App.Style.accent }</code></pre>
+
+        <p>Translucent surfaces are built from tokens at runtime (<code>primaryTextColor</code> at 5&ndash;7&nbsp;% for cards, <code>accent</code> at 18&ndash;25&nbsp;% for selection) rather than being separate theme keys, which keeps the theme object small and lets Album Art Capture palettes work without extra fields.</p>
 
         <!-- Customization -->
         <h2 id="customization">Customization Guide</h2>
 
         <h3>Creating a New Built-in Theme</h3>
         <ol class="steps">
-          <li>Open <span class="file-path">frontend/Style.qml</span></li>
-          <li>Add a new entry to the <code>themes</code> object following the existing structure</li>
-          <li>Define all required keys: <code>base</code>, <code>baseAlt</code>, <code>accent</code>, <code>text</code>, <code>states</code>, <code>sliders</code>, <code>bottombar</code>, <code>mediaroom</code>, <code>mainmenu</code>, <code>obd</code></li>
-          <li>The theme will automatically appear in the theme picker</li>
-        </ol>
-
-        <h3>Adding a New Environment Preset</h3>
-        <ol class="steps">
-          <li>Open <span class="file-path">frontend/EnvironmentTheme.qml</span></li>
-          <li>Add a new entry to the <code>environments</code> object</li>
-          <li>Define all shape/effect properties (copy from Standard as a base)</li>
-          <li>The preset will appear in the environment picker via <code>getAllEnvironmentNames()</code></li>
+          <li>Add an entry to the <code>themes</code> map in <span class="file-path">frontend/Style.qml</span> with all ten keys, including <code>bottombar.sensorButton</code>.</li>
+          <li>Append its name to <code>lightThemeNames</code> or <code>darkThemeNames</code> &mdash; the picker rows are built from those arrays, not from <code>Object.keys(themes)</code>.</li>
+          <li>Update <a href="settings-reference.html">Settings Reference</a> if the default changes.</li>
         </ol>
 
         <h3>Adding a New Font</h3>
         <ol class="steps">
-          <li>Drop a <code>.ttf</code> or <code>.otf</code> file into <span class="file-path">frontend/assets/fonts/</span></li>
-          <li>Main.qml's <code>FolderListModel</code> will discover it automatically at next launch</li>
-          <li>The font name (derived from filename) will appear in the font picker</li>
+          <li>Drop a <code>.ttf</code> or <code>.otf</code> file into <span class="file-path">frontend/assets/fonts/</span>.</li>
+          <li>Main.qml's <code>FolderListModel</code> discovers it at next launch; the display name is the filename minus extension with <code>-</code>/<code>_</code> turned into spaces.</li>
         </ol>
 
-        <!-- Font System -->
-        <h2 id="font-system">Font System</h2>
+        <h3>Adding a Structural Token</h3>
+        <ol class="steps">
+          <li>Add the key to the <code>active</code> object in <span class="file-path">frontend/EnvironmentTheme.qml</span>.</li>
+          <li>Read it as <code>App.EnvironmentTheme.active.key</code>; there is no runtime switching, so a change is a code change.</li>
+        </ol>
 
-        <p>Style.qml also manages the font system. The <code>fontFamily</code> property is the resolved font family name used by all UI components:</p>
+        <h3>Adding a Themed Icon</h3>
+        <ol class="steps">
+          <li>Draw a 600&times;600 SVG with a single <code>&lt;g fill="#FFFFFF"&gt;</code> group, centred in the viewBox, and save it in <span class="file-path">frontend/assets/</span>.</li>
+          <li>Reference it as <code>App.Style.assetBase + "name.svg"</code> from any directory depth.</li>
+        </ol>
 
-        <pre><code><span class="cmt">// Always returns a valid font family name</span>
-<span class="prop">property string</span> fontFamily: currentFont === <span class="str">"System Default"</span>
-    ? systemDefaultFont
-    : (fontFamilyMap[currentFont] || systemDefaultFont)</code></pre>
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Design Decisions</h2>
 
-        <p>Available fonts are populated at startup by Main.qml after scanning the <span class="file-path">frontend/assets/fonts/</span> directory. The <code>availableFonts</code> array always starts with "System Default":</p>
-
-        <pre><code><span class="kw">function</span> <span class="fn">registerFonts</span>(fontList, familyMap) {
-    availableFonts = [<span class="str">"System Default"</span>].<span class="fn">concat</span>(fontList)
-    fontFamilyMap = familyMap
-    <span class="fn">fontsUpdated</span>()
-}</code></pre>
-
-        <p>The <code>fontFamilyMap</code> maps display names (derived from filenames) to the actual font family names reported by Qt's <code>FontLoader</code>. This mapping is necessary because the filename may differ from the internal font family name.</p>
-
-        <!-- How Components Consume Themes -->
-        <h2 id="consuming-themes">How Components Consume the Theme</h2>
-
-        <p>Components access theme values through the <code>App.Style</code> namespace. The reactive color properties ensure automatic updates when the theme changes:</p>
-
-        <pre><code><span class="cmt">// Direct color binding (auto-updates with transitions)</span>
-<span class="prop">color</span>: App.Style.backgroundColor
-<span class="prop">color</span>: App.Style.primaryTextColor
-<span class="prop">color</span>: App.Style.accent
-
-<span class="cmt">// Environment-aware shape properties</span>
-<span class="prop">radius</span>: App.Spacing.<span class="fn">dpMin</span>(
-    App.EnvironmentTheme.active.cardRadius, <span class="num">2</span>)
-
-<span class="cmt">// Conditional features based on environment</span>
-<span class="prop">visible</span>: App.EnvironmentTheme.active.cornerBrackets
-<span class="prop">visible</span>: App.EnvironmentTheme.active.sliderTickMarks</code></pre>
-
-        <p>The pattern of using <code>Behavior on { ColorAnimation { duration: colorTransitionMs } }</code> on every color property means theme switches are always smooth, never jarring. This is especially important for Album Art Capture where colors change with every track.</p>
-
-        <div class="info-box warning">
-          <strong>Performance:</strong> Every <code>Behavior on</code> creates an active animation object. With 40+ color properties each having a behavior, theme transitions involve 40+ simultaneous <code>ColorAnimation</code> instances. This is manageable on desktop but can impact performance on Raspberry Pi. Consider reducing <code>colorTransitionMs</code> on low-powered devices.
-        </div>
+        <table>
+          <thead><tr><th>Decision</th><th>Rationale (from code comments and commit history)</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>One reactive <code>property color</code> per token, each with a <code>Behavior</code></td>
+              <td>Components bind to a colour, never to <code>activeTheme.x.y</code> directly, so a palette swap animates everywhere at once and Album Art Capture can change the palette on every track without any component knowing.</td>
+            </tr>
+            <tr>
+              <td><code>setThemeInstant()</code> for startup and manual picks</td>
+              <td>Comment: "the configured colorTransitionMs only applies to album-art-driven color shifts on song change". A user choosing a theme expects it immediately; a fade is only pleasant when it is ambient.</td>
+            </tr>
+            <tr>
+              <td>First album-art paint is instant</td>
+              <td>Comment on <code>_firstAlbumArtUpdate</code>: entering the mode (or starting with it on) should snap to the current song's colours; only real song changes honour the transition speed.</td>
+            </tr>
+            <tr>
+              <td>Persist the last extracted palette (<code>albumArtColors</code>)</td>
+              <td>Main.qml primes <code>albumArtTheme</code> from it before switching, "so the placeholder Album Art colors never paint". Both backends store the JSON with the comment "persisted for instant restore on startup".</td>
+            </tr>
+            <tr>
+              <td>Album Art Capture is a toggle, not a chip</td>
+              <td>Comment on <code>getAllThemeNames()</code>: it is "surfaced as a toggle under the chips, not as a selectable theme"; <code>lastStaticTheme</code> exists so that turning it off restores the prior choice.</td>
+            </tr>
+            <tr>
+              <td>Deterministic k-means (seed 42, 50&times;50 downscale, k = 5, 10 iterations)</td>
+              <td>The same cover always yields the same palette (stable when a track is replayed), and 2500 samples keep the pure-Python path to about 0.3&nbsp;s on desktop and about a second on a Pi &mdash; run on a worker with job supersession so skipping tracks applies only the last result.</td>
+            </tr>
+            <tr>
+              <td>Per-button accents in generated palettes</td>
+              <td>The generator deliberately assigns different extracted centroids to OBD, media, settings and sensor buttons "for variety", boosting saturation and brightness so the icons stay visible against the derived base.</td>
+            </tr>
+            <tr>
+              <td>Delivery through <code>settingsManager.albumArtColors</code> rather than a signal argument</td>
+              <td>Main.qml comment: "In PySide6, signal arguments may not pass through Connections properly, so we read directly from the property as a workaround". The <code>albumColorsExtracted</code> signal remains as a fallback.</td>
+            </tr>
+            <tr>
+              <td>Rebuild the custom-theme map atomically</td>
+              <td>Assigning a new object avoids briefly clearing <code>customThemes</code>, which "would make activeTheme fall back to SolarizedLight if a custom theme is currently active".</td>
+            </tr>
+            <tr>
+              <td><code>assetBase</code> is a property, not a function</td>
+              <td>Comment in Style.qml: singleton functions are unreliable on Android ("same Qt bug the local dp() wrappers work around"), and a URL resolved in <span class="file-path">frontend/</span> spares callers from guessing how many <code>../</code> they need.</td>
+            </tr>
+            <tr>
+              <td>EnvironmentTheme kept as a one-object singleton</td>
+              <td>Comment: the presets "were never finished and the picker was removed", but the singleton stays "so the ~40 existing EnvironmentTheme.active.X bindings keep working unchanged".</td>
+            </tr>
+            <tr>
+              <td>Two scale factors (<code>effectiveScale</code> vs <code>baseScale</code>)</td>
+              <td>Comments in Spacing.qml: hard-coded 720p pixel values need screen auto-detection, percentage tokens already adapt to the screen and "only need the original 0.6 design factor times the user's preference multiplier".</td>
+            </tr>
+            <tr>
+              <td>Auto-scale from the shorter screen edge (C++)</td>
+              <td>main.cpp comment: Android reports the natural portrait size even when locked landscape; using height alone gave a ~3&times; factor.</td>
+            </tr>
+            <tr>
+              <td>Scale slider commits on release</td>
+              <td>Updating <code>globalScale</code> mid-drag re-lays out the slider under the finger; deferring keeps the geometry steady (commit <code>fe567f3</code>).</td>
+            </tr>
+            <tr>
+              <td>Flat white SVGs plus <code>ColorOverlay</code></td>
+              <td>One asset serves every theme; ThemedIcon's offset second overlay reproduces the drop-shadow weight the old Unicode glyph tiles had, without a blur effect.</td>
+            </tr>
+          </tbody>
+        </table>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
           <a href="settings-ui.html" class="related-link">Settings UI</a>
+          <a href="bottom-bar.html" class="related-link">Bottom Bar</a>
           <a href="components.html" class="related-link">Components</a>
+          <a href="media-manager.html" class="related-link">Media Manager</a>
+          <a href="settings-reference.html" class="related-link">Settings Reference</a>
         </div>
 
       </div>

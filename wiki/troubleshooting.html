@@ -13,35 +13,106 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Troubleshooting</div>
           <h1 class="page-title">Troubleshooting</h1>
-          <p class="page-subtitle">Common issues, platform-specific fixes, log file analysis, and debugging techniques.</p>
+          <p class="page-subtitle">Symptom &rarr; cause &rarr; fix for both backends, where the logs are and what is in them, and the observability built into the app for diagnosing problems after the fact.</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
+            <li><a href="#first-look">Where to Look First</a></li>
+            <li><a href="#logs">Log Files, Crash Traces &amp; Debug Mode</a></li>
             <li><a href="#installation">Installation Issues</a></li>
             <li><a href="#display">Display &amp; Rendering Issues</a></li>
             <li><a href="#audio">Audio Issues</a></li>
             <li><a href="#obd">OBD Connection Issues</a></li>
+            <li><a href="#android-obd">Android OBD (Bluetooth / BLE)</a></li>
             <li><a href="#spotify">Spotify Authentication Issues</a></li>
+            <li><a href="#downloads">Music Download (yt-dlp) Issues</a></li>
+            <li><a href="#phone-mirror">Phone Mirror Issues</a></li>
             <li><a href="#hardware-sensors">Hardware Sensor Issues</a></li>
-            <li><a href="#logs">Log Files &amp; Debug Mode</a></li>
             <li><a href="#performance">Performance Issues</a></li>
+            <li><a href="#dev-tooling">Dev Tooling Issues</a></li>
             <li><a href="#wsl">WSL Display Issues</a></li>
           </ul>
         </nav>
 
+        <!-- First look -->
+        <h2 id="first-look">Where to Look First</h2>
+        <p>OCTAVE deliberately has no in-app error pop-ups (<span class="file-path">TODO/error-notification-ui.md</span>: anything flickering into a driver's peripheral vision is a distraction risk, so errors go to the logs where the person debugging will look). Every subsystem therefore reports through three channels:</p>
+        <ol class="steps">
+          <li><strong>The Connection Log / status text on the relevant page</strong> &mdash; the OBD settings card shows each connection step and rfcomm / permission errors; the Download page shows <code>Error: &lt;name&gt; - &lt;message&gt;</code> and marks the queue row <code>failed</code>; the phone-mirror view shows the adb / authorization message.</li>
+          <li><strong>Settings &rarr; About &rarr; Diagnostics card</strong> (<code>diagnosticsManager</code>, both backends) &mdash; a 2&times;2 grid: <strong>Refresh</strong> (last 200 log lines), <strong>Copy</strong> (last 400 lines to the clipboard), <strong>Export logs</strong> (copies the log files to the Downloads folder &mdash; the way to get logs off an Android tablet or a head unit without a shell) and <strong>Open folder</strong> (hidden on Android/iOS, where <code>canOpenFolder</code> is false). The log directory path is printed on the card.</li>
+          <li><strong>The rotating log files</strong> described next. A hung UI, a crash and a dropped adapter all leave a trace there even when the screen shows nothing.</li>
+        </ol>
+
+        <!-- Logs -->
+        <h2 id="logs">Log Files, Crash Traces &amp; Debug Mode</h2>
+
+        <h3>Log directory</h3>
+        <p>Both backends write to a <code>logs/</code> subdirectory of the app data directory (<code>SettingsManager::getAppDataDir()</code> / <code>get_app_data_dir()</code>):</p>
+        <table>
+          <thead><tr><th>Platform</th><th>Path</th></tr></thead>
+          <tbody>
+            <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\logs\</code></td></tr>
+            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/logs/</code></td></tr>
+            <tr><td>Linux</td><td><code>$XDG_CONFIG_HOME/OCTAVE/logs/</code>, i.e. <code>~/.config/OCTAVE/logs/</code></td></tr>
+            <tr><td>Android</td><td>Neither <code>logger.cpp</code> nor <code>getAppDataDir()</code> has an Android branch, so the C++ build falls through the Linux rule into the app's private home directory. It is not browsable from a file manager &mdash; use <strong>Export logs</strong> on the Diagnostics card, which writes into <code>Download/</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Log files &mdash; the two backends use different names</h3>
+        <table>
+          <thead><tr><th>Backend</th><th>File</th><th>Level</th><th>Max size</th><th>Backups</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Python</td><td><code>octave.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td><td><span class="file-path">backend/logging_config.py</span>, <code>RotatingFileHandler</code></td></tr>
+            <tr><td>Python</td><td><code>octave-error.log</code></td><td>ERROR+</td><td>2 MB</td><td>5</td><td>also receives crash tracebacks and <code>faulthandler</code> dumps</td></tr>
+            <tr><td>Python</td><td><code>octave-debug.log</code></td><td>DEBUG+</td><td>10 MB</td><td>2</td><td>only with <code>--debug</code></td></tr>
+            <tr><td>C++</td><td><code>octave-cpp.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td><td><span class="file-path">src/util/logger.cpp</span>, custom rotation with the same policy</td></tr>
+            <tr><td>C++</td><td><code>octave-cpp-error.log</code></td><td>WARNING+</td><td>2 MB</td><td>5</td><td>also the raw crash descriptor for the signal handler</td></tr>
+            <tr><td>C++</td><td><code>octave-cpp-debug.log</code></td><td>everything</td><td>10 MB</td><td>2</td><td>only with <code>--debug</code></td></tr>
+          </tbody>
+        </table>
+        <p>Because the names differ, a machine that has run both backends has both sets side by side; check the timestamps to see which one produced the session you care about. Total disk is bounded at roughly 32 MB per backend without debug, ~62 MB with it.</p>
+
+        <h3>Line format</h3>
+        <pre><code><span class="cmt"># Python console (HH:MM:SS):</span>
+HH:MM:SS | LEVEL   | octave.module            | message
+
+<span class="cmt"># Python file:</span>
+YYYY-MM-DD HH:MM:SS | LEVEL   | octave.module | file.py:line | function() | message
+
+<span class="cmt"># C++ file and stderr (same shape, millisecond timestamps, Qt category in the module column):</span>
+YYYY-MM-DD HH:MM:SS.zzz | LEVEL   | octave.elm327 | obdmanager.cpp:1772 | message</code></pre>
+        <p>Python logger names come from <code>get_logger(__name__)</code>: <code>octave.obd</code>, <code>octave.media</code>, <code>octave.spotify</code>, <code>octave.settings</code>, <code>octave.clock</code>, <code>octave.android_auto[.capture|.embedded]</code>, <code>octave.phone_mirror[.host|.capture|.container|.embedded]</code>, <code>octave.app</code> for <code>main.py</code>, and <code>octave.&lt;module&gt;</code> for everything else (e.g. <code>octave.ui_watchdog</code>, <code>octave.elm327_protocol</code>). python-obd's own <code>obd</code> logger tree is attached to the same handlers so an ELM327 session leaves its <code>write:</code>/<code>read:</code> transcript in <code>octave-debug.log</code>. The C++ side uses one <code>QLoggingCategory</code> per manager: <code>octave.settings</code>, <code>octave.media</code>, <code>octave.spotify</code>, <code>octave.download</code>, <code>octave.network</code>, <code>octave.phonemirror</code> (+ <code>octave.phonemirror.client</code> for the scrcpy-protocol client), <code>octave.androidauto</code>, <code>octave.embeddeddhu</code>, <code>octave.audioanalyzer</code>, <code>octave.berryimu</code>, <code>octave.gesture</code>, <code>octave.esp32volume</code>, <code>octave.dashboards</code>, <code>octave.diagnostics</code>, <code>octave.ui_watchdog</code> and <code>octave.elm327</code> (protocol transcript and the Android BLE bridge lines). The exceptions are <code>obdmanager.cpp</code>, <code>clock.cpp</code> and <code>volumecontroller.cpp</code>, which log through plain <code>qDebug()</code>/<code>qWarning()</code> and therefore appear under the category <code>default</code> &mdash; so there is no <code>octave.obd</code> category to filter on in the C++ logs; look for the <code>[OBD Worker]</code> message prefix instead. With <code>--debug</code> the C++ build sets the filter rules <code>*.debug=true</code>, <code>qt.*.debug=false</code>; without it <code>*.debug=false</code>, so category-debug output costs nothing.</p>
+
+        <h3>Crash traces</h3>
+        <ul>
+          <li><strong>Python:</strong> <code>sys.excepthook</code> and <code>threading.excepthook</code> log <code>Unhandled exception on the main thread</code> / <code>in thread '&lt;name&gt;'</code> with the traceback at CRITICAL, and <code>faulthandler</code> is enabled on a descriptor of <code>octave-error.log</code> so a native fault (SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL &mdash; e.g. inside PySide6 or PyAV) dumps every Python thread's stack there.</li>
+          <li><strong>C++ (Unix):</strong> a signal handler for the same five signals writes <code>==== FATAL SIGSEGV - backtrace (addresses; symbolise with addr2line against this build) ====</code> plus <code>backtrace_symbols_fd()</code> frames to <code>octave-cpp-error.log</code> and stderr, then restores the default action and re-raises so the OS still produces a core / tombstone. The addresses are only meaningful against the exact binary that crashed. <strong>Windows:</strong> <code>SetUnhandledExceptionFilter</code> writes the exception code, address and a <code>CaptureStackBackTrace</code> frame list.</li>
+          <li><strong>SIGTERM / SIGINT</strong> (launcher scripts, systemd, Ctrl-C) on desktop Unix are turned into <code>app.quit()</code> through a self-pipe so the <code>aboutToQuit</code> cleanup runs and child processes / adb forwards are not orphaned (<span class="file-path">src/main.cpp</span>).</li>
+        </ul>
+
+        <h3>UI watchdog: "UI thread blocked for N s and counting"</h3>
+        <p>Both backends run a watchdog thread (<span class="file-path">src/util/uiwatchdog.cpp</span>, <span class="file-path">backend/ui_watchdog.py</span>) that posts a ping to the GUI thread every 2 s; if the GUI thread has not answered within 5 s a WARNING is logged under <code>octave.ui_watchdog</code>, once per stall, followed by <code>UI thread responsive again after N s</code> when it recovers. A frozen head unit therefore leaves a timestamped trace even though nothing was drawn. Look at the lines immediately before the warning to see which manager was busy; the watchdog is stopped before Qt tears down the QObjects so a shutdown never shows as a stall.</p>
+
+        <h3>Enabling debug mode</h3>
+        <pre><code><span class="fn">python</span> main.py --debug      <span class="cmt"># Python backend</span>
+./build/octave --debug      <span class="cmt"># C++ backend (its only command-line flag)</span></code></pre>
+        <p>Creates the <code>-debug.log</code> file with DEBUG-level output. Useful for: the ELM327 TX/RX transcript (C++ logs <code>[OBD Worker]</code> TX/RX lines with round-trip times at debug level under <code>octave.elm327</code>; Python attaches python-obd's transcript), serial data from the ESP32 knob, settings load/save, media library scanning and tag extraction, Spotify API calls and token refresh, and the phone-mirror adb / server launch sequence.</p>
+
         <!-- Installation -->
         <h2 id="installation">Installation Issues</h2>
+        <p>These concern the Python developer backend (<code>python setup.py</code> / <code>python main.py</code>) unless stated otherwise. Build-time problems with the C++ tree are on the <a href="building.html#troubleshooting">Building</a> page.</p>
 
         <h3>Windows</h3>
         <table>
           <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
           <tbody>
-            <tr><td>"DLL not found" errors</td><td>Install <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe">Visual C++ Redistributable</a></td></tr>
-            <tr><td>PySide6 fails to install</td><td>Ensure Python 3.8+ (64-bit). Run: <code>pip install --upgrade pip setuptools wheel</code> then retry</td></tr>
-            <tr><td><code>pip install obd</code> fails</td><td>Install build tools: Visual Studio Build Tools with "Desktop development with C++"</td></tr>
-            <tr><td>Virtual environment won't activate</td><td>Run <code>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser</code> in PowerShell</td></tr>
+            <tr><td>"DLL not found" launching the shipped <code>.exe</code></td><td>Install the <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe">Visual C++ Redistributable</a>. The installer already warns when the registry shows no VC++ runtime.</td></tr>
+            <tr><td>PySide6 fails to install</td><td>Use a 64-bit Python 3.10 or 3.11 (<span class="file-path">pyproject.toml</span> declares <code>&gt;=3.10,&lt;3.12</code>; CI runs 3.11; <code>setup.py</code> only refuses below 3.8). Run <code>pip install --upgrade pip setuptools wheel</code> then retry.</td></tr>
+            <tr><td>Virtual environment won't activate</td><td>Run <code>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser</code> in PowerShell, then <code>venv\Scripts\activate</code>.</td></tr>
+            <tr><td>Console prints <code>?</code> instead of &check; / &rarr;</td><td>Cosmetic: <code>setup.py</code> reconfigures stdout to UTF-8 when the code page is not UTF-8 (cp1252 cannot encode the glyphs).</td></tr>
+            <tr><td><code>setup.py</code> recreates the venv every run</td><td>It deletes a venv whose <code>pyvenv.cfg</code> was written on another OS (a Dropbox-synced checkout used from Linux and Windows) or whose <code>pip --version</code> fails. Keep one venv per machine, or run from a non-synced clone.</td></tr>
           </tbody>
         </table>
 
@@ -49,9 +120,9 @@
         <table>
           <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
           <tbody>
-            <tr><td>"App is damaged" Gatekeeper error</td><td><code>xattr -cr /Applications/OCTAVE.app</code> or <code>sudo spctl --master-disable</code></td></tr>
-            <tr><td>PySide6 import errors on ARM Mac</td><td>Ensure using native ARM Python, not Rosetta x86. Check with <code>python -c "import platform; print(platform.machine())"</code></td></tr>
-            <tr><td><code>keyring</code> fails</td><td>Grant terminal access to Keychain in System Settings > Privacy</td></tr>
+            <tr><td>"App is damaged" Gatekeeper error on the <code>.dmg</code> build</td><td>The bundle is unsigned: <code>xattr -cr /Applications/OCTAVE.app</code>.</td></tr>
+            <tr><td>PySide6 import errors on Apple Silicon</td><td>Use a native arm64 Python, not Rosetta x86. Check with <code>python -c "import platform; print(platform.machine())"</code>.</td></tr>
+            <tr><td>Spotify: <code>keyring</code> cannot store the token</td><td>Python only. Grant the terminal Keychain access when prompted; otherwise spotipy falls back to the file cache (see <a href="#spotify">Spotify</a>).</td></tr>
           </tbody>
         </table>
 
@@ -59,286 +130,253 @@
         <table>
           <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
           <tbody>
-            <tr><td>Missing <code>libxcb</code> libraries</td><td><code>sudo apt install libxcb-xinerama0 libxcb-cursor0 libxkbcommon0</code></td></tr>
-            <tr><td><code>libGL</code> errors</td><td><code>sudo apt install libgl1-mesa-glx libegl1</code></td></tr>
-            <tr><td><code>smbus2</code> install fails</td><td><code>sudo apt install python3-dev i2c-tools</code></td></tr>
-            <tr><td>AppImage won't run</td><td><code>chmod +x OCTAVE-x86_64.AppImage</code> or install libfuse2: <code>sudo apt install libfuse2</code></td></tr>
-            <tr><td>AppImage FUSE not available</td><td>Extract: <code>./OCTAVE-x86_64.AppImage --appimage-extract && ./squashfs-root/AppRun</code></td></tr>
+            <tr><td>Missing <code>libxcb</code> / <code>libGL</code> libraries</td><td><code>python setup.py</code> installs the Qt runtime packages for the Arch, Fedora and Debian families (it needs <code>sudo</code>). On Debian/Ubuntu the core set is <code>libxcb-xinerama0 libxcb-cursor0 libxkbcommon0 libgl1-mesa-glx libegl1 libpulse0</code> &mdash; the same list the CI <code>test</code> job installs.</td></tr>
+            <tr><td><code>smbus2</code> missing (BerryIMU / gesture sensor)</td><td>It is Linux-only in <span class="file-path">requirements.txt</span> (<code>smbus2&gt;=0.4.3; sys_platform == "linux"</code>); reinstall requirements inside the venv on the Pi. I&sup2;C access itself is covered under <a href="#hardware-sensors">Hardware Sensors</a>.</td></tr>
+            <tr><td>AppImage won't run</td><td><code>chmod +x OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code>; if FUSE is missing, <code>sudo apt install libfuse2</code> or run <code>./OCTAVE-&lt;version&gt;-linux-x86_64.AppImage --appimage-extract &amp;&amp; ./squashfs-root/AppRun</code>.</td></tr>
+            <tr><td>AppImage from a GitHub release fails with a glibc error on an old distro</td><td>CI builds on Ubuntu 22.04; older glibc cannot load it. Build locally instead (<a href="building.html#linux">Building &rarr; Linux</a>).</td></tr>
+            <tr><td>Locally built AppImage starts, no window appears</td><td>The QML tree is not at <code>usr/frontend/</code> next to <code>usr/bin/octave</code>; see <a href="building.html#linux">AppImage structure</a>.</td></tr>
           </tbody>
         </table>
 
         <!-- Display -->
         <h2 id="display">Display &amp; Rendering Issues</h2>
 
-        <h3>XCB Plugin Errors (Linux)</h3>
+        <h3>XCB platform plugin errors (Linux)</h3>
         <div class="info-box danger">
-          <strong>Error:</strong> <code>qt.qpa.plugin: Could not load the Qt platform plugin "xcb"</code>
+          <div class="info-box-title">Error</div>
+          <code>qt.qpa.plugin: Could not load the Qt platform plugin "xcb"</code>
         </div>
-        <p>Install required X11 libraries:</p>
-        <pre><code>sudo apt install libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 \
-  libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
-  libxcb-render-util0 libxcb-shape0</code></pre>
+        <p>Install the X11/XCB libraries. The list <code>setup.py</code> installs on Debian/Ubuntu is the reference:</p>
+        <pre><code>sudo apt install libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+  libxcb-randr0 libxcb-render0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
+  libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 libxcb-util1 \
+  libxkbcommon0 libxkbcommon-x11-0</code></pre>
+        <p>The AppImage ships its own platform plugins and sets <code>QT_QPA_PLATFORM_PLUGIN_PATH</code> in its <code>AppRun</code>, so this error from an AppImage means an unset <code>DISPLAY</code>/<code>WAYLAND_DISPLAY</code> rather than a missing package.</p>
 
         <h3>Wayland vs X11</h3>
-        <p>OCTAVE uses Qt Quick which works on both Wayland and X11. If you experience issues on Wayland:</p>
-        <pre><code><span class="cmt"># Force X11 backend</span>
-<span class="kw">export</span> QT_QPA_PLATFORM=xcb
-<span class="fn">python</span> main.py
+        <p>Qt picks the platform plugin from the session. To force one (either backend, same variable):</p>
+        <pre><code><span class="kw">export</span> QT_QPA_PLATFORM=xcb       <span class="cmt"># force X11 / XWayland</span>
+<span class="kw">export</span> QT_QPA_PLATFORM=wayland   <span class="cmt"># force Wayland</span>
+<span class="fn">python</span> main.py                   <span class="cmt"># or ./build/octave</span></code></pre>
+        <p>The dev screenshot and recording tools do not care which one is active: they grab the window from inside Qt (<code>grabWindow()</code>) rather than through the compositor &mdash; see <a href="development.html#screenshots">Development &rarr; Screenshots</a>.</p>
 
-<span class="cmt"># Or force Wayland</span>
-<span class="kw">export</span> QT_QPA_PLATFORM=wayland
-<span class="fn">python</span> main.py</code></pre>
+        <h3>Black UI, missing icons or album art</h3>
+        <p>The nav icons and media controls are SVGs wrapped in <code>ColorOverlay</code> and the album art uses <code>MultiEffect</code> / <code>DropShadow</code> &mdash; GPU shader effects that need a real GL context. Under Qt's <code>offscreen</code> platform (used by the smoke tests and the fastest screenshot mode) they paint blank by design. On a real display, a black window usually means a broken GL stack: try <code>QT_QUICK_BACKEND=software</code> (slow but reliable) and check the log for <code>module "..." is not installed</code>, which means the Qt build lacks <code>QtQuick.Effects</code> / <code>Qt5Compat.GraphicalEffects</code> (<a href="building.html#cmake-options">Building</a>).</p>
 
-        <h3>OpenGL / Software Rendering</h3>
-        <p>If the UI is black or has rendering artifacts:</p>
-        <pre><code><span class="cmt"># Force software rendering (slow but reliable)</span>
-<span class="kw">export</span> QT_QUICK_BACKEND=software
-<span class="fn">python</span> main.py
-
-<span class="cmt"># Or specify OpenGL ES (for Raspberry Pi)</span>
-<span class="kw">export</span> QT_OPENGL=es2
-<span class="fn">python</span> main.py</code></pre>
-
-        <h3>Black Screen on Startup</h3>
+        <h3>Nothing appears at startup</h3>
         <ul>
-          <li>Check QML import path: OCTAVE adds <code>frontend/</code> to the QML import path. If running from a different directory, QML files won't be found.</li>
-          <li>Check Qt Quick Controls style: OCTAVE forces <code>QT_QUICK_CONTROLS_STYLE=Basic</code>. If this env var is overridden, slider customization breaks.</li>
-          <li>Run with <code>--debug</code> and check logs for QML errors.</li>
+          <li><strong>QML import path:</strong> the Python backend adds <code>&lt;checkout&gt;/frontend</code> to the import path from <code>main.py</code>'s own location, so it works from any cwd. The C++ binary looks for <code>frontend/</code> next to itself, then one level up; running a binary copied elsewhere logs <code>Could not locate frontend/ directory</code>.</li>
+          <li><strong>Controls style:</strong> both backends force the <code>Basic</code> style (<code>os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"</code> / <code>QQuickStyle::setStyle("Basic")</code>) because the sliders are fully custom-drawn. An externally set <code>QT_QUICK_CONTROLS_STYLE</code> is overridden by the Python side but can surprise a C++ build started through a wrapper.</li>
+          <li>Run with <code>--debug</code> and read the QML warnings in the debug log.</li>
         </ul>
 
-        <h3>UI Scaling Issues</h3>
-        <p>If the UI is too small or too large, adjust the <code>uiScale</code> setting (0.5 - 2.0) in Settings > Display, or set it in <code>settingsConfigure.json</code>.</p>
+        <h3>UI scale wrong</h3>
+        <p>The <code>uiScale</code> setting ranges 0.5&ndash;2.0 in 0.05 steps (Settings &rarr; Display, or edit <code>settingsConfigure.json</code>; an old default of 0.6 is migrated to 1.0 on load). On top of it both backends compute <code>screenAutoScale</code> from the <em>shorter</em> screen edge divided by 720, clamped to 0.4&ndash;3.0, so a portrait-reporting Android tablet no longer gets a 3&times; factor.</p>
 
         <!-- Audio -->
         <h2 id="audio">Audio Issues</h2>
 
-        <h3>No Audio Output</h3>
+        <h3>No or very quiet audio</h3>
         <ul>
-          <li>Check volume: OCTAVE uses a logarithmic curve <code>(volume/100)^2.0</code>. Low slider values produce very quiet output.</li>
-          <li>Check mute state: <code>mediaManager.is_muted()</code> in QML or check the mute toggle guard (<code>_mute_toggle_locked</code>).</li>
-          <li>Verify audio output device in system settings.</li>
+          <li>The volume slider is mapped through a <strong>quadratic</strong> curve, <code>(volume/100)^2.0</code> (<span class="file-path">src/managers/volumecontroller.cpp</span> / <span class="file-path">backend/volume_utils.py</span>, pinned by <code>tests/test_smoke.py::test_volume_curve_math</code>): 50 % on the slider is 25 % linear gain, 10 % is 1 %. Low slider values are genuinely quiet.</li>
+          <li>Mute: <code>mediaManager.is_muted()</code> in both backends. <code>toggle_mute()</code> is guarded by a 150 ms lock (<code>_mute_toggle_locked</code> / <code>m_muteToggleLocked</code>) so a bouncing ESP32 button or gesture cannot double-toggle; a mute press within 150 ms of the previous one is ignored.</li>
+          <li>Phone-mirror ducking: while the phone is producing sound, local playback is ducked to <code>scrcpyAudioDuckLevel</code> (default 0.1) and released 1.5 s after the phone goes quiet (<code>scrcpyAudioDuckEnabled</code>, default on). If music seems to drop out during mirroring, this is why.</li>
+          <li>Verify the output device in the system mixer.</li>
         </ul>
 
-        <h3>PulseAudio Issues (Linux)</h3>
-        <pre><code><span class="cmt"># Check PulseAudio is running</span>
-pulseaudio --check
+        <h3>PulseAudio / PipeWire (Linux)</h3>
+        <pre><code>pactl list short sinks             <span class="cmt"># is there a sink at all?</span>
+pulseaudio --check || pulseaudio --start</code></pre>
 
-<span class="cmt"># Restart PulseAudio</span>
-pulseaudio --kill && pulseaudio --start
+        <h3>Media backend</h3>
+        <p>OCTAVE assumes Qt Multimedia's FFmpeg backend: the media manager passes <code>probe-size</code> / <code>analyzeduration</code> hints to the player, and the aarch64 AppImage deliberately ships <em>without</em> Qt's GStreamer plugin (<a href="building.html#design-decisions">Building</a>). Neither backend sets <code>QT_MEDIA_BACKEND</code> or any GStreamer variable; if you set one yourself and playback breaks, unset it.</p>
 
-<span class="cmt"># List audio sinks</span>
-pactl list short sinks</code></pre>
-
-        <h3>ALSA Errors (Linux)</h3>
-        <pre><code><span class="cmt"># Install ALSA plugins</span>
-sudo apt install libasound2-plugins
-
-<span class="cmt"># If "ALSA lib pcm_dmix.c" errors appear, set:</span>
-<span class="kw">export</span> QT_MULTIMEDIA_PREFERRED_PLUGINS=gstreamer</code></pre>
-
-        <h3>Audio Playback Stalls</h3>
-        <p>The media manager has automatic recovery for stalled/invalid media. If a file consistently fails, check the file format. Supported: MP3, M4A, FLAC, OGG, OPUS, WAV.</p>
+        <h3>Playback stalls, a track keeps skipping, or playback stops by itself</h3>
+        <p>Both backends run the same recovery: an invalid or stalled file is retried at most <strong>2</strong> times, then skipped; after <strong>10 consecutive</strong> unplayable tracks (or the playlist length, if shorter) playback stops and the source is cleared rather than looping forever. Check the log for the file names; the usual cause is an unsupported container. Extensions scanned: <code>.mp3 .m4a .flac .ogg .opus .wav</code> in both backends &mdash; the C++ backend additionally scans <code>.mp4</code> (yt-dlp names YouTube audio-only streams that way), the Python backend does not, so a library of downloads can look shorter under Python.</p>
 
         <!-- OBD -->
         <h2 id="obd">OBD Connection Issues</h2>
+        <p>Read the <strong>Connection Log</strong> on Settings &rarr; OBD first: every init step, rfcomm command and error the manager sees is appended there in both backends.</p>
 
-        <h3>Serial Port Permissions (Linux)</h3>
-        <pre><code><span class="cmt"># Add user to dialout group for serial port access</span>
-sudo usermod -aG dialout $USER
+        <h3>Which port / address to enter</h3>
+        <p>The single field (<code>obdBluetoothPort</code>, placeholder "MAC address, /dev path, or COM port") accepts a Bluetooth MAC, a device path or a COM port. Left empty, the default is <code>/dev/rfcomm0</code> on Linux, <code>COM3</code> on Windows, <code>/dev/tty.OBD</code> on macOS, and nothing on Android (a MAC is required). While disconnected, both backends rescan every 10 s: Linux globs <code>/dev/rfcomm*</code>, <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code> (<code>/dev/ttyS*</code> is excluded as a false-positive source); Windows filters serial-port descriptions for bluetooth / obd / elm / serial / usb; macOS looks at <code>tty.OBD*</code>, <code>tty.Bluetooth*</code>, <code>cu.*</code>, <code>*ELM*</code>. Note the OBD scanner does <em>not</em> exclude the ESP32 volume knob's USB serial port; the knob's own manager does exclude the OBD port.</p>
 
-<span class="cmt"># Log out and back in, then verify</span>
-groups | grep dialout</code></pre>
+        <h3>Serial port permissions (Linux)</h3>
+        <pre><code>sudo usermod -aG dialout $USER     <span class="cmt"># log out and back in, then: groups | grep dialout</span></code></pre>
 
-        <h3>Bluetooth OBD Pairing (Linux)</h3>
-        <pre><code><span class="cmt"># Pair the OBD adapter</span>
-bluetoothctl
-  scan on
-  pair XX:XX:XX:XX:XX:XX
-  trust XX:XX:XX:XX:XX:XX
-  quit
-
-<span class="cmt"># Bind to rfcomm</span>
-sudo rfcomm bind 0 XX:XX:XX:XX:XX:XX
-
-<span class="cmt"># Verify</span>
+        <h3>Bluetooth ELM327 pairing (Linux)</h3>
+        <p>Linux uses classic Bluetooth SPP through <code>rfcomm</code>, not Qt Bluetooth sockets. Pair and trust once with <code>bluetoothctl</code> (<code>scan on</code>, <code>pair XX:XX:XX:XX:XX:XX</code>, <code>trust ...</code>). Then either enter the MAC in the OBD settings &mdash; both backends run <code>rfcomm bind 0 &lt;mac&gt; 1</code> for you (<code>ensureRfcommBound</code> / <code>_ensure_rfcomm_bound</code>) and reuse an existing <code>/dev/rfcommN</code> &mdash; or bind manually and enter the device path:</p>
+        <pre><code>sudo rfcomm bind 0 XX:XX:XX:XX:XX:XX
 ls -la /dev/rfcomm0</code></pre>
+        <p>"rfcomm bind failed: rfcomm binary not found" in the Connection Log means <code>bluez-utils</code> (Arch) / the package that ships <code>rfcomm</code> is missing; the log also tells you to bind once with sudo and enter <code>/dev/rfcomm0</code>.</p>
 
-        <h3>Connection Timeouts</h3>
+        <h3>Connection is slow or times out</h3>
         <ul>
-          <li>Default timeout is 5 seconds. The OBD manager uses a dedicated QThread worker to avoid blocking the UI.</li>
-          <li>If connection is slow, check if <code>obdFastMode</code> is enabled (it should be by default).</li>
-          <li>The manager caches the last successful protocol to skip auto-detection on reconnect (saves 1-3 seconds).</li>
-          <li>Set <code>obdAutoReconnectAttempts</code> to 1-10 for automatic reconnection after drops.</li>
+          <li>The connection runs on a dedicated worker thread (<code>OBDConnectionWorker</code> on a <code>QThread</code> in both backends) so the UI never blocks; progress is reported through <code>connectionProgress</code> / <code>connectionDetail</code>.</li>
+          <li><code>obdConnectionTimeout</code> is 5 s by default, settable 5&ndash;60. The Python backend passes it to python-obd; the C++ worker uses fixed per-command timeouts (300&ndash;1500 ms for init commands, 3 s for the RPM probe, 500 ms per poll) and does not currently read the setting.</li>
+          <li><code>obdFastMode</code> (default on): C++ polls with a 0 ms interval instead of 50 ms; Python passes python-obd's <code>fast=</code> flag.</li>
+          <li>Only the Python backend caches the last successful protocol and passes it to python-obd on reconnect; the C++ worker always sends its fixed init sequence ending in <code>ATSP0</code> (auto-detect).</li>
+          <li><code>obdAutoReconnectAttempts</code> is 0&ndash;10 and <strong>defaults to 0 = off</strong> (shown as "Off" on the slider). With 0, a drop leaves the manager in a passive 10 s port scan; with 1&ndash;10 the Python backend retries with a <code>min(10, 2 + 2n)</code> s backoff.</li>
         </ul>
 
-        <h3>"No Data" from Vehicle</h3>
+        <h3>"Adapter stopped responding" / a dead port pegs a CPU core</h3>
+        <p>C++ only (python-obd owns the I/O on the Python side). Commits <code>953f85f</code>, <code>0404f7b</code> and <code>5d76a03</code> fixed a worker that span at 100 % CPU for the whole command timeout on an rfcomm port that had gone away (gdb on the Pi showed the entire stack inside <code>QSerialPort</code>). Now: non-productive waits are paced to ~10 Hz; after 50 consecutive "readable but zero bytes" polls the worker logs <code>Port reports readable but delivers no data; treating as disconnected</code>, releases the port and emits <code>connectionLost("Adapter stopped responding")</code>; every failed init and the no-vehicle path also release the port so no read notifier stays armed; a USB unplug (<code>ResourceError</code> / <code>DeviceNotFoundError</code>) is treated as connection lost. On the Python side a 2 s monitor thread reports "Device Lost" / "Bluetooth device disconnected" when the port path disappears, and an <code>Errno 5</code> clears the cached protocol.</p>
+
+        <h3>"No Data" for a parameter</h3>
         <ul>
-          <li>Run a vehicle scan (OBD Settings > Scan Vehicle) to discover which PIDs your vehicle supports.</li>
-          <li>Not all vehicles support all 87+ parameters. Enable only supported ones to avoid polling errors.</li>
-          <li>Some parameters only report data when the engine is running.</li>
+          <li>Both backends query the adapter's supported-PID bitmaps (ranges 00/20/40/60/80/A0/C0/E0) automatically 2 s after every successful connect; the OBD settings page shows the scan progress. There is no manual "Scan Vehicle" button.</li>
+          <li>The parameter model (<span class="file-path">frontend/OBDParameterModel.qml</span>) lists 84 OBD parameters plus 8 BerryIMU-derived ones; the native ELM327 decoders in both backends cover 61 PIDs. Watching a parameter the vehicle or the decoder does not support simply yields no value &mdash; it is not an error.</li>
+          <li>Many parameters only report with the engine running.</li>
         </ul>
 
-        <h3>Data Watchdog</h3>
-        <p>The OBD manager includes a data watchdog that detects stale connections (no data for 30 seconds while parameters are watched). If triggered, it automatically reconnects.</p>
+        <h3>Data watchdog: "Stale Connection" / "No data received, reconnecting..."</h3>
+        <p>While connected <em>and</em> at least one parameter is being watched, both backends check every 5 s whether any data arrived in the last 30 s (<code>DATA_WATCHDOG_TIMEOUT_MS = 30000</code>). If not, they log the messages above, tear the connection down and reconnect after 100 ms (the Python backend refreshes its timestamp from a single watched PID, preferring RPM). Repeated watchdog trips with a healthy adapter usually mean the vehicle stopped answering (ignition off) rather than a link problem.</p>
 
-        <!-- Spotify -->
-        <h2 id="spotify">Spotify Authentication Issues</h2>
+        <h3>Reading the ELM327 transcript</h3>
+        <p>C++: TX/RX lines with round-trip times are logged at debug level under <code>octave.elm327</code> (run with <code>--debug</code>); short responses and decoder exceptions are warnings and always logged. Python: run with <code>--debug</code> and read python-obd's <code>write:</code> / <code>read:</code> lines in <code>octave-debug.log</code>; the parity decoder logs under <code>octave.elm327_protocol</code>.</p>
 
-        <h3>OAuth Flow</h3>
-        <ol class="steps">
-          <li>Enter Client ID and Client Secret in Spotify Settings</li>
-          <li>Click "Connect" - OCTAVE starts a local HTTP server on port 8888</li>
-          <li>Browser opens to Spotify's auth page</li>
-          <li>After authorizing, Spotify redirects to <code>http://127.0.0.1:8888/callback</code></li>
-          <li>OCTAVE captures the auth code and exchanges it for tokens</li>
-        </ol>
-
-        <h3>Common Issues</h3>
+        <!-- Android OBD -->
+        <h2 id="android-obd">Android OBD (Bluetooth / BLE)</h2>
+        <span class="platform-badge android">Android</span>
+        <p>The C++ APK connects to ELM327 adapters over Bluetooth through <span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span> (Qt's <code>QLowEnergyController</code> is deliberately bypassed). The manifest declares <code>BLUETOOTH_CONNECT</code>, <code>BLUETOOTH_SCAN</code> (<code>neverForLocation</code>, so no location permission is needed on Android 12+) and <code>BLUETOOTH_ADVERTISE</code>; <code>ACCESS_FINE_LOCATION</code> is only declared up to API 30.</p>
         <table>
-          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+          <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
           <tbody>
-            <tr><td>Redirect URI mismatch</td><td>Add <code>http://127.0.0.1:8888/callback</code> to your Spotify Developer Dashboard redirect URIs</td></tr>
-            <tr><td>Token expired</td><td>OCTAVE auto-refreshes tokens via spotipy. If it fails, disconnect and re-authenticate.</td></tr>
-            <tr><td>Keyring errors</td><td>Install <code>keyring</code> and the appropriate backend. Falls back to file cache at <code>backend/.spotify_token_cache</code></td></tr>
-            <tr><td>No devices found</td><td>Ensure Spotify is running on at least one device (phone, desktop). OCTAVE controls playback remotely.</td></tr>
-            <tr><td>Rate limiting</td><td>OCTAVE polls every 3 seconds and uses max 2 concurrent API threads. If rate-limited, reduce polling interval.</td></tr>
+            <tr><td>Status "Requesting Bluetooth permission &mdash; tap Allow, then tap Connect again"</td><td>First connect on API 31+: the bridge calls <code>requestPermissions()</code> and returns; answer the system dialog and press Connect again.</td></tr>
+            <tr><td>Status "Bluetooth permission denied", detail "Grant Bluetooth in Settings -&gt; Apps -&gt; OCTAVE -&gt; Permissions"</td><td>The permission was refused. Grant it in the system app settings. The manager always re-runs Qt's <code>QBluetoothPermission</code> check after its own because Qt 6.7 caches a stale result.</td></tr>
+            <tr><td>Nothing happens with an empty port field</td><td>Android requires the adapter's MAC address; there is no default and no serial scan.</td></tr>
+            <tr><td>Where are the BLE logs?</td><td>The Java side queues <code>I|</code>/<code>W|</code> lines; the OBD manager drains up to 50 per 50 ms poll and re-emits them as <code>[BLE] ...</code> under <code>octave.elm327</code>, so they land in <code>octave-cpp.log</code>, the Connection Log and the Diagnostics export. No <code>adb logcat</code> needed.</td></tr>
+            <tr><td>Update refuses to install</td><td>Every CI release is signed with a fresh key: uninstall <code>org.octave.app</code> first (<a href="building.html#android">Building &rarr; Android</a>).</td></tr>
           </tbody>
         </table>
 
-        <h3>Token Storage</h3>
-        <p>Tokens are stored securely in the OS keychain via the <code>keyring</code> library (service: "OCTAVE_Spotify", username: "spotify_token"). Fallback: <span class="file-path">backend/.spotify_token_cache</span> file.</p>
+        <!-- Spotify -->
+        <h2 id="spotify">Spotify Authentication Issues</h2>
+        <p>Spotify is desktop-only; the Android build compiles a stub so the QML bindings stay valid but nothing connects.</p>
+
+        <h3>OAuth flow (both backends)</h3>
+        <ol class="steps">
+          <li>Enter the Client ID and Client Secret in Spotify settings.</li>
+          <li>Click Connect &mdash; OCTAVE starts a local HTTP listener on <code>127.0.0.1:8888</code> (Python: stdlib <code>HTTPServer</code> on a thread; C++: a hand-rolled <code>QTcpServer</code> that parses the GET line).</li>
+          <li>The browser opens Spotify's authorization page.</li>
+          <li>Spotify redirects to <code>http://127.0.0.1:8888/callback</code>.</li>
+          <li>OCTAVE exchanges the code for tokens (spotipy / <code>QNetworkAccessManager</code>).</li>
+        </ol>
+
+        <h3>Common issues</h3>
+        <table>
+          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+          <tbody>
+            <tr><td>Redirect URI mismatch</td><td>Add exactly <code>http://127.0.0.1:8888/callback</code> to the app's redirect URIs in the Spotify Developer Dashboard.</td></tr>
+            <tr><td>Token expired</td><td>Python refreshes through <code>spotipy.SpotifyOAuth</code>; C++ refreshes itself with <code>grant_type=refresh_token</code>, pre-emptively 60 s before expiry, and forces re-auth if the refresh fails. If playback control stops working, disconnect and re-authenticate.</td></tr>
+            <tr><td>Keyring errors (Python)</td><td>The Python backend stores the token in the OS keychain via <code>keyring</code> (service <code>OCTAVE_Spotify</code>, username <code>spotify_token</code>) and falls back to the file <span class="file-path">backend/.spotify_token_cache</span> (gitignored).</td></tr>
+            <tr><td>Logged in under Python, logged out under C++ (or vice versa)</td><td>Expected: the C++ backend keeps its token as plain JSON in <code>&lt;app data dir&gt;/.spotify_token_cache</code> &mdash; same file name, different directory, no keychain &mdash; so the two backends do not share a login.</td></tr>
+            <tr><td>No devices found</td><td>OCTAVE controls playback remotely; Spotify must be running on at least one device.</td></tr>
+            <tr><td>Rate limiting</td><td>Polling is adaptive in both backends: 3 s while playing, 5 s paused, 10 s idle, plus a 250 ms local position interpolation timer. The Python backend caps API work at a 2-worker thread pool; the C++ backend issues asynchronous requests from the GUI thread.</td></tr>
+            <tr><td>Playlists show no tracks after February 2026</td><td>Spotify moved <code>/playlists/{id}/tracks</code> to <code>/items</code> with a 50-item page cap; both backends page <code>/items</code> up to 1000 entries (commit <code>a37f3ff</code>). Update if you are on an older build.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Downloads -->
+        <h2 id="downloads">Music Download (yt-dlp) Issues</h2>
+        <p>Where yt-dlp comes from differs per backend: the C++ desktop build runs an external <code>yt-dlp</code> found on PATH or in the app dir, <code>/usr/local/bin</code>, <code>/usr/bin</code>, <code>~/.local/bin</code> (<code>.exe</code> variants on Windows); the Python backend imports the pip package in-process (<code>yt-dlp==2026.8.19</code> in <span class="file-path">requirements.txt</span>); Android uses the <code>youtubedl-android</code> AAR through JNI (sentinel path <code>jni://yt-dlp</code>). A build configured with <code>-DOCTAVE_ENABLE_DOWNLOADS=OFF</code> reports "Downloads disabled in this build".</p>
+        <table>
+          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+          <tbody>
+            <tr><td><code>yt-dlp</code> not found (C++ desktop)</td><td>Install it (<code>pipx install yt-dlp</code> or the distro package) somewhere on the lookup list above.</td></tr>
+            <tr><td>"Sign in to confirm you're not a bot"</td><td>Usually a VPN: YouTube blocklists most shared VPN exit IPs; downloads work again on a residential connection or a dedicated-IP exit node (README). To stay on the VPN, export a Netscape <code>cookies.txt</code> from a logged-in browser (the README walks through the "Get cookies.txt LOCALLY" extension) and save it as <code>youtube_cookies.txt</code> in the Downloads folder: <code>~/Downloads/</code> on Linux/macOS, <code>%USERPROFILE%\Downloads\</code> on Windows, <code>/storage/emulated/0/Download/</code> on Android. Restart OCTAVE. Both backends look only at that one path (<code>QStandardPaths::DownloadLocation</code> / <code>_youtube_cookies_default_path()</code>) and log a warning naming it when the file is absent; the C++ backend also retries across several yt-dlp player clients with linear backoff because the wall is per-video. An in-app file picker is deferred (<span class="file-path">TODO/yt-cookies-file-picker.md</span>).</td></tr>
+            <tr><td>A download fails silently</td><td>It is not silent: the Download page status reads <code>Error: &lt;name&gt; - &lt;message&gt;</code>, the queue row turns <code>failed</code> with the message, and <code>downloadError</code> / <code>searchError</code> are logged.</td></tr>
+            <tr><td>YouTube Music search returns nothing on Android</td><td>The APK must contain <code>assets/python-packages/ytmusic-bundle.zip</code> (built by <span class="file-path">scripts/build-android-pylib-bundle.sh</span>); without it <code>ytmusic_search.py</code> cannot import <code>ytmusicapi</code> and search fails silently. CI builds it; a local APK needs the script run first.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Phone mirror -->
+        <h2 id="phone-mirror">Phone Mirror Issues</h2>
+        <p>Mirroring needs only <code>adb</code> and the phone server jar OCTAVE ships; the full design is on the <a href="phone-mirror-android-auto.html">Phone Mirror</a> page. Symptoms specific to recent behaviour:</p>
+        <table>
+          <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
+          <tbody>
+            <tr><td>"adb not found. Run scripts/fetch_platform_tools.py or install android-tools."</td><td>Both backends look for a bundled <code>adb</code> first (<code>platform-tools/</code> next to the binary, <code>tools/platform-tools/&lt;os&gt;/</code> in a checkout, <code>Contents/Resources/platform-tools/</code> in the bundle), then PATH, then common SDK paths. On ARM boards Google ships no adb; install the distro's (<code>sudo apt install adb</code>).</td></tr>
+            <tr><td>"Phone is connected but USB debugging is not authorized. Unlock the phone and tap 'Allow' on the USB debugging prompt."</td><td><code>adb devices</code> shows <code>unauthorized</code>. Unlock, accept the prompt (tick "always allow"); if the prompt never appears, unplug and replug.</td></tr>
+            <tr><td>Picture freezes for a moment when the cable is bumped, then continues</td><td>Working as designed: for virtual-display sessions the server keeps the session alive for <code>octave_persist_ms</code> = 60 s after the socket drops; the client reattaches to the same session within 55 s with a 4 s deadline, and the view holds the last frame and shows a "Reconnecting to phone…" badge only after 2 s. If the attach fails or the window expires ("No client reconnected within N ms" in the server log) a fresh session starts.</td></tr>
+            <tr><td>Mirror goes dark when the phone screen is off / shows a black frame with a status bar</td><td>The phone-side <code>MirrorKeeper</code> reports sleep state; while asleep every incoming frame is dropped and the last good one is held. A stride-2 luma test over the Y plane detects black frames, with a 5 % lenient fraction (a solid status strip is 3&ndash;4 % of samples) for 3 s around a reattach.</td></tr>
+            <tr><td>Cannot get the phone back after it went dark on the dash</td><td>The pick-up path: a power press forces the panel back on (<code>relightOnWake</code>), a second press within the 8 s grace (<code>WAKE_GRACE_MS</code> / <code>kWakeGraceMs</code>) marks the phone as in use, and waking to an unlocked phone counts as in use.</td></tr>
+            <tr><td>Music ducks while mirroring</td><td>Intentional: see <a href="#audio">Audio</a>. The phone's own volume is never changed; OCTAVE applies its own gain (<code>scrcpyAudioGain</code>, default 2.0, soft-limited).</td></tr>
+            <tr><td>Server refuses to start: version mismatch</td><td>The jar in <span class="file-path">tools/phone-server/</span> and both clients must agree on <code>3.3.4-octave</code>; rebuild the jar after editing <code>phone_server/src</code> (<a href="building.html#phone-server">Building</a>).</td></tr>
+            <tr><td><code>phoneMirrorManager.nativeAvailable</code> is false (C++)</td><td>The binary was built without libavcodec; there is no other decoder path. Rebuild with FFmpeg dev packages present.</td></tr>
+          </tbody>
+        </table>
 
         <!-- Hardware Sensors -->
         <h2 id="hardware-sensors">Hardware Sensor Issues</h2>
 
-        <h3>I2C Permissions</h3>
-        <pre><code><span class="cmt"># Add user to i2c group</span>
-sudo usermod -aG i2c $USER
-
-<span class="cmt"># Enable I2C on Raspberry Pi</span>
-sudo raspi-config  <span class="cmt"># Interface Options > I2C > Enable</span>
-
-<span class="cmt"># Verify I2C devices are detected</span>
+        <h3>I&sup2;C permissions and bus</h3>
+        <pre><code>sudo usermod -aG i2c $USER
+sudo raspi-config                  <span class="cmt"># Raspberry Pi: Interface Options &gt; I2C &gt; Enable</span>
 i2cdetect -y 2
-<span class="cmt"># Should show: 0x6A (LSM6DSL), 0x1C (LIS3MDL), 0x77 (BMP388), 0x73 (PAJ7620)</span></code></pre>
+<span class="cmt"># Expected: 0x6A (LSM6DSL), 0x1C (LIS3MDL), 0x77 (BMP388), 0x73 (PAJ7620U2)</span></code></pre>
+        <p>The bus number is a hard-coded constant, <code>I2C_BUS = 2</code>, in both backends (<span class="file-path">src/managers/berryimumanager.cpp</span>, <span class="file-path">src/managers/gesturemanager.cpp</span>, <span class="file-path">backend/berryimu_manager.py</span>, <span class="file-path">backend/gesture_manager.py</span>) &mdash; there is no setting. The Python backend talks through <code>smbus2</code>; the C++ backend opens <code>/dev/i2c-2</code> directly with <code>ioctl(I2C_SLAVE)</code> (Linux only).</p>
 
-        <h3>"Device not found" Errors</h3>
+        <h3>"Device not found" errors</h3>
         <table>
           <thead><tr><th>Error</th><th>Cause</th><th>Solution</th></tr></thead>
           <tbody>
-            <tr><td><code>/dev/i2c-2 not found</code></td><td>I2C bus not enabled or wrong bus number</td><td>Enable I2C in raspi-config. OCTAVE uses bus 2 by default.</td></tr>
-            <tr><td>Permission denied on <code>/dev/i2c-2</code></td><td>User not in i2c group</td><td><code>sudo usermod -aG i2c $USER</code> then log out/in</td></tr>
-            <tr><td>Expected chip ID 0x7620, got 0x0000</td><td>PAJ7620U2 not responding</td><td>Check wiring, verify 3.3V power, check I2C pull-up resistors</td></tr>
-            <tr><td>smbus2 not installed</td><td>Python I2C library missing</td><td><code>pip install smbus2</code></td></tr>
+            <tr><td><code>/dev/i2c-2 not found</code></td><td>I&sup2;C not enabled or the sensors are on another bus</td><td>Enable I&sup2;C; move the sensors to bus 2 or change the constant and rebuild/restart.</td></tr>
+            <tr><td>Permission denied on <code>/dev/i2c-2</code></td><td>User not in the <code>i2c</code> group</td><td><code>sudo usermod -aG i2c $USER</code>, then log out/in.</td></tr>
+            <tr><td>Expected chip ID 0x7620, got 0x0000</td><td>PAJ7620U2 not responding</td><td>Check wiring, 3.3 V supply, pull-ups.</td></tr>
+            <tr><td><code>smbus2</code> not installed</td><td>Python I&sup2;C library missing</td><td><code>pip install smbus2</code> in the venv.</td></tr>
           </tbody>
         </table>
 
-        <h3>Reconnection Behavior</h3>
-        <p>Both BerryIMU and gesture sensor managers retry up to 5 times with linear backoff (5s, 10s, 15s, 20s, 25s). Permission errors do not trigger retries (permanent failure). After max retries, the sensor is marked as unavailable.</p>
+        <h3>Reconnection behaviour</h3>
+        <p>BerryIMU and gesture managers retry up to 5 times with linear backoff (5, 10, 15, 20, 25 s) in both backends, then mark the sensor unavailable. The Python managers skip the retries on a <code>PermissionError</code> (it cannot fix itself); the C++ managers cannot distinguish the error and retry five times regardless, so a permission problem shows up as five "failed to open" lines over ~75 s.</p>
 
-        <h3>ESP32 Volume Knob Not Connecting</h3>
+        <h3>IMU updates look slow</h3>
+        <p>Sampling and the Madgwick filter always run at full rate, but the signals emitted to QML drop to 5 Hz (<code>IDLE_EMIT_INTERVAL = 0.2</code>) unless a page that draws them is showing &mdash; Car, Sensors, Sensor Home, the OBD menu, or the home screen when an IMU parameter is on a home card &mdash; where they run at ~60 Hz. This is the idle-CPU optimisation, not a fault.</p>
+
+        <h3>ESP32 volume knob not connecting</h3>
         <ul>
-          <li>Check that the ESP32-S3 dongle appears in <code>dmesg</code> output after plugging in</li>
-          <li>Verify serial port permissions: <code>sudo usermod -aG dialout $USER</code></li>
-          <li>Check that the OBD port and ESP32 port are different (OCTAVE filters out the OBD port)</li>
-          <li>Try manual port selection in Volume Knob settings if auto-detection fails</li>
-          <li>Check baud rate: must be 115200</li>
+          <li>Confirm the ESP32-S3 dongle appears in <code>dmesg</code> after plugging in and that you are in <code>dialout</code>.</li>
+          <li>The knob's manager excludes the OBD adapter's port from its scan; set <code>esp32VolumePort</code> (Volume Knob settings) manually if auto-detection picks the wrong one.</li>
+          <li>Baud rate is 115200 in both backends. The Python reader blocks in <code>readline()</code> on a 1 s port timeout (commit <code>94d61be</code>, replacing 100 Hz polling); the C++ reader is driven by <code>QSerialPort::readyRead</code>.</li>
         </ul>
-
-        <!-- Logs -->
-        <h2 id="logs">Log Files &amp; Debug Mode</h2>
-
-        <h3>Log File Locations</h3>
-        <table>
-          <thead><tr><th>Platform</th><th>Path</th></tr></thead>
-          <tbody>
-            <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\logs\</code></td></tr>
-            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/logs/</code></td></tr>
-            <tr><td>Linux</td><td><code>~/.config/OCTAVE/logs/</code></td></tr>
-            <tr><td>Android</td><td><code>&lt;cwd&gt;/OCTAVE/logs/</code></td></tr>
-          </tbody>
-        </table>
-
-        <h3>Log Files</h3>
-        <table>
-          <thead><tr><th>File</th><th>Level</th><th>Max Size</th><th>Backups</th><th>Total Disk</th></tr></thead>
-          <tbody>
-            <tr><td><code>octave.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td><td>~20 MB</td></tr>
-            <tr><td><code>octave-error.log</code></td><td>ERROR+</td><td>2 MB</td><td>5</td><td>~12 MB</td></tr>
-            <tr><td><code>octave-debug.log</code></td><td>DEBUG+</td><td>10 MB</td><td>2</td><td>~30 MB</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Log Format</h3>
-        <pre><code><span class="cmt"># Console format:</span>
-HH:MM:SS | LEVEL   | module_name               | message
-
-<span class="cmt"># File format (more detail):</span>
-YYYY-MM-DD HH:MM:SS | LEVEL   | module | file.py:line | function() | message</code></pre>
-
-        <h3>Enabling Debug Mode</h3>
-        <pre><code><span class="fn">python</span> main.py --debug</code></pre>
-        <p>Creates the <code>octave-debug.log</code> file with verbose output from all modules. Useful for diagnosing:</p>
-        <ul>
-          <li>I2C communication issues (every register read/write logged)</li>
-          <li>Serial port data (ESP32 commands logged)</li>
-          <li>Settings load/save operations</li>
-          <li>Media file scanning and metadata extraction</li>
-          <li>Spotify API calls and token refresh</li>
-        </ul>
-
-        <h3>Reading Logs</h3>
-        <p>Module names are mapped to clean hierarchical names:</p>
-        <pre><code>octave.obd        <span class="cmt">- OBD manager</span>
-octave.media      <span class="cmt">- Media manager</span>
-octave.spotify    <span class="cmt">- Spotify manager</span>
-octave.settings   <span class="cmt">- Settings manager</span>
-octave.clock      <span class="cmt">- Clock</span>
-octave.app        <span class="cmt">- Main application</span></code></pre>
 
         <!-- Performance -->
         <h2 id="performance">Performance Issues</h2>
 
-        <h3>UI Stuttering</h3>
+        <h3>UI stuttering</h3>
         <ol class="steps">
-          <li>Run with <code>--profile</code> to see event-loop latency. Healthy is &lt;5ms avg.</li>
-          <li>Check GIL jitter. High values indicate a Python thread is holding the GIL too long.</li>
-          <li>Look for slow slots in the perf output (&gt;2ms p95).</li>
-          <li>Check CPU usage. If near 100%, identify which thread is busy.</li>
+          <li>Look for <code>octave.ui_watchdog</code> warnings in the log &mdash; they timestamp every stall longer than 5 s.</li>
+          <li>Python: run <code>python main.py --profile</code> and watch the <code>[PERF]</code> line: event-loop latency is green under 5 ms average, yellow under 16 ms, red above (STUTTER); GIL jitter is the delay a background thread sees trying to run every 10 ms; slow slots are those with p95 &gt; 2 ms. Details on the <a href="development.html#profiling">Development</a> page. There is no equivalent flag in the C++ build.</li>
+          <li>Check CPU: if a core is pegged while the OBD adapter is unplugged, see the dead-port note under <a href="#obd">OBD</a>.</li>
         </ol>
 
-        <h3>High Memory Usage</h3>
+        <h3>High memory usage</h3>
         <ul>
-          <li>Album art cache: Limited to 500 files. LRU eviction when full.</li>
-          <li>Metadata cache: Limited to 1000 entries.</li>
-          <li>FFT data: Pre-computed for entire track. Large FLAC files may use significant memory.</li>
-          <li>Spotify queue cache: Stores track metadata for side-card art.</li>
+          <li>Album-art cache: 500 cover files with LRU eviction (<code>_max_cache_files</code> / <code>m_maxCacheFiles</code>), content-addressed <code>cover_&lt;sha256[:16]&gt;</code> files kept across runs and pruned at startup; metadata cache 1000 entries, persisted to <code>&lt;app data dir&gt;/metadata_cache.json</code>.</li>
+          <li>Audio analyzer: the FFT is pre-computed for the entire track when it starts, so a long lossless file costs memory up front.</li>
         </ul>
 
-        <h3>Slow Media Library Scan</h3>
-        <p>Large libraries (&gt;10,000 files) may take time on first scan. The scan runs on the main thread but uses lazy metadata loading. Pre-caching of neighboring tracks runs on a background thread after each track change.</p>
+        <h3>Slow library scan</h3>
+        <p>The library scan runs synchronously on the GUI thread in both backends (progress via <code>scanProgress</code>); a very large first scan will block the UI until it finishes. Neighbouring-track precache (&plusmn;3 tracks, 80 ms after a track change) and album-colour extraction run off-thread.</p>
+
+        <!-- Dev tooling -->
+        <h2 id="dev-tooling">Dev Tooling Issues</h2>
+        <table>
+          <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
+          <tbody>
+            <tr><td><code>python main.py --profile</code> raises <code>ModuleNotFoundError: backend.command_server</code></td><td><span class="file-path">backend/command_server.py</span>, <span class="file-path">backend/perf_monitor.py</span> and <span class="file-path">backend/perf_patches.py</span> are gitignored developer-machine files (as is all of <span class="file-path">dev/</span> and <span class="file-path">.mcp.json</span>); a fresh clone does not have them. Only the <code>perf_patches</code> import is guarded (it logs a warning and skips instrumentation).</td></tr>
+            <tr><td>MCP servers <code>octave-perf</code> / <code>octave-benchmark</code> fail to connect</td><td>They are started from <span class="file-path">.mcp.json</span> with an absolute path to this machine's <code>venv/bin/python</code>; the <code>-rob</code> / <code>-zion</code> entries are the other machines' paths and are expected to fail here. They also need <code>pip install mcp</code> in the venv and the app running with <code>--profile</code>.</td></tr>
+            <tr><td>Screenshots have blank icons / album art</td><td>Qt's <code>offscreen</code> platform has no GL; use the default Xvfb mode (<code>sudo pacman -S xorg-server-xvfb</code>) or <code>--visible</code>.</td></tr>
+            <tr><td>Screenshot tool navigates but every capture shows the home page</td><td>QML functions take untyped parameters, so <code>Q_ARG(str, ...)</code> invokes match nothing and fail silently; the bridge calls <code>root.navigateTo(page)</code> directly. If you add a page, register it in the command server's <code>navigate</code> map and <code>Main.qml</code>'s <code>navigateTo</code>.</td></tr>
+            <tr><td><code>pytest tests/</code> hangs</td><td>Run with <code>QT_QPA_PLATFORM=offscreen</code> (the conftest sets it as a default, but an exported value wins). <code>MediaManager</code> is intentionally never instantiated in the suite because <code>QAudioOutput</code> hangs without an audio backend.</td></tr>
+          </tbody>
+        </table>
 
         <!-- WSL -->
         <h2 id="wsl">WSL Display Issues</h2>
-
-        <h3>WSL2 with GUI</h3>
-        <p>WSL2 supports GUI apps natively on Windows 11. If the display doesn't work:</p>
-        <pre><code><span class="cmt"># Check WSLg is working</span>
-echo $DISPLAY  <span class="cmt"># Should show :0 or similar</span>
-
-<span class="cmt"># If blank, try setting it</span>
-<span class="kw">export</span> DISPLAY=:0
-
-<span class="cmt"># For WSL2 with X server (VcXsrv, etc.)</span>
-<span class="kw">export</span> DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0
-<span class="kw">export</span> LIBGL_ALWAYS_INDIRECT=1</code></pre>
-
-        <h3>WSL1 (No Native GUI)</h3>
-        <p>WSL1 requires an external X server (VcXsrv, Xming). Install and run the X server first, then set <code>DISPLAY</code>.</p>
-
-        <h3>OpenGL in WSL</h3>
-        <pre><code><span class="cmt"># If OpenGL errors, force software rendering</span>
-<span class="kw">export</span> QT_QUICK_BACKEND=software
+        <p><code>setup.py</code> detects WSL from <code>/proc/version</code> and, when neither <code>DISPLAY</code> nor <code>WAYLAND_DISPLAY</code> is set, prints the options instead of launching: WSLg on Windows 11 (try <code>wsl --update</code>), an X server such as VcXsrv or X410 on Windows 10 followed by <code>export DISPLAY=:0</code>, or running OCTAVE natively on Windows. Once a display exists, <code>python main.py</code> runs normally; if OpenGL fails under an external X server, fall back to software rendering:</p>
+        <pre><code><span class="kw">export</span> QT_QUICK_BACKEND=software
 <span class="kw">export</span> LIBGL_ALWAYS_SOFTWARE=1
 <span class="fn">python</span> main.py</code></pre>
 
@@ -346,6 +384,8 @@ echo $DISPLAY  <span class="cmt"># Should show :0 or similar</span>
           <h3>Related Pages</h3>
           <a href="getting-started.html" class="related-link">Getting Started</a>
           <a href="hardware-setup.html" class="related-link">Hardware Setup</a>
+          <a href="obd-manager.html" class="related-link">OBD Manager</a>
+          <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
           <a href="development.html" class="related-link">Development Guide</a>
           <a href="building.html" class="related-link">Building &amp; Distribution</a>
         </div>

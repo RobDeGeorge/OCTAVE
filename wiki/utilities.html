@@ -13,238 +13,625 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Utility Modules</div>
           <h1 class="page-title">Utility Modules</h1>
-          <p class="page-subtitle">Reference documentation for Clock, Logging, Platform Config, Performance Monitor, Command Server, and Stubs.</p>
+          <p class="page-subtitle">Every supporting module that is not a feature manager, in both backends: Clock, logging and crash handlers, the UI watchdog, DiagnosticsManager, VolumeController, version, lazy imports, the performance monitor, the command server, the C++ <code>src/util</code> / <code>src/platform</code> trees, and the <code>backend/media</code> / <code>backend/temp</code> directories.</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
+            <li><a href="#overview">Overview &amp; file map</a></li>
             <li><a href="#clock">Clock</a></li>
-            <li><a href="#logging">Logging Configuration</a></li>
-            <li><a href="#perf-monitor">Performance Monitor</a></li>
-            <li><a href="#command-server">Command Server</a></li>
+            <li><a href="#logging">Logging</a></li>
+            <li><a href="#crash-handlers">Crash handlers &amp; signal shutdown</a></li>
+            <li><a href="#ui-watchdog">UI watchdog</a></li>
+            <li><a href="#diagnostics-manager">DiagnosticsManager</a></li>
+            <li><a href="#volume-controller">VolumeController</a></li>
+            <li><a href="#version">Version &amp; update check</a></li>
+            <li><a href="#lazy-import">Lazy imports (Python)</a></li>
+            <li><a href="#perf-monitor">Performance monitor &amp; perf tooling (Python)</a></li>
+            <li><a href="#command-server">Command server (Python)</a></li>
+            <li><a href="#platform">C++ <code>src/util/</code> and <code>src/platform/</code></a></li>
+            <li><a href="#backend-dirs"><code>backend/media</code> and <code>backend/temp</code></a></li>
+            <li><a href="#design-decisions">Design decisions</a></li>
           </ul>
         </nav>
 
+        <!-- Overview -->
+        <h2 id="overview">Overview &amp; file map</h2>
+        <p>The feature managers (media, Spotify, OBD, sensors, phone mirror, downloads, dashboards) each have their own wiki page. This page covers everything else that supports them. The table shows where each piece lives in each backend, whether it is a QObject that QML can reach, and the context-property name registered in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>.</p>
+
+        <table>
+          <thead><tr><th>Module</th><th>C++</th><th>Python</th><th>QML context property</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Clock</td><td><span class="file-path">src/managers/clock.{h,cpp}</span></td><td><span class="file-path">backend/clock.py</span></td><td><code>clock</code></td><td>Both backends</td></tr>
+            <tr><td>Logging</td><td><span class="file-path">src/util/logger.{h,cpp}</span> (<code>OctaveLog</code> namespace)</td><td><span class="file-path">backend/logging_config.py</span></td><td>&ndash;</td><td>Not a QObject; installed first thing in <code>main()</code></td></tr>
+            <tr><td>Crash handlers</td><td>inside <span class="file-path">src/util/logger.cpp</span></td><td><code>logging_config._install_crash_handlers()</code></td><td>&ndash;</td><td>Write to the error log</td></tr>
+            <tr><td>UI watchdog</td><td><span class="file-path">src/util/uiwatchdog.{h,cpp}</span></td><td><span class="file-path">backend/ui_watchdog.py</span></td><td>&ndash; (not registered)</td><td>QObject, but internal only</td></tr>
+            <tr><td>DiagnosticsManager</td><td><span class="file-path">src/managers/diagnosticsmanager.{h,cpp}</span></td><td><span class="file-path">backend/diagnostics_manager.py</span></td><td><code>diagnosticsManager</code></td><td>Settings &rarr; About &rarr; Diagnostics card</td></tr>
+            <tr><td>VolumeController</td><td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td><td><span class="file-path">backend/volume_utils.py</span></td><td><code>volumeController</code></td><td>Quadratic curve + dispatch</td></tr>
+            <tr><td>Version</td><td><code>project(OCTAVE VERSION …)</code> in <span class="file-path">CMakeLists.txt</span> &rarr; <code>OCTAVE_VERSION</code> define</td><td><span class="file-path">backend/version.py</span></td><td>&ndash; (surfaced as <code>diagnosticsManager.appVersion</code>)</td><td>Kept in lockstep by hand</td></tr>
+            <tr><td>Lazy imports</td><td>&ndash;</td><td><span class="file-path">backend/lazy_import.py</span></td><td>&ndash;</td><td>Python-only</td></tr>
+            <tr><td>Performance monitor</td><td>&ndash;</td><td><span class="file-path">backend/perf_monitor.py</span>, <span class="file-path">backend/perf_patches.py</span></td><td><code>perfMonitor</code> (only with <code>--profile</code>)</td><td>Python-only, gitignored</td></tr>
+            <tr><td>Command server</td><td>&ndash;</td><td><span class="file-path">backend/command_server.py</span></td><td>&ndash;</td><td>Python-only, gitignored, only with <code>--profile</code></td></tr>
+            <tr><td>Android JNI bridges</td><td><span class="file-path">src/platform/androidmediabridge.h</span>, <span class="file-path">src/platform/androidprocessadapter.h</span></td><td>&ndash;</td><td>&ndash;</td><td>C++-only (mobile is C++-only by policy)</td></tr>
+          </tbody>
+        </table>
+
+        <div class="info-box info">
+          <div class="info-box-title">Dev-only files that are not in a fresh clone</div>
+          <p><span class="file-path">.gitignore</span> lists <code>backend/perf_monitor.py</code>, <code>backend/perf_patches.py</code> and <code>backend/command_server.py</code> under &ldquo;Performance profiling (lives in dev/perf/)&rdquo;, together with the whole <code>dev/</code> tree, <code>backend/temp/</code> and <code>.mcp.json</code>. They exist on the developer machines but are not versioned. <span class="file-path">main.py</span> only imports them inside <code>setup_perf_profiling()</code>, which runs when <code>--profile</code> is passed; a normal <code>python main.py</code> never touches them.</p>
+        </div>
+
         <!-- Clock -->
         <h2 id="clock">Clock</h2>
-        <p><span class="file-path">backend/clock.py</span> &mdash; QML name: <code>clock</code></p>
+        <p><span class="file-path">src/managers/clock.{h,cpp}</span> / <span class="file-path">backend/clock.py</span> &mdash; QML name: <code>clock</code> (both backends)</p>
 
-        <p>A simple QTimer-based clock. It formats the time every second (honouring <code>clockShowSeconds</code>) but emits <code>timeChanged</code> only when the text actually changed, so without seconds QML bindings re-evaluate once a minute instead of sixty times. Respects the user's clock visibility and format preferences from SettingsManager.</p>
+        <p>A QTimer-based clock that formats the current time once a second and emits it as a string. It reads three settings from <code>SettingsManager</code> on every tick &mdash; <code>showClock</code>, <code>clockFormat24Hour</code> and <code>clockShowSeconds</code> &mdash; so a settings change takes effect within a second without any signal wiring. Since commit <code>7777777</code> it emits <code>timeChanged</code> <em>only when the text actually changed</em>: without seconds the string changes once a minute, so the QML bindings that show the clock re-evaluate 60&times; less often, and a hidden clock emits the empty string exactly once instead of forever.</p>
 
-        <h3>Source Code</h3>
-        <pre><code><span class="kw">class</span> <span class="cls">Clock</span>(QObject):
-    timeChanged = Signal(str)
+        <h3>Public API</h3>
+        <table>
+          <thead><tr><th>Member</th><th>Kind</th><th>C++</th><th>Python</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>timeChanged(str)</code></td><td>signal</td><td><code>void timeChanged(const QString &amp;)</code></td><td><code>Signal(str)</code></td><td>Formatted time, or <code>""</code> when <code>showClock</code> is off</td></tr>
+            <tr><td><code>update_time()</code></td><td>slot</td><td><code>public slots</code></td><td><code>@Slot()</code></td><td>Timer callback (1000 ms); computes the text and emits on change</td></tr>
+            <tr><td>constructor</td><td>&ndash;</td><td><code>Clock(SettingsManager *, QObject *parent = nullptr)</code></td><td><code>Clock(settings_manager)</code></td><td>Starts the timer immediately</td></tr>
+          </tbody>
+        </table>
 
-    <span class="kw">def</span> <span class="fn">__init__</span>(self, settings_manager):
-        <span class="fn">super</span>().__init__()
-        self._settings_manager = settings_manager
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_time)
-        self.timer.start(<span class="num">1000</span>)  <span class="cmt"># Update every second</span>
+        <h3>Format</h3>
+        <table>
+          <thead><tr><th>Setting</th><th>Without seconds</th><th>With seconds</th></tr></thead>
+          <tbody>
+            <tr><td><code>clockFormat24Hour = true</code></td><td><code>14:30</code></td><td><code>14:30:05</code></td></tr>
+            <tr><td><code>clockFormat24Hour = false</code></td><td><code>02:30 PM</code></td><td><code>02:30:05 PM</code></td></tr>
+            <tr><td><code>showClock = false</code></td><td colspan="2"><code>""</code> (emitted once)</td></tr>
+          </tbody>
+        </table>
+        <p>Python uses <code>strftime</code> (<code>%H:%M</code> / <code>%I:%M</code> plus an upper-cased <code>%p</code>); C++ builds the 12-hour form by hand (<code>hour % 12</code>, 0 &rarr; 12, zero-padded) because <code>QTime::toString</code> has no locale-independent AM/PM token. The output strings are identical.</p>
 
-    <span class="kw">def</span> <span class="fn">update_time</span>(self):
-        <span class="kw">if not</span> self._settings_manager.showClock:
-            self._emit_if_changed(<span class="str">""</span>)
-            <span class="kw">return</span>
+        <h3>Emit-on-change (both backends)</h3>
+        <pre><code><span class="kw">void</span> <span class="cls">Clock</span>::<span class="fn">update_time</span>()
+{
+    QString text;
+    <span class="kw">if</span> (m_settingsManager-&gt;showClock()) {
+        <span class="cmt">// ... build "HH:mm[:ss]" or "hh:mm[:ss] AM/PM" ...</span>
+    }
+    <span class="cmt">// Without seconds the text changes once a minute; re-evaluating every</span>
+    <span class="cmt">// binding that shows the clock 60 times for the same string is waste.</span>
+    <span class="kw">if</span> (text == m_lastText)
+        <span class="kw">return</span>;
+    m_lastText = text;
+    <span class="kw">emit</span> timeChanged(text);
+}</code></pre>
+        <pre><code><span class="kw">def</span> <span class="fn">_emit_if_changed</span>(self, text):
+    <span class="kw">if</span> text == self._last_text:
+        <span class="kw">return</span>
+    self._last_text = text
+    self.timeChanged.emit(text)</code></pre>
 
-        current_time = datetime.now()
-        show_seconds = self._settings_manager.clockShowSeconds
-        <span class="kw">if</span> self._settings_manager.clockFormat24Hour:
-            time_str = current_time.strftime(<span class="str">"%H:%M:%S"</span> <span class="kw">if</span> show_seconds <span class="kw">else</span> <span class="str">"%H:%M"</span>)
-        <span class="kw">else</span>:
-            hour_min = current_time.strftime(<span class="str">"%I:%M:%S"</span> <span class="kw">if</span> show_seconds <span class="kw">else</span> <span class="str">"%I:%M"</span>)
-            am_pm = current_time.strftime(<span class="str">"%p"</span>).upper()
-            time_str = <span class="str">f"{hour_min} {am_pm}"</span>
-
-        self._emit_if_changed(time_str)   <span class="cmt"># timeChanged only when the text differs</span></code></pre>
-
-        <h3>Behavior</h3>
+        <h3>QML consumers</h3>
         <ul>
-          <li><strong>Timer interval:</strong> 1000ms (1 second)</li>
-          <li><strong>Format:</strong> Reads <code>clockFormat24Hour</code> setting each tick. 24h: "14:30", 12h: "02:30 PM"</li>
-          <li><strong>Visibility:</strong> When <code>showClock</code> is false, emits empty string so QML hides the display</li>
-          <li><strong>QML binding:</strong> <code>clock.timeChanged</code> signal carries the formatted time string</li>
+          <li><span class="file-path">frontend/BottomBar.qml</span> &mdash; <code>Connections { target: clock; function onTimeChanged(time) { clockText.text = time } }</code></li>
+          <li><span class="file-path">frontend/ClockMenu.qml</span> &mdash; same signal drives the digital readout, the date line and the analog hands (<code>time.split(":")</code> for hours / minutes / seconds)</li>
         </ul>
+        <p>Neither backend logs from the Clock (the <code>octave.clock</code> entry in the Python logger name map is unused).</p>
 
         <!-- Logging -->
-        <h2 id="logging">Logging Configuration</h2>
-        <p><span class="file-path">backend/logging_config.py</span></p>
+        <h2 id="logging">Logging</h2>
+        <p><span class="file-path">backend/logging_config.py</span> (Python) &middot; <span class="file-path">src/util/logger.{h,cpp}</span> (C++, commit <code>053f587</code>)</p>
 
-        <p>Centralized logging for the entire application. Provides two main functions:</p>
+        <p>Both backends write rotating log files into <code>&lt;app data dir&gt;/logs/</code>, where the app data dir is the same one that holds <code>settingsConfigure.json</code> (Windows <code>%APPDATA%\OCTAVE</code>, macOS <code>~/Library/Application Support/OCTAVE</code>, Linux <code>$XDG_CONFIG_HOME/OCTAVE</code> or <code>~/.config/OCTAVE</code>). The two backends use <strong>different file names</strong> so that a machine running both never interleaves them: Python writes <code>octave*.log</code>, C++ writes <code>octave-cpp*.log</code>. The sizes and backup counts are the same.</p>
 
-        <h3><code>setup_logging(debug, console, file)</code></h3>
-        <p>Called once at startup in <code>main.py</code>. Initializes the Python logging system with rotating file handlers.</p>
-        <pre><code><span class="kw">from</span> backend.logging_config <span class="kw">import</span> setup_logging
-setup_logging(debug=<span class="kw">False</span>)  <span class="cmt"># Normal mode</span>
-setup_logging(debug=<span class="kw">True</span>)   <span class="cmt"># Debug mode (--debug flag)</span></code></pre>
-
-        <h3>Parameters</h3>
         <table>
-          <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+          <thead><tr><th>Python file</th><th>C++ file</th><th>Level</th><th>Max size</th><th>Backups</th><th>When</th></tr></thead>
           <tbody>
-            <tr><td><code>debug</code></td><td>bool</td><td>False</td><td>Enable DEBUG level logging. Creates octave-debug.log (10MB, 2 backups).</td></tr>
-            <tr><td><code>console</code></td><td>bool</td><td>True</td><td>Enable console (stdout) output</td></tr>
-            <tr><td><code>file</code></td><td>bool</td><td>True</td><td>Enable file output with automatic rotation</td></tr>
+            <tr><td><code>octave.log</code></td><td><code>octave-cpp.log</code></td><td>INFO and above (C++: everything except <code>QtDebugMsg</code>)</td><td>5 MB</td><td>3</td><td>Always</td></tr>
+            <tr><td><code>octave-error.log</code></td><td><code>octave-cpp-error.log</code></td><td>Python: ERROR+ &middot; C++: <strong>WARNING</strong>, ERROR (<code>QtCriticalMsg</code>) and FATAL, plus crash blocks</td><td>2 MB</td><td>5</td><td>Always</td></tr>
+            <tr><td><code>octave-debug.log</code></td><td><code>octave-cpp-debug.log</code></td><td>DEBUG and above (everything)</td><td>10 MB</td><td>2</td><td>Only with <code>--debug</code></td></tr>
           </tbody>
         </table>
+        <p>Worst-case disk use per backend: ~32 MB without <code>--debug</code>, ~62 MB with it &mdash; sized for an SD-card head unit that must keep several sessions of history.</p>
 
-        <h3>Log Rotation Policy</h3>
-        <table>
-          <thead><tr><th>File</th><th>Level</th><th>Max Size</th><th>Backups</th><th>Total Max</th></tr></thead>
-          <tbody>
-            <tr><td><code>octave.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td><td>~20 MB</td></tr>
-            <tr><td><code>octave-error.log</code></td><td>ERROR+</td><td>2 MB</td><td>5</td><td>~12 MB</td></tr>
-            <tr><td><code>octave-debug.log</code></td><td>DEBUG+</td><td>10 MB</td><td>2</td><td>~30 MB</td></tr>
-          </tbody>
-        </table>
-        <p>Total max disk usage: ~62 MB with debug, ~32 MB without. Designed for embedded/vehicle use where disk space is limited.</p>
+        <h3>The <code>--debug</code> flag</h3>
+        <ul>
+          <li><strong>Python:</strong> parsed by <code>argparse</code> in <span class="file-path">main.py</span> (<code>parse_known_args</code>, so unknown Qt flags pass through) and handed to <code>setup_logging(debug=args.debug)</code> before any other backend import. It sets the <code>octave</code> root logger and the console handler to DEBUG and opens the debug file.</li>
+          <li><strong>C++:</strong> <code>main()</code> scans <code>argv</code> for the literal <code>--debug</code> with <code>strcmp</code> <em>before</em> the <code>QGuiApplication</code> exists and calls <code>OctaveLog::install(debugLogging)</code>. With debug the category filter is <code>*.debug=true\nqt.*.debug=false</code> (OCTAVE categories on, Qt&rsquo;s own off) and the debug file is opened; without it the rule is <code>*.debug=false</code>, so <code>qCDebug</code> calls are filtered at the source and cost nothing.</li>
+        </ul>
 
-        <h3>Formatters</h3>
+        <h3>Python: <code>setup_logging(debug=False, console=True, file=True)</code></h3>
+        <p>Called once at startup; a module-level <code>_initialized</code> flag makes later calls no-ops. It configures the <code>octave</code> logger (handlers cleared first) with:</p>
+        <ul>
+          <li>a <code>StreamHandler</code> on stdout using the compact console format;</li>
+          <li>three <code>RotatingFileHandler</code>s (main, error, and &mdash; with debug &mdash; debug) using the detailed file format, <code>encoding='utf-8'</code>;</li>
+          <li>the <strong>python-obd</strong> logger (<code>obd</code>): level matched to ours, <code>propagate = False</code>, and given the same handler objects, so an ELM327 session&rsquo;s <code>write:</code>/<code>read:</code> transcript lands in <code>octave-debug.log</code> and its errors in <code>octave-error.log</code>;</li>
+          <li>the crash handlers (<a href="#crash-handlers">below</a>) when <code>file</code> is true.</li>
+        </ul>
+        <p><code>_get_log_dir()</code> keeps its own copy of the platform-path logic rather than importing <code>get_app_data_dir()</code> from <span class="file-path">backend/settings_manager.py</span> &mdash; the settings manager itself imports <code>get_logger</code> from this module, so the reverse import would be circular. The two functions compute the same directory.</p>
+
         <pre><code><span class="cmt"># Console (compact):</span>
 HH:MM:SS | LEVEL   | module_name               | message
 
 <span class="cmt"># File (detailed):</span>
 YYYY-MM-DD HH:MM:SS | LEVEL   | name | file.py:line | func() | message</code></pre>
 
-        <h3><code>get_logger(name)</code></h3>
-        <p>Gets a hierarchical logger for a module. Converts Python module paths to clean <code>octave.*</code> names.</p>
-        <pre><code><span class="kw">from</span> backend.logging_config <span class="kw">import</span> get_logger
-logger = get_logger(__name__)
-logger.info(<span class="str">"Application started"</span>)</code></pre>
-
-        <h3>Name Mapping</h3>
+        <h3>Python: <code>get_logger(name)</code></h3>
+        <p>Returns a cached logger under the <code>octave.*</code> hierarchy. A small map gives the main modules short names; anything else under <code>backend.</code> has the prefix stripped.</p>
         <table>
-          <thead><tr><th>Module <code>__name__</code></th><th>Logger Name</th></tr></thead>
+          <thead><tr><th>Module <code>__name__</code></th><th>Logger name</th></tr></thead>
           <tbody>
             <tr><td><code>backend.obd_manager</code></td><td><code>octave.obd</code></td></tr>
             <tr><td><code>backend.media_manager</code></td><td><code>octave.media</code></td></tr>
             <tr><td><code>backend.spotify_manager</code></td><td><code>octave.spotify</code></td></tr>
             <tr><td><code>backend.settings_manager</code></td><td><code>octave.settings</code></td></tr>
-            <tr><td><code>backend.clock</code></td><td><code>octave.clock</code></td></tr>
-            <tr><td><code>backend.android_auto.manager</code></td><td><code>octave.android_auto</code></td></tr>
-            <tr><td><code>backend.phone_mirror.manager</code></td><td><code>octave.phone_mirror</code></td></tr>
-            <tr><td><code>__main__</code></td><td><code>octave.app</code></td></tr>
-            <tr><td>Other <code>backend.*</code></td><td><code>octave.&lt;rest&gt;</code></td></tr>
+            <tr><td><code>backend.clock</code></td><td><code>octave.clock</code> (mapped, but the Clock never logs)</td></tr>
+            <tr><td><code>backend.android_auto.manager</code> / <code>.dhu_capture</code> / <code>.embedded_dhu</code></td><td><code>octave.android_auto</code> / <code>.capture</code> / <code>.embedded</code></td></tr>
+            <tr><td><code>backend.phone_mirror.manager</code> / <code>.scrcpy_capture</code> / <code>.scrcpy_host</code> / <code>.scrcpy_container</code> / <code>.embedded_widget</code></td><td><code>octave.phone_mirror</code> / <code>.capture</code> / <code>.host</code> / <code>.container</code> / <code>.embedded</code></td></tr>
+            <tr><td><code>__main__</code> or <code>main</code></td><td><code>octave.app</code></td></tr>
+            <tr><td>Any other <code>backend.&lt;rest&gt;</code></td><td><code>octave.&lt;rest&gt;</code> &mdash; e.g. <code>octave.ui_watchdog</code>, <code>octave.diagnostics_manager</code>, <code>octave.command_server</code>, <code>octave.network_manager</code>, <code>octave.download_manager</code>, <code>octave.dashboard_manager</code>, <code>octave.elm327_protocol</code>, <code>octave.esp32_volume_manager</code>, <code>octave.gesture_manager</code>, <code>octave.berryimu_manager</code>, <code>octave.audio_analyzer</code>, <code>octave.phone_mirror.scrcpy_client</code></td></tr>
           </tbody>
         </table>
 
-        <h3>Implementation Notes</h3>
+        <h3>C++: <code>OctaveLog</code></h3>
+        <pre><code><span class="kw">namespace</span> OctaveLog {
+<span class="kw">void</span> <span class="fn">install</span>(<span class="kw">bool</span> debug);   <span class="cmt">// message handler + crash handlers; call before QGuiApplication</span>
+QString <span class="fn">logDir</span>();          <span class="cmt">// &lt;app data dir&gt;/logs, created on install</span>
+<span class="kw">void</span> <span class="fn">flush</span>();              <span class="cmt">// flush all three files</span>
+}</code></pre>
+        <p><code>install()</code> creates the log directory via <code>SettingsManager::getAppDataDir()</code>, opens the files in append mode, sets the category filter rules, installs a <code>qInstallMessageHandler</code> and then the crash handlers. The handler formats every <code>qDebug</code> / <code>qInfo</code> / <code>qWarning</code> / <code>qCritical</code> / <code>qFatal</code> and every <code>qC*</code> category call &mdash; and, because QML <code>console.*</code> goes through the same Qt message system, every QML log line too &mdash; as:</p>
+        <pre><code>2026-09-10 12:00:00.123 | INFO    | octave.media | mediamanager.cpp:123 | message</code></pre>
+        <p>Levels are named <code>DEBUG</code>, <code>INFO</code>, <code>WARNING</code>, <code>ERROR</code> (for <code>QtCriticalMsg</code>) and <code>FATAL</code>; uncategorised messages show the category <code>default</code>; the file column is the basename only, or <code>-</code> when Qt supplies no location. The line is always echoed to stderr first, then written under a <code>QMutex</code> to the debug file (if enabled), to the main file (unless it is a debug message), and to the error file (warning and above). Each write is flushed immediately; <code>flush()</code> is declared for the normal-exit / fatal paths but currently has no callers outside <span class="file-path">logger.cpp</span>. Rotation happens before a write that would push the file past <code>maxBytes</code>, by the same rename chain as Python&rsquo;s <code>RotatingFileHandler</code> (<code>.3</code> deleted, <code>.2</code>&rarr;<code>.3</code>, <code>.1</code>&rarr;<code>.2</code>, current&rarr;<code>.1</code>).</p>
+
+        <h3>C++ logging categories</h3>
+        <p>Each manager declares one <code>Q_LOGGING_CATEGORY</code>. The full list (all under <code>octave.*</code>):</p>
+        <table>
+          <thead><tr><th>Category</th><th>Declared in</th></tr></thead>
+          <tbody>
+            <tr><td><code>octave.androidauto</code></td><td><span class="file-path">src/managers/androidautomanager.cpp</span></td></tr>
+            <tr><td><code>octave.audioanalyzer</code></td><td><span class="file-path">src/managers/audioanalyzer.cpp</span></td></tr>
+            <tr><td><code>octave.berryimu</code></td><td><span class="file-path">src/managers/berryimumanager.cpp</span></td></tr>
+            <tr><td><code>octave.dashboards</code></td><td><span class="file-path">src/managers/dashboardmanager.cpp</span></td></tr>
+            <tr><td><code>octave.diagnostics</code></td><td><span class="file-path">src/managers/diagnosticsmanager.cpp</span></td></tr>
+            <tr><td><code>octave.download</code></td><td><span class="file-path">src/managers/downloadmanager.cpp</span></td></tr>
+            <tr><td><code>octave.elm327</code></td><td><span class="file-path">src/managers/elm327protocol.cpp</span> (also carries the Android <code>[BLE]</code> bridge lines, see <a href="#platform">below</a>)</td></tr>
+            <tr><td><code>octave.embeddeddhu</code></td><td><span class="file-path">src/items/embeddeddhuitem.cpp</span></td></tr>
+            <tr><td><code>octave.esp32volume</code></td><td><span class="file-path">src/managers/esp32volumemanager.cpp</span></td></tr>
+            <tr><td><code>octave.gesture</code></td><td><span class="file-path">src/managers/gesturemanager.cpp</span></td></tr>
+            <tr><td><code>octave.media</code></td><td><span class="file-path">src/managers/mediamanager.cpp</span></td></tr>
+            <tr><td><code>octave.network</code></td><td><span class="file-path">src/managers/networkmanager.cpp</span></td></tr>
+            <tr><td><code>octave.phonemirror</code>, <code>octave.phonemirror.client</code></td><td><span class="file-path">src/managers/phonemirrormanager.cpp</span>, <span class="file-path">src/phone_mirror/scrcpyclient.cpp</span></td></tr>
+            <tr><td><code>octave.settings</code></td><td><span class="file-path">src/managers/settingsmanager.cpp</span></td></tr>
+            <tr><td><code>octave.spotify</code></td><td><span class="file-path">src/managers/spotifymanager.cpp</span></td></tr>
+            <tr><td><code>octave.ui_watchdog</code></td><td><span class="file-path">src/util/uiwatchdog.cpp</span></td></tr>
+          </tbody>
+        </table>
+        <p>Clock, VolumeController and the two Android platform headers have no category (the latter use plain <code>qWarning</code>, which lands under <code>default</code>).</p>
+
+        <!-- Crash handlers -->
+        <h2 id="crash-handlers">Crash handlers &amp; signal shutdown</h2>
+        <p>Commit <code>053f587</code> (crash handlers, both backends) and <code>3810e03</code> (C++ SIGTERM/SIGINT cleanup). The rule from <span class="file-path">src/util/logger.h</span>: <em>a crash in the vehicle must leave a trace in the error log</em>.</p>
+
+        <h3>Python: <code>logging_config._install_crash_handlers()</code></h3>
+        <p>Called at the end of <code>setup_logging()</code> whenever file logging is on. Three hooks, all pointed at <code>octave-error.log</code>:</p>
         <ul>
-          <li>Logger instances are cached in a module-level <code>_loggers</code> dict for fast repeat access</li>
-          <li><code>_initialized</code> flag prevents double-initialization</li>
-          <li>Log directory is created automatically at the platform-specific config path + <code>/logs/</code></li>
+          <li><code>sys.excepthook</code> &mdash; logs <code>CRITICAL "Unhandled exception on the main thread"</code> with the traceback, then chains to <code>sys.__excepthook__</code>. <code>KeyboardInterrupt</code> is passed straight through without logging.</li>
+          <li><code>threading.excepthook</code> &mdash; the same for worker threads (OBD, IMU, gesture, phone mirror &hellip;), naming the thread.</li>
+          <li><code>faulthandler.enable(file=fh, all_threads=True)</code> &mdash; on a native fault (SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL) the interpreter dumps every thread&rsquo;s Python stack to a descriptor opened on <code>octave-error.log</code> in append mode and kept open for the process lifetime. A failure to open it only logs a warning.</li>
         </ul>
 
-        <!-- Performance Monitor -->
-        <h2 id="perf-monitor">Performance Monitor</h2>
-        <p><span class="file-path">backend/perf_monitor.py</span></p>
-        <p>Comprehensive performance monitoring exposed as a QObject with QML-bindable properties. Only active when <code>--profile</code> flag is passed.</p>
+        <h3>C++: signal / exception handlers in <code>logger.cpp</code></h3>
+        <ul>
+          <li><strong>Unix:</strong> <code>installCrashHandlers()</code> opens <code>octave-cpp-error.log</code> a second time with raw <code>open(O_WRONLY|O_APPEND|O_CREAT)</code> and installs <code>crashHandler</code> for SIGSEGV, SIGABRT, SIGFPE, SIGILL and SIGBUS. The handler uses only <code>write()</code> and <code>backtrace_symbols_fd()</code> (no Qt, no heap): it writes <code>==== FATAL SIGSEGV - backtrace (addresses; symbolise with addr2line against this build) ====</code>, up to 64 frames, and <code>==== end ====</code> to the error log and a shorter block to stderr, then restores <code>SIG_DFL</code> and re-raises so the OS still produces a core dump / tombstone. Backtraces exist only where <code>execinfo.h</code> is available (glibc or macOS); elsewhere &mdash; Android&rsquo;s bionic libc &mdash; the block reads <code>(no backtrace support on this platform)</code>.</li>
+          <li><strong>Windows:</strong> <code>SetUnhandledExceptionFilter(crashFilter)</code> writes <code>==== FATAL exception 0x&lt;code&gt; at &lt;address&gt; ====</code> plus up to 62 <code>CaptureStackBackTrace</code> frames via <code>_write</code>, then returns <code>EXCEPTION_CONTINUE_SEARCH</code>.</li>
+          <li><code>qFatal</code> is not a signal: it goes through the message handler as <code>FATAL</code> (and is flushed) before Qt aborts, so assertion text is on disk before the SIGABRT block.</li>
+        </ul>
 
-        <h3>Internal Components</h3>
+        <h3>SIGTERM / SIGINT run the normal cleanup</h3>
+        <p>Launcher scripts, systemd and Ctrl-C all deliver a signal; the default action would kill the process without running <code>aboutToQuit</code>, orphaning child processes (scrcpy, ffmpeg, the DHU) and leaking the phone-mirror adb forward. Both mains therefore turn the signal into <code>app.quit()</code>:</p>
+        <ul>
+          <li><strong>C++</strong> (<span class="file-path">src/main.cpp</span>, <code>#if !defined(Q_OS_WIN) &amp;&amp; !defined(Q_OS_MOBILE)</code>): the self-pipe trick. A <code>socketpair()</code> is created; the <code>std::signal</code> handler only writes one byte into it, and a <code>QSocketNotifier</code> on the other end reads the byte on the event loop, logs <code>Signal received, shutting down</code> and calls <code>QCoreApplication::quit()</code>. Nothing Qt-side runs in signal context.</li>
+          <li><strong>Python</strong> (<span class="file-path">main.py</span>): <code>signal.signal(SIGTERM|SIGINT, lambda *_: app.quit())</code>. CPython only services signal handlers while running bytecode, and inside <code>app.exec()</code> it is not, so a 500 ms no-op <code>QTimer</code> (<code>_signal_pump</code>) gives the interpreter a chance to see the signal.</li>
+        </ul>
+        <p>The <code>aboutToQuit</code> cleanup itself (same order of concerns in both backends): stop the UI watchdog first (commit <code>95dfb49</code> &mdash; otherwise its worker could ping a QObject that Qt had already destroyed, which the new threading excepthook then logged as CRITICAL), save playback state and flush the metadata store, clean up Spotify / Android Auto / phone mirror / ESP32 / IMU / gesture / network / downloads, close OBD (C++), and flush the coalesced settings write so the last slider change reaches disk. In Python, <code>setup_perf_profiling()</code> additionally connects <code>cmd_server.stop()</code> and <code>perf_monitor.stop()</code> to <code>aboutToQuit</code> when <code>--profile</code> is on.</p>
 
-        <h4>_RingBuffer</h4>
-        <p>Fixed-size ring buffer (deque-based) for numeric samples with cheap percentile calculation. Used for both event-loop latency and GIL jitter measurements. Capacity: 300 samples for GIL, 600 for loop (about 10 seconds at 60Hz).</p>
+        <!-- UI watchdog -->
+        <h2 id="ui-watchdog">UI watchdog</h2>
+        <p><span class="file-path">src/util/uiwatchdog.{h,cpp}</span> / <span class="file-path">backend/ui_watchdog.py</span> &mdash; class <code>UiWatchdog</code>, commit <code>f157b97</code>. Not registered as a QML context property in either backend; it is started right after <code>SettingsManager</code> in both mains and stopped from the quit cleanup.</p>
 
-        <h4>_GILProbe</h4>
-        <p>A daemon background thread that sleeps for 10ms intervals and measures the actual sleep duration. The jitter (actual - expected) approximates GIL contention time. Runs continuously until stopped.</p>
+        <p>A hung event loop used to vanish without a trace &mdash; the screen froze and the log simply stopped. The watchdog is a worker thread that posts a &ldquo;ping&rdquo; to the GUI thread every <code>pingMs</code> (2000) and records when the GUI thread answers it. If the answer is older than <code>stallMs</code> (5000) it logs <strong>once</strong> <code>UI thread blocked for N s and counting</code> as a WARNING on <code>octave.ui_watchdog</code>, and when the GUI thread catches up (silence back under one ping interval) it logs <code>UI thread responsive again after N s</code>. In C++ the warning also lands in <code>octave-cpp-error.log</code> (that file is WARNING+); in Python it appears in <code>octave.log</code> only, because <code>octave-error.log</code> is ERROR+.</p>
 
-        <h4>Event-Loop Probe</h4>
-        <p>A QTimer with interval 0 (fires on next event-loop iteration). Measures the delta between successive firings. High deltas indicate the event loop is blocked (UI stutter).</p>
+        <div class="diagram">
+worker thread ("ui-watchdog")                     GUI thread
+    │                                                 │
+    │─ sleep pingMs (2 s) ─┐                          │
+    │◄─────────────────────┘                          │
+    │── queued invoke: lastPong = now ───────────────►│  (runs when the event loop gets to it)
+    │                                                 │
+    │  silent = now - lastPong                        │
+    │  silent &gt; stallMs (5 s)  → WARNING "blocked for N s and counting" (once)
+    │  silent ≤ pingMs after a stall → WARNING "responsive again after N s"
+</div>
 
-        <h3>Reporting Cycle (Every 1 Second)</h3>
+        <table>
+          <thead><tr><th>Member</th><th>C++</th><th>Python</th></tr></thead>
+          <tbody>
+            <tr><td>constructor</td><td><code>UiWatchdog(QObject *parent = nullptr, int pingMs = 2000, int stallMs = 5000)</code></td><td><code>UiWatchdog(parent=None, ping_s=2.0, stall_s=5.0)</code></td></tr>
+            <tr><td><code>start()</code></td><td>Starts a <code>QThread</code> named <code>ui-watchdog</code>; the loop runs from its <code>started</code> signal</td><td>Starts a daemon <code>threading.Thread</code> named <code>ui-watchdog</code></td></tr>
+            <tr><td><code>stop()</code></td><td>Clears the atomic running flag, <code>quit()</code> + <code>wait(2000)</code></td><td>Clears the flag and joins for <code>ping_s + 0.5</code> s (unless called from the worker itself)</td></tr>
+            <tr><td>ping mechanism</td><td><code>QMetaObject::invokeMethod(this, lambda, Qt::QueuedConnection)</code> writing an <code>std::atomic&lt;qint64&gt;</code> (ms since epoch)</td><td>A private <code>_ping</code> Signal connected to <code>_pong()</code> with <code>QueuedConnection</code>, writing <code>time.monotonic()</code></td></tr>
+            <tr><td>teardown safety</td><td>Worker owns nothing Qt-side; it only posts to <code>this</code></td><td><code>_ping.emit()</code> inside <code>try/except RuntimeError</code> so a QObject torn down without <code>stop()</code> ends the loop quietly</td></tr>
+          </tbody>
+        </table>
+        <p>Legitimate slow work (a big library scan, a dashboard JSON load) stays well under 5 s; the thresholds were chosen so the log only speaks when something is really wrong. Verified in both backends with a deliberate 4 s GUI block (commit message).</p>
+
+        <!-- DiagnosticsManager -->
+        <h2 id="diagnostics-manager">DiagnosticsManager</h2>
+        <p><span class="file-path">src/managers/diagnosticsmanager.{h,cpp}</span> / <span class="file-path">backend/diagnostics_manager.py</span> &mdash; QML name: <code>diagnosticsManager</code> (both backends). Commits <code>b5d47b8</code>, <code>95dfb49</code>, <code>7fd8405</code>.</p>
+
+        <p>Field diagnostics: get the logs out of the head unit <em>without a laptop</em>. It backs the <strong>Diagnostics</strong> card on Settings &rarr; About (<span class="file-path">frontend/settings/AboutPage.qml</span>), which shows the version / backend / device line and the log path, a scrollable tail of the running backend&rsquo;s log, and four buttons in a 2&times;2 grid (so they fit at dash scale on the Pi): Refresh, Copy, Export logs and &mdash; on desktop &mdash; Open folder. The card is guarded with <code>visible: typeof diagnosticsManager !== "undefined"</code>.</p>
+
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Notify</th><th>C++ value</th><th>Python value</th></tr></thead>
+          <tbody>
+            <tr><td><code>logDir</code></td><td>str</td><td>CONSTANT</td><td><code>SettingsManager::getAppDataDir() + "/logs"</code></td><td><code>get_app_data_dir()/logs</code></td></tr>
+            <tr><td><code>appVersion</code></td><td>str</td><td>CONSTANT</td><td><code>OCTAVE_VERSION</code> compile definition (<code>"dev"</code> if undefined)</td><td><code>backend.version.__version__</code></td></tr>
+            <tr><td><code>backendName</code></td><td>str</td><td>CONSTANT</td><td><code>"C++"</code></td><td><code>"Python"</code></td></tr>
+            <tr><td><code>deviceInfo</code></td><td>str</td><td>CONSTANT</td><td><code>&lt;prettyProductName&gt; &lt;cpuArch&gt; (&lt;hostname&gt;, &lt;kernelVersion&gt;)</code> via <code>QSysInfo</code></td><td><code>&lt;system&gt; &lt;release&gt; &lt;machine&gt; (&lt;node&gt;, Python &lt;ver&gt;)</code> via <code>platform</code></td></tr>
+            <tr><td><code>lastExportPath</code></td><td>str</td><td><code>lastExportPathChanged</code></td><td colspan="2">Folder written by the last <code>exportLogs()</code>; <code>""</code> until it has run</td></tr>
+            <tr><td><code>canOpenFolder</code></td><td>bool</td><td>CONSTANT</td><td><code>false</code> on <code>Q_OS_ANDROID</code> / <code>Q_OS_IOS</code>, else <code>true</code></td><td>always <code>true</code> (Python is desktop-only)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Invokables / slots</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Signature</th><th>Behaviour</th></tr></thead>
+          <tbody>
+            <tr><td><code>recentLogLines(maxLines)</code></td><td>C++ <code>Q_INVOKABLE QString (int maxLines = 200) const</code> &middot; Python <code>@Slot(int, result=str)</code></td><td>Reads at most the last 256 KB of the backend&rsquo;s main log (<code>octave-cpp.log</code> / <code>octave.log</code>), keeps the last <code>maxLines</code> non-empty lines, then appends <code>---- errors ----</code> and the last <code>maxLines / 4</code> lines of the error log if any. Returns <code>(no log yet)</code> when the main log is empty.</td></tr>
+            <tr><td><code>copyLogsToClipboard(maxLines)</code></td><td>C++ <code>Q_INVOKABLE bool (int maxLines = 400)</code> &middot; Python <code>@Slot(int, result=bool)</code></td><td>Puts <code>OCTAVE &lt;version&gt; (&lt;backend&gt; backend) on &lt;device&gt;</code>, an ISO timestamp, and <code>recentLogLines(maxLines)</code> on the <code>QGuiApplication</code> clipboard. Logs <code>Logs copied to clipboard</code>. <code>false</code> if there is no clipboard.</td></tr>
+            <tr><td><code>exportLogs()</code></td><td>C++ <code>Q_INVOKABLE QString ()</code> &middot; Python <code>@Slot(result=str)</code></td><td>Copies every <code>octave*.log*</code> file (current and rotated backups) into <code>&lt;Downloads&gt;/OCTAVE-logs-&lt;yyyyMMdd-HHmmss&gt;/</code> (Documents if there is no Downloads location) plus a <code>device-info.txt</code> header, sets <code>lastExportPath</code>, emits <code>lastExportPathChanged</code>, returns the folder or <code>""</code> on failure. On Android that is the public Download folder, attachable from any mail or files app &mdash; chosen over a FileProvider because androidx is deliberately not bundled.</td></tr>
+            <tr><td><code>openLogFolder()</code></td><td>C++ <code>Q_INVOKABLE bool ()</code> &middot; Python <code>@Slot(result=bool)</code></td><td><code>QDesktopServices::openUrl(QUrl::fromLocalFile(logDir))</code>; C++ returns <code>false</code> where <code>canOpenFolder</code> is false.</td></tr>
+          </tbody>
+        </table>
+        <p>Signal: <code>lastExportPathChanged()</code>. Logging category <code>octave.diagnostics</code> (C++) / logger <code>octave.diagnostics_manager</code> (Python). The QML calls are <code>recentLogLines(200)</code>, <code>copyLogsToClipboard(400)</code>, <code>exportLogs()</code> and <code>openLogFolder()</code>; PySide slots declared with <code>@Slot(int, …)</code> require the argument to be passed, which the card always does.</p>
+
+        <!-- VolumeController -->
+        <h2 id="volume-controller">VolumeController</h2>
+        <p><span class="file-path">src/managers/volumecontroller.{h,cpp}</span> / <span class="file-path">backend/volume_utils.py</span> &mdash; QML name: <code>volumeController</code> (both backends). Introduced in commit <code>d2b047b</code> (&ldquo;volume curve de-duplication&rdquo;).</p>
+
+        <p>OCTAVE maps the UI volume percent (0&ndash;100) to a linear audio gain (0.0&ndash;1.0) through a <strong>quadratic curve</strong>, <code>(percent / 100)<sup>2</sup></code>, which gives a more natural perceptual response at low volumes than a straight line. Before this module existed the curve was hard-coded in about nine places across <span class="file-path">main.py</span> and QML, so any change had to be made in lockstep everywhere. <code>VolumeController</code> owns the math and is the <em>single entry point</em> for routing a percent to every output; changing the curve means editing <code>to_linear()</code> / <code>toLinearStatic()</code> in one place per backend.</p>
+
+        <table>
+          <thead><tr><th>Percent</th><th>Linear gain</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>0.0</td></tr>
+            <tr><td>25</td><td>0.0625</td></tr>
+            <tr><td>50</td><td>0.25</td></tr>
+            <tr><td>75</td><td>0.5625</td></tr>
+            <tr><td>100</td><td>1.0</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Public API</h3>
+        <table>
+          <thead><tr><th>Member</th><th>C++</th><th>Python</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>applyVolume(percent)</code></td><td><code>public slot void (int)</code></td><td><code>@Slot(int)</code></td><td>Clamps to 0&ndash;100, persists the raw percent via <code>SettingsManager.setCurrentVolume()</code>, computes the linear value and dispatches to every output</td></tr>
+            <tr><td><code>toLinear(percent)</code></td><td><code>public slot float (float)</code></td><td><code>@Slot(float, result=float)</code></td><td>Pure curve math for QML; no dispatch</td></tr>
+            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>signal</td><td>&ndash;</td><td>C++-only: emitted after every <code>applyVolume()</code>; <span class="file-path">main.cpp</span> connects the outputs to it</td></tr>
+            <tr><td><code>toLinearStatic(float)</code></td><td><code>static float</code></td><td>module function <code>to_linear(percent)</code></td><td>Curve without an instance (tests, one-off math)</td></tr>
+            <tr><td>constructor</td><td><code>VolumeController(SettingsManager *, QObject *parent = nullptr)</code></td><td><code>VolumeController(settings_manager, media_manager, spotify_manager=None, phone_mirror_manager=None, esp32_manager=None, parent=None)</code></td><td>Python holds the output managers directly; C++ is decoupled through the signal</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Dispatch: who gets what</h3>
+        <p>The two backends deliberately differ in <em>how</em> they fan out, but the contract is the same: settings store the percent, local media and the phone mirror take the linear gain, Spotify and the ESP32 LED take the raw percent.</p>
+        <pre><code><span class="cmt"># Python — backend/volume_utils.py</span>
+<span class="kw">@Slot</span>(int)
+<span class="kw">def</span> <span class="fn">applyVolume</span>(self, percent: int) -&gt; None:
+    percent = <span class="fn">max</span>(<span class="num">0</span>, <span class="fn">min</span>(<span class="num">100</span>, <span class="fn">int</span>(percent)))
+    linear = to_linear(percent)
+
+    <span class="kw">if</span> self._settings <span class="kw">is not</span> None:
+        self._settings.setCurrentVolume(percent)
+    <span class="kw">if</span> self._media <span class="kw">is not</span> None:
+        self._media.setVolume(linear)
+    <span class="kw">if</span> self._spotify <span class="kw">is not</span> None <span class="kw">and</span> self._spotify.is_connected():
+        self._spotify.set_volume(percent)
+    <span class="kw">if</span> self._phone_mirror <span class="kw">is not</span> None:
+        self._phone_mirror.setVolume(linear)
+    <span class="kw">if</span> self._esp32 <span class="kw">is not</span> None:
+        self._esp32.send_volume_update(percent)</code></pre>
+        <pre><code><span class="cmt">// C++ — src/main.cpp wiring (the controller itself only emits)</span>
+QObject::connect(&amp;volumeController, &amp;VolumeController::volumeApplied,
+                 [&amp;mediaManager](<span class="kw">int</span> percent, <span class="kw">float</span> linear) {
+    mediaManager.setVolume(linear);
+    pendingSpotifyVolume = percent;
+    spotifyVolumeDebounce.start();   <span class="cmt">// 300 ms single-shot → spotifyManager.set_volume() if connected</span>
+});
+volumeController.applyVolume(settingsManager.currentVolume());   <span class="cmt">// startup volume</span></code></pre>
+        <p>The C++ side debounces Spotify by 300 ms so a slider drag does not fire a Web API call per pixel. As of this writing the C++ wiring connects only local media and Spotify; <code>PhoneMirrorManager::setVolume()</code> and <code>ESP32VolumeManager::send_volume_update()</code> exist but are not connected to <code>volumeApplied</code> in <span class="file-path">main.cpp</span>, so on the C++ desktop build the phone-mirror audio and the ESP32 LED ring do not follow the slider the way they do in Python.</p>
+
+        <h3>Callers</h3>
+        <ul>
+          <li><span class="file-path">frontend/BottomBar.qml</span> (four slider / button sites) and <span class="file-path">frontend/MediaRoom.qml</span> call <code>volumeController.applyVolume(Math.round(value))</code></li>
+          <li>Gesture sensor <code>volume_up</code> / <code>volume_down</code>: <code>applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></li>
+          <li>ESP32 knob <code>volumeChangeRequested(delta)</code>: fractional deltas are accumulated and applied once they reach a whole percent</li>
+          <li>Both mains call <code>applyVolume(settingsManager.currentVolume)</code> once after every manager is constructed, so the saved volume reaches every output at startup</li>
+        </ul>
+        <div class="info-box warning">
+          <div class="info-box-title">Rule</div>
+          <p>Never call an individual manager&rsquo;s <code>setVolume</code> from QML or a hardware handler, and never re-derive the curve. Everything goes through <code>volumeController.applyVolume(percent)</code>.</p>
+        </div>
+
+        <!-- Version -->
+        <h2 id="version">Version &amp; update check</h2>
+        <p><span class="file-path">backend/version.py</span> / <span class="file-path">CMakeLists.txt</span> &mdash; added with the Diagnostics card (<code>b5d47b8</code>).</p>
+        <pre><code><span class="cmt">"""OCTAVE version, mirrored from CMakeLists.txt project(OCTAVE VERSION ...)."""</span>
+__version__ = <span class="str">"0.9.0"</span></code></pre>
+        <ul>
+          <li><strong>C++:</strong> <code>project(OCTAVE VERSION 0.9.0 LANGUAGES CXX)</code> is the source of truth. CMake passes <code>OCTAVE_VERSION="${PROJECT_VERSION}"</code> as a compile definition (next to <code>OCTAVE_ENABLE_DOWNLOADS</code>) and reuses <code>PROJECT_VERSION</code> for <code>MACOSX_BUNDLE_BUNDLE_VERSION</code> / <code>MACOSX_BUNDLE_SHORT_VERSION_STRING</code>. <span class="file-path">diagnosticsmanager.cpp</span> falls back to <code>"dev"</code> if the define is missing.</li>
+          <li><strong>Python:</strong> <code>backend/version.py</code> is a hand-maintained mirror; bump both in the same commit.</li>
+          <li>The version is surfaced to users only through <code>diagnosticsManager.appVersion</code> (About page and the log export header).</li>
+        </ul>
+        <p>The <strong>update check</strong> does <em>not</em> use the version string. <code>NetworkManager.checkForUpdates()</code> (both backends) compares the local git <code>HEAD</code> against <code>https://api.github.com/repos/&lt;repo&gt;/commits/main</code> and reports <code>up-to-date</code> / <code>update-available</code> / <code>ahead</code> / <code>diverged</code> / <code>error</code> through <code>updateStatus</code>; the About page and the settings layouts show a badge when it is <code>update-available</code>. See <a href="network-manager.html">Network Manager</a>.</p>
+
+        <!-- Lazy imports -->
+        <h2 id="lazy-import">Lazy imports (Python)</h2>
+        <p><span class="file-path">backend/lazy_import.py</span> &mdash; Python-only; introduced in commit <code>ee5a23e</code> (startup optimisations).</p>
+        <p>Several optional libraries are expensive to import &mdash; <code>obd</code> pulls in pint, <code>spotipy</code> pulls in redis, <code>numpy</code> and <code>av</code> load large native extensions &mdash; and none of them are needed until the user connects an adapter, logs in, or plays a track. Importing them eagerly cost about a second before the first frame on the Orange Pi. The module offers two helpers:</p>
+        <pre><code><span class="kw">def</span> <span class="fn">available</span>(name: str) -&gt; bool:
+    <span class="cmt">"""True when the top-level package is installed (no import performed)."""</span>
+    <span class="kw">try</span>:
+        <span class="kw">return</span> importlib.util.find_spec(name) <span class="kw">is not</span> None
+    <span class="kw">except</span> (ImportError, ValueError):
+        <span class="kw">return</span> False
+
+
+<span class="kw">class</span> <span class="cls">LazyModule</span>:
+    <span class="cmt">"""Import ``name`` on first attribute access and forward everything to it."""</span>
+    <span class="kw">def</span> <span class="fn">__getattr__</span>(self, attr):
+        <span class="kw">return</span> <span class="fn">getattr</span>(self._lazy_load(), attr)
+
+
+<span class="kw">def</span> <span class="fn">lazy_module</span>(name: str):
+    <span class="kw">return</span> LazyModule(name)</code></pre>
+        <p>Because the proxy forwards attribute access, module code keeps its natural spelling (<code>obd.commands.RPM</code>); the real import happens on the first such access. <code>available()</code> answers &ldquo;is it installed?&rdquo; via <code>find_spec</code> without importing, so the <code>*_AVAILABLE</code> flags stay cheap.</p>
+        <table>
+          <thead><tr><th>Module</th><th>Lazy</th><th>Availability flag</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">backend/obd_manager.py</span></td><td><code>obd = lazy_module("obd")</code></td><td>&ndash;</td></tr>
+            <tr><td><span class="file-path">backend/spotify_manager.py</span></td><td><code>spotipy</code>, <code>keyring</code></td><td><code>SPOTIPY_AVAILABLE</code>, <code>KEYRING_AVAILABLE</code></td></tr>
+            <tr><td><span class="file-path">backend/audio_analyzer.py</span></td><td><code>np</code> (numpy), <code>av</code> (PyAV)</td><td><code>NUMPY_AVAILABLE</code>, <code>AV_AVAILABLE</code></td></tr>
+            <tr><td><span class="file-path">backend/phone_mirror/scrcpy_client.py</span></td><td><code>np = lazy_module("numpy") if available("numpy") else None</code></td><td>&ndash;</td></tr>
+          </tbody>
+        </table>
+        <p>There is no C++ equivalent.</p>
+
+        <!-- Performance monitor -->
+        <h2 id="perf-monitor">Performance monitor &amp; perf tooling (Python)</h2>
+        <p><span class="file-path">backend/perf_monitor.py</span>, <span class="file-path">backend/perf_patches.py</span> (both gitignored), <span class="file-path">dev/perf/</span>, <span class="file-path">dev/mcp_server.py</span>, <span class="file-path">dev/mcp_benchmark.py</span>, <span class="file-path">.mcp.json</span>. Python-only: there is no C++ perf monitor.</p>
+
+        <p>Everything here is switched on by one flag: <code>python main.py --profile</code>. <code>main.py</code>&rsquo;s <code>setup_perf_profiling()</code> (called after the QML is loaded, also from <code>dev/main_dev.py</code>) creates a <code>PerfMonitor</code> writing <code>dev/perf/logs/perf_&lt;YYYYmmdd_HHMMSS&gt;.csv</code> and <code>.log</code>, registers it as the QML context property <code>perfMonitor</code> (no shipped QML binds to it; it is there for a HUD), starts it, starts the <a href="#command-server">command server</a>, applies <code>perf_patches</code> if the file exists (its absence only logs a warning), and connects both <code>stop()</code>s to <code>aboutToQuit</code>. On quit the detailed report is printed to the terminal and appended to the <code>.log</code>.</p>
+
+        <h3>PerfMonitor internals</h3>
+        <table>
+          <thead><tr><th>Component</th><th>What it measures</th></tr></thead>
+          <tbody>
+            <tr><td><code>_RingBuffer</code></td><td>Fixed-size <code>deque</code> with <code>mean()</code>, <code>max_val()</code> and linear-interpolated <code>percentile(p)</code>. Capacities: 600 for loop latency (~10 s at 60 Hz), 300 for GIL jitter, 200 per slot timing.</td></tr>
+            <tr><td>Event-loop probe</td><td>A <code>QTimer</code> with interval 0 and <code>PreciseTimer</code>; the delta between consecutive firings is one sample. Samples &ge; 500 ms are discarded (the first one has no reference point). A high delta means the loop was blocked &mdash; UI stutter.</td></tr>
+            <tr><td><code>_GILProbe</code></td><td>A daemon thread that waits 10 ms on an <code>Event</code> and records how late it woke; the excess approximates time other threads held the GIL.</td></tr>
+            <tr><td><code>psutil</code></td><td>Process CPU % and RSS MB, if installed (otherwise those columns are 0 and a hint is printed).</td></tr>
+            <tr><td>Slot timings</td><td>Module-level <code>_slot_timings: dict[str, _RingBuffer]</code> fed by the <code>@timed_slot</code> decorator (key <code>fn.__qualname__</code>), by <code>PerfMonitor.begin()</code> / <code>end(start, label)</code>, and by <code>perf_patches</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Reporting cycle (every 1 s)</h3>
         <ol class="steps">
-          <li>Calculate loop latency statistics (avg, p50, p95, p99, max) from ring buffer</li>
-          <li>Calculate GIL jitter statistics (avg, p99)</li>
-          <li>Read CPU and memory usage via psutil (if available)</li>
-          <li>Count active threads</li>
-          <li>Write to terminal (color-coded), CSV file, and perf log file</li>
-          <li>Report slow slots (p95 > 2ms) every 5 seconds</li>
-          <li>Clear buffers and emit <code>metricsUpdated</code> signal</li>
+          <li>Loop latency avg / p50 / p95 / p99 / max from the ring buffer; GIL avg / p99; <code>threading.active_count()</code>; CPU and memory.</li>
+          <li>Terminal line, colour-coded by average loop latency: green &lt; 5 ms, yellow &lt; 16 ms, red otherwise. Slots whose p95 exceeds 2 ms are listed every fifth report.</li>
+          <li>Plain-text line in the perf <code>.log</code> tagged <code>OK</code> / <code>WARN</code> / <code>STUTTER</code> with the same thresholds, plus <code>SLOW</code> lines.</li>
+          <li>CSV row: <code>timestamp, loop_avg_ms, loop_p50_ms, loop_p95_ms, loop_p99_ms, loop_max_ms, gil_avg_ms, gil_p99_ms, cpu_pct, mem_mb, threads</code>.</li>
+          <li>Buffers cleared, <code>metricsUpdated</code> emitted.</li>
         </ol>
 
-        <h3>timed_slot Decorator</h3>
-        <pre><code><span class="kw">from</span> backend.perf_monitor <span class="kw">import</span> timed_slot
+        <h3>QML properties (all notify on <code>metricsUpdated</code>)</h3>
+        <p><code>loopLatencyMs</code>, <code>loopP99Ms</code>, <code>gilJitterMs</code> (float), <code>cpuPercent</code>, <code>memMb</code> (float), <code>threadCount</code> (int), <code>summaryText</code> (str, a one-line HUD string). Slot: <code>getDetailedReport()</code> &rarr; str, listing loop / GIL / CPU and every slot with p95 &gt; 1 ms sorted by p95.</p>
 
-<span class="kw">@timed_slot</span>
-<span class="kw">def</span> <span class="fn">my_slot</span>(self):
-    <span class="cmt"># This slot's execution time is automatically tracked</span>
-    <span class="cmt"># under the key "ClassName.my_slot"</span>
-    ...</code></pre>
-        <p>Records per-call duration in a _RingBuffer keyed by <code>fn.__qualname__</code>. Reported when p95 exceeds 2ms.</p>
+        <h3>Instrumentation</h3>
+        <pre><code><span class="kw">from</span> backend.perf_monitor <span class="kw">import</span> timed_slot, PerfMonitor
 
-        <h3>Manual Instrumentation</h3>
-        <pre><code><span class="cmt"># Time any code section</span>
-t = PerfMonitor.begin()
+<span class="kw">@timed_slot</span>                       <span class="cmt"># recorded under "ClassName.my_slot"</span>
+<span class="kw">def</span> <span class="fn">my_slot</span>(self): ...
+
+t = PerfMonitor.begin()           <span class="cmt"># manual section</span>
 <span class="cmt"># ... expensive operation ...</span>
 PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
+        <p><span class="file-path">backend/perf_patches.py</span> keeps timing decorators out of production code: <code>apply_patches(...)</code> monkey-patches instance methods on the live managers with a <code>functools.wraps</code> timer that feeds <code>_slot_timings</code>. Currently wrapped: <code>media._extract_colors</code>, <code>media._kmeans_colors</code>, <code>media._update_position</code>, <code>media.next_track</code>, <code>media.previous_track</code>, <code>audio._analyze_audio (FFT)</code>, <code>spotify._poll_playback</code>, <code>spotify._fetch_playback_state</code>, <code>obd._monitor_connection</code>, <code>esp32._read_serial</code>, <code>settings.save_settings</code>. Missing methods are skipped silently; the <code>berryimu_manager</code> and <code>gesture_manager</code> arguments are accepted but nothing is wrapped for them.</p>
 
-        <h3>Detailed Report</h3>
-        <p>The <code>getDetailedReport()</code> slot returns a multi-line string summarizing all tracked metrics and slot timings. Written to the perf log file on shutdown.</p>
+        <h3>dev/perf and the MCP servers</h3>
+        <p>The whole <code>dev/</code> tree is gitignored, so these exist only on developer machines:</p>
+        <table>
+          <thead><tr><th>Tool</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">dev/perf/profile_performance.py</span></td><td>External sampler: finds the <code>main.py</code> process with psutil and records CPU / memory to CSV for a duration. Does not need <code>--profile</code>.</td></tr>
+            <tr><td><span class="file-path">dev/perf/run_perf_loop.py</span></td><td>Drives the command socket (127.0.0.1:9876) through the full gamut of pages and settings in a loop and diffs the metrics between iterations.</td></tr>
+            <tr><td><span class="file-path">dev/perf/brutalize.py</span></td><td>Cranks every visual setting to maximum and hammers actions faster and faster until the loop latency degrades, then reports where it broke.</td></tr>
+            <tr><td><span class="file-path">dev/perf/logs/</span></td><td>Output: <code>perf_*.csv</code> / <code>.log</code> from PerfMonitor, <code>benchmark_*.json</code> and <code>baseline.json</code> from the benchmark server.</td></tr>
+            <tr><td><span class="file-path">dev/mcp_server.py</span> (<code>octave-perf</code>)</td><td>FastMCP server wrapping the command socket as tools an AI agent can call: <code>ping</code>, <code>list_actions</code>, <code>navigate</code>, <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code>, <code>list_pages</code>, the settings tools (<code>get_all_settings</code>, <code>list_*_settings</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>), media tools (<code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code>, <code>skip_tracks</code>, <code>get_media_status</code>, <code>get_track_info</code>), <code>spotify_status</code>, <code>obd_status</code>, <code>get_metrics</code>, <code>get_detailed_report</code>.</td></tr>
+            <tr><td><span class="file-path">dev/mcp_benchmark.py</span> (<code>octave-benchmark</code>)</td><td>Systematic benchmarking and regression tracking: <code>benchmark_page</code>, <code>benchmark_setting</code>, <code>benchmark_transition</code>, <code>benchmark_media_ops</code>, <code>get_bottlenecks</code>, <code>run_benchmark_suite</code> (five phases: baseline, settings matrix, stress, combined, bottlenecks), <code>save_baseline</code>, <code>compare_to_baseline</code>.</td></tr>
+            <tr><td><span class="file-path">.mcp.json</span></td><td>Registers both servers for Claude Code, once per developer machine (<code>octave-perf</code> / <code>octave-benchmark</code> plus <code>-rob</code> and <code>-zion</code> variants pointing at that machine&rsquo;s venv), each launched as <code>&lt;venv&gt;/bin/python dev/mcp_server.py</code>. Gitignored because the paths are absolute.</td></tr>
+          </tbody>
+        </table>
 
-        <!-- Command Server -->
-        <h2 id="command-server">Command Server</h2>
-        <p><span class="file-path">backend/command_server.py</span></p>
-        <p>TCP server for remote control of OCTAVE. Only active with <code>--profile</code> flag. Listens on <code>127.0.0.1:9876</code>.</p>
+        <!-- Command server -->
+        <h2 id="command-server">Command server (Python)</h2>
+        <p><span class="file-path">backend/command_server.py</span> (gitignored) &mdash; Python-only, started by <code>setup_perf_profiling()</code> when <code>--profile</code> is passed. Listens on <code>127.0.0.1:9876</code> (<code>DEFAULT_PORT</code>). Since commit <code>b1db87c</code> the instance is exposed as the module attribute <code>main.cmd_server</code> (<code>None</code> without <code>--profile</code>) so dev tooling can extend it.</p>
+
+        <h3>Protocol</h3>
+        <p>One JSON object per line in, one per line out. <code>args</code> is optional.</p>
+        <pre><code>{<span class="str">"action"</span>: <span class="str">"navigate"</span>, <span class="str">"args"</span>: {<span class="str">"page"</span>: <span class="str">"obd"</span>}}
+{<span class="str">"ok"</span>: <span class="kw">true</span>, <span class="str">"result"</span>: {<span class="str">"navigated_to"</span>: <span class="str">"obd"</span>}}
+
+{<span class="str">"action"</span>: <span class="str">"bogus"</span>}
+{<span class="str">"ok"</span>: <span class="kw">false</span>, <span class="str">"error"</span>: <span class="str">"Unknown action: bogus"</span>}</code></pre>
+        <p>Invalid JSON gets <code>{"ok": false, "error": "Invalid JSON: …"}</code>; any exception raised by a handler is logged with its traceback and returned as <code>error</code>. A client may keep the connection open and send many lines.</p>
 
         <h3>Architecture</h3>
         <div class="diagram">
-<pre>
-  CommandServer
-    |
-    +-- _ThreadedTCPServer (socketserver.ThreadingMixIn)
-    |     |
-    |     +-- _Handler (one per client connection)
-    |     |     reads JSON lines, calls dispatch()
-    |     |
-    |     +-- dispatch(action, args)
-    |           routes to appropriate manager method
-    |
-    +-- NavigationBridge
-          QObject on main thread
-          thread-safe QML navigation via QMetaObject.invokeMethod
-</pre>
-        </div>
+  CommandServer                       (lifecycle wrapper: start / stop / register)
+    │
+    ├── _ThreadedTCPServer            socketserver.ThreadingMixIn + TCPServer,
+    │     │                           allow_reuse_address, daemon_threads; serve_forever()
+    │     │                           on a daemon thread named "CommandServer"
+    │     ├── _Handler                one per client; StreamRequestHandler reading JSON lines
+    │     │       └── server.dispatch(action, args)
+    │     └── _extensions{}           action → handler(args), added by register()
+    │
+    └── NavigationBridge (QObject on the GUI thread)
+          navigation:   QMetaObject.invokeMethod(..., Qt.QueuedConnection)
+          screenshots / recording / UI driving:  Qt.BlockingQueuedConnection,
+          result read back from the bridge after the call returns
+</div>
+        <p>The TCP threads never touch Qt objects directly for anything that must happen on the GUI thread; <code>NavigationBridge</code> slots are invoked with <code>QueuedConnection</code> (fire and forget: navigation, window size, dev chrome) or <code>BlockingQueuedConnection</code> (screenshot, recording, item lookup, clicks) when the reply needs the result. <code>navigate_to</code> calls <code>root.navigateTo(page)</code> directly rather than via <code>Q_ARG(str, …)</code> because the QML function takes an untyped <code>var</code> and a typed invoke would silently match nothing. Extension handlers registered via <code>register()</code> run on the server thread and must marshal to the GUI thread themselves (the dev <code>SimBridge</code> does this with a queued Signal).</p>
 
-        <h3>NavigationBridge</h3>
-        <p>Provides thread-safe navigation by executing QML method calls on the GUI thread:</p>
-        <pre><code><span class="kw">class</span> <span class="cls">NavigationBridge</span>(QObject):
-    <span class="kw">@Slot</span>(str)
-    <span class="kw">def</span> <span class="fn">navigate_to</span>(self, page: str):
-        <span class="cmt"># Calls mainWindow.navigateTo(page) in QML</span>
-        QMetaObject.invokeMethod(root, <span class="str">"navigateTo"</span>, Q_ARG(str, page))
+        <h3>Actions</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td>App</td><td><code>ping</code> &rarr; <code>"pong"</code>; <code>list_actions</code> (extensions first, then the built-ins)</td></tr>
+            <tr><td>Perf</td><td><code>get_metrics</code> (loop_avg_ms, loop_p99_ms, gil_avg_ms, cpu_percent, mem_mb, thread_count, summary), <code>get_detailed_report</code>, <code>get_slot_timings</code> (avg / p95 / max / count per label)</td></tr>
+            <tr><td>Navigation</td><td><code>navigate</code> (<code>page</code> &isin; home, media_room, media_player, obd, obd_home, obd_diagnostics, sensor_home, settings, phone_mirror, android_auto, sensors, car, download, clock &mdash; mapped to the QML file), <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code> (objectName of the <code>stackView</code> current item), <code>list_pages</code>, <code>open_settings</code> (<code>section</code> &isin; displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings, about &mdash; calls <code>navigateToSettings(section)</code>), <code>list_settings_sections</code></td></tr>
+            <tr><td>Screenshots / recording</td><td><code>screenshot</code> (<code>path</code>; <code>grabWindow()</code> &rarr; PNG, so it works on Wayland, X11 and offscreen without any external tool), <code>set_window_size</code> (<code>width</code>, <code>height</code>; sets the root window&rsquo;s properties so Main.qml reflows Spacing), <code>set_dev_chrome</code> (<code>visible</code>; toggles the <code>devOverlay</code> item, no-op in production), <code>record_start</code> (<code>path</code>, <code>fps</code> &le; 60, default 30: a GUI-thread QTimer pipes raw RGBA <code>grabWindow()</code> frames into <code>ffmpeg -c:v libx264 -crf 18 -pix_fmt yuv420p</code>), <code>record_stop</code>, <code>record_status</code> (frames, dropped, seconds, error)</td></tr>
+            <tr><td>UI driving</td><td><code>find_item</code> (<code>name</code>: objectName search through the window&rsquo;s contentItem, popups included, preferring the visible match; returns scene geometry, centre, effective visibility and <code>hiddenBy</code>), <code>list_items</code> (<code>prefix</code>), <code>get_prop</code> / <code>set_prop</code> (<code>name</code>, <code>prop</code>[, <code>value</code>]; <code>"root"</code> addresses the ApplicationWindow), <code>call</code> (<code>name</code>, <code>method</code>: no-arg invoke), <code>click</code> (<code>x</code>, <code>y</code>: synthetic press + release through <code>QCoreApplication.sendEvent</code>), <code>drag</code> (<code>x1</code>, <code>y1</code>, <code>x2</code>, <code>y2</code>, <code>steps</code> default 12: press, interpolated synchronous moves, release)</td></tr>
+            <tr><td>Media</td><td><code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code> (<code>volume</code> 0.0&ndash;1.0 &mdash; calls <code>MediaManager.setVolume</code> directly, bypassing the curve), <code>get_media_status</code>, <code>get_track_info</code>, <code>skip_tracks</code> (<code>count</code>)</td></tr>
+            <tr><td>Spotify</td><td><code>spotify_toggle_play</code>, <code>spotify_next</code>, <code>spotify_previous</code>, <code>spotify_status</code></td></tr>
+            <tr><td>OBD</td><td><code>obd_status</code> (connected, status string), <code>obd_reconnect</code></td></tr>
+            <tr><td>Settings</td><td><code>get_settings</code> (legacy: media_source, volume, theme), <code>get_all_settings</code>, <code>set_media_source</code>, <code>toggle_setting</code> / <code>set_bool_setting</code> / <code>list_toggle_settings</code>, <code>set_numeric_setting</code> / <code>list_numeric_settings</code>, <code>set_string_setting</code> / <code>list_string_settings</code></td></tr>
+            <tr><td>Extensions (dev mode)</td><td><code>sim_throttle</code>, <code>sim_brake</code>, <code>sim_rev</code>, <code>sim_engine</code>, <code>sim_gear</code>, <code>sim_upshift</code>, <code>sim_downshift</code>, <code>sim_speed</code>, <code>sim_rpm</code>, <code>sim_scenario</code>, <code>sim_realistic</code>, <code>sim_status</code> &mdash; registered by <code>dev/dev_runtime.install_sim_commands()</code> on the mock OBD manager</td></tr>
+          </tbody>
+        </table>
 
-    <span class="kw">@Slot</span>()
-    <span class="kw">def</span> <span class="fn">go_home</span>(self): ...
-    <span class="kw">@Slot</span>()
-    <span class="kw">def</span> <span class="fn">go_back</span>(self): ...</code></pre>
+        <h3>Settings actions in detail</h3>
+        <ul>
+          <li><strong>Boolean toggles (12):</strong> <code>show_clock</code>, <code>clock_24h</code>, <code>show_waveform</code>, <code>show_3d_tilt</code>, <code>show_3d_album</code>, <code>rounded_album_art</code>, <code>album_art_shadow</code>, <code>vinyl_mode</code>, <code>obd_fast_mode</code>, <code>auto_play</code>, <code>show_bottom_bar_controls</code>, <code>song_length_transition</code> &mdash; each mapped to the <code>save_*</code> slot and the property to read back (<code>toggle_setting</code> returns <code>old</code> / <code>new</code>).</li>
+          <li><strong>Numeric (10), clamped to a range:</strong> <code>ui_scale</code> (0.5&ndash;2.0), <code>blur_radius</code> (0&ndash;100), <code>color_transition_ms</code> (0&ndash;5000), <code>album_art_corner_radius</code> (2&ndash;32), <code>bg_overlay_opacity</code> (0&ndash;100), <code>side_card_opacity</code> (0.1&ndash;1.0), <code>side_card_angle</code> (5&ndash;60), <code>button_tilt_duration</code> (50&ndash;500), <code>text_scroll_speed</code> (1000&ndash;10000), <code>clock_size</code> (8&ndash;72).</li>
+          <li><strong>String / enum (6):</strong> <code>theme</code>, <code>font</code>, <code>mediaFolder</code> (free), <code>album_art_transition</code> (Crossfade, Slide, Vinyl Lift, Dissolve, Flip), <code>bottom_bar_orientation</code> (bottom, side), <code>media_source</code> (local, spotify).</li>
+        </ul>
 
-        <h3>Action Dispatch</h3>
-        <p>The dispatch method handles 40+ actions across 7 categories. It accesses managers via a dict passed at startup:</p>
-        <pre><code>server.start(
+        <h3>Lifecycle</h3>
+        <pre><code><span class="cmt"># main.py — setup_perf_profiling()</span>
+cmd_server = CommandServer()
+cmd_server.start(
     managers={
-        <span class="str">"settings"</span>: settings_manager,
         <span class="str">"media"</span>: media_manager,
         <span class="str">"spotify"</span>: spotify_manager,
         <span class="str">"obd"</span>: obd_manager,
+        <span class="str">"settings"</span>: settings_manager,
     },
     perf_monitor=perf_monitor,
-    engine=engine
-)</code></pre>
+    engine=engine,
+)
+app.aboutToQuit.connect(stop_cmd_server)   <span class="cmt"># server.shutdown()</span></code></pre>
+        <p><code>register(action, handler)</code> must be called after <code>start()</code> (it raises otherwise). <code>stop()</code> calls <code>shutdown()</code> on the socket server.</p>
 
-        <h3>Settings Actions</h3>
-        <p>The command server exposes three types of settings manipulation:</p>
+        <h3>Who uses it</h3>
         <ul>
-          <li><strong>Boolean toggles:</strong> 13 settings (show_clock, vinyl_mode, obd_fast_mode, etc.) via <code>toggle_setting</code> and <code>set_bool_setting</code></li>
-          <li><strong>Numeric sliders:</strong> 10 settings with min/max clamping (ui_scale, blur_radius, etc.) via <code>set_numeric_setting</code></li>
-          <li><strong>String/enum:</strong> 6 settings with validation (theme, font, album_art_transition, etc.) via <code>set_string_setting</code></li>
+          <li><span class="file-path">dev/screenshot_tool.py</span> / <code>python -m dev.screenshots</code> (<span class="file-path">dev/screenshots/auto.py</span>): launches dev mode headless with <code>--profile</code>, then walks every page with <code>navigate</code> / <code>open_settings</code>, fixes the size with <code>set_window_size</code>, hides the overlay with <code>set_dev_chrome</code> and captures with <code>screenshot</code>. This replaced the xdotool + mss tool that broke under Wayland.</li>
+          <li><span class="file-path">dev/screenshots/stories.py</span> and the README clips use <code>record_start</code> / <code>record_stop</code> plus the <code>sim_*</code> actions.</li>
+          <li><span class="file-path">dev/tests/drive_dashboard_editor.py</span>: an end-to-end scenario (~40 assertions) that opens the dashboard chooser, creates and edits dashboards and checks the draft-rescue flow using <code>find_item</code>, <code>get_prop</code>, <code>set_prop</code>, <code>click</code>, <code>drag</code> and <code>call</code>.</li>
+          <li><span class="file-path">dev/perf/run_perf_loop.py</span>, <span class="file-path">dev/perf/brutalize.py</span>, and both MCP servers (<a href="#perf-monitor">above</a>).</li>
         </ul>
+        <p>Because there is no C++ command server, all of this tooling drives the Python backend only.</p>
+
+        <!-- Platform -->
+        <h2 id="platform">C++ <code>src/util/</code> and <code>src/platform/</code></h2>
+        <p>Both directories are listed explicitly in <code>qt_add_executable(octave …)</code> in <span class="file-path">CMakeLists.txt</span>.</p>
+
+        <h3><code>src/util/</code></h3>
+        <table>
+          <thead><tr><th>File</th><th>Contents</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">logger.h</span> / <span class="file-path">logger.cpp</span></td><td>The <code>OctaveLog</code> namespace: rotating file logging, the Qt message handler and the crash handlers. See <a href="#logging">Logging</a> and <a href="#crash-handlers">Crash handlers</a>.</td></tr>
+            <tr><td><span class="file-path">uiwatchdog.h</span> / <span class="file-path">uiwatchdog.cpp</span></td><td><code>UiWatchdog</code>. See <a href="#ui-watchdog">UI watchdog</a>.</td></tr>
+          </tbody>
+        </table>
+
+        <h3><code>src/platform/</code></h3>
+        <p>Header-only Android glue. Both files compile to nothing on desktop; there is no Python peer because mobile is C++-only.</p>
+        <table>
+          <thead><tr><th>File</th><th>Guard</th><th>Contents</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="file-path">androidmediabridge.h</span></td>
+              <td><code>#ifdef Q_OS_ANDROID</code></td>
+              <td>Namespace <code>OctaveAndroid</code>: inline <code>QJniObject</code> wrappers around the Java class <code>org.octave.app.OctaveMediaBridge</code> (<span class="file-path">android/src/org/octave/app/OctaveMediaBridge.java</span>), which embeds the youtubedl-android runtime because no yt-dlp / ffmpeg binaries are on PATH on a phone. Functions: <code>initMediaBridge()</code> (one-time extraction of Python + yt-dlp + ffmpeg to the app&rsquo;s private dir; blocking, call off the GUI thread), <code>runYtDlp(args)</code> (blocking, returns combined output; check <code>lastExitCode()</code>), <code>getFfmpegBinaryPath()</code> (the binary is launchable with <code>QProcess</code> from <code>noBackupFilesDir</code>), <code>pollProgress()</code> / <code>pollEta()</code> / <code>pollLine()</code>, <code>readMetadata(path)</code> (newline-delimited title / artist / album / duration from <code>MediaMetadataRetriever</code>), <code>extractAlbumArt(path, out)</code>, <code>getDownloadsDir()</code> (scoped-storage-safe app external dir), <code>hasAllFilesAccess()</code> / <code>requestAllFilesAccess()</code> (Android 11+ <code>MANAGE_EXTERNAL_STORAGE</code>, needed to write into a user-picked folder such as <code>/storage/emulated/0/Music</code>), <code>cacheHttpImage(url)</code> (downloads over Android&rsquo;s SSL stack because Qt&rsquo;s OpenSSL is broken on Android; returns a plain path to wrap with <code>QUrl::fromLocalFile</code>), <code>runYtMusicSearch(query, limit)</code> (bundled <code>ytmusic_search.py</code>; empty when ytmusicapi is missing, caller falls back to yt-dlp search), <code>runEmbedCover(audio, cover)</code> (mutagen in-place cover-atom patch, no re-encode).</td>
+            </tr>
+            <tr>
+              <td><span class="file-path">androidprocessadapter.h</span></td>
+              <td><code>#ifdef Q_OS_MOBILE</code> (a CMake define, because moc only sees defines in <code>moc_predefs.h</code>)</td>
+              <td><code>AndroidProcessAdapter</code>: a <code>QObject</code> with just enough of <code>QProcess</code>&rsquo;s shape &mdash; <code>start(program, args)</code> (program ignored; the constructor&rsquo;s <code>Tool</code> enum, currently always <code>YtDlp</code>, decides what runs), <code>kill()</code>, <code>waitForFinished()</code>, <code>readAllStandardOutput()</code> / <code>readAll()</code> / <code>readAllStandardError()</code>, <code>processId()</code> (always 0, so SIGSTOP/SIGCONT pause paths become no-ops), <code>setProcessChannelMode()</code> (no-op) and the signals <code>finished(int, QProcess::ExitStatus)</code>, <code>errorOccurred</code>, <code>readyReadStandardOutput</code>, <code>readyReadStandardError</code> &mdash; so <span class="file-path">downloadmanager.cpp</span> can use it through a conditional typedef. The JNI call blocks a <code>QThread::create</code> worker; there is no stdin and no live stdout streaming, the whole output arrives at once. <code>kill()</code> cannot cancel the JNI call; it flags the thread to suppress its final <code>finished</code> and emits <code>errorOccurred(Crashed)</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Android BLE bridge event logging (commit <code>3858c5c</code>)</h3>
+        <p>This does <em>not</em> live in <code>src/platform</code>. The OBD-over-BLE bridge is <span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span> (Java) and <code>OBDManager::onAndroidBlePoll()</code> in <span class="file-path">src/managers/obdmanager.cpp</span>. Every <code>setEvent</code> / <code>setError</code> in the Java bridge is also pushed onto a bounded <code>ConcurrentLinkedQueue</code> (<code>LOG_QUEUE_MAX = 200</code>, so a disconnected adapter cannot grow it without bound) as <code>"I|msg"</code> or <code>"W|msg"</code>, exposed via <code>pollLog()</code>. The C++ side drains up to 50 lines per tick of its existing 50 ms notification poll and emits them as <code>qCInfo</code> / <code>qCWarning(lcElm327) &lt;&lt; "[BLE]" &lt;&lt; msg</code>, so a BLE drop in the car lands in <code>octave-cpp.log</code> and in the Diagnostics export instead of only in logcat. No JNI native registration is needed.</p>
+
+        <!-- backend dirs -->
+        <h2 id="backend-dirs"><code>backend/media</code> and <code>backend/temp</code></h2>
+        <table>
+          <thead><tr><th>Directory</th><th>Purpose</th><th>Versioned?</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="file-path">backend/media/</span></td>
+              <td>The <strong>default local music library</strong> when no <code>mediaFolder</code> setting points elsewhere: <code>MediaManager.default_media_dir = &lt;backend dir&gt;/media</code> (Python) and <code>m_defaultMediaDir = applicationDirPath()/media</code> (C++ desktop; on Android the standard Music location). Created by <code>_ensure_directories()</code> if missing.</td>
+              <td>Empty in the repo (git does not track empty directories) and not gitignored, so files placed there would show up in <code>git status</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="file-path">backend/temp/</span></td>
+              <td>Per-checkout scratch cache: <code>cover_&lt;hash&gt;.&lt;ext&gt;</code> album covers extracted from tags by <code>MediaManager</code> (content-addressed, kept across runs so a boot does not re-read every tag; pruned at startup to the 500 least-recently-accessed files by <code>_prune_cover_dir()</code>), <code>spotify_album_art.jpg</code> downloaded by <code>SpotifyManager</code> for colour extraction, and <code>music_dl/</code> used by the download engine (<span class="file-path">backend/music_dl/utils/config.py</span>). C++ desktop uses <code>applicationDirPath()/temp</code>; Android uses <code>AppDataLocation/temp</code>.</td>
+              <td>Gitignored (<code>backend/temp/</code>, line 4 of <span class="file-path">.gitignore</span>).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Design decisions</h2>
+
+        <h3>Why the volume curve lives in one object</h3>
+        <p>Commit <code>d2b047b</code> replaced ~9 copies of <code>(v/100)**2</code> spread across <span class="file-path">main.py</span>, <span class="file-path">BottomBar.qml</span> and <span class="file-path">MediaRoom.qml</span> with <code>VolumeController</code>. The module docstring states the risk plainly: every output must use the same curve <em>or they drift out of sync when the user moves the slider</em>. Python takes the manager instances in its constructor; C++ emits <code>volumeApplied</code> instead so the controller can be constructed before the managers it feeds exist (&ldquo;avoids tight coupling &mdash; VolumeController doesn&rsquo;t need pointers to managers that may not exist yet&rdquo;, <span class="file-path">volumecontroller.h</span>).</p>
+
+        <h3>Why the Clock emits on change</h3>
+        <p>Commit <code>7777777</code>: with seconds hidden the string changes once a minute, but the old code emitted it every second and every binding that shows the clock re-evaluated 60 times for the same value; a hidden clock emitted <code>""</code> forever. Comparing against the last emitted text costs one string compare per second and removes the churn. Settings are still re-read on every tick rather than wired to change signals, which keeps the class free of any signal connections.</p>
+
+        <h3>Why the crash handlers write where they do</h3>
+        <p>The observability overhaul (<code>053f587</code>) exists because the head unit runs unattended in a vehicle: the only thing a user can do after a freeze or crash is export the logs from the About page later. So every trace must end up in the <em>error log file</em>, the one file the Diagnostics export and the tail both read. On the C++ side the code comments spell out the constraint: &ldquo;a separate descriptor, opened once, so the signal path never touches Qt&rdquo; and &ldquo;async-signal-safe as far as practical&rdquo; &mdash; the handler only calls <code>write()</code> and <code>backtrace_symbols_fd()</code> on that raw descriptor. It then restores <code>SIG_DFL</code> and re-raises so the OS still writes its core dump / tombstone; the file log is additive, not a replacement. Python routes to the same file because <code>faulthandler</code> needs a file object, opened in append mode and &ldquo;kept open for the process lifetime&rdquo;.</p>
+
+        <h3>Why the C++ log files have different names</h3>
+        <p>Commit <code>053f587</code> places the C++ files &ldquo;next to the Python ones&rdquo; in the same <code>logs/</code> directory. The distinct <code>octave-cpp</code> prefix keeps the two histories apart on a machine that runs both backends against the same config directory, and <code>DiagnosticsManager</code> tails whichever belongs to the running backend. Sizes, backup counts and the line format are the same (&ldquo;Rotation policy, same as the Python backend&rdquo;, <span class="file-path">logger.cpp</span>) so anyone reading them sees one convention.</p>
+
+        <h3>Why SIGTERM/SIGINT go through the event loop</h3>
+        <p>Commit <code>3810e03</code>: with the default action, a launcher or systemd stopping the app killed the process outright and the phone-mirror adb forward leaked. Calling <code>QCoreApplication::quit()</code> from inside a signal handler is not safe, so the C++ handler only writes a byte into a <code>socketpair</code> and a <code>QSocketNotifier</code> does the real work on the event loop. Python has the opposite problem &mdash; the interpreter cannot see a signal while Qt&rsquo;s <code>exec()</code> owns the thread &mdash; hence the 500 ms no-op timer that returns control to bytecode periodically. Both end in the same <code>aboutToQuit</code> cleanup that a window close triggers.</p>
+
+        <h3>Why a watchdog, and why it stops first</h3>
+        <p>The header comment states the goal: &ldquo;so a frozen head unit leaves a trace&rdquo;. The watchdog (<code>f157b97</code>) is the smallest thing that turns a hang into evidence: one thread, one queued call, one warning per stall with the duration on recovery. The 2 s / 5 s thresholds keep legitimate slow work (a big library scan, dashboard JSON) silent. Commit <code>95dfb49</code> moved <code>stop()</code> to the head of the quit cleanup after a Pi run where the worker pinged a QObject Qt had already destroyed and the brand-new threading excepthook reported it as CRITICAL &mdash; noise the whole effort exists to remove.</p>
+
+        <h3>Why lazy imports instead of dropping the dependencies</h3>
+        <p>The Python backend is the tinkering backend and deliberately keeps optional hardware / service libraries. Commit <code>ee5a23e</code> measured about a second of import time on the Orange Pi before the first frame for libraries nobody needs until an adapter is connected or a login happens. A proxy that imports on first attribute access preserves every existing call site (<code>obd.commands.RPM</code> keeps working) and <code>find_spec</code>-based availability keeps the &ldquo;is it installed?&rdquo; checks free. The C++ build has no equivalent cost.</p>
+
+        <h3>Why a TCP command server rather than an in-process test harness</h3>
+        <p>The command server is what lets every external tool &mdash; the screenshot sweeper, the dashboard-editor scenario, the perf loops and the MCP servers &mdash; drive the <em>real</em> app process from outside without a display server: the app captures itself with <code>grabWindow()</code> and injects input with <code>QCoreApplication.sendEvent</code>, so the same scripts run on Wayland, X11, Xvfb and offscreen (the header of <span class="file-path">dev/screenshots/auto.py</span> records that the previous xdotool + mss approach broke under Wayland). Newline-delimited JSON over localhost is trivially scriptable from any language and from an MCP tool. It is bound to <code>127.0.0.1</code>, is only started with <code>--profile</code>, and the file is gitignored, so it is never present in a normal run. The <code>register()</code> extension point (and exposing the instance as <code>main.cmd_server</code>, <code>b1db87c</code>) let dev-only code such as the OBD simulator add actions without touching the shipped module.</p>
+
+        <h3>Why perf instrumentation is monkey-patched</h3>
+        <p><span class="file-path">perf_patches.py</span>&rsquo;s docstring: &ldquo;This avoids polluting production code with timing decorators.&rdquo; Hot paths are wrapped on the live instances only when <code>--profile</code> is on, so the shipped managers carry no profiling code and the list of instrumented methods can change without touching them.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
           <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
           <a href="development.html" class="related-link">Development Guide</a>
+          <a href="settings-manager.html" class="related-link">Settings Manager</a>
+          <a href="network-manager.html" class="related-link">Network Manager</a>
           <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
         </div>
       </div>

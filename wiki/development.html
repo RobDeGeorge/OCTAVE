@@ -13,220 +13,168 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Development Guide</div>
           <h1 class="page-title">Development Guide</h1>
-          <p class="page-subtitle">Dev mode, mock OBD, dev tools, MCP server, performance profiling, command server, and how to add new features.</p>
+          <p class="page-subtitle">Dev mode, the mock OBD simulator, the command server and MCP servers, profiling, screenshots and video stories, the parity workflow for adding features, testing, CI, the deferred-work folder &mdash; and why the tooling is built this way.</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
+            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#repo-map">Repository Map for Developers</a></li>
             <li><a href="#dev-mode">Dev Mode Setup &amp; Usage</a></li>
             <li><a href="#mock-obd">Mock OBD Manager</a></li>
             <li><a href="#dev-tools">DevToolsPanel</a></li>
-            <li><a href="#mcp-server">MCP Server</a></li>
-            <li><a href="#profiling">Performance Profiling</a></li>
             <li><a href="#command-server">Command Server (TCP)</a></li>
-            <li><a href="#screenshots">Screenshot Tool</a></li>
-            <li><a href="#adding-features">How to Add New Features</a></li>
+            <li><a href="#mcp-server">MCP Servers</a></li>
+            <li><a href="#profiling">Performance Profiling</a></li>
+            <li><a href="#screenshots">Screenshots &amp; Video Stories</a></li>
+            <li><a href="#adding-features">How to Add New Features (Parity Workflow)</a></li>
             <li><a href="#testing">Testing &amp; Linting</a></li>
+            <li><a href="#ci">Continuous Integration</a></li>
+            <li><a href="#todo">Deferred Work: the TODO Folder</a></li>
           </ul>
         </nav>
 
-        <!-- Dev Mode -->
-        <h2 id="dev-mode">Dev Mode Setup &amp; Usage</h2>
-        <p>Dev mode provides simulated vehicle data and keyboard controls for testing without a physical OBD-II adapter.</p>
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Design Decisions</h2>
 
-        <pre><code><span class="cmt"># Launch dev mode</span>
-<span class="fn">python</span> -m dev.main_dev</code></pre>
+        <h3>Two backends, one frontend</h3>
+        <p>The C++ tree (<span class="file-path">src/</span>) is what ships; the Python tree (<span class="file-path">backend/</span>, <span class="file-path">main.py</span>) is the development and hardware-hacking backend. Both expose the same managers, context-property names, slots, signals, properties and on-disk JSON to the shared QML in <span class="file-path">frontend/</span>, which must never know which one is running (the only allowed difference is a <code>typeof fooManager !== "undefined"</code> guard for a feature legitimately absent on one platform). This is the standing policy in <span class="file-path">CLAUDE.md</span>; the rationale and the packaging consequences are on the <a href="building.html#design-decisions">Building</a> page. Practically, it means the Python side is where most tooling lives: the command server, perf monitor, mock OBD and MCP servers are Python, and they exercise the same QML the C++ binary runs.</p>
 
-        <p>The <span class="file-path">dev/</span> directory is gitignored and fully isolated from production code. Dev mode:</p>
-        <ul>
-          <li>Replaces <code>OBDManager</code> with <code>MockOBDManager</code></li>
-          <li>Adds a <code>KeyboardController</code> exposed to QML as <code>devKeyboardController</code></li>
-          <li>Sets <code>devMode = true</code> as a QML context property</li>
-          <li>Loads <span class="file-path">dev/DevMain.qml</span> with keyboard handler overlay</li>
-          <li>Adds <code>DevToolsManager</code> for screenshots and diagnostics</li>
-        </ul>
+        <h3>Why dev mode wraps production instead of duplicating it</h3>
+        <p><code>python -m dev.main_dev</code> imports <code>main</code>, which runs the whole production start-up (app, engine, every manager, every signal connection) and stops short of loading the QML because that lives under <code>main.py</code>'s <code>if __name__ == "__main__"</code> guard. Dev mode then swaps in the mock OBD, registers its context properties, calls <code>main.load_main_qml()</code> and reparents an overlay into the real window. The docstring in <span class="file-path">dev/main_dev.py</span> records why: the old <code>dev/dev_main.py</code> "duplicated 85% of main.py and constantly drifted out of parity". Same code path as production, extra layers bolted on afterwards.</p>
 
-        <h3>Keyboard Controls</h3>
+        <h3>Why a TCP command server and MCP servers for performance work</h3>
+        <p>The head unit runs in a Jeep; the problems that matter are stutter, stalls and regressions that only show up when the app is driven the way a driver drives it. A JSON-over-TCP command server (<span class="file-path">backend/command_server.py</span>, only started by <code>--profile</code>) lets a script or an agent navigate pages, toggle every setting, skip tracks, drive the simulator and read the perf counters while the perf monitor measures the event loop, so a test is repeatable and comparable between commits (<span class="file-path">dev/docs/perf_test_plan.md</span>, <span class="file-path">dev/perf/run_perf_loop.py</span>). The two MCP servers expose the same channel to a coding agent so it can reproduce a report, bisect a regression or benchmark a setting without a human clicking. The README makes the same point: "The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips."</p>
+
+        <h3>Why the tooling is gitignored</h3>
+        <p><span class="file-path">dev/</span>, <span class="file-path">.mcp.json</span>, <span class="file-path">backend/command_server.py</span>, <span class="file-path">backend/perf_monitor.py</span> and <span class="file-path">backend/perf_patches.py</span> are all in <span class="file-path">.gitignore</span> ("Developer mode tools (completely isolated from main codebase)", "Performance profiling"). They are synced between the developer machines through Dropbox, not git, so the shipped tree carries no simulator, no TCP listener and no monkey-patching; <code>main.py</code> imports them lazily and only under <code>--profile</code>. The consequence is that a fresh clone cannot run <code>--profile</code> or dev mode &mdash; see <a href="troubleshooting.html#dev-tooling">Troubleshooting</a>.</p>
+
+        <h3>Why screenshots are grabbed from inside Qt</h3>
+        <p>The first screenshot tool used xdotool + mss (X11 input and capture) and broke under Wayland. The current one asks the running app to capture itself: <code>screenshot</code> and <code>record_start</code> run <code>root.grabWindow()</code> on the GUI thread, which works identically on Wayland, X11 and Xvfb, and hides the dev HUD automatically. It also gives deterministic window sizes for README assets (<span class="file-path">dev/docs/SCREENSHOTS.md</span>).</p>
+
+        <h3>Why ruff runs warn-only</h3>
+        <p>The full ruleset (<code>E F W E722 B UP</code>) is enabled in <span class="file-path">pyproject.toml</span>, but the CI step is <code>ruff check . || true</code> because the legacy tree still has noise (long lines, import ordering, unused re-exports &mdash; already ignored as <code>E501 E402 F401 B008 UP007</code>, with more remaining). Only the two rules that indicate a real bug, <code>E722</code> (bare except) and <code>F821</code> (undefined name), are blocking. The workflow step is labelled "warn-only &mdash; full ruleset has legacy noise"; <span class="file-path">CLAUDE.md</span> calls this the Phase 1 cleanup and expects <code>E722</code>/<code>F821</code> to stay blocking while the enforced set widens as the code is cleaned up.</p>
+
+        <h3>Why errors do not surface in the UI</h3>
+        <p>Every backend routes errors to logs and status text, never to pop-ups, because a notification flickering in a driver's peripheral vision is a distraction risk (<span class="file-path">TODO/error-notification-ui.md</span>). The trade-off is that developers must be able to get at the logs after the fact, which is why both backends have rotating files, crash handlers, a UI watchdog and the Diagnostics card (<a href="troubleshooting.html#logs">Troubleshooting</a>).</p>
+
+        <!-- Repo map -->
+        <h2 id="repo-map">Repository Map for Developers</h2>
         <table>
-          <thead><tr><th>Key</th><th>Action</th><th>Type</th></tr></thead>
+          <thead><tr><th>Path</th><th>Tracked?</th><th>What it is</th></tr></thead>
           <tbody>
-            <tr><td><code>W</code> / <code>Up</code></td><td>Accelerate (hold for continuous)</td><td>Continuous</td></tr>
-            <tr><td><code>S</code> / <code>Down</code></td><td>Brake (hold for continuous)</td><td>Continuous</td></tr>
-            <tr><td><code>Space</code></td><td>Quick rev (throttle blip to 70%)</td><td>Instant</td></tr>
-            <tr><td><code>E</code></td><td>Toggle engine on/off</td><td>Toggle</td></tr>
-            <tr><td><code>Q</code></td><td>Downshift</td><td>Instant</td></tr>
-            <tr><td><code>R</code></td><td>Upshift</td><td>Instant</td></tr>
-            <tr><td><code>1</code>-<code>6</code></td><td>Set specific gear</td><td>Instant</td></tr>
-            <tr><td><code>F1</code></td><td>Simulate cold start</td><td>Scenario</td></tr>
-            <tr><td><code>F2</code></td><td>Simulate overheating</td><td>Scenario</td></tr>
-            <tr><td><code>F3</code></td><td>Simulate low fuel</td><td>Scenario</td></tr>
-            <tr><td><code>F4</code></td><td>Reset to normal conditions</td><td>Scenario</td></tr>
-            <tr><td><code>Escape</code></td><td>Quit application</td><td>Instant</td></tr>
+            <tr><td><span class="file-path">src/</span>, <span class="file-path">CMakeLists.txt</span></td><td>yes</td><td>C++ backend: <code>main.cpp</code>, <code>managers/</code>, <code>util/</code> (logger, UI watchdog), <code>phone_mirror/</code>, <code>items/</code>, <code>platform/</code> (Android-only headers)</td></tr>
+            <tr><td><span class="file-path">backend/</span>, <span class="file-path">main.py</span>, <span class="file-path">setup.py</span></td><td>yes</td><td>Python backend and its one-shot installer</td></tr>
+            <tr><td><span class="file-path">frontend/</span></td><td>yes</td><td>Shared QML, <code>gauges/</code>, <code>dashboards/presets/*.json</code>, <code>shaders/</code>, <code>assets/</code> (incl. <code>assets/readme/</code> for the README media)</td></tr>
+            <tr><td><span class="file-path">android/</span></td><td>yes</td><td>Qt Android package source: manifest, <code>build.gradle</code>, <code>res/</code>, Java bridges in <code>src/org/octave/app/</code>, <code>assets/frontend</code> + <code>assets/scripts</code> symlinks, <code>assets/python-packages/</code> (bundle zip gitignored)</td></tr>
+            <tr><td><span class="file-path">phone_server/</span>, <span class="file-path">tools/phone-server/</span></td><td>yes</td><td>Forked scrcpy server source and the committed jar (+ LICENSE / NOTICE)</td></tr>
+            <tr><td><span class="file-path">scripts/</span></td><td>yes</td><td><code>fetch_platform_tools.py</code> (adb), <code>build-android-pylib-bundle.sh</code>, <code>ytmusic_search.py</code> and <code>embed_cover.py</code> (run on Android's bundled Python), <code>octave-desktop.sh</code> (desktop launcher), <code>octave-start.sh</code> / <code>octave-update.sh</code> (legacy Pi launcher / updater with hard-coded paths)</td></tr>
+            <tr><td><span class="file-path">packaging/linux/</span>, <span class="file-path">build_scripts/</span></td><td>yes</td><td>AppImage script (its <code>tools/</code> download dir is gitignored) and the Inno Setup <code>.iss</code></td></tr>
+            <tr><td><span class="file-path">tests/</span></td><td>yes</td><td>Headless smoke suite (<a href="#testing">Testing</a>)</td></tr>
+            <tr><td><span class="file-path">docs/</span></td><td>yes</td><td><code>GAUGE_AUTHORING.md</code> (the gauge/dashboard spec &mdash; read it before building a gauge), <code>PHONE_MIRROR_NATIVE_PLAN.md</code> (protocol byte layouts, hardware results), <code>vehicle/</code> (Jeep TJ photo references, <code>references.md</code>, <code>reference-manifest.json</code>, <code>reference-board.html</code>)</td></tr>
+            <tr><td><span class="file-path">tools/vehicle/</span></td><td>yes</td><td>Blender build scripts for <code>frontend/assets/jeep_tj_2003.glb</code> (<code>build_jeep_tj.py</code>, <code>rig_export.py</code>, check scripts, <code>steering_geometry.json</code>)</td></tr>
+            <tr><td><span class="file-path">TODO/</span></td><td>yes</td><td>Deferred work, one plan per file (<a href="#todo">below</a>)</td></tr>
+            <tr><td><span class="file-path">wiki/</span></td><td>yes</td><td>This wiki; rebuild the search index with <code>python wiki/build_search_index.py</code> after content changes</td></tr>
+            <tr><td><span class="file-path">dev/</span></td><td><strong>no</strong></td><td>Dev runtime, mock OBD, overlay QML, screenshot/story tools, MCP servers, <code>perf/</code>, <code>tests/</code>, <code>docs/</code>, <code>jeep-tj-reference/</code> (164 reference photos)</td></tr>
+            <tr><td><span class="file-path">backend/command_server.py</span>, <span class="file-path">backend/perf_monitor.py</span>, <span class="file-path">backend/perf_patches.py</span>, <span class="file-path">.mcp.json</span></td><td><strong>no</strong></td><td>Profiling / remote-control infrastructure used by <code>--profile</code></td></tr>
+            <tr><td><span class="file-path">tools/platform-tools/</span>, <span class="file-path">tools/scrcpy*/</span></td><td>no</td><td>Fetched adb; leftover scrcpy binaries from the removed external-scrcpy path</td></tr>
           </tbody>
         </table>
 
-        <h3>Dev Mode Architecture</h3>
+        <!-- Dev Mode -->
+        <h2 id="dev-mode">Dev Mode Setup &amp; Usage</h2>
+        <p>Dev mode provides a simulated vehicle and keyboard controls for testing without an OBD-II adapter. Python only; the C++ binary has no simulator.</p>
+
+        <pre><code><span class="cmt"># Launch dev mode (from the project root, venv active)</span>
+<span class="fn">python</span> -m dev.main_dev
+
+<span class="cmt"># Dev mode + perf monitor + command server, with the simulator exposed as sim_* actions</span>
+<span class="fn">python</span> -m dev.main_dev --profile</code></pre>
+
+        <p><span class="file-path">dev/main_dev.py</span> imports <code>main</code> (production start-up runs at import), then <span class="file-path">dev/dev_runtime.py</span> does the rest:</p>
+        <ol class="steps">
+          <li><code>install_dev_runtime(main)</code> &mdash; <code>main.install_obd_manager(MockOBDManager(...))</code> replaces the real <code>OBDManager</code> (every QML binding to <code>obdManager</code> now sees the mock), and registers <code>devKeyboardController</code>, <code>devToolsManager</code> and <code>devMode = true</code> as context properties.</li>
+          <li><code>main.load_main_qml()</code> &mdash; the <em>production</em> <code>Main.qml</code> loads; there is no separate dev entry QML.</li>
+          <li><code>install_dev_overlay(main, root_window)</code> &mdash; instantiates <span class="file-path">dev/DevOverlay.qml</span> with the engine's root context, pins it to C++ ownership and gives it both a QObject parent and a visual parent (the window's <code>contentItem</code>) so the JS garbage collector cannot reclaim it, then hands the window to <code>DevToolsManager</code> for <code>grabWindow()</code>.</li>
+          <li>With <code>--profile</code>: <code>main.setup_perf_profiling()</code> then <code>install_sim_commands(main)</code>, which registers the <code>sim_*</code> actions on the command server through a <code>SimBridge</code> that marshals them onto the GUI thread (the mock's timers live there).</li>
+        </ol>
+
+        <h3>Keyboard controls</h3>
+        <p>Handled by <code>KeyboardController.handle_key(key, pressed)</code>, fed from <code>Keys.onPressed</code> / <code>onReleased</code> in the overlay:</p>
+        <table>
+          <thead><tr><th>Key</th><th>Action</th><th>Type</th></tr></thead>
+          <tbody>
+            <tr><td><code>W</code> / <code>Up</code></td><td>Throttle 100 % while held</td><td>Continuous</td></tr>
+            <tr><td><code>S</code> / <code>Down</code></td><td>Brake 100 % while held</td><td>Continuous</td></tr>
+            <tr><td><code>Space</code></td><td>Quick rev (throttle blip to 70 %)</td><td>Instant</td></tr>
+            <tr><td><code>E</code></td><td>Toggle engine on/off</td><td>Toggle</td></tr>
+            <tr><td><code>Q</code> / <code>R</code></td><td>Downshift / upshift</td><td>Instant</td></tr>
+            <tr><td><code>1</code>&ndash;<code>6</code></td><td>Set gear</td><td>Instant</td></tr>
+            <tr><td><code>F1</code> / <code>F2</code> / <code>F3</code> / <code>F4</code></td><td>Cold start / overheating / low fuel / reset to normal</td><td>Scenario</td></tr>
+            <tr><td><code>Tab</code></td><td>Toggle the dev overlay HUD</td><td>Toggle</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Dev mode architecture</h3>
         <div class="diagram">
 <pre>
-  main_dev.py
+  python -m dev.main_dev
     |
-    +-- MockOBDManager     (replaces OBDManager)
-    +-- KeyboardController (handles key events from QML)
-    +-- DevToolsManager    (screenshots, diagnostics)
-    +-- DevMain.qml        (wraps Main.qml with keyboard handler)
-    |
-    +-- All regular managers (MediaManager, SpotifyManager, etc.)
+    +-- import main            (production start-up: app, engine, all managers, all connections)
+    +-- install_dev_runtime    MockOBDManager replaces OBDManager
+    |                          devKeyboardController / devToolsManager / devMode context props
+    +-- main.load_main_qml()   production frontend/Main.qml
+    +-- install_dev_overlay    dev/DevOverlay.qml reparented into the root window
+    |                            (key handler, simulation HUD, DevToolsPanel.qml)
+    +-- [--profile] setup_perf_profiling + install_sim_commands
+                               perfMonitor context prop, command server :9876, sim_* actions
 </pre>
         </div>
 
         <!-- Mock OBD -->
         <h2 id="mock-obd">Mock OBD Manager</h2>
         <p><span class="file-path">dev/mock_obd_manager.py</span></p>
-        <p>The MockOBDManager provides the same Signal interface as the real OBDManager but generates simulated data based on keyboard input and physics modeling.</p>
+        <p><code>MockOBDManager(settings_manager)</code> provides the same signal and slot surface as the real <code>OBDManager</code> but generates data from keyboard / command input and a simple physics model. It also simulates the connection sequence (<code>_begin_connect_sequence</code> / <code>_advance_connect</code>) so the OBD settings card's progress UI can be exercised, and can inject dropouts.</p>
 
-        <h3>Signal Compatibility</h3>
-        <p>Emits all 87+ OBD signals identical to the real manager: <code>rpmChanged(float)</code>, <code>speedMPHChanged(float)</code>, <code>coolantTempChanged(float)</code>, etc. Plus all connection status signals. QML code works identically with both.</p>
-
-        <h3>Simulation Features</h3>
+        <h3>Simulation features</h3>
         <ul>
-          <li><strong>Physics-based RPM/speed:</strong> Throttle input drives RPM, which drives speed through gear ratios</li>
-          <li><strong>Gear simulation:</strong> 6 gears with realistic ratios, manual shifting via Q/R</li>
-          <li><strong>Temperature modeling:</strong> Coolant and oil temp rise with engine load, cool at idle</li>
-          <li><strong>Fuel consumption:</strong> Fuel level decreases proportional to load</li>
-          <li><strong>Scenario presets:</strong> Cold start (low coolant, rich fuel), overheating (high temps, low voltage), low fuel</li>
+          <li>Throttle drives RPM, which drives speed through six gear ratios; manual shifting via Q/R or gear 1&ndash;6</li>
+          <li>Coolant and oil temperatures rise with load and cool at idle; fuel level falls with load</li>
+          <li>Emitters run at several rates (<code>_emit_fast</code> ... <code>_emit_slowest</code>) so the parameter cards see realistic update cadences; values are quantised like a real adapter (<code>_q_rpm</code>, <code>_q_int</code>, <code>_q_v01</code>)</li>
+          <li>Scenario presets: cold start, overheating (high temps, low voltage), low fuel, reset to normal</li>
+          <li>Dropout simulation: <code>set_simulate_dropouts(bool)</code>, <code>set_failure_rate(float)</code>, <code>trigger_dropout_now()</code>; per-PID drops via <code>_drop()</code></li>
+          <li>The QML-callable getters of the real manager (<code>coolantTemp()</code>, <code>voltage()</code>, <code>speedMPH()</code>, ...) are mirrored as slots</li>
         </ul>
 
-        <h3>Key Methods</h3>
-        <pre><code><span class="fn">set_throttle</span>(percent)    <span class="cmt"># 0-100 throttle input</span>
-<span class="fn">set_brake</span>(percent)       <span class="cmt"># 0-100 brake input</span>
-<span class="fn">rev_engine</span>(percent)      <span class="cmt"># Quick throttle blip</span>
-<span class="fn">toggle_engine</span>()          <span class="cmt"># Engine on/off</span>
-<span class="fn">upshift</span>() / <span class="fn">downshift</span>()  <span class="cmt"># Gear changes</span>
-<span class="fn">simulate_cold_start</span>()   <span class="cmt"># Preset scenario</span>
-<span class="fn">simulate_overheating</span>()  <span class="cmt"># Preset scenario</span>
-<span class="fn">simulate_low_fuel</span>()     <span class="cmt"># Preset scenario</span>
-<span class="fn">reset_to_normal</span>()       <span class="cmt"># Reset all values</span></code></pre>
+        <h3>Control methods</h3>
+        <pre><code><span class="fn">set_throttle</span>(percent) / <span class="fn">set_brake</span>(percent)   <span class="cmt"># 0-100</span>
+<span class="fn">rev_engine</span>(intensity=50)                       <span class="cmt"># throttle blip</span>
+<span class="fn">toggle_engine</span>()
+<span class="fn">set_gear</span>(n) / <span class="fn">upshift</span>() / <span class="fn">downshift</span>()
+<span class="fn">set_speed</span>(mph) / <span class="fn">set_rpm</span>(rpm)                  <span class="cmt"># direct overrides</span>
+<span class="fn">set_realistic_mode</span>(enabled)
+<span class="fn">simulate_cold_start</span>() / <span class="fn">simulate_overheating</span>() / <span class="fn">simulate_low_fuel</span>() / <span class="fn">reset_to_normal</span>()</code></pre>
+        <p>Over the command server (dev mode with <code>--profile</code>) the same controls are <code>sim_throttle</code> / <code>sim_brake</code> (<code>value</code>), <code>sim_rev</code> (<code>intensity</code>), <code>sim_engine</code> (<code>on</code>), <code>sim_gear</code>, <code>sim_upshift</code>, <code>sim_downshift</code>, <code>sim_speed</code> (<code>mph</code>), <code>sim_rpm</code>, <code>sim_scenario</code> (<code>name</code>: <code>cold</code> | <code>hot</code> | <code>low_fuel</code> | <code>normal</code>), <code>sim_realistic</code> (<code>enabled</code>) and <code>sim_status</code>.</p>
 
         <!-- Dev Tools -->
         <h2 id="dev-tools">DevToolsPanel</h2>
-        <p><span class="file-path">dev/dev_tools_manager.py</span> &amp; <span class="file-path">dev/DevToolsPanel.qml</span></p>
-        <p>The DevToolsManager provides dev-only tools exposed to QML as <code>devToolsManager</code>.</p>
-
-        <h3>Screenshot Capture</h3>
-        <p>Uses Qt's <code>grabWindow()</code> for cross-platform screenshots (works on Wayland and X11):</p>
-        <ul>
-          <li>Saves to <span class="file-path">dev/screenshots/output/</span></li>
-          <li>Maintains a manifest.json tracking all screenshots with metadata</li>
-          <li>Emits <code>hideOverlaysRequested</code>/<code>showOverlaysRequested</code> signals to hide dev UI for clean captures</li>
-        </ul>
-
-        <h3>Signals</h3>
+        <p><span class="file-path">dev/dev_tools_manager.py</span> &amp; <span class="file-path">dev/DevToolsPanel.qml</span> (embedded in <span class="file-path">dev/DevOverlay.qml</span>)</p>
+        <p><code>DevToolsManager</code> is exposed to QML as <code>devToolsManager</code>. It captures the window with Qt's <code>grabWindow()</code> (Wayland- and X11-safe), saves PNGs to <span class="file-path">dev/screenshots/output/</span>, keeps a <code>manifest.json</code> of every capture with its description, and can generate a <code>GALLERY.md</code>.</p>
         <table>
-          <thead><tr><th>Signal</th><th>Parameters</th><th>Description</th></tr></thead>
+          <thead><tr><th>Member</th><th>Kind</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>screenshotStatusChanged</code></td><td>str</td><td>"idle", "capturing", "done", "error"</td></tr>
-            <tr><td><code>screenshotOutputChanged</code></td><td>str</td><td>Accumulated terminal-style output</td></tr>
-            <tr><td><code>screenshotCountChanged</code></td><td>int</td><td>Total screenshots in manifest</td></tr>
-            <tr><td><code>isCapturingChanged</code></td><td>bool</td><td>Whether a capture is in progress</td></tr>
-            <tr><td><code>hideOverlaysRequested</code></td><td>(none)</td><td>QML should hide dev overlays</td></tr>
-            <tr><td><code>showOverlaysRequested</code></td><td>(none)</td><td>QML should show dev overlays again</td></tr>
+            <tr><td><code>captureWindow(name, description)</code></td><td>Slot</td><td>Grab the window to <code>&lt;name&gt;.png</code> and record it in the manifest</td></tr>
+            <tr><td><code>beginCapture()</code> / <code>endCapture()</code></td><td>Slot</td><td>Emit <code>hideOverlaysRequested</code> / <code>showOverlaysRequested</code> so the HUD is out of the picture</td></tr>
+            <tr><td><code>clearScreenshots()</code>, <code>generateGallery()</code>, <code>openOutputFolder()</code></td><td>Slot</td><td>Housekeeping</td></tr>
+            <tr><td><code>screenshotStatus</code> (str), <code>screenshotOutput</code> (str), <code>screenshotCount</code> (int), <code>isCapturing</code> (bool)</td><td>Property + <code>...Changed</code> signal</td><td>"idle" / "capturing" / "done" / "error", the accumulated terminal-style output, manifest count, in-progress flag</td></tr>
           </tbody>
         </table>
-
-        <!-- MCP Server -->
-        <h2 id="mcp-server">MCP Server for Remote Control</h2>
-        <p><span class="file-path">dev/mcp_server.py</span></p>
-        <p>The MCP (Model Context Protocol) server lets an AI agent (like Claude Code) remote-control OCTAVE for automated testing.</p>
-
-        <h3>Setup</h3>
-        <pre><code><span class="cmt"># Install MCP dependency</span>
-pip install mcp
-
-<span class="cmt"># Start OCTAVE with command server enabled</span>
-<span class="fn">python</span> main.py --profile
-
-<span class="cmt"># In another terminal, start the MCP server</span>
-<span class="fn">python</span> dev/mcp_server.py</code></pre>
-
-        <h3>How It Works</h3>
-        <div class="diagram">
-<pre>
-  AI Agent (Claude Code)
-       |
-       v
-  MCP Server (dev/mcp_server.py)
-       |  TCP socket (127.0.0.1:9876)
-       v
-  Command Server (backend/command_server.py)
-       |  QMetaObject.invokeMethod
-       v
-  OCTAVE Managers (media, settings, OBD, etc.)
-</pre>
-        </div>
-
-        <h3>Available MCP Tools</h3>
-        <table>
-          <thead><tr><th>Tool</th><th>Arguments</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>ping()</code></td><td>-</td><td>Check if OCTAVE is running</td></tr>
-            <tr><td><code>navigate(page)</code></td><td>page name</td><td>Navigate to a specific page (home, media_room, obd, settings, etc.)</td></tr>
-            <tr><td><code>go_back()</code></td><td>-</td><td>Navigate back in the stack</td></tr>
-            <tr><td><code>go_home()</code></td><td>-</td><td>Return to home screen</td></tr>
-            <tr><td><code>list_actions()</code></td><td>-</td><td>List all available actions</td></tr>
-          </tbody>
-        </table>
-        <p>Plus media controls (next_track, toggle_play, etc.), Spotify controls, OBD controls, and settings manipulation tools. See <span class="file-path">dev/mcp_server.py</span> for the full list.</p>
-
-        <div class="info-box info">
-          <strong>Benchmark Tool:</strong> <span class="file-path">dev/mcp_benchmark.py</span> provides automated benchmark sequences that the MCP server can run for repeatable performance testing.
-        </div>
-
-        <!-- Profiling -->
-        <h2 id="profiling">Performance Profiling</h2>
-        <p><span class="file-path">backend/perf_monitor.py</span></p>
-
-        <h3>Launch with Profiling</h3>
-        <pre><code><span class="fn">python</span> main.py --profile</code></pre>
-
-        <h3>What Gets Measured</h3>
-        <table>
-          <thead><tr><th>Metric</th><th>Method</th><th>Threshold</th></tr></thead>
-          <tbody>
-            <tr><td>Event-loop latency</td><td>QTimer(0) probe measures time between iterations</td><td>&lt;5ms green, &lt;16ms yellow, &gt;16ms red</td></tr>
-            <tr><td>GIL contention</td><td>Background thread measures jitter vs expected 10ms sleep</td><td>Higher = more GIL lock contention</td></tr>
-            <tr><td>Per-slot timing</td><td><code>@timed_slot</code> decorator on critical QObject methods</td><td>&gt;2ms p95 reported as "slow"</td></tr>
-            <tr><td>CPU usage</td><td>psutil.Process.cpu_percent()</td><td>-</td></tr>
-            <tr><td>Memory (RSS)</td><td>psutil.Process.memory_info().rss</td><td>-</td></tr>
-            <tr><td>Thread count</td><td>threading.active_count()</td><td>-</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Output Formats</h3>
-        <ul>
-          <li><strong>Terminal:</strong> Color-coded live metrics every 1 second (overwrites line). Slow slots reported every 5 seconds.</li>
-          <li><strong>CSV file:</strong> Machine-readable metrics log for spreadsheet analysis. Columns: timestamp, loop_avg_ms, loop_p50_ms, loop_p95_ms, loop_p99_ms, loop_max_ms, gil_avg_ms, gil_p99_ms, cpu_pct, mem_mb, threads.</li>
-          <li><strong>Perf log file:</strong> Human-readable plain text log with health tags (OK/WARN/STUTTER) and slow slot details.</li>
-          <li><strong>QML HUD:</strong> <code>summaryText</code> property for on-screen display</li>
-        </ul>
-
-        <h3>Manual Instrumentation</h3>
-        <pre><code><span class="cmt"># Decorator for QObject slots</span>
-<span class="kw">from</span> backend.perf_monitor <span class="kw">import</span> timed_slot
-
-<span class="kw">@timed_slot</span>
-<span class="kw">def</span> <span class="fn">my_expensive_slot</span>(self):
-    ...
-
-<span class="cmt"># Inline timing for arbitrary code sections</span>
-t = PerfMonitor.begin()
-... <span class="cmt"># code to measure</span>
-PerfMonitor.end(t, <span class="str">"my_section"</span>)</code></pre>
 
         <!-- Command Server -->
         <h2 id="command-server">Command Server (TCP)</h2>
-        <p><span class="file-path">backend/command_server.py</span></p>
-        <p>A TCP server on <code>127.0.0.1:9876</code> that accepts JSON commands for remote control. Only active when <code>--profile</code> is passed.</p>
+        <p><span class="file-path">backend/command_server.py</span> (gitignored)</p>
+        <p>A <code>socketserver</code>-based TCP server on <code>127.0.0.1:9876</code> (<code>DEFAULT_PORT</code>) that accepts newline-delimited JSON commands. It is created by <code>main.setup_perf_profiling()</code>, i.e. only when <code>python main.py --profile</code> (or <code>dev.main_dev --profile</code>) is used, receives the media / spotify / obd / settings managers, the perf monitor and the QML engine, and is stopped on <code>aboutToQuit</code>. <code>main.cmd_server</code> exposes it as a module attribute so dev tooling can <code>register(action, handler)</code> extra actions (commit <code>b1db87c</code>).</p>
 
         <h3>Protocol</h3>
         <pre><code><span class="cmt">// Client sends JSON + newline:</span>
@@ -241,161 +189,220 @@ PerfMonitor.end(t, <span class="str">"my_section"</span>)</code></pre>
 <span class="cmt">// Error response:</span>
 {<span class="str">"ok"</span>: <span class="kw">false</span>, <span class="str">"error"</span>: <span class="str">"Unknown action: foo"</span>}</code></pre>
 
-        <h3>Action Categories</h3>
-        <p>The command server dispatches 40+ actions organized by category:</p>
+        <h3>Actions (the <code>list_actions</code> response)</h3>
         <ul>
-          <li><strong>App:</strong> <code>ping</code>, <code>list_actions</code></li>
+          <li><strong>App:</strong> <code>ping</code> (returns <code>"pong"</code>), <code>list_actions</code></li>
           <li><strong>Performance:</strong> <code>get_metrics</code>, <code>get_detailed_report</code>, <code>get_slot_timings</code></li>
-          <li><strong>Navigation:</strong> <code>navigate</code>, <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code>, <code>list_pages</code></li>
+          <li><strong>Navigation:</strong> <code>navigate</code> (page id), <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code>, <code>list_pages</code>, <code>open_settings</code> (section id), <code>list_settings_sections</code></li>
+          <li><strong>Screenshots / recording:</strong> <code>screenshot</code> (path), <code>set_dev_chrome</code> (show/hide the HUD), <code>set_window_size</code>, <code>record_start</code> (<code>path</code>, <code>fps</code>), <code>record_stop</code>, <code>record_status</code></li>
+          <li><strong>UI driving:</strong> <code>find_item</code> (geometry + effective visibility of any QML item by <code>objectName</code>, popups included), <code>list_items</code> (prefix match), <code>get_prop</code> / <code>set_prop</code>, <code>call</code> (invoke a no-arg method such as <code>forceActiveFocus</code>), <code>click</code> (x, y) and <code>drag</code> (x1, y1, x2, y2, steps) &mdash; synthetic mouse events delivered through the window's normal event path, so MouseArea drag thresholds and Flickable behave as they would for a finger. Closed popups leave the item tree, and pages pushed via <code>navigate</code> are not destroyed on <code>go_home</code>, so tests should prefer the visible instance (the server does) and scroll targets into view before clicking.</li>
           <li><strong>Media:</strong> <code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code>, <code>get_media_status</code>, <code>get_track_info</code>, <code>skip_tracks</code></li>
           <li><strong>Spotify:</strong> <code>spotify_toggle_play</code>, <code>spotify_next</code>, <code>spotify_previous</code>, <code>spotify_status</code></li>
           <li><strong>OBD:</strong> <code>obd_status</code>, <code>obd_reconnect</code></li>
-          <li><strong>Settings:</strong> <code>get_all_settings</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>, and <code>list_*</code> variants</li>
-          <li><strong>UI driving:</strong> <code>find_item</code> (geometry + effective visibility of any QML item by <code>objectName</code>, popups included), <code>list_items</code> (prefix match), <code>get_prop</code> / <code>set_prop</code>, <code>call</code> (invoke a no-arg method such as <code>forceActiveFocus</code>), <code>click</code> (x, y) and <code>drag</code> (x1, y1, x2, y2, steps) — synthetic mouse events delivered through the window's normal event path, so MouseArea drag thresholds and Flickable behave as they would for a finger. Closed popups leave the item tree, and pages pushed via <code>navigate</code> are not destroyed on <code>go_home</code>, so tests should prefer the visible instance (the server does) and scroll targets into view before clicking.</li>
+          <li><strong>Settings:</strong> <code>get_settings</code>, <code>get_all_settings</code>, <code>set_media_source</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>, and the <code>list_toggle_settings</code> / <code>list_numeric_settings</code> / <code>list_string_settings</code> discovery calls</li>
+          <li><strong>Extensions:</strong> whatever was <code>register()</code>ed &mdash; in dev mode the <code>sim_*</code> simulator actions</li>
         </ul>
-        <p>Example consumer: <span class="file-path">dev/tests/drive_dashboard_editor.py</span> drives the whole dashboard editor (place, bind, drag, resize, options, save, edit, duplicate, delete, draft rescue, hot reload) under Xvfb and exits non-zero on any failed assertion.</p>
 
-        <h3>Navigation Bridge</h3>
-        <p>The <code>NavigationBridge</code> class provides thread-safe QML navigation. Commands from the TCP handler thread are dispatched to the GUI thread via <code>QMetaObject.invokeMethod</code> with <code>QueuedConnection</code>.</p>
+        <h3>Navigation bridge and valid pages</h3>
+        <p><code>NavigationBridge</code> lives on the GUI thread; the TCP handler thread reaches it with <code>QMetaObject.invokeMethod</code> (queued for navigation, <code>BlockingQueuedConnection</code> for captures and UI driving so the result can be read back). Because QML <code>function foo(arg)</code> parameters are untyped and register as <code>QVariant</code>, the bridge calls <code>root.navigateTo(page)</code> directly instead of <code>Q_ARG(str, ...)</code>, which would match nothing and fail silently. Page ids map to QML files:</p>
+        <pre><code>home, media_room, media_player, obd, obd_home, obd_diagnostics, sensor_home,
+settings, phone_mirror, android_auto, sensors, car, download, clock
+<span class="cmt"># settings sections for open_settings:</span>
+displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings, about</code></pre>
+        <p>Example consumer: <span class="file-path">dev/tests/drive_dashboard_editor.py</span> drives the whole dashboard editor (place, bind, drag, resize, options, save, edit, duplicate, delete, draft rescue, hot reload; ~40 assertions, ~3 min) under Xvfb (<code>xvfb</code> | <code>visible</code> | <code>offscreen</code> modes), writes screenshots to <code>dev/screenshots/output/editor/</code>, cleans up its <code>test-dash*.json</code> dashboards, and exits 1 on any failed assertion. The other scripts in <span class="file-path">dev/tests/</span> are stand-alone hardware checks: <code>test_dtc.py</code> / <code>clear_dtc.py</code> (python-obd against <code>/dev/rfcomm0</code>) and <code>test_album_art_colors.py</code>.</p>
 
-        <h3>Valid Navigation Pages</h3>
-        <pre><code>home, media_room, media_player, obd, obd_diagnostics,
-settings, phone_mirror, android_auto, sensors, car, download, clock</code></pre>
+        <!-- MCP -->
+        <h2 id="mcp-server">MCP Servers</h2>
+        <p><span class="file-path">dev/mcp_server.py</span> (<code>octave-perf</code>) and <span class="file-path">dev/mcp_benchmark.py</span> (<code>octave-benchmark</code>) are <code>FastMCP</code> servers that let a coding agent such as Claude Code drive OCTAVE through the command server. Both need <code>pip install mcp</code> in the venv and the app running with <code>--profile</code>; every tool just sends a JSON action to <code>127.0.0.1:9876</code>.</p>
+
+        <h3>Setup</h3>
+        <pre><code><span class="fn">pip</span> install mcp                       <span class="cmt"># in the venv; not in requirements.txt</span>
+<span class="fn">python</span> main.py --profile              <span class="cmt"># or: python -m dev.main_dev --profile for the simulator</span>
+<span class="fn">python</span> dev/mcp_server.py              <span class="cmt"># stdio MCP server; normally launched by the agent from .mcp.json</span></code></pre>
+        <p><span class="file-path">.mcp.json</span> (gitignored) declares <code>octave-perf</code> and <code>octave-benchmark</code> with the absolute path of this machine's <code>venv/bin/python</code>, plus <code>-rob</code> and <code>-zion</code> variants pointing at the other machines' checkouts &mdash; the tree is Dropbox-synced, so each machine has entries for the others that fail to spawn locally. That is expected; use the unsuffixed pair.</p>
+
+        <div class="diagram">
+<pre>
+  AI agent (Claude Code)
+       |  stdio (MCP)
+       v
+  dev/mcp_server.py  /  dev/mcp_benchmark.py
+       |  TCP 127.0.0.1:9876, JSON + newline
+       v
+  backend/command_server.py  (thread)  --QMetaObject.invokeMethod--&gt;  NavigationBridge / managers (GUI thread)
+       |
+       v
+  PerfMonitor (metrics, slot timings)   MockOBDManager (sim_*)   root.grabWindow() (screenshot / record)
+</pre>
+        </div>
+
+        <h3><code>octave-perf</code> tools</h3>
+        <table>
+          <thead><tr><th>Group</th><th>Tools</th></tr></thead>
+          <tbody>
+            <tr><td>App / navigation</td><td><code>ping</code>, <code>list_actions</code>, <code>navigate(page)</code>, <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code>, <code>list_pages</code></td></tr>
+            <tr><td>Settings</td><td><code>get_all_settings</code>, <code>list_toggle_settings</code>, <code>list_numeric_settings</code>, <code>list_string_settings</code>, <code>toggle_setting(key)</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code></td></tr>
+            <tr><td>Media / Spotify / OBD</td><td><code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code>, <code>skip_tracks(count)</code>, <code>get_media_status</code>, <code>get_track_info</code>, <code>spotify_status</code>, <code>obd_status</code></td></tr>
+            <tr><td>Performance</td><td><code>get_metrics</code>, <code>get_detailed_report</code>, <code>get_slot_timings</code>, <code>read_perf_log</code>, <code>read_perf_csv</code></td></tr>
+            <tr><td>Scripted tests</td><td><code>run_track_skip_test(count, delay_seconds)</code>, <code>run_idle_baseline(duration_seconds)</code>, <code>run_rapid_skip_test(count)</code>, <code>run_navigation_test(settle_seconds)</code>, <code>run_settings_toggle_test</code>, <code>run_slider_sweep_test(key, steps)</code>, <code>run_settings_optimizer</code>, <code>apply_performance_profile</code>, <code>run_spam_test(total_skips, burst_size, burst_delay)</code>, <code>run_chaos_test(duration_seconds)</code>, <code>run_full_test_suite</code></td></tr>
+            <tr><td>Media production</td><td><code>record_start(path, fps)</code>, <code>record_stop</code>, <code>record_status</code>, <code>sim(action, value, name, on)</code>, <code>run_story(names, visible, media_folder)</code>, <code>optimize_assets(inputs, out_dir, width)</code></td></tr>
+          </tbody>
+        </table>
+        <p><span class="file-path">dev/docs/perf_test_plan.md</span> is the agent-facing script for a full regression pass (idle baseline, navigation, single / 10 / 20-track skips, settings toggles, slider sweeps) with pass criteria per section; <span class="file-path">dev/docs/perf_optimize_prompt.md</span> and <span class="file-path">dev/docs/PERFORMANCE_AUDIT.md</span> record earlier optimisation rounds.</p>
+
+        <h3><code>octave-benchmark</code> tools</h3>
+        <p><code>benchmark_page(page, settle_seconds, samples)</code>, <code>benchmark_setting(key)</code> (sweeps a setting across its range), <code>benchmark_transition(transition, skip_count, ...)</code>, <code>benchmark_media_ops</code>, <code>get_bottlenecks(min_p95_ms)</code>, <code>run_benchmark_suite(include_stress)</code> (five phases: baseline, settings matrix, stress, combined, bottlenecks), <code>save_baseline</code> and <code>compare_to_baseline</code>, which diffs a run against a saved JSON baseline and flags regressions.</p>
+
+        <h3>Stand-alone perf scripts</h3>
+        <p><span class="file-path">dev/perf/run_perf_loop.py</span> talks to the socket directly and loops the full test gamut, comparing iterations; <span class="file-path">dev/perf/brutalize.py</span> maxes every visual setting and hammers the app until it degrades; <span class="file-path">dev/perf/profile_performance.py</span> is a system-level sampler for the Orange Pi (<code>--duration</code>, <code>--interval</code>). Perf CSV/log output lands in <span class="file-path">dev/perf/logs/</span>.</p>
+
+        <!-- Profiling -->
+        <h2 id="profiling">Performance Profiling</h2>
+        <p><span class="file-path">backend/perf_monitor.py</span> (gitignored) &mdash; Python backend only.</p>
+        <pre><code><span class="fn">python</span> main.py --profile</code></pre>
+        <p><code>setup_perf_profiling()</code> in <code>main.py</code> creates <code>PerfMonitor(csv_path, log_path)</code> writing <code>dev/perf/logs/perf_&lt;YYYYMMDD_HHMMSS&gt;.csv</code> and <code>.log</code>, registers it as the <code>perfMonitor</code> context property, starts the command server, then applies <span class="file-path">backend/perf_patches.py</span> (method instrumentation for the media, audio-analyzer, Spotify, OBD, IMU, gesture, ESP32 and settings managers) if the file is present &mdash; otherwise it logs a warning and continues.</p>
+
+        <h3>What is measured</h3>
+        <table>
+          <thead><tr><th>Metric</th><th>Method</th><th>Threshold</th></tr></thead>
+          <tbody>
+            <tr><td>Event-loop latency</td><td>A zero-interval <code>QTimer</code> probe; samples kept in a 300-entry ring buffer with p50/p95/p99/max</td><td>avg &lt; 5 ms green, &lt; 16 ms yellow (WARN), otherwise red (STUTTER)</td></tr>
+            <tr><td>GIL contention</td><td><code>_GILProbe</code> thread sleeps 10 ms and records how late it wakes</td><td>Higher jitter = a Python thread holding the GIL</td></tr>
+            <tr><td>Per-slot timing</td><td><code>@timed_slot</code> decorator and <code>PerfMonitor.begin()</code> / <code>end(label)</code></td><td>Slots with p95 &gt; 2 ms are reported as slow (detailed report lists p95 &gt; 1 ms)</td></tr>
+            <tr><td>CPU / RSS / threads</td><td><code>psutil</code> (optional import) and <code>threading.active_count()</code></td><td>&mdash;</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Outputs</h3>
+        <ul>
+          <li><strong>Terminal:</strong> a colour-coded <code>[PERF]</code> line refreshed every second; slow slots every 5 s.</li>
+          <li><strong>CSV:</strong> columns <code>timestamp, loop_avg_ms, loop_p50_ms, loop_p95_ms, loop_p99_ms, loop_max_ms, gil_avg_ms, gil_p99_ms, cpu_pct, mem_mb, threads</code>.</li>
+          <li><strong>Perf log:</strong> plain text with OK / WARN / STUTTER tags and slow-slot details.</li>
+          <li><strong>QML HUD:</strong> <code>perfMonitor.summaryText</code>.</li>
+          <li><strong>Command server:</strong> <code>get_metrics</code>, <code>get_detailed_report</code>, <code>get_slot_timings</code>.</li>
+        </ul>
+
+        <h3>Manual instrumentation</h3>
+        <pre><code><span class="kw">from</span> backend.perf_monitor <span class="kw">import</span> timed_slot, PerfMonitor
+
+<span class="kw">@timed_slot</span>
+<span class="kw">def</span> <span class="fn">my_expensive_slot</span>(self):
+    ...
+
+t = PerfMonitor.begin()
+... <span class="cmt"># code to measure</span>
+PerfMonitor.end(t, <span class="str">"my_section"</span>)</code></pre>
+        <p>The C++ build has no profiling flag; use the UI watchdog log lines and a native profiler.</p>
 
         <!-- Screenshots -->
-        <h2 id="screenshots">Screenshot Tool</h2>
-        <p><span class="file-path">dev/screenshot_tool.py</span></p>
-        <pre><code><span class="cmt"># Run a pre-defined scenario</span>
-<span class="fn">python</span> dev/screenshot_tool.py run main_pages
+        <h2 id="screenshots">Screenshots &amp; Video Stories</h2>
+        <p><span class="file-path">dev/screenshots/</span> (<code>auto.py</code>, <code>stories.py</code>, <code>optimize.py</code>; <code>core.py</code> / <code>scenarios.py</code> / <code>cli.py</code> are the deprecated xdotool tool kept for reference). Full documentation: <span class="file-path">dev/docs/SCREENSHOTS.md</span>.</p>
 
-<span class="cmt"># Take a single screenshot</span>
-<span class="fn">python</span> dev/screenshot_tool.py shot --name my_screenshot
+        <h3>Menu sweep</h3>
+        <pre><code><span class="fn">python</span> -m dev.screenshots                <span class="cmt"># launch dev mode headless (Xvfb if installed), shoot every page, quit</span>
+<span class="fn">python</span> dev/screenshot_tool.py            <span class="cmt"># identical wrapper</span>
+<span class="fn">python</span> -m dev.screenshots --visible      <span class="cmt"># real window (full GPU; a tiling WM may resize it)</span>
+<span class="fn">python</span> -m dev.screenshots --no-launch    <span class="cmt"># sweep an app you started yourself with --profile</span>
+<span class="fn">python</span> -m dev.screenshots --prod         <span class="cmt"># production backend, no mock OBD</span></code></pre>
+        <p>Options: <code>--size WxH</code> (1280x720), <code>--settle SECS</code> (1.2), <code>--dev-chrome</code>, <code>--keep</code>, <code>--port N</code> (9876), <code>--out DIR</code>, and the mode flags <code>--xvfb</code> / <code>--offscreen</code>. Mode is auto-picked <code>--visible</code> &gt; <code>--offscreen</code> &gt; Xvfb (if <code>xvfb-run</code> exists) &gt; offscreen. Output: <code>dev/screenshots/output/*.png</code>, <code>manifest.json</code>, <code>GALLERY.md</code> for all 11 top-level pages and 6 settings sections. The <code>offscreen</code> platform has no GL, so the <code>ColorOverlay</code> icons and <code>MultiEffect</code> album art render blank there &mdash; Xvfb (<code>xorg-server-xvfb</code>, llvmpipe) is the faithful headless path.</p>
 
-<span class="cmt"># Interactive mode</span>
-<span class="fn">python</span> dev/screenshot_tool.py interactive
-
-<span class="cmt"># List existing screenshots</span>
-<span class="fn">python</span> dev/screenshot_tool.py list</code></pre>
-
-        <p>For agentic/programmatic use:</p>
-        <pre><code><span class="kw">from</span> dev.screenshots.core <span class="kw">import</span> OctaveWindow, ScreenCapture
-
-win = OctaveWindow.find()
-cap = ScreenCapture(win)
-
-<span class="cmt"># Navigate and capture</span>
-win.click_percent(<span class="num">0.51</span>, <span class="num">0.96</span>)   <span class="cmt"># Click media button</span>
-cap.capture(<span class="str">"media_view"</span>, <span class="str">"Media player view"</span>)</code></pre>
+        <h3>Video stories (README / demo clips)</h3>
+        <pre><code><span class="fn">python</span> -m dev.screenshots.stories --list
+<span class="fn">python</span> -m dev.screenshots.stories                          <span class="cmt"># all stories</span>
+<span class="fn">python</span> -m dev.screenshots.stories drive media --visible    <span class="cmt"># Wayland is fine</span>
+<span class="fn">python</span> -m dev.screenshots.stories tour --media-folder ~/Music --size 1280x720 --fps 30
+<span class="fn">python</span> -m dev.screenshots.stories --no-launch drive        <span class="cmt"># app already up with --profile</span></code></pre>
+        <p>Launches the dev app with its <strong>own settings profile</strong> (<code>dev/screenshots/profile/</code>, so demos never touch your real config), drives it over the command server (navigation, media, <code>sim_*</code>) and records with <code>record_start</code> / <code>record_stop</code>: a GUI-thread <code>QTimer</code> calls <code>root.grabWindow()</code> per frame and pipes raw RGBA into <code>ffmpeg -c:v libx264 -crf 18</code> (keep fps &le; 30; 1280x720 at 30 fps drops no frames on a desktop GPU). Each story yields <code>&lt;story&gt;.mp4</code>, an 800 px animated <code>.webp</code> at 15 fps (the README asset), a palettegen <code>.gif</code> and the requested stills under <code>dev/screenshots/output/stories/</code>, plus <code>manifest.json</code>. Stories are step lists in <code>stories.py</code> (<code>("nav", page)</code>, <code>("settings", section)</code>, <code>("wait", s)</code>, <code>("still", name)</code>, <code>("rec", name)</code> / <code>("stop",)</code>, <code>("media", action)</code>, <code>("sim", action, args)</code>) registered in <code>STORIES</code>: <code>tour</code>, <code>drive</code>, <code>media</code>, <code>settings</code>.</p>
+        <p><code>python -m dev.screenshots.optimize &lt;png|mp4&gt; --width N --out frontend/assets/readme</code> rescales (lanczos) and recompresses with ffmpeg, then <code>pngquant</code> if installed. Keep animated assets under ~3 MB. The same operations are the <code>run_story</code>, <code>record_*</code>, <code>sim</code> and <code>optimize_assets</code> MCP tools.</p>
 
         <!-- Adding Features -->
-        <h3>Video stories (README / demo clips)</h3>
-        <p>
-          <code>python -m dev.screenshots.stories [tour|drive|media|settings] --visible</code> launches the dev app with
-          its own settings profile, drives it over the command server (navigation, media, the OBD simulator's
-          <code>sim_*</code> actions) and records the window with the command server's <code>record_start</code> /
-          <code>record_stop</code> (a GUI-thread <code>grabWindow()</code> per frame piped into ffmpeg, so it works on Wayland,
-          X11 and Xvfb). Each story yields an MP4, an 800&nbsp;px animated WebP and a GIF plus stills under
-          <code>dev/screenshots/output/stories/</code>; <code>python -m dev.screenshots.optimize</code> rescales and
-          recompresses assets for <code>frontend/assets/readme/</code>. The same operations are MCP tools
-          (<code>run_story</code>, <code>record_start</code>, <code>sim</code>, <code>optimize_assets</code>). Details in
-          <code>dev/docs/SCREENSHOTS.md</code>.
-        </p>
-        <h2 id="adding-features">How to Add New Features</h2>
-        <p>OCTAVE follows a consistent pattern for every feature. Here is a step-by-step guide:</p>
-
+        <h2 id="adding-features">How to Add New Features (Parity Workflow)</h2>
+        <p>Every feature lands in <strong>both</strong> backends in the same change set for desktop functionality; mobile-only code lives behind <code>#ifdef Q_OS_ANDROID</code> / <code>Q_OS_IOS</code> in C++ and needs no Python mirror. The sequence from <span class="file-path">CLAUDE.md</span>:</p>
         <ol class="steps">
-          <li>
-            <strong>Create a Manager class</strong> in <span class="file-path">backend/</span>:<br>
-            Inherit from <code>QObject</code>. Define Signals for state changes, Properties for QML binding, and Slots for QML-callable methods. Use <code>get_logger(__name__)</code> for logging.
-          </li>
-          <li>
-            <strong>Add settings</strong> if needed:<br>
-            Add defaults to <code>_default_settings</code> in <span class="file-path">backend/settings_manager.py</span>. Add a Property + Signal + save_xxx Slot. Optionally register in <code>SETTINGS_REGISTRY</code> for Quick Panel support.
-          </li>
-          <li>
-            <strong>Register in main.py:</strong><br>
-            Instantiate the manager, call <code>engine.rootContext().setContextProperty("myManager", manager)</code>. Wire up any cross-manager signal connections.
-          </li>
-          <li>
-            <strong>Create QML view</strong> in <span class="file-path">frontend/</span>:<br>
-            Access the manager directly: <code>myManager.someSlot()</code>, bind to properties. Add navigation in BottomBar.qml or the appropriate menu.
-          </li>
-          <li>
-            <strong>Add settings UI</strong> if needed:<br>
-            Create a settings section in <span class="file-path">frontend/settings/</span> and register it in the settings menu visibility system.
-          </li>
-          <li>
-            <strong>Add dev mode support:</strong><br>
-            If the feature uses hardware, create a mock manager. Register it in <span class="file-path">dev/main_dev.py</span>. (The Python backend is desktop-only; mobile/Android support lives in the C++ backend behind <code>#ifdef Q_OS_ANDROID</code>, not in Python.)
-          </li>
-          <li>
-            <strong>Add to command server</strong> (optional):<br>
-            Add actions in <span class="file-path">backend/command_server.py</span> dispatch method. Add MCP tools in <span class="file-path">dev/mcp_server.py</span>.
-          </li>
-          <li>
-            <strong>Test manually:</strong><br>
-            Run in dev mode (<code>python -m dev.main_dev</code>) and production mode (<code>python main.py</code>). Test on target platform if using hardware.
-          </li>
+          <li><strong>Pick the leading backend</strong> &mdash; usually C++ for performance-sensitive work, Python for quick iteration &mdash; and implement it there.</li>
+          <li><strong>C++ manager:</strong> add <code>src/managers/foo.h</code> / <code>foo.cpp</code> (a <code>QObject</code> with <code>Q_PROPERTY</code>, <code>Q_INVOKABLE</code>, signals; log through a <code>QLoggingCategory</code>), list both files in <span class="file-path">CMakeLists.txt</span>'s <code>qt_add_executable</code>, instantiate in <span class="file-path">src/main.cpp</span> and <code>ctx-&gt;setContextProperty("fooManager", &amp;fooManager)</code>.</li>
+          <li><strong>Python manager:</strong> add <code>backend/foo.py</code> with the same class name, mirroring every property / invokable / slot / signal as PySide6 <code>Property</code> / <code>Slot</code> / <code>Signal</code> with the same names and types; <code>get_logger(__name__)</code> for logging; instantiate in <span class="file-path">main.py</span> and register under the <strong>same</strong> context-property name. Use <code>get_app_data_dir()</code> for storage (matches <code>SettingsManager::getAppDataDir()</code>) so JSON files are shared on disk.</li>
+          <li><strong>Settings:</strong> add the key with its default to <em>both</em> <code>SettingsManager</code>s in the same commit (C++ defaults table + <code>Q_PROPERTY</code> + <code>save_xxx</code>; Python <code>_default_settings</code> + <code>Property</code> + <code>Signal</code> + <code>save_xxx</code> slot), and to the settings registry if it should appear in the Quick Panel.</li>
+          <li><strong>QML:</strong> build the view in <span class="file-path">frontend/</span>; every new <code>fooManager.bar()</code> binding must resolve on both backends before it ships (grep the QML for the symbol and check both). Settings pages go under <span class="file-path">frontend/settings/</span>. Gauges and dashboards follow <span class="file-path">docs/GAUGE_AUTHORING.md</span>.</li>
+          <li><strong>Dev mode / tooling:</strong> if the feature depends on hardware, add a mock in <span class="file-path">dev/</span> and register it in <code>dev_runtime.py</code>; add command-server actions and MCP tools if an agent should be able to drive it.</li>
+          <li><strong>Verify both:</strong> <code>cmake --build build -j</code>, <code>QT_QPA_PLATFORM=offscreen pytest tests/</code> (or at least <code>python -c "import main"</code>), then run each backend against the QML.</li>
+          <li><strong>Wiki:</strong> update the manager page and <a href="signals-slots-reference.html">Signals &amp; Slots Reference</a>, the <a href="settings-reference.html">Settings Reference</a> for new keys, and rebuild the search index. Stale docs are treated as worse than missing docs.</li>
+          <li><strong>If parity genuinely cannot land now</strong> (e.g. a C++-only library), gate the QML with <code>typeof fooManager !== "undefined"</code>, write a <span class="file-path">TODO/</span> file for the missing half and say so in the PR.</li>
         </ol>
 
         <!-- Testing -->
         <h2 id="testing">Testing &amp; Linting</h2>
         <div class="info-box">
-          <strong>Minimal automation:</strong> OCTAVE ships with a headless smoke test suite under <span class="file-path">tests/</span> and a ruff linter configured in <span class="file-path">pyproject.toml</span>. Both run in CI on every push and PR to <code>main</code>. Most testing is still manual — the smoke suite only catches import-time crashes and basic manager instantiation.
+          <div class="info-box-title">Minimal automation, by choice</div>
+          OCTAVE ships a headless smoke suite under <span class="file-path">tests/</span> and a ruff configuration in <span class="file-path">pyproject.toml</span>; both run in CI on every push and PR to <code>main</code>. The suite catches import-time crashes, a broken start-up path and drift in a few load-bearing invariants; behaviour is still tested manually and on hardware. The menu of tests we would add next, ordered by value, is <span class="file-path">TODO/future-tests.md</span>.
         </div>
 
         <h3>Linter (ruff)</h3>
-        <p>Ruff is configured in <span class="file-path">pyproject.toml</span> under <code>[tool.ruff]</code> with a conservative rule set: pycodestyle (<code>E</code>, <code>W</code>), pyflakes (<code>F</code>), bare-except detection (<code>E722</code>), bugbear (<code>B</code>), and pyupgrade (<code>UP</code>). Initial ignores cover long lines (<code>E501</code>), out-of-order imports (<code>E402</code>), and unused imports (<code>F401</code>) since the existing codebase has known patterns for each.</p>
-        <pre><code><span class="cmt"># Run ruff locally</span>
-<span class="fn">source</span> venv/bin/activate
-<span class="fn">ruff</span> check .
+        <p><code>[tool.ruff]</code>: line length 120, target <code>py310</code>, excludes <code>venv dev dist build build-android tools wiki</code>. <code>[tool.ruff.lint]</code> selects <code>E</code>, <code>F</code>, <code>W</code>, <code>E722</code>, <code>B</code> (bugbear, incl. <code>B904</code> raise-from) and <code>UP</code> (pyupgrade); ignores <code>E501</code> (long lines), <code>E402</code> (imports after the <code>sys.path</code> twiddling in <code>main.py</code>), <code>F401</code> (re-exports / conditional imports), <code>B008</code> (function call in default arg, a common Qt pattern) and <code>UP007</code>; per-file <code>E402</code> ignores for <code>main.py</code> and <code>tests/*</code>.</p>
+        <pre><code><span class="fn">source</span> venv/bin/activate
+<span class="fn">ruff</span> check .                        <span class="cmt"># full ruleset (advisory)</span>
+<span class="fn">ruff</span> check . --select E722,F821     <span class="cmt"># the two rules CI enforces</span></code></pre>
+        <p>CI pins <code>ruff==0.15.10</code>; a newer local ruff may report rules the pinned one does not.</p>
 
-<span class="cmt"># Check only critical rules (bare except + undefined names)</span>
-<span class="fn">ruff</span> check . --select E722,F821</code></pre>
-        <div class="info-box">
-          <strong>Critical rules are enforced in CI:</strong> <code>E722</code> (bare except) and <code>F821</code> (undefined name) are hard failures in the <code>lint</code> job. The full ruff ruleset runs in warn-only mode (<code>|| true</code>) — existing long lines and style noise are tracked but don't block merges. Broaden enforcement as the codebase cleans up.
-        </div>
-
-        <h3>Smoke Test Suite</h3>
-        <p>The <span class="file-path">tests/</span> directory contains a minimal pytest suite that proves:</p>
+        <h3>Smoke test suite (21 tests)</h3>
         <ul>
-          <li>Every backend manager module imports cleanly (no syntax errors, no import-time crashes)</li>
-          <li><code>QApplication</code> can initialize headlessly under <code>QT_QPA_PLATFORM=offscreen</code></li>
-          <li>Hardware-free managers (<code>SettingsManager</code>, <code>AudioAnalyzer</code>, <code>NetworkManager</code>) can be constructed without touching the developer's real config directory</li>
+          <li><span class="file-path">tests/conftest.py</span> sets <code>QT_QPA_PLATFORM=offscreen</code> and <code>QT_QUICK_CONTROLS_STYLE=Basic</code> as defaults, puts the repo root on <code>sys.path</code> and provides a session-scoped <code>qapp</code>.</li>
+          <li><span class="file-path">tests/test_smoke.py</span>: 16 parametrised import tests (one per backend module, including <code>backend.phone_mirror</code>, <code>backend.android_auto</code>, <code>backend.dashboard_manager</code>); <code>QApplication</code> initialises headlessly; the quadratic volume curve is pinned (<code>to_linear(50) == 0.25</code>, clamping); <code>SettingsManager</code>, <code>AudioAnalyzer</code> and <code>NetworkManager</code> construct with <code>HOME</code> / <code>XDG_CONFIG_HOME</code> / <code>APPDATA</code> redirected to a temp dir; <code>DashboardManager</code> discovers the built-in presets in <code>frontend/dashboards/presets/</code> (so a preset added on the C++ side without its JSON breaks the test) and round-trips duplicate &rarr; save &rarr; delete with the built-in protected.</li>
+          <li><span class="file-path">tests/test_boot.py</span>: launches <code>python main.py</code> offscreen with <code>OCTAVE_SMOKE_BOOT=1</code> and asserts it is still alive after 12 s with no <code>Traceback</code> in its output &mdash; added because "a removed no-op slot once broke boot while every unit-level check passed".</li>
         </ul>
-        <p>Hardware-bound managers (OBD, ESP32, BerryIMU, Gesture, PhoneMirror, AndroidAuto) are imported but not instantiated — instantiation would probe for hardware and is not safe on headless runners. <code>MediaManager</code> is also excluded because <code>QAudioOutput</code> hangs without a real audio backend.</p>
-        <pre><code><span class="cmt"># Run smoke tests locally</span>
-<span class="fn">source</span> venv/bin/activate
-<span class="ev">QT_QPA_PLATFORM</span>=offscreen <span class="fn">pytest</span> tests/ -v</code></pre>
+        <p>Hardware-bound managers (OBD, ESP32, BerryIMU, Gesture, PhoneMirror, AndroidAuto) are imported but never instantiated; <code>MediaManager</code> is excluded because <code>QAudioOutput</code> hangs without an audio backend. There are no C++ unit tests; the C++ tree is validated by compiling it and by <code>qmllint</code> over the shared QML.</p>
+        <pre><code><span class="fn">source</span> venv/bin/activate
+<span class="kw">QT_QPA_PLATFORM</span>=offscreen <span class="fn">pytest</span> tests/ -v</code></pre>
 
-        <h3>Continuous Integration</h3>
-        <p>The <span class="file-path">.github/workflows/build.yml</span> workflow has three always-on jobs and a tag-gated release matrix:</p>
-        <ul>
-          <li><code>lint</code> — runs ruff on Ubuntu 22.04 (Python 3.11). Triggered on every push/PR to <code>main</code>.</li>
-          <li><code>test</code> — runs the headless pytest smoke suite on Ubuntu 22.04. Triggered on every push/PR to <code>main</code>.</li>
-          <li><code>cpp-compile-check</code> — configures and builds the C++ tree with Qt 6.7.3 on Ubuntu 22.04, then runs <code>qmllint</code> over <span class="file-path">frontend/</span> and fails on any QML error. Triggered on every push/PR to <code>main</code>, so a C++ or QML break cannot sit on <code>main</code> until the next release tag.</li>
-          <li><code>cpp-build-windows</code> / <code>cpp-build-macos</code> / <code>cpp-build-linux</code> / <code>cpp-build-android</code> — CMake + Qt 6 release builds (<code>.exe</code> zip, <code>.dmg</code>, AppImage, <code>.apk</code>). Gated on <code>lint</code> + <code>test</code> passing, and only run on version tags (<code>v*</code>) or manual <code>workflow_dispatch</code>.</li>
-          <li><code>release</code> — publishes every artifact to a single GitHub Release when the trigger is a version tag.</li>
-        </ul>
-
-        <h3>Manual Testing Workflow</h3>
+        <h3>Manual testing workflow</h3>
         <ol class="steps">
-          <li><strong>Dev mode testing:</strong> Use <code>python -m dev.main_dev</code> for rapid iteration with simulated OBD data and keyboard controls</li>
-          <li><strong>Profile mode:</strong> Use <code>python main.py --profile</code> to verify no performance regressions (watch event-loop latency, GIL jitter)</li>
-          <li><strong>MCP automation:</strong> Use the MCP server for repeatable test sequences (navigate pages, change settings, verify state)</li>
-          <li><strong>Cross-platform:</strong> Test on Windows, macOS, and Linux. Use <code>python main.py --debug</code> for verbose logging when debugging platform-specific issues.</li>
-          <li><strong>Hardware testing:</strong> Test with physical OBD adapter, ESP32 volume knob, BerryIMU, and gesture sensor when making changes to those subsystems</li>
-          <li><strong>Build testing:</strong> Build the C++ tree (<code>cmake --build build -j</code>) and run the headless smoke suite (<code>QT_QPA_PLATFORM=offscreen pytest tests/</code>) before tagging; CI then builds every platform on a <code>v*</code> tag</li>
+          <li><strong>Dev mode:</strong> <code>python -m dev.main_dev</code> for rapid iteration with the simulator and keyboard controls; <code>--profile</code> to script it.</li>
+          <li><strong>Profile mode:</strong> <code>python main.py --profile</code> and watch loop latency / GIL jitter; run <span class="file-path">dev/docs/perf_test_plan.md</span> through the MCP server before and after a change that touches a hot path.</li>
+          <li><strong>UI-driving scripts:</strong> <span class="file-path">dev/tests/drive_dashboard_editor.py</span> for the editor; write new ones against the <code>find_item</code> / <code>click</code> / <code>drag</code> actions.</li>
+          <li><strong>Both backends:</strong> run the C++ binary (<code>./build/octave</code>) and the Python backend against the same QML; <code>--debug</code> on either for verbose logs.</li>
+          <li><strong>Hardware:</strong> the Orange Pi 5 Plus head unit in the Jeep is the reference for OBD, IMU, gesture, ESP32 and phone-mirror changes (the aarch64 AppImage exists for it); the Galaxy Tab S6 / S22 Ultra are the Android targets named in <span class="file-path">TODO/android-cpp-port.md</span>.</li>
+          <li><strong>Before tagging:</strong> <code>cmake --build build -j</code> and <code>QT_QPA_PLATFORM=offscreen pytest tests/</code>; CI then builds every platform on a <code>v*</code> tag.</li>
         </ol>
 
-        <h3>Debug Mode</h3>
-        <pre><code><span class="fn">python</span> main.py --debug</code></pre>
-        <p>Enables DEBUG level logging, creates <code>octave-debug.log</code> (10MB, 2 backups) with full stack traces and verbose output from all modules.</p>
+        <!-- CI -->
+        <h2 id="ci">Continuous Integration</h2>
+        <p><span class="file-path">.github/workflows/build.yml</span> has four always-on jobs and a tag-gated release matrix (full detail on the <a href="building.html#ci-cd">Building</a> page):</p>
+        <ul>
+          <li><code>lint</code> &mdash; ruff 0.15.10 on Ubuntu 22.04 / Python 3.11: full ruleset advisory, <code>E722</code> + <code>F821</code> blocking.</li>
+          <li><code>test</code> &mdash; the 21-test headless suite with <code>requirements.txt</code> installed.</li>
+          <li><code>cpp-compile-check</code> &mdash; Debug CMake/Ninja build of the C++ tree against Qt 6.7.3, then <code>qmllint</code> over <span class="file-path">frontend/</span> failing only on <code>critical</code> entries, so a C++ or QML break cannot sit on <code>main</code> until the next tag.</li>
+          <li><code>phone-server</code> &mdash; rebuilds the phone-server jar from source (JDK 21) and checks the committed jar carries the same class and version string; hash mismatch is a warning.</li>
+          <li><code>cpp-build-windows</code> / <code>cpp-build-macos</code> / <code>cpp-build-linux</code> / <code>cpp-build-linux-arm64</code> / <code>cpp-build-android</code> &mdash; Release builds and installers, only on <code>v*</code> tags or manual dispatch, each gated on <code>lint</code> + <code>test</code>.</li>
+          <li><code>release</code> &mdash; attaches the five installers to a single GitHub Release on a version tag.</li>
+        </ul>
+
+        <!-- TODO -->
+        <h2 id="todo">Deferred Work: the TODO Folder</h2>
+        <p><span class="file-path">TODO/</span> holds one markdown file per intentionally deferred plan, written so a future session can pick it up cold: a <code>Status</code> line, a <code>Last updated</code> date, why it is parked, file paths and line numbers, prerequisites, a recommended order, and "delete this file when done". Bug reports and wishlists do not belong there. Current contents:</p>
+        <table>
+          <thead><tr><th>File</th><th>Status</th><th>Summary</th></tr></thead>
+          <tbody>
+            <tr><td><code>android-cpp-port.md</code></td><td>active</td><td>C++ Android port: phases 0&ndash;3 done (OBD-over-BLE, YT Music search/download shipped on sideload); remaining Phase 4 sideload polish and Play Store prerequisites. Targets: Galaxy Tab S6, S22 Ultra; Spotify excluded from Android.</td></tr>
+            <tr><td><code>android-openssl-bundling.md</code></td><td>deferred</td><td>Bundle OpenSSL so Qt on Android has a working TLS backend (logcat spams a missing <code>libcrypto.so</code>).</td></tr>
+            <tr><td><code>android-signing-keystore.md</code></td><td>deferred</td><td>Persist one signing keystore as a GitHub Secret instead of generating a fresh one per release, so APK updates install and Play Store becomes possible.</td></tr>
+            <tr><td><code>carlinkit-dongle-port.md</code></td><td>deferred</td><td>CarPlay + wireless Android Auto through a Carlinkit dongle, replacing the DHU screen-scrape path; needs $60 hardware, no work started.</td></tr>
+            <tr><td><code>ci-multiplatform-builds.md</code></td><td>parked</td><td>The build matrix exists; what is left is cutting v0.9.0, a nightly prerelease, an optional workflow split, and deferred targets (iOS, Flatpak, app-store variants).</td></tr>
+            <tr><td><code>dashboards-roadmap.md</code></td><td>phases 1&ndash;3 complete</td><td>JSON dashboards + <code>DashboardManager</code> + in-app editor all landed and verified on desktop 2026-09-08; only an on-device Android pass remains before the file is deleted.</td></tr>
+            <tr><td><code>dp-helper-consolidation.md</code></td><td>deferred</td><td>59 QML files each carry a private <code>dp()</code> / <code>dpMin()</code> copy working around a Qt Android singleton-function bug; consolidation is blocked on an Android verification.</td></tr>
+            <tr><td><code>error-notification-ui.md</code></td><td>deferred</td><td>An in-app error notification layer, deliberately not built because of driver-distraction concerns; records the plan if that decision changes.</td></tr>
+            <tr><td><code>future-tests.md</code></td><td>menu</td><td>Tests worth adding, ordered by value: ELM327 protocol unit tests from recorded fixtures first, then settings round-trips and more.</td></tr>
+            <tr><td><code>god-object-splits.md</code></td><td>deferred</td><td>Split the three &gt;2000-line Python managers (<code>settings_manager.py</code>, <code>media_manager.py</code>, <code>obd_manager.py</code>) &mdash; only after <code>future-tests.md</code> provides a safety net.</td></tr>
+            <tr><td><code>octave-companion-app.md</code></td><td>deferred</td><td>A phone-side companion app for wireless adb pairing and phone data (notifications, calls, now-playing); wait until the mirror has road time.</td></tr>
+            <tr><td><code>wiki-purge-removed-python-android-docs.md</code></td><td>deferred</td><td>Remove the remaining wiki sections that document the deleted Python-on-Android files (<code>utilities.html</code>, <code>architecture.html</code>) and rewrite <code>obd-manager.html</code>'s Android section against the C++ BLE code.</td></tr>
+            <tr><td><code>yt-cookies-file-picker.md</code></td><td>deferred (post-v0.9)</td><td>In-app picker / status / test / clear UI for the YouTube cookies file, replacing the fixed <code>Downloads/youtube_cookies.txt</code> path.</td></tr>
+          </tbody>
+        </table>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
           <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
+          <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
           <a href="building.html" class="related-link">Building &amp; Distribution</a>
           <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
         </div>

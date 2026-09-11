@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Bottom Bar</div>
           <h1 class="page-title">Bottom Bar</h1>
-          <p class="page-subtitle">The persistent navigation and media control bar: layout, volume system, media transport, and dual-orientation support</p>
+          <p class="page-subtitle">The persistent navigation and media control bar: layout, dual orientation, volume routing through VolumeController, navigation button behaviour, the clock, and the update-available indicator</p>
         </div>
 
         <nav class="toc">
@@ -24,51 +24,59 @@
             <li><a href="#orientation">Dual Orientation</a></li>
             <li><a href="#media-controls">Media Transport Controls</a></li>
             <li><a href="#volume">Volume Slider and Mute</a></li>
+            <li><a href="#mute-states">Mute Icon States</a></li>
             <li><a href="#navigation">Navigation Buttons</a></li>
+            <li><a href="#update-notification">Update Notification</a></li>
+            <li><a href="#clock">Clock Section</a></li>
             <li><a href="#shuffle">Shuffle State</a></li>
+            <li><a href="#external-volume">External Volume Sources</a></li>
             <li><a href="#managers">Manager Communication</a></li>
+            <li><a href="#visibility-popup">Toggle View Popup (dormant)</a></li>
+            <li><a href="#sizing">Sizing Tokens</a></li>
+            <li><a href="#animation-pattern">Button Animation Pattern</a></li>
+            <li><a href="#svg-pattern">SVG Icon Pattern</a></li>
+            <li><a href="#design-decisions">Design Decisions</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
 
-        <p><span class="file-path">frontend/BottomBar.qml</span> is the persistent control surface that appears at all times. It is a <code>Rectangle</code> with a themed gradient background, containing three logical sections arranged via a <code>Loader</code> that switches between horizontal and vertical layout components.</p>
+        <p><span class="file-path">frontend/BottomBar.qml</span> (about 3100 lines) is the persistent control surface that is visible on every page. It is a <code>Rectangle</code> with a themed gradient background whose contents are provided by a <code>Loader</code> that swaps between two complete layout components: a horizontal bar docked at the bottom of the window and a vertical bar docked at the left. Both layouts carry the same three logical sections &mdash; media transport controls, navigation buttons, and the clock.</p>
 
-        <div class="diagram">
-<pre>
- Horizontal Layout (default):
- +-------------------+------------------+---------------------+
- | SECTION 1         | SECTION 2        | SECTION 3           |
- | Media Controls    | Navigation       | (Android Auto /     |
- | [&lt;&lt;] [&gt;||] [&gt;&gt;]  | [Home] [OBD]     |  Phone Mirror)      |
- | [Shuffle] [Mute]  | [Media] [Gear]   |                     |
- | [Vol: 50%]        | [AA] [PM]        |                     |
- +-------------------+------------------+---------------------+
+        <p>It is instantiated once in <span class="file-path">frontend/Main.qml</span> with <code>z: 0</code>; the page <code>StackView</code> sits above it (<code>z: 1</code>) and anchors to <code>bottomBar.top</code> (horizontal) or <code>bottomBar.right</code> (vertical). A 12&nbsp;px gradient <code>Rectangle</code> (<code>bottomBarShadow</code> / <code>sideBarShadow</code>) in Main.qml draws a soft shadow along the bar's inner edge.</p>
 
- Vertical Layout (side mode):
- +--------+
- | [Home] |
- | [OBD]  |
- | [Media]|
- | [Gear] |
- | [AA]   |
- | [PM]   |
- |--------|
- | [&lt;&lt;]   |
- | [&gt;||]  |
- | [&gt;&gt;]   |
- | [Shuf] |
- | [Mute] |
- | [Vol]  |
- +--------+
-</pre>
-        </div>
+        <pre class="diagram">
+ Horizontal layout (bottomBarOrientation = "bottom"):
+ +-----------------------------+-----------------------------------+--------------+
+ | SECTION 1  (40 % width)     | SECTION 2  (fills remaining)      | SECTION 3    |
+ | Media controls              | Navigation                        | (20 % width) |
+ | [&lt;&lt;] [&gt;||] [&gt;&gt;] [Shuf] [Mute] 50%  [Home] [OBD] [Media] [Sensor] [Gear] [AA] [PM] |  12:34   |
+ +-----------------------------+-----------------------------------+--------------+
+
+ Vertical layout (bottomBarOrientation = "side", 10 % of window width):
+ +----------+
+ | [&lt;&lt;][&gt;||][&gt;&gt;]   SECTION 1 (top 40 % height)
+ |  [Shuf]  |
+ |  [Mute]  |
+ |   50%    |
+ |----------|
+ |  [Home]  |   SECTION 2 (fills remaining)
+ |  [OBD]   |
+ |  [Media] |
+ | [Sensor] |
+ |  [Gear]  |
+ |  [AA]    |
+ |  [PM]    |
+ |----------|
+ |  12:34   |   SECTION 3 (bottom 10 % height)
+ +----------+
+        </pre>
 
         <!-- Layout -->
         <h2 id="layout">Layout and Structure</h2>
 
-        <p>The BottomBar is a <code>Rectangle</code> with a gradient background that adapts direction based on orientation:</p>
+        <p>The root is a <code>Rectangle</code> whose gradient direction follows the orientation. Note the unusual stop positions &mdash; the "start" colour is placed at <span class="num">1.5</span>, beyond the end of the gradient, so the visible bar is dominated by <code>bottomBarGradientEnd</code> (the theme's <code>baseAlt</code>) fading toward <code>base</code>:</p>
 
         <pre><code><span class="cls">Rectangle</span> {
     <span class="prop">id</span>: bottomBar
@@ -80,33 +88,47 @@
 
     <span class="kw">required property</span> <span class="cls">StackView</span> stackView
     <span class="kw">required property</span> <span class="cls">Window</span> mainWindow
+
+    <span class="cls">Loader</span> {
+        <span class="prop">anchors.fill</span>: parent
+        <span class="prop">sourceComponent</span>: isVertical ? verticalLayoutComponent : horizontalLayoutComponent
+    }
 }</code></pre>
 
-        <p>A <code>Loader</code> at the top level switches between two complete layout components:</p>
+        <p>Like every other QML file in the project, the bar defines local <code>dp()</code> / <code>dpMin()</code> wrappers (<code>Math.round(size * (App.Spacing.effectiveScale || 1.0))</code>) instead of calling <code>App.Spacing.dp()</code>. The comment at the top of the file explains why: calling functions on a QML singleton is unreliable on Android, so every file re-implements the two-line helper locally.</p>
 
-        <pre><code><span class="cls">Loader</span> {
-    <span class="prop">anchors.fill</span>: parent
-    <span class="prop">sourceComponent</span>: isVertical
-        ? verticalLayoutComponent : horizontalLayoutComponent
+        <h3>Section 1: Media Controls</h3>
+        <p>In the horizontal layout this <code>Item</code> takes <code>parent.width * 0.4</code> when <code>settingsManager.showBottomBarMediaControls</code> is true. When the user hides the media controls the item stays in the layout but its width is bound to <code>clockSection.width</code>, so the navigation row still sits at the true horizontal centre. The vertical layout uses the same trick with heights (40&nbsp;% shown, 10&nbsp;% hidden).</p>
+
+        <h3>Section 2: Navigation</h3>
+        <p>Uses <code>Layout.fillWidth: true</code> (or <code>fillHeight</code> when vertical) and centres a <code>RowLayout</code> / <code>ColumnLayout</code> of nav buttons. The horizontal row has <code>z: 1</code> so that, with many buttons enabled, its outer buttons (Phone Mirror in particular) still receive clicks when the row is wider than its section. Its spacing is computed by <code>fitSpacing</code>:</p>
+
+        <pre><code><span class="kw">readonly property real</span> preferredSpacing: App.Spacing.bottomBarBetweenButtonMargin * <span class="num">6</span>
+<span class="kw">readonly property real</span> fitSpacing: {
+    <span class="kw">var</span> n = <span class="num">0</span>, w = <span class="num">0</span>
+    <span class="kw">for</span> (<span class="kw">var</span> i = <span class="num">0</span>; i &lt; children.length; ++i) {
+        <span class="kw">var</span> c = children[i]
+        <span class="kw">if</span> (c.visible &amp;&amp; c.implicitWidth &gt; <span class="num">0</span>) { n++; w += c.implicitWidth }
+    }
+    <span class="kw">if</span> (n &lt; <span class="num">2</span>) <span class="kw">return</span> preferredSpacing
+    <span class="kw">var</span> avail = parent.width - w
+    <span class="kw">return</span> Math.<span class="fn">max</span>(<span class="fn">dp</span>(<span class="num">4</span>), Math.<span class="fn">min</span>(preferredSpacing, avail / (n - <span class="num">1</span>)))
 }</code></pre>
 
-        <p>The horizontal layout uses a <code>RowLayout</code> with three sections. The vertical layout uses a <code>ColumnLayout</code>. Both contain the same controls, just arranged differently.</p>
+        <p>The gap between buttons shrinks (down to <code>dp(4)</code>) instead of letting the row overflow under the clock or the media controls.</p>
 
-        <h3>Section 1: Media Controls (Horizontal Mode)</h3>
-        <p>Takes 40% of width when visible, or 10% when hidden (for symmetry). Visibility is controlled by <code>settingsManager.showBottomBarMediaControls</code>.</p>
-
-        <h3>Section 2: Navigation (Center)</h3>
-        <p>Uses <code>Layout.fillWidth: true</code> to fill remaining space, with navigation buttons centered via a <code>RowLayout</code>.</p>
+        <h3>Section 3: Clock</h3>
+        <p>Horizontal: <code>parent.width * 0.2</code> when <code>settingsManager.showClock</code> is true, otherwise <code>0</code> so the navigation row re-centres. Vertical: a fixed 10&nbsp;% of the bar height at the bottom.</p>
 
         <!-- Orientation -->
         <h2 id="orientation">Dual Orientation</h2>
 
-        <p>The <code>isVertical</code> property controls whether the bar appears at the bottom (horizontal) or left side (vertical) of the window:</p>
+        <p>The <code>isVertical</code> property is bound to the persisted setting (Display &rarr; Layout &rarr; "Nav Bar Position", a <code>SettingsSegmentedControl</code> with the options <code>"bottom"</code> and <code>"side"</code>):</p>
 
-        <pre><code><span class="prop">property bool</span> isVertical: settingsManager &&
+        <pre><code><span class="prop">property bool</span> isVertical: settingsManager &amp;&amp;
     settingsManager.bottomBarOrientation === <span class="str">"side"</span></code></pre>
 
-        <p>The <code>updateLayout()</code> function reconfigures anchors when orientation changes:</p>
+        <p><code>updateLayout()</code> re-anchors the bar. Anchors are released (set to <code>undefined</code>) before the new ones are assigned, which avoids a transient state where conflicting anchors are active at the same time:</p>
 
         <pre><code><span class="kw">function</span> <span class="fn">updateLayout</span>() {
     <span class="kw">if</span> (isVertical) {
@@ -122,214 +144,278 @@
         anchors.left = parent.left
         anchors.bottom = parent.bottom
         width = parent.width
-        height = parent.height * App.Spacing.bottomBarHeightPercent
+        height = parent.height * App.Spacing.bottomBarHeightPercent   <span class="cmt">// 0.125</span>
     }
 }</code></pre>
 
-        <div class="info-box tip">
-          <strong>Anchor Release Pattern:</strong> Anchors are released (set to <code>undefined</code>) before new ones are assigned. This prevents binding loops that occur when conflicting anchor constraints are temporarily active.
-        </div>
+        <p>It runs from <code>Component.onCompleted</code>, from <code>onIsVerticalChanged</code>, and from a <code>Connections</code> on <code>settingsManager.bottomBarOrientationChanged</code>. A second <code>Connections</code> on the parent's <code>widthChanged</code> / <code>heightChanged</code> keeps the explicit width/height current after a window resize.</p>
 
-        <p>Parent size changes are also tracked via Connections to ensure correct sizing after window resizes.</p>
+        <p>Main.qml reacts to the same signal: it flips <code>isVerticalLayout</code>, re-asserts the z-order (<code>stackView.z = 1</code>, <code>bottomBar.z = 0</code>) and, if the Settings page is open, restarts <code>navReloadTimer</code> (150&nbsp;ms) which replaces the current <code>SettingsMenu</code> with a fresh instance on the same section so the settings layout re-measures against the new content area.</p>
 
         <!-- Media Transport Controls -->
         <h2 id="media-controls">Media Transport Controls</h2>
 
-        <p>Each media button follows a consistent pattern using <code>Control</code> with an SVG image and <code>ColorOverlay</code>:</p>
+        <p>Section 1 contains, in order: Previous, Play/Pause, Next, Shuffle, Mute and the volume percentage. Each transport button is a <code>Control</code> with a transparent background, an SVG rendered through the hidden-<code>Image</code>-plus-<code>ColorOverlay</code> pattern (see <a href="#svg-pattern">SVG Icon Pattern</a>), and the press animation described under <a href="#animation-pattern">Button Animation Pattern</a>:</p>
 
         <pre><code><span class="cls">Control</span> {
     <span class="prop">id</span>: previousButtonControl
     <span class="prop">implicitWidth</span>: App.Spacing.bottomBarPreviousButtonWidth
     <span class="prop">implicitHeight</span>: App.Spacing.bottomBarPreviousButtonHeight
-
-    <span class="cmt">// Press animation</span>
     <span class="prop">scale</span>: mouseAreaPrev.pressed ? <span class="num">0.8</span> : <span class="num">1.0</span>
     <span class="prop">opacity</span>: mouseAreaPrev.pressed ? <span class="num">0.7</span> : <span class="num">1.0</span>
-
-    <span class="cls">Behavior on</span> scale {
-        <span class="cls">NumberAnimation</span> {
-            <span class="prop">duration</span>: <span class="num">200</span>
-            <span class="prop">easing.type</span>: Easing.OutBack
-            <span class="prop">easing.overshoot</span>: <span class="num">1.1</span>
-        }
-    }
+    <span class="prop">background</span>: <span class="cls">Rectangle</span> { <span class="prop">color</span>: <span class="str">"transparent"</span> }
 
     <span class="prop">contentItem</span>: <span class="cls">Item</span> {
-        <span class="cls">Image</span> {
-            <span class="prop">id</span>: previousButtonImage
-            <span class="prop">source</span>: <span class="str">"./assets/previous_button.svg"</span>
-            <span class="prop">visible</span>: <span class="kw">false</span>  <span class="cmt">// Hidden; used as ColorOverlay source</span>
-        }
-        <span class="cls">ColorOverlay</span> {
-            <span class="prop">source</span>: previousButtonImage
-            <span class="prop">color</span>: App.Style.bottomBarPreviousButton
+        <span class="cls">Image</span> { <span class="prop">id</span>: previousButtonImage; <span class="prop">source</span>: <span class="str">"./assets/previous_button.svg"</span>; <span class="prop">visible</span>: <span class="kw">false</span> }
+        <span class="cls">ColorOverlay</span> { <span class="prop">source</span>: previousButtonImage; <span class="prop">color</span>: App.Style.bottomBarPreviousButton }
+    }
+    <span class="cls">Item</span> {   <span class="cmt">// enlarged hit area</span>
+        <span class="prop">anchors.centerIn</span>: parent
+        <span class="prop">width</span>: parent.width * <span class="num">2.5</span>
+        <span class="prop">height</span>: parent.height * <span class="num">3.0</span>
+        <span class="cls">MouseArea</span> {
+            <span class="prop">id</span>: mouseAreaPrev
+            <span class="prop">anchors.fill</span>: parent
+            <span class="prop">onClicked</span>: useSpotify ? spotifyManager.<span class="fn">previous_track</span>() : mediaManager.<span class="fn">previous_track</span>()
         }
     }
 }</code></pre>
 
         <h3>Enlarged Hit Areas</h3>
-        <p>Every button wraps its <code>MouseArea</code> in an invisible <code>Item</code> that is significantly larger than the visual icon (typically 2.5x width, 3x height). This improves touch accuracy on car touchscreens:</p>
+        <p>Every button wraps its <code>MouseArea</code> in an invisible <code>Item</code> larger than the drawn icon so it is easy to hit on a car touchscreen. The multipliers differ per button:</p>
 
-        <pre><code><span class="cls">Item</span> {
-    <span class="prop">id</span>: previousButtonClickArea
-    <span class="prop">anchors.centerIn</span>: parent
-    <span class="prop">width</span>: parent.width * <span class="num">2.5</span>
-    <span class="prop">height</span>: parent.height * <span class="num">3.0</span>
-
-    <span class="cls">MouseArea</span> {
-        <span class="prop">id</span>: mouseAreaPrev
-        <span class="prop">anchors.fill</span>: parent
-        <span class="prop">onClicked</span>: useSpotify
-            ? spotifyManager.<span class="fn">previous_track</span>()
-            : mediaManager.<span class="fn">previous_track</span>()
-    }
-}</code></pre>
+        <table>
+          <thead><tr><th>Button</th><th>Horizontal hit area</th><th>Vertical hit area</th></tr></thead>
+          <tbody>
+            <tr><td>Previous / Next</td><td>2.5&times; width, 3.0&times; height</td><td>2&times; width, 2.5&times; height</td></tr>
+            <tr><td>Play/Pause</td><td>1.5&times; play width, 2.5&times; play height</td><td>1.5&times;, 2.5&times;</td></tr>
+            <tr><td>Shuffle, Mute</td><td>1.5&times; width, 2.5&times; height</td><td>3&times; width, 1&times; height</td></tr>
+            <tr><td>Volume label</td><td>1.5&times; width, 3.5&times; height</td><td>3&times; width, 2&times; height</td></tr>
+            <tr><td>Navigation buttons</td><td colspan="2">1.5&times; width, 1.5&times; height (the visible bordered rectangle is already large)</td></tr>
+          </tbody>
+        </table>
 
         <h3>Play/Pause Button</h3>
-        <p>The play/pause button dynamically switches its icon based on playback state:</p>
+        <p>The play/pause image picks its source from the active backend's <code>is_playing()</code>. Because that is a method call and not a property, the binding does not re-evaluate on its own; two <code>Connections</code> blocks (one on <code>mediaManager</code>, one on <code>spotifyManager</code>) listen for <code>playStateChanged(playing)</code> and assign the source of both the horizontal and the vertical image explicitly. The <code>mediaManager</code> handler only acts when <code>!useSpotify</code>, the Spotify handler only when <code>useSpotify</code>:</p>
 
         <pre><code><span class="prop">source</span>: {
     <span class="kw">var</span> isPlaying = useSpotify ?
-        (spotifyManager && spotifyManager.<span class="fn">is_playing</span>()) :
-        (mediaManager && mediaManager.<span class="fn">is_playing</span>())
-    <span class="kw">return</span> isPlaying
-        ? <span class="str">"./assets/pause_button.svg"</span>
-        : <span class="str">"./assets/play_button.svg"</span>
+        (spotifyManager &amp;&amp; spotifyManager.<span class="fn">is_playing</span>()) :
+        (mediaManager &amp;&amp; mediaManager.<span class="fn">is_playing</span>())
+    <span class="kw">return</span> isPlaying ? <span class="str">"./assets/pause_button.svg"</span> : <span class="str">"./assets/play_button.svg"</span>
 }</code></pre>
 
         <!-- Volume -->
         <h2 id="volume">Volume Slider and Mute</h2>
 
-        <h3>Volume Display</h3>
-        <p>The volume percentage is shown as a small text label. Clicking it opens a full-width popup with a large slider:</p>
+        <h3>Volume Label and Popup</h3>
+        <p>The bar itself only shows the percentage as bold text (<code>volumeControl.currentValue + "%"</code>, <code>primaryTextColor</code>, size <code>bottomBarVolumeText</code>). Tapping it opens <code>popupSlider</code>, a modal <code>Popup</code> as wide as the window and <code>dp(140)</code> tall, centred in <code>Overlay.overlay</code>, closed by Escape or by pressing outside. Its background is <code>backgroundColor</code> with a 1&nbsp;px <code>accent</code> border. Inside: a <code>dp(32)</code> accent-coloured percentage label and a <code>Slider</code>:</p>
 
-        <pre><code><span class="cls">Popup</span> {
-    <span class="prop">id</span>: popupSlider
-    <span class="prop">width</span>: parent.Window.width
-    <span class="prop">height</span>: App.Spacing.<span class="fn">dp</span>(<span class="num">140</span>)
-    <span class="prop">anchors.centerIn</span>: Overlay.overlay
-    <span class="prop">modal</span>: <span class="kw">true</span>
-    <span class="prop">closePolicy</span>: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        <pre><code><span class="cls">Slider</span> {
+    <span class="prop">id</span>: volumeSlider
+    <span class="prop">width</span>: parent.width * <span class="num">0.95</span>
+    <span class="prop">height</span>: <span class="fn">dp</span>(<span class="num">50</span>)
+    <span class="prop">from</span>: <span class="num">0</span>; <span class="prop">to</span>: <span class="num">100</span>; <span class="prop">stepSize</span>: <span class="num">1</span>
+    <span class="prop">value</span>: volumeControl.currentValue
+
+    <span class="prop">background</span>: <span class="cls">Rectangle</span> {      <span class="cmt">// dp(16) tall track, hoverColor, volumeSliderColor fill</span>
+        ...
+    }
+    <span class="prop">handle</span>: <span class="cls">Rectangle</span> {          <span class="cmt">// dp(40) circle in accent</span>
+        ...
+    }
+
+    <span class="prop">onValueChanged</span>: {
+        volumeControl.currentValue = value
+        <span class="cmt">// Single dispatch to settings + every audio output.</span>
+        volumeController.<span class="fn">applyVolume</span>(Math.<span class="fn">round</span>(value))
+
+        <span class="kw">if</span> (value &gt; <span class="num">0</span> &amp;&amp; muteButton.isMuted) {
+            muteButton.isMuted = <span class="kw">false</span>
+            mediaManager.<span class="fn">toggle_mute</span>()
+        }
+        <span class="fn">updateMuteButtonImage</span>()
+    }
 }</code></pre>
 
-        <h3>Logarithmic Volume Curve</h3>
-        <p>The slider range is 0-100 (linear). The actual audio volume is computed with a squared curve for perceptually even loudness:</p>
+        <h3>Volume Routing: VolumeController</h3>
+        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly (except for a fallback when <code>settingsManager</code> is missing). Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered by both backends. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
 
-        <pre><code><span class="prop">onValueChanged</span>: {
-    volumeControl.currentValue = value
-    <span class="kw">var</span> normalizedValue = value / <span class="num">100</span>
-    <span class="kw">var</span> logVolume = Math.<span class="fn">pow</span>(normalizedValue, <span class="num">2.0</span>)
+        <table>
+          <thead><tr><th>Backend</th><th>Implementation</th><th>What <code>applyVolume(percent)</code> does</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>C++</td>
+              <td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td>
+              <td>Clamps to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code> and to a debounced <code>spotifyManager.set_volume(percent)</code>. The ESP32 manager receives volume through <code>connect_settings_manager()</code> (it reads <code>currentVolume</code> from the settings object).</td>
+            </tr>
+            <tr>
+              <td>Python</td>
+              <td><span class="file-path">backend/volume_utils.py</span></td>
+              <td>Clamps, calls <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>spotify_manager.set_volume(percent)</code> (if connected), <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>.</td>
+            </tr>
+          </tbody>
+        </table>
 
-    <span class="cmt">// Sync to all audio outputs</span>
-    settingsManager.<span class="fn">setCurrentVolume</span>(Math.<span class="fn">round</span>(value))
-    mediaManager.<span class="fn">setVolume</span>(logVolume)
-
-    <span class="kw">if</span> (spotifyManager && spotifyManager.<span class="fn">is_connected</span>())
-        spotifyManager.<span class="fn">set_volume</span>(Math.<span class="fn">round</span>(value))
-
-    <span class="kw">if</span> (phoneMirrorManager)
-        phoneMirrorManager.<span class="fn">setVolume</span>(logVolume)
-}</code></pre>
+        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (both entry points also apply it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>).</p>
 
         <div class="info-box info">
-          <strong>Volume Sync:</strong> Volume changes from the slider are applied to four outputs simultaneously: local media (QMediaPlayer), Spotify API, Phone Mirror (scrcpy), and the settings store (for persistence and ESP32 LED feedback).
+          <div class="info-box-title">One Curve, One Entry Point</div>
+          The docstring in <span class="file-path">backend/volume_utils.py</span> records why this exists: the curve used to be hard-coded in about nine call sites across <code>main.py</code> and QML, so any change had to be made everywhere in lockstep. See the <a href="frontend-overview.html">Frontend Overview</a> and <a href="media-manager.html">Media Manager</a> pages for the consumers.
         </div>
 
         <h3>Touch-Friendly Slider</h3>
-        <p>The popup slider includes 9 circular touch areas evenly distributed along the track. Each one maps touch position back to the slider value, making it much easier to hit on a car touchscreen:</p>
+        <p>Nine <code>dp(80)</code> square <code>MouseArea</code>s are laid along the track at <code>index * (volumeSlider.width / 8)</code>, each mapping its press position back to a slider value. <code>preventStealing: false</code> lets the slider itself still receive the events. This turns a thin 16&nbsp;px track into a band of large targets:</p>
 
         <pre><code><span class="cls">Repeater</span> {
     <span class="prop">model</span>: <span class="num">9</span>
     <span class="cls">MouseArea</span> {
-        <span class="prop">width</span>: App.Spacing.<span class="fn">dp</span>(<span class="num">80</span>)
-        <span class="prop">height</span>: App.Spacing.<span class="fn">dp</span>(<span class="num">80</span>)
+        <span class="prop">x</span>: (index * (volumeSlider.width / <span class="num">8</span>)) - width/<span class="num">2</span> + volumeSlider.x
+        <span class="prop">y</span>: volumeSlider.y + volumeSlider.height/<span class="num">2</span> - height/<span class="num">2</span>
+        <span class="prop">width</span>: <span class="fn">dp</span>(<span class="num">80</span>); <span class="prop">height</span>: <span class="fn">dp</span>(<span class="num">80</span>)
         <span class="prop">onMouseXChanged</span>: {
             <span class="kw">if</span> (pressed) {
                 <span class="kw">var</span> globalX = <span class="fn">mapToItem</span>(volumeSlider, mouseX, mouseY).x
                 <span class="kw">var</span> newPosition = Math.<span class="fn">max</span>(<span class="num">0</span>, Math.<span class="fn">min</span>(<span class="num">1</span>,
-                    (globalX - volumeSlider.leftPadding)
-                    / volumeSlider.availableWidth))
+                    (globalX - volumeSlider.leftPadding) / volumeSlider.availableWidth))
                 volumeSlider.value = newPosition * <span class="num">100</span>
             }
         }
+        <span class="prop">preventStealing</span>: <span class="kw">false</span>
     }
 }</code></pre>
 
         <h3>Mute Button</h3>
-        <p>The mute button toggles mute state via <code>mediaManager.toggle_mute()</code>. Special case: if volume is 0, clicking mute restores to the startup volume instead:</p>
+        <p>Tapping Mute normally calls <code>mediaManager.toggle_mute()</code>. If the volume is already 0 the tap instead restores the persisted startup volume (<code>Math.round(settingsManager.startUpVolume * 100)</code>) by assigning the slider, which routes through <code>applyVolume</code>. Mute state comes back from <code>mediaManager.muteChanged(muted)</code>:</p>
 
         <pre><code><span class="prop">onClicked</span>: {
-    <span class="kw">if</span> (volumeControl.currentValue === <span class="num">0</span> && settingsManager) {
-        <span class="kw">var</span> startupVol = Math.<span class="fn">round</span>(settingsManager.startUpVolume * <span class="num">100</span>)
-        volumeSlider.value = startupVol
+    <span class="kw">if</span> (volumeControl.currentValue === <span class="num">0</span> &amp;&amp; settingsManager) {
+        volumeSlider.value = Math.<span class="fn">round</span>(settingsManager.startUpVolume * <span class="num">100</span>)
     } <span class="kw">else</span> {
         mediaManager.<span class="fn">toggle_mute</span>()
     }
 }</code></pre>
 
-        <p>The mute icon dynamically changes between volume levels (high, medium, low, muted) based on the current volume value.</p>
+        <!-- Mute Icon States -->
+        <h2 id="mute-states">Mute Icon States</h2>
+
+        <p><code>getUpdatedMuteSource()</code> (and its <code>Vertical</code> twin) picks the SVG from <span class="file-path">frontend/assets/</span>. Muted wins over any level; the level thresholds are strict <code>&lt;</code> comparisons:</p>
+
+        <table>
+          <thead><tr><th>Condition</th><th>Icon file</th></tr></thead>
+          <tbody>
+            <tr><td><code>mediaManager.is_muted()</code>, local <code>isMuted</code>, or volume 0</td><td><code>mute_on.svg</code></td></tr>
+            <tr><td>volume &lt; 33</td><td><code>mute_off_low.svg</code></td></tr>
+            <tr><td>volume &lt; 66</td><td><code>mute_off_med.svg</code></td></tr>
+            <tr><td>66 and above</td><td><code>mute_off_high.svg</code></td></tr>
+          </tbody>
+        </table>
+
+        <p>The icon is tinted with <code>bottomBarVolumeButton</code>. It is refreshed explicitly from <code>onValueChanged</code>, <code>onMuteChanged</code>, <code>onVolumeChanged</code> and at startup.</p>
 
         <!-- Navigation Buttons -->
         <h2 id="navigation">Navigation Buttons</h2>
 
-        <p>The center section contains navigation buttons, each with a bordered rectangle background, icon via SVG + ColorOverlay, and enlarged touch areas:</p>
+        <p>Section 2 holds seven <code>Control</code>s, each with a transparent, <code>dpMin(8, 2)</code>-radius rectangle bordered in <code>accent</code> and a tinted SVG at 70&nbsp;% of the control size. The vertical layout uses the same buttons at <code>bottomBarNavButtonWidth * 1.5</code> width.</p>
 
         <table>
-          <thead><tr><th>Button</th><th>Action</th><th>Smart Behavior</th></tr></thead>
+          <thead><tr><th>Button</th><th>Icon / colour token</th><th>Behaviour on tap</th></tr></thead>
           <tbody>
-            <tr><td>Home</td><td>Pop to root</td><td>Pops all pages: <code>while (stackView.depth > 1) stackView.pop()</code></td></tr>
-            <tr><td>OBD</td><td>Push OBDMenu</td><td>If already on OBDMenu, pushes OBDDiagnostics instead (and vice versa)</td></tr>
-            <tr><td>Media</td><td>Push MediaRoom/Player</td><td>Toggles between MediaRoom and MediaPlayer if already on one; otherwise pushes default</td></tr>
-            <tr><td>Settings</td><td>Push SettingsMenu</td><td>If already on settings, opens visibility popup; otherwise pops to root first then pushes fresh settings</td></tr>
-            <tr><td>Android Auto</td><td>Push AndroidAutoView</td><td>Only visible when <code>settingsManager.androidAutoEnabled</code></td></tr>
-            <tr><td>Phone Mirror</td><td>Push PhoneMirrorView</td><td>Only visible when <code>settingsManager.phoneMirrorEnabled</code></td></tr>
+            <tr>
+              <td>Home</td><td><code>home_button.svg</code> / <code>bottomBarHomeButton</code></td>
+              <td>Pops the stack to the root: <code>while (stackView.depth &gt; 1) stackView.pop()</code>.</td>
+            </tr>
+            <tr>
+              <td>OBD</td><td><code>obd_button.svg</code> / <code>bottomBarOBDButton</code></td>
+              <td>Reads <code>stackView.currentItem.objectName</code>. On <code>"obdHome"</code>: nothing. On any page whose name starts with <code>"obd"</code>: pops until <code>obdHome</code> is on top (pushes a fresh <code>OBDHome.qml</code> if it was not on the stack). From anywhere else: pushes the remembered subpage stored in the generic setting <code>lastOBDPage</code> (written by <span class="file-path">OBDHome.qml</span>), or <code>OBDHome.qml</code> if none.</td>
+            </tr>
+            <tr>
+              <td>Media</td><td><code>media_button.svg</code> / <code>bottomBarMediaButton</code></td>
+              <td>On <code>mediaRoom</code> pushes <code>MediaPlayer.qml</code>; on <code>mediaPlayer</code> pushes <code>MediaRoom.qml</code>; otherwise pushes the page named by <code>settingsManager.musicButtonDefaultPage</code> (<code>"mediaRoom"</code> or <code>"mediaPlayer"</code>, the "Default to Library View" toggle in Media settings).</td>
+            </tr>
+            <tr>
+              <td>Sensor</td><td><code>sensor_button.svg</code> / <code>bottomBarSensorButton</code></td>
+              <td><code>openSensorSection()</code>: on <code>sensorHome</code> nothing; on a page named <code>sensor*</code> or <code>carMenu</code> pops back to Sensor Home; from elsewhere pushes the generic setting <code>lastSensorPage</code> (written by <span class="file-path">SensorHome.qml</span>). If that page fails to load (for example <code>CarMenu.qml</code> when QtQuick3D is missing) the stale preference is cleared and <code>SensorHome.qml</code> is pushed instead. Every failure is logged with <code>console.warn</code>.</td>
+            </tr>
+            <tr>
+              <td>Settings</td><td><code>settings_button.svg</code> / <code>bottomBarSettingsButton</code></td>
+              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid; a no-op for Sidebar and Carousel). Otherwise pops to root and pushes a new <code>SettingsMenu.qml</code> with <code>initialSection: lastSettingsSection</code> (a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>).</td>
+            </tr>
+            <tr>
+              <td>Android Auto</td><td><code>android_auto_button.svg</code> / <code>bottomBarAndroidAutoButton</code></td>
+              <td>Pushes <code>AndroidAutoView.qml</code>. Visible only when <code>settingsManager.androidAutoEnabled</code> and not on Android (<code>typeof isAndroid === "undefined" || !isAndroid</code>).</td>
+            </tr>
+            <tr>
+              <td>Phone Mirror</td><td><code>phone_mirror_button.svg</code> / <code>bottomBarPhoneMirrorButton</code></td>
+              <td>Walks the stack looking for an item with <code>objectName === "phoneMirrorView"</code>; if found, pops everything above it so the running mirror session is reused. Otherwise pushes <code>PhoneMirrorView.qml</code> with that <code>objectName</code>. Same visibility rule as Android Auto, keyed on <code>phoneMirrorEnabled</code>.</td>
+            </tr>
           </tbody>
         </table>
 
-        <h3>Update Notification</h3>
-        <p>The Settings button displays a pulsing orange dot when a software update is available:</p>
+        <p>Pages pushed from the bar receive <code>stackView: bottomBar.stackView</code> and, where the page declares it, <code>mainWindow: stackView.parent.Window.window</code>.</p>
+
+        <!-- Update notification -->
+        <h2 id="update-notification">Update Notification</h2>
+
+        <p>The Settings button carries a <code>dp(8)</code> orange dot (<code>#FF9800</code>) anchored to its top-right corner, visible while <code>networkManager.updateStatus === "update-available"</code>. The pulse animation is bound to the same condition through <code>running</code>, so it costs nothing while hidden:</p>
 
         <pre><code><span class="cls">Rectangle</span> {
-    <span class="prop">width</span>: App.Spacing.<span class="fn">dp</span>(<span class="num">8</span>)
-    <span class="prop">height</span>: App.Spacing.<span class="fn">dp</span>(<span class="num">8</span>)
-    <span class="prop">radius</span>: width / <span class="num">2</span>
+    <span class="prop">width</span>: <span class="fn">dp</span>(<span class="num">8</span>); <span class="prop">height</span>: <span class="fn">dp</span>(<span class="num">8</span>); <span class="prop">radius</span>: width / <span class="num">2</span>
     <span class="prop">color</span>: <span class="str">"#FF9800"</span>
-    <span class="prop">visible</span>: networkManager &&
-        networkManager.updateStatus === <span class="str">"update-available"</span>
+    <span class="prop">z</span>: <span class="num">10</span>
+    <span class="prop">visible</span>: networkManager &amp;&amp; networkManager.updateStatus === <span class="str">"update-available"</span>
 
     <span class="cls">SequentialAnimation on</span> opacity {
+        <span class="prop">running</span>: networkManager &amp;&amp; networkManager.updateStatus === <span class="str">"update-available"</span>
         <span class="prop">loops</span>: Animation.Infinite
         <span class="cls">NumberAnimation</span> { <span class="prop">from</span>: <span class="num">1.0</span>; <span class="prop">to</span>: <span class="num">0.3</span>; <span class="prop">duration</span>: <span class="num">1200</span> }
         <span class="cls">NumberAnimation</span> { <span class="prop">from</span>: <span class="num">0.3</span>; <span class="prop">to</span>: <span class="num">1.0</span>; <span class="prop">duration</span>: <span class="num">1200</span> }
     }
 }</code></pre>
 
+        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (sidebar row, carousel tab, hub card, dashboard card) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is produced by <code>NetworkManager</code> in both backends (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
+
+        <!-- Clock -->
+        <h2 id="clock">Clock Section</h2>
+
+        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and <code>font.pixelSize: settingsManager.clockSize</code> (default 18, slider 10&ndash;85). Tapping the clock pushes <code>SensorHome.qml</code>. A press highlight uses <code>hoverColor</code>.</p>
+
+        <div class="info-box warning">
+          <div class="info-box-title">Vertical Clock Binding</div>
+          In the vertical layout the clock's initial binding is <code>text: clockTextVertical.text</code> &mdash; a reference to itself. It works only because the <code>Connections</code> on <code>clock.timeChanged</code> overwrites the text every tick; the binding itself never supplies a value.
+        </div>
+
         <!-- Shuffle -->
         <h2 id="shuffle">Shuffle State</h2>
 
-        <p>Shuffle is a shared state property on the BottomBar, acting as the single source of truth:</p>
+        <p><code>isShuffleEnabled</code> on the bar root is the single source of truth for both layouts' shuffle buttons. It is initialised from <code>spotifyManager.is_shuffled()</code> or <code>mediaManager.is_shuffled()</code> depending on <code>useSpotify</code>, and kept current by <code>shuffleStateChanged(enabled)</code> from whichever manager is active, plus a <code>Connections</code> on <code>settingsManager.mediaSourceChanged</code> that re-reads the correct source when the user switches between local and Spotify playback.</p>
 
-        <pre><code><span class="prop">property bool</span> isShuffleEnabled: <span class="kw">false</span>
+        <p>When active, the button background becomes <code>bottomBarToggleShade</code> (radius 4) and the icon is tinted <code>bottomBarActiveToggleButton</code> (the accent). When inactive the icon uses <code>bottomBarVolumeButton</code> &mdash; the per-theme <code>bottombar.shuffle</code> colour (<code>Style.bottomBarShuffleButton</code>) is not referenced by the bar.</p>
 
-Component.onCompleted: {
-    <span class="kw">if</span> (useSpotify && spotifyManager)
-        isShuffleEnabled = spotifyManager.<span class="fn">is_shuffled</span>()
-    <span class="kw">else if</span> (mediaManager)
-        isShuffleEnabled = mediaManager.<span class="fn">is_shuffled</span>()
-}</code></pre>
+        <!-- External Volume -->
+        <h2 id="external-volume">External Volume Sources</h2>
 
-        <p>The shuffle button's background changes to <code>bottomBarToggleShade</code> when active, and its icon color shifts to <code>bottomBarActiveToggleButton</code> (the accent color).</p>
+        <p>Volume can change without the slider being touched. All of these end in <code>volumeController.applyVolume()</code> in one of the backends, so the bar simply reacts to <code>mediaManager.volumeChanged</code>:</p>
+
+        <table>
+          <thead><tr><th>Source</th><th>Path</th></tr></thead>
+          <tbody>
+            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>). The knob's mute button toggles <code>mediaManager</code> mute and the bar's icon follows via <code>muteChanged</code>.</td></tr>
+            <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
+            <tr><td>Startup</td><td>Persisted <code>currentVolume</code> is applied by the entry point and again by the bar's <code>Component.onCompleted</code>.</td></tr>
+            <tr><td>Spotify connect</td><td><code>spotifyManager.connectionStateChanged(true)</code> &rarr; the bar calls <code>spotifyManager.set_volume(settingsManager.currentVolume)</code> so a freshly connected device matches OCTAVE's level.</td></tr>
+          </tbody>
+        </table>
 
         <!-- Manager Communication -->
         <h2 id="managers">Manager Communication</h2>
 
-        <p>The BottomBar communicates with backend managers through the <code>useSpotify</code> flag:</p>
+        <p>Every media action is dispatched by the <code>useSpotify</code> flag:</p>
 
-        <pre><code><span class="prop">property bool</span> useSpotify: settingsManager &&
-    settingsManager.mediaSource === <span class="str">"spotify"</span> &&
-    spotifyManager && spotifyManager.<span class="fn">is_connected</span>()</code></pre>
+        <pre><code><span class="prop">property bool</span> useSpotify: settingsManager &amp;&amp;
+    settingsManager.mediaSource === <span class="str">"spotify"</span> &amp;&amp;
+    spotifyManager &amp;&amp; spotifyManager.<span class="fn">is_connected</span>()</code></pre>
 
-        <p>Every media action checks this flag and dispatches to the correct manager:</p>
         <ul>
           <li><code>useSpotify ? spotifyManager.previous_track() : mediaManager.previous_track()</code></li>
           <li><code>useSpotify ? spotifyManager.toggle_play() : mediaManager.toggle_play()</code></li>
@@ -337,93 +423,138 @@ Component.onCompleted: {
           <li><code>useSpotify ? spotifyManager.toggle_shuffle() : mediaManager.toggle_shuffle()</code></li>
         </ul>
 
-        <p>Connections to <code>settingsManager</code> track orientation changes and trigger <code>updateLayout()</code>.</p>
+        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>spotifyManager</code>, <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered under the same names by <span class="file-path">src/main.cpp</span> and <span class="file-path">main.py</span>.</p>
 
-        <!-- ESP32 and External Volume -->
-        <h2 id="external-volume">External Volume Sources</h2>
+        <!-- Visibility popup -->
+        <h2 id="visibility-popup">Toggle View Popup (dormant)</h2>
 
-        <p>Volume changes can arrive from multiple external sources beyond the UI slider:</p>
+        <p>At the bottom of the file, outside both layout components, a modal <code>Popup</code> named <code>settingsVisibilityPopup</code> ("Toggle View") lists six settings sections (Device, Media, Display, OBD, Accessories, About) with animated switches bound to <code>settingsManager.is_settings_section_visible(section)</code> and writing <code>save_settings_section_visibility(section, state)</code>. It is defined at bar level "so both horizontal and vertical layouts can access it", but nothing in the current code calls <code>settingsVisibilityPopup.open()</code> &mdash; the Settings button's second tap now calls <code>navigateToHub()</code> instead. The visibility setting itself is still honoured by <code>SettingsMenu.buildHubModel()</code> (see <a href="settings-ui.html#visibility">Settings UI &rarr; Section Visibility</a>).</p>
 
-        <table>
-          <thead><tr><th>Source</th><th>Manager</th><th>How It Works</th></tr></thead>
-          <tbody>
-            <tr><td>ESP32 Volume Knob</td><td><code>esp32VolumeManager</code></td><td>Wireless rotary encoder sends volume deltas over serial. The BottomBar syncs its slider to match.</td></tr>
-            <tr><td>Gesture Sensor</td><td><code>gestureManager</code></td><td>PAJ7620U2 sensor detects swipe gestures for volume up/down</td></tr>
-            <tr><td>Settings startup</td><td><code>settingsManager</code></td><td>Unified <code>currentVolume</code> restored from settings on app launch</td></tr>
-          </tbody>
-        </table>
+        <!-- Sizing -->
+        <h2 id="sizing">Sizing Tokens</h2>
 
-        <p>All sources converge on the same logarithmic curve: <code>logVolume = (value/100)^2.0</code>. The squared curve makes perceived volume changes feel linear to the human ear.</p>
-
-        <!-- Mute Icon States -->
-        <h2 id="mute-states">Mute Icon States</h2>
-
-        <p>The mute button icon dynamically changes to reflect the current volume level. The <code>getUpdatedMuteSource()</code> function returns the appropriate SVG based on the <code>volumeControl.currentValue</code>:</p>
+        <p>All dimensions come from <span class="file-path">frontend/Spacing.qml</span>. The bar's button percentages are multiples of <code>normalButtonSize</code> (<span class="num">0.085</span>) applied to the window's shorter edge, then passed through <code>scaledSize()</code> (&times;0.6 &times; the user's UI scale):</p>
 
         <table>
-          <thead><tr><th>Volume Range</th><th>Icon</th></tr></thead>
+          <thead><tr><th>Token</th><th>Value</th></tr></thead>
           <tbody>
-            <tr><td>0%</td><td>Muted (line through speaker)</td></tr>
-            <tr><td>1-33%</td><td>Low volume (one sound wave)</td></tr>
-            <tr><td>34-66%</td><td>Medium volume (two sound waves)</td></tr>
-            <tr><td>67-100%</td><td>High volume (three sound waves)</td></tr>
+            <tr><td><code>bottomBarHeightPercent</code></td><td>0.125 of window height</td></tr>
+            <tr><td><code>bottomBarPreviousButtonWidthPercent</code>, <code>...NextButton...</code></td><td>0.085</td></tr>
+            <tr><td><code>bottomBarPlayButtonWidthPercent</code></td><td>0.085 &times; 1.5 = 0.1275</td></tr>
+            <tr><td><code>bottomBarMuteButtonWidthPercent</code></td><td>0.085 &times; 1.25</td></tr>
+            <tr><td><code>bottomBarShuffleButtonWidthPercent</code></td><td>0.085 &times; 1.4878125</td></tr>
+            <tr><td><code>bottomBarNavButtonWidthPercent</code></td><td>0.085 &times; 1.7</td></tr>
+            <tr><td><code>bottomBarVolumeSliderWidthPercent</code>, <code>bottomBarVolumeTextPercent</code></td><td>0.05</td></tr>
+            <tr><td><code>bottomBarBetweenButtonMarginPercent</code></td><td>0.01 (nav row uses 6&times; this as its preferred spacing)</td></tr>
           </tbody>
         </table>
 
         <!-- Button Animation Pattern -->
         <h2 id="animation-pattern">Button Animation Pattern</h2>
 
-        <p>Every interactive button in the BottomBar follows a consistent animation pattern using Qt Quick <code>Behavior</code> declarations:</p>
+        <p>Every interactive button follows the same press feedback: scale to 0.8 with an <code>Easing.OutBack</code> overshoot of 1.1 over 200&nbsp;ms, and opacity to 0.7 over 150&nbsp;ms. Transport buttons animate the <code>Control</code>; navigation buttons animate both the bordered <code>background</code> and the <code>contentItem</code> separately so the border and icon shrink together:</p>
 
-        <pre><code><span class="cmt">// Press: scale down with spring effect</span>
-<span class="prop">scale</span>: mouseArea.pressed ? <span class="num">0.8</span> : <span class="num">1.0</span>
+        <pre><code><span class="prop">scale</span>: mouseArea.pressed ? <span class="num">0.8</span> : <span class="num">1.0</span>
 <span class="cls">Behavior on</span> scale {
-    <span class="cls">NumberAnimation</span> {
-        <span class="prop">duration</span>: <span class="num">200</span>
-        <span class="prop">easing.type</span>: Easing.OutBack
-        <span class="prop">easing.overshoot</span>: <span class="num">1.1</span>
-    }
+    <span class="cls">NumberAnimation</span> { <span class="prop">duration</span>: <span class="num">200</span>; <span class="prop">easing.type</span>: Easing.OutBack; <span class="prop">easing.overshoot</span>: <span class="num">1.1</span> }
 }
-
-<span class="cmt">// Press: reduce opacity</span>
 <span class="prop">opacity</span>: mouseArea.pressed ? <span class="num">0.7</span> : <span class="num">1.0</span>
-<span class="cls">Behavior on</span> opacity {
-    <span class="cls">NumberAnimation</span> { <span class="prop">duration</span>: <span class="num">150</span> }
-}</code></pre>
-
-        <p>The <code>Easing.OutBack</code> with overshoot creates a subtle "bounce" when the button returns to its normal size, giving satisfying tactile feedback on touchscreens.</p>
+<span class="cls">Behavior on</span> opacity { <span class="cls">NumberAnimation</span> { <span class="prop">duration</span>: <span class="num">150</span> } }</code></pre>
 
         <!-- SVG and ColorOverlay Pattern -->
         <h2 id="svg-pattern">SVG Icon Pattern</h2>
 
-        <p>All icons follow a pattern where the <code>Image</code> is hidden and used only as a source for <code>ColorOverlay</code>. This allows theme colors to tint the icons dynamically:</p>
+        <p>All icons are flat single-fill SVGs from <span class="file-path">frontend/assets/</span>. The <code>Image</code> is hidden and used only as the source of a <code>ColorOverlay</code> (Qt5Compat.GraphicalEffects), which recolours every opaque pixel with a theme token:</p>
 
         <pre><code><span class="cls">Image</span> {
     <span class="prop">id</span>: iconImage
-    <span class="prop">source</span>: <span class="str">"./assets/icon.svg"</span>
-    <span class="prop">sourceSize</span>: Qt.<span class="fn">size</span>(width * <span class="num">2</span>, height * <span class="num">2</span>)
+    <span class="prop">source</span>: <span class="str">"./assets/home_button.svg"</span>
+    <span class="prop">sourceSize</span>: Qt.<span class="fn">size</span>(width * <span class="num">2</span>, height * <span class="num">2</span>)   <span class="cmt">// 2x supersample</span>
     <span class="prop">fillMode</span>: Image.PreserveAspectFit
-    <span class="prop">smooth</span>: <span class="kw">true</span>
-    <span class="prop">antialiasing</span>: <span class="kw">true</span>
-    <span class="prop">mipmap</span>: <span class="kw">true</span>
-    <span class="prop">visible</span>: <span class="kw">false</span>  <span class="cmt">// Hidden</span>
+    <span class="prop">smooth</span>: <span class="kw">true</span>; <span class="prop">antialiasing</span>: <span class="kw">true</span>; <span class="prop">mipmap</span>: <span class="kw">true</span>
+    <span class="prop">visible</span>: <span class="kw">false</span>
 }
-
 <span class="cls">ColorOverlay</span> {
     <span class="prop">anchors.fill</span>: iconImage
     <span class="prop">source</span>: iconImage
-    <span class="prop">color</span>: App.Style.bottomBarHomeButton  <span class="cmt">// Theme color</span>
+    <span class="prop">color</span>: App.Style.bottomBarHomeButton
 }</code></pre>
 
-        <div class="info-box tip">
-          <strong>2x sourceSize:</strong> SVGs are rasterized at 2x the display size for crisp rendering on high-DPI displays. The <code>mipmap: true</code> flag ensures clean downscaling.
-        </div>
+        <p>Because every token in <span class="file-path">Style.qml</span> has a <code>Behavior on</code> colour animation, the icons cross-fade when the theme changes (see <a href="theme-system.html#transitions">Theme System &rarr; Colour Transitions</a>). The bar repeats this pair by hand about twenty times; the newer <span class="file-path">frontend/ThemedIcon.qml</span> wraps the same pattern for the settings UI but the bar has not been migrated to it.</p>
+
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Design Decisions</h2>
+
+        <table>
+          <thead><tr><th>Decision</th><th>Rationale (from code comments and commit history)</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Two complete layout <code>Component</code>s instead of one reflowing layout</td>
+              <td>The horizontal and vertical bars differ in more than direction (section proportions, button widths, hit areas, popup ids), so each is written out in full and a <code>Loader</code> swaps them. The cost is duplication: helper functions, <code>Connections</code> and the mute/volume logic exist twice (suffixed <code>Vertical</code>).</td>
+            </tr>
+            <tr>
+              <td>Release anchors before re-anchoring</td>
+              <td>Comment in <code>updateLayout()</code>: "Release anchors first to prevent binding loops". Setting <code>bottom</code> and <code>top</code> at the same time would over-constrain the item.</td>
+            </tr>
+            <tr>
+              <td>Local <code>dp()</code>/<code>dpMin()</code> wrappers</td>
+              <td>"Work around Qt Android singleton-function bug" &mdash; singleton <em>functions</em> are unreliable on Android, so only singleton <em>properties</em> (<code>App.Spacing.effectiveScale</code>) are read across the boundary.</td>
+            </tr>
+            <tr>
+              <td>All volume changes go through <code>volumeController.applyVolume()</code></td>
+              <td>Commit <code>d2b047b</code> ("volume curve de-duplication") replaced the per-site <code>Math.pow(value/100, 2)</code> and the four manual <code>setVolume</code> calls with one dispatcher. Changing the curve is now a one-line edit in <code>toLinear()</code> and every output stays in sync.</td>
+            </tr>
+            <tr>
+              <td>Hidden media section keeps the clock's width</td>
+              <td>Comment: "When hidden, mirror the clock section's width so nav buttons sit at the true horizontal center". Collapsing it to zero would shift the nav row left.</td>
+            </tr>
+            <tr>
+              <td>Nav row shrinks its spacing and sits at <code>z: 1</code></td>
+              <td>Comments: "Shrink the gap between buttons when they would not fit, instead of overflowing under the clock / media controls" and "keep it above the neighbouring sections so the outermost buttons (e.g. Phone Mirror) still receive clicks". Enabling Android Auto and Phone Mirror adds two buttons to a row sized for five.</td>
+            </tr>
+            <tr>
+              <td>Nine circular touch areas on the popup slider</td>
+              <td>A 16&nbsp;px track is impractical to grab while driving; the overlapping <code>dp(80)</code> areas turn the whole band into a target while leaving the <code>Slider</code> functional.</td>
+            </tr>
+            <tr>
+              <td>Mute at 0&nbsp;% restores the startup volume</td>
+              <td>Comment: "If volume is 0, restore to startup volume instead of toggling mute". Toggling mute on a silent output would do nothing visible.</td>
+            </tr>
+            <tr>
+              <td>Sensor button remembers and validates the last subpage</td>
+              <td>Comments and commit <code>0c29e64</code> ("Fix sensor menu dead-end"): a stored <code>lastSensorPage</code> that no longer loads (CarMenu needs the optional QtQuick3D module) used to make the button appear dead. The failure is now logged, the preference cleared, and Sensor Home shown.</td>
+            </tr>
+            <tr>
+              <td>Second tap on Settings returns to the hub</td>
+              <td>The Hub and Dashboard layouts have a card-grid landing state; <code>navigateToHub()</code> gives the nav button a purpose while already in Settings. The older "visibility popup" behaviour was left in the file but is no longer wired (see above).</td>
+            </tr>
+            <tr>
+              <td>Phone Mirror pops back to an existing view</td>
+              <td>Comment: "Check if PhoneMirrorView is already on the stack - if so, pop back to it". Pushing a second view would start a second mirroring session over the live one.</td>
+            </tr>
+            <tr>
+              <td><code>playStateChanged</code> handlers instead of relying on the binding</td>
+              <td><code>is_playing()</code> is a method, so the image <code>source</code> binding is evaluated once; the signal handlers are what actually flip the icon.</td>
+            </tr>
+            <tr>
+              <td>Inverse curve on <code>volumeChanged</code></td>
+              <td>The bar stores percent, the player reports linear; <code>Math.sqrt(volume) * 100</code> is the exact inverse of the quadratic in <code>VolumeController</code>, so external changes display the same number the user would have set.</td>
+            </tr>
+            <tr>
+              <td>StackView transitions disabled in Main.qml</td>
+              <td>Comment: "Disable transitions for better performance" &mdash; every push from the bar is instant, which matters on the Raspberry Pi / Orange Pi head units.</td>
+            </tr>
+          </tbody>
+        </table>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
           <a href="pages.html" class="related-link">Pages</a>
           <a href="theme-system.html" class="related-link">Theme System</a>
+          <a href="settings-ui.html" class="related-link">Settings UI</a>
+          <a href="media-manager.html" class="related-link">Media Manager</a>
+          <a href="network-manager.html" class="related-link">Network Manager</a>
         </div>
 
       </div>

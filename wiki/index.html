@@ -15,24 +15,24 @@
           <h1 class="page-title">OCTAVE Wiki</h1>
           <p class="page-subtitle">
             The complete reference for the Open-source Cross-platform Telematics for Augmented Vehicle Experience.
-            Everything you need to understand, use, modify, and extend OCTAVE.
+            Everything you need to understand, use, modify, and extend OCTAVE &mdash; both backends and the shared frontend.
           </p>
         </div>
 
         <h2>What is OCTAVE?</h2>
         <p>
-          OCTAVE is a fully programmable infotainment system designed for vehicles. It pairs a
+          OCTAVE is an open-source (MIT) car head unit / infotainment system you run on your own hardware. It pairs a
           <strong>C++ / Qt 6 backend</strong> &mdash; the shipped binary on every platform &mdash; with a
           parallel <strong>Python / PySide6 backend</strong> for desktop development and tinkering, both
-          driving a single shared <strong>QML frontend</strong>. It runs on
-          Windows, macOS, Linux, Raspberry Pi, and Android. OCTAVE is purpose-built for older vehicles
-          with outdated or missing infotainment systems, but works anywhere you want a rich media and
-          diagnostics experience.
+          driving a single shared <strong>QML frontend</strong>. It plays local music and Spotify, reads live data
+          from the car over OBD-II, mirrors an Android phone over USB, shows a live 3D model of the vehicle from an
+          IMU, and recolours its interface to match the album art. It runs on Windows, macOS, Linux, Raspberry Pi /
+          Orange Pi class boards, and Android (iOS is planned but not built yet).
         </p>
         <p>
-          The typical installation uses a Raspberry Pi (or equivalent SBC), a proportionate touchscreen,
-          a power source, a 3D-printed mount, and a speaker interface. Development and testing can happen
-          on any desktop OS.
+          The typical installation is a single-board computer behind the dash, a touchscreen, a power source and a
+          3D-printed mount (the author daily-drives it in a 2003 Jeep TJ on an Orange Pi 5 with a 2560&times;1080
+          display). Development and testing can happen on any desktop OS.
         </p>
 
         <h2>Core Features</h2>
@@ -43,8 +43,8 @@
               <span class="feature-icon">&#9835;</span>
               <div class="feature-title">Local Media Player</div>
               <div class="feature-desc">
-                MP3, M4A, FLAC playback with album art carousel, shuffle/repeat,
-                playlist management, and FFT waveform visualization.
+                MP3, M4A, FLAC, OGG, Opus and WAV playback with album art carousel, shuffle/repeat,
+                playlists, a persistent metadata store, and album-art colour extraction.
               </div>
             </a>
           </div>
@@ -54,8 +54,8 @@
               <span class="feature-icon">&#9836;</span>
               <div class="feature-title">Spotify Integration</div>
               <div class="feature-desc">
-                Full Spotify Connect with OAuth2 authentication, device switching,
-                playback control, and secure keyring token storage.
+                Spotify Web API with OAuth2 (local callback on port 8888), device switching,
+                playback control and a cached token (OS keyring on Python, file on C++). Desktop only.
               </div>
             </a>
           </div>
@@ -65,8 +65,19 @@
               <span class="feature-icon">&gt;_</span>
               <div class="feature-title">OBD-II Diagnostics</div>
               <div class="feature-desc">
-                50+ vehicle parameters via ELM327 adapter. RPM, speed, coolant temp,
-                fuel level, O2 sensors, DTC codes, and configurable gauge layouts.
+                92 vehicle parameters via an ELM327 adapter (USB / Bluetooth serial; BLE on Android),
+                DTC read and clear, freeze frame, a full-screen shift light, and a protocol transcript in the logs.
+              </div>
+            </a>
+          </div>
+
+          <div class="feature-card">
+            <a href="gauges-dashboards.html">
+              <span class="feature-icon">&#9684;</span>
+              <div class="feature-title">Gauges &amp; Dashboards</div>
+              <div class="feature-desc">
+                Nine gauge primitives, JSON-defined dashboards (five built-in presets plus your own),
+                a chooser with live miniatures, and an in-app drag-and-drop dashboard editor.
               </div>
             </a>
           </div>
@@ -74,10 +85,10 @@
           <div class="feature-card">
             <a href="phone-mirror-android-auto.html">
               <span class="feature-icon">&#9743;</span>
-              <div class="feature-title">Phone Mirror & Android Auto</div>
+              <div class="feature-title">Phone Mirror &amp; Android Auto</div>
               <div class="feature-desc">
-                Mirror your phone screen via scrcpy or run Android Auto through
-                Google's Desktop Head Unit with touch forwarding.
+                Mirror an Android phone over USB with a built-in scrcpy-protocol client and bundled adb &mdash;
+                nothing to install on the phone &mdash; or run Android Auto through Google's Desktop Head Unit.
               </div>
             </a>
           </div>
@@ -87,8 +98,8 @@
               <span class="feature-icon">&#8615;</span>
               <div class="feature-title">Music Download</div>
               <div class="feature-desc">
-                Search and download music with Spotify metadata matching and
-                YouTube audio extraction. Auto-adds to your library.
+                Search and download music with Spotify metadata matching and YouTube audio extraction
+                (yt-dlp). Auto-adds to your library. Compiled out for app-store builds.
               </div>
             </a>
           </div>
@@ -98,8 +109,19 @@
               <span class="feature-icon">&#9881;</span>
               <div class="feature-title">Hardware Integrations</div>
               <div class="feature-desc">
-                ESP32 wireless volume knob (ESP-NOW), BerryIMU v3 9DOF sensor
-                fusion (Madgwick AHRS), PAJ7620U2 gesture recognition.
+                ESP32 wireless volume knob (ESP-NOW pair, USB dongle, LED ring), BerryIMU v3 9DOF
+                sensor fusion (Madgwick AHRS), PAJ7620U2 gesture recognition.
+              </div>
+            </a>
+          </div>
+
+          <div class="feature-card">
+            <a href="pages.html#carmenu">
+              <span class="feature-icon">&#9951;</span>
+              <div class="feature-title">Live 3D Vehicle</div>
+              <div class="feature-desc">
+                A rigged Jeep TJ in Qt Quick 3D with working doors, hood, tailgate, lights, steering and
+                wheels, rolled and pitched in real time by the IMU.
               </div>
             </a>
           </div>
@@ -109,8 +131,8 @@
               <span class="feature-icon">&#9670;</span>
               <div class="feature-title">Dynamic Theming</div>
               <div class="feature-desc">
-                UI colors adapt in real-time to album art. Accent, background,
-                and text colors extracted and applied across all views.
+                UI colours adapt in real time to album art. Accent, background and text colours are
+                extracted and applied across every view (and to the ESP32 LED ring).
               </div>
             </a>
           </div>
@@ -120,8 +142,30 @@
               <span class="feature-icon">&#8767;</span>
               <div class="feature-title">Waveform Visualizer</div>
               <div class="feature-desc">
-                Real-time FFT waveform visualization with 96 frequency
-                bars at 60 FPS, rendered directly in QML.
+                FFT waveform visualisation with 96 frequency bars, pre-computed off the UI thread
+                and rendered directly in QML.
+              </div>
+            </a>
+          </div>
+
+          <div class="feature-card">
+            <a href="architecture.html#logging">
+              <span class="feature-icon">&#9998;</span>
+              <div class="feature-title">Diagnostics &amp; Logs</div>
+              <div class="feature-desc">
+                Rotating logs from both backends, crash backtraces, a UI-thread watchdog, and a
+                Diagnostics page that copies or exports the logs straight from the dash.
+              </div>
+            </a>
+          </div>
+
+          <div class="feature-card">
+            <a href="network-manager.html">
+              <span class="feature-icon">&#8635;</span>
+              <div class="feature-title">Network &amp; Updates</div>
+              <div class="feature-desc">
+                WiFi status, GitHub update checks and git-based self-update with in-app restart
+                for checkout installs.
               </div>
             </a>
           </div>
@@ -134,34 +178,46 @@
             <tr>
               <th>Platform</th>
               <th>Status</th>
+              <th>Shipped artefact</th>
               <th>Notes</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><strong>Linux</strong> (Debian/Arch/Fedora)</td>
+              <td><strong>Linux</strong> (Debian/Ubuntu/Arch/Fedora)</td>
               <td>Full support</td>
-              <td>Primary development target. All features available.</td>
+              <td><code>OCTAVE-&lt;v&gt;-linux-x86_64.AppImage</code></td>
+              <td>Primary development target. All features. Both backends.</td>
             </tr>
             <tr>
-              <td><strong>Raspberry Pi</strong></td>
+              <td><strong>Raspberry Pi / Orange Pi</strong> (Linux aarch64)</td>
               <td>Full support</td>
-              <td>Recommended for vehicle installation. All hardware I2C sensors supported.</td>
+              <td><code>OCTAVE-&lt;v&gt;-linux-aarch64.AppImage</code></td>
+              <td>The in-vehicle target. I²C sensors and the ESP32 knob supported. Google ships no aarch64 adb, so the distro <code>adb</code> is used for phone mirroring.</td>
             </tr>
             <tr>
               <td><strong>Windows</strong> 10+</td>
               <td>Full support</td>
-              <td>All features except I2C hardware (BerryIMU, gesture sensor).</td>
+              <td><code>OCTAVE-&lt;v&gt;-windows-x86_64.exe</code> (Inno Setup)</td>
+              <td>All features except I²C hardware (BerryIMU, gesture sensor). Python-backend Android Auto capture is Windows-only.</td>
             </tr>
             <tr>
-              <td><strong>macOS</strong> 10.14+</td>
+              <td><strong>macOS</strong> (Intel and Apple Silicon)</td>
               <td>Full support</td>
-              <td>All features except I2C hardware.</td>
+              <td><code>OCTAVE-&lt;v&gt;-macos.dmg</code></td>
+              <td>All features except I²C hardware. CI builds on macOS 14 against Qt 6.7.3.</td>
             </tr>
             <tr>
-              <td><strong>Android</strong></td>
-              <td>Experimental</td>
-              <td>C++ / Qt 6 <code>.apk</code> built by CI. OBD over Bluetooth, YouTube Music search and download. Phone mirror and Android Auto are desktop-only.</td>
+              <td><strong>Android</strong> (arm64-v8a, Android 11+)</td>
+              <td>Sideload</td>
+              <td><code>OCTAVE-&lt;v&gt;-android-arm64-v8a.apk</code></td>
+              <td>C++ only. Local media, OBD over BLE, YouTube Music search and download, dashboards, IMU view from the device's own sensors. Spotify, phone mirror, Android Auto, ESP32 and I²C sensors are excluded. The release APK is signed with a per-build keystore, so updates require an uninstall.</td>
+            </tr>
+            <tr>
+              <td><strong>iOS</strong></td>
+              <td>Planned, not built</td>
+              <td>&mdash;</td>
+              <td>No CMake toolchain wiring and no CI job yet (see <code>BUILD.md</code>, "iOS build").</td>
             </tr>
           </tbody>
         </table>
@@ -170,28 +226,28 @@
 
         <h3>Getting Started</h3>
         <ul>
-          <li><a href="getting-started.html">Installation & First Run</a> &mdash; Setup on all platforms, requirements, configuration</li>
-          <li><a href="architecture.html">Architecture Overview</a> &mdash; System design, communication patterns, threading model</li>
+          <li><a href="getting-started.html">Installation &amp; First Run</a> &mdash; Pre-built binaries, the Python dev backend, the C++ build, requirements, directory layout</li>
+          <li><a href="architecture.html">Architecture Overview</a> &mdash; Two backends, manager pattern, startup order, threading, volume, video paths, logging, design decisions</li>
         </ul>
 
         <h3>Backend Deep Dives</h3>
         <ul>
-          <li><a href="settings-manager.html">Settings Manager</a> &mdash; Central settings store, property system, JSON persistence</li>
-          <li><a href="media-manager.html">Media Manager</a> &mdash; Local audio playback, library scanning, album art</li>
-          <li><a href="spotify-manager.html">Spotify Manager</a> &mdash; OAuth2, API integration, device control</li>
-          <li><a href="obd-manager.html">OBD Manager</a> &mdash; ELM327 protocol, 50+ vehicle parameters, threaded worker</li>
+          <li><a href="settings-manager.html">Settings Manager</a> &mdash; Central settings store, property system, coalesced JSON persistence</li>
+          <li><a href="media-manager.html">Media Manager</a> &mdash; Local audio playback, library scanning, album art and colours</li>
+          <li><a href="spotify-manager.html">Spotify Manager</a> &mdash; OAuth2, Web API integration, device control</li>
+          <li><a href="obd-manager.html">OBD Manager</a> &mdash; ELM327 protocol, 92 vehicle parameters, threaded worker, Android BLE</li>
           <li><a href="network-manager.html">Network Manager</a> &mdash; WiFi status, update checking, self-update</li>
           <li><a href="download-manager.html">Download Manager</a> &mdash; Music search and download pipeline</li>
-          <li><a href="hardware-managers.html">Hardware Managers</a> &mdash; ESP32, BerryIMU, gesture sensor</li>
-          <li><a href="phone-mirror-android-auto.html">Phone Mirror & Android Auto</a> &mdash; Built-in scrcpy-protocol client, bundled adb and phone server, DHU</li>
-          <li><a href="audio-analyzer.html">Audio Analyzer</a> &mdash; FFT waveform visualization</li>
-          <li><a href="utilities.html">Utilities</a> &mdash; Clock, logging, performance monitor, command server</li>
+          <li><a href="hardware-managers.html">Hardware Managers</a> &mdash; ESP32 knob, BerryIMU, gesture sensor</li>
+          <li><a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a> &mdash; Built-in scrcpy-protocol client, the forked phone server, bundled adb, DHU</li>
+          <li><a href="audio-analyzer.html">Audio Analyzer</a> &mdash; FFT waveform visualisation</li>
+          <li><a href="utilities.html">Utilities</a> &mdash; Clock, logging and crash handlers, DiagnosticsManager, UI watchdog, VolumeController, performance monitor, command server</li>
         </ul>
 
         <h3>Frontend Deep Dives</h3>
         <ul>
           <li><a href="frontend-overview.html">Frontend Overview</a> &mdash; QML architecture, Main.qml, page routing</li>
-          <li><a href="pages.html">Pages & Views</a> &mdash; Every page in the application</li>
+          <li><a href="pages.html">Pages &amp; Views</a> &mdash; Every page in the application, including the 3D CarMenu</li>
           <li><a href="bottom-bar.html">Bottom Bar</a> &mdash; Navigation and volume control</li>
           <li><a href="theme-system.html">Theme System</a> &mdash; Dynamic theming, design tokens</li>
           <li><a href="settings-ui.html">Settings UI</a> &mdash; Settings framework, layout engines, components</li>
@@ -199,13 +255,13 @@
           <li><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a> &mdash; Gauge primitives, JSON dashboards, the in-app editor</li>
         </ul>
 
-        <h3>Reference & Guides</h3>
+        <h3>Reference &amp; Guides</h3>
         <ul>
           <li><a href="settings-reference.html">Settings Reference</a> &mdash; Complete catalog of every setting</li>
-          <li><a href="signals-slots-reference.html">Signals & Slots API</a> &mdash; Every manager's QML-accessible API</li>
+          <li><a href="signals-slots-reference.html">Signals &amp; Slots API</a> &mdash; Every manager's QML-accessible API</li>
           <li><a href="hardware-setup.html">Hardware Setup</a> &mdash; Wiring, firmware, 3D printed mounts</li>
-          <li><a href="building.html">Building & CI/CD</a> &mdash; CMake targets, AppImage / DMG / EXE / APK packaging, GitHub Actions</li>
-          <li><a href="development.html">Development</a> &mdash; Dev mode, mock data, MCP server, profiling</li>
+          <li><a href="building.html">Building &amp; CI/CD</a> &mdash; CMake targets, AppImage / DMG / EXE / APK packaging, GitHub Actions</li>
+          <li><a href="development.html">Development</a> &mdash; Dev mode, mock data, MCP server, profiling, screenshots</li>
           <li><a href="troubleshooting.html">Troubleshooting</a> &mdash; Common issues, log locations, debugging</li>
         </ul>
 
@@ -214,65 +270,73 @@
           <thead>
             <tr>
               <th>Component</th>
-              <th>Technology</th>
-              <th>Purpose</th>
+              <th>C++ backend (shipped)</th>
+              <th>Python backend (developer)</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>Backend</td>
-              <td>Python 3.8+</td>
-              <td>All business logic, hardware integration, API calls</td>
+              <td>Language / toolchain</td>
+              <td>C++17, Qt 6.7.3, CMake 3.21+ (Ninja recommended)</td>
+              <td>Python 3.10&ndash;3.11 (<code>pyproject.toml</code>), PySide6 &ge; 6.5 (<code>requirements.txt</code>), venv via <code>setup.py</code></td>
             </tr>
             <tr>
               <td>Frontend</td>
-              <td>QML (Qt Quick 2.15)</td>
-              <td>Declarative UI with animations and 3D effects</td>
+              <td colspan="2">QML (Qt Quick, Qt Quick Controls "Basic" style, Qt5Compat.GraphicalEffects, QtQuick.Effects, Qt Quick 3D for the vehicle view) loaded from <code>frontend/</code> at runtime</td>
             </tr>
             <tr>
-              <td>Qt Binding</td>
-              <td>PySide6 6.5+</td>
-              <td>Python-Qt bridge with signals/slots</td>
+              <td>Audio playback / tags</td>
+              <td>QMediaPlayer + TagLib</td>
+              <td>QMediaPlayer + mutagen</td>
             </tr>
             <tr>
-              <td>Audio</td>
-              <td>QMediaPlayer + av</td>
-              <td>Playback and FFT analysis</td>
+              <td>Waveform FFT</td>
+              <td>QAudioDecoder + in-house radix-2 FFT on QtConcurrent</td>
+              <td>PyAV (<code>av</code>) decode + numpy FFT on a thread pool</td>
             </tr>
             <tr>
               <td>Spotify</td>
-              <td>spotipy</td>
-              <td>Spotify Web API wrapper with OAuth2</td>
+              <td>QNetworkAccessManager + QTcpServer OAuth callback; token file in the app data dir</td>
+              <td>spotipy + keyring (OS keychain)</td>
             </tr>
             <tr>
               <td>OBD-II</td>
-              <td>python-obd</td>
-              <td>ELM327 adapter communication</td>
+              <td>QSerialPort + own ELM327 protocol (<code>elm327protocol.cpp</code>); Android: native BluetoothGatt via JNI (<code>OctaveOBDBridge.java</code>)</td>
+              <td>python-obd (<code>obd.Async</code>) over pyserial</td>
             </tr>
             <tr>
-              <td>Music DL</td>
-              <td>yt-dlp + ytmusicapi</td>
-              <td>YouTube audio extraction with Spotify metadata</td>
+              <td>Music download</td>
+              <td>yt-dlp via QProcess; Android: youtubedl-android AAR + bundled ytmusic Python</td>
+              <td>vendored <code>music_dl</code> package: yt-dlp, ytmusicapi, rapidfuzz</td>
             </tr>
             <tr>
-              <td>Sensors</td>
-              <td>smbus2</td>
-              <td>I2C communication (BerryIMU, gesture)</td>
+              <td>I²C sensors</td>
+              <td><code>/dev/i2c-N</code> + <code>ioctl</code>; Android: QtSensors (accelerometer, compass, pressure)</td>
+              <td>smbus2 (Linux only)</td>
             </tr>
             <tr>
-              <td>Serial</td>
+              <td>ESP32 serial</td>
+              <td>QSerialPort</td>
               <td>pyserial</td>
-              <td>ESP32 volume knob USB communication</td>
             </tr>
             <tr>
-              <td>Credentials</td>
-              <td>keyring</td>
-              <td>Secure OS keychain storage for Spotify tokens</td>
+              <td>Phone mirror</td>
+              <td>QTcpSocket + libavcodec (FFmpeg, optional at build) &rarr; QVideoSink; QAudioSink</td>
+              <td>sockets + PyAV &rarr; QVideoSink; QAudioSink</td>
             </tr>
             <tr>
-              <td>Build</td>
-              <td>CMake + Qt 6</td>
-              <td>Native executables and the Android APK; the Python backend runs from a venv (developers only)</td>
+              <td>Phone side</td>
+              <td colspan="2"><code>phone_server/</code> &mdash; OCTAVE's fork of the scrcpy server (v3.3.4, Apache-2.0), prebuilt jar in <code>tools/phone-server/</code>; bundled Google platform-tools (adb)</td>
+            </tr>
+            <tr>
+              <td>Logging</td>
+              <td>QLoggingCategory + <code>src/util/logger.cpp</code> rotating files, signal crash handlers</td>
+              <td><code>logging</code> hierarchy under <code>octave.*</code>, rotating files, <code>faulthandler</code></td>
+            </tr>
+            <tr>
+              <td>Build &amp; CI</td>
+              <td>GitHub Actions: compile check + qmllint on every push; Windows / macOS / Linux x86_64 / Linux aarch64 / Android on tags</td>
+              <td>ruff lint + headless pytest smoke and boot tests on every push; never packaged</td>
             </tr>
           </tbody>
         </table>
