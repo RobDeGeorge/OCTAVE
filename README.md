@@ -74,6 +74,14 @@ Fifty-plus OBD-II parameters, a set of gauge primitives (circular, arc, bar, lin
   <img src="frontend/assets/readme/dashboards_chooser.png" alt="Dashboard chooser with live miniatures of every dashboard" width="49%">
 </p>
 
+### The shift light
+
+<p align="center">
+  <img src="frontend/assets/readme/shiftlight.webp" alt="The whole screen flashes red as the engine crosses the shift-light RPM on the Sport dashboard" width="900">
+</p>
+
+Set an RPM flag and the entire screen strobes when the engine crosses it, whatever page is showing. It is the one thing in OCTAVE built to be impossible to miss, so it gets its own clip and appears nowhere else on this page.
+
 ### Your phone on the dash
 
 <p align="center">
