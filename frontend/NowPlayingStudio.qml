@@ -324,10 +324,13 @@ Item {
                     id: leftPanelScrollBar
                     parent: leftPanel
                     policy: ScrollBar.AsNeeded
-                    anchors.top: leftFlick.top
-                    anchors.bottom: leftFlick.bottom
-                    anchors.right: leftPanel.right
-                    anchors.rightMargin: studio.dp(6)
+                    // Geometry, not anchors: the attached ScrollBar is
+                    // created under the Flickable and only later reparented
+                    // to leftPanel, and anchoring to a non-sibling at that
+                    // first evaluation warns at startup.
+                    x: leftPanel.width - width - studio.dp(6)
+                    y: leftFlick.y
+                    height: leftFlick.height
                 }
 
                 ColumnLayout {
@@ -700,10 +703,13 @@ Item {
                     id: bottomScrollBar
                     parent: pipBgStrip
                     policy: ScrollBar.AsNeeded
-                    anchors.top: pipBgFlick.top
-                    anchors.bottom: pipBgFlick.bottom
-                    anchors.right: pipBgStrip.right
-                    anchors.rightMargin: studio.dp(6)
+                    // Geometry, not anchors: the attached ScrollBar is
+                    // created under the Flickable and only later reparented
+                    // to pipBgStrip, and anchoring to a non-sibling at that
+                    // first evaluation warns at startup.
+                    x: pipBgStrip.width - width - studio.dp(6)
+                    y: pipBgFlick.y
+                    height: pipBgFlick.height
                 }
 
                 ColumnLayout {

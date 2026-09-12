@@ -37,7 +37,7 @@ struct RotatingFile {
     void open()
     {
         file.setFileName(path);
-        file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
+        (void)file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
     }
 
     void write(const QByteArray &line)
@@ -65,7 +65,10 @@ struct RotatingFile {
     }
 };
 
-QMutex g_mutex;
+// Recursive on purpose: anything Qt warns about while the lock is held
+// (a QFile call on a closed file, for instance) re-enters handler() on the
+// same thread, and a plain QMutex would deadlock the app there.
+QRecursiveMutex g_mutex;
 RotatingFile g_main;    // info and above          5 MB x 3
 RotatingFile g_error;   // warning and above        2 MB x 5
 RotatingFile g_debug;   // everything, --debug only 10 MB x 2
@@ -120,7 +123,7 @@ void handler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
 #endif
 
     {
-        QMutexLocker lock(&g_mutex);
+        QMutexLocker<QRecursiveMutex> lock(&g_mutex);
         if (g_debugEnabled)
             g_debug.write(line);
         if (type != QtDebugMsg)
@@ -251,10 +254,12 @@ QString logDir() { return g_logDir; }
 
 void flush()
 {
-    QMutexLocker lock(&g_mutex);
-    g_main.file.flush();
-    g_error.file.flush();
-    g_debug.file.flush();
+    QMutexLocker<QRecursiveMutex> lock(&g_mutex);
+    // Only open files: QFile::flush() on a closed one (the debug log when
+    // --debug is off) emits a qWarning, which used to self-deadlock here.
+    for (RotatingFile *f : {&g_main, &g_error, &g_debug})
+        if (f->file.isOpen())
+            f->file.flush();
 }
 
 }  // namespace OctaveLog

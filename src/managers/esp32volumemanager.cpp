@@ -95,18 +95,20 @@ void ESP32VolumeManager::connectSettingsSignals()
     if (!m_settingsManager)
         return;
 
-    // These connect to signals that SettingsManager must declare.
-    // The slot names match the Python signal names exactly.
-    connect(m_settingsManager, SIGNAL(esp32VolumePortChanged()),
-            this, SLOT(onPortChanged()));
-    connect(m_settingsManager, SIGNAL(esp32VolumeEnabledChanged()),
-            this, SLOT(onEnabledChanged()));
-    connect(m_settingsManager, SIGNAL(esp32VolumeStepSizeChanged()),
-            this, SLOT(onStepSizeChanged()));
-    connect(m_settingsManager, SIGNAL(esp32AutoReconnectChanged()),
-            this, SLOT(onAutoReconnectChanged()));
-    connect(m_settingsManager, SIGNAL(esp32LedSleepEnabledChanged()),
-            this, SLOT(onLedSleepChanged()));
+    // Pointer-to-member connects: the SettingsManager signals carry the new
+    // value as an argument and the slots ignore it (they re-read the
+    // property), so string-based SIGNAL()/SLOT() with empty parameter lists
+    // never matched and silently connected nothing.
+    connect(m_settingsManager, &SettingsManager::esp32VolumePortChanged,
+            this, &ESP32VolumeManager::onPortChanged);
+    connect(m_settingsManager, &SettingsManager::esp32VolumeEnabledChanged,
+            this, &ESP32VolumeManager::onEnabledChanged);
+    connect(m_settingsManager, &SettingsManager::esp32VolumeStepSizeChanged,
+            this, &ESP32VolumeManager::onStepSizeChanged);
+    connect(m_settingsManager, &SettingsManager::esp32AutoReconnectChanged,
+            this, &ESP32VolumeManager::onAutoReconnectChanged);
+    connect(m_settingsManager, &SettingsManager::esp32LedSleepEnabledChanged,
+            this, &ESP32VolumeManager::onLedSleepChanged);
 
     // Load initial step size via property or method — we use dynamic property
     // access so we don't need to include the full SettingsManager header.

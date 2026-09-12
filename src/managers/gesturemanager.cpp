@@ -579,12 +579,11 @@ void GestureManager::connect_settings_manager(SettingsManager *settingsManager)
         m_cooldown = cooldownVar.toInt() / 1000.0;
 
     // Try to load gesture mapping from settings
-    QVariant mappingVar;
+    QVariantMap vmap;
     bool ok = QMetaObject::invokeMethod(settingsManager, "get_gesture_mapping_dict",
                                          Qt::DirectConnection,
-                                         Q_RETURN_ARG(QVariant, mappingVar));
-    if (ok && mappingVar.isValid()) {
-        QVariantMap vmap = mappingVar.toMap();
+                                         Q_RETURN_ARG(QVariantMap, vmap));
+    if (ok) {
         if (!vmap.isEmpty()) {
             m_gestureMapping.clear();
             for (auto it = vmap.constBegin(); it != vmap.constEnd(); ++it) {
