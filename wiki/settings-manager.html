@@ -548,7 +548,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>get_git_commit_hash()</code></td><td>Runs <code>git rev-parse --short HEAD</code> in the repo root with a 5&nbsp;s timeout; <code>"unknown"</code> on failure.</td></tr>
+            <tr><td><code>get_git_commit_hash()</code></td><td>Runs <code>git rev-parse --short HEAD</code> in the repo root with a 5&nbsp;s timeout; <code>"unknown"</code> on failure.. Packaged C++ builds (APK, installers, AppImage) have no <code>.git</code> and no <code>git</code> binary, so when the process fails the C++ backend returns the hash CMake baked in at configure time (<code>OCTAVE_GIT_COMMIT</code>, likewise <code>OCTAVE_GIT_DATE</code> for <code>get_git_commit_date()</code>); the About page on the phone showed "unknown" for both until v0.9.2. The Python backend always runs from a checkout and keeps the git-only path.</td></tr>
             <tr><td><code>get_git_commit_date()</code></td><td><code>git log -1 --format=%ci</code>, reformatted to <code>YYYY-MM-DD at HH:MM</code>.</td></tr>
             <tr><td><code>get_git_commit_message()</code></td><td><code>git log -1 --format=%s</code>; empty string on failure.</td></tr>
           </tbody>

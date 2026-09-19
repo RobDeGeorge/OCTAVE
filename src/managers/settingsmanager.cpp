@@ -2194,9 +2194,18 @@ QString SettingsManager::get_git_commit_hash()
     QProcess proc;
     proc.setWorkingDirectory(getGitRepoDir());
     proc.start(QStringLiteral("git"), {QStringLiteral("rev-parse"), QStringLiteral("--short"), QStringLiteral("HEAD")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0)
-        return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+    if (proc.waitForFinished(5000) && proc.exitCode() == 0) {
+        const QString hash = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+        if (!hash.isEmpty())
+            return hash;
+    }
+    // Packaged builds (APK, installers) have neither .git nor git: use the
+    // value CMake baked in at configure time.
+#ifdef OCTAVE_GIT_COMMIT
+    return QStringLiteral(OCTAVE_GIT_COMMIT);
+#else
     return QStringLiteral("unknown");
+#endif
 }
 
 QString SettingsManager::get_git_commit_date()
@@ -2204,16 +2213,19 @@ QString SettingsManager::get_git_commit_date()
     QProcess proc;
     proc.setWorkingDirectory(getGitRepoDir());
     proc.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%ci")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0) {
-        QString dateStr = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-        if (!dateStr.isEmpty()) {
-            QStringList parts = dateStr.split(QLatin1Char(' '));
-            if (parts.size() >= 2)
-                return parts[0] + QStringLiteral(" at ") + parts[1].left(5);
-        }
-        return dateStr;
-    }
-    return QStringLiteral("unknown");
+    QString dateStr;
+    if (proc.waitForFinished(5000) && proc.exitCode() == 0)
+        dateStr = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+#ifdef OCTAVE_GIT_DATE
+    if (dateStr.isEmpty())
+        dateStr = QStringLiteral(OCTAVE_GIT_DATE);   // baked in by CMake for packaged builds
+#endif
+    if (dateStr.isEmpty() || dateStr == QStringLiteral("unknown"))
+        return QStringLiteral("unknown");
+    const QStringList parts = dateStr.split(QLatin1Char(' '));
+    if (parts.size() >= 2)
+        return parts[0] + QStringLiteral(" at ") + parts[1].left(5);
+    return dateStr;
 }
 
 QString SettingsManager::get_git_commit_message()

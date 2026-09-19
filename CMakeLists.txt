@@ -147,8 +147,35 @@ qt_add_executable(octave
     src/platform/androidprocessadapter.h
 )
 
+# Commit hash and date baked in at configure time. Packaged builds (APK,
+# installers, AppImage) have no .git and no git binary, so the About page
+# showed "Commit: unknown" on the phone; SettingsManager falls back to these
+# when running git fails. Reconfigure is triggered by a change of HEAD/index.
+set(OCTAVE_GIT_COMMIT "unknown")
+set(OCTAVE_GIT_DATE "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_VARIABLE _git_hash
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE _git_rc)
+    if(_git_rc EQUAL 0 AND NOT _git_hash STREQUAL "")
+        set(OCTAVE_GIT_COMMIT "${_git_hash}")
+    endif()
+    execute_process(COMMAND "${GIT_EXECUTABLE}" log -1 --format=%ci
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_VARIABLE _git_date
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE _git_rc)
+    if(_git_rc EQUAL 0 AND NOT _git_date STREQUAL "")
+        set(OCTAVE_GIT_DATE "${_git_date}")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/.git/HEAD" "${CMAKE_SOURCE_DIR}/.git/index")
+endif()
+message(STATUS "Build commit: ${OCTAVE_GIT_COMMIT} (${OCTAVE_GIT_DATE})")
+
 target_compile_definitions(octave PRIVATE
     OCTAVE_VERSION="${PROJECT_VERSION}"
+    OCTAVE_GIT_COMMIT="${OCTAVE_GIT_COMMIT}"
+    OCTAVE_GIT_DATE="${OCTAVE_GIT_DATE}"
     $<$<BOOL:${OCTAVE_ENABLE_DOWNLOADS}>:OCTAVE_ENABLE_DOWNLOADS>
     $<$<BOOL:${OCTAVE_HAVE_FFMPEG}>:OCTAVE_HAVE_FFMPEG>
     # Activate existing #ifndef Q_OS_MOBILE guards on Android (and iOS later).

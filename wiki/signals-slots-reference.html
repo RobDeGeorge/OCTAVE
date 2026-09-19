@@ -307,7 +307,7 @@
             <tr><td><code>get_pinned_settings_metadata()</code></td><td><code>QString</code></td><td>JSON array of registry entries for every pinned setting</td></tr>
             <tr><td><code>get_settings_menu_visibility()</code></td><td><code>QString</code></td><td>Same JSON as the <code>settingsMenuVisibility</code> property</td></tr>
             <tr><td><code>is_settings_section_visible(QString section)</code></td><td><code>bool</code></td><td>Visibility of one settings section (default <code>true</code>)</td></tr>
-            <tr><td><code>get_git_commit_hash()</code></td><td><code>QString</code></td><td>Short HEAD hash of the checkout (<code>"unknown"</code> outside git)</td></tr>
+            <tr><td><code>get_git_commit_hash()</code></td><td><code>QString</code></td><td>Short HEAD hash of the checkout; packaged C++ builds fall back to the hash baked in by CMake (<code>"unknown"</code> only when neither exists)</td></tr>
             <tr><td><code>get_git_commit_date()</code></td><td><code>QString</code></td><td>Commit date of HEAD</td></tr>
             <tr><td><code>get_git_commit_message()</code></td><td><code>QString</code></td><td>Commit subject of HEAD</td></tr>
             <tr><td><code>flush_pending_save()</code> <span class="platform-badge linux">Python only</span></td><td><code>void</code></td><td>Legacy snake_case alias of <code>flushPendingSave()</code></td></tr>
