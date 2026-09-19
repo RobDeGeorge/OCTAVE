@@ -222,3 +222,28 @@ fi
 mv "$PRODUCED" "$DIST_DIR/$OUTPUT_NAME"
 echo "==> Wrote $DIST_DIR/$OUTPUT_NAME"
 ls -lh "$DIST_DIR/$OUTPUT_NAME"
+
+# ---- 8. Sanity-check the bundle -----------------------------------------
+# v0.9.1's x86_64 AppImage carried the QtQuick3D.AssetUtils QML plugin but not
+# libQt6Quick3DAssetUtils / libQt6QuickTimeline (the kit lacked the
+# qtquicktimeline module), so the music player objects failed to load. Extract
+# the image (no FUSE needed) and refuse to ship that combination again.
+APPIMAGE_ABS="$(cd "$DIST_DIR" && pwd)/$OUTPUT_NAME"
+CHECK_DIR="$(mktemp -d)"
+if ( cd "$CHECK_DIR" && "$APPIMAGE_ABS" --appimage-extract >/dev/null 2>&1 ); then
+    ROOT="$CHECK_DIR/squashfs-root"
+    if [ -d "$ROOT/usr/qml/QtQuick3D/AssetUtils" ]; then
+        for lib in libQt6Quick3DAssetUtils.so.6 libQt6QuickTimeline.so.6; do
+            if [ ! -f "$ROOT/usr/lib/$lib" ]; then
+                echo "ERROR: AppImage bundles QtQuick3D.AssetUtils but not usr/lib/$lib" \
+                     "(install the qtquicktimeline module in this Qt kit)"
+                rm -rf "$CHECK_DIR"
+                exit 1
+            fi
+        done
+        echo "==> QtQuick3D.AssetUtils runtime dependencies present"
+    fi
+else
+    echo "WARNING: could not extract $OUTPUT_NAME to verify its contents"
+fi
+rm -rf "$CHECK_DIR"

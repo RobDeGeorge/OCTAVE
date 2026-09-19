@@ -94,7 +94,7 @@ jobs:
           version: '6.7.3'
           host: 'linux'
           target: 'desktop'
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools'
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline'
           cache: true
 
       - name: Configure
@@ -259,9 +259,9 @@ jobs:
         shell: pwsh
         run: |
           # Inno Setup 6 ships pre-installed on windows-latest runners as iscc.exe.
-          # Patch the .iss version to match the git tag (or 0.9.1 fallback for dispatches).
+          # Patch the .iss version to match the git tag (or 0.9.2 fallback for dispatches).
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          if ([string]::IsNullOrEmpty($version)) { $version = '0.9.1' }
+          if ([string]::IsNullOrEmpty($version)) { $version = '0.9.2' }
           (Get-Content build_scripts/installer_windows.iss) `
             -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$version`"" |
             Set-Content build_scripts/installer_windows.iss
@@ -367,7 +367,7 @@ jobs:
           # and QtQuick.Effects, both of which pull qtshadertools transitively.
           # Without these, linuxdeploy-plugin-qt can't bundle the modules and
           # Main.qml fails with `module "..." is not installed` at runtime.
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools'
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline'
 
       - name: Build AppImage
         env:
@@ -470,7 +470,7 @@ jobs:
           version: '6.7.3'
           host: 'linux'
           target: 'desktop'
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d'
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline'
 
       - name: Install Qt 6 (Android arm64)
         uses: jurplel/install-qt-action@v4
@@ -479,7 +479,7 @@ jobs:
           host: 'linux'
           target: 'android'
           arch: 'android_arm64_v8a'
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d'
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline'
 
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
@@ -591,6 +591,21 @@ jobs:
             delay=$((delay * 2))
             attempt=$((attempt + 1))
           done
+
+      - name: Check the APK bundles Quick3D's runtime dependencies
+        run: |
+          # v0.9.1 shipped an APK that died at launch: libQt6Quick3DAssetUtils
+          # (QtQuick3D.AssetUtils, the music player objects) needs
+          # libQt6QuickTimeline, which androiddeployqt can only bundle when the
+          # qtquicktimeline module is installed in the Android kit.
+          APK=$(find build-android -name '*.apk' | head -n1)
+          [ -n "$APK" ] || { echo "::error::no APK found under build-android"; exit 1; }
+          LIBS=$(unzip -Z1 "$APK" | grep '^lib/arm64-v8a/' || true)
+          if echo "$LIBS" | grep -q libQt6Quick3DAssetUtils && ! echo "$LIBS" | grep -q libQt6QuickTimeline; then
+            echo "::error::APK bundles libQt6Quick3DAssetUtils without libQt6QuickTimeline — add qtquicktimeline to the Android Qt modules"
+            exit 1
+          fi
+          echo "$LIBS" | grep -E 'Quick3D|QuickTimeline' || echo "(no Quick3D libraries bundled)"
 
       - name: Sign APK with test keystore
         run: |

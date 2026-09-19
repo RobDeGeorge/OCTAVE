@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(OCTAVE VERSION 0.9.1 LANGUAGES CXX)
+project(OCTAVE VERSION 0.9.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,6 +32,20 @@ if(Qt6Quick3D_FOUND)
     # qmake6 may well resolve to an Android kit instead of this desktop one.
     file(WRITE "${CMAKE_BINARY_DIR}/qt_plugins_path.txt"
          "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}")
+    # Quick3D's AssetUtils (RuntimeLoader — the music player objects in
+    # MediaRoom) links QuickTimeline, which ships in a separate Qt module
+    # (qtquicktimeline). The deploy tools bundle only libraries the kit has and
+    # the app links, so find and link both explicitly. Without this the v0.9.1
+    # APK died at launch ("libQt6QuickTimeline_arm64-v8a.so not found") and the
+    # x86_64 AppImage carried the AssetUtils QML plugin without its library.
+    find_package(Qt6 QUIET COMPONENTS Quick3DAssetUtils QuickTimeline)
+    if(Qt6Quick3DAssetUtils_FOUND AND Qt6QuickTimeline_FOUND)
+        message(STATUS "QtQuick3D AssetUtils + QuickTimeline found — music player objects enabled")
+    else()
+        message(WARNING "QtQuick3D is present but Quick3DAssetUtils/QuickTimeline are not "
+                        "(install the qtquicktimeline module): the music player objects "
+                        "will be unavailable at runtime and a packaged build may not start.")
+    endif()
 else()
     message(STATUS "QtQuick3D NOT found — 3D vehicle view will be unavailable at runtime. "
                    "Install it to enable (Arch: qt6-quick3d, Debian/Ubuntu: qt6-quick3d-dev, "
@@ -163,6 +177,9 @@ if(OCTAVE_HAVE_FFMPEG)
 endif()
 if(Qt6Quick3D_FOUND)
     target_link_libraries(octave PRIVATE Qt6::Quick3D)
+    if(Qt6Quick3DAssetUtils_FOUND AND Qt6QuickTimeline_FOUND)
+        target_link_libraries(octave PRIVATE Qt6::Quick3DAssetUtils Qt6::QuickTimeline)
+    endif()
 endif()
 if(TARGET Qt6::WebEngineQuick)
     target_link_libraries(octave PRIVATE Qt6::WebEngineQuick)
