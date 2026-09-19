@@ -27,6 +27,13 @@ QtObject {
     // Always returns a valid font family name - systemDefaultFont for System Default, custom font family otherwise
     property string fontFamily: currentFont === "System Default" ? systemDefaultFont : (fontFamilyMap[currentFont] || systemDefaultFont)
 
+    // Family of the bundled icon-glyph font (assets/fonts/symbols/, set by
+    // Main.qml once loaded). Every Text that draws a symbol (✓ ✗ ⌨ ⌫ ⚠ ♪ …)
+    // uses symbolFont: Qt on Android has no working symbol-font fallback, so
+    // those glyphs rendered as boxes whenever the UI font lacked them.
+    property string symbolFontFamily: ""
+    readonly property string symbolFont: symbolFontFamily !== "" ? symbolFontFamily : fontFamily
+
     // Signal when fonts list is updated
     signal fontsUpdated()
 

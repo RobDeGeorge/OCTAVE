@@ -2,6 +2,8 @@
 #include <cstring>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QSslSocket>
+#include "util/assetstore.h"
 #include <QQuickStyle>
 #include <QScreen>
 #include <QObject>
@@ -116,6 +118,11 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("screenAutoScale", autoScale);
 #ifdef Q_OS_ANDROID
     ctx->setContextProperty("isAndroid", true);
+    // OpenSSL is bundled from android/openssl (QT_ANDROID_EXTRA_LIBS). If this
+    // says no TLS backend, every Qt-side HTTPS request (Spotify, self-update)
+    // fails on the device — v0.9.2 shipped that way without noticing.
+    qInfo() << "Android TLS:" << (QSslSocket::supportsSsl() ? "OpenSSL available," : "NO TLS BACKEND,")
+            << QSslSocket::sslLibraryVersionString();
 #else
     ctx->setContextProperty("isAndroid", false);
 #endif
@@ -335,6 +342,10 @@ int main(int argc, char *argv[])
 
     engine.addImportPath(frontendDir.absolutePath());
 #endif
+    // file:// URLs for frontend/assets files that non-Qt loaders (Quick3D's
+    // Assimp importer) must open themselves — extracted from the APK on Android.
+    AssetStore assetStore(frontendDir.absoluteFilePath(QStringLiteral("assets")));
+    ctx->setContextProperty("assetStore", &assetStore);
 
     // Prefer editable documentation alongside the checkout; packaged desktop
     // builds fall back to the offline copy embedded in the executable.

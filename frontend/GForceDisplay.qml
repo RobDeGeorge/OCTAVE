@@ -49,6 +49,7 @@ Rectangle {
             spacing: dp(6)
 
             Text {
+                font.family: App.Style.symbolFont
                 text: "\u2B07"
                 color: App.Style.accent
                 font.pixelSize: dp(16)

@@ -1049,25 +1049,13 @@ void DownloadManager::_startNextDownload()
             args << QStringLiteral("--extract-audio");
             args << QStringLiteral("--audio-format") << QStringLiteral("m4a");
         }
-        // YouTube's bot detection in 2026 is per-video / per-time, not
-        // blanket. Same videoId can succeed at 12:54 and fail at 13:08 with
-        // identical args. Strategy:
-        //
-        // 1. Cycle through every known-working 2025/2026 player_client. Each
-        //    has slightly different bot-wall sensitivity; one usually slips
-        //    through.
-        // 2. yt-dlp built-in retry: --extractor-retries with --retry-sleep
-        //    linear backoff. The bot wall throttle resets quickly (seconds),
-        //    so 5 tries with 5-30s spacing recovers most attempts that
-        //    happened to hit a peak.
-        // 3. --sleep-interval randomization de-clusters our requests so
-        //    YouTube's per-IP rate limiter doesn't fingerprint us.
-        // YouTube heavily rate-limits the default web client with HTTP 403.
-        // Forcing the iOS / tv_embedded / android player clients bypasses
-        // this on yt-dlp 2024+. android_vr was added in 2026 and is the most
-        // tolerant of brief IP-reputation hiccups.
-        args << QStringLiteral("--extractor-args")
-             << QStringLiteral("youtube:player_client=android_vr,ios,tv_embedded,android");
+        // No player_client override. Until v0.9.2 this forced
+        // "android_vr,ios,tv_embedded,android"; by September 2026 that set
+        // yields nothing (android_vr wants a GVS PO token, tv_embedded is no
+        // longer a client) and every download ended in HTTP 403, while
+        // yt-dlp's own default client list downloads the same videos fine.
+        // The bundled yt-dlp self-updates on launch, so its defaults track
+        // whatever YouTube currently accepts — leave the choice to it.
 #endif
 
         args << QStringLiteral("-o") << outputTemplate;

@@ -145,8 +145,8 @@ Flow {
             property bool isDeletable: control.deletableItems.indexOf(modelData) !== -1
             property bool hasImage: control.chipImages && control.chipImages[modelData] ? true : false
             property bool hasPalette: !hasImage
-                && control.chipPalettes
-                && control.chipPalettes[modelData]
+                && !!control.chipPalettes
+                && !!control.chipPalettes[modelData]
                 && control.chipPalettes[modelData].length > 0
             property bool hasFont: !hasImage && !hasPalette
                 && control.chipFonts

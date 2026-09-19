@@ -35,18 +35,22 @@ Item {
     property string statusText: "Search for songs to download"
     property bool statusVisible: true
 
-    // Start a download, first making sure the app may write to the target
-    // folder. Only the C++ backend exposes hasStorageAccess()/
-    // requestStorageAccess() (Android "All files access"); on Python and on
-    // desktop C++ hasStorageAccess() is always true.
+    // Start a download. On Android without "All files access" the backend
+    // saves into the app's own Music folder (which the library scans), so the
+    // download always goes ahead; the page only mentions the permission once.
+    // Until v0.9.2 the first tap instead threw the user into Android's system
+    // settings page and did nothing else — and Android killed the backgrounded
+    // app while they were there. Only the C++ backend exposes
+    // hasStorageAccess() (desktop C++ and Python: always true).
+    property bool storageHintShown: false
     function startDownload(songJson) {
-        if (isAndroid && typeof downloadManager.hasStorageAccess === "function"
-                && !downloadManager.hasStorageAccess()) {
-            downloadManager.requestStorageAccess()
-            downloadPage.statusText = "Grant \"All files access\" in the settings screen, then tap download again"
-            return
-        }
         downloadManager.download_song(songJson)
+        if (isAndroid && !storageHintShown
+                && typeof downloadManager.hasStorageAccess === "function"
+                && !downloadManager.hasStorageAccess()) {
+            storageHintShown = true
+            downloadPage.statusText = "Saving inside OCTAVE's app folder. To download into your phone's Music folder, allow \"All files access\" for OCTAVE in Android settings."
+        }
     }
 
     onStatusTextChanged: {
@@ -523,6 +527,7 @@ Item {
                         border.color: downloadPage.showKeyboard ? accentColor : cardBorderColor
 
                         Text {
+                            font.family: App.Style.symbolFont
                             anchors.centerIn: parent
                             text: "\u2328"
                             font.pixelSize: dp(20)
@@ -686,6 +691,7 @@ Item {
                             border.color: Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.15)
 
                             Text {
+                                font.family: App.Style.symbolFont
                                 anchors.centerIn: parent
                                 text: "\u232B"
                                 font.pixelSize: onScreenKeyboard.keyFontSize * 1.2
@@ -909,6 +915,7 @@ Item {
 
                             // Fallback icon
                             Text {
+                                font.family: App.Style.symbolFont
                                 anchors.centerIn: parent
                                 text: "\u266A"
                                 font.pixelSize: dp(20)
@@ -1088,6 +1095,7 @@ Item {
 
                             // Checkmark (shown when downloaded)
                             Text {
+                                font.family: App.Style.symbolFont
                                 anchors.centerIn: parent
                                 text: "\u2713"
                                 font.pixelSize: dp(20)
@@ -1098,6 +1106,7 @@ Item {
 
                             // X mark (shown when failed)
                             Text {
+                                font.family: App.Style.symbolFont
                                 anchors.centerIn: parent
                                 text: "\u2717"
                                 font.pixelSize: dp(18)
@@ -1320,6 +1329,7 @@ Item {
 
                                         // Status icon
                                         Text {
+                                            font.family: App.Style.symbolFont
                                             text: {
                                                 if (model.status === "complete") return "\u2713"
                                                 if (model.status === "failed") return "\u2717"
@@ -1662,6 +1672,7 @@ Item {
                         border.color: dlNewPlaylistDialog.npShowKeyboard ? accentColor : Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.2)
 
                         Text {
+                            font.family: App.Style.symbolFont
                             anchors.centerIn: parent
                             text: "\u2328"
                             font.pixelSize: dp(20)
@@ -1869,7 +1880,7 @@ Item {
                             Text {
                                 anchors.centerIn: parent
                                 text: "\u232B"
-                                font.family: downloadPage.globalFont
+                                font.family: App.Style.symbolFont
                                 font.pixelSize: dlNpKeyboard.keyFont
                                 color: textColor
                             }

@@ -515,7 +515,7 @@ Flickable {
                                     Layout.alignment: Qt.AlignVCenter
 
                                     SequentialAnimation on opacity {
-                                        running: parent.parent.confirming
+                                        running: parent.parent.confirming === true
                                         loops: Animation.Infinite
                                         NumberAnimation { from: 1.0; to: 0.4; duration: 800 }
                                         NumberAnimation { from: 0.4; to: 1.0; duration: 800 }

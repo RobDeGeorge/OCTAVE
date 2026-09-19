@@ -208,7 +208,7 @@ ls ~/Qt/6.7.3/android_arm64_v8a/bin/qt-cmake       # Android cross-compile wrapp
 ls ~/Qt/6.7.3/gcc_64/bin/androiddeployqt           # APK packaging tool (runs on host)
 ```
 
-**OpenSSL for Android:** wired in at build time via the KDAB `android_openssl` CMake project (already integrated). No separate install step needed.
+**OpenSSL for Android:** prebuilt `libcrypto_3.so` / `libssl_3.so` (OpenSSL 3.1.8, from KDAB's `android_openssl`) are checked in under `android/openssl/<abi>/` and added to the APK through `QT_ANDROID_EXTRA_LIBS` in `CMakeLists.txt`. Nothing to install; see `android/openssl/README.md` to update them.
 
 ### Step 2 — Install Android SDK + NDK
 

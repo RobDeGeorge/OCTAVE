@@ -119,7 +119,7 @@ Item {
                     label: "ROLL"
                     value: currentRoll.toFixed(decimalPlaces)
                     unit: "\u00B0"
-                    icon: "\u21C4"
+                    icon: "\u2194"
                     barValue: (currentRoll + 90) / 180
                     globalFont: sensorMenu.globalFont
                     connected: imuConnected

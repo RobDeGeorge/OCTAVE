@@ -258,6 +258,7 @@ Item {
                             height: width
 
                             Text {
+                                font.family: App.Style.symbolFont
                                 anchors.centerIn: parent
                                 text: "\u26A0"
                                 font.pixelSize: dp(36)

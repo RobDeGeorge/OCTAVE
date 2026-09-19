@@ -1989,6 +1989,7 @@ Item {
                         border.color: newPlaylistDialog.npShowKeyboard ? App.Style.accent : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.2)
 
                         Text {
+                            font.family: App.Style.symbolFont
                             anchors.centerIn: parent
                             text: "\u2328"
                             font.pixelSize: dp(20)
@@ -2160,6 +2161,7 @@ Item {
                             border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.15)
 
                             Text {
+                                font.family: App.Style.symbolFont
                                 anchors.centerIn: parent
                                 text: "\u232B"
                                 font.pixelSize: npKeyboard.keyFont * 1.1

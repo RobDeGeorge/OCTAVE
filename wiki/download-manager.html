@@ -407,10 +407,12 @@ C++ desktop                       C++ Android
               <code>YoutubeDLRequest</code> to <code>YoutubeDL.getInstance().execute()</code>.</li>
             <li><strong>Extra yt-dlp flags:</strong> <code>--embed-metadata --add-metadata</code>, and for m4a
               <code>--extract-audio --audio-format m4a</code> (an AAC→m4a rewrap, "no re-encode, no quality loss", needed so the
-              metadata post-processors actually run), plus
-              <code>--extractor-args youtube:player_client=android_vr,ios,tv_embedded,android</code> -- the comment records that
-              YouTube's bot detection is per-video and per-time, so cycling clients and yt-dlp's own retries recover most
-              attempts.</li>
+              metadata post-processors actually run). There is deliberately <em>no</em> <code>player_client</code>
+              override any more: until v0.9.2 the Android build forced
+              <code>youtube:player_client=android_vr,ios,tv_embedded,android</code>, and by September 2026 that set produced
+              nothing (android_vr wants a GVS PO token, tv_embedded is no longer a client), so every download ended in
+              <code>HTTP Error 403</code> while yt-dlp's default client list fetched the same videos fine. The bundled yt-dlp
+              self-updates on launch, so its defaults track what YouTube currently accepts.</li>
             <li><strong>Search bundle:</strong> the AAR's Python has no pip, so <span class="file-path">scripts/build-android-pylib-bundle.sh</span>
               packs ytmusicapi and its pure-Python dependencies into
               <span class="file-path">android/assets/python-packages/ytmusic-bundle.zip</span>; the bridge extracts it to
@@ -510,10 +512,12 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             wherever they live. <code>hasStorageAccess()</code> / <code>requestStorageAccess()</code> are exposed to QML
             (the latter opens Android's per-app "All files access" settings screen, since this permission has no runtime
             dialog). <span class="file-path">DownloadPage.qml</span> routes every download (result row and the error-popup
-            retry) through its <code>startDownload(songJson)</code> function: on Android, when
-            <code>hasStorageAccess()</code> is false it calls <code>requestStorageAccess()</code>, sets the status text to
-            "Grant \"All files access\" in the settings screen, then tap download again" and returns; otherwise (and always on
-            Python and desktop C++, where access is unconditional) it calls <code>download_song()</code>. Commit
+            retry) through its <code>startDownload(songJson)</code> function, which always calls
+            <code>download_song()</code> first: without All files access the file simply lands in the app-scoped folder,
+            which the library scans. On Android it then shows a one-time status hint ("Saving inside OCTAVE's app folder.
+            To download into your phone's Music folder, allow \"All files access\" for OCTAVE in Android settings"). Until
+            v0.9.2 the first tap instead called <code>requestStorageAccess()</code>, jumped to the system settings page and
+            downloaded nothing — and Android killed the backgrounded app while the user was there. Commit
             <code>d751c9d</code> introduced the storage split so downloads "land in the user-picked folder".
           </p>
         </section>

@@ -30,6 +30,9 @@ settings = SettingsManager()
 settings.save_setting("musicDeviceModel", "Album art")
 engine.rootContext().setContextProperty("settingsManager", settings)
 engine.rootContext().setContextProperty("testSettings", settings)
+from backend.asset_store import AssetStore
+asset_store = AssetStore(str(Path(sys.argv[3]) / "frontend" / "assets"))
+engine.rootContext().setContextProperty("assetStore", asset_store)
 # Catch import/type errors in both integration surfaces, not just the isolated scene.
 for file in ("MediaRoom.qml", "NowPlayingStudio.qml", "settings/MediaSettingsPage.qml"):
     component = QQmlComponent(engine, QUrl.fromLocalFile(str(Path.cwd() / "frontend" / file)))
@@ -49,7 +52,7 @@ assert restored.get_setting_with_default("musicDeviceModel", "Album art") == "Re
 sys.exit(code)
 '''
     result = subprocess.run(
-        [sys.executable, "-c", runner, str(ROOT / "tests/fixtures" / fixture), str(tmp_path)],
+        [sys.executable, "-c", runner, str(ROOT / "tests/fixtures" / fixture), str(tmp_path), str(ROOT)],
         cwd=ROOT,
         env=dict(os.environ, XDG_CONFIG_HOME=str(tmp_path), QT_QUICK_CONTROLS_STYLE="Basic", QSG_RHI_BACKEND="opengl"),
         capture_output=True, text=True, timeout=35,

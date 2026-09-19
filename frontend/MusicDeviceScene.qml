@@ -94,13 +94,24 @@ Item {
         refreshArtwork()
         if (animateOnArrival) loadMedia(true)
     }
+    // Deferred loads run from Timers, not Qt.callLater: the Loader that hosts
+    // this scene unloads it when MediaRoom is left, and a callLater closure
+    // fired after that logged "Property 'loadMedia' ... is not a function".
+    // A Timer dies with the scene, so it can never fire on a dead object.
+    Timer { id: arrivalRetry; interval: 0; onTriggered: if (root.pendingArrival) root.loadMedia(true) }
+    Timer { id: deviceChangeLoad; interval: 0; onTriggered: root.loadMedia(true) }
     onReadyChanged: {
-        if (ready && pendingArrival) Qt.callLater(function() { if (root.pendingArrival) root.loadMedia(true) })
+        if (ready && pendingArrival) arrivalRetry.restart()
     }
     onVisibleChanged: {
         if (!visible) cancelLoading()
         else if (initialized && animateOnArrival) loadMedia(true)
     }
+    // Quick3D's RuntimeLoader hands the path to Assimp, which cannot read
+    // files inside an Android APK; assetStore extracts them and returns a
+    // file:// URL (a plain path on desktop). "" stays "" so the conditional
+    // loaders above unload cleanly.
+    function modelUrl(name) { return (name === "" || !assetStore) ? "" : assetStore.localUrl("music_devices/" + name) }
     readonly property bool ready: body.status === RuntimeLoader.Success
         && (!disc.source.toString() || disc.status === RuntimeLoader.Success)
         && (!leftReel.source.toString() || leftReel.status === RuntimeLoader.Success)
@@ -132,7 +143,7 @@ Item {
     onDeviceChanged: {
         cancelLoading()
         spin = 0; supplySpin = 0; takeupSpin = 0; yaw = -18; pitch = -18
-        if (initialized && animateOnArrival) Qt.callLater(function() { root.loadMedia(true) })
+        if (initialized && animateOnArrival) deviceChangeLoad.restart()
     }
 
     Timer {
@@ -199,8 +210,8 @@ Item {
             RuntimeLoader {
                 id: body
                 objectName: "deviceBody"
-                source: "assets/music_devices/" + (root.record ? "record-player" : root.cassette ? "cassette-player"
-                    : root.compactDisc ? "cd-player" : root.ipod ? "ipod" : "mp3-player") + ".glb"
+                source: root.modelUrl((root.record ? "record-player" : root.cassette ? "cassette-player"
+                    : root.compactDisc ? "cd-player" : root.ipod ? "ipod" : "mp3-player") + ".glb")
             }
             Node {
                 x: (root.record ? -35 : 0) + root.mediaSide * root.mediaLift * 50
@@ -211,7 +222,7 @@ Item {
                 eulerRotation.z: -root.spin
                 RuntimeLoader {
                     id: disc
-                    source: root.record ? "assets/music_devices/record.glb" : root.compactDisc ? "assets/music_devices/cd.glb" : ""
+                    source: root.record ? root.modelUrl("record.glb") : root.compactDisc ? root.modelUrl("cd.glb") : ""
                 }
                 MusicDeviceArtSurface {
                     objectName: "discArtwork"
@@ -264,19 +275,19 @@ Item {
             }
             RuntimeLoader {
                 id: tonearm
-                source: root.record ? "assets/music_devices/tonearm.glb" : ""
+                source: root.record ? root.modelUrl("tonearm.glb") : ""
                 position: Qt.vector3d(103, 80, 41 + root.doorOpen * 8)
                 eulerRotation.z: root.tonearmAngle
             }
             RuntimeLoader {
                 id: lid
-                source: root.compactDisc ? "assets/music_devices/cd-lid.glb" : ""
+                source: root.compactDisc ? root.modelUrl("cd-lid.glb") : ""
                 position: Qt.vector3d(0, 103, 31)
                 eulerRotation.x: -105 * root.doorOpen
             }
             RuntimeLoader {
                 id: door
-                source: root.cassette ? "assets/music_devices/cassette-door.glb" : ""
+                source: root.cassette ? root.modelUrl("cassette-door.glb") : ""
                 position: Qt.vector3d(-10, -109, 33)
                 eulerRotation.x: 65 * root.doorOpen
             }
@@ -288,7 +299,7 @@ Item {
                 opacity: root.mediaAlpha
                 RuntimeLoader {
                     id: tape
-                    source: root.cassette ? "assets/music_devices/cassette.glb" : ""
+                    source: root.cassette ? root.modelUrl("cassette.glb") : ""
                 }
                 MusicDeviceArtSurface {
                     objectName: "cassetteArtwork"
@@ -299,25 +310,25 @@ Item {
                 }
                 RuntimeLoader {
                     id: supplyTape
-                    source: root.cassette ? "assets/music_devices/tape-pack.glb" : ""
+                    source: root.cassette ? root.modelUrl("tape-pack.glb") : ""
                     position: Qt.vector3d(-19, -39, 28.1)
                     scale: Qt.vector3d(root.supplyRadius, root.supplyRadius, 1)
                 }
                 RuntimeLoader {
                     id: takeupTape
-                    source: root.cassette ? "assets/music_devices/tape-pack.glb" : ""
+                    source: root.cassette ? root.modelUrl("tape-pack.glb") : ""
                     position: Qt.vector3d(-19, 35, 28.1)
                     scale: Qt.vector3d(root.takeupRadius, root.takeupRadius, 1)
                 }
                 RuntimeLoader {
                     id: leftReel
-                    source: root.cassette ? "assets/music_devices/reel.glb" : ""
+                    source: root.cassette ? root.modelUrl("reel.glb") : ""
                     position: Qt.vector3d(-19, -39, 29.5)
                     eulerRotation.z: -root.supplySpin
                 }
                 RuntimeLoader {
                     id: rightReel
-                    source: root.cassette ? "assets/music_devices/reel.glb" : ""
+                    source: root.cassette ? root.modelUrl("reel.glb") : ""
                     position: Qt.vector3d(-19, 35, 29.5)
                     eulerRotation.z: -root.takeupSpin
                 }

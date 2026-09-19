@@ -9,13 +9,17 @@ QtObject {
     // Probing compiles MusicDeviceScene.qml and therefore loads the Quick3D
     // plugin. Do it on first demand rather than at singleton creation so the
     // default "Album art" mode never pays for the 3D module at startup.
-    property int availability: -1
+    // The result is cached in a plain JS object rather than a QML property:
+    // isAvailable() is called from bindings (SettingCategory.description in
+    // the Now Playing studio and Media settings), and assigning a property the
+    // binding had just read logged "Binding loop detected for description".
+    readonly property var _probe: ({ availability: -1 })
     function isAvailable() {
-        if (availability < 0) {
+        if (_probe.availability < 0) {
             var component = Qt.createComponent("MusicDeviceScene.qml", Component.PreferSynchronous)
-            availability = component.status === Component.Ready ? 1 : 0
+            _probe.availability = component.status === Component.Ready ? 1 : 0
         }
-        return availability === 1
+        return _probe.availability === 1
     }
     function readMode() {
         var value = settingsManager ? settingsManager.get_setting_with_default("musicDeviceModel", "Album art") : "Album art"

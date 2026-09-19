@@ -19,7 +19,9 @@ Node {
     Behavior on animatedAngle { enabled: hinge.animate; NumberAnimation { id: hingeAnimation; duration: 450; easing.type: Easing.InOutCubic } }
     RuntimeLoader {
         id: loader
-        source: "./assets/jeep_tj/" + hinge.part.file
+        // assetStore hands Assimp a real file (extracted from the APK on Android)
+        // (null-guarded: at shutdown the backend drops assetStore before the scene dies)
+        source: assetStore ? assetStore.localUrl("jeep_tj/" + hinge.part.file) : ""
         onStatusChanged: if (status === RuntimeLoader.Error) console.warn("Jeep asset:", source, errorString)
     }
 }

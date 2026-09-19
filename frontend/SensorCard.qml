@@ -38,6 +38,7 @@ Rectangle {
             Text {
                 text: card.icon
                 color: App.Style.accent
+                font.family: App.Style.symbolFont
                 font.pixelSize: dp(16)
             }
 

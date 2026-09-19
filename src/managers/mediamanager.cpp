@@ -1988,7 +1988,13 @@ void MediaManager::_scan_library_inner(bool resetDisplayNames)
         const QString appMusicRoot = OctaveAndroid::getDownloadsDir();
         qCInfo(lcMedia) << "Android secondary scan root:" << appMusicRoot;
         QDir rootDir(appMusicRoot);
-        if (rootDir.exists()) {
+        // Without All-files-access the library root *is* the app dir, so this
+        // walk would find every file a second time and register it under a
+        // "<folder> - <file>" alias — which then showed up as a duplicate
+        // track titled "Downloads - - For No One" once the artist was stripped.
+        if (QDir::cleanPath(appMusicRoot) == QDir::cleanPath(m_libraryRoot)) {
+            qCInfo(lcMedia) << "Android secondary scan skipped: app dir is the library root";
+        } else if (rootDir.exists()) {
             // Walk each subfolder as a playlist (Downloads, Unsorted, etc.)
             const QStringList subs = rootDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
             qCInfo(lcMedia) << "Android secondary subfolders found:" << subs

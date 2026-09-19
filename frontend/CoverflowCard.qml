@@ -1,4 +1,4 @@
-import QtQuick 2.15
+import QtQuick
 import Qt5Compat.GraphicalEffects
 
 // Reusable coverflow card — one album art image with 3D perspective transform,

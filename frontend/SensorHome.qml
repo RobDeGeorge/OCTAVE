@@ -135,6 +135,7 @@ Item {
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             text: "◉"
+                            font.family: App.Style.symbolFont
                             color: accentColor
                             font.pixelSize: dp(48)
                         }
@@ -249,6 +250,7 @@ Item {
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             text: "⌖"
+                            font.family: App.Style.symbolFont
                             color: labelColor
                             font.pixelSize: dp(48)
                         }
@@ -289,6 +291,7 @@ Item {
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             text: "◬"
+                            font.family: App.Style.symbolFont
                             color: labelColor
                             font.pixelSize: dp(48)
                         }

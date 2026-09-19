@@ -605,7 +605,17 @@ jobs:
             echo "::error::APK bundles libQt6Quick3DAssetUtils without libQt6QuickTimeline — add qtquicktimeline to the Android Qt modules"
             exit 1
           fi
-          echo "$LIBS" | grep -E 'Quick3D|QuickTimeline' || echo "(no Quick3D libraries bundled)"
+          # RuntimeLoader needs the Assimp asset importer plugin (QT_ANDROID_EXTRA_PLUGINS in CMake)
+          if echo "$LIBS" | grep -q libQt6Quick3D_ && ! echo "$LIBS" | grep -q libplugins_assetimporters_assimp; then
+            echo "::error::APK bundles Quick3D without the assetimporters plugin — glb models cannot load"
+            exit 1
+          fi
+          # Qt-side HTTPS needs OpenSSL in the APK (android/openssl, QT_ANDROID_EXTRA_LIBS)
+          if ! echo "$LIBS" | grep -q libssl_3 || ! echo "$LIBS" | grep -q libcrypto_3; then
+            echo "::error::APK is missing libssl_3/libcrypto_3 — Qt TLS would be unavailable on the device"
+            exit 1
+          fi
+          echo "$LIBS" | grep -E 'Quick3D|QuickTimeline|assetimporters|ssl_3|crypto_3' || echo "(no Quick3D libraries bundled)"
 
       - name: Sign APK with test keystore
         run: |

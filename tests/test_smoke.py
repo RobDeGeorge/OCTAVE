@@ -30,6 +30,7 @@ BACKEND_MODULES = [
     "backend.android_auto",
     "backend.volume_utils",
     "backend.dashboard_manager",
+    "backend.asset_store",
 ]
 
 

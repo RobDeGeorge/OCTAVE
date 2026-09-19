@@ -96,8 +96,10 @@ ApplicationWindow {
     // width/height here overrides that pillarboxing, causing content to
     // intrude into the cutout / rounded-corner area. Leaving the bindings
     // unset on Android lets the OS own the sizing.
-    width: isAndroid ? undefined : screenWidth
-    height: isAndroid ? undefined : screenHeight
+    // (A conditional `undefined` binding would log "Unable to assign
+    // [undefined] to int" on Android; these bindings simply don't exist there.)
+    Binding on width { when: !isAndroid; value: screenWidth }
+    Binding on height { when: !isAndroid; value: screenHeight }
 
     // Handle window close (force close / X button)
     onClosing: function(close) {
@@ -744,6 +746,19 @@ ApplicationWindow {
                     GradientStop { position: 1.0; color: globalAuraFlash.auraColor }
                 }
             }
+        }
+    }
+
+    // Icon-glyph font used by every symbol-drawing Text (App.Style.symbolFont).
+    // Lives in its own subfolder so the picker's folder scan below skips it.
+    FontLoader {
+        id: symbolFontLoader
+        source: Qt.resolvedUrl("assets/fonts/symbols/OCTAVESymbols-Regular.ttf")
+        onStatusChanged: {
+            if (status === FontLoader.Ready)
+                App.Style.symbolFontFamily = name
+            else if (status === FontLoader.Error)
+                console.warn("Symbol font failed to load; icon glyphs fall back to the UI font")
         }
     }
 

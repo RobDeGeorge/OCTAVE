@@ -21,6 +21,7 @@ appimagetool-*.AppImage
 .buildozer/
 /buildozer.spec
 build-android/
+build-android-*/
 aqtinstall.log
 build-android-configure.log
 # Regenerate via scripts/build-android-pylib-bundle.sh

@@ -99,6 +99,8 @@ qt_add_executable(octave
     src/main.cpp
     src/util/logger.h
     src/util/logger.cpp
+    src/util/assetstore.cpp
+    src/util/assetstore.h
     src/util/uiwatchdog.h
     src/util/uiwatchdog.cpp
     src/managers/settingsmanager.h
@@ -258,5 +260,26 @@ if(ANDROID)
         # Bundle the QML frontend/ dir into the APK so runtime-loaded QML is findable.
         QT_QML_ROOT_PATH "${CMAKE_SOURCE_DIR}/frontend"
     )
+    # Qt for Android ships the OpenSSL TLS *plugin* but not OpenSSL itself;
+    # without libcrypto_3/libssl_3 in the APK every QSslSocket fails with "No
+    # functional TLS backend was found" (Spotify, self-update, any Qt-side
+    # HTTPS). Prebuilt from KDAB/android_openssl — see android/openssl/README.md.
+    foreach(abi IN LISTS QT_ANDROID_ABIS)
+        set(_ssl_dir "${CMAKE_SOURCE_DIR}/android/openssl/${abi}")
+        if(EXISTS "${_ssl_dir}/libssl_3.so")
+            set_property(TARGET octave APPEND PROPERTY QT_ANDROID_EXTRA_LIBS
+                "${_ssl_dir}/libcrypto_3.so" "${_ssl_dir}/libssl_3.so")
+        else()
+            message(WARNING "android/openssl/${abi}: no OpenSSL libraries — Qt HTTPS will not work in this APK")
+        endif()
+    endforeach()
+    # androiddeployqt only bundles plugin categories the linked Qt modules
+    # declare, and Quick3D's "assetimporters" (the Assimp glTF importer behind
+    # RuntimeLoader) is not one of them: v0.9.2 shipped an APK where every glb
+    # failed with "Unsupported: Unknown error" (music player objects, the Jeep).
+    if(Qt6Quick3D_FOUND)
+        set_property(TARGET octave APPEND PROPERTY QT_ANDROID_EXTRA_PLUGINS
+            "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/assetimporters")
+    endif()
     # No manual qt_finalize_executable call — qt_add_executable schedules it automatically.
 endif()

@@ -30,6 +30,7 @@ from PySide6.QtWidgets import QApplication
 
 # backend imports — universal
 from backend.clock import Clock
+from backend.asset_store import AssetStore
 from backend.settings_manager import SettingsManager
 from backend.media_manager import MediaManager
 from backend.audio_analyzer import AudioAnalyzer
@@ -90,6 +91,10 @@ engine.addImportPath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "f
 
 # Expose platform flag to QML — always false on the Python (desktop) build.
 engine.rootContext().setContextProperty("isAndroid", False)
+
+# file:// URLs for frontend/assets files (3D models) — see backend/asset_store.py
+asset_store = AssetStore(os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "assets"))
+engine.rootContext().setContextProperty("assetStore", asset_store)
 
 # Settings Manager
 settings_manager = SettingsManager()

@@ -71,10 +71,10 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: App.Spacing.overallSpacing * 0.5
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\u21BB"
+                text: "\u2B6E"
                 color: reconnectArea.containsMouse ? App.Style.accent : App.Style.secondaryTextColor
                 font.pixelSize: App.Spacing.overallText
-                font.family: App.Style.fontFamily
+                font.family: App.Style.symbolFont
                 visible: !widgetRoot.obdConnected
 
                 Behavior on color { ColorAnimation { duration: 150 } }
