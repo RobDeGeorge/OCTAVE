@@ -13,8 +13,12 @@ Popup {
     readonly property bool suspended: opened && contentArea && navigationOwner
                                       && contentArea.currentItem !== navigationOwner
     parent: contentArea || Overlay.overlay
-    width: parent ? parent.width : 0
-    height: parent ? parent.height : 0
+    // Zero-sized while suspended: an open Popup swallows every press inside
+    // its geometry even when disabled and transparent (the Controls overlay
+    // checks containment first), which left the page shown underneath — the
+    // media room, for one — untouchable after the wiki had been opened.
+    width: parent && !suspended ? parent.width : 0
+    height: parent && !suspended ? parent.height : 0
     padding: 0
     modal: false
     dim: false
