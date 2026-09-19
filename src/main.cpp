@@ -18,6 +18,9 @@
 #ifdef OCTAVE_HAVE_WEBENGINE
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #endif
+#ifdef OCTAVE_HAVE_WEBVIEW
+#include <QtWebView/QtWebView>
+#endif
 
 #ifdef Q_OS_ANDROID
 #include <QtCore/private/qandroidextras_p.h>
@@ -87,6 +90,9 @@ int main(int argc, char *argv[])
     }
 #endif
     QtWebEngineQuick::initialize();
+#endif
+#ifdef OCTAVE_HAVE_WEBVIEW
+    QtWebView::initialize();   // Android: must precede QGuiApplication
 #endif
     QGuiApplication app(argc, argv);
     app.setOrganizationName("OCTAVE");
@@ -355,6 +361,11 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("wikiHomeUrl", QFile::exists(localWiki)
         ? QUrl::fromLocalFile(QDir::cleanPath(localWiki))
         : QUrl(QStringLiteral("qrc:/wiki/index.html")));
+#elif defined(OCTAVE_HAVE_WEBVIEW)
+    // Android: the native WebView reads the wiki copied into the APK's assets
+    // (android/assets/wiki). Only asset URLs work here — no qrc:/, no assets:/.
+    ctx->setContextProperty("wikiViewerAvailable", true);
+    ctx->setContextProperty("wikiHomeUrl", QUrl(QStringLiteral("file:///android_asset/wiki/index.html")));
 #else
     ctx->setContextProperty("wikiViewerAvailable", false);
     ctx->setContextProperty("wikiHomeUrl", QUrl());

@@ -17,6 +17,16 @@ find_package(Qt6 REQUIRED COMPONENTS ${OCTAVE_QT_COMPONENTS})
 if(NOT ANDROID AND NOT IOS)
     find_package(Qt6 QUIET COMPONENTS WebEngineQuick)
 endif()
+# On Android the reader uses Qt WebView (the platform's native WebView) and
+# reads the wiki from the APK's assets (android/assets/wiki -> wiki/).
+if(ANDROID)
+    find_package(Qt6 QUIET COMPONENTS WebView)
+    if(TARGET Qt6::WebView)
+        message(STATUS "Qt WebView found — offline wiki reader enabled on Android")
+    else()
+        message(WARNING "Qt WebView not found (qtwebview module): the wiki reader will be unavailable in this APK")
+    endif()
+endif()
 
 # Quick3D backs the 3D vehicle-attitude view (frontend/CarMenu.qml). It is
 # optional at build time: the QML is loaded lazily and SensorHome probes for the
@@ -220,6 +230,10 @@ if(TARGET Qt6::WebEngineQuick)
         "${CMAKE_SOURCE_DIR}/wiki/*.png" "${CMAKE_SOURCE_DIR}/wiki/*.webp")
     qt_add_resources(octave "wiki" PREFIX "/wiki"
         BASE "${CMAKE_SOURCE_DIR}/wiki" FILES ${OCTAVE_WIKI_FILES})
+endif()
+if(ANDROID AND TARGET Qt6::WebView)
+    target_link_libraries(octave PRIVATE Qt6::WebView)
+    target_compile_definitions(octave PRIVATE OCTAVE_HAVE_WEBVIEW)
 endif()
 if(ANDROID)
     target_link_libraries(octave PRIVATE Qt6::Sensors Qt6::CorePrivate)

@@ -94,7 +94,7 @@ jobs:
           version: '6.7.3'
           host: 'linux'
           target: 'desktop'
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline'
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline qtwebview'
           cache: true
 
       - name: Configure
@@ -479,7 +479,7 @@ jobs:
           host: 'linux'
           target: 'android'
           arch: 'android_arm64_v8a'
-          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline'
+          modules: 'qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline qtwebview'
 
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
@@ -525,7 +525,7 @@ jobs:
           # Main.qml". Same fix for the scripts symlink.
           set -e
           cd android/assets
-          for link in frontend scripts; do
+          for link in frontend scripts wiki; do
             if [ -L "$link" ]; then
               target=$(readlink -f "$link")
               echo "Dereferencing $link -> $target"
@@ -616,6 +616,11 @@ jobs:
             exit 1
           fi
           echo "$LIBS" | grep -E 'Quick3D|QuickTimeline|assetimporters|ssl_3|crypto_3' || echo "(no Quick3D libraries bundled)"
+          # The offline wiki reader: Qt WebView + the wiki copied into assets/
+          if ! echo "$LIBS" | grep -q libQt6WebView_ || ! unzip -Z1 "$APK" | grep -q '^assets/wiki/index.html$'; then
+            echo "::error::APK lacks Qt WebView or assets/wiki/index.html — the wiki reader would be unavailable"
+            exit 1
+          fi
 
       - name: Sign APK with test keystore
         run: |

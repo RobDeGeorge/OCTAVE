@@ -69,10 +69,14 @@ Popup {
             objectName: "wikiBrowserLoader"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: popup.viewerAvailable && status !== Loader.Error
+            // Hidden (not just transparent) while another page is shown:
+            // on Android the reader is a native WebView layered above the
+            // Qt window, which ignores QML opacity and would stay on screen.
+            visible: popup.viewerAvailable && status !== Loader.Error && !popup.suspended
             // Neither Chromium nor the page remains alive after Close.
             active: popup.opened && popup.viewerAvailable
-            source: "WikiWebView.qml"
+            // Chromium on desktop, the platform WebView on Android (see WikiNativeView.qml).
+            source: (typeof isAndroid !== "undefined" && isAndroid) ? "WikiNativeView.qml" : "WikiWebView.qml"
             onLoaded: item.homeUrl = popup.homeUrl
         }
 
