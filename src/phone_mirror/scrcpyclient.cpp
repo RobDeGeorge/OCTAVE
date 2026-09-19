@@ -23,6 +23,11 @@
 #include <QtEndian>
 
 #ifdef Q_OS_WIN
+// windows.h (pulled in by winsock2.h) defines min/max macros that break
+// std::max() below unless NOMINMAX is set first.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #else
 #include <sys/socket.h>
@@ -73,6 +78,9 @@ constexpr int kBlackLumaMax = 20;
 // fewer than this fraction of samples are bright.
 constexpr double kBlackLenientFraction = 0.05;
 
+#ifdef OCTAVE_HAVE_FFMPEG
+// Only the libavcodec decode loop produces AVFrames; without FFmpeg the type
+// does not exist and MSVC fails on the signature.
 static bool isBlackFrame(const AVFrame *f, bool lenient)
 {
     const int w = f->width, h = f->height, stride = f->linesize[0];
@@ -94,6 +102,7 @@ static bool isBlackFrame(const AVFrame *f, bool lenient)
     }
     return true;
 }
+#endif  // OCTAVE_HAVE_FFMPEG
 
 // Frame header flags (app/src/demuxer.c)
 constexpr quint64 kFlagConfig = quint64(1) << 63;

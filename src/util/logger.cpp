@@ -15,6 +15,7 @@
 #if defined(Q_OS_WIN)
 #  include <windows.h>
 #  include <io.h>
+#  include <fcntl.h>     // _O_WRONLY / _O_APPEND / _O_CREAT for the crash-log fd
 #elif defined(Q_OS_UNIX)
 #  include <csignal>
 #  include <fcntl.h>
