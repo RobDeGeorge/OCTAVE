@@ -146,6 +146,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default also installs the legacy "tools" package,
+          # which Google removed from the SDK repository (sdkmanager:
+          # "Failed to find package 'tools'"). We only need platform-tools.
+          packages: platform-tools
 
       - name: Install platform + build-tools
         run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
@@ -478,6 +483,8 @@ jobs:
 
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools   # see phone-server job: legacy "tools" is gone
 
       - name: Install NDK r26b
         run: |
