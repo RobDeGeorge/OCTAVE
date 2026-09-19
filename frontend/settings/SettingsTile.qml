@@ -40,57 +40,32 @@ Rectangle {
     Behavior on color { ColorAnimation { duration: 150 } }
     Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
 
-    // Top-edge bevel highlight — static, fakes a lit upper rim.
-    Rectangle {
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.leftMargin: dp(App.EnvironmentTheme.active.cardRadius)
-        anchors.rightMargin: dp(App.EnvironmentTheme.active.cardRadius)
-        height: 1
-        color: Qt.rgba(1, 1, 1, 0.10)
-    }
-
-    // Bottom-edge inner shadow — static, pairs with the top highlight to
-    // give the card a beveled / raised look without any per-frame cost.
-    Rectangle {
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.leftMargin: dp(App.EnvironmentTheme.active.cardRadius)
-        anchors.rightMargin: dp(App.EnvironmentTheme.active.cardRadius)
-        height: 1
-        color: Qt.rgba(0, 0, 0, 0.20)
-    }
-
     App.CornerBrackets {
         bracketLength: dp(10)
         visible: App.EnvironmentTheme.active.cornerBrackets
     }
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: tile.dp(10)
-        spacing: tile.dp(6)
+        anchors.centerIn: parent
+        width: Math.max(0, parent.width - tile.dp(24))
+        spacing: tile.dp(12)
 
         Item {
             id: iconHolder
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumHeight: tile.dp(28)
+            Layout.preferredHeight: Math.max(tile.dp(24),
+                Math.min(tile.dp(64), tile.height - tileLabel.implicitHeight - tile.dp(40)))
 
-            // Preferred path: theme-tinted SVG. ThemedIcon carries the same
-            // offset drop shadow the glyphs below fake, so the two render
-            // paths have matching weight.
+            // Keep the icon balanced on wide and tall tiles alike. Rounded
+            // SVG strokes stay clean without an offset shadow doubling them.
             App.ThemedIcon {
                 anchors.centerIn: parent
                 visible: tile._hasSvg
-                width: Math.max(tile.dp(24), parent.height * 0.62)
+                width: Math.min(parent.width * 0.6, parent.height)
                 height: width
                 source: tile.iconSource
                 color: App.Style.accent
-                shadowOffsetX: tile.dp(1)
-                shadowOffsetY: tile.dp(2)
+                shadow: false
             }
 
             // Static drop-shadow glyph behind the main icon — gives the
@@ -117,12 +92,13 @@ Rectangle {
         }
 
         Text {
+            id: tileLabel
             Layout.fillWidth: true
             text: tile.title
             color: App.Style.primaryTextColor
-            font.pixelSize: App.Spacing.overallText * 1.6
+            font.pixelSize: App.Spacing.overallText * 1.1
             font.family: App.Style.fontFamily
-            font.bold: true
+            font.weight: Font.Medium
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
             font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing

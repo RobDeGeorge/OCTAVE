@@ -482,6 +482,21 @@ Item {
                         }
 
                         SettingCategory {
+                            title: "Music Player Object"
+                            description: App.MusicDevicePreference.isAvailable()
+                                ? "Drag the player to rotate. Double-tap to reset."
+                                : "3D players require Qt Quick 3D."
+                            NowPlayingButtonGrid {
+                                options: App.MusicDevicePreference.options
+                                currentValue: App.MusicDevicePreference.mode
+                                onSelected: function(value) {
+                                    if (value === "Album art" || App.MusicDevicePreference.isAvailable())
+                                        App.MusicDevicePreference.select(value)
+                                }
+                            }
+                        }
+
+                        SettingCategory {
                             title: "Vinyl"
                             inlineContent: SettingsToggle {
                                 id: vinylToggle

@@ -14,6 +14,7 @@ Item {
 
     property string currentSection: ""
     property bool updateAvailable: networkManager && networkManager.updateStatus === "update-available"
+    property var activeWikiPopup: null
 
     // Central page model — single source of truth for all pages
     // NOTE: `source` paths are relative to frontend/ (consumed by layout Loaders in frontend/)
@@ -28,17 +29,17 @@ Item {
         { name: "Display",     section: "displaySettings",     source: "settings/DisplaySettingsPage.qml",     widget: "widgets/DisplayWidget.qml",     icon: "\u263C", iconSource: Style.assetBase + "cat_display.svg",
           group: "Appearance",
           subSections: ["Layout", "Window", "Appearance", "Clock"] },
-        { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml",       widget: "widgets/MediaWidget.qml",       icon: "\u266B", iconSource: Style.assetBase + "media_button.svg",
+        { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml",       widget: "widgets/MediaWidget.qml",       icon: "\u266B", iconSource: Style.assetBase + "cat_media.svg",
           group: "Appearance",
           subSections: ["Library", "Playback", "Now Playing", "Spotify"] },
-        { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml",         widget: "widgets/OBDWidget.qml",         icon: "\u26A1", iconSource: Style.assetBase + "obd_button.svg",
+        { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml",         widget: "widgets/OBDWidget.qml",         icon: "\u26A1", iconSource: Style.assetBase + "cat_obd.svg",
           group: "Connectivity",
           subSections: ["Connection", "Adapters", "Tuning", "Parameters"] },
-        { name: "Accessories", section: "accessoriesSettings", source: "settings/AccessoriesSettingsPage.qml", widget: "widgets/AccessoriesWidget.qml", icon: "\u2388", iconSource: Style.assetBase + "sensor_button.svg",
+        { name: "Accessories", section: "accessoriesSettings", source: "settings/AccessoriesSettingsPage.qml", widget: "widgets/AccessoriesWidget.qml", icon: "\u2388", iconSource: Style.assetBase + "cat_accessories.svg",
           group: "Connectivity",
           desktopOnly: true,
           subSections: ["Volume Knob", "IMU Sensor", "Gesture Sensor", "Phone Dock"] },
-        { name: "Device",      section: "deviceSettings",      source: "settings/DeviceSettingsPage.qml",      widget: "widgets/DeviceWidget.qml",      icon: "\u2699", iconSource: Style.assetBase + "settings_button.svg",
+        { name: "Device",      section: "deviceSettings",      source: "settings/DeviceSettingsPage.qml",      widget: "widgets/DeviceWidget.qml",      icon: "\u2699", iconSource: Style.assetBase + "cat_device.svg",
           group: "System",
           subSections: ["Device Name", "Network", "Power"] },
         { name: "About",       section: "about",               source: "settings/AboutPage.qml",               widget: "widgets/AboutWidget.qml",       icon: "\u2139", iconSource: Style.assetBase + "cat_about.svg",
@@ -130,6 +131,20 @@ Item {
         if (layoutLoader.item && typeof layoutLoader.item.navigateToHub === "function") {
             layoutLoader.item.navigateToHub()
         }
+    }
+
+    function registerWikiPopup(popup) {
+        activeWikiPopup = popup
+    }
+
+    function handleSettingsButton() {
+        if (activeWikiPopup && activeWikiPopup.opened) {
+            activeWikiPopup.close()
+            if (currentSection !== "about")
+                navigateToCategory("about")
+            return
+        }
+        navigateToHub()
     }
 
     function navigateToCategory(section) {

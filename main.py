@@ -47,6 +47,19 @@ from backend.esp32_volume_manager import ESP32VolumeManager
 from backend.berryimu_manager import BerryIMUManager
 from backend.gesture_manager import GestureManager
 
+try:
+    from PySide6.QtWebEngineQuick import QtWebEngineQuick
+    # Match the native backend: avoid Chromium's Mesa/Wayland GPU crash
+    # without disabling hardware acceleration for the Qt Quick interface.
+    if system_name == "Linux":
+        chromium_flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+        if "--disable-gpu" not in chromium_flags.split():
+            os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (chromium_flags + " --disable-gpu").strip()
+    QtWebEngineQuick.initialize()
+    wiki_viewer_available = True
+except ImportError:
+    wiki_viewer_available = False
+
 app = QApplication(sys.argv)
 
 # Auto-detect screen size and calculate scale factor
@@ -63,6 +76,9 @@ else:
     logger.warning("No primary screen detected, using autoScale=1.0")
 
 engine = QQmlApplicationEngine()
+engine.rootContext().setContextProperty("wikiViewerAvailable", wiki_viewer_available)
+engine.rootContext().setContextProperty(
+    "wikiHomeUrl", QUrl.fromLocalFile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "wiki", "index.html")))
 
 # Expose auto-scale to QML
 engine.rootContext().setContextProperty("screenAutoScale", auto_scale)

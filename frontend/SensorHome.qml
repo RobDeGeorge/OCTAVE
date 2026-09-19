@@ -41,20 +41,8 @@ Item {
     // QtQuick3D module) became the bottom bar's remembered target, so the
     // sensor button silently did nothing on every later launch.
     function pushSubpage(qmlFile) {
-        var component = Qt.createComponent(qmlFile)
-        if (component.status !== Component.Ready) {
-            console.warn("[SensorHome] Failed to load", qmlFile, "-", component.errorString())
+        if (!stackView.openPage(qmlFile))
             return false
-        }
-        var page = component.createObject(stackView, {
-            stackView: sensorHome.stackView,
-            mainWindow: sensorHome.mainWindow
-        })
-        if (!page) {
-            console.warn("[SensorHome] Failed to instantiate", qmlFile)
-            return false
-        }
-        stackView.push(page)
         if (settingsManager) {
             settingsManager.save_setting("lastSensorPage", qmlFile)
             lastSubpage = qmlFile

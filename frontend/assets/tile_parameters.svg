@@ -1,16 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
-  <g fill="#FFFFFF">
-  <g transform="translate(-24,-34)">
-    <!-- Parameter rows: bullet + value bar -->
-    <circle cx="132" cy="170" r="28"/>
-    <rect x="196" y="146" width="290" height="48" rx="24"/>
-    <circle cx="132" cy="280" r="28"/>
-    <rect x="196" y="256" width="350" height="48" rx="24"/>
-    <circle cx="132" cy="390" r="28"/>
-    <rect x="196" y="366" width="228" height="48" rx="24"/>
-    <circle cx="132" cy="500" r="28"/>
-    <rect x="196" y="476" width="310" height="48" rx="24"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 8h15M12 16h15M12 24h10"/>
+    <g fill="#fff" stroke="none"><circle cx="5" cy="8" r="1.4"/><circle cx="5" cy="16" r="1.4"/><circle cx="5" cy="24" r="1.4"/></g>
   </g>
 </svg>

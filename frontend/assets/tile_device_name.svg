@@ -1,10 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
-  <g fill="#FFFFFF">
-    <!-- Nameplate -->
-    <path fill-rule="evenodd" d="M70,180 h460 v240 h-460 Z M114,224 h372 v152 h-372 Z"/>
-    <!-- Name lines -->
-    <rect x="152" y="256" width="296" height="30" rx="15"/>
-    <rect x="152" y="314" width="188" height="30" rx="15"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="7" width="24" height="18" rx="4"/>
+    <path d="M10 13h12m-12 6h8"/>
   </g>
 </svg>

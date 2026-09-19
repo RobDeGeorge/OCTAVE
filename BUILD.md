@@ -49,6 +49,11 @@ cmake --build build -j
   packages often split it out — on Arch, `qt6-quick3d` additionally needs `assimp` installed, or
   the model silently fails to load with `Failed to load asset import plugin with key: "assimp"`.
 - **Ninja** (recommended on Linux/macOS for faster builds — `cmake -G Ninja`).
+- **Qt WebEngine Quick** (optional, desktop only) — enables the embedded wiki
+  under Settings → About → Open Wiki. Install `qt6-webengine` on Arch or
+  `qt6-webengine-dev` on Debian/Ubuntu before configuring CMake. Source launches
+  read `wiki/` directly; desktop builds also embed an offline copy. Without this
+  module, About remains usable and the wiki viewer displays an availability message.
 - A C++17 compiler (GCC 11+/Clang 14+/MSVC 2022).
 
 ### Linux

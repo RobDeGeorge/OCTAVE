@@ -254,9 +254,9 @@ jobs:
         shell: pwsh
         run: |
           # Inno Setup 6 ships pre-installed on windows-latest runners as iscc.exe.
-          # Patch the .iss version to match the git tag (or 0.9.0 fallback for dispatches).
+          # Patch the .iss version to match the git tag (or 0.9.1 fallback for dispatches).
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          if ([string]::IsNullOrEmpty($version)) { $version = '0.9.0' }
+          if ([string]::IsNullOrEmpty($version)) { $version = '0.9.1' }
           (Get-Content build_scripts/installer_windows.iss) `
             -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$version`"" |
             Set-Content build_scripts/installer_windows.iss

@@ -2,8 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.octave.app"
     android:installLocation="auto"
-    android:versionCode="1"
-    android:versionName="0.1">
+    android:versionCode="2"
+    android:versionName="0.9.1">
 
     <!-- Network (weather, OBD report sync, future update checks) -->
     <uses-permission android:name="android.permission.INTERNET" />

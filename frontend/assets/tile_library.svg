@@ -1,13 +1,8 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
-  <g fill="#FFFFFF">
-    <!-- Record crate -->
-    <path fill-rule="evenodd" d="M80,170 h440 v320 h-440 Z M124,214 h352 v232 h-352 Z"/>
-    <!-- Sleeves -->
-    <rect x="180" y="214" width="26" height="232"/>
-    <rect x="288" y="214" width="26" height="232"/>
-    <rect x="396" y="214" width="26" height="232"/>
-    <!-- Handle -->
-    <rect x="240" y="110" width="120" height="34" rx="17"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 4h12M7 7h18"/>
+    <rect x="5" y="10" width="22" height="18" rx="3" fill="#fff" fill-opacity=".12"/>
+    <path d="M18 22v-7l4-1"/>
+    <ellipse cx="15.8" cy="22.7" rx="2.4" ry="1.8" fill="#fff" stroke="none"/>
   </g>
 </svg>

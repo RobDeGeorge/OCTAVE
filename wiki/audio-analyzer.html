@@ -48,8 +48,8 @@
  +--------------------------------------+
  | Decoder                              |  Python: PyAV (av.open) -> all frames,
  |  PyAV (Python) / QAudioDecoder (C++) |          average channels to mono
- |                                      |  C++:    QAudioDecoder asked for 8 kHz
- |                                      |          mono Int16, converted to float
+ |                                      |  C++:    QAudioDecoder in the file's native
+ |                                      |          format, averaged to mono float
  +--------------------------------------+
        |
        v
@@ -146,32 +146,34 @@ all_samples = all_samples[::downsample_factor]
 effective_rate = sample_rate // downsample_factor</code></pre>
 
         <h3>C++: QAudioDecoder</h3>
-        <p>The C++ backend asks Qt Multimedia's <code>QAudioDecoder</code> for <strong>8&nbsp;kHz, mono, Int16</strong> output directly, so the channel mix-down and resampling happen inside the platform decoder and the analyzer never sees the original rate. Int16 is requested rather than Float because some Android MediaCodec configurations reject float sample formats; the buffer is converted to normalized float32 (<code>&times; 1/32768</code>) afterwards. Because the worker has no event loop of its own, the decode runs a local <code>QEventLoop</code> that quits on <code>finished</code> or <code>error</code>, with a 30&nbsp;s single-shot watchdog so a stalled codec cannot hang the worker forever. An error or an empty buffer makes the analysis fail (no data, bars stay at zero).</p>
+        <p>The C++ backend runs Qt Multimedia's <code>QAudioDecoder</code> <strong>in the file's native format</strong> &mdash; no <code>setAudioFormat()</code> &mdash; and does the rest itself so the pipeline matches Python step for step: <code>appendMono()</code> averages the channels of every <code>QAudioBuffer</code> into a float vector (Float, Int16, Int32 and UInt8 sources are handled), the vector is normalized to its peak, then stride-decimated by <code>nativeRate / 8000</code> to an effective rate of <code>nativeRate / factor</code> (8820&nbsp;Hz for a 44.1&nbsp;kHz MP3, 8000&nbsp;Hz for 48&nbsp;kHz), exactly Python's <code>all_samples[::downsample_factor]</code>. Because the worker has no event loop of its own, the decode runs a local <code>QEventLoop</code> that quits on <code>finished</code> or <code>error</code>, with a 30&nbsp;s watchdog so a stalled codec cannot hang the worker forever; any buffers still queued when <code>finished</code> fires are drained before the decoder is stopped. An error, a timeout or an empty buffer fails the analysis (bars stay at zero) and each case is logged with its own <code>console.warn</code>-level message, including how many samples the watchdog case had managed to decode.</p>
 
-        <pre><code><span class="cls">QAudioDecoder</span> decoder;
-<span class="cls">QAudioFormat</span> fmt;
-fmt.<span class="fn">setSampleRate</span>(<span class="num">8000</span>);
-fmt.<span class="fn">setChannelCount</span>(<span class="num">1</span>);
-fmt.<span class="fn">setSampleFormat</span>(<span class="cls">QAudioFormat</span>::Int16);
-decoder.<span class="fn">setAudioFormat</span>(fmt);
+        <p><strong>Why native format:</strong> the analyzer used to ask the decoder for 8&nbsp;kHz mono Int16 output directly. On Qt&nbsp;6.11's FFmpeg backend that request yields <em>no buffers and no error</em> for MP3 sources (WAV converted fine, which hid it), so every analysis ran into the 30&nbsp;s watchdog, logged <code>Analysis failed</code>, and the visualizer stayed dark on the shipped binary. Decoding natively takes a few hundred milliseconds for a full track and removes the dependency on the backend's converter; on Android it also sidesteps MediaCodec's sample-format quirks that were the reason for the old Int16 request.</p>
+
+        <pre><code><span class="cls">QAudioDecoder</span> decoder;                       <span class="cmt">// no setAudioFormat(): native rate/channels/format</span>
 decoder.<span class="fn">setSource</span>(<span class="cls">QUrl</span>::<span class="fn">fromLocalFile</span>(filePath));
 
+std::vector&lt;<span class="kw">float</span>&gt; mono; <span class="kw">int</span> nativeRate = <span class="num">0</span>;
 <span class="cls">QEventLoop</span> loop;
-<span class="cls">QObject</span>::<span class="fn">connect</span>(&amp;decoder, &amp;<span class="cls">QAudioDecoder</span>::bufferReady, &amp;decoder, [&amp;]() {
-    <span class="kw">while</span> (decoder.<span class="fn">bufferAvailable</span>()) {
-        <span class="cls">QAudioBuffer</span> buf = decoder.<span class="fn">read</span>();
-        rawInt16.<span class="fn">append</span>(buf.<span class="fn">constData</span>&lt;<span class="kw">char</span>&gt;(), buf.<span class="fn">byteCount</span>());
-    }
-});
+<span class="kw">auto</span> drain = [&amp;]() {
+    <span class="kw">while</span> (decoder.<span class="fn">bufferAvailable</span>())
+        <span class="fn">appendMono</span>(decoder.<span class="fn">read</span>(), mono, nativeRate);   <span class="cmt">// average channels -&gt; float</span>
+};
+<span class="cls">QObject</span>::<span class="fn">connect</span>(&amp;decoder, &amp;<span class="cls">QAudioDecoder</span>::bufferReady, &amp;decoder, drain);
 <span class="cls">QObject</span>::<span class="fn">connect</span>(&amp;decoder, &amp;<span class="cls">QAudioDecoder</span>::finished, &amp;loop, &amp;<span class="cls">QEventLoop</span>::quit);
-<span class="cls">QTimer</span>::<span class="fn">singleShot</span>(<span class="num">30000</span>, &amp;loop, &amp;<span class="cls">QEventLoop</span>::quit);   <span class="cmt">// watchdog</span>
+watchdog.<span class="fn">start</span>(<span class="num">30000</span>);                          <span class="cmt">// sets timedOut, quits the loop</span>
 decoder.<span class="fn">start</span>();
-loop.<span class="fn">exec</span>();</code></pre>
+loop.<span class="fn">exec</span>();
+<span class="fn">drain</span>();
+
+<span class="cmt">// normalise, then decimate like Python's all_samples[::factor]</span>
+<span class="kw">const int</span> factor     = std::max(<span class="num">1</span>, nativeRate / <span class="num">8000</span>);
+<span class="kw">const int</span> sampleRate = nativeRate / factor;</code></pre>
 
         <!-- FFT Pipeline -->
         <h2 id="fft-pipeline">FFT Pipeline</h2>
 
-        <p>The preprocessed audio is split into 100&nbsp;ms chunks (<code>chunk_duration = 0.1</code>, 10 chunks per second). In Python <code>chunk_size = int(effective_rate * 0.1)</code> (882 samples for a 44.1&nbsp;kHz source, 800 for 48&nbsp;kHz); in C++ it is always 800 samples, zero-padded to the next power of two (1024) because the radix-2 FFT needs a power-of-two length. Each chunk is analyzed independently:</p>
+        <p>The preprocessed audio is split into 100&nbsp;ms chunks (<code>chunk_duration = 0.1</code>, 10 chunks per second). In both backends <code>chunk_size = int(effective_rate * 0.1)</code> (882 samples for a 44.1&nbsp;kHz source, 800 for 48&nbsp;kHz); C++ zero-pads the chunk to the next power of two (1024) because the radix-2 FFT needs a power-of-two length. Each chunk is analyzed independently:</p>
 
         <pre><code>chunk_size = <span class="fn">int</span>(effective_rate * self._chunk_duration)
 num_chunks = <span class="fn">len</span>(all_samples) // chunk_size
@@ -435,7 +437,7 @@ av = <span class="fn">lazy_module</span>(<span class="str">"av"</span>)</code></
             <tr><td><strong>8&nbsp;kHz, 100&nbsp;ms chunks, 0-8 levels</strong></td><td>The code comments give the reason for the rate ("Downsample to ~8kHz for faster processing"); the spectrum is analysed up to the 4&nbsp;kHz Nyquist limit in both backends, 100&nbsp;ms chunks give 10 data frames per second, which the 120&nbsp;ms bar animations bridge, and nine discrete integer levels make "did anything change?" a cheap list comparison so unchanged chunks emit nothing.</td></tr>
             <tr><td><strong>Analysis after the card animation</strong></td><td>MediaRoom calls <code>analyze_file</code> from the carousel's settled signal so decoding and the first FFT do not compete with animation frames; the bars drop to zero and stay visible meanwhile.</td></tr>
             <tr><td><strong>QAudioDecoder in C++</strong></td><td>Qt Multimedia is already linked for <code>QMediaPlayer</code> and supplies the native codec on every target (including MediaCodec on Android, where shipping FFmpeg would be a separate build). An earlier C++ version shelled out to an <code>ffmpeg</code> CLI to mirror PyAV; the decoder route removed the external binary (Android sweep, commit <code>d751c9d</code>) and the source comments and log lines no longer mention ffmpeg. Running the decoder inside a local <code>QEventLoop</code> on the worker, with a watchdog, is what makes it usable off the GUI thread.</td></tr>
-            <tr><td><strong>Int16 rather than Float from the decoder</strong></td><td>Some Android MediaCodec configurations reject float sample formats; Int16 works everywhere and converting to float is one multiply per sample.</td></tr>
+            <tr><td><strong>Native format from the decoder, own mix-down and decimation</strong></td><td>Requesting 8&nbsp;kHz mono Int16 from the decoder silently produced nothing for MP3 on Qt&nbsp;6.11's FFmpeg backend (every analysis timed out). Taking whatever the platform decoder emits and converting in <code>appendMono()</code> works on every backend, needs no assumptions about which sample formats MediaCodec accepts, and makes the C++ preprocessing identical to Python's (mono average, peak normalize, stride decimate).</td></tr>
             <tr><td><strong>Own radix-2 FFT</strong></td><td>The header labels the helpers "FFT helpers (no external deps)": a 1024-point transform ten times per second of audio does not justify another library across nine build targets, and zero-padding 800 samples to 1024 is the only cost.</td></tr>
             <tr><td><strong>Pending-file chaining (C++)</strong></td><td>Rapid skip presses used to drop every request after the first, leaving the visualizer on the previous track's FFT or blank; remembering only the latest request and chaining into it when the current job ends fixes that without cancelling decoders mid-flight.</td></tr>
             <tr><td><strong>Poll timer instead of callbacks (Python)</strong></td><td>A <code>concurrent.futures</code> callback would run on the worker thread, where Qt signals must not be emitted; a 100&nbsp;ms <code>QTimer</code> keeps every Qt interaction on the main thread with no cross-thread signal plumbing.</td></tr>

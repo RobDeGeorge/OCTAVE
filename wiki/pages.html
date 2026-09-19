@@ -43,7 +43,7 @@
         <!-- Inventory -->
         <h2 id="inventory">View Inventory</h2>
 
-        <p>All views live at the top of <span class="file-path">frontend/</span> and are instantiated with <code>Qt.createComponent()</code> when navigated to (see <a href="frontend-overview.html#page-routing">Page Routing</a>). The table lists what each one declares and where it is pushed from; "required" means <code>required property</code>, so a <code>createObject()</code> call that omits it returns <code>null</code>.</p>
+        <p>All views live at the top of <span class="file-path">frontend/</span> and are built once, on first visit, by <code>stackView.openPage()</code>, then kept and re-pushed on every later visit (see <a href="frontend-overview.html#page-cache">the page cache</a>). The table lists what each one declares and where it is opened from; "required" means <code>required property</code>, which <code>cachedPage()</code> satisfies by always passing <code>stackView</code> and <code>mainWindow</code>. Because instances are long-lived, per-visit work belongs in <code>StackView.onActivated</code>, not <code>Component.onCompleted</code>.</p>
 
         <table>
           <thead><tr><th>View</th><th>objectName</th><th>Properties it takes</th><th>Reached from</th></tr></thead>
@@ -59,7 +59,7 @@
             <tr><td><a href="#sensormenu">SensorMenu</a></td><td><code>sensorMenu</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>SensorHome "Sensors" card, BottomBar Sensor via <code>lastSensorPage</code></td></tr>
             <tr><td><a href="#carmenu">CarMenu</a></td><td><code>carMenu</code></td><td><code>stackView</code> (required), <code>mainWindow</code> (plain)</td><td>SensorHome "3D View" card, BottomBar Sensor via <code>lastSensorPage</code></td></tr>
             <tr><td><a href="#clockmenu">ClockMenu</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>only <code>navigateTo("ClockMenu.qml")</code> (command server / screenshot sweeper); no in-app button</td></tr>
-            <tr><td><a href="#phonemirror">PhoneMirrorView</a></td><td><code>phoneMirrorView</code> (set by BottomBar at <code>createObject</code>)</td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Phone Mirror (desktop only)</td></tr>
+            <tr><td><a href="#phonemirror">PhoneMirrorView</a></td><td><code>phoneMirrorView</code></td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Phone Mirror (desktop only)</td></tr>
             <tr><td><a href="#androidauto">AndroidAutoView</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Android Auto (desktop only)</td></tr>
             <tr><td><a href="#settingsmenu">SettingsMenu</a></td><td><code>settingsMenu</code></td><td><code>stackView</code>, <code>mainWindow</code>, <code>initialSection</code> (required)</td><td>BottomBar Settings, <code>navigateToSettings()</code></td></tr>
             <tr><td>DashboardEditor (<span class="file-path">dashboards/editor/</span>)</td><td>&mdash;</td><td><code>stackView</code>, <code>callerPage</code>, optional <code>editingId</code> / <code>draftJson</code></td><td>OBDMenu chooser (+ New, Edit, &#9650; Draft); see <a href="gauges-dashboards.html#editor">Gauges &amp; Dashboards</a></td></tr>
@@ -205,7 +205,7 @@
           </tbody>
         </table>
 
-        <p><code>pushSubpage()</code> saves the file name to the generic setting <code>lastOBDPage</code>, creates the page with <code>Qt.createComponent()</code> + <code>{ stackView, mainWindow }</code>, and warns with <code>errorString()</code> on failure. The card matching <code>lastSubpage</code> gets a 2&nbsp;px accent border ("you were just here"); the BottomBar reads the same key to jump straight to the remembered subpage on the next tap.</p>
+        <p><code>pushSubpage()</code> saves the file name to the generic setting <code>lastOBDPage</code> and opens the page through <code>stackView.openPage()</code>, which logs a <code>console.warn</code> on failure. The card matching <code>lastSubpage</code> gets a 2&nbsp;px accent border ("you were just here"); the BottomBar reads the same key to jump straight to the remembered subpage on the next tap.</p>
 
         <h3>Backend managers used</h3>
         <p><code>obdManager</code> (<code>is_connected()</code>, <code>connectionStatusChanged</code>, <code>connectionStatusDetailChanged</code>, <code>connectionLogLineAppended</code>), <code>settingsManager</code>.</p>
@@ -282,7 +282,7 @@
           </tbody>
         </table>
 
-        <p>Only the 3D View card is conditionally dimmed, and only by module availability: <code>has3DView</code> is computed once by <code>Qt.createComponent("CarMenu.qml", Component.PreferSynchronous).status === Component.Ready</code>. IMU connection state changes nothing but the status bar &mdash; both live cards stay tappable without an IMU. <code>pushSubpage()</code> persists <code>lastSensorPage</code> <em>only after a successful push</em>; the comment records why: writing it up front once made an unloadable CarMenu the BottomBar's remembered target, "so the sensor button silently did nothing on every later launch" (commit <code>0c29e64</code>).</p>
+        <p>Only the 3D View card is conditionally dimmed, and only by module availability: <code>has3DView</code> is computed once by <code>Qt.createComponent("CarMenu.qml", Component.PreferSynchronous).status === Component.Ready</code>. IMU connection state changes nothing but the status bar &mdash; both live cards stay tappable without an IMU. <code>pushSubpage()</code> opens the page with <code>stackView.openPage()</code> and persists <code>lastSensorPage</code> <em>only after that succeeds</em>; the comment records why: writing it up front once made an unloadable CarMenu the BottomBar's remembered target, "so the sensor button silently did nothing on every later launch" (commit <code>0c29e64</code>).</p>
 
         <h3>Backend managers used</h3>
         <p><code>berryIMU</code>, <code>settingsManager</code>.</p>
@@ -366,7 +366,7 @@
         <!-- PhoneMirrorView -->
         <h2 id="phonemirror">PhoneMirrorView.qml</h2>
 
-        <p><span class="file-path">frontend/PhoneMirrorView.qml</span> (538 lines): "OCTAVE's built-in scrcpy-protocol client streams the phone (or a virtual display on it) straight onto the VideoOutput below and forwards touch over the control socket. No external tools involved." It imports <code>QtQuick.Controls.Basic</code> and <code>QtMultimedia</code>. The BottomBar shows its button only when <code>!isAndroid &amp;&amp; settingsManager.phoneMirrorEnabled</code>, reuses an instance already on the stack (found by the <code>phoneMirrorView</code> objectName it assigns at <code>createObject</code>), and otherwise creates a new one.</p>
+        <p><span class="file-path">frontend/PhoneMirrorView.qml</span> (538 lines): "OCTAVE's built-in scrcpy-protocol client streams the phone (or a virtual display on it) straight onto the VideoOutput below and forwards touch over the control socket. No external tools involved." It imports <code>QtQuick.Controls.Basic</code> and <code>QtMultimedia</code>. The BottomBar shows its button only when <code>!isAndroid &amp;&amp; settingsManager.phoneMirrorEnabled</code> and opens the view with <code>stackView.openPage("PhoneMirrorView.qml")</code>, so the single cached instance (and its running session) is reused; the view sets its own <code>objectName: "phoneMirrorView"</code>. Its <code>StackView.onActivated</code> calls <code>startMirror()</code> on every visit, which is a no-op while the stream is already up.</p>
 
         <ul>
           <li><strong>Video</strong> &mdash; a <code>VideoOutput</code> (<code>PreserveAspectFit</code>) whose <code>videoSink</code> is handed to the manager in <code>Component.onCompleted</code> (<code>phoneMirrorManager.videoSink = videoSink</code>); decoded frames land on it directly. <code>frameCounter</code> is bumped on every <code>frameReady</code> ("proof of life"); <code>hasVideo = frameCounter &gt;= 1</code>.</li>
@@ -459,14 +459,14 @@
         <!-- Navigation summary -->
         <h2 id="navigation-summary">Navigation Summary</h2>
 
-        <p>Primary navigation is the seven BottomBar buttons plus its clock; secondary navigation happens inside pages. Every arrow below is a <code>Qt.createComponent()</code> + <code>stackView.push()</code> (or a pop back to an instance already on the stack).</p>
+        <p>Primary navigation is the seven BottomBar buttons plus its clock; secondary navigation happens inside pages. Every arrow below is a <code>stackView.openPage()</code>: the page is built on its first visit, and afterwards the same instance is pushed again or popped back to.</p>
 
         <div class="diagram">
 <pre>
  BottomBar
  |-- Home ............ pop to MainMenu
  |-- OBD ............. OBDHome, or lastOBDPage (OBDMenu / OBDDiagnostics); on an obd* page: pop to OBDHome
- |-- Media ........... musicButtonDefaultPage (MediaRoom | MediaPlayer); on one of them: push the other
+ |-- Media ........... musicButtonDefaultPage (MediaRoom | MediaPlayer); on one of them: open the other
  |-- Sensor .......... SensorHome, or lastSensorPage (SensorMenu / CarMenu); on a sensor* / carMenu page: pop to SensorHome
  |-- Settings ........ SettingsMenu(initialSection = lastSettingsSection); already there: navigateToHub()
  |-- Android Auto .... AndroidAutoView          (desktop only, androidAutoEnabled)

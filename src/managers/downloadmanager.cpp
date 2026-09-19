@@ -235,7 +235,27 @@ QString DownloadManager::_findYtDlp() const
     return m_ytDlpPath;
 #endif
 
-    // Check PATH first
+    // Source launches from a desktop menu do not activate the Python venv.
+    // Use the checkout's pinned yt-dlp, just as search uses its Python.
+    const QString appDir = QCoreApplication::applicationDirPath();
+#ifdef Q_OS_WIN
+    const QString venvBin = QStringLiteral("/venv/Scripts/yt-dlp.exe");
+#else
+    const QString venvBin = QStringLiteral("/venv/bin/yt-dlp");
+#endif
+    const QStringList sourceCandidates = {
+        QDir::cleanPath(appDir + QStringLiteral("/..") + venvBin),
+        appDir + venvBin,
+    };
+    for (const QString &candidate : sourceCandidates) {
+        const QFileInfo info(candidate);
+        if (info.isFile() && info.isExecutable()) {
+            m_ytDlpPath = candidate;
+            return m_ytDlpPath;
+        }
+    }
+
+    // Installed builds and checkouts without a venv can use PATH.
     QString path = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
     if (!path.isEmpty()) {
         m_ytDlpPath = path;
@@ -256,7 +276,8 @@ QString DownloadManager::_findYtDlp() const
     };
 
     for (const QString &candidate : candidates) {
-        if (QFileInfo::exists(candidate)) {
+        const QFileInfo info(candidate);
+        if (info.isFile() && info.isExecutable()) {
             m_ytDlpPath = candidate;
             return m_ytDlpPath;
         }

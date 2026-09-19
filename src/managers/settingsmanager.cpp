@@ -241,6 +241,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("roundedAlbumArt")]         = true;
     d[QStringLiteral("albumArtCornerRadius")]    = 16;
     d[QStringLiteral("showAlbumArtShadow")]      = true;
+    d[QStringLiteral("musicDeviceModel")] = QStringLiteral("Album art");
     d[QStringLiteral("vinylRecordMode")]         = false;
     d[QStringLiteral("albumArtTransition")]      = QStringLiteral("Crossfade");
     d[QStringLiteral("backgroundOverlayOpacity")] = 80;
@@ -2160,6 +2161,7 @@ void SettingsManager::reset_to_defaults()
     emit albumArtCornerRadiusChanged(m_albumArtCornerRadius);
     emit showAlbumArtShadowChanged(m_showAlbumArtShadow);
     emit vinylRecordModeChanged(m_vinylRecordMode);
+    emit genericSettingChanged(QStringLiteral("musicDeviceModel"));
     emit albumArtTransitionChanged(m_albumArtTransition);
     emit backgroundOverlayOpacityChanged(m_backgroundOverlayOpacity);
     emit sideCardOpacityChanged(m_sideCardOpacity);

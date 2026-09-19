@@ -14,6 +14,7 @@ Item {
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
 
     id: phoneMirrorView
+    objectName: "phoneMirrorView"
     property StackView stackView
     property var mainWindow: null
     width: parent ? parent.width : 0
@@ -44,10 +45,13 @@ Item {
     }
     onLaunchFailedChanged: if (launchFailed) refreshSetupOk()
 
+    // Runs on the first push and on every later visit — this view is built
+    // once and re-pushed by the StackView page cache (see Main.qml).
+    // startMirror() only syncs the flag when the stream is already up and
+    // starts it otherwise, so a revisit behaves like a fresh view used to.
     StackView.onActivated: {
         console.log("PhoneMirrorView activated")
-        if (phoneMirrorManager && phoneMirrorManager.isRunning)
-            mirrorRunning = true
+        startMirror()
     }
 
     Rectangle {
@@ -525,7 +529,6 @@ Item {
         if (phoneMirrorManager) {
             console.log("phone mirror client available:", phoneMirrorManager.nativeAvailable,
                         "server", phoneMirrorManager.serverVersion, "adb:", phoneMirrorManager.adbPath)
-            startMirror()
         } else {
             launchFailed = true
             errorMessage = "Phone Mirror manager not available"

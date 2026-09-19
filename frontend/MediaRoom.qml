@@ -16,6 +16,11 @@ Item {
     property StackView stackView
     property ApplicationWindow mainWindow
 
+    // MediaRoom is built once and re-pushed by the StackView page cache (see
+    // Main.qml); re-read the now-playing state on every visit so nothing that
+    // changed while the page was hidden is shown stale.
+    StackView.onActivated: mainContent.syncNowPlaying()
+
     // Demo a track-transition without actually changing the track. Used by
     // the Now Playing studio's chip selection so users see the chosen
     // transition fire immediately. `style` overrides the carousel's bound
@@ -27,6 +32,7 @@ Item {
             albumArtStack.transitionStyle = style
         albumArtStack.direction = (direction === -1) ? -1 : 1
         albumArtStack.triggerSlide()
+        if (musicDeviceLoader.item) musicDeviceLoader.item.loadMedia(false)
         // Restore live binding so subsequent settings changes still flow.
         albumArtStack.transitionStyle = Qt.binding(function() {
             return settingsManager ? settingsManager.albumArtTransition : "Crossfade"
@@ -87,6 +93,21 @@ Item {
     property int duration: 0
     property int position: 0
     property bool userSeeking: false
+    property bool devicePlaying: false
+    function refreshDevicePlaying() {
+        var manager = useSpotify ? spotifyManager : mediaManager
+        devicePlaying = manager ? manager.is_playing() : false
+    }
+    onUseSpotifyChanged: refreshDevicePlaying()
+    Connections {
+        target: mediaManager
+        function onPlayStateChanged(playing) { if (!mediaRoom.useSpotify) mediaRoom.devicePlaying = playing }
+    }
+    Connections {
+        target: spotifyManager
+        function onPlayStateChanged(playing) { if (mediaRoom.useSpotify) mediaRoom.devicePlaying = playing }
+    }
+    readonly property bool showMusicDevice: App.MusicDevicePreference.enabled && App.MusicDevicePreference.isAvailable()
 
     property bool isShuffleEnabled: false
 
@@ -230,6 +251,7 @@ Item {
         // Always trigger the carousel — it picks single-card or 3D mode
         // based on previewEnabled.  Heavy work deferred via settled signal.
         albumArtStack.triggerSlide()
+        if (musicDeviceLoader.item) musicDeviceLoader.item.loadMedia(false)
     }
 
     Rectangle {
@@ -312,7 +334,9 @@ Item {
         }
 
 
-        Component.onCompleted: {
+        Component.onCompleted: syncNowPlaying()
+
+        function syncNowPlaying() {
             if (useSpotify && spotifyManager) {
                 mediaRoom.duration = spotifyManager.get_duration()
                 mediaRoom.position = spotifyManager.get_position()
@@ -645,8 +669,8 @@ Item {
                 // Left side - Controls and Metadata
                 ColumnLayout {
                     Layout.fillHeight: true
-                    Layout.preferredWidth: parent.width * 0.6  // 60% for left side
-                    Layout.maximumWidth: parent.width * 0.6
+                    Layout.preferredWidth: parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
+                    Layout.maximumWidth: parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
                     Layout.leftMargin: dp(20)
                     spacing: App.Spacing.mediaRoomSpacing * 2
 
@@ -1021,39 +1045,74 @@ Item {
                 }
 
 
-                AlbumArtCarousel {
-                    id: albumArtStack
+                Item {
                     Layout.fillHeight: true
-                    Layout.preferredWidth: parent.width * 0.4
-                    Layout.maximumWidth: parent.width * 0.4
+                    Layout.preferredWidth: parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
+                    Layout.maximumWidth: parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
                     Layout.alignment: Qt.AlignVCenter
 
-                    // Settings bindings
-                    previewEnabled: settingsManager && settingsManager.show3DAlbumPreview
-                    roundedArt: settingsManager && settingsManager.roundedAlbumArt
-                    artRadius: dp(settingsManager ? settingsManager.albumArtCornerRadius : 16)
-                    vinylMode: settingsManager && settingsManager.vinylRecordMode
-                    sideCardAngle: settingsManager ? settingsManager.sideCardAngle : 30
-                    sideCardOpacity: settingsManager ? settingsManager.sideCardOpacity : 0.4
-                    showShadow: settingsManager && settingsManager.showAlbumArtShadow
-                    transitionStyle: settingsManager ? settingsManager.albumArtTransition : "Crossfade"
+                    Loader {
+                        id: musicDeviceLoader
+                        anchors.fill: parent
+                        active: mediaRoom.showMusicDevice && mediaRoom.visible
+                        source: active ? "MusicDeviceScene.qml" : ""
+                        onLoaded: mediaRoom.refreshDevicePlaying()
+                    }
+                    Binding { target: musicDeviceLoader.item; property: "device"; value: App.MusicDevicePreference.mode; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "playing"; value: mediaRoom.devicePlaying; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "artSource"; value: mediaRoom._displayAlbumArt; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "trackTitle"; value: mediaRoom.currentTrackName; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "artist"; value: mediaRoom.currentArtist; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "playbackPosition"; value: mediaRoom.position; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "playbackDuration"; value: mediaRoom.duration; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "hasTrack"; value: !mediaRoom.playlistEmpty && mediaRoom.currentTrackName !== ""; when: musicDeviceLoader.status === Loader.Ready }
+                    Binding { target: musicDeviceLoader.item; property: "progress"; value: mediaRoom.duration > 0 ? mediaRoom.position / mediaRoom.duration : 0; when: musicDeviceLoader.status === Loader.Ready }
 
-                    // Media state
-                    artSource: mediaRoom._displayAlbumArt
-                    direction: mediaRoom._slideDirection
-                    playbackPosition: mediaRoom.position
-                    playbackDuration: mediaRoom.duration
+                    AlbumArtCarousel {
+                        id: albumArtStack
+                        anchors.fill: parent
+                        // Keep the carousel's transition/settled lifecycle alive for track analysis.
+                        // Only its presentation is hidden while a device is successfully loaded.
+                        visible: !(musicDeviceLoader.item && musicDeviceLoader.item.ready)
 
-                    // Sync busy flag back to MediaRoom (drives blur freeze, viz pause, etc.)
-                    onAnimBusyChanged: mediaRoom._cardAnimBusy = animBusy
+                        // Settings bindings
+                        previewEnabled: settingsManager && settingsManager.show3DAlbumPreview
+                        roundedArt: settingsManager && settingsManager.roundedAlbumArt
+                        artRadius: dp(settingsManager ? settingsManager.albumArtCornerRadius : 16)
+                        vinylMode: settingsManager && settingsManager.vinylRecordMode
+                        sideCardAngle: settingsManager ? settingsManager.sideCardAngle : 30
+                        sideCardOpacity: settingsManager ? settingsManager.sideCardOpacity : 0.4
+                        showShadow: settingsManager && settingsManager.showAlbumArtShadow
+                        transitionStyle: settingsManager ? settingsManager.albumArtTransition : "Crossfade"
 
-                    onAnimationFinished: sideCardRefreshTimer.restart()
+                        // Media state
+                        artSource: mediaRoom._displayAlbumArt
+                        direction: mediaRoom._slideDirection
+                        playbackPosition: mediaRoom.position
+                        playbackDuration: mediaRoom.duration
 
-                    onSettled: mediaRoom._doTrackChangeWork()
+                        // Sync busy flag back to MediaRoom (drives blur freeze, viz pause, etc.)
+                        onAnimBusyChanged: mediaRoom._cardAnimBusy = animBusy
 
-                    onArtClicked: albumArtPopup.open()
+                        onAnimationFinished: sideCardRefreshTimer.restart()
 
-                    onArtLoadFailed: mediaRoom._displayAlbumArt = "./assets/missing_art.png"
+                        onSettled: mediaRoom._doTrackChangeWork()
+
+                        onArtClicked: albumArtPopup.open()
+
+                        onArtLoadFailed: mediaRoom._displayAlbumArt = "./assets/missing_art.png"
+                    }
+                    Text {
+                        anchors.bottom: parent.bottom
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: parent.width
+                        visible: mediaRoom.showMusicDevice && (musicDeviceLoader.status === Loader.Error || (musicDeviceLoader.item && musicDeviceLoader.item.error !== ""))
+                        text: "Device view unavailable. Showing album art."
+                        color: App.Style.metadataColor
+                        font.pixelSize: dp(12)
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                    }
                 }
             }
 
@@ -1073,6 +1132,7 @@ Item {
         // Waveform Visualizer
         Item {
             id: waveformContainer
+            objectName: "waveformContainer"
             width: parent.width * 0.75
             height: dp(40)
             anchors {

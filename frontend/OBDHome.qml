@@ -59,18 +59,7 @@ Item {
             settingsManager.save_setting("lastOBDPage", qmlFile)
             lastSubpage = qmlFile
         }
-        var component = Qt.createComponent(qmlFile)
-        if (component.status === Component.Ready) {
-            var page = component.createObject(stackView, {
-                stackView: obdHome.stackView,
-                mainWindow: obdHome.mainWindow
-            })
-            if (page) {
-                stackView.push(page)
-            }
-        } else {
-            console.warn("[OBDHome] Failed to load", qmlFile, component.errorString())
-        }
+        stackView.openPage(qmlFile)
     }
 
     Rectangle {

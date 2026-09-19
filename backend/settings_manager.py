@@ -436,6 +436,7 @@ class SettingsManager(QObject):
             "roundedAlbumArt": True,     # Rounded corners on album art
             "albumArtCornerRadius": 16,  # Corner radius in dp (2-32)
             "showAlbumArtShadow": True,  # Drop shadow on album art
+            "musicDeviceModel": "Album art",
             "vinylRecordMode": False,    # Spin album art like a vinyl record
             "albumArtTransition": "Crossfade",  # any of: "Crossfade", "Slide", "Vinyl Lift", "Dissolve", "Flip", "Coverflow", "Conveyor", "Stack", "Depth", "Swing"
             "backgroundOverlayOpacity": 80,  # Dark overlay opacity percentage (0-100)
@@ -2353,6 +2354,7 @@ class SettingsManager(QObject):
         self.albumArtCornerRadiusChanged.emit(self._album_art_corner_radius)
         self.showAlbumArtShadowChanged.emit(self._show_album_art_shadow)
         self.vinylRecordModeChanged.emit(self._vinyl_record_mode)
+        self.genericSettingChanged.emit("musicDeviceModel")
         self.albumArtTransitionChanged.emit(self._album_art_transition)
         self.backgroundOverlayOpacityChanged.emit(self._background_overlay_opacity)
         self.sideCardOpacityChanged.emit(self._side_card_opacity)

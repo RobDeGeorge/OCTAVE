@@ -25,6 +25,7 @@ exec >"$OCTAVE_LOG" 2>&1
 trap 'notify "Launch failed. Details: $OCTAVE_LOG"' ERR
 cd -- "$OCTAVE_CHECKOUT"
 printf 'Launching native OCTAVE from %s\n' "$OCTAVE_CHECKOUT"
+notify "Checking the Dropbox source and building changes…"
 
 if [[ ! -f "$OCTAVE_BUILD/CMakeCache.txt" ]]; then
     # The Qt package registry may otherwise select an installed Android kit.

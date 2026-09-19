@@ -386,11 +386,7 @@ Item {
                 onTapped: {
                     var defaultPage = settingsManager ? settingsManager.musicButtonDefaultPage : "mediaRoom"
                     var targetPage = defaultPage === "mediaPlayer" ? "MediaPlayer.qml" : "MediaRoom.qml"
-                    var props = { stackView: mainMenu.stackView }
-                    if (defaultPage === "mediaPlayer") {
-                        props.mainWindow = mainWindow
-                    }
-                    stackView.push(targetPage, props)
+                    stackView.openPage(targetPage)
                 }
             }
         }
@@ -414,10 +410,7 @@ Item {
             MouseArea {
                 anchors.fill: parent
                 onClicked: {
-                    stackView.push("OBDMenu.qml", {
-                        stackView: stackView,
-                        mainWindow: mainWindow
-                    })
+                    stackView.openPage("OBDMenu.qml")
                 }
             }
         }

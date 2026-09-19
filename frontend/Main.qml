@@ -387,16 +387,8 @@ ApplicationWindow {
             console.warn("[NAV] Unknown page:", pageName)
             return
         }
-        var component = Qt.createComponent(entry.file)
-        if (component.status === Component.Ready) {
-            var page = component.createObject(stackView, entry.props)
-            if (page) {
-                stackView.push(page)
-                console.log("[NAV] Pushed", pageName)
-            }
-        } else {
-            console.warn("[NAV] Failed to load", pageName, component.errorString())
-        }
+        if (stackView.openPage(entry.file, entry.props))
+            console.log("[NAV] Opened", pageName)
     }
 
     function navigateHome() {
@@ -416,19 +408,10 @@ ApplicationWindow {
             console.log("[NAV] Settings section ->", target)
             return
         }
-        var comp = Qt.createComponent("SettingsMenu.qml")
-        if (comp.status !== Component.Ready) {
-            console.warn("[NAV] SettingsMenu load failed:", comp.errorString())
-            return
-        }
-        var page = comp.createObject(stackView, {
-            stackView: stackView,
-            mainWindow: mainWindow,
-            initialSection: target
-        })
+        var page = stackView.openPage("SettingsMenu.qml", { initialSection: target })
         if (page) {
-            stackView.push(page)
-            console.log("[NAV] Pushed Settings ->", target)
+            page.navigateToCategory(target)
+            console.log("[NAV] Opened Settings ->", target)
         }
     }
 
@@ -452,6 +435,71 @@ ApplicationWindow {
 
             // Cached DownloadPage — created once, reused across all navigations
             property var _cachedDownloadPage: null
+
+            // One live instance per page file, keyed by "Foo.qml". A page is
+            // built on its first visit and re-pushed on every later one, so a
+            // nav press costs a StackView push/pop instead of instantiating a
+            // 2-3k-line QML tree on the GUI thread. StackView never destroys
+            // items pushed as instances (only ones it created itself from a
+            // URL or Component), so before this cache every press quietly
+            // left another hidden copy of the page alive behind the stack.
+            // Pages that need per-visit work do it in StackView.onActivated.
+            property var _pageCache: ({})
+
+            // Return the cached instance of qmlFile, building it on first use.
+            // stackView/mainWindow are always supplied; `props` adds to or
+            // overrides them and only applies when the page is first built.
+            function cachedPage(qmlFile, props) {
+                var page = _pageCache[qmlFile]
+                if (page)
+                    return page
+                var component = Qt.createComponent(qmlFile)
+                if (component.status !== Component.Ready) {
+                    console.warn("[NAV] Failed to load", qmlFile, "-", component.errorString())
+                    return null
+                }
+                var allProps = { stackView: stackView, mainWindow: mainWindow }
+                for (var key in props)
+                    allProps[key] = props[key]
+                page = component.createObject(stackView, allProps)
+                if (!page) {
+                    console.warn("[NAV] Failed to instantiate", qmlFile)
+                    return null
+                }
+                _pageCache[qmlFile] = page
+                return page
+            }
+
+            function containsItem(item) {
+                for (var i = 0; i < depth; i++)
+                    if (get(i) === item)
+                        return true
+                return false
+            }
+
+            // Show a page: no-op if it is already current, pop back to it if
+            // it is somewhere in the stack, push it otherwise. Returns the
+            // page, or null when it could not be built.
+            function openPage(qmlFile, props) {
+                var page = cachedPage(qmlFile, props)
+                if (!page)
+                    return null
+                if (currentItem === page)
+                    return page
+                if (containsItem(page))
+                    pop(page)
+                else
+                    push(page)
+                return page
+            }
+
+            // Drop a page from the cache and hand it back; the caller decides
+            // when it is safe to destroy it (never while it is in the stack).
+            function forgetPage(qmlFile) {
+                var page = _pageCache[qmlFile] || null
+                delete _pageCache[qmlFile]
+                return page
+            }
 
 
             // Different anchoring based on orientation
@@ -485,12 +533,14 @@ ApplicationWindow {
             property string pendingSection: ""
             onTriggered: {
                 if (stackView.currentItem && stackView.currentItem.objectName === "settingsMenu") {
-                    var page = Qt.createComponent("SettingsMenu.qml").createObject(stackView, {
-                        stackView: stackView,
-                        mainWindow: mainWindow,
-                        initialSection: pendingSection
-                    })
-                    stackView.replace(stackView.currentItem, page)
+                    // The cached instance was laid out for the old orientation:
+                    // build a fresh one, swap it in, and retire the old copy.
+                    var old = stackView.forgetPage("SettingsMenu.qml")
+                    var page = stackView.cachedPage("SettingsMenu.qml", { initialSection: pendingSection })
+                    if (page)
+                        stackView.replace(stackView.currentItem, page)
+                    if (old)
+                        old.destroy()
                 }
             }
         }

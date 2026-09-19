@@ -1,11 +1,7 @@
 #include "audioanalyzer.h"
 
 #include <QUrl>
-#include <QFile>
 #include <QFileInfo>
-#include <QDir>
-#include <QProcess>
-#include <QStandardPaths>
 #include <QtConcurrent>
 #include <QLoggingCategory>
 #include <QAudioDecoder>
@@ -132,12 +128,76 @@ static std::vector<int> logBandEdges(int fftLen, int numBars)
 }
 
 // ════════════════════════════════════════════════════════════════
+// Append one decoded buffer to `mono`, averaging channels, in whatever
+// sample format the platform decoder chose. Mirrors the Python backend's
+// frame.to_ndarray().mean(axis=0).
+// ════════════════════════════════════════════════════════════════
+
+static void appendMono(const QAudioBuffer &buf, std::vector<float> &mono, int &sampleRate)
+{
+    const QAudioFormat f = buf.format();
+    const int frames   = static_cast<int>(buf.frameCount());
+    const int channels = std::max(1, f.channelCount());
+    if (frames <= 0)
+        return;
+    if (sampleRate <= 0)
+        sampleRate = f.sampleRate();
+
+    const float invCh = 1.0f / static_cast<float>(channels);
+
+    switch (f.sampleFormat()) {
+    case QAudioFormat::Float: {
+        const float *p = buf.constData<float>();
+        for (int i = 0; i < frames; ++i, p += channels) {
+            float sum = 0.0f;
+            for (int c = 0; c < channels; ++c) sum += p[c];
+            mono.push_back(sum * invCh);
+        }
+        break;
+    }
+    case QAudioFormat::Int16: {
+        const auto *p = buf.constData<int16_t>();
+        constexpr float k = 1.0f / 32768.0f;
+        for (int i = 0; i < frames; ++i, p += channels) {
+            float sum = 0.0f;
+            for (int c = 0; c < channels; ++c) sum += static_cast<float>(p[c]) * k;
+            mono.push_back(sum * invCh);
+        }
+        break;
+    }
+    case QAudioFormat::Int32: {
+        const auto *p = buf.constData<int32_t>();
+        constexpr float k = 1.0f / 2147483648.0f;
+        for (int i = 0; i < frames; ++i, p += channels) {
+            float sum = 0.0f;
+            for (int c = 0; c < channels; ++c) sum += static_cast<float>(p[c]) * k;
+            mono.push_back(sum * invCh);
+        }
+        break;
+    }
+    case QAudioFormat::UInt8: {
+        const auto *p = buf.constData<uint8_t>();
+        constexpr float k = 1.0f / 128.0f;
+        for (int i = 0; i < frames; ++i, p += channels) {
+            float sum = 0.0f;
+            for (int c = 0; c < channels; ++c) sum += (static_cast<float>(p[c]) - 128.0f) * k;
+            mono.push_back(sum * invCh);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
 // Worker: decode audio file and compute per-chunk FFT levels
 // Runs on a QtConcurrent thread — must NOT touch Qt GUI objects.
 //
 // Decodes with QAudioDecoder (driven by a local QEventLoop so it
-// works on this worker thread) to 8 kHz mono PCM, matching the
-// Python version's PyAV decode + 8 kHz downsample.
+// works on this worker thread) in the file's native format, then
+// mixes to mono and decimates to ~8 kHz exactly as the Python
+// backend does after its PyAV decode.
 // ════════════════════════════════════════════════════════════════
 
 AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
@@ -145,92 +205,97 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
 {
     AnalysisResult result;
 
-    QByteArray pcmBuffer;
-
     // ── Decode via QAudioDecoder (cross-platform) ────────────────────────
     // Uses the native backend on each platform: MediaCodec on Android,
-    // GStreamer/FFmpeg on Linux, Windows Media Foundation on Windows,
+    // FFmpeg/GStreamer on Linux, Windows Media Foundation on Windows,
     // AVFoundation on macOS. QtMultimedia is already linked for QMediaPlayer.
-    // We request Int16 mono at 8 kHz; we convert to normalised float32 below
-    // (simpler cross-backend than asking for Float because some Android
-    // MediaCodec configurations reject Float sample formats).
+    //
+    // Deliberately no setAudioFormat(): asking the FFmpeg backend to convert
+    // an MP3 to 8 kHz mono Int16 yields no buffers and no error on Qt 6.11
+    // (the decode just sat on the watchdog for 30 s and the visualizer stayed
+    // dark), while the native format decodes in a few hundred ms. WAV sources
+    // converted fine, which is what hid the failure. The mono mix-down and
+    // the decimation happen below in appendMono() and the stride loop, so the
+    // decoder's choice of rate, channel count and sample format no longer
+    // matters — on Android this also sidesteps MediaCodec's format quirks.
     QAudioDecoder decoder;
-    QAudioFormat fmt;
-    fmt.setSampleRate(8000);
-    fmt.setChannelCount(1);
-    fmt.setSampleFormat(QAudioFormat::Int16);
-    decoder.setAudioFormat(fmt);
     decoder.setSource(QUrl::fromLocalFile(filePath));
 
-    QByteArray rawInt16;
-    bool errorFlag = false;
+    std::vector<float> mono;       // mixed to mono, native sample rate
+    int  nativeRate = 0;
+    bool errorFlag  = false;
+    bool timedOut   = false;
 
     QEventLoop loop;
-    QObject::connect(&decoder, &QAudioDecoder::bufferReady, &decoder,
-        [&decoder, &rawInt16]() {
-            while (decoder.bufferAvailable()) {
-                QAudioBuffer buf = decoder.read();
-                if (!buf.isValid()) break;
-                rawInt16.append(reinterpret_cast<const char *>(buf.constData<char>()),
-                                buf.byteCount());
-            }
-        });
+    auto drain = [&decoder, &mono, &nativeRate]() {
+        while (decoder.bufferAvailable()) {
+            QAudioBuffer buf = decoder.read();
+            if (!buf.isValid()) break;
+            appendMono(buf, mono, nativeRate);
+        }
+    };
+    QObject::connect(&decoder, &QAudioDecoder::bufferReady, &decoder, drain);
     QObject::connect(&decoder, &QAudioDecoder::finished, &loop, &QEventLoop::quit);
     QObject::connect(&decoder, QOverload<QAudioDecoder::Error>::of(&QAudioDecoder::error),
         &decoder,
-        [&loop, &errorFlag, &filePath](QAudioDecoder::Error err) {
+        [&loop, &errorFlag, &filePath, &decoder](QAudioDecoder::Error err) {
             Q_UNUSED(err);
             errorFlag = true;
-            qCWarning(lcAudioAnalyzer) << "QAudioDecoder error for" << filePath;
+            qCWarning(lcAudioAnalyzer) << "QAudioDecoder error for" << filePath
+                                       << "-" << decoder.errorString();
             loop.quit();
         });
 
     // Watchdog — bail out if decode takes too long (e.g. codec stall).
-    QTimer::singleShot(30000, &loop, &QEventLoop::quit);
+    QTimer watchdog;
+    watchdog.setSingleShot(true);
+    QObject::connect(&watchdog, &QTimer::timeout, &loop, [&loop, &timedOut]() {
+        timedOut = true;
+        loop.quit();
+    });
+    watchdog.start(30000);
 
     decoder.start();
     loop.exec();
+    drain();            // buffers queued between the last bufferReady and finished
     decoder.stop();
 
-    if (errorFlag || rawInt16.isEmpty()) {
+    if (errorFlag)
+        return result;
+    if (timedOut) {
+        qCWarning(lcAudioAnalyzer) << "QAudioDecoder timed out after 30 s for" << filePath
+                                   << "-" << mono.size() << "samples decoded at" << nativeRate << "Hz";
         return result;
     }
-
-    // Convert Int16 → normalised float32 matching the old ffmpeg output path.
-    const auto *srcI16 = reinterpret_cast<const int16_t *>(rawInt16.constData());
-    const int i16Count = rawInt16.size() / static_cast<int>(sizeof(int16_t));
-    pcmBuffer.resize(i16Count * static_cast<int>(sizeof(float)));
-    auto *dstF32 = reinterpret_cast<float *>(pcmBuffer.data());
-    constexpr float kInv32k = 1.0f / 32768.0f;
-    for (int i = 0; i < i16Count; ++i) {
-        dstF32[i] = static_cast<float>(srcI16[i]) * kInv32k;
-    }
-
-    if (pcmBuffer.isEmpty()) {
+    if (mono.empty() || nativeRate <= 0) {
         qCWarning(lcAudioAnalyzer) << "QAudioDecoder produced no audio data for" << filePath;
         return result;
     }
 
-    // ── PCM data is now a contiguous float array at 8 kHz mono ─
-    const auto *samples     = reinterpret_cast<const float *>(pcmBuffer.constData());
-    const int   sampleCount = pcmBuffer.size() / static_cast<int>(sizeof(float));
-    const int   sampleRate  = 8000;
+    // ── Normalise (before decimation, like the Python backend) ─
+    float maxVal = 0.0f;
+    for (float v : mono)
+        maxVal = std::max(maxVal, std::abs(v));
+    if (maxVal > 0.0f) {
+        const float inv = 1.0f / maxVal;
+        for (float &v : mono)
+            v *= inv;
+    }
 
+    // ── Decimate to ~8 kHz: every (rate // 8000)th sample, effective rate
+    //    rate // factor — identical to Python's all_samples[::factor]. ──
+    const int factor     = std::max(1, nativeRate / 8000);
+    const int sampleRate = nativeRate / factor;
+    std::vector<float> normalised;
+    normalised.reserve(mono.size() / factor + 1);
+    for (size_t i = 0; i < mono.size(); i += factor)
+        normalised.push_back(mono[i]);
+    mono.clear();
+    mono.shrink_to_fit();
+
+    const int sampleCount = static_cast<int>(normalised.size());
     if (sampleCount == 0)
         return result;
-
-    // Normalise
-    float maxVal = 0.0f;
-    for (int i = 0; i < sampleCount; ++i)
-        maxVal = std::max(maxVal, std::abs(samples[i]));
-
-    std::vector<float> normalised(sampleCount);
-    if (maxVal > 0.0f) {
-        for (int i = 0; i < sampleCount; ++i)
-            normalised[i] = samples[i] / maxVal;
-    } else {
-        std::fill(normalised.begin(), normalised.end(), 0.0f);
-    }
 
     // ── Chunk into ~chunkDuration windows and FFT each ─────────
     const int chunkSize = static_cast<int>(sampleRate * chunkDuration);
@@ -243,8 +308,8 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
     const auto window = hannWindow(chunkSize);
 
     // Magnitudes of the positive frequencies, skipping DC: bins 1..N/2, i.e.
-    // 0-4 kHz at the 8 kHz decode rate (the Python backend keeps the same
-    // range: np.abs(np.fft.rfft(chunk))[1:]).
+    // 0 to sampleRate/2 (~4 kHz) at the decimated rate (the Python backend
+    // keeps the same range: np.abs(np.fft.rfft(chunk))[1:]).
     const int fftLen = fftSize / 2;
     const std::vector<int> logIndices = logBandEdges(fftLen, numBars);
 

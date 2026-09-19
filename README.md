@@ -2,23 +2,21 @@
 
 # OCTAVE
 
-### Open-source car infotainment · carputer · DIY head unit
-**Raspberry Pi · Desktop · Android — fully programmable, hackable, MIT-licensed.**
+### An open-source car head unit
+**Runs on Raspberry Pi, desktop, and Android. C++ or Python backend, QML frontend, MIT.**
 
 <img src="frontend/assets/readme/drive.webp" alt="OCTAVE on the dash of a 2003 Jeep TJ: album art beside live speed and RPM during a full-throttle pull" width="900">
 
-<sub>Recorded on the head unit in the author's Jeep TJ, an Orange Pi 5 driving a 2560x1080 dash display. Every clip and screenshot in this README was captured from the running app; the theme is following the album art.</sub>
+<sub>Recorded on the head unit in my Jeep TJ, an Orange Pi 5 driving a 2560x1080 dash display. Every clip and screenshot in this README was captured from the running app. The theme is following the album art.</sub>
 
 [![Latest Release](https://img.shields.io/github/v/release/WayBetterSolutions/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/WayBetterSolutions/OCTAVE/releases/latest)
 [![Stars](https://img.shields.io/github/stars/WayBetterSolutions/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/WayBetterSolutions/OCTAVE/stargazers)
 [![Downloads](https://img.shields.io/github/downloads/WayBetterSolutions/OCTAVE/total?style=for-the-badge&color=2b8aff&label=downloads)](https://github.com/WayBetterSolutions/OCTAVE/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)](LICENSE)
 
-[![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20Linux%20%7C%20Pi%20%7C%20Android-success?style=flat-square)](#get-octave)
+[![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20Linux%20%7C%20Pi%20%7C%20Android-success?style=flat-square)](#install)
 [![Backend](https://img.shields.io/badge/backend-C%2B%2B%20%7C%20Python-orange?style=flat-square)](#two-backends-one-frontend)
 [![Frontend](https://img.shields.io/badge/frontend-Qt%206%20%2F%20QML-41cd52?style=flat-square)](#)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/WayBetterSolutions/OCTAVE?style=flat-square&label=commits%2Fmonth)](https://github.com/WayBetterSolutions/OCTAVE/pulse)
-[![Forks](https://img.shields.io/github/forks/WayBetterSolutions/OCTAVE?style=flat-square&color=8a4fff)](https://github.com/WayBetterSolutions/OCTAVE/network/members)
 
 ### [Download Latest Release →](https://github.com/WayBetterSolutions/OCTAVE/releases/latest)
 
@@ -26,23 +24,17 @@
 
 ---
 
-OCTAVE is an open-source infotainment system. A carputer you actually own. Rip out your factory head unit and bolt a Raspberry Pi to your dash, run it on a laptop in a project car, or sideload it onto an Android tablet. It plays your music, talks to your car over OBD-II, mirrors your phone, and themes itself to your album art.
+OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi behind the dash, a laptop in a project car, or an Android tablet. It plays local music and Spotify, reads live data from the car over OBD-II, mirrors an Android phone over USB, and recolours its interface to match the album art.
 
-If you've poked at **Crankshaft, OpenAuto Pro, or AGL** before, OCTAVE lives in the same neighborhood — closer to a hackable foundation than a polished product. Two backends ship side by side, C++/Qt and Python/PySide6, so you can fork whichever one you're already fluent in.
+It sits in the same space as Crankshaft, OpenAuto Pro and AGL, but it runs on its own rather than projecting a phone, and it is built to be modified. Most of the customisation (themes, dashboards, layouts, hardware bindings) happens inside the app. Past that, the code is small enough to fork, and it ships in both C++/Qt and Python/PySide6 so you can work in whichever you already know.
+
+I daily-drive it in a 2003 Jeep TJ. That is where most of the design decisions come from, and it is why the README is full of the Jeep.
 
 ---
 
-## Why OCTAVE
+## What it looks like
 
-Stock head units age out fast. Aftermarket units lock you in. Android Auto and CarPlay are great until you want to do something the manufacturer didn't sign off on.
-
-OCTAVE is the third option: a stack you build, modify, and run on whatever hardware you want. If you've ever wanted to wire a rotary encoder to your dash, throw a custom OBD gauge on screen, or theme your UI to match your album art in real time, this is the project for you.
-
-It's not really a product. It's more like vanilla Minecraft — I'll keep the base build healthy and supported, but the amount of customization baked in means no two OCTAVE installs are going to look the same. Themes, dashboards, layouts, hardware bindings, gauges, sensors, the lot. And if you want to go further than the built-in knobs allow, the whole thing is yours to fork.
-
-## See It
-
-Everything below was shot on the real rig with the music playing. Each clip has a different song behind it, and since the **Album Art Capture** theme is on, the whole interface takes its colours from whatever is playing.
+Every clip below was recorded on the Jeep's head unit with music playing. Each has a different song behind it, and with the **Album Art Capture** theme on, the whole interface takes its colours from the current track.
 
 ### Music that colours the whole interface
 
@@ -50,7 +42,7 @@ Everything below was shot on the real rig with the music playing. Each clip has 
   <img src="frontend/assets/readme/media.webp" alt="Media room and player: accent, glow and background follow each album's art as tracks change" width="900">
 </p>
 
-Skip a track and the UI recolours. Local MP3/M4A/FLAC with a live waveform, Spotify, and a built-in downloader that pairs Spotify metadata with YouTube audio.
+Skip a track and the UI recolours. Local MP3, M4A and FLAC with a live waveform, Spotify, and a downloader that pairs Spotify metadata with YouTube audio.
 
 <p align="center">
   <img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room with waveform, controls and album art" width="49%">
@@ -63,7 +55,7 @@ Skip a track and the UI recolours. Local MP3/M4A/FLAC with a live waveform, Spot
   <img src="frontend/assets/readme/dashboards.webp" alt="Dashboard chooser with live miniatures, then Sport, Performance, TJ Wrangler and Full Grid dashboards under load" width="900">
 </p>
 
-Fifty-plus OBD-II parameters, a set of gauge primitives (circular, arc, bar, linear, digital, sparkline, warning light), and full-screen dashboards defined in JSON or built in the in-app drag-and-drop editor. The chooser shows every dashboard as a live miniature. The "TJ Wrangler 4.0" one is the author's daily layout.
+Fifty-plus OBD-II parameters, seven gauge primitives (circular, arc, bar, linear, digital, sparkline, warning light), and full-screen dashboards defined in JSON or built in the in-app drag-and-drop editor. The chooser shows every dashboard as a live miniature. "TJ Wrangler 4.0" is the one I actually drive with.
 
 <p align="center">
   <img src="frontend/assets/readme/dashboards_sport.png" alt="Sport dashboard: big speed readout and RPM arc" width="49%">
@@ -80,7 +72,7 @@ Fifty-plus OBD-II parameters, a set of gauge primitives (circular, arc, bar, lin
   <img src="frontend/assets/readme/shiftlight.webp" alt="The whole screen flashes red as the engine crosses the shift-light RPM on the Sport dashboard" width="900">
 </p>
 
-Set an RPM flag and the entire screen strobes when the engine crosses it, whatever page is showing. It is the one thing in OCTAVE built to be impossible to miss, so it gets its own clip and appears nowhere else on this page.
+Set an RPM threshold and the whole screen strobes red when the engine crosses it, whatever page is showing.
 
 <p align="center">
   <img src="frontend/assets/readme/shiftlight_strobe.png" alt="Mid-flash: the Sport dashboard washed red at 6300 RPM" width="700">
@@ -92,7 +84,7 @@ Set an RPM flag and the entire screen strobes when the engine crosses it, whatev
   <img src="frontend/assets/readme/mirror_live.png" alt="A Samsung phone's DeX desktop mirrored onto the head unit over USB" width="700">
 </p>
 
-Plug in an Android phone and OCTAVE mirrors a DeX-style desktop onto the head unit through a built-in scrcpy-protocol client. Nothing to install on the phone, no companion app. The phone's own screen stays dark in the cradle, a power press is undone before you notice, unlocking the phone hands it back to you, and a USB blip keeps whatever you had open instead of resetting to the home screen.
+Plug in an Android phone and OCTAVE mirrors a DeX-style desktop onto the head unit through a built-in scrcpy-protocol client. There is nothing to install on the phone. Its own screen stays dark in the cradle, an accidental power press is reverted, unlocking the phone hands control back to it, and a brief USB disconnect resumes where you were instead of resetting to the home screen.
 
 ### The vehicle, live
 
@@ -100,7 +92,7 @@ Plug in an Android phone and OCTAVE mirrors a DeX-style desktop onto the head un
   <img src="frontend/assets/readme/jeep.webp" alt="A rigged 3D Jeep TJ: doors, hood and tailgate open, lights on, steering and wheels turning, tilted by the real IMU" width="900">
 </p>
 
-A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels, rolled and pitched in real time by the BerryIMU on the dash. Heading, altitude and cabin temperature come from the same sensor.
+A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels. The BerryIMU on the dash rolls and pitches it in real time, and supplies heading, altitude and cabin temperature.
 
 <p align="center">
   <img src="frontend/assets/readme/jeep_open.png" alt="Jeep with doors and hood open" width="49%">
@@ -123,15 +115,7 @@ A rigged model of the Jeep with working doors, hood, tailgate, lights, steering 
   <img src="frontend/assets/readme/settings.webp" alt="Settings sections: display, media, OBD, accessories, device, about" width="900">
 </p>
 
-## Who This Is For
-
-- **The Pi tinkerer.** You've got a Raspberry Pi 4 or 5, a touchscreen, and a free weekend. You want a real infotainment stack to hack on, not a kiosk wrapped around a browser tab.
-- **The factory-head-unit refugee.** Your 2008 Civic / E46 / Tacoma / van came with something terrible (or nothing at all), and you'd rather wire a tablet into the dash than drop $900 on a double-DIN.
-- **The Android Auto / CarPlay defector.** Those are fine until you want to do something the manufacturer didn't sign off on. OCTAVE is the "do whatever you want" option.
-- **The OBD-II data nerd.** You want live gauges, custom dashboards, and 50+ PIDs on screen without paying a subscription.
-- **The van-build / overlander / project-car person.** You need an interface that survives being rebuilt three times and fits hardware nobody else supports.
-
-## How It Compares
+## How it compares
 
 | | OCTAVE | Crankshaft | OpenAuto Pro | Stock Android Auto |
 |---|---|---|---|---|
@@ -143,9 +127,7 @@ A rigged model of the Jeep with working doors, hood, tailgate, lights, steering 
 | Local music + Spotify + downloads | yes | via phone | via phone | via phone |
 | Desktop dev loop | yes (Win/macOS/Linux) | Pi only | Pi only | n/a |
 
-If you want a head unit that runs **on its own** instead of a screen that mirrors your phone, OCTAVE is the one.
-
-## What's In The Box
+## Features
 
 ### Media & Audio
 - Local player for MP3, M4A, FLAC with album art carousel and live FFT visualizer
@@ -162,14 +144,14 @@ If you want a head unit that runs **on its own** instead of a screen that mirror
 
 ### Platform & Customization
 - Runs on Windows, macOS, Linux, Raspberry Pi, and Android
-- Two parallel backends so you can hack in whichever language you'd rather live in
+- Two parallel backends (C++ and Python) with the same API surface
 - 100+ user-configurable settings, all persisted to disk
 - Gauge primitives, JSON dashboards and an in-app dashboard editor — build your own and drop them in
-- Rotating logs, crash traces and a Diagnostics page that exports them from the dash, so a failure on the road is never a mystery
+- Rotating logs, crash traces and a Diagnostics page that exports them from the dash
 
-## Get OCTAVE
+## Install
 
-The fastest way to try OCTAVE is to grab the pre-built binary for your OS from the [Releases](https://github.com/WayBetterSolutions/OCTAVE/releases) page and give it a spin — no toolchain, no build, no Python venv. One installer per platform:
+Pre-built binaries for every platform are on the [Releases](https://github.com/WayBetterSolutions/OCTAVE/releases) page. No toolchain or Python needed:
 
 - **Windows:** `OCTAVE-<version>-windows-x86_64.exe` — run the installer.
 - **macOS:** `OCTAVE-<version>-macos.dmg` — open, drag to Applications.
@@ -177,11 +159,9 @@ The fastest way to try OCTAVE is to grab the pre-built binary for your OS from t
   - Arch users may need `fuse2`: `sudo pacman -S fuse2`. Alternative without FUSE: `./OCTAVE-*.AppImage --appimage-extract-and-run`.
 - **Android:** `OCTAVE-<version>-android-arm64-v8a.apk` — sideload (the released APK uses a per-build keystore, so updates require uninstalling the previous version).
 
-If you'd rather build it yourself, hack on the code, or run from a checkout, keep reading.
-
 ## Building from source
 
-If you just want to run the app, use the pre-built download above. Building from source is for hacking on OCTAVE — the Python backend is the fastest dev loop:
+The Python backend is the quickest way to get a development loop going:
 
 ```bash
 git clone https://github.com/waybettersolutions/octave.git
@@ -200,7 +180,7 @@ python main.py --debug               # verbose logging
 python -m dev.main_dev               # simulated OBD + keyboard controls
 ```
 
-### Running the C++ Build
+### C++ build
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -210,11 +190,11 @@ cmake --build build -j
 
 Full build matrix (9 targets including iOS, Android, Flatpak, and app store variants) lives in [BUILD.md](BUILD.md).
 
-### YouTube downloads failing? Check your VPN first.
+### YouTube downloads failing
 
-**99% of the time the fix is to turn off your VPN.** YouTube's bot detection blocklists most VPN exit IPs (NordVPN, ExpressVPN, Mullvad, ProtonVPN, etc. — they're shared with thousands of automated tools), and every download will fail with *"Sign in to confirm you're not a bot"* until you reconnect on a residential IP. If you need to stay on a VPN, switch to a residential-IP plan or a dedicated-IP exit node.
+If downloads fail with *"Sign in to confirm you're not a bot"*, the usual cause is a VPN. YouTube blocklists most shared VPN exit IPs, and downloads work again on a residential connection or a dedicated-IP exit node.
 
-If turning off the VPN isn't an option (geo-restricted regions, privacy requirements), you can authenticate with your YouTube account via cookies as a fallback:
+If you need to stay on the VPN, you can authenticate with your YouTube account through a cookies file instead:
 
 1. Install the **Get cookies.txt LOCALLY** extension in any Chromium-based browser:
    - Desktop: Chrome / Brave / Edge / Vivaldi.
@@ -225,47 +205,42 @@ If turning off the VPN isn't an option (geo-restricted regions, privacy requirem
    - **Linux / macOS:** `~/Downloads/youtube_cookies.txt`
    - **Windows:** `%USERPROFILE%\Downloads\youtube_cookies.txt`
    - **Android:** `/storage/emulated/0/Download/youtube_cookies.txt` (visible as `Internal storage / Download / youtube_cookies.txt` in any file manager)
-5. Restart OCTAVE — every download will now use those cookies. Cookies usually stay valid for weeks.
+5. Restart OCTAVE. Downloads now use those cookies, which usually stay valid for weeks.
 
-OCTAVE detects the file automatically — no settings to configure. If you don't have the file, downloads still work for any video that isn't currently walled by YouTube on your network.
+OCTAVE picks the file up automatically. There is no setting to configure.
 
 ## Two backends, one frontend
 
-This is the part I care about most.
+OCTAVE has two backends, C++ / Qt 6 in `src/` and Python / PySide6 in `backend/`, that expose the same managers, signals and settings to a single QML frontend. The frontend does not know which one is running.
 
-OCTAVE ships **two parallel backends**, C++ / Qt 6 and Python / PySide6, both driving the same QML frontend. Not because the project needs both, but because **you** might. The whole reason it exists in two languages is so the next person to fork OCTAVE can pick up the side they already speak and start building.
+The C++ tree is what ships: every release binary on every platform, including Android, is built from it. The Python tree is for development and hardware work. On a Pi with a new sensor on the I²C bus, a Python REPL beats a compile cycle, and most managers are a few hundred lines you can read in one sitting.
 
-- Love C++? `src/` is yours. Performance, app stores, mobile — that's the side that ships natively.
-- Live in Python? `backend/` is yours. Want to wire up a weird sensor on a Pi at 2am with a REPL open? Done in 20 lines.
-
-The frontend doesn't know or care which one is running. Mod whichever side you want, ship to whoever you want.
-
-You don't have to fork to make OCTAVE yours — most of the customization is just settings, themes, and dashboards you build inside the app. But if you do want to fork and ship something I'd never have thought of, the wild rigs and weird hardware ports are the part I'm most excited to see.
+Both are kept in sync on desktop. A feature or fix in one lands in the other in the same change.
 
 ## Dev tooling
 
-The screenshots and clips above were not staged by hand. `python -m dev.main_dev --profile` runs OCTAVE with a simulated engine and a local command server; `python -m dev.screenshots.stories` then drives it through scripted scenes (navigate, play, floor the throttle, switch dashboards), records the window straight from Qt, and writes README-ready WebP, GIF and PNG. The same channel is exposed as MCP tools, so an AI coding agent can navigate the app, poke settings, read performance counters and record clips while it works. It all lives under `dev/` and is documented in the wiki.
+The clips and screenshots above are scripted. `python -m dev.main_dev --profile` runs OCTAVE with a simulated engine and a local command server, and `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, switch dashboards), captures the window from inside Qt, and writes WebP, GIF and PNG. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. Everything is under `dev/` and documented in the wiki.
 
-## System Requirements
+## System requirements
 
 - **Python** 3.8+ (for the Python backend) / **Qt 6** + **CMake 3.16+** (for C++)
 - **OS:** Windows 10+, macOS 10.14+, Linux (Debian / Arch / Fedora), Raspberry Pi OS, Android
 
 ## Roadmap
 
-A few of the bigger things in flight — full plans live under [`TODO/`](TODO/):
+Larger items in progress. Full plans are under [`TODO/`](TODO/).
 
-- **Native C++ Android port, sideload polish** — on the way to Play Store distribution. See [`TODO/android-cpp-port.md`](TODO/android-cpp-port.md).
+- **Android on the Play Store.** The C++ port runs on sideload today. See [`TODO/android-cpp-port.md`](TODO/android-cpp-port.md).
 - **Companion app** for phone mirroring without USB debugging. See [`TODO/octave-companion-app.md`](TODO/octave-companion-app.md).
-- **CarlinKit / wireless CarPlay-Android Auto dongle support.** See [`TODO/carlinkit-dongle-port.md`](TODO/carlinkit-dongle-port.md).
-- **In-app error notification UI** — surface backend issues without diving into log files.
-- **Expanded test coverage** — beyond the current smoke suite.
+- **CarlinKit wireless CarPlay / Android Auto dongle support.** See [`TODO/carlinkit-dongle-port.md`](TODO/carlinkit-dongle-port.md).
+- **In-app error notifications**, so backend problems show up on screen rather than only in the logs.
+- **More tests** beyond the current smoke suite.
 
 ## Documentation
 
-The wiki covers everything — architecture, every backend manager, every frontend page, settings reference, hardware setup, build guides, the gauge authoring spec — start at [`wiki/index.html`](wiki/index.html). For building gauges and dashboards specifically, [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md) is the source of truth.
+The wiki covers architecture, every backend manager, every frontend page, the settings reference, hardware setup and the build guides. Start at [`wiki/index.html`](wiki/index.html). For gauges and dashboards, [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md) is the spec.
 
-## Star History
+## Star history
 
 <a href="https://star-history.com/#WayBetterSolutions/OCTAVE&Date">
   <img src="https://api.star-history.com/svg?repos=WayBetterSolutions/OCTAVE&type=Date" alt="Star History Chart" width="720">
@@ -273,12 +248,8 @@ The wiki covers everything — architecture, every backend manager, every fronte
 
 ## Contributing
 
-Pull requests welcome. Bug reports welcome. Hardware mods extremely welcome.
-
-If you build something cool on top of OCTAVE — a custom dashboard, a new sensor integration, a port to weirder hardware — open an issue or PR and show it off. The more wild builds out there, the better the project gets.
-
-Star the repo if you want to follow along.
+Pull requests and bug reports are welcome. If you build a dashboard, a sensor integration or a port to new hardware, open an issue or PR. I would like to see it.
 
 ## License
 
-2026 [Way Better Solutions](https://waybetter.solutions/) — MIT License. Do whatever you want with it.
+2026 [Way Better Solutions](https://waybetter.solutions/). MIT License.

@@ -1,9 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
-  <g fill="#FFFFFF">
-    <!-- Broken ring -->
-    <path fill="none" stroke="#FFFFFF" stroke-width="48" stroke-linecap="round" d="M191,164 A190,190 0 1 0 409,164"/>
-    <!-- Stem -->
-    <rect x="276" y="70" width="48" height="200" rx="24"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 4v11M9 7.5a11 11 0 1 0 14 0"/>
   </g>
 </svg>

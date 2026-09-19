@@ -379,7 +379,12 @@ Item {
     Component.onCompleted: {
         console.log("AndroidAutoView loaded")
         console.log("androidAutoManager available:", androidAutoManager ? "yes" : "no")
+    }
 
+    // Runs on the first push and on every later visit — this view is built
+    // once and re-pushed by the StackView page cache (see Main.qml), so a
+    // revisit after the DHU exited relaunches it just like a fresh view did.
+    StackView.onActivated: {
         if (androidAutoManager) {
             // Check if DHU is already running (user navigated back)
             if (androidAutoManager.isDhuEmbedded) {

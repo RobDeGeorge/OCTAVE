@@ -327,19 +327,19 @@
             </tr>
             <tr>
               <td>OBD</td><td><code>obd_button.svg</code> / <code>bottomBarOBDButton</code></td>
-              <td>Reads <code>stackView.currentItem.objectName</code>. On <code>"obdHome"</code>: nothing. On any page whose name starts with <code>"obd"</code>: pops until <code>obdHome</code> is on top (pushes a fresh <code>OBDHome.qml</code> if it was not on the stack). From anywhere else: pushes the remembered subpage stored in the generic setting <code>lastOBDPage</code> (written by <span class="file-path">OBDHome.qml</span>), or <code>OBDHome.qml</code> if none.</td>
+              <td><code>openOBDSection()</code>: reads <code>stackView.currentItem.objectName</code>. On <code>"obdHome"</code>: nothing. On any page whose name starts with <code>"obd"</code>: pops until <code>obdHome</code> is on top (opens <code>OBDHome.qml</code> if it was not on the stack). From anywhere else: opens the remembered subpage stored in the generic setting <code>lastOBDPage</code> (written by <span class="file-path">OBDHome.qml</span>), falling back to <code>OBDHome.qml</code> if none is stored or it fails to load.</td>
             </tr>
             <tr>
               <td>Media</td><td><code>media_button.svg</code> / <code>bottomBarMediaButton</code></td>
-              <td>On <code>mediaRoom</code> pushes <code>MediaPlayer.qml</code>; on <code>mediaPlayer</code> pushes <code>MediaRoom.qml</code>; otherwise pushes the page named by <code>settingsManager.musicButtonDefaultPage</code> (<code>"mediaRoom"</code> or <code>"mediaPlayer"</code>, the "Default to Library View" toggle in Media settings).</td>
+              <td><code>openMediaSection()</code>: on <code>mediaRoom</code> opens <code>MediaPlayer.qml</code>; on <code>mediaPlayer</code> opens <code>MediaRoom.qml</code>; otherwise opens the page named by <code>settingsManager.musicButtonDefaultPage</code> (<code>"mediaRoom"</code> or <code>"mediaPlayer"</code>, the "Default to Library View" toggle in Media settings).</td>
             </tr>
             <tr>
               <td>Sensor</td><td><code>sensor_button.svg</code> / <code>bottomBarSensorButton</code></td>
-              <td><code>openSensorSection()</code>: on <code>sensorHome</code> nothing; on a page named <code>sensor*</code> or <code>carMenu</code> pops back to Sensor Home; from elsewhere pushes the generic setting <code>lastSensorPage</code> (written by <span class="file-path">SensorHome.qml</span>). If that page fails to load (for example <code>CarMenu.qml</code> when QtQuick3D is missing) the stale preference is cleared and <code>SensorHome.qml</code> is pushed instead. Every failure is logged with <code>console.warn</code>.</td>
+              <td><code>openSensorSection()</code>: on <code>sensorHome</code> nothing; on a page named <code>sensor*</code> or <code>carMenu</code> pops back to Sensor Home; from elsewhere opens the generic setting <code>lastSensorPage</code> (written by <span class="file-path">SensorHome.qml</span>). If that page fails to load (for example <code>CarMenu.qml</code> when QtQuick3D is missing) the stale preference is cleared and <code>SensorHome.qml</code> is opened instead. Every failure is logged with <code>console.warn</code> by <code>openPage()</code>.</td>
             </tr>
             <tr>
               <td>Settings</td><td><code>settings_button.svg</code> / <code>bottomBarSettingsButton</code></td>
-              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid; a no-op for Sidebar and Carousel). Otherwise pops to root and pushes a new <code>SettingsMenu.qml</code> with <code>initialSection: lastSettingsSection</code> (a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>). Press-and-hold (<code>onPressAndHold</code>, in both orientations) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
+              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid; a no-op for Sidebar and Carousel). Otherwise pops to root and opens the cached <code>SettingsMenu.qml</code> (built the first time with <code>initialSection: lastSettingsSection</code>, a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>; on later visits the page simply keeps the section it was on). Press-and-hold (<code>onPressAndHold</code>, in both orientations) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
             </tr>
             <tr>
               <td>Android Auto</td><td><code>android_auto_button.svg</code> / <code>bottomBarAndroidAutoButton</code></td>
@@ -347,12 +347,12 @@
             </tr>
             <tr>
               <td>Phone Mirror</td><td><code>phone_mirror_button.svg</code> / <code>bottomBarPhoneMirrorButton</code></td>
-              <td>Walks the stack looking for an item with <code>objectName === "phoneMirrorView"</code>; if found, pops everything above it so the running mirror session is reused. Otherwise pushes <code>PhoneMirrorView.qml</code> with that <code>objectName</code>. Same visibility rule as Android Auto, keyed on <code>phoneMirrorEnabled</code>.</td>
+              <td><code>openPhoneMirrorSection()</code> &rarr; <code>stackView.openPage("PhoneMirrorView.qml")</code>: pops back to the cached view if it is on the stack (so the running mirror session is reused) or pushes it. Same visibility rule as Android Auto, keyed on <code>phoneMirrorEnabled</code>.</td>
             </tr>
           </tbody>
         </table>
 
-        <p>Pages pushed from the bar receive <code>stackView: bottomBar.stackView</code> and, where the page declares it, <code>mainWindow: stackView.parent.Window.window</code>.</p>
+        <p>Every button ends in <code>stackView.openPage()</code> (see <a href="frontend-overview.html#page-cache">the page cache</a>): the page is built once with <code>stackView</code> and <code>mainWindow</code> supplied by <code>cachedPage()</code>, and every later press re-pushes or pops back to that same instance. Both bar orientations share one set of <code>open*Section()</code> functions on <code>bottomBar</code>; the horizontal and vertical <code>MouseArea</code>s only call them.</p>
 
         <!-- Update notification -->
         <h2 id="update-notification">Update Notification</h2>
@@ -378,7 +378,7 @@
         <!-- Clock -->
         <h2 id="clock">Clock Section</h2>
 
-        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and <code>font.pixelSize: settingsManager.clockSize</code> (default 18, slider 10&ndash;85). Tapping the clock pushes <code>SensorHome.qml</code>. A press highlight uses <code>hoverColor</code>.</p>
+        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and <code>font.pixelSize: settingsManager.clockSize</code> (default 18, slider 10&ndash;85). Tapping the clock opens <code>SensorHome.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
 
         <p>Both layouts bind their clock <code>Text</code> to one bar-level property, <code>bottomBar.clockTimeText</code>, which a single <code>Connections</code> on <code>clock.timeChanged</code> (also at bar level, outside both layout components) keeps current:</p>
 
@@ -548,7 +548,7 @@
             </tr>
             <tr>
               <td>StackView transitions disabled in Main.qml</td>
-              <td>Comment: "Disable transitions for better performance" &mdash; every push from the bar is instant, which matters on the Raspberry Pi / Orange Pi head units.</td>
+              <td>Comment: "Disable transitions for better performance" &mdash; every push from the bar is instant, which matters on the Raspberry Pi / Orange Pi head units. Together with the page cache this also makes <code>StackView.onActivated</code> fire synchronously inside <code>push()</code>.</td>
             </tr>
           </tbody>
         </table>

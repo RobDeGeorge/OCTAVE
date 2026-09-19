@@ -855,9 +855,7 @@ Item {
                                 return
                             }
                             if (downloadPage.stackView) {
-                                downloadPage.stackView.push("MediaRoom.qml", {
-                                    stackView: downloadPage.stackView
-                                })
+                                downloadPage.stackView.openPage("MediaRoom.qml")
                             }
                         } else if (modelData.is_failed) {
                             errorPopup.errorMsg = modelData.error_message || "Download failed — no audio source found"
@@ -1297,9 +1295,7 @@ Item {
                                         }
                                         downloadPage.statusText = "Playing: " + (model.songName || "")
                                         if (downloadPage.stackView) {
-                                            downloadPage.stackView.push("MediaRoom.qml", {
-                                                stackView: downloadPage.stackView
-                                            })
+                                            downloadPage.stackView.openPage("MediaRoom.qml")
                                         }
                                     }
                                 }

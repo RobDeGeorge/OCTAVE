@@ -602,6 +602,21 @@ Flickable {
                     }
 
                     SettingCategory {
+                        title: "Music Player Object"
+                        description: App.MusicDevicePreference.isAvailable()
+                            ? "Replace album art with a real 3D player. Drag to rotate; double-tap to reset."
+                            : "3D players require Qt Quick 3D. Album art remains available."
+                        NowPlayingButtonGrid {
+                            options: App.MusicDevicePreference.options
+                            currentValue: App.MusicDevicePreference.mode
+                            onSelected: function(value) {
+                                if (value === "Album art" || App.MusicDevicePreference.isAvailable())
+                                    App.MusicDevicePreference.select(value)
+                            }
+                        }
+                    }
+
+                    SettingCategory {
                         title: "Vinyl Record Mode"
                         description: "Swap album art for a spinning vinyl while playing."
 

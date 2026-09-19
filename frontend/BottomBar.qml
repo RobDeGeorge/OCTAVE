@@ -11,6 +11,7 @@ Rectangle {
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
 
     id: bottomBar
+    objectName: "bottomBar"
     property bool isVertical: settingsManager && settingsManager.bottomBarOrientation === "side"
 
     // Global font binding for all text in this component
@@ -48,25 +49,11 @@ Rectangle {
         }
     }
     
-    // Build + push a sensor page, returning true on success. Every failure is
-    // logged — a silently-swallowed load error here reads to the user as "the
+    // Show a sensor page, returning true on success. openPage() logs every
+    // failure — a silently-swallowed load error here reads to the user as "the
     // sensor button is dead" with nothing in the console to explain it.
     function _pushSensorPage(qmlFile) {
-        var component = Qt.createComponent(qmlFile)
-        if (component.status !== Component.Ready) {
-            console.warn("[BottomBar] Failed to load", qmlFile, "-", component.errorString())
-            return false
-        }
-        var page = component.createObject(stackView, {
-            stackView: bottomBar.stackView,
-            mainWindow: stackView.parent.Window.window
-        })
-        if (!page) {
-            console.warn("[BottomBar] Failed to instantiate", qmlFile)
-            return false
-        }
-        stackView.push(page)
-        return true
+        return stackView.openPage(qmlFile) !== null
     }
 
     // Sensor nav button. Opens the last-visited sensor subpage when we have one,
@@ -104,6 +91,121 @@ Rectangle {
                 settingsManager.save_setting("lastSensorPage", "")
         }
         _pushSensorPage("SensorHome.qml")
+    }
+
+    function persistentWikiSettings() {
+        for (var i = stackView.depth - 1; i > 0; --i) {
+            var item = stackView.get(i)
+            if (item && item.objectName === "settingsMenu"
+                    && item.activeWikiPopup && item.activeWikiPopup.opened)
+                return item
+        }
+        return null
+    }
+
+    function openHomeSection() {
+        var savedSettings = persistentWikiSettings()
+        if (!savedSettings) {
+            while (stackView.depth > 1)
+                stackView.pop()
+            return
+        }
+
+        // Reuse a Home page already above the preserved Settings page.
+        for (var i = stackView.depth - 1; i > 0; --i) {
+            var item = stackView.get(i)
+            if (item === savedSettings)
+                break
+            if (item && item.objectName === "mainMenu") {
+                if (stackView.currentItem !== item)
+                    stackView.pop(item)
+                return
+            }
+        }
+
+        stackView.openPage("MainMenu.qml", {
+            windowWidth: bottomBar.mainWindow.width,
+            windowHeight: bottomBar.mainWindow.height
+        })
+    }
+
+    function openSettingsSection() {
+        var currentItem = stackView.currentItem
+        if (currentItem && currentItem.objectName === "settingsMenu") {
+            if (typeof currentItem.handleSettingsButton === "function")
+                currentItem.handleSettingsButton()
+            else if (typeof currentItem.navigateToHub === "function")
+                currentItem.navigateToHub()
+            return
+        }
+
+        var savedSettings = persistentWikiSettings()
+        if (savedSettings) {
+            stackView.pop(savedSettings)
+            return
+        }
+
+        while (stackView.depth > 1)
+            stackView.pop()
+        stackView.openPage("SettingsMenu.qml", { initialSection: lastSettingsSection })
+    }
+
+    // OBD nav button. On an OBD subpage it steps back to OBD Home; from
+    // anywhere else it jumps to the last-visited OBD page (falling back to
+    // OBD Home when that page can no longer load).
+    function openOBDSection() {
+        var currentItem = stackView.currentItem
+        var name = currentItem ? currentItem.objectName : ""
+
+        if (name === "obdHome")
+            return  // already on OBD Home
+
+        if (name.indexOf("obd") === 0) {
+            while (stackView.depth > 1) {
+                var item = stackView.currentItem
+                if (item && item.objectName === "obdHome")
+                    return
+                stackView.pop()
+            }
+            stackView.openPage("OBDHome.qml")
+            return
+        }
+
+        var lastPage = settingsManager ? settingsManager.get_setting_with_default("lastOBDPage", "") : ""
+        if (lastPage !== "" && stackView.openPage(lastPage))
+            return
+        stackView.openPage("OBDHome.qml")
+    }
+
+    // Media nav button toggles between MediaRoom and MediaPlayer when on
+    // either; from anywhere else it opens the user's chosen default page.
+    function openMediaSection() {
+        var currentItem = stackView.currentItem
+        var name = currentItem ? currentItem.objectName : ""
+
+        if (name === "mediaRoom") {
+            stackView.openPage("MediaPlayer.qml")
+        } else if (name === "mediaPlayer") {
+            stackView.openPage("MediaRoom.qml")
+        } else {
+            var defaultPage = settingsManager ? settingsManager.musicButtonDefaultPage : "mediaRoom"
+            stackView.openPage(defaultPage === "mediaPlayer" ? "MediaPlayer.qml" : "MediaRoom.qml")
+        }
+    }
+
+    // Both mirror views launch/reattach their stream in StackView.onActivated,
+    // so re-showing the cached instance is all a press has to do.
+    function openAndroidAutoSection() {
+        stackView.openPage("AndroidAutoView.qml")
+    }
+
+    function openPhoneMirrorSection() {
+        stackView.openPage("PhoneMirrorView.qml")
+    }
+
+    // Tapping the clock opens Sensor Home.
+    function openClockSection() {
+        stackView.openPage("SensorHome.qml")
     }
 
     function updateLayout() {
@@ -834,12 +936,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    // Pop to root/main menu
-                                    while (stackView.depth > 1) {
-                                        stackView.pop();
-                                    }
-                                }
+                                onClicked: bottomBar.openHomeSection()
                             }
                         }
                         
@@ -908,51 +1005,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    var currentItem = stackView.currentItem
-                                    var name = currentItem ? currentItem.objectName : ""
-
-                                    if (name === "obdHome") {
-                                        // Already on OBD Home �� do nothing
-                                        return
-                                    }
-
-                                    if (name.indexOf("obd") === 0) {
-                                        // On an OBD subpage — go back to OBDHome
-                                        var found = false
-                                        while (stackView.depth > 1) {
-                                            var item = stackView.currentItem
-                                            if (item && item.objectName === "obdHome") {
-                                                found = true
-                                                break
-                                            }
-                                            stackView.pop()
-                                        }
-                                        if (!found) {
-                                            var component = Qt.createComponent("OBDHome.qml")
-                                            if (component.status === Component.Ready) {
-                                                var page = component.createObject(stackView, {
-                                                    stackView: bottomBar.stackView,
-                                                    mainWindow: stackView.parent.Window.window
-                                                })
-                                                if (page) stackView.push(page)
-                                            }
-                                        }
-                                    } else {
-                                        // From a non-OBD page — check if we have a remembered subpage
-                                        var lastPage = settingsManager ? settingsManager.get_setting_with_default("lastOBDPage", "") : ""
-                                        var target = (lastPage !== "") ? lastPage : "OBDHome.qml"
-
-                                        var component = Qt.createComponent(target)
-                                        if (component.status === Component.Ready) {
-                                            var page = component.createObject(stackView, {
-                                                stackView: bottomBar.stackView,
-                                                mainWindow: stackView.parent.Window.window
-                                            })
-                                            if (page) stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openOBDSection()
                             }
                         }
 
@@ -1021,43 +1074,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    var currentItem = stackView.currentItem
-                                    var defaultPage = settingsManager ? settingsManager.musicButtonDefaultPage : "mediaRoom"
-
-                                    if (currentItem && currentItem.objectName === "mediaRoom") {
-                                        // On MediaRoom, go to MediaPlayer
-                                        var component = Qt.createComponent("MediaPlayer.qml")
-                                        if (component.status === Component.Ready) {
-                                            var page = component.createObject(stackView, {
-                                                stackView: bottomBar.stackView,
-                                                mainWindow: stackView.parent.Window.window
-                                            })
-                                            stackView.push(page)
-                                        }
-                                    } else if (currentItem && currentItem.objectName === "mediaPlayer") {
-                                        // On MediaPlayer, go to MediaRoom
-                                        var component = Qt.createComponent("MediaRoom.qml")
-                                        if (component.status === Component.Ready) {
-                                            var page = component.createObject(stackView, {
-                                                stackView: bottomBar.stackView
-                                            })
-                                            stackView.push(page)
-                                        }
-                                    } else {
-                                        // From other pages, go to the default page based on setting
-                                        var targetPage = defaultPage === "mediaPlayer" ? "MediaPlayer.qml" : "MediaRoom.qml"
-                                        var component = Qt.createComponent(targetPage)
-                                        if (component.status === Component.Ready) {
-                                            var props = { stackView: bottomBar.stackView }
-                                            if (defaultPage === "mediaPlayer") {
-                                                props.mainWindow = stackView.parent.Window.window
-                                            }
-                                            var page = component.createObject(stackView, props)
-                                            stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openMediaSection()
                             }
                         }
 
@@ -1217,23 +1234,7 @@ Rectangle {
                                 anchors.centerIn: parent
                                 hoverEnabled: true
                                 onPressAndHold: settingsVisibilityPopup.open()
-                                onClicked: {
-                                    var currentItem = stackView.currentItem
-                                    if (currentItem && currentItem.objectName === "settingsMenu") {
-                                        if (typeof currentItem.navigateToHub === "function")
-                                            currentItem.navigateToHub()
-                                    } else {
-                                        // Pop back to root first, then push fresh settings page
-                                        while (stackView.depth > 1)
-                                            stackView.pop()
-                                        var page = Qt.createComponent("SettingsMenu.qml").createObject(stackView, {
-                                            stackView: bottomBar.stackView,
-                                            mainWindow: stackView.parent.Window.window,
-                                            initialSection: lastSettingsSection
-                                        })
-                                        stackView.push(page)
-                                    }
-                                }
+                                onClicked: bottomBar.openSettingsSection()
                             }
                         }
 
@@ -1303,19 +1304,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    // Navigate to AndroidAutoView and launch seamless DHU
-                                    var component = Qt.createComponent("AndroidAutoView.qml")
-                                    if (component.status === Component.Ready) {
-                                        var page = component.createObject(stackView, {
-                                            stackView: bottomBar.stackView,
-                                            mainWindow: stackView.parent.Window.window
-                                        })
-                                        if (page) {
-                                            stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openAndroidAutoSection()
                             }
                         }
 
@@ -1385,33 +1374,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    // Check if PhoneMirrorView is already on the stack - if so, pop back to it
-                                    for (var i = 0; i < stackView.depth; i++) {
-                                        var item = stackView.get(i)
-                                        if (item && item.objectName === "phoneMirrorView") {
-                                            console.log("PhoneMirrorView found on stack at index", i, "- popping to it")
-                                            // Pop all items above it
-                                            while (stackView.depth > i + 1) {
-                                                stackView.pop()
-                                            }
-                                            return
-                                        }
-                                    }
-
-                                    // Navigate to PhoneMirrorView
-                                    var component = Qt.createComponent("PhoneMirrorView.qml")
-                                    if (component.status === Component.Ready) {
-                                        var page = component.createObject(stackView, {
-                                            stackView: bottomBar.stackView,
-                                            mainWindow: stackView.parent.Window.window,
-                                            objectName: "phoneMirrorView"
-                                        })
-                                        if (page) {
-                                            stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openPhoneMirrorSection()
                             }
                         }
                     }
@@ -1458,13 +1421,7 @@ Rectangle {
                                 id: mouseAreaClock
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    var page = Qt.createComponent("SensorHome.qml").createObject(stackView, {
-                                        stackView: bottomBar.stackView,
-                                        mainWindow: bottomBar.mainWindow
-                                    })
-                                    stackView.push(page)
-                                }
+                                onClicked: bottomBar.openClockSection()
                             }
                         }
                     }
@@ -2179,11 +2136,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    while (stackView.depth > 1) {
-                                        stackView.pop();
-                                    }
-                                }
+                                onClicked: bottomBar.openHomeSection()
                             }
                         }
                         // OBD Button
@@ -2252,51 +2205,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    var currentItem = stackView.currentItem
-                                    var name = currentItem ? currentItem.objectName : ""
-
-                                    if (name === "obdHome") {
-                                        // Already on OBD Home �� do nothing
-                                        return
-                                    }
-
-                                    if (name.indexOf("obd") === 0) {
-                                        // On an OBD subpage — go back to OBDHome
-                                        var found = false
-                                        while (stackView.depth > 1) {
-                                            var item = stackView.currentItem
-                                            if (item && item.objectName === "obdHome") {
-                                                found = true
-                                                break
-                                            }
-                                            stackView.pop()
-                                        }
-                                        if (!found) {
-                                            var component = Qt.createComponent("OBDHome.qml")
-                                            if (component.status === Component.Ready) {
-                                                var page = component.createObject(stackView, {
-                                                    stackView: bottomBar.stackView,
-                                                    mainWindow: stackView.parent.Window.window
-                                                })
-                                                if (page) stackView.push(page)
-                                            }
-                                        }
-                                    } else {
-                                        // From a non-OBD page — check if we have a remembered subpage
-                                        var lastPage = settingsManager ? settingsManager.get_setting_with_default("lastOBDPage", "") : ""
-                                        var target = (lastPage !== "") ? lastPage : "OBDHome.qml"
-
-                                        var component = Qt.createComponent(target)
-                                        if (component.status === Component.Ready) {
-                                            var page = component.createObject(stackView, {
-                                                stackView: bottomBar.stackView,
-                                                mainWindow: stackView.parent.Window.window
-                                            })
-                                            if (page) stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openOBDSection()
                             }
                         }
 
@@ -2366,43 +2275,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    var currentItem = stackView.currentItem
-                                    var defaultPage = settingsManager ? settingsManager.musicButtonDefaultPage : "mediaRoom"
-
-                                    if (currentItem && currentItem.objectName === "mediaRoom") {
-                                        // On MediaRoom, go to MediaPlayer
-                                        var component = Qt.createComponent("MediaPlayer.qml")
-                                        if (component.status === Component.Ready) {
-                                            var page = component.createObject(stackView, {
-                                                stackView: bottomBar.stackView,
-                                                mainWindow: stackView.parent.Window.window
-                                            })
-                                            stackView.push(page)
-                                        }
-                                    } else if (currentItem && currentItem.objectName === "mediaPlayer") {
-                                        // On MediaPlayer, go to MediaRoom
-                                        var component = Qt.createComponent("MediaRoom.qml")
-                                        if (component.status === Component.Ready) {
-                                            var page = component.createObject(stackView, {
-                                                stackView: bottomBar.stackView
-                                            })
-                                            stackView.push(page)
-                                        }
-                                    } else {
-                                        // From other pages, go to the default page based on setting
-                                        var targetPage = defaultPage === "mediaPlayer" ? "MediaPlayer.qml" : "MediaRoom.qml"
-                                        var component = Qt.createComponent(targetPage)
-                                        if (component.status === Component.Ready) {
-                                            var props = { stackView: bottomBar.stackView }
-                                            if (defaultPage === "mediaPlayer") {
-                                                props.mainWindow = stackView.parent.Window.window
-                                            }
-                                            var page = component.createObject(stackView, props)
-                                            stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openMediaSection()
                             }
                         }
 
@@ -2564,23 +2437,7 @@ Rectangle {
                                 anchors.centerIn: parent
                                 hoverEnabled: true
                                 onPressAndHold: settingsVisibilityPopup.open()
-                                onClicked: {
-                                    var currentItem = stackView.currentItem
-                                    if (currentItem && currentItem.objectName === "settingsMenu") {
-                                        if (typeof currentItem.navigateToHub === "function")
-                                            currentItem.navigateToHub()
-                                    } else {
-                                        // Pop back to root first, then push fresh settings page
-                                        while (stackView.depth > 1)
-                                            stackView.pop()
-                                        var page = Qt.createComponent("SettingsMenu.qml").createObject(stackView, {
-                                            stackView: bottomBar.stackView,
-                                            mainWindow: stackView.parent.Window.window,
-                                            initialSection: lastSettingsSection
-                                        })
-                                        stackView.push(page)
-                                    }
-                                }
+                                onClicked: bottomBar.openSettingsSection()
                             }
                         }
 
@@ -2651,19 +2508,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    // Navigate to AndroidAutoView and launch seamless DHU
-                                    var component = Qt.createComponent("AndroidAutoView.qml")
-                                    if (component.status === Component.Ready) {
-                                        var page = component.createObject(stackView, {
-                                            stackView: bottomBar.stackView,
-                                            mainWindow: stackView.parent.Window.window
-                                        })
-                                        if (page) {
-                                            stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openAndroidAutoSection()
                             }
                         }
 
@@ -2734,33 +2579,7 @@ Rectangle {
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    // Check if PhoneMirrorView is already on the stack - if so, pop back to it
-                                    for (var i = 0; i < stackView.depth; i++) {
-                                        var item = stackView.get(i)
-                                        if (item && item.objectName === "phoneMirrorView") {
-                                            console.log("PhoneMirrorView found on stack at index", i, "- popping to it")
-                                            // Pop all items above it
-                                            while (stackView.depth > i + 1) {
-                                                stackView.pop()
-                                            }
-                                            return
-                                        }
-                                    }
-
-                                    // Navigate to PhoneMirrorView
-                                    var component = Qt.createComponent("PhoneMirrorView.qml")
-                                    if (component.status === Component.Ready) {
-                                        var page = component.createObject(stackView, {
-                                            stackView: bottomBar.stackView,
-                                            mainWindow: stackView.parent.Window.window,
-                                            objectName: "phoneMirrorView"
-                                        })
-                                        if (page) {
-                                            stackView.push(page)
-                                        }
-                                    }
-                                }
+                                onClicked: bottomBar.openPhoneMirrorSection()
                             }
                         }
                     }
@@ -2806,13 +2625,7 @@ Rectangle {
                                 id: mouseAreaClockVertical
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: {
-                                    var page = Qt.createComponent("SensorHome.qml").createObject(stackView, {
-                                        stackView: bottomBar.stackView,
-                                        mainWindow: bottomBar.mainWindow
-                                    })
-                                    stackView.push(page)
-                                }
+                                onClicked: bottomBar.openClockSection()
                             }
                         }
                     }

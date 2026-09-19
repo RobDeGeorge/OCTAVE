@@ -3,3 +3,4 @@ singleton Spacing 1.0 Spacing.qml
 singleton EnvironmentTheme 1.0 EnvironmentTheme.qml
 singleton OBDParameterModel 1.0 OBDParameterModel.qml
 singleton WidgetCatalog 1.0 dashboards/WidgetCatalog.qml
+singleton MusicDevicePreference 1.0 MusicDevicePreference.qml

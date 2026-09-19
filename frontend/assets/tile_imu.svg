@@ -1,11 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
-  <g fill="#FFFFFF">
-  <g transform="translate(1,-29)">
-    <!-- Isometric cube -->
-    <path fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linejoin="round" d="M300,90 L510,210 L510,450 L300,570 L90,450 L90,210 Z"/>
-    <!-- Axes from centroid -->
-    <path fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" d="M300,330 L300,570 M300,330 L90,210 M300,330 L510,210"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="8" width="16" height="16" rx="3" fill="#fff" fill-opacity=".12"/>
+    <path d="M12 4v4m8-4v4m-8 16v4m8-4v4M4 12h4m-4 8h4m16-8h4m-4 8h4"/>
+    <rect x="13" y="13" width="6" height="6" rx="1.5" fill="#fff" stroke="none"/>
   </g>
 </svg>

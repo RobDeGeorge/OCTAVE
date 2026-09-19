@@ -163,8 +163,11 @@ Item {
         return -1
     }
 
-    // Initialize component
-    Component.onCompleted: {
+    // Refresh from the backend on every visit. This page is built once and
+    // re-pushed by the StackView page cache (see Main.qml), so the per-visit
+    // work (playlists, current track, scroll position, album art) lives here
+    // rather than in Component.onCompleted, which would only ever run once.
+    StackView.onActivated: {
         if (mediaManager) {
             // Load playlist names
             playlistNames = mediaManager.get_playlist_names()
@@ -1188,9 +1191,7 @@ Item {
                                                 spotifyManager.play_uri(uri)
                                             }
                                             if (!returnToLibrary) {
-                                                stackView.push("MediaRoom.qml", {
-                                                    stackView: mediaPlayer.stackView
-                                                })
+                                                stackView.openPage("MediaRoom.qml")
                                             }
                                         }
                                     } else {
@@ -1204,9 +1205,7 @@ Item {
                                             mediaManager.play_file(modelData)
                                             lastPlayedSong = modelData
                                             if (!returnToLibrary) {
-                                                stackView.push("MediaRoom.qml", {
-                                                    stackView: mediaPlayer.stackView
-                                                })
+                                                stackView.openPage("MediaRoom.qml")
                                             }
                                         }
                                     }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(OCTAVE VERSION 0.9.0 LANGUAGES CXX)
+project(OCTAVE VERSION 0.9.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +11,12 @@ if(ANDROID)
     list(APPEND OCTAVE_QT_COMPONENTS Sensors)
 endif()
 find_package(Qt6 REQUIRED COMPONENTS ${OCTAVE_QT_COMPONENTS})
+
+# The offline wiki viewer is loaded on demand. Keep builds without a desktop
+# web engine working (Qt WebEngine is not available on Android/iOS).
+if(NOT ANDROID AND NOT IOS)
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuick)
+endif()
 
 # Quick3D backs the 3D vehicle-attitude view (frontend/CarMenu.qml). It is
 # optional at build time: the QML is loaded lazily and SensorHome probes for the
@@ -157,6 +163,17 @@ if(OCTAVE_HAVE_FFMPEG)
 endif()
 if(Qt6Quick3D_FOUND)
     target_link_libraries(octave PRIVATE Qt6::Quick3D)
+endif()
+if(TARGET Qt6::WebEngineQuick)
+    target_link_libraries(octave PRIVATE Qt6::WebEngineQuick)
+    target_compile_definitions(octave PRIVATE OCTAVE_HAVE_WEBENGINE)
+    # Installed apps have an offline copy; source launches prefer the live wiki/.
+    file(GLOB_RECURSE OCTAVE_WIKI_FILES CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/wiki/*.html" "${CMAKE_SOURCE_DIR}/wiki/*.css"
+        "${CMAKE_SOURCE_DIR}/wiki/*.js" "${CMAKE_SOURCE_DIR}/wiki/*.svg"
+        "${CMAKE_SOURCE_DIR}/wiki/*.png" "${CMAKE_SOURCE_DIR}/wiki/*.webp")
+    qt_add_resources(octave "wiki" PREFIX "/wiki"
+        BASE "${CMAKE_SOURCE_DIR}/wiki" FILES ${OCTAVE_WIKI_FILES})
 endif()
 if(ANDROID)
     target_link_libraries(octave PRIVATE Qt6::Sensors Qt6::CorePrivate)

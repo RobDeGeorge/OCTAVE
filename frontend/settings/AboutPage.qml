@@ -4,6 +4,41 @@ import QtQuick.Layouts 1.15
 import ".." as App
 
 Flickable {
+    id: aboutPage
+    property var stackView: null
+    property var wikiHost: null
+
+    WikiPopup {
+        id: wikiPopup
+        contentArea: aboutPage.stackView
+    }
+    function registerWikiPopup() {
+        if (wikiHost && wikiHost.activeWikiPopup === wikiPopup)
+            wikiHost.activeWikiPopup = null
+        wikiHost = stackView && stackView.currentItem
+                && stackView.currentItem.objectName === "settingsMenu"
+                ? stackView.currentItem : null
+        wikiPopup.navigationOwner = wikiHost || aboutPage
+        if (wikiHost && typeof wikiHost.registerWikiPopup === "function")
+            wikiHost.registerWikiPopup(wikiPopup)
+    }
+    onStackViewChanged: registerWikiPopup()
+    Component.onCompleted: registerWikiPopup()
+    Connections {
+        target: aboutPage.stackView
+        ignoreUnknownSignals: true
+        function onCurrentItemChanged() {
+            // SettingsMenu can finish loading About before StackView promotes
+            // it to currentItem. Adopt it as soon as that promotion happens.
+            if (!aboutPage.wikiHost && aboutPage.stackView.currentItem
+                    && aboutPage.stackView.currentItem.objectName === "settingsMenu")
+                aboutPage.registerWikiPopup()
+        }
+    }
+    Component.onDestruction: {
+        if (wikiHost && wikiHost.activeWikiPopup === wikiPopup)
+            wikiHost.activeWikiPopup = null
+    }
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
@@ -130,6 +165,28 @@ Flickable {
                         Layout.fillWidth: true
                         visible: text !== ""
                     }
+                }
+            }
+
+            SettingsCard {
+                Layout.fillWidth: true
+                title: "Documentation"
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Explore the guides, features, and settings without leaving OCTAVE."
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.family: App.Style.fontFamily
+                    wrapMode: Text.WordWrap
+                }
+
+                SettingsButton {
+                    objectName: "openWikiButton"
+                    text: "Open Wiki"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: aboutPage.dp(44)
+                    onClicked: wikiPopup.open()
                 }
             }
 

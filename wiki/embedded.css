@@ -1,0 +1,85 @@
+/* Applied only by OCTAVE's in-app reader. The normal website keeps style.css. */
+html.octave-reader {
+  --font-body: var(--reader-font, system-ui, sans-serif);
+  --font-heading: var(--font-body);
+  --bg-primary: var(--reader-bg, #0d1117);
+  --bg-secondary: var(--reader-surface, #161b22);
+  --bg-sidebar: var(--bg-primary);
+  --bg-card: var(--bg-secondary);
+  --bg-code: var(--bg-secondary);
+  --bg-code-inline: var(--bg-secondary);
+  --bg-table-header: var(--bg-secondary);
+  --bg-table-row-alt: var(--bg-primary);
+  --text-primary: var(--reader-text, #e6edf3);
+  --text-secondary: var(--reader-muted, #aab4c0);
+  --text-tertiary: var(--text-secondary);
+  --text-link: var(--reader-accent, #58a6ff);
+  --accent-cyan: var(--text-link);
+  font-size: var(--reader-size, 22px);
+  scroll-behavior: auto;
+  scroll-padding-top: 20px;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+.octave-reader body { font-size: 1rem; line-height: 1.65; letter-spacing: 0; overflow-wrap: anywhere; }
+.octave-reader .content { margin-left: 0; width: 100%; }
+.octave-reader .content-inner { max-width: 52rem; padding: 24px clamp(20px, 5vw, 64px) 64px; }
+.octave-reader .page-header { margin-bottom: 24px; padding-bottom: 20px; }
+.octave-reader .page-title { font-size: 1.6rem; font-weight: 600; }
+.octave-reader .page-subtitle { font-size: 1rem; line-height: 1.55; }
+.octave-reader h2 { font-size: 1.3rem; margin-top: 32px; }
+.octave-reader h3 { font-size: 1.12rem; }
+.octave-reader h4 { font-size: 1rem; }
+.octave-reader p, .octave-reader li { font-size: 1rem; }
+.octave-reader pre { font-size: .85rem; max-width: 100%; overflow: auto; touch-action: pan-x pan-y; }
+.octave-reader pre code { font-size: inherit; }
+.octave-reader code, .octave-reader .file-path { font-size: .88em; }
+.octave-reader .octave-table-scroll { overflow-x: auto; margin-bottom: 24px; touch-action: pan-x pan-y; }
+.octave-reader table { font-size: .88rem; min-width: 620px; margin: 0; }
+.octave-reader th { font-size: .78rem; text-transform: none; }
+.octave-reader td, .octave-reader th { padding: 16px; }
+.octave-reader .feature-grid { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 16px; }
+.octave-reader .feature-card { padding: 0; border-radius: 12px; }
+.octave-reader .feature-card a { display: block; padding: 24px; min-height: 64px; }
+.octave-reader .feature-card .feature-title { font-size: 1.05rem; }
+.octave-reader .feature-card .feature-desc { font-size: .9rem; line-height: 1.5; }
+.octave-reader .related-link, .octave-reader .toc-list a, .octave-reader .breadcrumb a {
+  display: inline-flex; align-items: center; min-height: 52px; padding: 10px 16px;
+  font-size: .9rem; border-radius: 8px;
+}
+.octave-reader .toc-list a { display: flex; }
+.octave-reader .toc { padding: 20px; }
+.octave-reader .toc-title { font-size: 1rem; }
+.octave-reader .sidebar-toggle { display: none !important; }
+.octave-reader .sidebar {
+  width: min(400px, 90vw); height: 100dvh; padding: 12px;
+  transform: translateX(-100%); visibility: hidden;
+  background: var(--bg-primary); z-index: 1100;
+  transition: transform 160ms ease, visibility 160ms;
+  overscroll-behavior: contain; touch-action: pan-y;
+}
+.octave-reader .sidebar.open { transform: none; visibility: visible; }
+.octave-reader .sidebar-header { display: none; }
+.octave-reader .sidebar-section-title { font: 600 .75rem var(--font-body); padding: 20px 14px 8px; }
+.octave-reader .sidebar-link { display: flex; align-items: center; min-height: 56px; padding: 12px 16px; font-size: .92rem; line-height: 1.4; border-radius: 8px; }
+.octave-reader .search-box { padding: 8px 0; position: sticky; top: 0; background: var(--bg-primary); z-index: 2; }
+.octave-reader .search-box input { font: inherit; font-size: .9rem; min-height: 56px; padding: 12px; }
+.octave-reader .search-shortcut { display: none; }
+.octave-reader .octave-topics-close { display: block; min-height: 52px; width: 100%; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; }
+.octave-reader .octave-topics-backdrop { position: fixed; inset: 0; z-index: 1050; background: #0008; border: 0; display: none; }
+.octave-reader.octave-topics-open .octave-topics-backdrop { display: block; }
+.octave-reader.octave-topics-open body { overflow: hidden; }
+.octave-reader .search-overlay { z-index: 1200; left: min(400px, 90vw); padding: 12px; }
+.octave-reader .search-results { width: 100%; max-width: 800px; max-height: calc(100dvh - 24px); overscroll-behavior: contain; touch-action: pan-y; }
+.octave-reader .search-result-link { min-height: 56px; padding: 8px 0; }
+.octave-reader .search-result-title { font-size: 1rem; }
+.octave-reader .search-result-subtitle, .octave-reader .search-result-snippet { font-size: .85rem; }
+.octave-reader .search-section-link { display: inline-flex; align-items: center; min-height: 48px; padding: 8px 12px; font-size: .82rem; }
+.octave-reader a, .octave-reader button { touch-action: manipulation; }
+.octave-reader .octave-dragging, .octave-reader.octave-dragging * { user-select: none; cursor: grabbing; }
+.octave-reader ::-webkit-scrollbar { width: 10px; height: 10px; }
+@media (max-width: 700px) {
+  .octave-reader .content-inner { padding: 20px 20px 48px; }
+  .octave-reader .search-overlay { left: 0; top: 136px; }
+  .octave-reader .search-results { max-height: calc(100dvh - 160px); }
+}
+@media (prefers-reduced-motion: reduce) { .octave-reader .sidebar { transition: none; } }

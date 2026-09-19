@@ -587,10 +587,10 @@ Item {
         function onHeightChanged() { updateTimer.restart(); }
     }
     
-    // Initialize layout
-    Component.onCompleted: {
-        updateTimer.start();
-    }
+    // Lay the grid out immediately. The debounce timer above is only for the
+    // later settings/resize churn — routing the first layout through it left
+    // the page visible with the wrong column count for 100 ms on every open.
+    Component.onCompleted: updateLayout()
 
     // ── Dashboard Chooser Popup ──────────────────────────────────────
     Popup {

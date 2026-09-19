@@ -6,12 +6,16 @@
 #include <QScreen>
 #include <QObject>
 #include <QDir>
+#include <QFile>
 #include <QWindow>
 #include <QTimer>
 #include <QColor>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtQml/qqml.h>
+#ifdef OCTAVE_HAVE_WEBENGINE
+#include <QtWebEngineQuick/qtwebenginequickglobal.h>
+#endif
 
 #ifdef Q_OS_ANDROID
 #include <QtCore/private/qandroidextras_p.h>
@@ -69,6 +73,19 @@ int main(int argc, char *argv[])
             debugLogging = true;
     OctaveLog::install(debugLogging);
 
+#ifdef OCTAVE_HAVE_WEBENGINE
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    // Chromium's GPU initialization can crash in Mesa on Wayland when GBM
+    // falls back to Vulkan. The offline wiki needs no GPU acceleration;
+    // disable it only for WebEngine, leaving Qt Quick's renderer unchanged.
+    QByteArray chromiumFlags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+    if (!chromiumFlags.split(' ').contains("--disable-gpu")) {
+        chromiumFlags.append(" --disable-gpu");
+        qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags.trimmed());
+    }
+#endif
+    QtWebEngineQuick::initialize();
+#endif
     QGuiApplication app(argc, argv);
     app.setOrganizationName("OCTAVE");
     app.setApplicationName("OCTAVE");
@@ -317,6 +334,19 @@ int main(int argc, char *argv[])
     }
 
     engine.addImportPath(frontendDir.absolutePath());
+#endif
+
+    // Prefer editable documentation alongside the checkout; packaged desktop
+    // builds fall back to the offline copy embedded in the executable.
+#ifdef OCTAVE_HAVE_WEBENGINE
+    ctx->setContextProperty("wikiViewerAvailable", true);
+    const QString localWiki = frontendDir.absoluteFilePath("../wiki/index.html");
+    ctx->setContextProperty("wikiHomeUrl", QFile::exists(localWiki)
+        ? QUrl::fromLocalFile(QDir::cleanPath(localWiki))
+        : QUrl(QStringLiteral("qrc:/wiki/index.html")));
+#else
+    ctx->setContextProperty("wikiViewerAvailable", false);
+    ctx->setContextProperty("wikiHomeUrl", QUrl());
 #endif
 
     // ==================================================================
