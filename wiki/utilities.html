@@ -372,9 +372,9 @@ volumeController.applyVolume(settingsManager.currentVolume());   <span class="cm
         <h2 id="version">Version &amp; update check</h2>
         <p><span class="file-path">backend/version.py</span> / <span class="file-path">CMakeLists.txt</span> &mdash; added with the Diagnostics card (<code>b5d47b8</code>).</p>
         <pre><code><span class="cmt">"""OCTAVE version, mirrored from CMakeLists.txt project(OCTAVE VERSION ...)."""</span>
-__version__ = <span class="str">"0.9.2"</span></code></pre>
+__version__ = <span class="str">"0.9.3"</span></code></pre>
         <ul>
-          <li><strong>C++:</strong> <code>project(OCTAVE VERSION 0.9.2 LANGUAGES CXX)</code> is the source of truth. CMake passes <code>OCTAVE_VERSION="${PROJECT_VERSION}"</code> as a compile definition (next to <code>OCTAVE_ENABLE_DOWNLOADS</code>) and reuses <code>PROJECT_VERSION</code> for <code>MACOSX_BUNDLE_BUNDLE_VERSION</code> / <code>MACOSX_BUNDLE_SHORT_VERSION_STRING</code>. <span class="file-path">diagnosticsmanager.cpp</span> falls back to <code>"dev"</code> if the define is missing.</li>
+          <li><strong>C++:</strong> <code>project(OCTAVE VERSION 0.9.3 LANGUAGES CXX)</code> is the source of truth. CMake passes <code>OCTAVE_VERSION="${PROJECT_VERSION}"</code> as a compile definition (next to <code>OCTAVE_ENABLE_DOWNLOADS</code>) and reuses <code>PROJECT_VERSION</code> for <code>MACOSX_BUNDLE_BUNDLE_VERSION</code> / <code>MACOSX_BUNDLE_SHORT_VERSION_STRING</code>. <span class="file-path">diagnosticsmanager.cpp</span> falls back to <code>"dev"</code> if the define is missing.</li>
           <li><strong>Python:</strong> <code>backend/version.py</code> is a hand-maintained mirror; bump both in the same commit.</li>
           <li>The version is surfaced to users only through <code>diagnosticsManager.appVersion</code> (About page and the log export header).</li>
         </ul>

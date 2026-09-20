@@ -2,7 +2,7 @@
 ; Download Inno Setup from: https://jrsoftware.org/isdl.php
 
 #define MyAppName "OCTAVE"
-#define MyAppVersion "0.9.2"
+#define MyAppVersion "0.9.3"
 #define MyAppPublisher "Way Better Solutions"
 #define MyAppURL "https://github.com/waybettersolutions/octave"
 #define MyAppExeName "OCTAVE.exe"
