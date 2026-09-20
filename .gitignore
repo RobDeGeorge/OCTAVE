@@ -76,6 +76,8 @@ backend/command_server.py
 *.o
 *.a
 *.so
+# ...except the prebuilt OpenSSL the Android APK ships (android/openssl/README.md)
+!android/openssl/**/*.so
 *.dylib
 *.obj
 *.lib
