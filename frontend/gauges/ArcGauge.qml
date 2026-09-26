@@ -68,6 +68,8 @@ Item {
     property bool showTicks: true
     property int majorTickCount: 5
     property int minorTicksPerMajor: 4
+    // Tick steps per major segment; 0 minor ticks means major ticks only
+    readonly property int _tickSteps: Math.max(1, minorTicksPerMajor)
     property real redlineStart: NaN
     property bool showReadout: true
     property int decimals: 0
@@ -159,10 +161,10 @@ Item {
 
     // ── Tick marks ──────────────────────────────────────────────────
     Repeater {
-        model: root.showTicks ? ((root.majorTickCount - 1) * root.minorTicksPerMajor + 1) : 0
+        model: root.showTicks ? (Math.max(1, root.majorTickCount - 1) * root._tickSteps + 1) : 0
         delegate: Rectangle {
-            property bool _major: (index % root.minorTicksPerMajor) === 0
-            property real _t: index / ((root.majorTickCount - 1) * root.minorTicksPerMajor)
+            property bool _major: (index % root._tickSteps) === 0
+            property real _t: index / (Math.max(1, root.majorTickCount - 1) * root._tickSteps)
             property real _angleDeg: root.startAngle + root.sweepAngle * _t
             property real _angleRad: _angleDeg * Math.PI / 180
             property real _tickR: root._arcR + root._arcWidth / 2 + App.Spacing.dp(4)

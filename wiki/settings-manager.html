@@ -216,7 +216,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <p>The constructor performs the only unconditional disk read of the manager's lifetime:</p>
         <ol class="steps">
           <li>Build <code>_default_settings</code> / <code>buildDefaultSettings()</code> (92 keys) and the registry.</li>
-          <li><code>load_settings()</code>: the file is opened with a <em>shared</em> lock, parsed and passed through <code>_validate_settings()</code>. A missing file is created from the defaults immediately; a corrupt file (JSON parse error) is logged and the defaults are used in memory without overwriting the file.</li>
+          <li><code>load_settings()</code>: the file is opened with a <em>shared</em> lock, parsed and passed through <code>_validate_settings()</code>. A missing file is created from the defaults immediately; a corrupt file (JSON parse error) is moved aside to <code>.corrupt</code> and restored from <code>.bak</code> (see <a href="#json-persistence">Backup and Corruption Recovery</a>).</li>
           <li><strong>Migrations</strong>, applied in memory (only the first two write back):
             <ul>
               <li><code>uiScale == 0.6</code> (an old default) becomes <code>1.0</code> and is saved straight away.</li>
@@ -264,13 +264,16 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <h3>Atomic Write</h3>
         <p><code>_write_settings_to_disk()</code> / <code>writeSettingsToDisk()</code> receives an already validated object and never re-validates (commit <code>037f753</code> aligned the C++ side with Python on this):</p>
         <ol class="steps">
-          <li>Create a temporary file in the same directory (<code>tempfile.mkstemp(dir=..., suffix='.json')</code> / <code>QTemporaryFile("settings_tmp_XXXXXX.json")</code>) so the final rename is on one filesystem</li>
-          <li>Take an exclusive, non-blocking lock on it (<code>fcntl.flock(LOCK_EX | LOCK_NB)</code> or <code>msvcrt.locking(LK_NBLCK)</code> in Python; <code>flock()</code> or <code>LockFileEx(LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY)</code> in C++). A lock failure is logged and the write proceeds</li>
-          <li>Write the JSON with 4-space indentation (<code>json.dump(indent=4)</code> / <code>QJsonDocument::Indented</code>)</li>
+          <li>Write to a temporary file in the same directory, so the final rename is on one filesystem: <code>tempfile.mkstemp(dir=..., suffix='.json')</code> in Python (under an exclusive, non-blocking <code>fcntl.flock</code> / <code>msvcrt.locking</code>), <code>QSaveFile</code> in C++</li>
+          <li>Write the JSON with 4-space indentation (<code>json.dumps(indent=4)</code> / <code>QJsonDocument::Indented</code>)</li>
+          <li>Flush and <code>fsync</code> the temp file (<code>QSaveFile::commit()</code> does this in C++), so a power cut cannot leave a zero-length file</li>
+          <li>Replace <code>settingsConfigure.json</code> in one step (<code>os.replace</code> / <code>QSaveFile::commit()</code>; both overwrite on every platform), then fsync the directory on Unix</li>
           <li>Set permissions to owner read/write only (<code>chmod 600</code>; skipped on Windows, where the user account protects the file)</li>
-          <li>Rename over <code>settingsConfigure.json</code>. On Windows the old file is deleted first because <code>rename</code> cannot overwrite</li>
-          <li>If any step fails, fall back to a direct (non-atomic) write of the same content, and remove the temp file</li>
+          <li>If any step fails, the temp file is removed and the existing file is left untouched; the next save tries again. There is no direct (truncating) fallback write</li>
         </ol>
+
+        <h3>Backup and Corruption Recovery</h3>
+        <p>The first time a session reads a settings file that parses cleanly, it copies it to <code>settingsConfigure.json.bak</code> (same atomic write). If a later boot finds the file unparseable (typically an ignition cut mid-write on an SD card), the bad file is moved to <code>settingsConfigure.json.corrupt</code> for inspection, the <code>.bak</code> copy is loaded and written back as the live file, and only if the backup is also unusable are the defaults used. Both backends use the same file names. Covered by <code>tests/test_settings_persistence.py</code>.</p>
 
         <h3>Validation</h3>
         <p>

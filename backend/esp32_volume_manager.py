@@ -13,6 +13,7 @@ import glob
 import time
 
 from backend.logging_config import get_logger
+from backend.qt_threading import run_on_main
 logger = get_logger(__name__)
 
 
@@ -496,7 +497,7 @@ class ESP32VolumeManager(QObject):
             except serial.SerialException as e:
                 logger.error(f"ESP32 volume: serial read error: {e}")
                 # Schedule reconnect on main thread
-                QTimer.singleShot(0, self._handle_disconnect)
+                run_on_main(self._handle_disconnect)
                 break
             except Exception as e:
                 logger.error(f"ESP32 volume: read loop error: {e}")

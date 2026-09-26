@@ -338,19 +338,31 @@ esp32_volume_manager.connectionStatusChanged.connect(on_esp32_connection_changed
 
 # Add the cleanup connection after creating managers:
 def cleanup_on_quit():
-    """Save state and cleanup before app exits"""
-    ui_watchdog.stop()  # before Qt tears the QObject down under the worker thread
-    media_manager._save_playback_state_now()
-    media_manager.flush_metadata_store()   # persistent tag store; covers stay cached across runs
-    spotify_manager.cleanup()
-    android_auto_manager.cleanup()  # Full cleanup: stops DHU, ADB, and head unit server
-    phone_mirror_manager.cleanup()  # Stop phone mirror if running
-    settings_manager.flush_pending_save()  # coalesced settings writes land before exit
-    esp32_volume_manager.cleanup()  # Disconnect ESP32 volume controller
-    berryimu_manager.cleanup()  # Stop BerryIMU sensor reading
-    gesture_manager.cleanup()  # Stop gesture sensor reading
-    network_manager.cleanup()  # Stop network polling
-    download_manager.cleanup()  # Clean up download engine
+    """Save state and cleanup before app exits. Each step is guarded so one
+    failing manager can't skip the rest (above all, the settings flush)."""
+    steps = [
+        ("ui watchdog", ui_watchdog.stop),  # before Qt tears the QObject down under the worker thread
+        ("playback state", media_manager._save_playback_state_now),
+        ("metadata store", media_manager.flush_metadata_store),  # persistent tag store; covers stay cached across runs
+        ("settings", settings_manager.flush_pending_save),  # coalesced settings writes land before exit
+        ("spotify", spotify_manager.cleanup),
+        ("android auto", android_auto_manager.cleanup),  # Full cleanup: stops DHU, ADB, and head unit server
+        ("phone mirror", phone_mirror_manager.cleanup),  # Stop phone mirror if running
+        ("obd", getattr(obd_manager, "close", None)),  # Stop monitor thread, close the adapter
+        ("esp32", esp32_volume_manager.cleanup),  # Disconnect ESP32 volume controller
+        ("berryimu", berryimu_manager.cleanup),  # Stop BerryIMU sensor reading
+        ("gesture", gesture_manager.cleanup),  # Stop gesture sensor reading
+        ("network", network_manager.cleanup),  # Stop network polling
+        ("downloads", download_manager.cleanup),  # Clean up download engine
+        ("settings (final)", settings_manager.flush_pending_save),  # anything a cleanup step saved
+    ]
+    for name, step in steps:
+        if step is None:
+            continue
+        try:
+            step()
+        except Exception:
+            logger.exception(f"Cleanup failed: {name}")
 
 app.aboutToQuit.connect(cleanup_on_quit)
 

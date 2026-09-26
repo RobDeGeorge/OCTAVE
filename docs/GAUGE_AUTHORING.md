@@ -84,7 +84,7 @@ Flagship primitive for RPM/speed/temp.
 | `showNeedle`          | bool  | `false` | Draws a rotating needle and center hub.                              |
 | `showTicks`           | bool  | `true`  | Major + minor tick marks along the arc.                              |
 | `majorTickCount`      | int   | `9`     | Number of major ticks (inclusive of endpoints).                      |
-| `minorTicksPerMajor`  | int   | `5`     | Minor ticks inserted between each pair of majors.                    |
+| `minorTicksPerMajor`  | int   | `5`     | Tick steps per major segment; `0` or `1` draws major ticks only.      |
 | `redlineStart`        | real  | `NaN`   | If set and `< max`, draws a red arc from this value up, and flips the filled arc to red once `value >= redlineStart`. |
 | `showCenterReadout`   | bool  | `true`  | Title + big number + unit in the middle.                             |
 | `trackColor`, `fillColor`, `redlineColor`, `needleColor` | color | theme | Manual overrides. |

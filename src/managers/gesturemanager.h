@@ -64,6 +64,7 @@ private:
     void flushSensor(double duration);
 
     std::atomic<bool> m_running;
+    std::atomic<bool> m_stopRequested{false};   // sticky: a stop() during init must win
     int m_fd;
 
     mutable QMutex m_configMutex;

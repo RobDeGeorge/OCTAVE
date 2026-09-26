@@ -67,6 +67,11 @@ static double decEvapPressure(const QVector<uint8_t> &a) {
     return std::round(val / 4.0 * 10.0) / 10.0;
 }
 
+// PID 0x54: unscaled Pa, offset by 32767 (J1979; matches python-obd)
+static double decEvapPressureAlt(const QVector<uint8_t> &a) {
+    return (a[0] * 256.0 + a[1]) - 32767.0;
+}
+
 static double decCatalystTemp(const QVector<uint8_t> &a) {
     return std::round((a[0] * 256.0 + a[1]) / 10.0 - 40.0);  // round to 0.1
 }
@@ -209,7 +214,7 @@ QHash<PidKey, PidEntry> ELM327Protocol::buildPidTable()
     t[{1, 0x50}] = {"Max MAF",                 "maxMAFChanged",                 "MAX_MAF",                   decMaxMAF,         1};
     t[{1, 0x51}] = {"Fuel Type",               "fuelTypeChanged",               "FUEL_TYPE",                 decSimple,         1};
     t[{1, 0x53}] = {"Evap Vapor Pressure Abs", "evapVaporPressureAbsChanged",   "EVAP_VAPOR_PRESSURE_ABS",   decAbsEvap,        2};
-    t[{1, 0x54}] = {"Evap Vapor Pressure Alt", "evapVaporPressureAltChanged",   "EVAP_VAPOR_PRESSURE_ALT",   decEvapPressure,   2};
+    t[{1, 0x54}] = {"Evap Vapor Pressure Alt", "evapVaporPressureAltChanged",   "EVAP_VAPOR_PRESSURE_ALT",   decEvapPressureAlt, 2};
     t[{1, 0x55}] = {"Short O2 Trim B1",        "shortO2TrimB1Changed",          "SHORT_O2_TRIM_B1",          decPctCentered,    1};
     t[{1, 0x56}] = {"Long O2 Trim B1",         "longO2TrimB1Changed",           "LONG_O2_TRIM_B1",           decPctCentered,    1};
     t[{1, 0x57}] = {"Short O2 Trim B2",        "shortO2TrimB2Changed",          "SHORT_O2_TRIM_B2",          decPctCentered,    1};
@@ -386,41 +391,107 @@ QChar ELM327Protocol::dtcPrefix(int code)
     }
 }
 
-QStringList ELM327Protocol::parseDtcResponse(const QString &raw)
+QString ELM327Protocol::decodeDtc(int byte1, int byte2)
 {
+    const QChar prefix = dtcPrefix((byte1 >> 6) & 0x03);
+    return QStringLiteral("%1%2%3%4%5")
+        .arg(prefix)
+        .arg((byte1 >> 4) & 0x03)
+        .arg(byte1 & 0x0F, 1, 16)
+        .arg((byte2 >> 4) & 0x0F, 1, 16)
+        .arg(byte2 & 0x0F, 1, 16)
+        .toUpper();
+}
+
+// Split an ELM327 reply (headers off, spaces off) into one hex string per
+// ECU message. CAN multi-frame replies ("00A", "0:4304...", "1:...") are
+// joined into a single message and trimmed to the announced byte count.
+QStringList ELM327Protocol::splitMessages(const QStringList &lines, bool *isMultiFrame)
+{
+    static const QRegularExpression frameRe(QStringLiteral("^([0-9A-F]):([0-9A-F]*)$"));
+    static const QRegularExpression hexRe(QStringLiteral("^[0-9A-F]+$"));
+
+    QStringList messages;
+    QString multi;
+    int multiLen = -1;
+    bool sawFrame = false;
+
+    for (QString line : lines) {
+        line.remove(QLatin1Char(' '));
+        line = line.toUpper();
+        const auto m = frameRe.match(line);
+        if (m.hasMatch()) {
+            sawFrame = true;
+            multi += m.captured(2);
+            continue;
+        }
+        if (!hexRe.match(line).hasMatch())
+            continue;   // SEARCHING..., NO DATA, echo, OK
+        if (line.size() == 3) {
+            // Byte-count header of a CAN multi-frame reply
+            if (!multi.isEmpty()) {
+                messages.append(multiLen > 0 ? multi.left(multiLen * 2) : multi);
+                multi.clear();
+            }
+            bool ok = false;
+            multiLen = line.toInt(&ok, 16);
+            if (!ok) multiLen = -1;
+            continue;
+        }
+        messages.append(line);
+    }
+    if (!multi.isEmpty())
+        messages.append(multiLen > 0 ? multi.left(multiLen * 2) : multi);
+    if (isMultiFrame)
+        *isMultiFrame = sawFrame;
+    return messages;
+}
+
+QStringList ELM327Protocol::parseDtcResponse(const QStringList &lines, int mode)
+{
+    const QString responseMode = QStringLiteral("%1").arg(mode + 0x40, 2, 16, QLatin1Char('0')).toUpper();
     QStringList codes;
-    QString line = raw.trimmed();
-    line.remove(QLatin1Char(' '));
 
-    // Remove mode byte (43 for mode 03 response)
-    if (line.startsWith(QStringLiteral("43")))
-        line = line.mid(2);
-
-    // Each DTC is 2 bytes (4 hex chars)
-    for (int i = 0; i + 3 < line.size(); i += 4) {
-        QString chunk = line.mid(i, 4);
-        if (chunk == QStringLiteral("0000"))
+    const QStringList messages = splitMessages(lines);
+    for (const QString &msg : messages) {
+        if (!msg.startsWith(responseMode))
             continue;
+        QString data = msg.mid(2);
+        // Pre-CAN protocols always send 6 data bytes (3 DTC slots, zero
+        // padded). ISO 15765 (CAN) puts a DTC-count byte first, which makes
+        // the data an odd number of bytes; drop it so it isn't read as a code.
+        if ((data.size() / 2) % 2 == 1)
+            data = data.mid(2);
 
-        bool ok1, ok2;
-        int byte1 = chunk.mid(0, 2).toInt(&ok1, 16);
-        int byte2 = chunk.mid(2, 2).toInt(&ok2, 16);
-        if (!ok1 || !ok2)
+        for (int i = 0; i + 3 < data.size(); i += 4) {
+            bool ok1 = false, ok2 = false;
+            const int byte1 = data.mid(i, 2).toInt(&ok1, 16);
+            const int byte2 = data.mid(i + 2, 2).toInt(&ok2, 16);
+            if (!ok1 || !ok2 || (byte1 == 0 && byte2 == 0))
+                continue;
+            const QString code = decodeDtc(byte1, byte2);
+            if (!codes.contains(code))   // several ECUs can report the same code
+                codes.append(code);
+        }
+    }
+    return codes;
+}
+
+QStringList ELM327Protocol::parseFreezeFrameDtc(const QStringList &lines)
+{
+    // Mode 02 PID 02 frame 00 reply: 42 02 00 <DTC hi> <DTC lo>
+    QStringList codes;
+    for (const QString &msg : splitMessages(lines)) {
+        if (!msg.startsWith(QStringLiteral("4202")) || msg.size() < 10)
             continue;
-
-        QChar prefix = dtcPrefix((byte1 >> 6) & 0x03);
-        int digit2 = (byte1 >> 4) & 0x03;
-        int digit3 = byte1 & 0x0F;
-        int digit4 = (byte2 >> 4) & 0x0F;
-        int digit5 = byte2 & 0x0F;
-
-        codes.append(QStringLiteral("%1%2%3%4%5")
-                         .arg(prefix)
-                         .arg(digit2)
-                         .arg(digit3, 1, 16)
-                         .arg(digit4, 1, 16)
-                         .arg(digit5, 1, 16)
-                         .toUpper());
+        bool ok1 = false, ok2 = false;
+        const int byte1 = msg.mid(6, 2).toInt(&ok1, 16);
+        const int byte2 = msg.mid(8, 2).toInt(&ok2, 16);
+        if (!ok1 || !ok2 || (byte1 == 0 && byte2 == 0))
+            continue;
+        const QString code = decodeDtc(byte1, byte2);
+        if (!codes.contains(code))
+            codes.append(code);
     }
     return codes;
 }
@@ -502,6 +573,7 @@ std::optional<QString> ResponseBuffer::getResponse()
         if (!trimmed.isEmpty())
             lines.append(trimmed);
     }
+    m_lastLines = lines;
 
     // Return the last meaningful line (skip echo, prompts, AT/OK)
     for (int i = lines.size() - 1; i >= 0; --i) {
@@ -516,4 +588,5 @@ std::optional<QString> ResponseBuffer::getResponse()
 void ResponseBuffer::clear()
 {
     m_buffer.clear();
+    m_lastLines.clear();
 }

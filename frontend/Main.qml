@@ -71,7 +71,8 @@ ApplicationWindow {
     // Function to find active flag based on current RPM
     function findActiveFlag() {
         if (!shiftLightFlags || shiftLightFlags.length === 0) {
-            activeShiftFlag = null
+            if (activeShiftFlag !== null)
+                activeShiftFlag = null
             return
         }
         // Check from highest priority (last) to lowest (first)
@@ -85,7 +86,10 @@ ApplicationWindow {
                 break
             }
         }
-        activeShiftFlag = active
+        // Assign only on a real change: onActiveShiftFlagChanged restarts the
+        // flash, and RPM updates arrive many times a second
+        if (activeShiftFlag !== active)
+            activeShiftFlag = active
     }
 
     // Set initial window size. On desktop use the saved user preference so
@@ -221,9 +225,6 @@ ApplicationWindow {
                 obdManager.rpmChanged.connect(function(rpm) {
                     mainWindow.currentRpm = rpm
                     mainWindow.findActiveFlag()
-                    if (mainWindow.activeShiftFlag !== null) {
-                        console.log("[GlobalFlash] RPM:", rpm, "Active flag:", mainWindow.activeShiftFlag.color, "fullScreenFlash:", mainWindow.activeShiftFlag.fullScreenFlash)
-                    }
                 })
                 console.log("[GlobalFlash] Signal connection established!")
             } else {

@@ -11,6 +11,8 @@ exercised in plain Python. PID numbers and command names follow python-obd's
 commands.py — keep this file, the C++ table and that table in agreement.
 """
 
+import re
+
 from backend.logging_config import get_logger
 logger = get_logger(__name__)
 
@@ -87,6 +89,10 @@ def _evap_pressure(a):
     if val > 32767:
         val -= 65536
     return round(val / 4.0, 1)
+
+def _evap_pressure_alt(a):
+    # PID 0x54: unscaled Pa, offset by 32767 (J1979; matches python-obd)
+    return (a[0] * 256.0 + a[1]) - 32767.0
 
 def _catalyst_temp(a):
     return round((a[0] * 256.0 + a[1]) / 10.0 - 40.0, 1)
@@ -189,7 +195,7 @@ PID_TABLE = {
     (1, 0x50): ("Max MAF", "maxMAFChanged", "MAX_MAF", lambda a: float(a[0] * 10), 1),
     (1, 0x51): ("Fuel Type", "fuelTypeChanged", "FUEL_TYPE", _simple, 1),
     (1, 0x53): ("Evap Vapor Pressure Abs", "evapVaporPressureAbsChanged", "EVAP_VAPOR_PRESSURE_ABS", _abs_evap, 2),
-    (1, 0x54): ("Evap Vapor Pressure Alt", "evapVaporPressureAltChanged", "EVAP_VAPOR_PRESSURE_ALT", _evap_pressure, 2),
+    (1, 0x54): ("Evap Vapor Pressure Alt", "evapVaporPressureAltChanged", "EVAP_VAPOR_PRESSURE_ALT", _evap_pressure_alt, 2),
     (1, 0x55): ("Short O2 Trim B1", "shortO2TrimB1Changed", "SHORT_O2_TRIM_B1", _pct_centered, 1),
     (1, 0x56): ("Long O2 Trim B1", "longO2TrimB1Changed", "LONG_O2_TRIM_B1", _pct_centered, 1),
     (1, 0x57): ("Short O2 Trim B2", "shortO2TrimB2Changed", "SHORT_O2_TRIM_B2", _pct_centered, 1),
@@ -338,36 +344,89 @@ def parse_supported_pids(data_bytes):
     return supported
 
 
-def parse_dtc_response(raw):
-    """Parse Mode 03 (GET_DTC) response.
+_FRAME_RE = re.compile(r"^([0-9A-F]):([0-9A-F]*)$")
+_HEX_RE = re.compile(r"^[0-9A-F]+$")
 
+
+def decode_dtc(byte1, byte2):
+    prefix = DTC_PREFIXES.get((byte1 >> 6) & 0x03, "P")
+    return f"{prefix}{(byte1 >> 4) & 0x03}{byte1 & 0x0F:X}{(byte2 >> 4) & 0x0F:X}{byte2 & 0x0F:X}"
+
+
+def split_messages(lines):
+    """Split an ELM327 reply (headers off, spaces off) into one hex string per
+    ECU message. CAN multi-frame replies ("00A", "0:4304...", "1:...") are
+    joined into a single message and trimmed to the announced byte count."""
+    messages = []
+    multi = ""
+    multi_len = -1
+    for line in lines:
+        line = line.replace(" ", "").upper()
+        m = _FRAME_RE.match(line)
+        if m:
+            multi += m.group(2)
+            continue
+        if not _HEX_RE.match(line):
+            continue  # SEARCHING..., NO DATA, echo, OK
+        if len(line) == 3:
+            # Byte-count header of a CAN multi-frame reply
+            if multi:
+                messages.append(multi[:multi_len * 2] if multi_len > 0 else multi)
+                multi = ""
+            multi_len = int(line, 16)
+            continue
+        messages.append(line)
+    if multi:
+        messages.append(multi[:multi_len * 2] if multi_len > 0 else multi)
+    return messages
+
+
+def parse_dtc_response(lines, mode=0x03):
+    """Parse a Mode 03 / 07 / 0A DTC reply (every line of it, headers off).
+
+    Handles CAN (count byte, multi-frame) and pre-CAN replies, several ECUs.
     Returns list of DTC code strings, e.g., ["P0301", "P0420"]
     """
+    if isinstance(lines, str):
+        lines = lines.splitlines()
+    response_mode = f"{mode + 0x40:02X}"
     codes = []
-    line = raw.strip().replace(" ", "")
-
-    # Remove the mode byte (43 for mode 03 response)
-    if line.startswith("43"):
-        line = line[2:]
-
-    # Each DTC is 2 bytes (4 hex chars)
-    for i in range(0, len(line) - 3, 4):
-        chunk = line[i:i+4]
-        if chunk == "0000":
+    for msg in split_messages(lines):
+        if not msg.startswith(response_mode):
             continue
-        try:
-            byte1 = int(chunk[0:2], 16)
-            byte2 = int(chunk[2:4], 16)
-            prefix = DTC_PREFIXES.get((byte1 >> 6) & 0x03, "P")
-            digit2 = (byte1 >> 4) & 0x03
-            digit3 = byte1 & 0x0F
-            digit4 = (byte2 >> 4) & 0x0F
-            digit5 = byte2 & 0x0F
-            code = f"{prefix}{digit2}{digit3:X}{digit4:X}{digit5:X}"
+        data = msg[2:]
+        # Pre-CAN protocols always send 6 data bytes (3 DTC slots, zero
+        # padded). ISO 15765 (CAN) puts a DTC-count byte first, which makes
+        # the data an odd number of bytes; drop it so it isn't read as a code.
+        if (len(data) // 2) % 2 == 1:
+            data = data[2:]
+        for i in range(0, len(data) - 3, 4):
+            byte1 = int(data[i:i + 2], 16)
+            byte2 = int(data[i + 2:i + 4], 16)
+            if byte1 == 0 and byte2 == 0:
+                continue
+            code = decode_dtc(byte1, byte2)
+            if code not in codes:  # several ECUs can report the same code
+                codes.append(code)
+    return codes
+
+
+def parse_freeze_frame_dtc(lines):
+    """Parse the Mode 02 PID 02 reply: the DTC that stored freeze frame 0
+    (42 02 00 <DTC hi> <DTC lo>)."""
+    if isinstance(lines, str):
+        lines = lines.splitlines()
+    codes = []
+    for msg in split_messages(lines):
+        if not msg.startswith("4202") or len(msg) < 10:
+            continue
+        byte1 = int(msg[6:8], 16)
+        byte2 = int(msg[8:10], 16)
+        if byte1 == 0 and byte2 == 0:
+            continue
+        code = decode_dtc(byte1, byte2)
+        if code not in codes:
             codes.append(code)
-        except (ValueError, IndexError):
-            continue
-
     return codes
 
 
@@ -376,6 +435,9 @@ class ResponseBuffer:
 
     def __init__(self):
         self._buffer = b""
+        # Every non-empty line of the last response get_response() returned
+        # (multi-line replies: several ECUs, CAN multi-frame DTC lists)
+        self.last_lines = []
 
     def feed(self, data):
         """Add incoming bytes to the buffer."""
@@ -398,6 +460,7 @@ class ResponseBuffer:
 
         # Filter out echo and empty lines, return the data line
         lines = [l.strip() for l in response.split("\r") if l.strip()]
+        self.last_lines = lines
         # Return the last meaningful line (skip echo, prompts)
         for line in reversed(lines):
             if line and not line.startswith("AT") and line != "OK":
@@ -406,3 +469,4 @@ class ResponseBuffer:
 
     def clear(self):
         self._buffer = b""
+        self.last_lines = []

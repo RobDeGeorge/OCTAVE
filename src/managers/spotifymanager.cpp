@@ -13,6 +13,8 @@
 #include <QNetworkReply>
 #include <QTcpSocket>
 #include <QUrlQuery>
+
+#include <utility>
 #include <QUrl>
 #include <QDir>
 #include <QFile>
@@ -39,6 +41,10 @@ SpotifyManager::SpotifyManager(QObject *parent)
     , m_nam(new QNetworkAccessManager(this))
     , m_redirectUri(QStringLiteral("http://127.0.0.1:8888/callback"))
 {
+    // A request stalled on a dropped cellular link must fail rather than hang
+    // (it would hold m_pollInProgress and freeze now-playing until TCP gives up)
+    m_nam->setTransferTimeout(15000);
+
     // Playback state polling timer
     m_pollTimer.setInterval(3000);
     connect(&m_pollTimer, &QTimer::timeout, this, &SpotifyManager::onPollTimeout);
@@ -358,8 +364,12 @@ void SpotifyManager::refreshAccessToken()
     if (m_refreshToken.isEmpty()) {
         emit statusProgress(QStringLiteral("[ERROR] No refresh token available"));
         emit errorOccurred(QStringLiteral("No refresh token available"));
+        failPendingRequests(QStringLiteral("No refresh token available"));
         return;
     }
+    if (m_refreshInProgress)
+        return;
+    m_refreshInProgress = true;
 
     QUrl tokenUrl(QStringLiteral("https://accounts.spotify.com/api/token"));
 
@@ -376,14 +386,39 @@ void SpotifyManager::refreshAccessToken()
     QNetworkReply *reply = m_nam->post(req, body.toString(QUrl::FullyEncoded).toUtf8());
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
+        m_refreshInProgress = false;
+        if (m_refreshToken.isEmpty())
+            return;   // logged out while the refresh was in flight
 
         if (reply->error() != QNetworkReply::NoError) {
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             const QString msg = QStringLiteral("Token refresh failed: ") + reply->errorString();
+            failPendingRequests(msg);
+
+            if (status == 0 && m_refreshRetryCount < 10) {
+                // No HTTP response: tunnel, dead zone, Wi-Fi hop. The refresh
+                // token is still good, so retry with back-off instead of
+                // dropping the session and making the user reconnect by hand.
+                const int delayMs = qMin(60000, 5000 * (1 << qMin(m_refreshRetryCount, 4)));
+                ++m_refreshRetryCount;
+                m_refreshBackoff = true;
+                qCInfo(lcSpotify) << msg << "- retrying in" << delayMs << "ms";
+                QTimer::singleShot(delayMs, this, [this]() {
+                    m_refreshBackoff = false;
+                    if (!m_refreshToken.isEmpty())
+                        refreshAccessToken();
+                });
+                return;
+            }
+
             emit errorOccurred(msg);
             emit statusProgress(QStringLiteral("[ERROR] ") + msg);
-            // Token refresh failed — force re-auth
+            // Spotify rejected the refresh token (or retries ran out) — force re-auth
+            m_refreshRetryCount = 0;
             m_accessToken.clear();
             m_isConnected = false;
+            m_pollTimer.stop();
+            m_interpolationTimer.stop();
             emit connectionStateChanged(false);
             return;
         }
@@ -392,8 +427,10 @@ void SpotifyManager::refreshAccessToken()
         auto doc = QJsonDocument::fromJson(reply->readAll(), &err);
         if (err.error != QJsonParseError::NoError || !doc.isObject()) {
             emit errorOccurred(QStringLiteral("Token refresh: invalid JSON response"));
+            failPendingRequests(QStringLiteral("Token refresh: invalid JSON response"));
             return;
         }
+        m_refreshRetryCount = 0;
 
         QJsonObject obj = doc.object();
         m_accessToken = obj.value(QStringLiteral("access_token")).toString();
@@ -411,6 +448,11 @@ void SpotifyManager::refreshAccessToken()
         cached[QStringLiteral("refresh_token")] = m_refreshToken;
         cached[QStringLiteral("expires_at")]    = m_tokenExpiresAt;
         saveTokenToCache(cached);
+
+        // Requests that arrived while the token was expiring go out now
+        const auto pending = std::exchange(m_pendingAfterRefresh, {});
+        for (const auto &p : pending)
+            p.retry();
 
         // Finish connecting
         m_isConnected = true;
@@ -439,6 +481,8 @@ void SpotifyManager::logout()
     m_refreshToken.clear();
     m_tokenExpiresAt = 0;
     m_isConnected = false;
+    m_refreshRetryCount = 0;
+    failPendingRequests(QStringLiteral("Disconnected from Spotify"));
     m_devices.clear();
     m_currentTrack.clear();
     m_cachedQueue.clear();
@@ -482,15 +526,41 @@ QNetworkRequest SpotifyManager::buildApiRequest(const QString &endpoint) const
     return req;
 }
 
+void SpotifyManager::deferUntilRefreshed(std::function<void()> retry,
+                                         std::function<void(const QString &)> onError)
+{
+    if (m_refreshBackoff) {
+        // Offline and waiting to retry the refresh: fail now rather than
+        // queue a pause/skip that would fire a minute later
+        if (onError)
+            onError(QStringLiteral("Waiting to refresh Spotify token (offline)"));
+        return;
+    }
+    m_pendingAfterRefresh.append({std::move(retry), std::move(onError)});
+    refreshAccessToken();
+}
+
+// Every deferred request must hear back, or callers that guard with an
+// in-flight flag (pollPlaybackState's m_pollInProgress) stay locked forever.
+void SpotifyManager::failPendingRequests(const QString &error)
+{
+    const auto pending = std::exchange(m_pendingAfterRefresh, {});
+    for (const auto &p : pending) {
+        if (p.fail)
+            p.fail(error);
+    }
+}
+
 void SpotifyManager::apiGet(const QString &endpoint,
                             std::function<void(const QJsonDocument &)> onSuccess,
                             std::function<void(const QString &)> onError)
 {
     if (m_accessToken.isEmpty()) return;
 
-    // Auto-refresh if token is about to expire (60s buffer)
+    // Auto-refresh if token is about to expire (60s buffer); the request
+    // waits for the new token instead of being dropped
     if (QDateTime::currentSecsSinceEpoch() >= m_tokenExpiresAt - 60) {
-        refreshAccessToken();
+        deferUntilRefreshed([=]() { apiGet(endpoint, onSuccess, onError); }, onError);
         return;
     }
 
@@ -508,7 +578,7 @@ void SpotifyManager::apiPut(const QString &endpoint,
     if (m_accessToken.isEmpty()) return;
 
     if (QDateTime::currentSecsSinceEpoch() >= m_tokenExpiresAt - 60) {
-        refreshAccessToken();
+        deferUntilRefreshed([=]() { apiPut(endpoint, body, onSuccess, onError); }, onError);
         return;
     }
 
@@ -526,7 +596,7 @@ void SpotifyManager::apiPost(const QString &endpoint,
     if (m_accessToken.isEmpty()) return;
 
     if (QDateTime::currentSecsSinceEpoch() >= m_tokenExpiresAt - 60) {
-        refreshAccessToken();
+        deferUntilRefreshed([=]() { apiPost(endpoint, body, onSuccess, onError); }, onError);
         return;
     }
 

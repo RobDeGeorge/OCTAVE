@@ -109,9 +109,13 @@ public:
     // Returns set of supported PID numbers (1-indexed relative to the base).
     static QSet<int> parseSupportedPids(const QVector<uint8_t> &dataBytes);
 
-    // Parse Mode 03 (GET_DTC) response.
-    // Returns list of DTC code strings, e.g. ["P0301", "P0420"].
-    static QStringList parseDtcResponse(const QString &raw);
+    // Parse a Mode 03 / 07 / 0A DTC reply (every line of it, headers off).
+    // Handles CAN (count byte, multi-frame) and pre-CAN replies, several ECUs.
+    // Returns DTC code strings, e.g. ["P0301", "P0420"].
+    static QStringList parseDtcResponse(const QStringList &lines, int mode = 0x03);
+
+    // Parse the Mode 02 PID 02 reply: the DTC that stored freeze frame 0.
+    static QStringList parseFreezeFrameDtc(const QStringList &lines);
 
     // Default PIDs to poll (the 16 most common)
     static QList<PidKey> defaultPids();
@@ -135,6 +139,8 @@ private:
 
     // DTC prefix lookup
     static QChar dtcPrefix(int code);
+    static QString decodeDtc(int byte1, int byte2);
+    static QStringList splitMessages(const QStringList &lines, bool *isMultiFrame = nullptr);
 };
 
 // ---------------------------------------------------------------------------
@@ -153,11 +159,16 @@ public:
     // Returns std::nullopt if no complete response yet.
     std::optional<QString> getResponse();
 
+    // Every non-empty line of the last response getResponse() returned
+    // (multi-line replies: several ECUs, CAN multi-frame DTC lists)
+    QStringList lastLines() const { return m_lastLines; }
+
     // Clear the buffer
     void clear();
 
 private:
     QByteArray m_buffer;
+    QStringList m_lastLines;
 };
 
 #endif // ELM327PROTOCOL_H

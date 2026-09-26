@@ -248,6 +248,7 @@ BerryIMUWorker::~BerryIMUWorker()
 
 void BerryIMUWorker::stop()
 {
+    m_stopRequested = true;
     m_running = false;
 }
 
@@ -568,7 +569,11 @@ void BerryIMUWorker::run()
     emit connectionStatusChanged(QStringLiteral("Connected"));
     emit started();
 
+    // stop() may have arrived during init (register writes, sleeps); setting
+    // m_running unconditionally would lose it and the loop would never end
     m_running = true;
+    if (m_stopRequested)
+        m_running = false;
 
     // Calibrate gyro (takes ~1 second)
     calibrateGyro();
@@ -829,12 +834,24 @@ void BerryIMUManager::stopWorker()
 {
     if (m_worker) {
         m_worker->stop();
+        QObject::disconnect(m_worker, nullptr, this, nullptr);
     }
     if (m_workerThread) {
         m_workerThread->quit();
-        m_workerThread->wait(2000);
-        delete m_workerThread;
-        m_workerThread = nullptr;
+        if (!m_workerThread->wait(2000)) {
+            // Still inside an I2C transaction or init: never destroy a
+            // running QThread (Qt aborts). Let it delete itself when done.
+            qWarning() << "BerryIMU worker still busy; it will clean up when it finishes";
+            if (m_worker)
+                QObject::connect(m_workerThread, &QThread::finished, m_worker, &QObject::deleteLater);
+            QObject::connect(m_workerThread, &QThread::finished, m_workerThread, &QObject::deleteLater);
+            m_workerThread->setParent(nullptr);
+            m_workerThread = nullptr;
+            m_worker = nullptr;
+        } else {
+            delete m_workerThread;
+            m_workerThread = nullptr;
+        }
     }
     if (m_worker) {
         delete m_worker;

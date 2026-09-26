@@ -618,7 +618,9 @@ void OBDManager::startConnection()
     m_hasActiveWatchers = !pidsToWatch.isEmpty();
     m_worker->setPidsToWatch(pidsToWatch);
 
-    m_workerThread = new QThread(this);
+    // No parent: cleanupWorkerThread() hands the thread its own deleteLater,
+    // so a busy thread is never destroyed with the manager while running
+    m_workerThread = new QThread();
     m_workerThread->setObjectName(QStringLiteral("obd-worker"));  // visible in top -H / ps
     m_worker->moveToThread(m_workerThread);
 
@@ -672,18 +674,42 @@ void OBDManager::cleanupConnection()
 
 void OBDManager::cleanupWorkerThread()
 {
-    if (m_workerThread && m_workerThread->isRunning()) {
-        m_workerThread->quit();
-        m_workerThread->wait(2000);
+    if (!m_workerThread) {
+        if (m_worker) {
+            delete m_worker;
+            m_worker = nullptr;
+        }
+        return;
     }
-    if (m_worker) {
-        m_worker->deleteLater();
-        m_worker = nullptr;
+
+    // Detach first: a worker still unwinding a blocking doConnect() must not
+    // deliver late results into the connection that replaces it.
+    if (m_worker)
+        QObject::disconnect(m_worker, nullptr, this, nullptr);
+
+    // Never destroy a running QThread (Qt aborts the process). The thread
+    // deletes itself and its worker once it has actually finished; a worker
+    // stuck in doConnect() (adapter "SEARCHING...") sees the interruption
+    // request at its next sendCommand() poll and unwinds within ~100 ms.
+    QThread *thread = m_workerThread;
+    OBDConnectionWorker *worker = m_worker;
+    m_workerThread = nullptr;
+    m_worker = nullptr;
+
+    if (!thread->isRunning()) {
+        delete worker;
+        delete thread;
+        return;
     }
-    if (m_workerThread) {
-        m_workerThread->deleteLater();
-        m_workerThread = nullptr;
-    }
+
+    if (worker)
+        QObject::connect(thread, &QThread::finished, worker, &QObject::deleteLater);
+    QObject::connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+
+    thread->requestInterruption();
+    thread->quit();
+    if (!thread->wait(2000))
+        qWarning() << "[OBD] Worker thread still busy; it will clean up when it finishes";
 }
 
 // The original 17 parameters default to enabled; everything else is opt-in
@@ -1767,6 +1793,10 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
 {
     if (!m_serial || !m_serial->isOpen())
         return QString();
+    // The manager abandoned this worker (reconnect, port change, quit):
+    // fail fast so a blocking doConnect() unwinds and the thread can finish
+    if (QThread::currentThread()->isInterruptionRequested())
+        return QString();
 
     m_responseBuffer.clear();
     qCDebug(lcElm327) << "TX" << cmd.trimmed();
@@ -1779,6 +1809,8 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
 
     int emptyReads = 0;
     while (timer.elapsed() < timeoutMs) {
+        if (QThread::currentThread()->isInterruptionRequested())
+            return QString();
         QElapsedTimer waitTimer;
         waitTimer.start();
         if (m_serial->waitForReadyRead(100)) {
@@ -1930,7 +1962,7 @@ void OBDConnectionWorker::doReadDtc()
     QString response = sendCommand(QByteArrayLiteral("03\r"), 5000);
     QStringList codes;
     if (!response.isEmpty()) {
-        codes = ELM327Protocol::parseDtcResponse(response);
+        codes = ELM327Protocol::parseDtcResponse(m_responseBuffer.lastLines(), 0x03);
     }
     emit dtcResult(codes);
 
@@ -1946,7 +1978,7 @@ void OBDConnectionWorker::doReadCurrentDtc()
     QString response = sendCommand(QByteArrayLiteral("07\r"), 5000);
     QStringList codes;
     if (!response.isEmpty()) {
-        codes = ELM327Protocol::parseDtcResponse(response);
+        codes = ELM327Protocol::parseDtcResponse(m_responseBuffer.lastLines(), 0x07);
     }
     emit dtcResult(codes);
 
@@ -1996,11 +2028,11 @@ void OBDConnectionWorker::doReadFreezeFrame()
     bool wasPolling = m_polling;
     if (wasPolling) stopPolling();
 
-    // Send Mode 02 PID 02 (freeze frame DTC)
-    QString response = sendCommand(QByteArrayLiteral("0202\r"), 5000);
+    // Send Mode 02 PID 02 frame 00 (the DTC that stored the freeze frame)
+    QString response = sendCommand(QByteArrayLiteral("020200\r"), 5000);
     QStringList codes;
     if (!response.isEmpty()) {
-        codes = ELM327Protocol::parseDtcResponse(response);
+        codes = ELM327Protocol::parseFreezeFrameDtc(m_responseBuffer.lastLines());
     }
     emit freezeFrame(codes);
 

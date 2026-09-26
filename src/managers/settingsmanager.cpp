@@ -13,8 +13,8 @@
 #include <QJsonValue>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QStandardPaths>
-#include <QTemporaryFile>
 #include <QThread>
 #include <QUrl>
 #include <QLoggingCategory>
@@ -693,31 +693,96 @@ QJsonObject SettingsManager::loadSettings()
 
 QJsonObject SettingsManager::readSettingsFromDisk()
 {
-    QFile f(m_settingsFile);
-    if (!f.exists()) {
+    if (!QFile::exists(m_settingsFile)) {
         writeSettingsToDisk(m_defaultSettings);
         return m_defaultSettings;
     }
 
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qCWarning(lcSettings) << "Cannot open settings file for reading:" << m_settingsFile;
-        return m_defaultSettings;
+    QString error;
+    QJsonObject settings;
+    if (parseSettingsFile(m_settingsFile, settings, error)) {
+        backupSettingsFile();
+        return settings;
     }
 
-    lockFile(f, false);
+    // A power cut mid-write can leave a truncated file. Keep it for
+    // inspection and fall back to the last known-good copy, so the next
+    // save doesn't overwrite the user's settings with defaults.
+    qCWarning(lcSettings) << "Settings file corrupted:" << error;
+    const QString corruptPath = m_settingsFile + QStringLiteral(".corrupt");
+    QFile::remove(corruptPath);
+    if (QFile::rename(m_settingsFile, corruptPath))
+        qCWarning(lcSettings) << "Corrupted settings moved to" << corruptPath;
 
+    if (parseSettingsFile(backupFilePath(), settings, error)) {
+        qCWarning(lcSettings) << "Restored settings from backup";
+        writeSettingsToDisk(settings);
+        return settings;
+    }
+    qCWarning(lcSettings) << "No usable settings backup (" << error << "), using defaults";
+    return m_defaultSettings;
+}
+
+QString SettingsManager::backupFilePath() const
+{
+    return m_settingsFile + QStringLiteral(".bak");
+}
+
+bool SettingsManager::parseSettingsFile(const QString &path, QJsonObject &out, QString &error)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        error = f.errorString();
+        return false;
+    }
+    lockFile(f, false);
     QByteArray data = f.readAll();
     unlockFile(f);
     f.close();
 
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-    if (err.error != QJsonParseError::NoError) {
-        qCWarning(lcSettings) << "Settings file corrupted:" << err.errorString();
-        return m_defaultSettings;
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        error = err.error != QJsonParseError::NoError ? err.errorString()
+                                                      : QStringLiteral("not a JSON object");
+        return false;
     }
+    out = validateSettings(doc.object());
+    return true;
+}
 
-    return validateSettings(doc.object());
+// Copy the settings file that just parsed cleanly to .bak, once per session.
+// That is the copy a corrupted file is restored from.
+void SettingsManager::backupSettingsFile()
+{
+    if (m_backupDone)
+        return;
+    m_backupDone = true;
+    QFile f(m_settingsFile);
+    if (!f.open(QIODevice::ReadOnly)) {
+        qCWarning(lcSettings) << "Could not back up settings:" << f.errorString();
+        return;
+    }
+    const QByteArray data = f.readAll();
+    f.close();
+    atomicWrite(backupFilePath(), data);
+}
+
+// Write via QSaveFile (temp file, fsync, rename over the target) so a power
+// cut leaves either the old file or the new one, never a truncated one.
+bool SettingsManager::atomicWrite(const QString &path, const QByteArray &data)
+{
+    QSaveFile out(path);
+    if (!out.open(QIODevice::WriteOnly)) {
+        qCWarning(lcSettings) << "Cannot open" << path << "for writing:" << out.errorString();
+        return false;
+    }
+    if (out.write(data) != data.size() || !out.commit()) {
+        qCWarning(lcSettings) << "Failed to write" << path << ":" << out.errorString();
+        return false;
+    }
+    setFilePermissions(path);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -747,57 +812,13 @@ void SettingsManager::flushPendingSave()
 }
 
 // ---------------------------------------------------------------------------
-// writeSettingsToDisk — atomic write (temp + rename) with file locking
+// writeSettingsToDisk — atomic write (QSaveFile: temp + fsync + rename)
 // ---------------------------------------------------------------------------
 void SettingsManager::writeSettingsToDisk(const QJsonObject &settings)
 {
     // Callers pass an already validated object (saveSettings / the defaults).
-    QJsonDocument doc(settings);
-
-    QString dirName = QFileInfo(m_settingsFile).absolutePath();
-
-    // Write to a temp file, then rename
-    QString tempPath = dirName + QStringLiteral("/settings_tmp_XXXXXX.json");
-    QTemporaryFile tmp(tempPath);
-    tmp.setAutoRemove(false);
-
-    if (!tmp.open()) {
-        qCWarning(lcSettings) << "Cannot create temp file for settings:" << tmp.errorString();
-        // Fallback: direct write
-        QFile direct(m_settingsFile);
-        if (direct.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            direct.write(doc.toJson(QJsonDocument::Indented));
-            direct.close();
-            setFilePermissions(m_settingsFile);
-        }
-        return;
-    }
-
-    lockFile(tmp, true);
-    tmp.write(doc.toJson(QJsonDocument::Indented));
-    unlockFile(tmp);
-
-    QString tmpName = tmp.fileName();
-    tmp.close();
-
-    setFilePermissions(tmpName);
-
-    // Atomic rename
-#ifdef Q_OS_WIN
-    // Windows cannot rename over existing file
-    if (QFile::exists(m_settingsFile))
-        QFile::remove(m_settingsFile);
-#endif
-    if (!QFile::rename(tmpName, m_settingsFile)) {
-        qCDebug(lcSettings) << "Atomic rename unavailable, using direct write";
-        QFile::remove(tmpName);
-        QFile direct(m_settingsFile);
-        if (direct.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            direct.write(doc.toJson(QJsonDocument::Indented));
-            direct.close();
-            setFilePermissions(m_settingsFile);
-        }
-    }
+    // On failure the file on disk is left untouched; the next save retries.
+    atomicWrite(m_settingsFile, QJsonDocument(settings).toJson(QJsonDocument::Indented));
 }
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import threading
 from PySide6.QtCore import QObject, Signal, Slot, QTimer, Property
 
 from backend.logging_config import get_logger
+from backend.qt_threading import run_on_main
 logger = get_logger(__name__)
 
 # I2C Configuration
@@ -285,7 +286,7 @@ class BerryIMUManager(QObject):
         self._retry_count += 1
         delay = self._retry_delay_ms * self._retry_count
         logger.info(f"BerryIMU: retry {self._retry_count}/{self._max_retries} in {delay}ms")
-        QTimer.singleShot(delay, self._start)
+        run_on_main(self._start, delay)
 
     def _cleanup_bus(self):
         """Close the I2C bus if open."""

@@ -53,6 +53,8 @@ Item {
     // ── Features ────────────────────────────────────────────────────
     property int majorTickCount: 5             // includes both endpoints
     property int minorTicksPerMajor: 4
+    // Tick steps per major segment; 0 minor ticks means major ticks only
+    readonly property int _tickSteps: Math.max(1, minorTicksPerMajor)
     property bool showTicks: true
     property bool centerOriginAtZero: min < 0 && max > 0   // bidirectional fill from 0
     property int decimals: 0
@@ -155,10 +157,10 @@ Item {
 
             // Tick marks below the track
             Repeater {
-                model: root.showTicks ? ((root.majorTickCount - 1) * root.minorTicksPerMajor + 1) : 0
+                model: root.showTicks ? (Math.max(1, root.majorTickCount - 1) * root._tickSteps + 1) : 0
                 delegate: Rectangle {
-                    property bool _major: (index % root.minorTicksPerMajor) === 0
-                    property real _t: index / ((root.majorTickCount - 1) * root.minorTicksPerMajor)
+                    property bool _major: (index % root._tickSteps) === 0
+                    property real _t: index / (Math.max(1, root.majorTickCount - 1) * root._tickSteps)
                     width: _major ? App.Spacing.dp(2) : App.Spacing.dp(1)
                     height: _major ? App.Spacing.dp(8) : App.Spacing.dp(5)
                     color: root.labelColor

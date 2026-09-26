@@ -164,6 +164,9 @@ private:
     void handleOAuthCallback(const QByteArray &requestData);
     void exchangeCodeForToken(const QString &code);
     void refreshAccessToken();
+    void deferUntilRefreshed(std::function<void()> retry,
+                             std::function<void(const QString &)> onError);
+    void failPendingRequests(const QString &error);
     bool isTokenExpired() const;
     void saveTokenToCache(const QJsonObject &tokenInfo);
     QJsonObject loadTokenFromCache();
@@ -258,6 +261,17 @@ private:
     QTimer m_pollTimer;
     QTimer m_interpolationTimer;
     bool   m_pollInProgress = false;
+
+    // Token refresh: one in flight at a time; API calls that hit an expiring
+    // token wait in m_pendingAfterRefresh and are retried (or failed) after it
+    struct PendingRequest {
+        std::function<void()> retry;
+        std::function<void(const QString &)> fail;
+    };
+    QList<PendingRequest> m_pendingAfterRefresh;
+    bool m_refreshInProgress = false;
+    bool m_refreshBackoff = false;     // a retry of a failed refresh is scheduled
+    int  m_refreshRetryCount = 0;
     int    m_consecutivePlaybackErrors = 0;
     qint64 m_lastPlaybackErrorTs = 0;
     static constexpr int POLL_ERROR_THRESHOLD = 5;
@@ -305,7 +319,7 @@ class SpotifyManager : public QObject
 public:
     explicit SpotifyManager(QObject *parent = nullptr) : QObject(parent) {}
     void setSettingsManager(QObject *) {}
-    void cleanup() {}
+    Q_INVOKABLE void cleanup() {}
 
     Q_INVOKABLE bool is_connected() const { return false; }
     Q_INVOKABLE bool is_playing() const { return false; }

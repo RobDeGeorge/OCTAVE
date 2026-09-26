@@ -101,6 +101,7 @@ private:
     void calibrateGyro();
 
     std::atomic<bool> m_running;
+    std::atomic<bool> m_stopRequested{false};   // sticky: a stop() during init must win
     int m_fd; // I2C file descriptor
 
     // BMP388 calibration

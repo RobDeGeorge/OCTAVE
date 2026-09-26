@@ -392,11 +392,11 @@ RELATIVE_ACCEL_POS  HYBRID_BATTERY_REMAINING  ELM_VOLTAGE</code></pre>
         <ol class="steps">
           <li>Validated once into the in-memory copy (types checked against the defaults; unknown keys kept)</li>
           <li>Coalesced behind a 500&nbsp;ms single-shot timer, flushed at quit</li>
-          <li>Written to a temp file in the same directory under an exclusive advisory lock (<code>fcntl</code> / <code>msvcrt</code> in Python, <code>flock</code> / <code>LockFileEx</code> in C++)</li>
+          <li>Written to a temp file in the same directory and fsynced (<code>tempfile.mkstemp</code> under an advisory lock in Python, <code>QSaveFile</code> in C++)</li>
           <li><code>chmod 600</code> on Unix</li>
-          <li>Renamed over the real file (Windows: old file deleted first); direct write as the fallback</li>
+          <li>Replaced over the real file in one step (<code>os.replace</code> / <code>QSaveFile::commit()</code>); on failure the existing file is left untouched</li>
         </ol>
-        <p>On load, a missing file is created from the defaults, a corrupt file is logged and replaced by defaults in memory, and wrong-typed values are replaced individually. Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
+        <p>On load, a missing file is created from the defaults, a corrupt file is moved to <code>settingsConfigure.json.corrupt</code> and restored from the last known-good <code>settingsConfigure.json.bak</code> (defaults only if that fails too), and wrong-typed values are replaced individually. Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
 
         <!-- Parity -->
         <h2 id="parity">C++ / Python Parity Check</h2>

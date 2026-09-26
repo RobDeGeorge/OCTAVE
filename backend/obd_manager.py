@@ -7,9 +7,11 @@ import sys
 import shutil
 import subprocess
 import threading
+import warnings
 import glob
 
 from backend.logging_config import get_logger
+from backend.qt_threading import run_on_main
 
 # python-obd drags in pint (~0.5 s on the Pi); import it when a connection is attempted.
 obd = lazy_module("obd")
@@ -354,6 +356,7 @@ class OBDManager(QObject):
 
         # Worker thread for non-blocking connections
         self._worker_thread = None
+        self._retired_threads = []  # busy workers abandoned by _cleanup_worker_thread()
         self._worker = None
 
         # Device discovery
@@ -585,9 +588,7 @@ class OBDManager(QObject):
         self.connectionStatusDetailChanged.emit(f"Found {port}, connecting...")
 
         # Clean up previous thread if it exists
-        if self._worker_thread is not None and self._worker_thread.isRunning():
-            self._worker_thread.quit()
-            self._worker_thread.wait(1000)
+        self._cleanup_worker_thread(wait_ms=1000)
 
         # Create worker and thread for non-blocking connection using Qt threading
         self._worker = OBDConnectionWorker()
@@ -691,13 +692,49 @@ class OBDManager(QObject):
         # Clean up worker thread
         self._cleanup_worker_thread()
 
-    def _cleanup_worker_thread(self):
-        """Clean up the worker thread after connection attempt"""
-        if self._worker_thread is not None and self._worker_thread.isRunning():
-            self._worker_thread.quit()
-            self._worker_thread.wait(2000)
+    def _cleanup_worker_thread(self, wait_ms=2000):
+        """Clean up the worker thread after connection attempt.
+
+        A worker can still be blocked inside obd.Async() (up to the connect
+        timeout). Dropping the last reference to a running QThread makes Qt
+        abort the process, so a busy thread is parked in _retired_threads
+        until it finishes, with its signals disconnected so a late result
+        can't clobber the connection that replaced it."""
+        thread, worker = self._worker_thread, self._worker
         self._worker_thread = None
         self._worker = None
+        if thread is None:
+            return
+        if worker is not None:
+            for sig, slot in ((worker.connectionProgress, self._on_connection_progress),
+                              (worker.connectionComplete, self._on_connection_complete),
+                              (worker.connectionError, self._on_connection_error)):
+                # PySide warns (not raises) when the slot isn't connected
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    try:
+                        sig.disconnect(slot)
+                    except Exception:
+                        pass
+        if thread.isRunning():
+            if worker is not None:
+                # A connection it opens after being abandoned would hold the port
+                worker.connectionComplete.connect(OBDManager._close_orphan_connection)
+            thread.quit()
+            if not thread.wait(wait_ms):
+                logger.warning("[OBD] Worker thread still busy; keeping it until it finishes")
+                entry = (thread, worker)
+                self._retired_threads.append(entry)
+                thread.finished.connect(lambda e=entry: self._retired_threads.remove(e)
+                                        if e in self._retired_threads else None)
+
+    @staticmethod
+    def _close_orphan_connection(connection, _status):
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception as e:
+                logger.debug(f"[OBD] Error closing abandoned connection: {e}")
 
     def _on_connection_error(self, error_msg):
         """Handle connection error on main thread"""
@@ -784,12 +821,12 @@ class OBDManager(QObject):
                     if current_status != obd.OBDStatus.CAR_CONNECTED and last_status == obd.OBDStatus.CAR_CONNECTED:
                         with self._lock:
                             self._connected = False
-                        # Use QTimer.singleShot to emit from main thread
-                        QTimer.singleShot(0, lambda: self.connectionStatusChanged.emit("Disconnected"))
-                        QTimer.singleShot(0, lambda: self.connectionStatusDetailChanged.emit("Connection to vehicle lost"))
-                        QTimer.singleShot(0, lambda: self.connectionProgressChanged.emit(0))
-                        QTimer.singleShot(0, self._schedule_auto_reconnect)
-                        QTimer.singleShot(0, self._device_scanner_timer.start)
+                        # Hand off to the main thread (QTimer.singleShot never fires from a plain thread)
+                        run_on_main(lambda: self.connectionStatusChanged.emit("Disconnected"))
+                        run_on_main(lambda: self.connectionStatusDetailChanged.emit("Connection to vehicle lost"))
+                        run_on_main(lambda: self.connectionProgressChanged.emit(0))
+                        run_on_main(self._schedule_auto_reconnect)
+                        run_on_main(self._device_scanner_timer.start)
 
                     last_status = current_status
 
@@ -798,12 +835,12 @@ class OBDManager(QObject):
                 if not self._check_port_exists(port):
                     with self._lock:
                         self._connected = False
-                    QTimer.singleShot(0, lambda: self.connectionStatusChanged.emit("Device Lost"))
-                    QTimer.singleShot(0, lambda: self.connectionStatusDetailChanged.emit("Bluetooth device disconnected"))
-                    QTimer.singleShot(0, lambda: self.connectionProgressChanged.emit(0))
-                    QTimer.singleShot(0, lambda: self.devicePresenceChanged.emit(False))
-                    QTimer.singleShot(0, self._schedule_auto_reconnect)
-                    QTimer.singleShot(0, self._device_scanner_timer.start)
+                    run_on_main(lambda: self.connectionStatusChanged.emit("Device Lost"))
+                    run_on_main(lambda: self.connectionStatusDetailChanged.emit("Bluetooth device disconnected"))
+                    run_on_main(lambda: self.connectionProgressChanged.emit(0))
+                    run_on_main(lambda: self.devicePresenceChanged.emit(False))
+                    run_on_main(self._schedule_auto_reconnect)
+                    run_on_main(self._device_scanner_timer.start)
                     break
 
             except Exception as e:
@@ -1833,7 +1870,7 @@ class OBDManager(QObject):
 
     def _emit_scan_output(self, message: str):
         """Emit scan output on main thread"""
-        QTimer.singleShot(0, lambda m=message: self.scanOutputChanged.emit(m))
+        run_on_main(lambda m=message: self.scanOutputChanged.emit(m))
 
     def _do_vehicle_scan(self):
         """Perform the actual vehicle scan (runs in background thread).
@@ -1853,14 +1890,14 @@ class OBDManager(QObject):
             conn = self._connection
             if not conn:
                 self._emit_scan_output("[WARN] Connection lost before scan could start")
-                QTimer.singleShot(0, lambda: self.scanProgressChanged.emit(0, "Connection lost"))
+                run_on_main(lambda: self.scanProgressChanged.emit(0, "Connection lost"))
                 return
             supported = conn.supported_commands
 
             if not supported:
                 self._emit_scan_output("[WARN] No supported commands returned from vehicle")
-                QTimer.singleShot(0, lambda: self.scanProgressChanged.emit(100, "No supported commands found"))
-                QTimer.singleShot(0, lambda: self.scanCompleteChanged.emit([]))
+                run_on_main(lambda: self.scanProgressChanged.emit(100, "No supported commands found"))
+                run_on_main(lambda: self.scanCompleteChanged.emit([]))
                 return
 
             self._emit_scan_output(f"[INFO] Vehicle reports {len(supported)} total supported PIDs")
@@ -1875,7 +1912,7 @@ class OBDManager(QObject):
             total = len(our_commands)
             for i, (param_name, (command, _)) in enumerate(our_commands.items()):
                 progress = int((i / total) * 100)
-                QTimer.singleShot(0, lambda p=progress, n=param_name: self.scanProgressChanged.emit(p, f"Checking {n}..."))
+                run_on_main(lambda p=progress, n=param_name: self.scanProgressChanged.emit(p, f"Checking {n}..."))
 
                 # Check if this command is in the vehicle's supported set
                 if command in supported:
@@ -1889,7 +1926,7 @@ class OBDManager(QObject):
 
             # Persist scan results so they survive app restarts
             if self._settings_manager:
-                QTimer.singleShot(0, lambda names=list(supported_names):
+                run_on_main(lambda names=list(supported_names):
                     self._settings_manager.save_supported_obd_parameters(names))
 
             # Summary output
@@ -1901,14 +1938,14 @@ class OBDManager(QObject):
             self._emit_scan_output("=" * 40)
 
             # Emit completion signals on main thread
-            QTimer.singleShot(0, lambda: self.scanProgressChanged.emit(100, f"Found {len(supported_names)} supported parameters"))
-            QTimer.singleShot(0, lambda: self.supportedCommandsChanged.emit(supported_names))
-            QTimer.singleShot(0, lambda: self.scanCompleteChanged.emit(supported_names))
+            run_on_main(lambda: self.scanProgressChanged.emit(100, f"Found {len(supported_names)} supported parameters"))
+            run_on_main(lambda: self.supportedCommandsChanged.emit(supported_names))
+            run_on_main(lambda: self.scanCompleteChanged.emit(supported_names))
 
             # Refresh watchers now that we know what's supported
             # This ensures watchers are active even if _setup_watchers() was called before
             # supported_commands was fully populated, or if async was running during setup
-            QTimer.singleShot(500, self._refresh_watchers)
+            run_on_main(self._refresh_watchers, 500)
 
             logger.info(f"[OBD] Vehicle scan complete: {len(supported_names)} supported parameters")
 
@@ -1919,7 +1956,7 @@ class OBDManager(QObject):
             # when the block exits, so the lambda would otherwise reference a
             # deleted name when QTimer fires it.
             err_msg = str(e)
-            QTimer.singleShot(0, lambda msg=err_msg: self.scanProgressChanged.emit(0, f"Scan error: {msg}"))
+            run_on_main(lambda msg=err_msg: self.scanProgressChanged.emit(0, f"Scan error: {msg}"))
 
         finally:
             self._is_scanning = False

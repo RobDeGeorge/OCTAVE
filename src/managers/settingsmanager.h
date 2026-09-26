@@ -562,8 +562,13 @@ private:
     QTimer m_saveTimer;
     bool m_savePending = false;
     bool m_settingsLoaded = false;
+    bool m_backupDone = false;
     QJsonObject readSettingsFromDisk();
     void writeSettingsToDisk(const QJsonObject &settings);
+    QString backupFilePath() const;
+    bool parseSettingsFile(const QString &path, QJsonObject &out, QString &error);
+    void backupSettingsFile();
+    bool atomicWrite(const QString &path, const QByteArray &data);
 
     // OBD parameter debounce timer (800ms)
     QTimer m_obdParamsSaveTimer;

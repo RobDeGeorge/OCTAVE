@@ -757,28 +757,62 @@ class SettingsManager(QObject):
 
     def _read_settings_from_disk(self):
         try:
-            with open(self.settings_file, 'r') as f:
-                try:
-                    self._lock_file(f, exclusive=False)
-                    settings = json.load(f)
-                    return self._validate_settings(settings)
-                except (BlockingIOError, OSError):
-                    # Could not acquire lock, read anyway but log warning
-                    logger.warning("Could not acquire file lock for reading settings")
-                    f.seek(0)
-                    settings = json.load(f)
-                    return self._validate_settings(settings)
-                finally:
-                    try:
-                        self._unlock_file(f)
-                    except Exception:
-                        pass
+            settings = self._parse_settings_file(self.settings_file)
         except FileNotFoundError:
             self._write_settings_to_disk(self._default_settings)
             return self._default_settings.copy()
-        except json.JSONDecodeError as e:
-            logger.error(f"Settings file corrupted ({e}), using defaults")
-            return self._default_settings.copy()
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+            # A power cut mid-write can leave a truncated file. Keep it for
+            # inspection and fall back to the last known-good copy, so the
+            # next save doesn't overwrite the user's settings with defaults.
+            logger.error(f"Settings file corrupted ({e})")
+            corrupt_path = self.settings_file + ".corrupt"
+            try:
+                os.replace(self.settings_file, corrupt_path)
+                logger.error(f"Corrupted settings moved to {corrupt_path}")
+            except OSError as move_err:
+                logger.warning(f"Could not preserve corrupted settings: {move_err}")
+            try:
+                settings = self._parse_settings_file(self._backup_file())
+                logger.warning("Restored settings from backup")
+                self._write_settings_to_disk(settings)
+                return settings
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as backup_err:
+                logger.error(f"No usable settings backup ({backup_err}), using defaults")
+                return self._default_settings.copy()
+
+        self._backup_settings_file()
+        return settings
+
+    def _backup_file(self):
+        return self.settings_file + ".bak"
+
+    def _parse_settings_file(self, path):
+        with open(path) as f:
+            try:
+                self._lock_file(f, exclusive=False)
+            except (BlockingIOError, OSError):
+                logger.warning("Could not acquire file lock for reading settings")
+            try:
+                return self._validate_settings(json.load(f))
+            finally:
+                try:
+                    self._unlock_file(f)
+                except Exception:
+                    pass
+
+    def _backup_settings_file(self):
+        """Copy the settings file that just parsed cleanly to .bak, once per
+        session. That is the copy a corrupted file is restored from."""
+        if getattr(self, "_backup_done", False):
+            return
+        self._backup_done = True
+        try:
+            with open(self.settings_file) as f:
+                text = f.read()
+            self._atomic_write_text(self._backup_file(), text)
+        except OSError as e:
+            logger.warning(f"Could not back up settings: {e}")
 
     def save_settings(self, settings):
         """Update the in-memory settings and write them to disk once things settle.
@@ -808,45 +842,46 @@ class SettingsManager(QObject):
         self.flushPendingSave()
 
     def _write_settings_to_disk(self, settings):
-        """Save settings atomically with file locking. Callers pass an
-        already validated dict (save_settings / the defaults)."""
-        validated_settings = settings
-
-        # Write to temp file first, then rename (atomic on most systems)
-        dir_name = os.path.dirname(self.settings_file)
+        """Save settings atomically. Callers pass an already validated dict
+        (save_settings / the defaults). On failure the file on disk is left
+        untouched and the next save tries again."""
         try:
-            # Create temp file in same directory for atomic rename
-            fd, temp_path = tempfile.mkstemp(dir=dir_name, suffix='.json')
-            try:
-                with os.fdopen(fd, 'w') as f:
-                    try:
-                        self._lock_file(f, exclusive=True)
-                    except (BlockingIOError, OSError):
-                        logger.warning("Could not acquire file lock for writing settings")
-                    json.dump(validated_settings, f, indent=4)
-
-                # Set permissions before rename
-                self._set_file_permissions(temp_path)
-
-                # Atomic rename (on Unix) or replace (on Windows)
-                if sys.platform == 'win32':
-                    # Windows doesn't support atomic rename over existing file
-                    if os.path.exists(self.settings_file):
-                        os.remove(self.settings_file)
-                os.rename(temp_path, self.settings_file)
-
-            except Exception as e:
-                # Clean up temp file on error
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                raise e
-
-        except Exception as e:
+            self._atomic_write_text(self.settings_file, json.dumps(settings, indent=4))
+        except (OSError, TypeError, ValueError) as e:
             logger.error(f"Error saving settings: {e}")
-            # Fallback to direct write if atomic fails
-            with open(self.settings_file, 'w') as f:
-                json.dump(validated_settings, f, indent=4)
-            self._set_file_permissions(self.settings_file)
+
+    def _atomic_write_text(self, path, text):
+        """Write text to a temp file, fsync it, then replace path in one step,
+        so a power cut leaves either the old file or the new one."""
+        dir_name = os.path.dirname(path)
+        fd, temp_path = tempfile.mkstemp(dir=dir_name, suffix='.json')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                try:
+                    self._lock_file(f, exclusive=True)
+                except (BlockingIOError, OSError):
+                    logger.warning("Could not acquire file lock for writing settings")
+                f.write(text)
+                f.flush()
+                os.fsync(f.fileno())
+            self._set_file_permissions(temp_path)
+            os.replace(temp_path, path)
+        except BaseException:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+            raise
+        if sys.platform != 'win32':
+            # Persist the rename itself (the directory entry)
+            try:
+                dir_fd = os.open(dir_name, os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError:
+                pass
 
     def update_setting(self, key, value, signal=None):
         settings = self.load_settings()
