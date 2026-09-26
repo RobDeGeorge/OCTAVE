@@ -2,6 +2,8 @@
 
 #include "scrcpyclient.h"
 
+#include <QElapsedTimer>
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
@@ -72,6 +74,11 @@ constexpr quint8 kDevMsgOctavePhoneState = 100;
 // frame stays on screen) for this long, or for as long as the manager says
 // the phone is asleep; a black run that outlives it is real content.
 constexpr qint64 kBlackHoldMs = 3000;
+// Upper bounds for one media packet read off the wire. A length beyond these
+// means the stream is out of sync (garbage header), not a real packet:
+// fail cleanly instead of a multi-GB allocation or a negative int resize.
+constexpr quint32 kMaxVideoPacketBytes = 32u * 1024 * 1024;
+constexpr quint32 kMaxAudioPacketBytes = 1u * 1024 * 1024;
 constexpr int kBlackLumaMax = 20;
 // While the phone is asleep or a stream is being reattached, a frame that is
 // black apart from a strip of status icons is not content either: hold it if
@@ -290,7 +297,7 @@ void ScrcpyClient::stop()
     // The worker removes its forward on the way out; if it could not (or was
     // never reached), do it here so a clean exit never strands a port.
     if (m_port) {
-        adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000);
+        adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000, false);
         qCInfo(lcScrcpyClient) << "removed forward tcp:" << m_port << "(from stop)";
         m_port = 0;
     }
@@ -392,7 +399,7 @@ void ScrcpyClient::hideConsoleWindow(QProcess *proc)
 #endif
 }
 
-bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutMs)
+bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutMs, bool interruptible)
 {
     QProcess p;
     QStringList full;
@@ -402,7 +409,22 @@ bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutM
     p.setProcessChannelMode(QProcess::MergedChannels);
     hideConsoleWindow(&p);
     p.start(m_adb, full);
-    const bool ok = p.waitForFinished(timeoutMs) && p.exitCode() == 0;
+    // Poll so stop() (which joins this thread from the GUI thread) never waits
+    // out a 30 s push or a hung adb; cleanup calls pass interruptible=false.
+    QElapsedTimer elapsed;
+    elapsed.start();
+    bool finished = false;
+    while (!(finished = p.waitForFinished(100))) {
+        if (p.state() == QProcess::NotRunning || elapsed.elapsed() >= timeoutMs)
+            break;
+        if (interruptible && m_stopping.load())
+            break;
+    }
+    if (!finished && p.state() != QProcess::NotRunning) {
+        p.kill();
+        p.waitForFinished(1000);
+    }
+    const bool ok = finished && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
     if (output)
         *output = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
     return ok;
@@ -423,7 +445,13 @@ QTcpSocket *ScrcpyClient::connectUntilReady(qint64 deadlineMs, bool startup)
         // waitForReadyRead() only reports *new* data, so check what may have
         // arrived already; otherwise a good connection gets aborted and the
         // server hands the next one out as the wrong socket.
-        if (s->waitForConnected(2000) && (s->bytesAvailable() > 0 || s->waitForReadyRead(2000))) {
+        bool ready = false;
+        if (s->waitForConnected(2000)) {
+            ready = s->bytesAvailable() > 0;
+            for (int i = 0; !ready && i < 10 && !m_stopping.load(); ++i)
+                ready = s->waitForReadyRead(200) || s->bytesAvailable() > 0;
+        }
+        if (ready) {
             char dummy = 0;
             if (s->read(&dummy, 1) == 1) {
                 s->setSocketOption(QAbstractSocket::LowDelayOption, 1);
@@ -555,7 +583,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
                         : QStringLiteral("scrcpy server did not answer within 20 s"));
         pumpServerLog();
         if (m_proc) { m_proc->kill(); m_proc->waitForFinished(1000); delete m_proc; m_proc = nullptr; }
-        adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000);
+        adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000, false);
         return;
     }
     m_video = video;
@@ -565,7 +593,10 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         auto *audioSock = new QTcpSocket;
         audioSock->connectToHost(QHostAddress::LocalHost, quint16(m_port));
         if (audioSock->waitForConnected(5000)) {
-            m_audio = audioSock;
+            {
+                std::lock_guard<std::mutex> lock(m_audioFdMutex);
+                m_audioFd = audioSock->socketDescriptor();
+            }
             audioSock->moveToThread(nullptr);
             m_audioThread = std::thread([this, audioSock]() {
 #ifdef Q_OS_LINUX
@@ -622,14 +653,17 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     for (QTcpSocket **s : {&m_video, &m_control}) {
         if (*s) { (*s)->abort(); delete *s; *s = nullptr; }
     }
-    if (m_audio) {
-        // Owned by the audio thread: just unblock it; it closes the socket itself
-        const qintptr afd = m_audio->socketDescriptor();
-        if (afd >= 0) {
+    {
+        // The audio socket is owned (and deleted) by the audio thread: only
+        // unblock it here. The descriptor is read and shut down under the
+        // mutex the audio thread takes before closing it, so this can never
+        // touch a freed socket or a reused descriptor.
+        std::lock_guard<std::mutex> lock(m_audioFdMutex);
+        if (m_audioFd >= 0) {
 #ifdef Q_OS_WIN
-            ::shutdown(static_cast<SOCKET>(afd), SD_BOTH);
+            ::shutdown(static_cast<SOCKET>(m_audioFd), SD_BOTH);
 #else
-            ::shutdown(static_cast<int>(afd), SHUT_RDWR);
+            ::shutdown(static_cast<int>(m_audioFd), SHUT_RDWR);
 #endif
         }
     }
@@ -639,7 +673,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         if (!m_proc->waitForFinished(2000)) { m_proc->kill(); m_proc->waitForFinished(1000); }
         delete m_proc; m_proc = nullptr;
     }
-    adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000);
+    adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000, false);
     qCInfo(lcScrcpyClient) << "removed forward tcp:" << m_port;
     m_port = 0;
     if (m_running.exchange(false)) {
@@ -672,6 +706,10 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
             break;
         const quint64 ptsFlags = qFromBigEndian<quint64>(header);
         const quint32 size = qFromBigEndian<quint32>(header + 8);
+        if (size > kMaxVideoPacketBytes) {
+            fail(QStringLiteral("video stream out of sync (packet of %1 bytes)").arg(size));
+            break;
+        }
         data.resize(int(size));
         if (!recvExact(video, data.data(), size, m_stopping))
             break;
@@ -830,6 +868,10 @@ void ScrcpyClient::audioLoop(QTcpSocket *audio)
                 if (!recvExact(audio, header, 12, m_stopping))
                     break;
                 const quint32 size = qFromBigEndian<quint32>(header + 8);
+                if (size > kMaxAudioPacketBytes) {
+                    qCWarning(lcScrcpyClient) << "audio stream out of sync (packet of" << size << "bytes); stopping audio";
+                    break;
+                }
                 data.resize(int(size));
                 if (!recvExact(audio, data.data(), size, m_stopping))
                     break;
@@ -861,9 +903,12 @@ void ScrcpyClient::audioLoop(QTcpSocket *audio)
             }
         }
     }
+    {
+        std::lock_guard<std::mutex> lock(m_audioFdMutex);
+        m_audioFd = -1;
+    }
     audio->abort();
     delete audio;
-    m_audio = nullptr;
     if (announced) {
         m_audioActive = false;
         emit audioStateChanged(false);

@@ -237,7 +237,11 @@
               PCM. Control messages are written to the control socket from any thread under a send mutex (C++ writes the raw
               descriptor with <code>::send()</code>).</li>
             <li><strong>Teardown</strong>: close the sockets, terminate the adb child (2 s, then kill), <code>adb forward --remove tcp:PORT</code>
-              (also repeated from <code>stop()</code> so a clean exit never strands a port). The server destroys the virtual display
+              (also repeated from <code>stop()</code> so a clean exit never strands a port). <code>stop()</code> never waits out a slow
+              step: C++ adb calls and the connect wait poll <code>m_stopping</code> every 100-200 ms (cleanup calls excepted), and in Python
+              the session thread re-checks <code>_stopping</code> between steps and releases anything it created after <code>stop()</code> ran
+              (forward, adb shell) itself. The audio socket belongs to the audio thread; the session only shuts its descriptor
+              down, under a mutex the audio thread takes before closing it. The server destroys the virtual display
               itself (<code>cleanup=true</code>) unless it is persisting. A stream that ends without a requested stop surfaces as
               <em>"Phone disconnected. Reconnect the USB cable."</em>. Both entry points route SIGTERM/SIGINT through the normal
               quit path (Python <code>signal.signal(..., app.quit)</code>; C++ a self-pipe <code>socketpair</code> handler) so launcher
@@ -265,6 +269,8 @@
   bit 63 = config packet (SPS/PPS for H.264; pts invalid)   <span class="cmt">// Streamer.PACKET_FLAG_CONFIG</span>
   bit 62 = key frame                                          <span class="cmt">// Streamer.PACKET_FLAG_KEY_FRAME</span>
   video data: Annex-B H.264; audio data: PCM s16le 48 kHz stereo (AudioConfig, up to 4096 B per read)</code></pre>
+          <p>Both clients treat a <code>size</code> above 32 MiB (video) or 1 MiB (audio) as a desynced stream: video fails the session
+            ("video stream out of sync"), audio stops and video continues.</p>
           <h4>Control messages (client &rarr; server), first byte = type</h4>
           <table>
             <thead><tr><th>Type</th><th>Name</th><th>Payload</th><th>Total</th><th>Used by OCTAVE</th></tr></thead>

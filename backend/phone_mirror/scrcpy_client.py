@@ -94,6 +94,11 @@ AUDIO_HOLD_MS = 1500
 # frame stays on screen) for this long, or for as long as the manager says
 # the phone is asleep; a black run that outlives it is real content.
 BLACK_HOLD_S = 3.0
+# Upper bounds for one media packet read off the wire. A length beyond these
+# means the stream is out of sync (garbage header), not a real packet: fail
+# cleanly instead of trying to read gigabytes.
+MAX_VIDEO_PACKET_BYTES = 32 * 1024 * 1024
+MAX_AUDIO_PACKET_BYTES = 1024 * 1024
 BLACK_LUMA_MAX = 20
 # While the phone is asleep or a stream is being reattached, a frame that is
 # black apart from a strip of status icons is not content either: hold it if
@@ -177,6 +182,9 @@ class ScrcpyClient(QObject):
         self._scid = ""
         self._attach_scid = ""
         self._proc: Optional[subprocess.Popen] = None
+        # Guards handing _proc/_port/sockets from the session thread to
+        # whoever releases them (stop() or the session's own exit)
+        self._res_lock = threading.Lock()
         self._video: Optional[socket.socket] = None
         self._audio: Optional[socket.socket] = None
         self._control: Optional[socket.socket] = None
@@ -288,7 +296,22 @@ class ScrcpyClient(QObject):
     def stop(self):
         self._stopping = True
         self._running = False
-        for s in (self._video, self._audio, self._control):
+        self._release_resources()
+        if self._thread and self._thread.is_alive() and threading.current_thread() is not self._thread:
+            # The session thread re-checks _stopping between steps and releases
+            # anything it creates after this point itself (see _run)
+            self._thread.join(timeout=3)
+        self._stop_audio_sink()
+
+    def _release_resources(self):
+        """Close the sockets, end the adb shell and remove the forward.
+        Idempotent; safe from any thread."""
+        with self._res_lock:
+            socks = (self._video, self._audio, self._control)
+            self._video = self._audio = self._control = None
+            proc, self._proc = self._proc, None
+            port, self._port = self._port, 0
+        for s in socks:
             if s is not None:
                 try:
                     s.shutdown(socket.SHUT_RDWR)
@@ -298,8 +321,6 @@ class ScrcpyClient(QObject):
                     s.close()
                 except OSError:
                     pass
-        self._video = self._audio = self._control = None
-        proc, self._proc = self._proc, None
         if proc is not None:
             try:
                 proc.terminate()
@@ -309,12 +330,11 @@ class ScrcpyClient(QObject):
                     proc.kill()
                 except Exception:
                     pass
-        if self._port:
-            self._adb_run(["forward", "--remove", f"tcp:{self._port}"], timeout=5)
-            self._port = 0
-        if self._thread and self._thread.is_alive() and threading.current_thread() is not self._thread:
-            self._thread.join(timeout=3)
-        self._stop_audio_sink()
+        if port:
+            try:
+                self._adb_run(["forward", "--remove", f"tcp:{port}"], timeout=5)
+            except (subprocess.SubprocessError, OSError):
+                pass
 
     def inject_touch(self, pointer_id: int, action: int, x: int, y: int, pressure: float = 1.0):
         """Touch on the mirrored display, x/y in frame pixels."""
@@ -440,6 +460,12 @@ class ScrcpyClient(QObject):
             self._session(display_size, max_fps, bit_rate, audio, stay_awake)
         except Exception as e:  # any unexpected error ends the session cleanly
             self._fail(f"scrcpy client error: {e}")
+        finally:
+            if self._stopping:
+                # stop() may have run while this thread was still pushing or
+                # starting the server: anything created since then (forward,
+                # adb shell) is released here, not stranded until OCTAVE exits
+                self._release_resources()
 
     def _session(self, display_size, max_fps, bit_rate, audio, stay_awake):
         t0 = time.monotonic()
@@ -450,15 +476,20 @@ class ScrcpyClient(QObject):
             if r.returncode != 0:
                 self._fail(f"could not push scrcpy server: {(r.stderr or r.stdout).strip()[-200:]}")
                 return
+        if self._stopping:
+            return
         # 2. tunnel. scid must fit a signed 32-bit int on the server side.
         #    secrets, not random: other modules seed the global RNG (media
         #    colour extraction), which made every session's scid identical.
         self._scid = self._attach_scid if attach else f"{secrets.randbits(31):08x}"
         self._reap_stale_forwards()
-        self._port = self._free_port()
+        with self._res_lock:
+            self._port = self._free_port()
         r = self._adb_run(["forward", f"tcp:{self._port}", f"localabstract:scrcpy_{self._scid}"])
         if r.returncode != 0:
             self._fail(f"adb forward failed: {(r.stderr or r.stdout).strip()[-200:]}")
+            return
+        if self._stopping:
             return
         popen_kw = {}
         if platform.system() == "Windows":
@@ -473,8 +504,12 @@ class ScrcpyClient(QObject):
             if self._serial:
                 cmd += ["-s", self._serial]
             cmd += ["logcat", "-v", "raw", "-T", "1", "-s", "scrcpy:I"]
-            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **popen_kw)
-            threading.Thread(target=self._drain_server_log, args=(self._proc,), daemon=True,
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **popen_kw)
+            with self._res_lock:
+                self._proc = proc
+            if self._stopping:
+                return
+            threading.Thread(target=self._drain_server_log, args=(proc,), daemon=True,
                              name="scrcpy-server-log").start()
             video = self._connect_until_ready(deadline=t0 + 4.0, startup=False)
             if video is None:
@@ -504,8 +539,12 @@ class ScrcpyClient(QObject):
         # by adbd when the USB link drops (it is then reparented to init).
         cmd += ["shell", f"{server_cmd} 2>&1 & wait"]
         logger.info(f"scrcpy client: starting server: app_process ... {' '.join(opts)}")
-        self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **popen_kw)
-        threading.Thread(target=self._drain_server_log, args=(self._proc,), daemon=True,
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **popen_kw)
+        with self._res_lock:
+            self._proc = proc
+        if self._stopping:
+            return
+        threading.Thread(target=self._drain_server_log, args=(proc,), daemon=True,
                          name="scrcpy-server-log").start()
 
         # 4. connect: the tunnel accepts before the server listens, so retry
@@ -624,6 +663,9 @@ class ScrcpyClient(QObject):
             while not self._stopping:
                 header = _recv_exact(audio_sock, 12)
                 _pts, size = struct.unpack(">QI", header)
+                if size > MAX_AUDIO_PACKET_BYTES:
+                    logger.warning(f"scrcpy client: audio stream out of sync (packet of {size} bytes); stopping audio")
+                    break
                 data = self._apply_gain(_recv_exact(audio_sock, size))
                 with self._audio_lock:
                     self._audio_queue.append(data)
@@ -761,6 +803,9 @@ class ScrcpyClient(QObject):
             while not self._stopping:
                 header = _recv_exact(video, 12)
                 pts_flags, size = struct.unpack(">QI", header)
+                if size > MAX_VIDEO_PACKET_BYTES:
+                    self._fail(f"video stream out of sync (packet of {size} bytes)")
+                    break
                 data = _recv_exact(video, size)
                 if pts_flags & FLAG_CONFIG:
                     # SPS/PPS: prepend to the next packet, as the scrcpy client does

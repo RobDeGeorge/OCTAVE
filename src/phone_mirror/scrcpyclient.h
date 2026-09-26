@@ -117,7 +117,8 @@ private slots:
 private:
     void session(QString displaySize, int maxFps, int bitRate, bool audio, bool stayAwake, QString attachScid);
     QTcpSocket *connectUntilReady(qint64 deadlineMs, bool startup = true);
-    bool adbRun(const QStringList &args, QString *output, int timeoutMs = 15000);
+    // interruptible: give up as soon as stop() is requested (false for cleanup calls)
+    bool adbRun(const QStringList &args, QString *output, int timeoutMs = 15000, bool interruptible = true);
     void videoLoop(QTcpSocket *video, qint64 t0);
     void audioLoop(QTcpSocket *audio);
     void deviceMessageLoop(qintptr fd);
@@ -150,7 +151,10 @@ private:
     // thread with ::send() under m_sendMutex.
     QProcess *m_proc = nullptr;
     QTcpSocket *m_video = nullptr;
-    QTcpSocket *m_audio = nullptr;
+    // Audio socket object is owned by the audio thread; the session thread
+    // only shuts its descriptor down, under m_audioFdMutex.
+    qintptr m_audioFd = -1;
+    std::mutex m_audioFdMutex;
     QTcpSocket *m_control = nullptr;
     std::atomic<qintptr> m_controlFd{-1};
     std::mutex m_sendMutex;
