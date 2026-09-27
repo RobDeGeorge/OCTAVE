@@ -9,16 +9,16 @@
 
 <sub>Recorded on the head unit in my Jeep TJ, an Orange Pi 5 driving a 2560x1080 dash display. Every clip and screenshot in this README was captured from the running app. The theme is following the album art.</sub>
 
-[![Latest Release](https://img.shields.io/github/v/release/WayBetterSolutions/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/WayBetterSolutions/OCTAVE/releases/latest)
-[![Stars](https://img.shields.io/github/stars/WayBetterSolutions/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/WayBetterSolutions/OCTAVE/stargazers)
-[![Downloads](https://img.shields.io/github/downloads/WayBetterSolutions/OCTAVE/total?style=for-the-badge&color=2b8aff&label=downloads)](https://github.com/WayBetterSolutions/OCTAVE/releases)
+[![Latest Release](https://img.shields.io/github/v/release/RobDeGeorge/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/RobDeGeorge/OCTAVE/releases/latest)
+[![Stars](https://img.shields.io/github/stars/RobDeGeorge/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/RobDeGeorge/OCTAVE/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/RobDeGeorge/OCTAVE/total?style=for-the-badge&color=2b8aff&label=downloads)](https://github.com/RobDeGeorge/OCTAVE/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)](LICENSE)
 
 [![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20Linux%20%7C%20Pi%20%7C%20Android-success?style=flat-square)](#install)
 [![Backend](https://img.shields.io/badge/backend-C%2B%2B%20%7C%20Python-orange?style=flat-square)](#two-backends-one-frontend)
 [![Frontend](https://img.shields.io/badge/frontend-Qt%206%20%2F%20QML-41cd52?style=flat-square)](#)
 
-### [Download Latest Release →](https://github.com/WayBetterSolutions/OCTAVE/releases/latest)
+### [Download Latest Release →](https://github.com/RobDeGeorge/OCTAVE/releases/latest)
 
 </div>
 
@@ -151,7 +151,7 @@ A rigged model of the Jeep with working doors, hood, tailgate, lights, steering 
 
 ## Install
 
-Pre-built binaries for every platform are on the [Releases](https://github.com/WayBetterSolutions/OCTAVE/releases) page. No toolchain or Python needed:
+Pre-built binaries for every platform are on the [Releases](https://github.com/RobDeGeorge/OCTAVE/releases) page. No toolchain or Python needed:
 
 - **Windows:** `OCTAVE-<version>-windows-x86_64.exe` — run the installer.
 - **macOS:** `OCTAVE-<version>-macos.dmg` — open, drag to Applications.
@@ -164,7 +164,7 @@ Pre-built binaries for every platform are on the [Releases](https://github.com/W
 The Python backend is the quickest way to get a development loop going:
 
 ```bash
-git clone https://github.com/waybettersolutions/octave.git
+git clone https://github.com/RobDeGeorge/OCTAVE.git
 cd octave
 python setup.py
 ```
@@ -242,8 +242,8 @@ The wiki covers architecture, every backend manager, every frontend page, the se
 
 ## Star history
 
-<a href="https://star-history.com/#WayBetterSolutions/OCTAVE&Date">
-  <img src="https://api.star-history.com/svg?repos=WayBetterSolutions/OCTAVE&type=Date" alt="Star History Chart" width="720">
+<a href="https://star-history.com/#RobDeGeorge/OCTAVE&Date">
+  <img src="https://api.star-history.com/svg?repos=RobDeGeorge/OCTAVE&type=Date" alt="Star History Chart" width="720">
 </a>
 
 ## Contributing
@@ -252,4 +252,4 @@ Pull requests and bug reports are welcome. If you build a dashboard, a sensor in
 
 ## License
 
-2026 [Way Better Solutions](https://waybetter.solutions/). MIT License.
+2026 Rob DeGeorge. MIT License.
