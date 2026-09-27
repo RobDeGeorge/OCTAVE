@@ -648,7 +648,9 @@ Item {
 
                 SettingsToggle {
                     text: "Fast mode"
-                    Layout.fillWidth: true
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
                     checked: settingsManager ? settingsManager.obdFastMode : true
 
                     onToggled: function(checked) {
@@ -720,7 +722,9 @@ Item {
 
                 SettingsToggle {
                     id: obdCardStyleToggle
-                    Layout.fillWidth: true
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
                     text: "Circular gauges"
                     checked: settingsManager ? settingsManager.get_setting_with_default("obdCardStyleCircular", false) : false
                     activeColor: App.Style.accent

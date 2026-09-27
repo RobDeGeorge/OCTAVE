@@ -11,6 +11,9 @@ Item {
     required property var stackView
     required property var mainWindow
     required property string initialSection
+    // Tile (cardId) to reopen on load — lets a rebuild (e.g. nav bar
+    // orientation change) put the user back inside the card they were in.
+    property string initialTile: ""
 
     property string currentSection: ""
     property bool updateAvailable: networkManager && networkManager.updateStatus === "update-available"
@@ -125,6 +128,13 @@ Item {
             })
         }
         hubModel = model
+    }
+
+    // cardId of the tile popup currently open in the layout, or "".
+    function openTileId() {
+        if (layoutLoader.item && typeof layoutLoader.item.openTileId === "function")
+            return layoutLoader.item.openTileId()
+        return ""
     }
 
     function navigateToHub() {

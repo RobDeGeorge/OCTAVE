@@ -26,6 +26,10 @@ Item {
         return settingsMenu.pageModel[0].source
     }
 
+    function openTileId() {
+        return contentArea.detailCardId
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
@@ -248,7 +252,10 @@ Item {
                             font.pixelSize: App.Spacing.overallText * 1.6
                             font.bold: settingsMenu && settingsMenu.currentSection === parent.itemSection
                             font.family: App.Style.fontFamily
-                            elide: Text.ElideRight
+                            // Shrink to fit rather than truncate so titles always show the whole word.
+                            fontSizeMode: Text.HorizontalFit
+                            minimumPixelSize: dp(8)
+                            elide: Text.ElideNone
                         }
 
                         // Update notification dot
@@ -419,6 +426,15 @@ Item {
                     if (hasTiles) {
                         // Hide the page's own Flickable rendering — the tile grid replaces it.
                         item.visible = false
+
+                        // Reopen the tile the user was in before a rebuild. openTile()
+                        // is a no-op if the cardId isn't on this page, so only clear
+                        // once it actually lands.
+                        if (settingsMenu && settingsMenu.initialTile !== "") {
+                            contentArea.openTile(settingsMenu.initialTile, null)
+                            if (contentArea.detailCardId === settingsMenu.initialTile)
+                                settingsMenu.initialTile = ""
+                        }
                     }
 
                     // Restore scroll position only for non-tile pages (use timer to wait for content to layout)

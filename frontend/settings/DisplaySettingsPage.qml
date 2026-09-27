@@ -676,10 +676,38 @@ Flickable {
 
             SettingCategory {
                 title: "Clock Size"
+                description: "Auto fits the clock to the nav bar. Turn it off to set the size by hand."
+
+                SettingsToggle {
+                    id: clockSizeAutoToggle
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: "Auto"
+                    checked: settingsManager ? settingsManager.clockSizeAuto : true
+
+                    onToggled: function(checked) {
+                        if (settingsManager) {
+                            settingsManager.save_clock_size_auto(checked)
+                        }
+                    }
+
+                    Connections {
+                        target: settingsManager
+                        function onClockSizeAutoChanged() {
+                            clockSizeAutoToggle.checked = settingsManager.clockSizeAuto
+                        }
+                    }
+                }
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.topMargin: App.Spacing.rowSpacing
                     spacing: App.Spacing.overallSpacing
+                    enabled: !clockSizeAutoToggle.checked
+                    opacity: enabled ? 1.0 : 0.4
+
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
 
                     SettingsSlider {
                         id: clockSizeSlider

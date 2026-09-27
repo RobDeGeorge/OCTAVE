@@ -167,6 +167,7 @@ class SettingsManager(QObject):
     clockFormatChanged = Signal(bool)
     clockShowSecondsChanged = Signal(bool)
     clockSizeChanged = Signal(int)
+    clockSizeAutoChanged = Signal(bool)
     backgroundGridChanged = Signal(str)
     screenWidthChanged = Signal(int)
     screenHeightChanged = Signal(int)
@@ -274,6 +275,7 @@ class SettingsManager(QObject):
             "clockFormat24Hour": True,
             "clockShowSeconds": False,
             "clockSize": 18,
+            "clockSizeAuto": True,
             "backgroundGrid": "4x4",
             "screenWidth": 1280,
             "screenHeight": 720,
@@ -575,6 +577,7 @@ class SettingsManager(QObject):
         self._clock_format_24hour = self._settings.get("clockFormat24Hour", self._default_settings["clockFormat24Hour"])
         self._clock_show_seconds = self._settings.get("clockShowSeconds", self._default_settings["clockShowSeconds"])
         self._clock_size = self._settings.get("clockSize", self._default_settings["clockSize"])
+        self._clock_size_auto = self._settings.get("clockSizeAuto", self._default_settings["clockSizeAuto"])
         self._background_grid = self._settings.get("backgroundGrid", self._default_settings["backgroundGrid"])
         self._screen_width = self._settings.get("screenWidth", self._default_settings["screenWidth"])
         self._screen_height = self._settings.get("screenHeight", self._default_settings["screenHeight"])
@@ -994,6 +997,10 @@ class SettingsManager(QObject):
     @Property(int, notify=clockSizeChanged)
     def clockSize(self):
         return self._clock_size
+
+    @Property(bool, notify=clockSizeAutoChanged)
+    def clockSizeAuto(self):
+        return self._clock_size_auto
     
     @Property(str, notify=backgroundGridChanged)
     def backgroundGrid(self):
@@ -1116,6 +1123,12 @@ class SettingsManager(QObject):
         logger.debug(f"Saving clock size setting: {size}")
         self._clock_size = size
         self.update_setting("clockSize", size, self.clockSizeChanged)
+
+    @Slot(bool)
+    def save_clock_size_auto(self, auto):
+        logger.debug(f"Saving clock size auto setting: {auto}")
+        self._clock_size_auto = auto
+        self.update_setting("clockSizeAuto", auto, self.clockSizeAutoChanged)
         
     @Slot(str)
     def save_background_grid(self, grid_setting):
@@ -2374,6 +2387,7 @@ class SettingsManager(QObject):
         self.clockFormatChanged.emit(self._clock_format_24hour)
         self.clockShowSecondsChanged.emit(self._clock_show_seconds)
         self.clockSizeChanged.emit(self._clock_size)
+        self.clockSizeAutoChanged.emit(self._clock_size_auto)
         self.backgroundGridChanged.emit(self._background_grid)
         self.screenWidthChanged.emit(self._screen_width)
         self.screenHeightChanged.emit(self._screen_height)

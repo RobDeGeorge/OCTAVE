@@ -3,6 +3,9 @@ import QtQuick.Layouts 1.15
 import ".." as App
 
 Rectangle {
+    // Local dp wrapper — work around Qt Android singleton-function bug.
+    function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
+
     id: hubCard
 
     property string categoryName: ""
@@ -94,7 +97,10 @@ Rectangle {
                 font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
                 font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
                 Layout.fillWidth: true
-                elide: Text.ElideRight
+                // Shrink to fit rather than truncate so titles always show the whole word.
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: dp(8)
+                elide: Text.ElideNone
             }
 
             Text {

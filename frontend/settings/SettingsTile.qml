@@ -100,7 +100,10 @@ Rectangle {
             font.family: App.Style.fontFamily
             font.weight: Font.Medium
             horizontalAlignment: Text.AlignHCenter
-            elide: Text.ElideRight
+            // Shrink to fit rather than truncate so titles always show the whole word.
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: dp(8)
+            elide: Text.ElideNone
             font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
             font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
         }

@@ -455,7 +455,9 @@ Flickable {
 
                 SettingsToggle {
                     id: ledSleepToggle
-                    Layout.fillWidth: true
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
                     text: "Keep LEDs on"
                     checked: settingsManager ? !settingsManager.esp32LedSleepEnabled : false
                     activeColor: App.Style.accent
@@ -872,7 +874,9 @@ Flickable {
 
                 SettingsToggle {
                     id: imuEnabledToggle
-                    Layout.fillWidth: true
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
                     text: "IMU Sensor"
                     checked: settingsManager ? settingsManager.imuEnabled : true
                     activeColor: App.Style.accent
@@ -932,7 +936,9 @@ Flickable {
                     }
 
                     SettingsToggle {
-                        Layout.fillWidth: true
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
                         text: "Temperature in °F"
                         checked: settingsManager ? settingsManager.get_setting_with_default("sensorTempUnit", "F") === "F" : true
                         activeColor: App.Style.accent
@@ -945,7 +951,9 @@ Flickable {
                     }
 
                     SettingsToggle {
-                        Layout.fillWidth: true
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
                         text: "Altitude in Feet"
                         checked: settingsManager ? settingsManager.get_setting_with_default("sensorAltitudeUnit", "m") === "ft" : false
                         activeColor: App.Style.accent
@@ -1026,7 +1034,9 @@ Flickable {
                             { key: "sensorShowTemperature", label: "Temperature", defaultOn: true }
                         ]
                         delegate: SettingsToggle {
-                            Layout.fillWidth: true
+                            compact: true
+                            Layout.fillWidth: false
+                            Layout.alignment: Qt.AlignLeft
                             text: modelData.label
                             checked: settingsManager
                                      ? settingsManager.get_setting_with_default(modelData.key, modelData.defaultOn)
@@ -1092,7 +1102,9 @@ Flickable {
 
                 SettingsToggle {
                     id: gestureEnabledToggle
-                    Layout.fillWidth: true
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
                     text: "Gesture Sensor"
                     checked: settingsManager ? settingsManager.gestureSensorEnabled : true
                     activeColor: App.Style.accent
@@ -1522,7 +1534,9 @@ Flickable {
 
                 SettingsToggle {
                     id: androidAutoEnabledToggle
-                    Layout.fillWidth: true
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
                     text: "Show in nav bar"
                     checked: settingsManager ? settingsManager.androidAutoEnabled : false
                     activeColor: App.Style.accent
@@ -1550,7 +1564,9 @@ Flickable {
 
                 SettingsToggle {
                     id: phoneMirrorEnabledToggle
-                    Layout.fillWidth: true
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
                     text: "Show in nav bar"
                     checked: settingsManager ? settingsManager.phoneMirrorEnabled : false
                     activeColor: App.Style.accent
@@ -1626,7 +1642,9 @@ Flickable {
 
                     SettingsToggle {
                         id: scrcpyPhoneScreenOffToggle
-                        Layout.fillWidth: true
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
                         text: "Phone screen off while mirroring"
                         checked: settingsManager ? settingsManager.scrcpyPhoneScreenOff : true
                         activeColor: App.Style.accent
@@ -1661,7 +1679,9 @@ Flickable {
 
                     SettingsToggle {
                         id: scrcpyAudioEnabledToggle
-                        Layout.fillWidth: true
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
                         text: "Forward phone audio"
                         checked: settingsManager ? settingsManager.scrcpyAudioEnabled : false
                         activeColor: App.Style.accent
@@ -1743,7 +1763,9 @@ Flickable {
 
                     SettingsToggle {
                         id: scrcpyAudioDuckEnabledToggle
-                        Layout.fillWidth: true
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
                         text: "Duck local music for phone audio"
                         checked: settingsManager ? settingsManager.scrcpyAudioDuckEnabled : true
                         activeColor: App.Style.accent

@@ -32,6 +32,29 @@ Rectangle {
     // when seconds are hidden.
     property string clockTimeText: ""
 
+    // ── Auto clock size ──
+    // When on, the clock takes the largest font that fits its slot in the bar.
+    // Measured at a 100px reference and scaled, since the clock's container
+    // sizes itself to the text (fitting against it directly would loop).
+    // Digits are measured as "8" so the size doesn't jitter every second.
+    property bool clockSizeAuto: settingsManager ? settingsManager.clockSizeAuto : true
+    property int manualClockSize: settingsManager ? settingsManager.clockSize : 18
+
+    TextMetrics {
+        id: clockMetrics
+        font.family: bottomBar.globalFont
+        font.pixelSize: 100
+        text: bottomBar.clockTimeText.replace(/[0-9]/g, "8")
+    }
+
+    function autoClockSize(availWidth, availHeight) {
+        if (clockMetrics.width <= 0 || clockMetrics.height <= 0)
+            return manualClockSize
+        var byWidth = availWidth * 100 / clockMetrics.width
+        var byHeight = availHeight * 100 / clockMetrics.height
+        return Math.max(10, Math.min(85, Math.floor(Math.min(byWidth, byHeight))))
+    }
+
     Connections {
         target: clock
         function onTimeChanged(time) {
@@ -1411,7 +1434,10 @@ Rectangle {
                                 id: clockText
                                 anchors.centerIn: parent
                                 visible: settingsManager ? settingsManager.showClock : true
-                                font.pixelSize: settingsManager ? settingsManager.clockSize : 18
+                                font.pixelSize: bottomBar.clockSizeAuto
+                                    ? bottomBar.autoClockSize(clockSection.width - App.Spacing.overallMargin - dp(20),
+                                                              clockSection.height * 0.75)
+                                    : bottomBar.manualClockSize
                                 font.family: bottomBar.globalFont
                                 color: App.Style.clockTextColor
                                 text: bottomBar.clockTimeText
@@ -2587,6 +2613,7 @@ Rectangle {
 
                 // SECTION 3: Clock (Bottom section when vertical)
                 Item {
+                    id: clockSlotVertical
                     Layout.preferredHeight: parent.height * 0.1
                     Layout.fillWidth: true
                     
@@ -2615,7 +2642,10 @@ Rectangle {
                                 id: clockTextVertical
                                 anchors.centerIn: parent
                                 visible: settingsManager ? settingsManager.showClock : true
-                                font.pixelSize: settingsManager ? settingsManager.clockSize : 18
+                                font.pixelSize: bottomBar.clockSizeAuto
+                                    ? bottomBar.autoClockSize(clockSlotVertical.width - dp(20),
+                                                              clockSlotVertical.height - dp(20))
+                                    : bottomBar.manualClockSize
                                 font.family: bottomBar.globalFont
                                 color: App.Style.clockTextColor
                                 text: bottomBar.clockTimeText

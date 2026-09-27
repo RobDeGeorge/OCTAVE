@@ -314,6 +314,7 @@ ApplicationWindow {
                 if (stackView.currentItem && stackView.currentItem.objectName === "settingsMenu") {
                     var section = stackView.currentItem.currentSection || ""
                     navReloadTimer.pendingSection = section
+                    navReloadTimer.pendingTile = stackView.currentItem.openTileId()
                     navReloadTimer.restart()
                 }
             }
@@ -534,12 +535,13 @@ ApplicationWindow {
             interval: 150
             repeat: false
             property string pendingSection: ""
+            property string pendingTile: ""
             onTriggered: {
                 if (stackView.currentItem && stackView.currentItem.objectName === "settingsMenu") {
                     // The cached instance was laid out for the old orientation:
                     // build a fresh one, swap it in, and retire the old copy.
                     var old = stackView.forgetPage("SettingsMenu.qml")
-                    var page = stackView.cachedPage("SettingsMenu.qml", { initialSection: pendingSection })
+                    var page = stackView.cachedPage("SettingsMenu.qml", { initialSection: pendingSection, initialTile: pendingTile })
                     if (page)
                         stackView.replace(stackView.currentItem, page)
                     if (old)
