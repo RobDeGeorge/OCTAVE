@@ -5,8 +5,6 @@ force_connect() or the Error status) arrives later on the main thread."""
 import threading
 import time
 
-from PySide6.QtCore import QThread
-
 from backend.obd_manager import OBDManager
 
 MAC = "AA:BB:CC:DD:EE:FF"
@@ -26,7 +24,7 @@ def _manager(monkeypatch, bind_result):
     release = threading.Event()
 
     def slow_bind(mac, log):
-        assert QThread.currentThread() is not mgr.thread()
+        assert threading.current_thread() is not threading.main_thread()
         log(f"rfcomm: binding {mac} → /dev/rfcomm0")
         release.wait(2.0)
         return bind_result
@@ -37,7 +35,8 @@ def _manager(monkeypatch, bind_result):
     mgr.connectionStatusChanged.connect(lambda s: events.append(("status", s)))
     monkeypatch.setattr(
         mgr, "force_connect",
-        lambda: events.append(("force_connect", QThread.currentThread() is mgr.thread())))
+        lambda: events.append(
+            ("force_connect", threading.current_thread() is threading.main_thread())))
     return mgr, release, events
 
 
