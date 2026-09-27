@@ -49,6 +49,25 @@ struct PidEntry {
 // Key for PID table: (mode, pid)
 using PidKey = QPair<int, int>;
 
+// One value carried by a multi-value PID (SAE J1979 PIDs 0x61+ pack several
+// sensors and a "supported" bitmap into one reply). Values flow to QML as
+// OBDManager::obdParameterChanged(paramId, value) rather than a dedicated
+// signal per parameter.
+struct ExtendedSignal {
+    QString paramId;       // parameter id shared with QML / settings ("BOOST_PRESSURE_A")
+    QString name;          // human-readable name
+    int supportBit;        // bit of data byte A that must be set, or -1
+    int minBytes;          // data bytes needed to decode this value
+    PidDecoder decoder;
+};
+
+// VIN read with Mode 09 PID 02 and what it says about the vehicle.
+struct VinInfo {
+    QString vin;           // 17 characters, "" if the vehicle gave none
+    QString make;          // from the WMI (first 3 characters), "" if unknown
+    int modelYear = 0;     // from position 10, 0 if not decodable
+};
+
 // Pseudo-PID for python-obd's ELM_VOLTAGE: not a Mode 01 request but the
 // adapter's own "ATRV" command, answered with text such as "12.6V". It lives
 // in the PID table so settings / scan / poll lists treat it like any other
@@ -93,6 +112,12 @@ public:
     // Returns std::nullopt on error/invalid.
     static std::optional<ParsedResponse> parseResponse(const QString &raw);
 
+    // Same, from every line of a reply: joins a CAN multi-frame answer
+    // (PIDs with more than 4 data bytes, e.g. 0x70 boost, 0x7F run time)
+    // and takes the first message that answers `mode`/`pid`.
+    static std::optional<ParsedResponse> parseResponseLines(const QStringList &lines,
+                                                            int mode, int pid);
+
     // Decode a parsed PID response into (signal_name, value).
     // Returns std::nullopt if PID is unknown or data is insufficient.
     static std::optional<DecodedPid> decodePid(int mode, int pid,
@@ -122,6 +147,21 @@ public:
 
     // Access the full PID table
     static const QHash<PidKey, PidEntry> &pidTable();
+
+    // Multi-value PIDs above 0x5E (torque, boost, odometer, ...)
+    static const QHash<PidKey, QList<ExtendedSignal>> &extendedPidTable();
+
+    // Decode a multi-value PID into (paramId, value) pairs; values whose
+    // "supported" bit is clear or whose bytes are missing are left out.
+    static QList<QPair<QString, double>> decodeExtendedPid(int mode, int pid,
+                                                           const QVector<uint8_t> &dataBytes);
+
+    // Parse a Mode 09 PID 02 reply (every line, headers off; CAN multi-frame
+    // or the five numbered pre-CAN messages) into the 17-character VIN.
+    static QString parseVin(const QStringList &lines);
+
+    // Model year and manufacturer from a VIN
+    static VinInfo decodeVin(const QString &vin);
 
     // Get all parameter names from the PID table
     static QStringList allParameterNames();

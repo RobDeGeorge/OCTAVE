@@ -11,6 +11,8 @@ exercised in plain Python. PID numbers and command names follow python-obd's
 commands.py — keep this file, the C++ table and that table in agreement.
 """
 
+import datetime
+import math
 import re
 
 from backend.logging_config import get_logger
@@ -428,6 +430,217 @@ def parse_freeze_frame_dtc(lines):
         if code not in codes:
             codes.append(code)
     return codes
+
+
+# ---------------------------------------------------------------------------
+# Multi-value PIDs (SAE J1979 Mode 01 above 0x5E). Byte layouts and scaling
+# cross-checked against the OBD-II PIDs table on Wikipedia and OBDb's SAEJ1979
+# signal set. Index 0 is data byte A. support_bit is the bit of A (0 = LSB)
+# the ECU sets when that value is present, or None.
+# Parity twin of ELM327Protocol::extendedPidTable() in C++; the running Python
+# app wraps these decoders in python-obd commands (obd_manager.py).
+# ---------------------------------------------------------------------------
+
+def _u16(a, i):
+    return a[i] * 256.0 + a[i + 1]
+
+
+def _s16(a, i):
+    v = a[i] * 256 + a[i + 1]
+    return float(v - 65536 if v > 32767 else v)
+
+
+def _u32(a, i):
+    return a[i] * 16777216.0 + a[i + 1] * 65536.0 + a[i + 2] * 256.0 + a[i + 3]
+
+
+def _r2(v):
+    # Half away from zero, like std::round in the C++ twin
+    return math.floor(abs(v) * 100.0 + 0.5) / 100.0 * (1 if v >= 0 else -1)
+
+
+def _xpct(a, i):
+    return _r2(a[i] * 100.0 / 255.0)
+
+
+def _xtemp(a, i):
+    return a[i] - 40.0
+
+
+def _xtorque(a, i):
+    return a[i] - 125.0
+
+
+# (mode, pid): [(param_id, name, support_bit, min_bytes, decoder), ...]
+EXTENDED_PID_TABLE = {
+    (1, 0x61): [("DEMAND_ENGINE_TORQUE", "Driver Demand Torque", None, 1, lambda a: _xtorque(a, 0))],
+    (1, 0x62): [("ACTUAL_ENGINE_TORQUE", "Actual Engine Torque", None, 1, lambda a: _xtorque(a, 0))],
+    (1, 0x63): [("REFERENCE_TORQUE", "Engine Reference Torque", None, 2, lambda a: _u16(a, 0))],
+    (1, 0x65): [("RECOMMENDED_GEAR", "Recommended Gear", 4, 2, lambda a: float(a[1] >> 4))],
+    (1, 0x66): [
+        ("MAF_SENSOR_A", "MAF Sensor A", 0, 3, lambda a: _r2(_u16(a, 1) / 32.0)),
+        ("MAF_SENSOR_B", "MAF Sensor B", 1, 5, lambda a: _r2(_u16(a, 3) / 32.0)),
+    ],
+    (1, 0x67): [
+        ("COOLANT_TEMP_SENSOR_1", "Coolant Temp Sensor 1", 0, 2, lambda a: _xtemp(a, 1)),
+        ("COOLANT_TEMP_SENSOR_2", "Coolant Temp Sensor 2", 1, 3, lambda a: _xtemp(a, 2)),
+    ],
+    (1, 0x68): [
+        ("INTAKE_TEMP_B1S1", "Intake Air Temp B1S1", 0, 2, lambda a: _xtemp(a, 1)),
+        ("INTAKE_TEMP_B1S2", "Intake Air Temp B1S2", 1, 3, lambda a: _xtemp(a, 2)),
+        ("INTAKE_TEMP_B2S1", "Intake Air Temp B2S1", 3, 5, lambda a: _xtemp(a, 4)),
+    ],
+    (1, 0x69): [
+        ("EGR_A_COMMANDED", "Commanded EGR A", 0, 2, lambda a: _xpct(a, 1)),
+        ("EGR_A_ACTUAL", "Actual EGR A", 1, 3, lambda a: _xpct(a, 2)),
+        ("EGR_A_ERROR", "EGR A Error", 2, 4, lambda a: _r2(a[3] * 100.0 / 128.0 - 100.0)),
+    ],
+    (1, 0x6C): [
+        ("THROTTLE_ACTUATOR_A_COMMANDED", "Commanded Throttle A", 0, 2, lambda a: _xpct(a, 1)),
+        ("RELATIVE_THROTTLE_A", "Relative Throttle A", 1, 3, lambda a: _xpct(a, 2)),
+    ],
+    (1, 0x6D): [
+        ("FUEL_RAIL_PRESSURE_A_COMMANDED", "Commanded Fuel Rail Pressure A", 0, 3, lambda a: _u16(a, 1) * 10.0),
+        ("FUEL_RAIL_PRESSURE_A", "Fuel Rail Pressure A", 1, 5, lambda a: _u16(a, 3) * 10.0),
+        ("FUEL_RAIL_TEMP_A", "Fuel Rail Temp A", 2, 6, lambda a: _xtemp(a, 5)),
+    ],
+    (1, 0x70): [
+        ("BOOST_PRESSURE_A_COMMANDED", "Commanded Boost A", 0, 3, lambda a: _r2(_u16(a, 1) / 32.0)),
+        ("BOOST_PRESSURE_A", "Boost Pressure A", 1, 5, lambda a: _r2(_u16(a, 3) / 32.0)),
+    ],
+    (1, 0x72): [
+        ("WASTEGATE_A_COMMANDED", "Commanded Wastegate A", 0, 2, lambda a: _xpct(a, 1)),
+        ("WASTEGATE_A", "Wastegate A Position", 1, 3, lambda a: _xpct(a, 2)),
+    ],
+    (1, 0x7F): [
+        ("ENGINE_RUN_TIME_TOTAL", "Total Engine Run Time", 0, 5, lambda a: _u32(a, 1)),
+        ("ENGINE_IDLE_TIME_TOTAL", "Total Idle Time", 1, 9, lambda a: _u32(a, 5)),
+    ],
+    (1, 0x84): [("MANIFOLD_SURFACE_TEMP", "Manifold Surface Temp", None, 1, lambda a: _xtemp(a, 0))],
+    (1, 0x8D): [("THROTTLE_POS_G", "Throttle Position G", None, 1, lambda a: _xpct(a, 0))],
+    (1, 0x8E): [("ENGINE_FRICTION_TORQUE", "Engine Friction Torque", None, 1, lambda a: _xtorque(a, 0))],
+    (1, 0x9A): [
+        ("HYBRID_BATTERY_VOLTAGE", "Hybrid Battery Voltage", 1, 4, lambda a: _r2(_u16(a, 2) / 64.0)),
+        ("HYBRID_BATTERY_CURRENT", "Hybrid Battery Current", 2, 6, lambda a: _r2(_s16(a, 4) / 10.0)),
+    ],
+    (1, 0x9D): [
+        ("ENGINE_FUEL_RATE_GS", "Engine Fuel Rate", None, 2, lambda a: _r2(_u16(a, 0) / 50.0)),
+        ("VEHICLE_FUEL_RATE_GS", "Vehicle Fuel Rate", None, 4, lambda a: _r2(_u16(a, 2) / 50.0)),
+    ],
+    (1, 0x9E): [("EXHAUST_FLOW_RATE", "Exhaust Flow Rate", None, 2, lambda a: _r2(_u16(a, 0) / 5.0))],
+    (1, 0xA2): [("CYLINDER_FUEL_RATE", "Cylinder Fuel Rate", None, 2, lambda a: _r2(_u16(a, 0) / 32.0))],
+    (1, 0xA4): [("TRANSMISSION_GEAR_RATIO", "Transmission Gear Ratio", 1, 4, lambda a: _u16(a, 2) / 1000.0)],
+    (1, 0xA6): [("ODOMETER", "Odometer", None, 4, lambda a: _u32(a, 0) / 10.0)],
+    (1, 0xB2): [("EV_BATTERY_HEALTH", "EV Battery Health", None, 1, lambda a: _xpct(a, 0))],
+}
+
+
+def decode_extended_pid(mode, pid, data_bytes):
+    """Decode a multi-value PID into [(param_id, value), ...]; values whose
+    "supported" bit is clear or whose bytes are missing are left out."""
+    values = []
+    for param_id, _name, support_bit, min_bytes, decoder in EXTENDED_PID_TABLE.get((mode, pid), []):
+        if len(data_bytes) < min_bytes:
+            continue
+        if support_bit is not None and not (data_bytes and data_bytes[0] & (1 << support_bit)):
+            continue
+        values.append((param_id, decoder(data_bytes)))
+    return values
+
+
+def parse_response_lines(lines, mode, pid):
+    """Parse every line of a reply (joining CAN multi-frame answers) and
+    return (mode, pid, data_bytes) for the first message answering mode/pid."""
+    prefix = f"{mode + 0x40:02X}{pid:02X}"
+    for msg in split_messages(lines):
+        if msg.startswith(prefix):
+            raw = bytes.fromhex(msg)
+            return (raw[0] - 0x40, raw[1], list(raw[2:]))
+    return None
+
+
+def parse_vin(lines):
+    """Parse a Mode 09 PID 02 reply into the 17-character VIN ("" if none).
+
+    CAN: one multi-frame message "4902 01 <17 bytes>" (01 = item count).
+    Pre-CAN: five messages "4902 <seq> <4 bytes>", the first left-padded with
+    00. Either way one byte follows "4902" before the characters."""
+    if isinstance(lines, str):
+        lines = lines.splitlines()
+    parts = {}
+    for msg in split_messages(lines):
+        if not msg.startswith("4902") or len(msg) < 6:
+            continue
+        try:
+            raw = bytes.fromhex(msg[4:])
+        except ValueError:
+            continue
+        if raw and raw[0] not in parts:
+            parts[raw[0]] = raw[1:]
+    text = "".join(chr(c).upper() for seq in sorted(parts) for c in parts[seq] if chr(c).isalnum() and c < 128)
+    return text[-17:] if len(text) >= 17 else ""
+
+
+_VIN_RE = re.compile(r"^[A-HJ-NPR-Z0-9]{17}$")
+_VIN_YEAR_CODES = "ABCDEFGHJKLMNPRSTVWXY123456789"
+
+# World manufacturer identifiers (same table as ELM327Protocol::decodeVin)
+_WMI3 = {
+    "1J4": "Jeep", "1J8": "Jeep", "1C4": "Chrysler/Dodge/Jeep", "1C3": "Chrysler/Dodge",
+    "1C6": "Ram", "3C6": "Ram", "3C7": "Ram", "1D7": "Dodge", "1B3": "Dodge", "1B7": "Dodge",
+    "2C3": "Chrysler/Dodge", "2C4": "Chrysler/Dodge", "3C4": "Chrysler/Dodge/Jeep",
+    "1G1": "Chevrolet", "1GC": "Chevrolet", "1GN": "Chevrolet", "1GB": "Chevrolet",
+    "2G1": "Chevrolet", "3GN": "Chevrolet", "3GC": "Chevrolet", "1GT": "GMC", "1GK": "GMC",
+    "3GT": "GMC", "1G6": "Cadillac", "1G4": "Buick", "1G2": "Pontiac", "1FA": "Ford",
+    "1FB": "Ford", "1FC": "Ford", "1FD": "Ford", "1FM": "Ford", "1FT": "Ford", "2FM": "Ford",
+    "3FA": "Ford", "1LN": "Lincoln", "5LM": "Lincoln", "1ME": "Mercury", "1HG": "Honda",
+    "2HG": "Honda", "5FN": "Honda", "5J6": "Honda", "19U": "Acura", "5J8": "Acura", "JH4": "Acura",
+    "1N4": "Nissan", "1N6": "Nissan", "5N1": "Nissan", "3N1": "Nissan", "JN1": "Nissan",
+    "JN8": "Nissan", "4T1": "Toyota", "4T3": "Toyota", "5TD": "Toyota", "5TF": "Toyota",
+    "2T1": "Toyota", "2T3": "Toyota", "JTD": "Toyota", "JTE": "Toyota", "JTM": "Toyota",
+    "JTN": "Toyota", "JTH": "Lexus", "JTJ": "Lexus", "2T2": "Lexus", "4S3": "Subaru",
+    "4S4": "Subaru", "JF1": "Subaru", "JF2": "Subaru", "JM1": "Mazda", "JM3": "Mazda",
+    "5NP": "Hyundai", "5NM": "Hyundai", "KMH": "Hyundai", "KM8": "Hyundai", "5XY": "Kia",
+    "5XX": "Kia", "KNA": "Kia", "KND": "Kia", "5YJ": "Tesla", "7SA": "Tesla", "LRW": "Tesla",
+    "WBA": "BMW", "WBS": "BMW M", "5UX": "BMW", "4US": "BMW", "WMW": "MINI",
+    "WDD": "Mercedes-Benz", "WDB": "Mercedes-Benz", "W1K": "Mercedes-Benz", "W1N": "Mercedes-Benz",
+    "4JG": "Mercedes-Benz", "WVW": "Volkswagen", "WV1": "Volkswagen", "WV2": "Volkswagen",
+    "3VW": "Volkswagen", "1VW": "Volkswagen", "WAU": "Audi", "WA1": "Audi", "WP0": "Porsche",
+    "WP1": "Porsche", "SAJ": "Jaguar", "SAL": "Land Rover", "YV1": "Volvo", "YV4": "Volvo",
+    "ZFF": "Ferrari", "ZAR": "Alfa Romeo", "ZFA": "Fiat", "3C3": "Fiat", "ZHW": "Lamborghini",
+    "JA3": "Mitsubishi", "JA4": "Mitsubishi", "ML3": "Mitsubishi", "JS1": "Suzuki",
+    "JS2": "Suzuki", "1HD": "Harley-Davidson", "VF1": "Renault", "VF3": "Peugeot",
+    "VF7": "Citroen", "SCC": "Lotus", "SCF": "Aston Martin", "1YV": "Mazda", "4F2": "Mazda",
+}
+_WMI2 = {
+    "1G": "General Motors", "2G": "General Motors", "3G": "General Motors", "1F": "Ford",
+    "2F": "Ford", "3F": "Ford", "1C": "Chrysler", "2C": "Chrysler", "3C": "Chrysler", "1J": "Jeep",
+    "1D": "Dodge", "2D": "Dodge", "3D": "Dodge", "1H": "Honda", "2H": "Honda", "JH": "Honda",
+    "1N": "Nissan", "JN": "Nissan", "JT": "Toyota", "4T": "Toyota", "5T": "Toyota", "JM": "Mazda",
+    "JF": "Subaru", "JS": "Suzuki", "KM": "Hyundai", "KN": "Kia", "WB": "BMW",
+    "WD": "Mercedes-Benz", "WV": "Volkswagen", "WA": "Audi", "WP": "Porsche", "YV": "Volvo",
+    "SA": "Jaguar/Land Rover",
+}
+
+
+def decode_vin(vin):
+    """Return {"vin", "make", "modelYear"} for a VIN ("" / 0 when unknown)."""
+    info = {"vin": "", "make": "", "modelYear": 0}
+    vin = (vin or "").strip().upper()
+    if not _VIN_RE.match(vin):
+        return info
+    info["vin"] = vin
+    info["make"] = _WMI3.get(vin[:3], _WMI2.get(vin[:2], ""))
+    # Position 10: a 30-year cycle. Position 7 alphabetic marks the 2010+
+    # cycle (North America); a year in the future falls back 30 years.
+    idx = _VIN_YEAR_CODES.find(vin[9])
+    if idx >= 0:
+        year = 1980 + idx + (30 if vin[6].isalpha() else 0)
+        max_year = datetime.date.today().year + 1
+        while year > max_year:
+            year -= 30
+        info["modelYear"] = year
+    return info
 
 
 class ResponseBuffer:

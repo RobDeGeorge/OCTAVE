@@ -49,6 +49,12 @@ class OBDManager : public QObject
     // on Android / Linux / Pi / Windows / macOS.
     Q_PROPERTY(QVariantList availableAdapters READ availableAdapters NOTIFY availableAdaptersChanged)
 
+    // Vehicle identity from Mode 09 PID 02, read once per connection
+    // ("" / 0 when the vehicle does not report a VIN, as many pre-2005 cars don't)
+    Q_PROPERTY(QString vin READ vin NOTIFY vinChanged)
+    Q_PROPERTY(QString vehicleMake READ vehicleMake NOTIFY vinChanged)
+    Q_PROPERTY(int vehicleModelYear READ vehicleModelYear NOTIFY vinChanged)
+
 signals:
     // ======================================================================
     // OBD parameter signals -- Original 18
@@ -179,6 +185,12 @@ signals:
     void dtcClearResult(bool success, const QString &message);
     void freezeFrameChanged(const QVariantList &data);
 
+    // Multi-value PIDs (0x61 and up: torque, boost, odometer, ...) arrive
+    // through this one signal instead of a signal per parameter; QML's
+    // OBDParameterModel routes it into paramValues by id.
+    void obdParameterChanged(const QString &paramId, float value);
+    void vinChanged(const QString &vin);
+
     // Live log line for the QML OBD page's connection log/terminal element.
     // One signal = one new line appended; QML can keep a rolling buffer.
     void connectionLogLineAppended(const QString &line);
@@ -195,6 +207,9 @@ public:
     // snake_case alias — the shared QML (OBDHome.qml etc.) calls is_connected()
     // to match the Python backend's @Slot name. Keep both in lockstep.
     Q_INVOKABLE bool is_connected() const { return isConnected(); }
+    QString vin() const { return m_vin.vin; }
+    QString vehicleMake() const { return m_vin.make; }
+    int vehicleModelYear() const { return m_vin.modelYear; }
 
 public slots:
     // ======================================================================
@@ -259,6 +274,7 @@ public slots:
     void read_status();
     void clear_dtc();
     void read_freeze_frame();
+    void read_vin();
 
     // ======================================================================
     // Diagnostic data getters
@@ -304,6 +320,8 @@ private slots:
     // Worker thread callbacks
     void onWorkerInitComplete(bool success, const QString &message);
     void onWorkerDataReceived(const QString &signalName, float value);
+    void onWorkerExtendedData(const QString &paramId, float value);
+    void onWorkerVin(const QString &vin);
     void onWorkerDtcResult(const QStringList &codes);
     void onWorkerDtcCleared(bool success, const QString &message);
     void onWorkerMilStatus(bool mil, int dtcCount);
@@ -417,6 +435,8 @@ private:
 
     // Diagnostic data
     QVariantList m_dtcCodes;
+    VinInfo m_vin;
+    void setVin(const QString &vin);
     int m_dtcCount = 0;
     bool m_milStatus = false;
     QVariantList m_freezeFrameDtcs;
@@ -573,6 +593,8 @@ private:
     QTimer m_androidPollWatchdog;
     // True between writing "ATRV" and its (text) reply.
     bool m_androidAwaitingElmVoltage = false;
+    bool m_androidVinRequested = false;   // next poll slot sends 0902
+    bool m_androidAwaitingVin = false;
     // MAC -> friendly name from the last bonded-device listing.
     QHash<QString, QString> m_androidDeviceNames;
 #endif
@@ -604,6 +626,8 @@ signals:
 
     // Live data
     void dataReceived(const QString &signalName, float value);
+    void extendedDataReceived(const QString &paramId, float value);
+    void vinRead(const QString &vin);
 
     // Diagnostics
     void dtcResult(const QStringList &codes);
@@ -630,6 +654,7 @@ public slots:
     void doClearDtc();
     void doReadStatus();
     void doReadFreezeFrame();
+    void doReadVin();
     void doScanVehicle();
 
 private slots:

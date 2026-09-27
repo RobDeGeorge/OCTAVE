@@ -290,6 +290,31 @@ Item {
                 }
             }
 
+            // ── Vehicle identity (VIN read at connect, Mode 09 PID 02) ──
+            SettingLabel {
+                text: "Vehicle"
+                visible: vehicleText.visible
+            }
+            Text {
+                id: vehicleText
+                Layout.fillWidth: true
+                readonly property string vin: typeof obdManager !== "undefined" && obdManager && obdManager.vin
+                                              ? obdManager.vin : ""
+                readonly property string summary: {
+                    if (!vin) return ""
+                    var parts = []
+                    if (obdManager.vehicleModelYear > 0) parts.push(obdManager.vehicleModelYear)
+                    if (obdManager.vehicleMake) parts.push(obdManager.vehicleMake)
+                    return parts.join(" ")
+                }
+                visible: vin !== ""
+                text: (summary ? summary + "  ·  " : "") + "VIN " + vin
+                color: App.Style.primaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.8
+                font.family: App.Style.fontFamily
+                wrapMode: Text.WrapAnywhere
+            }
+
             // ── Live OBD log ──────────────────────────────────
             SettingLabel {
                 text: "Connection Log"

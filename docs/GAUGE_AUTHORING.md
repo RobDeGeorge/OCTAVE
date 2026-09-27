@@ -328,7 +328,7 @@ The pre-Phase-2 path — create `frontend/dashboards/MyDashboard.qml` and regist
 
 ---
 
-## 6. All 92 parameter IDs (18 core + 66 extended OBD + 8 IMU)
+## 6. All 129 parameter IDs (18 core + 66 extended OBD + 37 multi-value OBD + 8 IMU)
 
 Copy `id` verbatim into `paramId`. `min`/`max` listed are what the primitive
 will default to. **Source of truth:** `frontend/OBDParameterModel.qml` —
@@ -386,6 +386,59 @@ EGR / emissions: `COMMANDED_EGR`, `EGR_ERROR`.
 
 Misc: `ABSOLUTE_LOAD`, `MAX_MAF`, `HYBRID_BATTERY_REMAINING`,
 `ELM_VOLTAGE`.
+
+### Multi-value PIDs (37 more, SAE J1979 PIDs 0x61-0xB2)
+
+Newer PIDs pack several sensors into one reply, so they do not get a signal
+each: both backends emit `obdManager.obdParameterChanged(paramId, value)` and
+`OBDParameterModel` routes it into `paramValues` like any other id. Gauges
+bind them by `paramId` exactly as above. All are off by default; the vehicle
+scan enables the ones the car reports. Decoders live in
+`ELM327Protocol::extendedPidTable()` (C++) and `EXTENDED_PID_TABLE` in
+`backend/elm327_protocol.py`; `tests/test_obd_extended_pids.py` checks that
+every id is wired into both settings defaults and the QML model.
+
+Boost pressure is absolute (subtract `BAROMETRIC_PRESSURE` for gauge boost).
+
+| `paramId` | Title | Unit | Min | Max |
+| --- | --- | --- | ---: | ---: |
+| `DEMAND_ENGINE_TORQUE` | Demand Torque | % | -125 | 130 |
+| `ACTUAL_ENGINE_TORQUE` | Actual Torque | % | -125 | 130 |
+| `ENGINE_FRICTION_TORQUE` | Friction Torque | % | -125 | 130 |
+| `REFERENCE_TORQUE` | Reference Torque | Nm | 0 | 2000 |
+| `BOOST_PRESSURE_A` | Boost Pressure (abs) | kPa | 0 | 300 |
+| `BOOST_PRESSURE_A_COMMANDED` | Boost Commanded (abs) | kPa | 0 | 300 |
+| `WASTEGATE_A` | Wastegate Position | % | 0 | 100 |
+| `WASTEGATE_A_COMMANDED` | Wastegate Commanded | % | 0 | 100 |
+| `MAF_SENSOR_A` | MAF Sensor A | g/s | 0 | 655 |
+| `MAF_SENSOR_B` | MAF Sensor B | g/s | 0 | 655 |
+| `INTAKE_TEMP_B1S1` | Intake Temp B1S1 | °C | -20 | 100 |
+| `INTAKE_TEMP_B1S2` | Intake Temp B1S2 | °C | -20 | 100 |
+| `INTAKE_TEMP_B2S1` | Intake Temp B2S1 | °C | -20 | 100 |
+| `MANIFOLD_SURFACE_TEMP` | Manifold Surface Temp | °C | -40 | 215 |
+| `COOLANT_TEMP_SENSOR_1` | Coolant Temp 1 | °C | 0 | 130 |
+| `COOLANT_TEMP_SENSOR_2` | Coolant Temp 2 | °C | 0 | 130 |
+| `THROTTLE_POS_G` | Throttle Pos G | % | 0 | 100 |
+| `THROTTLE_ACTUATOR_A_COMMANDED` | Throttle A Commanded | % | 0 | 100 |
+| `RELATIVE_THROTTLE_A` | Rel. Throttle A | % | 0 | 100 |
+| `EGR_A_COMMANDED` | EGR A Commanded | % | 0 | 100 |
+| `EGR_A_ACTUAL` | EGR A Actual | % | 0 | 100 |
+| `EGR_A_ERROR` | EGR A Error | % | -100 | 100 |
+| `FUEL_RAIL_PRESSURE_A` | Fuel Rail Pressure A | kPa | 0 | 250000 |
+| `FUEL_RAIL_PRESSURE_A_COMMANDED` | Fuel Rail A Commanded | kPa | 0 | 250000 |
+| `FUEL_RAIL_TEMP_A` | Fuel Rail Temp A | °C | -40 | 150 |
+| `ENGINE_FUEL_RATE_GS` | Engine Fuel Rate | g/s | 0 | 100 |
+| `VEHICLE_FUEL_RATE_GS` | Vehicle Fuel Rate | g/s | 0 | 100 |
+| `CYLINDER_FUEL_RATE` | Cylinder Fuel Rate | mg/stroke | 0 | 200 |
+| `EXHAUST_FLOW_RATE` | Exhaust Flow | kg/h | 0 | 2000 |
+| `TRANSMISSION_GEAR_RATIO` | Gear Ratio | :1 | 0 | 6 |
+| `RECOMMENDED_GEAR` | Recommended Gear |  | 0 | 10 |
+| `ODOMETER` | Odometer | km | 0 | 1000000 |
+| `ENGINE_RUN_TIME_TOTAL` | Total Engine Run Time | sec | 0 | 360000000 |
+| `ENGINE_IDLE_TIME_TOTAL` | Total Idle Time | sec | 0 | 360000000 |
+| `HYBRID_BATTERY_VOLTAGE` | Hybrid Battery Voltage | V | 0 | 900 |
+| `HYBRID_BATTERY_CURRENT` | Hybrid Battery Current | A | -500 | 500 |
+| `EV_BATTERY_HEALTH` | EV Battery Health | % | 0 | 100 |
 
 ### Sensor parameters (BerryIMU, not OBD)
 

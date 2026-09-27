@@ -629,6 +629,10 @@ void OBDManager::startConnection()
                      this, &OBDManager::onWorkerInitComplete, Qt::QueuedConnection);
     QObject::connect(m_worker, &OBDConnectionWorker::dataReceived,
                      this, &OBDManager::onWorkerDataReceived, Qt::QueuedConnection);
+    QObject::connect(m_worker, &OBDConnectionWorker::extendedDataReceived,
+                     this, &OBDManager::onWorkerExtendedData, Qt::QueuedConnection);
+    QObject::connect(m_worker, &OBDConnectionWorker::vinRead,
+                     this, &OBDManager::onWorkerVin, Qt::QueuedConnection);
     QObject::connect(m_worker, &OBDConnectionWorker::connectionLost,
                      this, &OBDManager::onWorkerConnectionLost, Qt::QueuedConnection);
     QObject::connect(m_worker, &OBDConnectionWorker::dtcResult,
@@ -741,6 +745,16 @@ QList<PidKey> OBDManager::buildPidsToWatch() const
             : isDefault;
         if (shouldWatch)
             pids.append(it.key());
+    }
+    // Multi-value PIDs: poll when any of their values is enabled (all opt-in)
+    const auto &ext = ELM327Protocol::extendedPidTable();
+    for (auto it = ext.constBegin(); it != ext.constEnd(); ++it) {
+        for (const ExtendedSignal &sig : it.value()) {
+            if (m_settingsManager && m_settingsManager->get_obd_parameter_enabled(sig.paramId, false)) {
+                pids.append(it.key());
+                break;
+            }
+        }
     }
     std::sort(pids.begin(), pids.end());  // deterministic poll order (by PID)
     return pids;
@@ -858,6 +872,30 @@ void OBDManager::onWorkerDataReceived(const QString &signalName, float value)
 {
     m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
     emitParameterSignal(signalName, value);
+}
+
+void OBDManager::onWorkerExtendedData(const QString &paramId, float value)
+{
+    m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
+    emit obdParameterChanged(paramId, value);
+}
+
+void OBDManager::onWorkerVin(const QString &vin)
+{
+    setVin(vin);
+}
+
+void OBDManager::setVin(const QString &vin)
+{
+    const VinInfo info = ELM327Protocol::decodeVin(vin);
+    if (info.vin == m_vin.vin)
+        return;
+    m_vin = info;
+    if (info.vin.isEmpty())
+        qInfo() << "[OBD] vehicle did not report a VIN";
+    else
+        qInfo() << "[OBD] VIN" << info.vin << "-" << info.modelYear << info.make;
+    emit vinChanged(info.vin);
 }
 
 void OBDManager::onWorkerDtcResult(const QStringList &codes)
@@ -1579,6 +1617,19 @@ void OBDManager::read_freeze_frame()
     invokeWorker("doReadFreezeFrame");
 }
 
+void OBDManager::read_vin()
+{
+    if (!m_connected) {
+        qDebug() << "[OBD] Cannot read VIN -- not connected";
+        return;
+    }
+#ifdef Q_OS_ANDROID
+    m_androidVinRequested = true;
+#else
+    invokeWorker("doReadVin");
+#endif
+}
+
 // ---------------------------------------------------------------------------
 // Diagnostic data getters
 // ---------------------------------------------------------------------------
@@ -1754,6 +1805,21 @@ void OBDConnectionWorker::doConnect()
 
     m_initialized = true;
     emit initComplete(true, QStringLiteral("Connected"));
+    // Queued startPolling() from the manager runs after this returns
+    doReadVin();
+}
+
+void OBDConnectionWorker::doReadVin()
+{
+    if (!m_initialized)
+        return;
+    const bool wasPolling = m_polling;
+    if (wasPolling) stopPolling();
+    // Multi-frame on CAN, five messages on pre-CAN; many pre-2005 vehicles
+    // answer NO DATA, which parses to ""
+    sendCommand(QByteArrayLiteral("0902\r"), 3000);
+    emit vinRead(ELM327Protocol::parseVin(m_responseBuffer.lastLines()));
+    if (wasPolling) startPolling();
 }
 
 void OBDConnectionWorker::releasePort()
@@ -1915,6 +1981,18 @@ void OBDConnectionWorker::onPollTimer()
 
     if (response.isEmpty())
         return;
+
+    // Multi-value PIDs: several values per reply, often CAN multi-frame
+    if (ELM327Protocol::extendedPidTable().contains(pid)) {
+        const auto ext = ELM327Protocol::parseResponseLines(m_responseBuffer.lastLines(),
+                                                            pid.first, pid.second);
+        if (!ext.has_value())
+            return;
+        const auto values = ELM327Protocol::decodeExtendedPid(ext->mode, ext->pid, ext->dataBytes);
+        for (const auto &v : values)
+            emit extendedDataReceived(v.first, static_cast<float>(v.second));
+        return;
+    }
 
     // Parse response
     auto parsed = ELM327Protocol::parseResponse(response);
@@ -2450,6 +2528,7 @@ void OBDManager::finalizeAndroidConnection()
     rebuildAndroidPollList();
 
     m_androidPollIndex = 0;
+    m_androidVinRequested = true;
     m_androidPolling = true;
     m_androidStaleCount = 0;
 
@@ -2495,7 +2574,18 @@ void OBDManager::rebuildAndroidPollList()
 
 void OBDManager::pollNextAndroidPid()
 {
-    if (!m_connected || !m_androidPolling || m_androidEnabledPids.isEmpty())
+    if (!m_connected || !m_androidPolling)
+        return;
+    if (m_androidVinRequested) {
+        // One VIN read per connection (or per read_vin()), in the normal
+        // request/response rhythm so it never interleaves with a PID reply
+        m_androidVinRequested = false;
+        m_androidAwaitingVin = true;
+        writeAndroidBytes(QByteArrayLiteral("0902\r"));
+        m_androidPollWatchdog.start(2000);
+        return;
+    }
+    if (m_androidEnabledPids.isEmpty())
         return;
     const PidKey pid = m_androidEnabledPids[m_androidPollIndex];
     m_androidPollIndex = (m_androidPollIndex + 1) % m_androidEnabledPids.size();
@@ -2532,6 +2622,14 @@ void OBDManager::processAndroidResponse(const QString &response)
 
     m_androidStaleCount = 0;
 
+    if (m_androidAwaitingVin) {
+        m_androidAwaitingVin = false;
+        setVin(ELM327Protocol::parseVin(m_btResponseBuffer.lastLines()));
+        if (m_androidPolling)
+            pollNextAndroidPid();
+        return;
+    }
+
     if (m_androidAwaitingElmVoltage) {
         m_androidAwaitingElmVoltage = false;
         if (auto volts = ELM327Protocol::parseElmVoltage(response)) {
@@ -2551,8 +2649,9 @@ void OBDManager::processAndroidResponse(const QString &response)
     }
 
     if (parsed->mode == 1 &&
-        (parsed->pid == 0x00 || parsed->pid == 0x20 ||
-         parsed->pid == 0x40 || parsed->pid == 0x60)) {
+        (parsed->pid == 0x00 || parsed->pid == 0x20 || parsed->pid == 0x40 ||
+         parsed->pid == 0x60 || parsed->pid == 0x80 || parsed->pid == 0xA0 ||
+         parsed->pid == 0xC0)) {
         const auto pids = ELM327Protocol::parseSupportedPids(parsed->dataBytes);
         for (int p : pids)
             m_androidSupportedPids.insert(p + parsed->pid);
@@ -2560,8 +2659,21 @@ void OBDManager::processAndroidResponse(const QString &response)
         // chain the request during the connect-time query so the supported
         // set covers the extended PIDs (0x21-0x5E) too, like the desktop
         // worker's querySupportedPids().
-        if (!m_connected && pids.contains(32) && parsed->pid < 0x60)
+        if (!m_connected && pids.contains(32) && parsed->pid < 0xC0)
             writeAndroidBytes(ELM327Protocol::formatPidRequest(1, parsed->pid + 0x20));
+        if (m_androidPolling)
+            pollNextAndroidPid();
+        return;
+    }
+
+    if (ELM327Protocol::extendedPidTable().contains({parsed->mode, parsed->pid})) {
+        const auto ext = ELM327Protocol::parseResponseLines(m_btResponseBuffer.lastLines(),
+                                                            parsed->mode, parsed->pid);
+        if (ext.has_value()) {
+            for (const auto &v : ELM327Protocol::decodeExtendedPid(ext->mode, ext->pid, ext->dataBytes))
+                emit obdParameterChanged(v.first, static_cast<float>(v.second));
+            m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
+        }
         if (m_androidPolling)
             pollNextAndroidPid();
         return;

@@ -2,6 +2,9 @@
 
 #include <QHash>
 #include <QRegularExpression>
+#include <cctype>
+#include <QMap>
+#include <QDate>
 
 #include <cmath>
 #include <exception>
@@ -310,6 +313,20 @@ std::optional<ParsedResponse> ELM327Protocol::parseResponse(const QString &raw)
     return ParsedResponse{respMode - 0x40, pid, data};
 }
 
+std::optional<ParsedResponse> ELM327Protocol::parseResponseLines(const QStringList &lines,
+                                                                 int mode, int pid)
+{
+    const QString prefix = QStringLiteral("%1%2")
+                               .arg(mode + 0x40, 2, 16, QLatin1Char('0'))
+                               .arg(pid, 2, 16, QLatin1Char('0'))
+                               .toUpper();
+    for (const QString &msg : splitMessages(lines)) {
+        if (msg.startsWith(prefix))
+            return parseResponse(msg);
+    }
+    return std::nullopt;
+}
+
 std::optional<DecodedPid> ELM327Protocol::decodePid(int mode, int pid,
                                                      const QVector<uint8_t> &dataBytes)
 {
@@ -496,6 +513,216 @@ QStringList ELM327Protocol::parseFreezeFrameDtc(const QStringList &lines)
     return codes;
 }
 
+// ---------------------------------------------------------------------------
+// Multi-value PIDs (SAE J1979 Mode 01 above 0x5E). Byte layouts and scaling
+// cross-checked against the OBD-II PIDs table on Wikipedia and OBDb's
+// SAEJ1979 signal set. Byte 0 is data byte A. `supportBit` is the bit of A
+// (0 = LSB) the ECU sets when that value is present.
+// Mirrored in backend/elm327_protocol.py (EXTENDED_PID_TABLE).
+// ---------------------------------------------------------------------------
+
+namespace {
+double u8(const QVector<uint8_t> &a, int i) { return a[i]; }
+double u16(const QVector<uint8_t> &a, int i) { return a[i] * 256.0 + a[i + 1]; }
+double s16(const QVector<uint8_t> &a, int i)
+{
+    const int v = a[i] * 256 + a[i + 1];
+    return v > 32767 ? v - 65536 : v;
+}
+double u32(const QVector<uint8_t> &a, int i)
+{
+    return a[i] * 16777216.0 + a[i + 1] * 65536.0 + a[i + 2] * 256.0 + a[i + 3];
+}
+double round2(double v) { return std::round(v * 100.0) / 100.0; }
+double pct(const QVector<uint8_t> &a, int i) { return round2(u8(a, i) * 100.0 / 255.0); }
+double temp(const QVector<uint8_t> &a, int i) { return u8(a, i) - 40.0; }
+double torque(const QVector<uint8_t> &a, int i) { return u8(a, i) - 125.0; }
+} // namespace
+
+const QHash<PidKey, QList<ExtendedSignal>> &ELM327Protocol::extendedPidTable()
+{
+    static const QHash<PidKey, QList<ExtendedSignal>> table = [] {
+        QHash<PidKey, QList<ExtendedSignal>> t;
+        auto sig = [](const char *id, const char *name, int supportBit, int minBytes, PidDecoder d) {
+            return ExtendedSignal{QString::fromLatin1(id), QString::fromLatin1(name), supportBit, minBytes, std::move(d)};
+        };
+        t[{1, 0x61}] = {sig("DEMAND_ENGINE_TORQUE", "Driver Demand Torque", -1, 1, [](auto &a) { return torque(a, 0); })};
+        t[{1, 0x62}] = {sig("ACTUAL_ENGINE_TORQUE", "Actual Engine Torque", -1, 1, [](auto &a) { return torque(a, 0); })};
+        t[{1, 0x63}] = {sig("REFERENCE_TORQUE", "Engine Reference Torque", -1, 2, [](auto &a) { return u16(a, 0); })};
+        t[{1, 0x65}] = {sig("RECOMMENDED_GEAR", "Recommended Gear", 4, 2, [](auto &a) { return double(a[1] >> 4); })};
+        t[{1, 0x66}] = {
+            sig("MAF_SENSOR_A", "MAF Sensor A", 0, 3, [](auto &a) { return round2(u16(a, 1) / 32.0); }),
+            sig("MAF_SENSOR_B", "MAF Sensor B", 1, 5, [](auto &a) { return round2(u16(a, 3) / 32.0); }),
+        };
+        t[{1, 0x67}] = {
+            sig("COOLANT_TEMP_SENSOR_1", "Coolant Temp Sensor 1", 0, 2, [](auto &a) { return temp(a, 1); }),
+            sig("COOLANT_TEMP_SENSOR_2", "Coolant Temp Sensor 2", 1, 3, [](auto &a) { return temp(a, 2); }),
+        };
+        t[{1, 0x68}] = {
+            sig("INTAKE_TEMP_B1S1", "Intake Air Temp B1S1", 0, 2, [](auto &a) { return temp(a, 1); }),
+            sig("INTAKE_TEMP_B1S2", "Intake Air Temp B1S2", 1, 3, [](auto &a) { return temp(a, 2); }),
+            sig("INTAKE_TEMP_B2S1", "Intake Air Temp B2S1", 3, 5, [](auto &a) { return temp(a, 4); }),
+        };
+        t[{1, 0x69}] = {
+            sig("EGR_A_COMMANDED", "Commanded EGR A", 0, 2, [](auto &a) { return pct(a, 1); }),
+            sig("EGR_A_ACTUAL", "Actual EGR A", 1, 3, [](auto &a) { return pct(a, 2); }),
+            sig("EGR_A_ERROR", "EGR A Error", 2, 4, [](auto &a) { return round2(u8(a, 3) * 100.0 / 128.0 - 100.0); }),
+        };
+        t[{1, 0x6C}] = {
+            sig("THROTTLE_ACTUATOR_A_COMMANDED", "Commanded Throttle A", 0, 2, [](auto &a) { return pct(a, 1); }),
+            sig("RELATIVE_THROTTLE_A", "Relative Throttle A", 1, 3, [](auto &a) { return pct(a, 2); }),
+        };
+        t[{1, 0x6D}] = {
+            sig("FUEL_RAIL_PRESSURE_A_COMMANDED", "Commanded Fuel Rail Pressure A", 0, 3, [](auto &a) { return u16(a, 1) * 10.0; }),
+            sig("FUEL_RAIL_PRESSURE_A", "Fuel Rail Pressure A", 1, 5, [](auto &a) { return u16(a, 3) * 10.0; }),
+            sig("FUEL_RAIL_TEMP_A", "Fuel Rail Temp A", 2, 6, [](auto &a) { return temp(a, 5); }),
+        };
+        t[{1, 0x70}] = {
+            sig("BOOST_PRESSURE_A_COMMANDED", "Commanded Boost A", 0, 3, [](auto &a) { return round2(u16(a, 1) / 32.0); }),
+            sig("BOOST_PRESSURE_A", "Boost Pressure A", 1, 5, [](auto &a) { return round2(u16(a, 3) / 32.0); }),
+        };
+        t[{1, 0x72}] = {
+            sig("WASTEGATE_A_COMMANDED", "Commanded Wastegate A", 0, 2, [](auto &a) { return pct(a, 1); }),
+            sig("WASTEGATE_A", "Wastegate A Position", 1, 3, [](auto &a) { return pct(a, 2); }),
+        };
+        t[{1, 0x7F}] = {
+            sig("ENGINE_RUN_TIME_TOTAL", "Total Engine Run Time", 0, 5, [](auto &a) { return u32(a, 1); }),
+            sig("ENGINE_IDLE_TIME_TOTAL", "Total Idle Time", 1, 9, [](auto &a) { return u32(a, 5); }),
+        };
+        t[{1, 0x84}] = {sig("MANIFOLD_SURFACE_TEMP", "Manifold Surface Temp", -1, 1, [](auto &a) { return temp(a, 0); })};
+        t[{1, 0x8D}] = {sig("THROTTLE_POS_G", "Throttle Position G", -1, 1, [](auto &a) { return pct(a, 0); })};
+        t[{1, 0x8E}] = {sig("ENGINE_FRICTION_TORQUE", "Engine Friction Torque", -1, 1, [](auto &a) { return torque(a, 0); })};
+        t[{1, 0x9A}] = {
+            sig("HYBRID_BATTERY_VOLTAGE", "Hybrid Battery Voltage", 1, 4, [](auto &a) { return round2(u16(a, 2) / 64.0); }),
+            sig("HYBRID_BATTERY_CURRENT", "Hybrid Battery Current", 2, 6, [](auto &a) { return round2(s16(a, 4) / 10.0); }),
+        };
+        t[{1, 0x9D}] = {
+            sig("ENGINE_FUEL_RATE_GS", "Engine Fuel Rate", -1, 2, [](auto &a) { return round2(u16(a, 0) / 50.0); }),
+            sig("VEHICLE_FUEL_RATE_GS", "Vehicle Fuel Rate", -1, 4, [](auto &a) { return round2(u16(a, 2) / 50.0); }),
+        };
+        t[{1, 0x9E}] = {sig("EXHAUST_FLOW_RATE", "Exhaust Flow Rate", -1, 2, [](auto &a) { return round2(u16(a, 0) / 5.0); })};
+        t[{1, 0xA2}] = {sig("CYLINDER_FUEL_RATE", "Cylinder Fuel Rate", -1, 2, [](auto &a) { return round2(u16(a, 0) / 32.0); })};
+        t[{1, 0xA4}] = {sig("TRANSMISSION_GEAR_RATIO", "Transmission Gear Ratio", 1, 4, [](auto &a) { return u16(a, 2) / 1000.0; })};
+        t[{1, 0xA6}] = {sig("ODOMETER", "Odometer", -1, 4, [](auto &a) { return u32(a, 0) / 10.0; })};
+        t[{1, 0xB2}] = {sig("EV_BATTERY_HEALTH", "EV Battery Health", -1, 1, [](auto &a) { return pct(a, 0); })};
+        return t;
+    }();
+    return table;
+}
+
+QList<QPair<QString, double>> ELM327Protocol::decodeExtendedPid(int mode, int pid,
+                                                                const QVector<uint8_t> &dataBytes)
+{
+    QList<QPair<QString, double>> values;
+    const auto &table = extendedPidTable();
+    auto it = table.constFind({mode, pid});
+    if (it == table.constEnd())
+        return values;
+    for (const ExtendedSignal &s : it.value()) {
+        if (dataBytes.size() < s.minBytes)
+            continue;
+        if (s.supportBit >= 0 && (dataBytes.isEmpty() || !(dataBytes[0] & (1 << s.supportBit))))
+            continue;
+        values.append({s.paramId, s.decoder(dataBytes)});
+    }
+    return values;
+}
+
+QString ELM327Protocol::parseVin(const QStringList &lines)
+{
+    // CAN: one multi-frame message "4902 01 <17 bytes>" (01 = item count).
+    // Pre-CAN: five messages "4902 <seq> <4 bytes>", the first left-padded
+    // with 00. Either way one byte follows "4902" before the characters.
+    QMap<int, QByteArray> parts;
+    for (const QString &msg : splitMessages(lines)) {
+        if (!msg.startsWith(QStringLiteral("4902")) || msg.size() < 6)
+            continue;
+        const QByteArray bytes = QByteArray::fromHex(msg.mid(4).toLatin1());
+        if (bytes.isEmpty())
+            continue;
+        const int seq = static_cast<uint8_t>(bytes[0]);
+        if (!parts.contains(seq))
+            parts.insert(seq, bytes.mid(1));
+    }
+    QString text;
+    for (const QByteArray &part : std::as_const(parts)) {
+        for (char c : part) {
+            if (std::isalnum(static_cast<unsigned char>(c)))
+                text.append(QChar(QLatin1Char(c)).toUpper());
+        }
+    }
+    if (text.size() < 17)
+        return QString();
+    return text.right(17);
+}
+
+VinInfo ELM327Protocol::decodeVin(const QString &vinIn)
+{
+    VinInfo info;
+    const QString vin = vinIn.trimmed().toUpper();
+    static const QRegularExpression vinRe(QStringLiteral("^[A-HJ-NPR-Z0-9]{17}$"));
+    if (!vinRe.match(vin).hasMatch())
+        return info;
+    info.vin = vin;
+
+    // World manufacturer identifier: exact 3-character match, then the
+    // 2-character prefix
+    static const QHash<QString, QString> wmi3 = {
+        {"1J4", "Jeep"}, {"1J8", "Jeep"}, {"1C4", "Chrysler/Dodge/Jeep"}, {"1C3", "Chrysler/Dodge"},
+        {"1C6", "Ram"}, {"3C6", "Ram"}, {"3C7", "Ram"}, {"1D7", "Dodge"}, {"1B3", "Dodge"},
+        {"1B7", "Dodge"}, {"2C3", "Chrysler/Dodge"}, {"2C4", "Chrysler/Dodge"}, {"3C4", "Chrysler/Dodge/Jeep"},
+        {"1G1", "Chevrolet"}, {"1GC", "Chevrolet"}, {"1GN", "Chevrolet"}, {"1GB", "Chevrolet"},
+        {"2G1", "Chevrolet"}, {"3GN", "Chevrolet"}, {"3GC", "Chevrolet"}, {"1GT", "GMC"},
+        {"1GK", "GMC"}, {"3GT", "GMC"}, {"1G6", "Cadillac"}, {"1G4", "Buick"}, {"1G2", "Pontiac"},
+        {"1FA", "Ford"}, {"1FB", "Ford"}, {"1FC", "Ford"}, {"1FD", "Ford"}, {"1FM", "Ford"},
+        {"1FT", "Ford"}, {"2FM", "Ford"}, {"3FA", "Ford"}, {"1LN", "Lincoln"}, {"5LM", "Lincoln"},
+        {"1ME", "Mercury"}, {"1HG", "Honda"}, {"2HG", "Honda"}, {"5FN", "Honda"}, {"5J6", "Honda"},
+        {"19U", "Acura"}, {"5J8", "Acura"}, {"JH4", "Acura"}, {"1N4", "Nissan"}, {"1N6", "Nissan"},
+        {"5N1", "Nissan"}, {"3N1", "Nissan"}, {"JN1", "Nissan"}, {"JN8", "Nissan"}, {"4T1", "Toyota"},
+        {"4T3", "Toyota"}, {"5TD", "Toyota"}, {"5TF", "Toyota"}, {"2T1", "Toyota"}, {"2T3", "Toyota"},
+        {"JTD", "Toyota"}, {"JTE", "Toyota"}, {"JTM", "Toyota"}, {"JTN", "Toyota"}, {"JTH", "Lexus"},
+        {"JTJ", "Lexus"}, {"2T2", "Lexus"}, {"4S3", "Subaru"}, {"4S4", "Subaru"}, {"JF1", "Subaru"},
+        {"JF2", "Subaru"}, {"JM1", "Mazda"}, {"JM3", "Mazda"}, {"5NP", "Hyundai"}, {"5NM", "Hyundai"},
+        {"KMH", "Hyundai"}, {"KM8", "Hyundai"}, {"5XY", "Kia"}, {"5XX", "Kia"}, {"KNA", "Kia"},
+        {"KND", "Kia"}, {"5YJ", "Tesla"}, {"7SA", "Tesla"}, {"LRW", "Tesla"}, {"WBA", "BMW"},
+        {"WBS", "BMW M"}, {"5UX", "BMW"}, {"4US", "BMW"}, {"WMW", "MINI"}, {"WDD", "Mercedes-Benz"},
+        {"WDB", "Mercedes-Benz"}, {"W1K", "Mercedes-Benz"}, {"W1N", "Mercedes-Benz"}, {"4JG", "Mercedes-Benz"},
+        {"WVW", "Volkswagen"}, {"WV1", "Volkswagen"}, {"WV2", "Volkswagen"}, {"3VW", "Volkswagen"},
+        {"1VW", "Volkswagen"}, {"WAU", "Audi"}, {"WA1", "Audi"}, {"WP0", "Porsche"}, {"WP1", "Porsche"},
+        {"SAJ", "Jaguar"}, {"SAL", "Land Rover"}, {"YV1", "Volvo"}, {"YV4", "Volvo"}, {"ZFF", "Ferrari"},
+        {"ZAR", "Alfa Romeo"}, {"ZFA", "Fiat"}, {"3C3", "Fiat"}, {"ZHW", "Lamborghini"}, {"JA3", "Mitsubishi"},
+        {"JA4", "Mitsubishi"}, {"ML3", "Mitsubishi"}, {"JS1", "Suzuki"}, {"JS2", "Suzuki"},
+        {"1HD", "Harley-Davidson"}, {"VF1", "Renault"}, {"VF3", "Peugeot"}, {"VF7", "Citroen"},
+        {"SCC", "Lotus"}, {"SCF", "Aston Martin"}, {"1YV", "Mazda"}, {"4F2", "Mazda"},
+    };
+    static const QHash<QString, QString> wmi2 = {
+        {"1G", "General Motors"}, {"2G", "General Motors"}, {"3G", "General Motors"}, {"1F", "Ford"},
+        {"2F", "Ford"}, {"3F", "Ford"}, {"1C", "Chrysler"}, {"2C", "Chrysler"}, {"3C", "Chrysler"},
+        {"1J", "Jeep"}, {"1D", "Dodge"}, {"2D", "Dodge"}, {"3D", "Dodge"}, {"1H", "Honda"}, {"2H", "Honda"},
+        {"JH", "Honda"}, {"1N", "Nissan"}, {"JN", "Nissan"}, {"JT", "Toyota"}, {"4T", "Toyota"},
+        {"5T", "Toyota"}, {"JM", "Mazda"}, {"JF", "Subaru"}, {"JS", "Suzuki"}, {"KM", "Hyundai"},
+        {"KN", "Kia"}, {"WB", "BMW"}, {"WD", "Mercedes-Benz"}, {"WV", "Volkswagen"}, {"WA", "Audi"},
+        {"WP", "Porsche"}, {"YV", "Volvo"}, {"SA", "Jaguar/Land Rover"},
+    };
+    info.make = wmi3.value(vin.left(3), wmi2.value(vin.left(2)));
+
+    // Model year, position 10: A-Y (no I, O, Q, U, Z) then 1-9, a 30-year
+    // cycle. Position 7 alphabetic marks the 2010+ cycle (North America);
+    // a year that would be in the future falls back 30 years.
+    static const QString codes = QStringLiteral("ABCDEFGHJKLMNPRSTVWXY123456789");
+    const int idx = codes.indexOf(vin.at(9));
+    if (idx >= 0) {
+        int year = 1980 + idx;
+        if (vin.at(6).isLetter())
+            year += 30;
+        const int maxYear = QDate::currentDate().year() + 1;
+        while (year > maxYear)
+            year -= 30;
+        info.modelYear = year;
+    }
+    return info;
+}
+
 QList<PidKey> ELM327Protocol::defaultPids()
 {
     return {
@@ -527,6 +754,13 @@ QStringList ELM327Protocol::supportedCommandNames(const QSet<int> &supportedPids
         if (key == kElmVoltageKey || (key.first == 1 && supportedPids.contains(key.second)))
             names.append(it.value().commandName);
     }
+    const auto &ext = extendedPidTable();
+    for (auto it = ext.constBegin(); it != ext.constEnd(); ++it) {
+        if (it.key().first == 1 && supportedPids.contains(it.key().second)) {
+            for (const ExtendedSignal &s : it.value())
+                names.append(s.paramId);
+        }
+    }
     names.sort();
     return names;
 }
@@ -537,6 +771,11 @@ QStringList ELM327Protocol::allParameterNames()
     const auto &table = pidTable();
     for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
         names.append(it.value().name);
+    }
+    const auto &ext = extendedPidTable();
+    for (auto it = ext.constBegin(); it != ext.constEnd(); ++it) {
+        for (const ExtendedSignal &s : it.value())
+            names.append(s.name);
     }
     names.sort();
     return names;

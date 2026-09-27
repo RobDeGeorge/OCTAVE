@@ -727,7 +727,7 @@
         <h2 id="obdManager">OBDManager <span class="cmt">&mdash; <code>obdManager</code></span></h2>
         <p><span class="file-path">src/managers/obdmanager.h</span> / <span class="file-path">backend/obd_manager.py</span> &mdash; QML context property <code>obdManager</code></p>
         <p>OBD-II diagnostics over an ELM327 adapter: USB / Bluetooth serial on desktop (worker thread), BLE GATT on Android. Every PID has its own <code>&lt;name&gt;Changed(float)</code> signal so QML gauges bind directly. PID numbers, command names and decoders follow python-obd on both backends (C++ <code>ELM327Protocol::buildPidTable()</code> carries all 82 mode-01 commands plus <code>ELM_VOLTAGE</code>), and parameter toggles in Settings take effect on a live connection without reconnecting (C++ swaps the worker's poll list via <code>updatePidsToWatch()</code>, Android via <code>rebuildAndroidPollList()</code>).</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class bypasses the serial worker and talks BLE through <code>OctaveOBDBridge.java</code> (JNI); the QML-facing API is identical. Connect chains the <code>0100</code> / <code>0120</code> / <code>0140</code> / <code>0160</code> supported-PID bitmaps so default PIDs above 0x20 (fuel level, module voltage, oil temperature) are polled, and the bridge requests <code>BLUETOOTH_CONNECT</code> on the first Connect tap (the former <code>requestAndroidBluetoothPermission()</code> helper is gone).</div>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class bypasses the serial worker and talks BLE through <code>OctaveOBDBridge.java</code> (JNI); the QML-facing API is identical. Connect chains the <code>0100</code> through <code>01C0</code> supported-PID bitmaps so default PIDs above 0x20 (fuel level, module voltage, oil temperature) and the multi-value PIDs are polled, the first poll slot reads the VIN, and the bridge requests <code>BLUETOOTH_CONNECT</code> on the first Connect tap (the former <code>requestAndroidBluetoothPermission()</code> helper is gone).</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -737,6 +737,9 @@
             <tr><td><code>connectionDetail</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusDetailChanged</code></td><td>Last <code>connectionStatusDetailChanged</code> message, bound by the Connection card</td></tr>
             <tr><td><code>connectionProgress</code></td><td><code>int</code></td><td>read-only</td><td><code>connectionProgressChanged</code></td><td>Last <code>connectionProgressChanged</code> percent (0&ndash;100)</td></tr>
             <tr><td><code>availableAdapters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>availableAdaptersChanged</code></td><td>Rich <code>[{name, identifier, kind}, &hellip;]</code> list bound by the OBD settings page; <code>kind</code> is <code>ble</code>, <code>serial-rfcomm</code>, <code>serial-usb</code>, <code>com</code>, <code>tty</code> or <code>serial</code>. On Android the list is the phone's bonded devices from <code>OctaveOBDBridge.bondedDevices()</code>, named <code>"&lt;name&gt; &middot; &lt;MAC&gt;"</code>; it stays empty until <code>BLUETOOTH_CONNECT</code> is granted, which the bridge requests on the first Connect tap</td></tr>
+            <tr><td><code>vin</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>17-character VIN read at connect (Mode 09 PID 02); <code>""</code> when the vehicle reports none</td></tr>
+            <tr><td><code>vehicleMake</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>Manufacturer decoded from the VIN's WMI; <code>""</code> if unknown</td></tr>
+            <tr><td><code>vehicleModelYear</code></td><td><code>int</code></td><td>read-only</td><td><code>vinChanged</code></td><td>Model year from VIN position 10; <code>0</code> if unknown</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -772,6 +775,7 @@
             <tr><td><code>read_status()</code></td><td><code>void</code></td><td>Read MIL state and DTC count (Mode 01 PID 01) &rarr; <code>milStatusChanged</code>, <code>dtcCountChanged</code></td></tr>
             <tr><td><code>clear_dtc()</code></td><td><code>void</code></td><td>Clear codes (Mode 04) &rarr; <code>dtcClearResult</code></td></tr>
             <tr><td><code>read_freeze_frame()</code></td><td><code>void</code></td><td>Read freeze-frame DTCs (Mode 02) &rarr; <code>freezeFrameChanged</code></td></tr>
+            <tr><td><code>read_vin()</code></td><td><code>void</code></td><td>Read the VIN again (Mode 09 PID 02) &rarr; <code>vinChanged</code>; runs on Android too (next poll slot)</td></tr>
             <tr><td><code>get_dtc_codes()</code></td><td><code>QVariantList</code></td><td>Last DTC list</td></tr>
             <tr><td><code>get_dtc_count()</code></td><td><code>int</code></td><td>Last DTC count</td></tr>
             <tr><td><code>get_mil_status()</code></td><td><code>bool</code></td><td>Last MIL state</td></tr>
@@ -905,6 +909,8 @@
             <tr><td><code>milStatusChanged(bool status)</code></td><td>Check-engine lamp state</td></tr>
             <tr><td><code>dtcClearResult(bool success, QString message)</code></td><td>Clear-codes result (success, message)</td></tr>
             <tr><td><code>freezeFrameChanged(QVariantList data)</code></td><td>Freeze-frame DTCs read</td></tr>
+            <tr><td><code>obdParameterChanged(QString paramId, float value)</code></td><td>One value from a multi-value PID (0x61 and up: torque, boost, odometer, &hellip;); <code>OBDParameterModel</code> routes it by id</td></tr>
+            <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>
             <tr><td><code>connectionLogLineAppended(QString line)</code></td><td>One live line for the OBD settings Connection Log card</td></tr>
           </tbody>
         </table>

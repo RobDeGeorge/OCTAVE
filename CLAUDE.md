@@ -230,7 +230,7 @@ Custom OBD gauges and dashboards live under `frontend/gauges/` (reusable primiti
 
 The long-term plan is a three-phase path from hand-written dashboard QMLs → JSON-defined dashboards + `DashboardManager` (C++) → in-app drag-drop editor ("Tony Hawk create-a-park for dashboards"). Full plan: `TODO/dashboards-roadmap.md`.
 
-**When the user asks you to build a new gauge or dashboard, read `docs/GAUGE_AUTHORING.md` first.** It is the complete, stand-alone spec: shared binding API, every primitive's props with defaults, theme tokens, angle math for needles, the full list of 92 supported parameter IDs, and step-by-step recipes for adding a new dashboard or primitive. Treat that doc as the source of truth and update it in the same commit whenever you change the gauge API or add/remove a primitive.
+**When the user asks you to build a new gauge or dashboard, read `docs/GAUGE_AUTHORING.md` first.** It is the complete, stand-alone spec: shared binding API, every primitive's props with defaults, theme tokens, angle math for needles, the full list of 129 supported parameter IDs, and step-by-step recipes for adding a new dashboard or primitive. Treat that doc as the source of truth and update it in the same commit whenever you change the gauge API or add/remove a primitive.
 
 ## TODO folder
 

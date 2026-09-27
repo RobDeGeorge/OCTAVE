@@ -111,6 +111,53 @@ QtObject {
         { id: "RELATIVE_ACCEL_POS", title: "Rel. Accel Pos", unit: "%", min: 0, max: 100, kind: "percentage" },
         { id: "HYBRID_BATTERY_REMAINING", title: "Hybrid Battery", unit: "%", min: 0, max: 100, kind: "percentage" },
         { id: "ELM_VOLTAGE", title: "ELM Voltage", unit: "V", min: 0, max: 65, kind: "voltage" },
+        // Torque (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "DEMAND_ENGINE_TORQUE", title: "Demand Torque", unit: "%", min: -125, max: 130, kind: "bidirectional" },
+        { id: "ACTUAL_ENGINE_TORQUE", title: "Actual Torque", unit: "%", min: -125, max: 130, kind: "bidirectional" },
+        { id: "ENGINE_FRICTION_TORQUE", title: "Friction Torque", unit: "%", min: -125, max: 130, kind: "bidirectional" },
+        { id: "REFERENCE_TORQUE", title: "Reference Torque", unit: "Nm", min: 0, max: 2000, kind: "numeric" },
+        // Boost (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "BOOST_PRESSURE_A", title: "Boost Pressure (abs)", unit: "kPa", min: 0, max: 300, kind: "pressure" },
+        { id: "BOOST_PRESSURE_A_COMMANDED", title: "Boost Commanded (abs)", unit: "kPa", min: 0, max: 300, kind: "pressure" },
+        { id: "WASTEGATE_A", title: "Wastegate Position", unit: "%", min: 0, max: 100, kind: "percentage" },
+        { id: "WASTEGATE_A_COMMANDED", title: "Wastegate Commanded", unit: "%", min: 0, max: 100, kind: "percentage" },
+        // Air (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "MAF_SENSOR_A", title: "MAF Sensor A", unit: "g/s", min: 0, max: 655, kind: "numeric" },
+        { id: "MAF_SENSOR_B", title: "MAF Sensor B", unit: "g/s", min: 0, max: 655, kind: "numeric" },
+        { id: "INTAKE_TEMP_B1S1", title: "Intake Temp B1S1", unit: "°C", min: -20, max: 100, kind: "temperature" },
+        { id: "INTAKE_TEMP_B1S2", title: "Intake Temp B1S2", unit: "°C", min: -20, max: 100, kind: "temperature" },
+        { id: "INTAKE_TEMP_B2S1", title: "Intake Temp B2S1", unit: "°C", min: -20, max: 100, kind: "temperature" },
+        { id: "MANIFOLD_SURFACE_TEMP", title: "Manifold Surface Temp", unit: "°C", min: -40, max: 215, kind: "temperature" },
+        // Temperature (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "COOLANT_TEMP_SENSOR_1", title: "Coolant Temp 1", unit: "°C", min: 0, max: 130, kind: "temperature" },
+        { id: "COOLANT_TEMP_SENSOR_2", title: "Coolant Temp 2", unit: "°C", min: 0, max: 130, kind: "temperature" },
+        // Throttle (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "THROTTLE_POS_G", title: "Throttle Pos G", unit: "%", min: 0, max: 100, kind: "percentage" },
+        { id: "THROTTLE_ACTUATOR_A_COMMANDED", title: "Throttle A Commanded", unit: "%", min: 0, max: 100, kind: "percentage" },
+        { id: "RELATIVE_THROTTLE_A", title: "Rel. Throttle A", unit: "%", min: 0, max: 100, kind: "percentage" },
+        // EGR (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "EGR_A_COMMANDED", title: "EGR A Commanded", unit: "%", min: 0, max: 100, kind: "percentage" },
+        { id: "EGR_A_ACTUAL", title: "EGR A Actual", unit: "%", min: 0, max: 100, kind: "percentage" },
+        { id: "EGR_A_ERROR", title: "EGR A Error", unit: "%", min: -100, max: 100, kind: "bidirectional" },
+        // Fuel (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "FUEL_RAIL_PRESSURE_A", title: "Fuel Rail Pressure A", unit: "kPa", min: 0, max: 250000, kind: "pressure" },
+        { id: "FUEL_RAIL_PRESSURE_A_COMMANDED", title: "Fuel Rail A Commanded", unit: "kPa", min: 0, max: 250000, kind: "pressure" },
+        { id: "FUEL_RAIL_TEMP_A", title: "Fuel Rail Temp A", unit: "°C", min: -40, max: 150, kind: "temperature" },
+        { id: "ENGINE_FUEL_RATE_GS", title: "Engine Fuel Rate", unit: "g/s", min: 0, max: 100, kind: "numeric" },
+        { id: "VEHICLE_FUEL_RATE_GS", title: "Vehicle Fuel Rate", unit: "g/s", min: 0, max: 100, kind: "numeric" },
+        { id: "CYLINDER_FUEL_RATE", title: "Cylinder Fuel Rate", unit: "mg/stroke", min: 0, max: 200, kind: "numeric" },
+        { id: "EXHAUST_FLOW_RATE", title: "Exhaust Flow", unit: "kg/h", min: 0, max: 2000, kind: "numeric" },
+        // Drivetrain (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "TRANSMISSION_GEAR_RATIO", title: "Gear Ratio", unit: ":1", min: 0, max: 6, kind: "numeric" },
+        { id: "RECOMMENDED_GEAR", title: "Recommended Gear", unit: "", min: 0, max: 10, kind: "numeric" },
+        // Distance and time (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "ODOMETER", title: "Odometer", unit: "km", min: 0, max: 1000000, kind: "numeric" },
+        { id: "ENGINE_RUN_TIME_TOTAL", title: "Total Engine Run Time", unit: "sec", min: 0, max: 360000000, kind: "numeric" },
+        { id: "ENGINE_IDLE_TIME_TOTAL", title: "Total Idle Time", unit: "sec", min: 0, max: 360000000, kind: "numeric" },
+        // Hybrid / EV (PIDs 0x61+, obdManager.obdParameterChanged)
+        { id: "HYBRID_BATTERY_VOLTAGE", title: "Hybrid Battery Voltage", unit: "V", min: 0, max: 900, kind: "voltage" },
+        { id: "HYBRID_BATTERY_CURRENT", title: "Hybrid Battery Current", unit: "A", min: -500, max: 500, kind: "bidirectional" },
+        { id: "EV_BATTERY_HEALTH", title: "EV Battery Health", unit: "%", min: 0, max: 100, kind: "percentage" },
         // ── Sensor (BerryIMU) parameters ──────────────────────────────
         // Fed by the berryIMU manager (see _imuConnections below), not
         // obdManager. They flow through paramValues like any OBD PID, so
@@ -295,6 +342,10 @@ QtObject {
         function onFuelPressureChanged(value) { root.updateParamValue("FUEL_PRESSURE", value); }
         function onEngineOilTempChanged(value) { root.updateParamValue("OIL_TEMP", value); }
         function onIgnitionTimingChanged(value) { root.updateParamValue("IGNITION_TIMING", value); }
+
+        // Multi-value PIDs 0x61+ (torque, boost, odometer, ...): one generic
+        // signal carries the parameter id with the value
+        function onObdParameterChanged(paramId, value) { root.updateParamValue(paramId, value); }
 
         // Additional parameters - Batch 1
         function onRunTimeChanged(value) { root.updateParamValue("RUN_TIME", value); }

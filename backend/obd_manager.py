@@ -12,10 +12,74 @@ import glob
 
 from backend.logging_config import get_logger
 from backend.qt_threading import run_on_main
+from backend.elm327_protocol import EXTENDED_PID_TABLE, decode_extended_pid, decode_vin
 
 # python-obd drags in pint (~0.5 s on the Pi); import it when a connection is attempted.
 obd = lazy_module("obd")
 logger = get_logger(__name__)
+
+
+_extended_commands = {}
+
+
+def extended_command(mode, pid):
+    """python-obd command for a multi-value PID from EXTENDED_PID_TABLE.
+    python-obd stops at PID 0x5F, so these are built here; the decoder
+    returns [(param_id, value), ...]."""
+    key = (mode, pid)
+    if key not in _extended_commands:
+        def decoder(messages, mode=mode, pid=pid):
+            return decode_extended_pid(mode, pid, list(messages[0].data[2:]))
+        _extended_commands[key] = obd.OBDCommand(
+            f"OCTAVE_{mode:02X}{pid:02X}", f"Mode {mode:02X} PID {pid:02X}",
+            f"{mode:02X}{pid:02X}".encode(), 0, decoder)
+    return _extended_commands[key]
+
+
+def _supported_pid_bitmap(messages):
+    data = messages[0].data[2:6]
+    bits = int.from_bytes(bytes(data).ljust(4, b"\0"), "big")
+    return {i + 1 for i in range(32) if bits & (1 << (31 - i))}
+
+
+def probe_vehicle(connection):
+    """Read the VIN and the supported-PID bitmaps above 0x5F (python-obd's
+    own support scan stops at 0x40). Runs on the connect worker before the
+    async loop starts. Returns (vin, set of supported mode 01 PIDs >= 0x61)."""
+    supported = set()
+    base = 0x60
+    while base <= 0xC0:
+        cmd = obd.OBDCommand(f"OCTAVE_PIDS_{base:02X}", "Supported PIDs", f"01{base:02X}".encode(),
+                             0, _supported_pid_bitmap)
+        r = obd.OBD.query(connection, cmd, force=True)
+        if r.is_null() or not r.value:
+            break
+        supported |= {base + p for p in r.value}
+        if 32 not in r.value:
+            break
+        base += 0x20
+    vin = ""
+    try:
+        r = obd.OBD.query(connection, _vin_command(), force=True)
+        if not r.is_null() and r.value:
+            vin = decode_vin(r.value)["vin"]
+    except Exception as e:
+        logger.info(f"[OBD] VIN read failed: {e}")
+    return vin, supported
+
+
+def _decode_vin_message(messages):
+    # python-obd's own VIN decoder strips the characters "\\", "x", "0", "1"
+    # and "2" from both ends (its strip set is written b'\\x00'...), which
+    # turns every US VIN "1..." into 16 characters. Keep the alphanumerics
+    # after mode/PID instead: that drops the CAN item count and the pre-CAN
+    # zero padding, and python-obd has already joined the frames.
+    text = "".join(chr(b) for b in messages[0].data[2:] if 48 <= b <= 57 or 65 <= b <= 90 or 97 <= b <= 122)
+    return text.upper()[-17:] if len(text) >= 17 else ""
+
+
+def _vin_command():
+    return obd.OBDCommand("OCTAVE_VIN", "Vehicle Identification Number", b"0902", 0, _decode_vin_message)
 
 
 class OBDConnectionWorker(QObject):
@@ -23,6 +87,7 @@ class OBDConnectionWorker(QObject):
 
     # Signals to communicate back to main thread
     connectionComplete = Signal(object, object)  # (connection, status)
+    vehicleInfo = Signal(str, object)  # (vin, set of supported PIDs 0x61+), before connectionComplete
     connectionProgress = Signal(int, str)  # (progress, message)
     connectionError = Signal(str)
 
@@ -62,6 +127,14 @@ class OBDConnectionWorker(QObject):
 
             self.connectionProgress.emit(80, "Checking connection status...")
             status = connection.status()
+
+            if status == obd.OBDStatus.CAR_CONNECTED:
+                self.connectionProgress.emit(90, "Reading vehicle information...")
+                try:
+                    vin, supported = probe_vehicle(connection)
+                    self.vehicleInfo.emit(vin, supported)
+                except Exception as e:
+                    logger.info(f"[OBD] Vehicle probe failed: {e}")
 
             self.connectionComplete.emit(connection, status)
 
@@ -192,6 +265,13 @@ class OBDManager(QObject):
     dtcClearResult = Signal(bool, str)  # success, message
     freezeFrameChanged = Signal(list)  # Freeze frame DTCs
 
+    # Multi-value PIDs (0x61 and up: torque, boost, odometer, ...) arrive
+    # through one signal carrying the parameter id; QML's OBDParameterModel
+    # routes it into paramValues.
+    obdParameterChanged = Signal(str, float)
+    vinChanged = Signal(str)
+    _emitVin = Signal(str)
+
     # Internal signals for thread-safe emission from background threads
     _emitDtcCodes = Signal(list)
     _emitDtcCount = Signal(int)
@@ -203,6 +283,8 @@ class OBDManager(QObject):
         super().__init__()
         self._connection = None
         self._connected = False
+        self._vin_info = decode_vin("")
+        self._extended_supported_pids = set()
         self._settings_manager = settings_manager
 
         # Thread safety lock
@@ -393,6 +475,7 @@ class OBDManager(QObject):
         self._emitMilStatus.connect(self._forwardMilStatus)
         self._emitDtcClearResult.connect(self._forwardDtcClearResult)
         self._emitFreezeFrame.connect(self._forwardFreezeFrame)
+        self._emitVin.connect(self._set_vin)
 
         # Connect to settings changes
         if self._settings_manager:
@@ -599,6 +682,7 @@ class OBDManager(QObject):
 
         # Connect signals
         self._worker.connectionProgress.connect(self._on_connection_progress)
+        self._worker.vehicleInfo.connect(self._on_vehicle_info)
         self._worker.connectionComplete.connect(self._on_connection_complete)
         self._worker.connectionError.connect(self._on_connection_error)
 
@@ -610,6 +694,62 @@ class OBDManager(QObject):
         """Handle connection progress updates from worker"""
         self.connectionProgressChanged.emit(progress)
         self.connectionStatusDetailChanged.emit(message)
+
+    def _on_vehicle_info(self, vin, supported):
+        self._extended_supported_pids = set(supported or ())
+        if self._extended_supported_pids:
+            logger.info("[OBD] Vehicle supports PIDs above 0x60: "
+                        + " ".join(f"{p:02X}" for p in sorted(self._extended_supported_pids)))
+        self._set_vin(vin)
+
+    def _set_vin(self, vin):
+        info = decode_vin(vin)
+        if info["vin"] == self._vin_info["vin"]:
+            return
+        self._vin_info = info
+        if info["vin"]:
+            logger.info(f"[OBD] VIN {info['vin']} - {info['modelYear']} {info['make']}")
+        else:
+            logger.info("[OBD] Vehicle did not report a VIN")
+        self.vinChanged.emit(info["vin"])
+
+    @Property(str, notify=vinChanged)
+    def vin(self):
+        return self._vin_info["vin"]
+
+    @Property(str, notify=vinChanged)
+    def vehicleMake(self):
+        return self._vin_info["make"]
+
+    @Property(int, notify=vinChanged)
+    def vehicleModelYear(self):
+        return self._vin_info["modelYear"]
+
+    @Slot()
+    def read_vin(self):
+        """Read the VIN again (Mode 09 PID 02)."""
+        if not self._connection or not self._connected:
+            logger.info("[OBD] Cannot read VIN - not connected")
+            return
+        threading.Thread(target=self._do_read_vin, daemon=True).start()
+
+    def _do_read_vin(self):
+        conn = self._connection
+        use_diagnostic_conn = self._diagnostic_mode and self._diagnostic_sync_conn
+        try:
+            if use_diagnostic_conn:
+                conn = self._diagnostic_sync_conn
+                vin, _ = probe_vehicle(conn)
+            else:
+                # Pause async polling while the port answers the VIN request
+                conn.stop()
+                try:
+                    vin, _ = probe_vehicle(conn)
+                finally:
+                    conn.start()
+            self._emitVin.emit(vin)
+        except Exception as e:
+            logger.error(f"[OBD] Error reading VIN: {e}")
 
     def _on_connection_complete(self, connection, status):
         """Handle connection result on main thread"""
@@ -1057,11 +1197,32 @@ class OBDManager(QObject):
                 except Exception as e:
                     logger.warning(f"[OBD] Could not watch {param}: {e}")
 
+        # Multi-value PIDs: watch when any of their values is enabled (all opt-in)
+        for (mode, pid), signals in EXTENDED_PID_TABLE.items():
+            enabled = [sig[0] for sig in signals
+                       if self._settings_manager
+                       and self._settings_manager.get_obd_parameter_enabled(sig[0], False)]
+            if not enabled:
+                continue
+            try:
+                self._connection.watch(extended_command(mode, pid),
+                                       callback=self._update_extended, force=True)
+                watcher_count += 1
+                logger.debug(f"[OBD] Watching: PID {pid:02X} ({', '.join(enabled)})")
+            except Exception as e:
+                logger.warning(f"[OBD] Could not watch PID {pid:02X}: {e}")
+
         # Track if we have active watchers for the data watchdog
         self._has_active_watchers = watcher_count > 0
         logger.info(f"[OBD] Set up {watcher_count} watchers")
 
     # Callback functions
+    def _update_extended(self, r):
+        if r.is_null() or not r.value:
+            return
+        for param_id, value in r.value:
+            self.obdParameterChanged.emit(param_id, float(value))
+
     def _update_coolant(self, r):
         if not r.is_null():
             self._coolant_temp = float(r.value.magnitude)
@@ -1921,6 +2082,16 @@ class OBDManager(QObject):
                     logger.info(f"[OBD] Vehicle supports: {param_name}")
                 else:
                     unsupported_names.append(param_name)
+
+            # Multi-value PIDs 0x61+: python-obd doesn't know them; use the
+            # support bitmaps read at connect time (probe_vehicle)
+            for (mode, pid), signals in EXTENDED_PID_TABLE.items():
+                for param_name, *_ in signals:
+                    if mode == 1 and pid in self._extended_supported_pids:
+                        supported_names.append(param_name)
+                        self._emit_scan_output(f"[OK] {param_name}")
+                    else:
+                        unsupported_names.append(param_name)
 
             self._supported_commands = supported_names
 

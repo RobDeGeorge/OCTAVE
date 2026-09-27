@@ -519,6 +519,60 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           </p>
         </div>
 
+        <h3 id="multi-value-pids">Multi-value PIDs 0x61 and up (37, disabled by default)</h3>
+        <p>
+          Newer SAE J1979 PIDs pack several sensors and a "supported" bitmap into one reply (boost pressure 0x70
+          carries commanded and actual boost for two turbos, 0x7F carries total run, idle and PTO time), and
+          python-obd stops at 0x5F. Both backends decode them from one table, <code>ELM327Protocol::extendedPidTable()</code>
+          in C++ and <code>EXTENDED_PID_TABLE</code> in <code>backend/elm327_protocol.py</code>: each value names its data
+          bytes, the bit of byte A that must be set (a value the ECU marks unsupported is never emitted) and the
+          minimum reply length. Byte layouts and scaling were cross-checked against Wikipedia's OBD-II PID table and
+          OBDb's SAEJ1979 signal set; PIDs whose layout could not be confirmed from two sources (EGT 0x78/0x79, turbo
+          RPM/temperature 0x74-0x76, exhaust pressure 0x73, DPF 0x7A-0x7C, the gear number in 0xA4) are deliberately
+          left out rather than guessed.
+        </p>
+        <p>
+          Values reach QML through one signal, <code>obdParameterChanged(paramId, value)</code>, instead of a
+          signal per parameter; <code>OBDParameterModel</code> routes it into <code>paramValues</code>. Replies longer
+          than one CAN frame are joined by <code>parseResponseLines()</code> (C++) / python-obd (Python). Python wraps
+          each PID in an <code>obd.OBDCommand</code> built by <code>extended_command()</code>, and the connect worker's
+          <code>probe_vehicle()</code> reads the <code>0160</code>-<code>01C0</code> support bitmaps python-obd skips, so
+          the vehicle scan can report these PIDs. Boost pressure is absolute; subtract <code>BAROMETRIC_PRESSURE</code>
+          for gauge boost.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Group</th><th>Parameters (mode/PID)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Torque</td><td><code>DEMAND_ENGINE_TORQUE</code> (01 61), <code>ACTUAL_ENGINE_TORQUE</code> (01 62), <code>ENGINE_FRICTION_TORQUE</code> (01 8E), <code>REFERENCE_TORQUE</code> (01 63)</td></tr>
+            <tr><td>Boost</td><td><code>BOOST_PRESSURE_A</code> (01 70), <code>BOOST_PRESSURE_A_COMMANDED</code> (01 70), <code>WASTEGATE_A</code> (01 72), <code>WASTEGATE_A_COMMANDED</code> (01 72)</td></tr>
+            <tr><td>Air</td><td><code>MAF_SENSOR_A</code> (01 66), <code>MAF_SENSOR_B</code> (01 66), <code>INTAKE_TEMP_B1S1</code> (01 68), <code>INTAKE_TEMP_B1S2</code> (01 68), <code>INTAKE_TEMP_B2S1</code> (01 68), <code>MANIFOLD_SURFACE_TEMP</code> (01 84)</td></tr>
+            <tr><td>Temperature</td><td><code>COOLANT_TEMP_SENSOR_1</code> (01 67), <code>COOLANT_TEMP_SENSOR_2</code> (01 67)</td></tr>
+            <tr><td>Throttle</td><td><code>THROTTLE_POS_G</code> (01 8D), <code>THROTTLE_ACTUATOR_A_COMMANDED</code> (01 6C), <code>RELATIVE_THROTTLE_A</code> (01 6C)</td></tr>
+            <tr><td>EGR</td><td><code>EGR_A_COMMANDED</code> (01 69), <code>EGR_A_ACTUAL</code> (01 69), <code>EGR_A_ERROR</code> (01 69)</td></tr>
+            <tr><td>Fuel</td><td><code>FUEL_RAIL_PRESSURE_A</code> (01 6D), <code>FUEL_RAIL_PRESSURE_A_COMMANDED</code> (01 6D), <code>FUEL_RAIL_TEMP_A</code> (01 6D), <code>ENGINE_FUEL_RATE_GS</code> (01 9D), <code>VEHICLE_FUEL_RATE_GS</code> (01 9D), <code>CYLINDER_FUEL_RATE</code> (01 A2), <code>EXHAUST_FLOW_RATE</code> (01 9E)</td></tr>
+            <tr><td>Drivetrain</td><td><code>TRANSMISSION_GEAR_RATIO</code> (01 A4), <code>RECOMMENDED_GEAR</code> (01 65)</td></tr>
+            <tr><td>Distance and time</td><td><code>ODOMETER</code> (01 A6), <code>ENGINE_RUN_TIME_TOTAL</code> (01 7F), <code>ENGINE_IDLE_TIME_TOTAL</code> (01 7F)</td></tr>
+            <tr><td>Hybrid / EV</td><td><code>HYBRID_BATTERY_VOLTAGE</code> (01 9A), <code>HYBRID_BATTERY_CURRENT</code> (01 9A), <code>EV_BATTERY_HEALTH</code> (01 B2)</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="vin">Vehicle identity (VIN)</h3>
+        <p>
+          After a successful connect both backends read Mode 09 PID 02 once (C++: <code>OBDConnectionWorker::doReadVin()</code>
+          before polling starts, Android: the first poll slot; Python: <code>probe_vehicle()</code> on the connect worker) and
+          expose <code>vin</code>, <code>vehicleMake</code> and <code>vehicleModelYear</code> with <code>vinChanged</code>;
+          <code>read_vin()</code> reads it again. <code>parseVin()</code> / <code>parse_vin</code> accept the CAN multi-frame
+          reply and the five numbered pre-CAN messages. Python does not use python-obd's <code>VIN</code> decoder: its strip
+          set is written <code>b'\\x00'</code>, which strips the characters <code>\ x 0 1 2</code> and turns every US VIN
+          (<code>1...</code>) into 16 characters. <code>decodeVin()</code> / <code>decode_vin</code> take the make from the
+          world manufacturer identifier (first 3 characters, about 120 entries, then a 2-character fallback) and the model year
+          from position 10 (30-year cycle; an alphabetic position 7 selects 2010+). Many pre-2005 vehicles, including the
+          2003 TJ, answer <code>NO DATA</code>; the properties then stay empty. The OBD settings Connection card shows a
+          <em>Vehicle</em> row when a VIN is known.
+        </p>
+
         <!-- Watcher System -->
         <h2 id="watcher-system">Which PIDs Get Polled</h2>
         <h3>Python: <code>_setup_watchers()</code></h3>
@@ -725,6 +779,9 @@ PID_TABLE[ELM_VOLTAGE_KEY] = (<span class="str">"ELM Voltage"</span>, <span clas
             <tr><td><code>parseSupportedPids(bytes)</code></td><td><code>parse_supported_pids</code></td><td>32-bit bitmap, MSB first, into 1-based PID offsets relative to the queried base.</td></tr>
             <tr><td><code>parseDtcResponse(lines, mode)</code></td><td><code>parse_dtc_response</code></td><td>Takes every line of the reply (<code>ResponseBuffer::lastLines()</code>). Joins CAN multi-frame replies (<code>00A</code>, <code>0:…</code>, <code>1:…</code>), keeps one message per ECU, checks the response mode (<code>43</code> / <code>47</code> / <code>4A</code>), drops the CAN DTC-count byte (CAN data is an odd byte count; pre-CAN is always 6 bytes), reads 2-byte chunks, skips <code>0000</code>, builds <code>P/C/B/U</code> + 4 digits and de-duplicates across ECUs. Covered by <code>tests/test_elm327_dtc.py</code>.</td></tr>
             <tr><td><code>parseFreezeFrameDtc(lines)</code></td><td><code>parse_freeze_frame_dtc</code></td><td>Reads the DTC from a Mode 02 PID 02 frame 0 reply (<code>42 02 00 hi lo</code>).</td></tr>
+            <tr><td><code>parseResponseLines(lines, mode, pid)</code></td><td><code>parse_response_lines</code></td><td>Like <code>parseResponse</code>, from every line of a reply: joins a CAN multi-frame answer and returns the first message answering <code>mode</code>/<code>pid</code>. Used for the multi-value PIDs.</td></tr>
+            <tr><td><code>decodeExtendedPid(mode, pid, bytes)</code></td><td><code>decode_extended_pid</code></td><td><code>[(paramId, value), ...]</code> from <code>extendedPidTable()</code> / <code>EXTENDED_PID_TABLE</code>, skipping values whose support bit is clear or whose bytes are missing. Covered by <code>tests/test_obd_extended_pids.py</code>.</td></tr>
+            <tr><td><code>parseVin(lines)</code>, <code>decodeVin(vin)</code></td><td><code>parse_vin</code>, <code>decode_vin</code></td><td>Mode 09 PID 02 reply to the 17-character VIN (<code>""</code> for <code>NO DATA</code>), and VIN to make + model year. See <a href="#vin">Vehicle identity</a>.</td></tr>
             <tr><td><code>defaultPids()</code></td><td><code>DEFAULT_PIDS</code></td><td>16 common PIDs. Present for parity; not used by the runtime poll list.</td></tr>
           </tbody>
         </table>
@@ -885,6 +942,8 @@ PID_TABLE[ELM_VOLTAGE_KEY] = (<span class="str">"ELM Voltage"</span>, <span clas
             <tr><td><code>milStatusChanged</code></td><td>bool</td><td>Check Engine Light status.</td></tr>
             <tr><td><code>dtcClearResult</code></td><td>bool, str</td><td>Success flag and message.</td></tr>
             <tr><td><code>freezeFrameChanged</code></td><td>list</td><td>Freeze-frame DTCs, same map shape.</td></tr>
+            <tr><td><code>vinChanged</code></td><td>str</td><td>VIN read (or cleared); <code>vin</code>, <code>vehicleMake</code>, <code>vehicleModelYear</code> notify on it.</td></tr>
+            <tr><td><code>obdParameterChanged</code></td><td>str, float</td><td>A value from a <a href="#multi-value-pids">multi-value PID</a>: parameter id and value.</td></tr>
           </tbody>
         </table>
 
