@@ -158,7 +158,7 @@ private:
     bool m_updateCheckBusy = false;
 
     // GitHub repo for update checks
-    static constexpr const char *GITHUB_REPO = "WayBetterSolutions/OCTAVE";
+    static constexpr const char *GITHUB_REPO = "RobDeGeorge/OCTAVE";
 };
 
 #endif // NETWORKMANAGER_H

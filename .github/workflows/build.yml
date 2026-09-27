@@ -642,7 +642,7 @@ jobs:
             -validity 10000 \
             -storepass octavepass \
             -keypass octavepass \
-            -dname "CN=OCTAVE Test Build, O=WayBetterSolutions, C=US"
+            -dname "CN=OCTAVE Test Build, O=Rob DeGeorge, C=US"
 
           # 2. Locate unsigned APK (gradle drops it under build/outputs/apk/release/)
           UNSIGNED=$(find build-android -path '*/build/outputs/apk/release/*-unsigned.apk' | head -n1)

@@ -3,8 +3,8 @@
 
 #define MyAppName "OCTAVE"
 #define MyAppVersion "0.9.3"
-#define MyAppPublisher "Way Better Solutions"
-#define MyAppURL "https://github.com/waybettersolutions/octave"
+#define MyAppPublisher "Rob DeGeorge"
+#define MyAppURL "https://github.com/RobDeGeorge/OCTAVE"
 #define MyAppExeName "OCTAVE.exe"
 
 [Setup]

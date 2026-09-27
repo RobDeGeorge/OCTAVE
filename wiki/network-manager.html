@@ -63,7 +63,7 @@
           </div>
 
           <p>
-            The manager targets the GitHub repository <code>WayBetterSolutions/OCTAVE</code> (<code>GITHUB_REPO</code>)
+            The manager targets the GitHub repository <code>RobDeGeorge/OCTAVE</code> (<code>GITHUB_REPO</code>)
             and compares the local git <code>HEAD</code> against the tip of the remote <code>main</code> branch.
           </p>
         </section>
@@ -234,7 +234,7 @@ NetworkManager (src/managers/networkmanager.cpp)
               <code>"error"</code> / "Could not determine local version".
             </li>
             <li>
-              <strong>Query GitHub API</strong> -- <code>GET https://api.github.com/repos/WayBetterSolutions/OCTAVE/commits/main</code>
+              <strong>Query GitHub API</strong> -- <code>GET https://api.github.com/repos/RobDeGeorge/OCTAVE/commits/main</code>
               with a <code>User-Agent: OCTAVE-Updater</code> header and a 10&nbsp;s timeout. The response's <code>sha</code> is
               truncated to 7 characters; the first line of <code>commit.message</code> becomes <code>remoteCommitMsg</code>.
             </li>

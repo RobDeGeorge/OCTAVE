@@ -640,7 +640,7 @@ Flickable {
 
             Text {
                 id: descriptionText
-                text: "Welcome to OCTAVE, an open-source, cross-platform telematics system for an augmented vehicle experience. Developed by Way Better Solutions, our mission is simple: we make things better.
+                text: "Welcome to OCTAVE, an open-source, cross-platform telematics system for an augmented vehicle experience. Developed by Rob DeGeorge.
 
 This software is designed to provide a seamless interface for vehicle systems, media playback, navigation, and more."
                 wrapMode: Text.WordWrap
@@ -669,7 +669,7 @@ This software is designed to provide a seamless interface for vehicle systems, m
             }
 
             Text {
-                text: "<a href='https://github.com/WayBetterSolutions/OCTAVE'>github.com/WayBetterSolutions/OCTAVE</a>"
+                text: "<a href='https://github.com/RobDeGeorge/OCTAVE'>github.com/RobDeGeorge/OCTAVE</a>"
                 color: App.Style.accent
                 linkColor: App.Style.accent
                 font.pixelSize: App.Spacing.overallText
@@ -679,7 +679,7 @@ This software is designed to provide a seamless interface for vehicle systems, m
             }
 
             Text {
-                text: "2026 Way Better Solutions"
+                text: "2026 Rob DeGeorge"
                 color: App.Style.primaryTextColor
                 font.pixelSize: App.Spacing.overallText
                 font.family: App.Style.fontFamily

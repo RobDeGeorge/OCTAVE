@@ -24,7 +24,7 @@ This was an acceptable shortcut for v0.9 (the goal was just "make the APK instal
      -validity 10000 \
      -storepass <STRONG_PASS> \
      -keypass <STRONG_PASS> \
-     -dname "CN=OCTAVE, O=WayBetterSolutions, C=US"
+     -dname "CN=OCTAVE, O=Rob DeGeorge, C=US"
    ```
    Pick passwords that are NOT `octavepass` (currently hardcoded). Use a password manager.
 
@@ -33,7 +33,7 @@ This was an acceptable shortcut for v0.9 (the goal was just "make the APK instal
    - Encrypted offline backup (USB, encrypted drive)
    - Anyone else on the team who is a release manager
 
-3. **Store as GitHub Secrets** on `WayBetterSolutions/OCTAVE`:
+3. **Store as GitHub Secrets** on `RobDeGeorge/OCTAVE`:
    - `ANDROID_KEYSTORE_BASE64` — `base64 -w0 octave-release.keystore`
    - `ANDROID_KEYSTORE_PASS` — store password
    - `ANDROID_KEY_ALIAS` — `octave`

@@ -47,7 +47,7 @@ class NetworkManager(QObject):
     selfUpdateMessageChanged = Signal(str)  # Human-readable progress message
     canSelfUpdateChanged = Signal(bool)     # Whether git-based self-update is possible
 
-    GITHUB_REPO = "WayBetterSolutions/OCTAVE"
+    GITHUB_REPO = "RobDeGeorge/OCTAVE"
 
     def __init__(self):
         super().__init__()

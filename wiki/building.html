@@ -143,7 +143,7 @@ cmake --build build -j</code></pre>
 
         <h3>Output</h3>
         <ul>
-          <li><code>build/octave.app</code> &mdash; <span class="file-path">CMakeLists.txt</span> sets <code>MACOSX_BUNDLE</code> explicitly (bundle id <code>com.waybettersolutions.octave</code>, name <code>OCTAVE</code>); without it <code>qt_add_executable</code> would emit a bare ELF-style binary that macdeployqt cannot bundle</li>
+          <li><code>build/octave.app</code> &mdash; <span class="file-path">CMakeLists.txt</span> sets <code>MACOSX_BUNDLE</code> explicitly (bundle id <code>com.robdegeorge.octave</code>, name <code>OCTAVE</code>); without it <code>qt_add_executable</code> would emit a bare ELF-style binary that macdeployqt cannot bundle</li>
           <li><code>dist/OCTAVE-&lt;version&gt;-macos.dmg</code> &mdash; CI renames the bundle to <code>OCTAVE.app</code>, copies <code>adb</code> into <code>Contents/Resources/platform-tools/</code>, runs <code>macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg</code> (macdeployqt creates the DMG itself) and renames the result (version fallback <code>0.0.0</code>)</li>
         </ul>
 
