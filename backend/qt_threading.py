@@ -34,10 +34,16 @@ def _get_invoker():
     global _invoker
     with _invoker_lock:
         if _invoker is None:
+            # Created on the main thread it already lives there. Only a first
+            # call from a worker has to move it, and that is the one path that
+            # asks Qt for a QThread off the main thread: PySide6 6.11.2 can
+            # later delete the main QThread through such a wrapper and
+            # segfault at exit. The module-level call below avoids it.
             _invoker = _MainThreadInvoker()
-            app = QCoreApplication.instance()
-            if app is not None and _invoker.thread() is not app.thread():
-                _invoker.moveToThread(app.thread())
+            if threading.current_thread() is not threading.main_thread():
+                app = QCoreApplication.instance()
+                if app is not None:
+                    _invoker.moveToThread(app.thread())
         return _invoker
 
 
@@ -48,3 +54,9 @@ def run_on_main(fn, delay_ms=0):
     ``QTimer.singleShot(delay_ms, fn)``.
     """
     _get_invoker()._invoke.emit(fn, int(delay_ms))
+
+
+# Managers import this module on the main thread at startup, so the invoker
+# is built there before any worker thread can call run_on_main().
+if threading.current_thread() is threading.main_thread():
+    _get_invoker()
