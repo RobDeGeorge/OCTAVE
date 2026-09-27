@@ -191,6 +191,10 @@
                 <td>Kept in <code>m_readBuffer</code> until a <code>\n</code> arrives</td>
               </tr>
               <tr>
+                <td>Overlong lines</td>
+                <td colspan="2">Both backends: a partial line longer than <code>ESP32_MAX_LINE_BYTES</code> (256) without a newline is line noise; it is dropped with one warning per connection and the reader resyncs by discarding everything up to the next <code>\n</code></td>
+              </tr>
+              <tr>
                 <td>Signal delivery</td>
                 <td><code>volumeChangeRequested</code> / <code>muteToggleRequested</code> are emitted from the read thread (queued to the main thread by Qt)</td>
                 <td>Emitted directly on the main thread</td>

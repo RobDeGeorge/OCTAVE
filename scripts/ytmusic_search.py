@@ -40,7 +40,7 @@ def main():
         thumbnails = item.get("thumbnails", [])
         cover_url = thumbnails[-1].get("url", "") if thumbnails else ""
 
-        if cover_url and "lh3.googleusercontent.com" in cover_url:
+        if cover_url and re.search(r"(lh3|yt3)\.googleusercontent\.com", cover_url):
             cover_url = re.sub(r"=w\d+-h\d+.*$", "=w800-h800-l90-rj", cover_url)
 
         duration_secs = item.get("duration_seconds", 0)

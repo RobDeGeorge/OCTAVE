@@ -291,8 +291,10 @@ DownloadManager
               credentials), otherwise <code>Song.from_missing_data(**song_data)</code> with the YouTube Music URL set as
               <code>download_url</code> so the downloader skips its own search.</li>
             <li><strong>Download, convert, tag</strong> -- <code>MusicDL.download(song)</code>: yt-dlp fetches to a temp
-              directory, ffmpeg converts to the target format (skipped when the source already matches, e.g. m4a→m4a),
-              mutagen embeds tags, cover and lyrics, and the file is moved to the output template.</li>
+              directory, ffmpeg converts to the target format (skipped when the source already matches, e.g. m4a→m4a)
+              into a hidden staging file <span class="file-path">.&lt;name&gt;.part</span> in the destination folder, mutagen
+              embeds tags, cover and lyrics, and the file is fsynced and renamed to the output template. A power cut leaves a
+              stray <code>.part</code> file rather than a truncated song that "skip" mode would treat as already downloaded.</li>
             <li><strong>Resolve</strong> -- the 200&nbsp;ms poll timer sees the finished future and emits
               <code>downloadComplete(song_id, path)</code> plus an <code>is_downloaded = true</code> patch, or
               <code>downloadError(song_id, name, "Download failed — no audio source found")</code> plus
@@ -316,17 +318,22 @@ DownloadManager
               <pre><code>yt-dlp -f <span class="str">"bestaudio[ext=m4a]/bestaudio/best"</span> --no-playlist --newline --no-warnings
        [--extract-audio --audio-format mp3|flac|opus|vorbis [--audio-quality &lt;bitrate&gt;]]
        [--cookies &lt;DownloadLocation&gt;/youtube_cookies.txt]
-       -o <span class="str">"&lt;downloadPath&gt;/%(artist,uploader)s - %(title)s.%(ext)s"</span>
+       -o <span class="str">"&lt;downloadPath&gt;/.octave-partial/&lt;songId&gt;/%(artist,uploader)s - %(title)s.%(ext)s"</span>
        https://music.youtube.com/watch?v=&lt;id&gt;</code></pre>
               The conversion flags are added for mp3 (with <code>--audio-quality</code> unless the bitrate is
               <code>auto</code> or <code>disable</code>), flac, opus and ogg; m4a downloads natively. The source comment
               explains the template: <code>%(artist,uploader)s</code> falls back to the uploader when YouTube Music's artist
               field is missing, and the "Artist - Title" shape matches the Python engine so
-              <code>mediaManager.play_downloaded_song()</code> finds files written by either backend.</li>
+              <code>mediaManager.play_downloaded_song()</code> finds files written by either backend. On desktop yt-dlp
+              writes into the hidden staging dir <span class="file-path">&lt;downloadPath&gt;/.octave-partial/&lt;songId&gt;/</span>
+              (Android writes straight to <code>&lt;downloadPath&gt;</code>); when nothing else is in flight, a new download
+              first sweeps leftovers from a power cut or mid-download quit out of <span class="file-path">.octave-partial/</span>.</li>
             <li><strong>Finish</strong> -- on exit code 0 the last <code>Destination:</code> line in stdout gives the file path
-              (falling back to the newest audio file in the download directory). Desktop then runs
-              <code>_embedMetadata()</code> and <code>_downloadCoverArt()</code>; Android runs <code>runEmbedCover()</code>.
-              <code>downloadComplete</code>, <code>statusMessage("Downloaded: …")</code> and an <code>is_downloaded</code> patch
+              (falling back to the newest audio file in the song's staging dir). Desktop then runs
+              <code>_embedMetadata()</code> and <code>_downloadCoverArt()</code> on the staged file; once the cover request ends
+              (embedded or not) <code>_finishDownload()</code> fsyncs it and renames it into <code>&lt;downloadPath&gt;</code>.
+              Android runs <code>runEmbedCover()</code>. <code>downloadComplete</code> (on desktop now only after the cover is
+              embedded), <code>statusMessage("Downloaded: …")</code> and an <code>is_downloaded</code> patch
               follow. A non-zero exit yields "Download failed (exit code N)"; a missing file yields "Download completed but
               file not found".</li>
           </ol>
@@ -541,7 +548,8 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             lower-cased audio stem to its folder name (root-level files map to <code>"Unsorted"</code>); if the walk finds
             nothing (fresh install), the configured download folder is probed directly. Python recognises
             <code>.mp3 .flac .ogg .opus .m4a</code>; C++ additionally treats <code>.mp4</code> as audio because yt-dlp names
-            YouTube's m4a streams with that extension.
+            YouTube's m4a streams with that extension. Both walks skip hidden directories (such as
+            <span class="file-path">.octave-partial/</span>), and <code>.part</code> staging files never match an audio extension.
           </p>
         </section>
 

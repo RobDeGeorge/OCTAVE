@@ -230,7 +230,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li><code>_cache_metadata()</code> first asks <code>_meta_from_store()</code>. An entry is served without opening the audio file if the file still exists and its size and integer mtime match. After the first run, scrolling a list or opening the media page therefore no longer opens every file with TagLib / mutagen.</li>
           <li>A stale entry (file deleted, renamed or rewritten) is removed on lookup, so the store stays bounded by the current library rather than by everything ever seen.</li>
           <li>Only on a miss does <code>_cache_metadata_from_file()</code> read the tags; the result is written back with <code>_meta_to_store()</code>.</li>
-          <li>Writes are coalesced: a single-shot 2&nbsp;s timer is restarted on every change and <code>_save_meta_store()</code> writes the compact JSON once. The dirty flag is only cleared when the write succeeded, so a failed write is retried on the next change or at shutdown.</li>
+          <li>Writes are coalesced: a single-shot 2&nbsp;s timer is restarted on every change and <code>_save_meta_store()</code> writes the compact JSON once, atomically (<code>QSaveFile</code> / <code>atomic_write_text()</code> from <span class="file-path">backend/atomic_io.py</span>), so a power cut leaves the old store or the new one. The dirty flag is only cleared when the write succeeded, so a failed write is retried on the next change or at shutdown.</li>
           <li>Shutdown flushes it explicitly: <code>flush_metadata_store()</code> is called from the <code>aboutToQuit</code> handler in <code>main.cpp</code> and from <code>cleanup_on_quit()</code> in <code>main.py</code> (the C++ destructor also saves).</li>
           <li>Python detail: the save timer is armed through the internal <code>_metaStoreChanged</code> signal with a <code>QueuedConnection</code>, so <code>_meta_to_store()</code> is safe to call from any thread (a <code>QTimer</code> must not be started from another thread).</li>
         </ul>
@@ -266,7 +266,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li>Return the URL from the in-memory map <code>m_albumArtCache</code> (albumId &rarr; URL) if present</li>
           <li>Run <code>_manage_cache()</code>: when the map already holds 500 entries (<code>m_maxCacheFiles</code>), the entry with the <em>lowest access count</em> (other than the one being added) is removed from the map and its file deleted</li>
           <li><code>_cached_art_url_for(albumId)</code>: if a cover file with that hash already exists in the temp dir from <em>any earlier run</em>, use it without opening the audio file</li>
-          <li>Otherwise open the audio file and extract the first picture (<code>_extract_art_for()</code> in both backends dispatches on extension: TagLib readers in C++, the mutagen readers in the <a href="#supported-formats">format table</a> in Python, whose <code>_write_cover()</code> names the file by MIME type) and write it if the file does not exist yet</li>
+          <li>Otherwise open the audio file and extract the first picture (<code>_extract_art_for()</code> in both backends dispatches on extension: TagLib readers in C++, the mutagen readers in the <a href="#supported-formats">format table</a> in Python, whose <code>_write_cover()</code> names the file by MIME type) and write it if no non-empty cover file exists yet. Cover files are written atomically (<code>QSaveFile</code> / <code>atomic_write_bytes()</code>); a zero-byte cover left by an older build is treated as missing and rewritten</li>
           <li>Store the URL in the map and return it (empty string if the file has no picture)</li>
         </ol>
 
@@ -345,7 +345,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <ol class="steps">
           <li>If no playlist order exists yet, build one: shuffled when shuffle is on, otherwise alphabetical by the sort key (lower-cased, punctuation and underscores stripped: <code>[^\w\s]|_</code>)</li>
           <li>Locate the file in the playlist and set <code>m_currentIndex</code>; if it is not there and shuffle is off, rebuild the alphabetical list; if it is still missing, play the first entry instead</li>
-          <li>Resolve the path with <code>_get_file_path()</code> (All Music aware), refuse to play a missing file</li>
+          <li>Resolve the path with <code>_get_file_path()</code> (All Music aware); a missing file (deleted, moved, unmounted USB stick) is logged and skipped via <code>_skip_bad_track(advance=true)</code>, the same path as an unplayable track</li>
           <li><code>setSource()</code> + <code>play()</code>, set the playing flags, re-apply mute (setting a source can reset the output volume), emit <code>playStateChanged(true)</code></li>
           <li>Pre-populate the metadata and cover caches and emit <code>metadataChanged</code> <em>before</em> <code>currentMediaChanged</code>, so the QML bindings that fire on the latter get instant cache hits instead of doing tag I/O during the render phase</li>
           <li>Emit <code>durationFormatChanged</code> via <code>get_formatted_duration()</code>, then start the 80&nbsp;ms <a href="#precaching">pre-cache timer</a></li>
@@ -412,7 +412,8 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         </ul>
         <p>
           <code>select_playlist(name)</code> switches <code>m_mediaDir</code> to the folder (or the root for All Music),
-          sorts the files alphabetically, resets the index, clears the in-memory metadata map, recalculates the library
+          sorts the files alphabetically (or, when shuffle is on, shuffles them with the current song first, so shuffle
+          survives playlist selection and library rescans), resets the index, clears the in-memory metadata map, recalculates the library
           statistics (<code>totalDurationChanged</code>, <code>albumCountChanged</code>, <code>artistCountChanged</code>,
           computed from cached durations and distinct non-"Unknown" album / artist tags) and emits
           <code>currentPlaylistChanged</code> and <code>mediaListChanged</code>.
@@ -443,8 +444,8 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <h2 id="display-names">Display Names</h2>
         <p>
           <code>get_display_name(filename)</code> returns a cleaned title for lists and the now-playing views. The map
-          <code>m_displayNames</code> is persisted as <code>&lt;app data&gt;/display_names.json</code> so cleaned names
-          survive restarts. <code>_strip_single_filename()</code> removes the extension, the artist name(s) from the
+          <code>m_displayNames</code> is persisted as <code>&lt;app data&gt;/display_names.json</code> (written atomically
+          in both backends) so cleaned names survive restarts. <code>_strip_single_filename()</code> removes the extension, the artist name(s) from the
           tags (split on <code>/</code> and <code>;</code>), leading track numbers (<code>^\d{1,3}\s*[-._)\s]\s*</code>),
           a list of YouTube-style junk such as <code>(Official Audio)</code>, <code>[HD]</code>, <code>(feat. ...)</code>,
           and leftover separators. <code>_auto_strip_display_names()</code> runs at the end of every scan for files that
@@ -643,7 +644,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           Recovery is capped (commit <code>2884c65</code>, seen on the Pi with 14 tag-only MP3 stubs). After
           <strong>2 attempts on the same file</strong> the track is skipped (<code>_skip_bad_track()</code> &rarr;
           <code>next_track()</code>): a tag-only stub or a truncated MP3 never becomes playable. A missing file skips
-          immediately. After <strong>10 unplayable tracks in a row</strong> (or the whole playlist, if shorter) playback
+          immediately and counts toward the same limit. After <strong>10 unplayable tracks in a row</strong> (or the whole playlist, if shorter) playback
           stops, the source is cleared so no further status events arrive, and <code>playStateChanged(false)</code> is
           emitted instead of looping the library. <code>toggle_play()</code> passes <code>force</code> so a user pressing
           play on a bad state still gets a recovery attempt. The Python constants are

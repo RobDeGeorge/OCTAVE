@@ -415,7 +415,10 @@ class DownloadManager(QObject):
             media_folder = self._settings_manager.mediaFolder
             if media_folder and os.path.isdir(media_folder):
                 try:
-                    for root, _dirs, files in os.walk(media_folder):
+                    for root, dirs, files in os.walk(media_folder):
+                        # Skip hidden dirs, e.g. the C++ backend's
+                        # ".octave-partial" download staging area
+                        dirs[:] = [d for d in dirs if not d.startswith('.')]
                         folder = os.path.basename(root)
                         # Root-level files belong to "Unsorted"
                         if os.path.normpath(root) == os.path.normpath(media_folder):
@@ -493,7 +496,7 @@ class DownloadManager(QObject):
             thumbnails = item.get("thumbnails", [])
             cover_url = thumbnails[-1].get("url", "") if thumbnails else ""
             # YTMusic thumbnails max out at 120x120; request high-res from Google's CDN
-            if cover_url and "lh3.googleusercontent.com" in cover_url:
+            if cover_url and re.search(r"(lh3|yt3)\.googleusercontent\.com", cover_url):
                 cover_url = re.sub(r"=w\d+-h\d+.*$", "=w800-h800-l90-rj", cover_url)
 
             # Parse duration string "M:SS" or "H:MM:SS" to seconds

@@ -74,6 +74,12 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
 
 OBDManager::~OBDManager()
 {
+    // Don't let a still-running rfcomm bind call back into a dying manager
+    if (m_rfcommBindProc) {
+        m_rfcommBindProc->disconnect();
+        m_rfcommBindProc->kill();
+        m_rfcommBindProc->waitForFinished(1000);
+    }
     close();
 }
 
@@ -1229,8 +1235,10 @@ QString OBDManager::platform_hint() const
 }
 
 #ifdef Q_OS_LINUX
-QString OBDManager::ensureRfcommBound(const QString &mac)
+void OBDManager::startRfcommBind(const QString &mac)
 {
+    const quint64 generation = m_rfcommBindGeneration;
+
     // 1) If any /dev/rfcommN already exists, the user pre-bound it (or a
     //    previous run did) — just use the lowest-numbered one. We don't
     //    verify the bound MAC matches; the user typing a MAC into the field
@@ -1241,50 +1249,138 @@ QString OBDManager::ensureRfcommBound(const QString &mac)
         if (QDir().exists(dev)) {
             emit connectionLogLineAppended(
                 QStringLiteral("rfcomm: using existing %1").arg(dev));
-            return dev;
+            finishRfcommBind(generation, dev);
+            return;
         }
     }
 
     // 2) Try `rfcomm bind 0 <mac> 1`. Channel 1 is the universal SPP channel
     //    for ELM327 clones; if the adapter advertises a different channel
-    //    the user can pre-bind manually.
+    //    the user can pre-bind manually. Async: a slow bind used to freeze
+    //    the GUI thread for up to 7 s.
     emit connectionLogLineAppended(
         QStringLiteral("rfcomm: binding %1 → /dev/rfcomm0").arg(mac));
-    QProcess proc;
-    proc.start(QStringLiteral("rfcomm"),
-               QStringList() << QStringLiteral("bind")
-                             << QStringLiteral("0") << mac
-                             << QStringLiteral("1"));
-    if (!proc.waitForStarted(2000)) {
+
+    if (m_rfcommBindProc) {
+        // A newer connect superseded the running bind
+        QProcess *old = m_rfcommBindProc;
+        m_rfcommBindProc = nullptr;
+        old->disconnect();
+        old->kill();
+        old->deleteLater();
+    }
+
+    auto *proc = new QProcess(this);
+    m_rfcommBindProc = proc;
+
+    auto *timeout = new QTimer(proc);
+    timeout->setSingleShot(true);
+    connect(timeout, &QTimer::timeout, proc, [this, proc]() {
+        if (proc->state() == QProcess::NotRunning)
+            return;
+        proc->setProperty("timedOut", true);
+        emit connectionLogLineAppended(QStringLiteral("rfcomm bind failed: timed out"));
+        proc->kill();  // finished() follows with CrashExit
+    });
+
+    connect(proc, &QProcess::errorOccurred, this,
+            [this, proc, generation](QProcess::ProcessError error) {
+        // Crashes and our timeout kill arrive via finished()
+        if (error != QProcess::FailedToStart)
+            return;
         emit connectionLogLineAppended(
             QStringLiteral("rfcomm bind failed: rfcomm binary not found "
                            "(install bluez-utils, or pre-bind and enter /dev/rfcomm0)"));
-        return QString();
-    }
-    proc.waitForFinished(5000);
-    if (proc.exitCode() != 0) {
-        const QString err = QString::fromUtf8(proc.readAllStandardError()).trimmed();
-        emit connectionLogLineAppended(
-            QStringLiteral("rfcomm bind failed: %1")
-                .arg(err.isEmpty() ? QStringLiteral("non-zero exit") : err));
-        emit connectionLogLineAppended(
-            QStringLiteral("tip: add user to bluetooth group, or run "
-                           "`sudo rfcomm bind 0 %1` once and enter /dev/rfcomm0")
-                .arg(mac));
-        return QString();
-    }
-    // Confirm the node now exists (rfcomm sometimes succeeds asynchronously).
-    for (int wait = 0; wait < 10; ++wait) {
-        if (QDir().exists(QStringLiteral("/dev/rfcomm0"))) {
-            emit connectionLogLineAppended(
-                QStringLiteral("rfcomm: bound, opening /dev/rfcomm0"));
-            return QStringLiteral("/dev/rfcomm0");
+        releaseRfcommProc(proc);
+        finishRfcommBind(generation, QString());
+    });
+
+    connect(proc, &QProcess::finished, this,
+            [this, proc, mac, generation](int exitCode, QProcess::ExitStatus exitStatus) {
+        const bool timedOut = proc->property("timedOut").toBool();
+        const QString err = QString::fromUtf8(proc->readAllStandardError()).trimmed();
+        releaseRfcommProc(proc);
+
+        // A timeout or crash is a failure even when exitCode() reads 0
+        if (timedOut) {
+            finishRfcommBind(generation, QString());
+            return;
         }
-        QThread::msleep(100);
+        if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+            QString reason = err;
+            if (reason.isEmpty()) {
+                reason = exitStatus != QProcess::NormalExit
+                    ? QStringLiteral("rfcomm crashed")
+                    : QStringLiteral("non-zero exit");
+            }
+            emit connectionLogLineAppended(
+                QStringLiteral("rfcomm bind failed: %1").arg(reason));
+            emit connectionLogLineAppended(
+                QStringLiteral("tip: add user to bluetooth group, or run "
+                               "`sudo rfcomm bind 0 %1` once and enter /dev/rfcomm0")
+                    .arg(mac));
+            finishRfcommBind(generation, QString());
+            return;
+        }
+        // Confirm the node now exists (rfcomm sometimes succeeds
+        // asynchronously): 10 checks, 100 ms apart.
+        waitForRfcommNode(generation, 9);
+    });
+
+    proc->start(QStringLiteral("rfcomm"),
+                QStringList() << QStringLiteral("bind")
+                              << QStringLiteral("0") << mac
+                              << QStringLiteral("1"));
+    timeout->start(5000);
+}
+
+void OBDManager::waitForRfcommNode(quint64 generation, int attemptsLeft)
+{
+    if (generation != m_rfcommBindGeneration)
+        return;
+    if (QDir().exists(QStringLiteral("/dev/rfcomm0"))) {
+        emit connectionLogLineAppended(
+            QStringLiteral("rfcomm: bound, opening /dev/rfcomm0"));
+        finishRfcommBind(generation, QStringLiteral("/dev/rfcomm0"));
+        return;
     }
-    emit connectionLogLineAppended(
-        QStringLiteral("rfcomm bind reported success but /dev/rfcomm0 missing"));
-    return QString();
+    if (attemptsLeft <= 0) {
+        emit connectionLogLineAppended(
+            QStringLiteral("rfcomm bind reported success but /dev/rfcomm0 missing"));
+        finishRfcommBind(generation, QString());
+        return;
+    }
+    QTimer::singleShot(100, this, [this, generation, attemptsLeft]() {
+        waitForRfcommNode(generation, attemptsLeft - 1);
+    });
+}
+
+void OBDManager::finishRfcommBind(quint64 generation, const QString &bound)
+{
+    // Superseded by a newer connect_to_adapter() — it owns the outcome now
+    if (generation != m_rfcommBindGeneration)
+        return;
+
+    if (bound.isEmpty()) {
+        emit connectionStatusChanged(QStringLiteral("Error"));
+        emit connectionStatusDetailChanged(
+            QStringLiteral("rfcomm bind failed — see Connection Log"));
+        return;
+    }
+    if (m_settingsManager) {
+        // Save the dev path as the active port so the worker thread
+        // opens the bound node, not the MAC string.
+        m_settingsManager->save_obd_bluetooth_port(bound);
+    }
+    force_connect();
+}
+
+void OBDManager::releaseRfcommProc(QProcess *proc)
+{
+    if (m_rfcommBindProc == proc)
+        m_rfcommBindProc = nullptr;
+    proc->disconnect(this);
+    proc->deleteLater();
 }
 #endif
 
@@ -1299,6 +1395,9 @@ void OBDManager::connect_to_adapter(const QString &identifier)
     static const QRegularExpression macRe(
         QStringLiteral("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"));
     const bool isMac = macRe.match(trimmed).hasMatch();
+
+    // Supersede any rfcomm bind still running for an earlier request
+    ++m_rfcommBindGeneration;
 
     qDebug() << "[OBD] connect_to_adapter:" << trimmed
              << "(kind:" << kindForIdentifier(trimmed) << ")";
@@ -1318,18 +1417,10 @@ void OBDManager::connect_to_adapter(const QString &identifier)
     // On Linux/Pi, a MAC alone isn't openable — translate to /dev/rfcommN.
     // (Android hands the MAC to OctaveOBDBridge.connect(); Windows would need
     // a MAC→COM lookup which we punt on for now and let the user enter COM.)
+    // The bind runs async and finishRfcommBind() calls force_connect().
     if (isMac) {
-        const QString bound = ensureRfcommBound(trimmed);
-        if (!bound.isEmpty() && m_settingsManager) {
-            // Save the dev path as the active port so the worker thread
-            // opens the bound node, not the MAC string.
-            m_settingsManager->save_obd_bluetooth_port(bound);
-        } else if (bound.isEmpty()) {
-            emit connectionStatusChanged(QStringLiteral("Error"));
-            emit connectionStatusDetailChanged(
-                QStringLiteral("rfcomm bind failed — see Connection Log"));
-            return;
-        }
+        startRfcommBind(trimmed);
+        return;
     }
 #endif
 

@@ -415,6 +415,9 @@ class OBDManager(QObject):
         self.connectionProgressChanged.connect(self._cache_connection_progress)
         self._is_connecting = False
         self._last_reconnect_time = 0
+        # Bumped by every connect_to_adapter(); an rfcomm bind still running
+        # for an older request is ignored when it finishes.
+        self._rfcomm_bind_generation = 0
         self._last_successful_protocol = None  # Cache last working protocol for faster reconnects
 
         # Auto-reconnect settings (loaded from settings_manager)
@@ -1904,50 +1907,80 @@ class OBDManager(QObject):
     def platform_hint(self):
         return self._get_platform()  # 'windows' | 'macos' | 'linux'
 
-    def _ensure_rfcomm_bound(self, mac):
+    def _ensure_rfcomm_bound(self, mac, log):
         """Linux/Pi: translate a MAC into a /dev/rfcommN node, binding it via
         `rfcomm bind 0 <mac> 1` if no node already exists. Returns the path on
-        success, None on failure (with reason logged to the connection-log)."""
+        success, None on failure (with reason passed to ``log``). Blocks for
+        up to ~6 s — runs on a worker thread, see _start_rfcomm_bind()."""
         # Existing bound node wins — user may have pre-bound manually.
         for i in range(8):
             dev = f"/dev/rfcomm{i}"
             if os.path.exists(dev):
-                self.connectionLogLineAppended.emit(f"rfcomm: using existing {dev}")
+                log(f"rfcomm: using existing {dev}")
                 return dev
 
         if shutil.which("rfcomm") is None:
-            self.connectionLogLineAppended.emit(
-                "rfcomm bind failed: rfcomm binary not found "
+            log("rfcomm bind failed: rfcomm binary not found "
                 "(install bluez-utils, or pre-bind and enter /dev/rfcomm0)")
             return None
 
-        self.connectionLogLineAppended.emit(f"rfcomm: binding {mac} → /dev/rfcomm0")
+        log(f"rfcomm: binding {mac} → /dev/rfcomm0")
         try:
             result = subprocess.run(
                 ["rfcomm", "bind", "0", mac, "1"],
                 capture_output=True, text=True, timeout=5)
         except subprocess.TimeoutExpired:
-            self.connectionLogLineAppended.emit("rfcomm bind failed: timed out")
+            log("rfcomm bind failed: timed out")
             return None
         except OSError as e:
-            self.connectionLogLineAppended.emit(f"rfcomm bind failed: {e}")
+            log(f"rfcomm bind failed: {e}")
             return None
         if result.returncode != 0:
             err = (result.stderr or "").strip() or "non-zero exit"
-            self.connectionLogLineAppended.emit(f"rfcomm bind failed: {err}")
-            self.connectionLogLineAppended.emit(
-                f"tip: add user to bluetooth group, or run "
+            log(f"rfcomm bind failed: {err}")
+            log(f"tip: add user to bluetooth group, or run "
                 f"`sudo rfcomm bind 0 {mac}` once and enter /dev/rfcomm0")
             return None
         # Wait for the node to appear (rfcomm sometimes succeeds async).
         for _ in range(10):
             if os.path.exists("/dev/rfcomm0"):
-                self.connectionLogLineAppended.emit("rfcomm: bound, opening /dev/rfcomm0")
+                log("rfcomm: bound, opening /dev/rfcomm0")
                 return "/dev/rfcomm0"
             time.sleep(0.1)
-        self.connectionLogLineAppended.emit(
-            "rfcomm bind reported success but /dev/rfcomm0 missing")
+        log("rfcomm bind reported success but /dev/rfcomm0 missing")
         return None
+
+    def _start_rfcomm_bind(self, mac):
+        """Run _ensure_rfcomm_bound() on a worker thread so a slow bind can't
+        freeze the GUI. Log lines and the result come back to the main thread
+        through run_on_main (a queued signal), in order."""
+        generation = self._rfcomm_bind_generation
+
+        def log(line):
+            run_on_main(lambda: self.connectionLogLineAppended.emit(line))
+
+        def work():
+            try:
+                bound = self._ensure_rfcomm_bound(mac, log)
+            except Exception as e:
+                log(f"rfcomm bind failed: {e}")
+                bound = None
+            run_on_main(lambda: self._finish_rfcomm_bind(generation, bound))
+
+        threading.Thread(target=work, name="obd-rfcomm-bind", daemon=True).start()
+
+    def _finish_rfcomm_bind(self, generation, bound):
+        """Main thread: act on a finished rfcomm bind."""
+        if generation != self._rfcomm_bind_generation:
+            return  # superseded by a newer connect_to_adapter()
+        if bound is None:
+            self.connectionStatusChanged.emit("Error")
+            self.connectionStatusDetailChanged.emit(
+                "rfcomm bind failed — see Connection Log")
+            return
+        if self._settings_manager:
+            self._settings_manager.save_obd_bluetooth_port(bound)
+        self.force_connect()
 
     @Slot(str)
     def connect_to_adapter(self, identifier):
@@ -1960,6 +1993,8 @@ class OBDManager(QObject):
             return
 
         is_mac = bool(self._MAC_RE.match(trimmed))
+        # Supersede any rfcomm bind still running for an earlier request
+        self._rfcomm_bind_generation += 1
         kind = self._kind_for_identifier(trimmed)
         logger.info(f"[OBD] connect_to_adapter: {trimmed} (kind: {kind})")
         self.connectionLogLineAppended.emit(
@@ -1971,14 +2006,9 @@ class OBDManager(QObject):
                 self._settings_manager.add_obd_saved_adapter(trimmed, trimmed)
 
         if self._get_platform() == "linux" and is_mac:
-            bound = self._ensure_rfcomm_bound(trimmed)
-            if bound and self._settings_manager:
-                self._settings_manager.save_obd_bluetooth_port(bound)
-            elif bound is None:
-                self.connectionStatusChanged.emit("Error")
-                self.connectionStatusDetailChanged.emit(
-                    "rfcomm bind failed — see Connection Log")
-                return
+            # Async; _finish_rfcomm_bind() calls force_connect()
+            self._start_rfcomm_bind(trimmed)
+            return
 
         self.force_connect()
 

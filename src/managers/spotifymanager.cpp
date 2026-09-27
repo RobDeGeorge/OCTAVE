@@ -19,6 +19,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QUuid>
 #include <QDateTime>
@@ -100,14 +101,27 @@ QString SpotifyManager::tokenCachePath() const
 
 void SpotifyManager::saveTokenToCache(const QJsonObject &tokenInfo)
 {
+    // QSaveFile (temp file, fsync, rename over the target): a power cut
+    // mid-write leaves the old token or the new one, never a truncated file
+    // that would force a manual reconnect. The token is a secret, so the temp
+    // file is made owner-only before it is renamed into place.
     const QString path = tokenCachePath();
-    QFile f(path);
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        f.write(QJsonDocument(tokenInfo).toJson(QJsonDocument::Compact));
-        f.close();
-    } else {
-        qCWarning(lcSpotify) << "Failed to write token cache:" << path;
+    const QByteArray data = QJsonDocument(tokenInfo).toJson(QJsonDocument::Compact);
+    QSaveFile out(path);
+    if (!out.open(QIODevice::WriteOnly)) {
+        qCWarning(lcSpotify) << "Failed to write token cache:" << path << out.errorString();
+        return;
     }
+#ifndef Q_OS_WIN
+    out.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+#endif
+    if (out.write(data) != data.size() || !out.commit()) {
+        qCWarning(lcSpotify) << "Failed to write token cache:" << path << out.errorString();
+        return;
+    }
+#ifndef Q_OS_WIN
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+#endif
 }
 
 QJsonObject SpotifyManager::loadTokenFromCache()

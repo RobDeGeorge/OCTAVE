@@ -16,6 +16,7 @@ import threading
 
 from backend.logging_config import get_logger
 from backend.settings_manager import get_app_data_dir
+from backend.atomic_io import atomic_write_bytes, atomic_write_text
 
 # .mp4: YouTube serves audio-only streams in an MP4 container that yt-dlp names
 # with a literal .mp4 extension — same format as .m4a, different extension.
@@ -283,10 +284,18 @@ class MediaManager(QObject):
         accumulate forever now that the temp dir survives restarts)."""
         try:
             with os.scandir(self.temp_dir) as it:
-                covers = [(e.stat().st_atime, e.path) for e in it
-                          if e.is_file() and e.name.startswith('cover_')]
+                entries = [e for e in it if e.is_file()]
         except OSError:
             return
+        covers = []
+        for e in entries:
+            try:
+                if e.name.startswith('.tmp-'):
+                    os.remove(e.path)   # atomic cover write cut off by a power loss
+                elif e.name.startswith('cover_'):
+                    covers.append((e.stat().st_atime, e.path))
+            except OSError:
+                pass
         excess = len(covers) - self._max_cache_files
         if excess <= 0:
             return
@@ -392,9 +401,10 @@ class MediaManager(QObject):
         except Exception as e:
             logger.error(f"Playback recovery failed: {e}")
 
-    def _skip_bad_track(self):
+    def _skip_bad_track(self, advance=False):
         """The current file is unplayable: move on, or stop if the whole
-        playlist is turning out that way."""
+        playlist is turning out that way. advance moves on even when nothing
+        is playing yet (play_file was asked to start a missing file)."""
         self._recovery_attempts = 0
         self._recovery_file = ""
         self._consecutive_bad_tracks += 1
@@ -408,7 +418,7 @@ class MediaManager(QObject):
             self._is_paused = True
             self.playStateChanged.emit(False)
             return
-        if self._is_playing:
+        if self._is_playing or advance:
             self.next_track()
 
     def _cache_metadata(self, filename):
@@ -447,8 +457,8 @@ class MediaManager(QObject):
             return
         self._meta_store_timer.stop()
         try:
-            with open(self._meta_store_path, 'w', encoding='utf-8') as f:
-                json.dump({"version": 1, "files": self._meta_store}, f, separators=(',', ':'))
+            atomic_write_text(self._meta_store_path,
+                              json.dumps({"version": 1, "files": self._meta_store}, separators=(',', ':')))
             self._meta_store_dirty = False   # only once the write succeeded: a failed one retries later
         except Exception as e:
             logger.warning(f"Could not write tag store: {e}")
@@ -495,9 +505,19 @@ class MediaManager(QObject):
         cache_hash = hashlib.sha256(f"{album_id}_0".encode('utf-8')).hexdigest()[:16]
         for ext in ('jpg', 'png', 'gif', 'img'):
             path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{ext}')
-            if os.path.exists(path):
+            if self._cover_file_ok(path):
                 return QUrl.fromLocalFile(path).toString()
         return ""
+
+    @staticmethod
+    def _cover_file_ok(path):
+        """A cached cover is usable only if it has content: older builds wrote
+        covers in place, so a power cut could leave a zero-byte file that
+        would otherwise be served (blank art) forever."""
+        try:
+            return os.path.getsize(path) > 0
+        except OSError:
+            return False
 
     def _cache_metadata_from_file(self, filename):
         """Read a file's tags into the cache.
@@ -664,9 +684,10 @@ class MediaManager(QObject):
             ext = 'img'
         cache_hash = hashlib.sha256(f"{album_id}_0".encode('utf-8')).hexdigest()[:16]
         temp_path = os.path.join(self.temp_dir, f'cover_{cache_hash}.{ext}')
-        if not os.path.exists(temp_path):
-            with open(temp_path, 'wb') as img_file:
-                img_file.write(data)
+        if not self._cover_file_ok(temp_path):
+            # Atomic: a power cut mid-write must not leave a truncated cover
+            # that the hash fast path would then serve on every later boot.
+            atomic_write_bytes(temp_path, bytes(data))
         return QUrl.fromLocalFile(temp_path).toString()
 
     def _extract_album_art_mp3(self, file_path, album_id):
@@ -1367,7 +1388,7 @@ class MediaManager(QObject):
         
         # Play the file - use helper for correct path (handles All Music)
         file_path = self._get_file_path(filename)
-        if os.path.exists(file_path):
+        if file_path and os.path.exists(file_path):
             try:
                 url = QUrl.fromLocalFile(file_path)
                 self._player.setSource(url)
@@ -1396,7 +1417,11 @@ class MediaManager(QObject):
             except Exception as e:
                 logger.error(f"Playback error")
         else:
-            logger.info(f"File not found: {file_path}")
+            # Deleted/moved since the last scan (or an unmounted USB stick):
+            # handle it like any unplayable track so playback moves on, or
+            # stops cleanly once MAX_CONSECUTIVE_BAD_TRACKS are missing in a row.
+            logger.warning(f"File not found, skipping: {file_path}")
+            self._skip_bad_track(advance=True)
      
     @Slot()
     def next_track(self):
@@ -1884,10 +1909,26 @@ class MediaManager(QObject):
             # Update media_dir to playlist path for existing methods
             self.media_dir = playlist["path"]
 
-        self._current_playlist = sorted(
-            playlist["files"],
-            key=lambda x: re.sub(r'[^\w\s]|_', '', x.lower())
-        )
+        if self._shuffle:
+            # Keep shuffle when (re)selecting a playlist — a library rescan
+            # re-selects the active one. Same as toggle_shuffle: a fresh
+            # shuffled order with the loaded song first, if it is in this list.
+            current_song = ""
+            if 0 <= self._current_index < len(self._current_playlist):
+                current_song = self._current_playlist[self._current_index]
+            shuffled = playlist["files"].copy()
+            random.shuffle(shuffled)
+            if current_song in shuffled:
+                idx = shuffled.index(current_song)
+                if idx > 0:
+                    shuffled[0], shuffled[idx] = shuffled[idx], shuffled[0]
+            self._original_files = playlist["files"].copy()
+            self._current_playlist = shuffled
+        else:
+            self._current_playlist = sorted(
+                playlist["files"],
+                key=lambda x: re.sub(r'[^\w\s]|_', '', x.lower())
+            )
         self._current_index = 0
 
         # Clear metadata cache if switching playlists (different folder)
@@ -2274,8 +2315,8 @@ class MediaManager(QObject):
     def _save_display_names(self):
         """Persist display names to JSON"""
         try:
-            with open(self._display_names_path, 'w', encoding='utf-8') as f:
-                json.dump(self._display_names, f, ensure_ascii=False, indent=2)
+            atomic_write_text(self._display_names_path,
+                              json.dumps(self._display_names, ensure_ascii=False, indent=2))
             logger.info(f"Saved {len(self._display_names)} display names")
         except Exception as e:
             logger.error(f"Error saving display names: {e}")

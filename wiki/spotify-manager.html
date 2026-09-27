@@ -167,6 +167,13 @@ keyring = lazy_module(<span class="str">"keyring"</span>)</code></pre>
           code exchange and with every refresh, which is why the secret has to be entered in the app. Both backends
           try a cached token first and only open the browser when none is usable.
         </p>
+        <p>
+          In Python <code>authenticate()</code> returns immediately: the cached-token check (which may refresh an expired
+          token over HTTP) runs on the executor, emits <code>[INFO] Checking for cached token...</code>, and finishes on the
+          GUI thread via the queued <code>_cachedTokenChecked</code> signal. Repeat Connect taps while it runs are ignored
+          with <code>[INFO] Spotify authentication already in progress...</code>, and <code>disconnect()</code> /
+          <code>cleanup()</code> bump a generation counter so a late result is discarded.
+        </p>
 
         <div class="diagram">
 +------------------+     +------------------+     +------------------+
@@ -302,9 +309,14 @@ keyring = lazy_module(<span class="str">"keyring"</span>)</code></pre>
         <span class="kw">return</span> <span class="kw">None</span></code></pre>
         <p>
           The C++ side has no keychain integration: <code>saveTokenToCache()</code> / <code>loadTokenFromCache()</code> /
-          <code>deleteTokenCache()</code> are plain <code>QFile</code> reads and writes of the path returned by
+          <code>deleteTokenCache()</code> are plain file reads and writes of the path returned by
           <code>tokenCachePath()</code>. This is a known parity gap -- the C++ token (including the refresh token) sits in a
-          user-readable file.
+          plain file rather than a keychain.
+        </p>
+        <p>
+          Both token files are written atomically -- <code>QSaveFile</code> in C++, <code>atomic_write_text()</code> from
+          <span class="file-path">backend/atomic_io.py</span> in Python -- so a power cut leaves the old token or the new one,
+          never a truncated file. Both are owner-only (<code>0600</code>) on POSIX systems.
         </p>
 
         <!-- Async Pattern -->
@@ -315,6 +327,12 @@ keyring = lazy_module(<span class="str">"keyring"</span>)</code></pre>
           emits an internal signal that is connected in the constructor:
         </p>
         <pre><code>self._executor = ThreadPoolExecutor(max_workers=<span class="num">2</span>)</code></pre>
+        <p>
+          Every spotipy client (and <code>SpotifyOAuth</code>) is built with <code>requests_timeout=5</code>, one connection
+          retry and no status retries (<code>SPOTIFY_REQUEST_TIMEOUT</code> / <code>SPOTIFY_RETRIES</code> /
+          <code>SPOTIFY_STATUS_RETRIES</code>, via <code>_make_spotify_client()</code>): spotipy's default is to wait forever,
+          and urllib3 would otherwise sleep out a 429/5xx <code>Retry-After</code> on an executor worker. The next poll is the retry.
+        </p>
         <table>
           <thead>
             <tr><th>Internal Signal</th><th>Connected To</th><th>Purpose</th></tr>
@@ -326,6 +344,7 @@ keyring = lazy_module(<span class="str">"keyring"</span>)</code></pre>
             <tr><td><code>_devicesReady</code></td><td><code>_handle_devices_result</code></td><td>Available Spotify devices</td></tr>
             <tr><td><code>_playlistsReady</code></td><td><code>_handle_playlists_result</code></td><td>User playlists</td></tr>
             <tr><td><code>_authCompleted</code></td><td><code>_on_auth_completed</code></td><td>Post-OAuth setup</td></tr>
+            <tr><td><code>_cachedTokenChecked</code></td><td><code>_on_cached_token_checked</code></td><td>Cached-token check / refresh result from <code>authenticate()</code></td></tr>
           </tbody>
         </table>
 

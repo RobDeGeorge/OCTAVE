@@ -257,7 +257,7 @@ private:
     QString m_recoveryFile;
     int m_recoveryAttempts = 0;
     int m_consecutiveBadTracks = 0;
-    void _skip_bad_track();
+    void _skip_bad_track(bool advance = false);
     bool m_autoPlay = false;
 
     // Playlist management

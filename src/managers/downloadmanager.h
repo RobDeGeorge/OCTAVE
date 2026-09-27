@@ -148,6 +148,11 @@ private:
     void _startNextDownload();
     void _embedMetadata(const QString &filePath, const DownloadTask &task);
     void _downloadCoverArt(const QString &songId, const QString &coverUrl, const QString &filePath);
+#ifndef Q_OS_MOBILE
+    void _embedCoverArt(const QString &filePath, const QByteArray &imageData);
+#endif
+    void _finishDownload(const QString &songId, const QString &filePath);
+    void _failDownload(const QString &songId, const QString &errorMsg);
     void _emitStatusPatch(const QString &songId, const QString &field, const QVariant &value);
     float _parseProgressLine(const QString &line);
 #ifdef Q_OS_MOBILE
@@ -189,6 +194,9 @@ private:
     // Cover art downloads
     QNetworkAccessManager *m_networkManager = nullptr;
     QMap<QString, QString> m_pendingCoverDownloads; // reply URL -> songId
+    // Desktop: songs whose file sits tagged in the staging dir while their
+    // cover art downloads; they're published when the cover request ends.
+    QSet<QString> m_awaitingCover;
 
 #ifdef Q_OS_MOBILE
     QTimer *m_mobileProgressPoller = nullptr;

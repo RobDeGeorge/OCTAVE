@@ -20,7 +20,10 @@
 #include <QLoggingCategory>
 
 #ifndef Q_OS_WIN
+#include <cerrno>
 #include <csignal>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 #ifdef Q_OS_ANDROID
@@ -49,6 +52,75 @@
 #endif // Q_OS_MOBILE
 
 Q_LOGGING_CATEGORY(lcDownload, "octave.download")
+
+#ifndef Q_OS_MOBILE
+// ═══════════════════════════════════════════════════════════════════
+// Download staging (desktop)
+//
+// yt-dlp and ffmpeg write each song into <downloadPath>/.octave-partial/<id>/
+// and the finished, tagged file is renamed into the library in one step.
+// The head unit loses power with the ignition; writing straight to the
+// library left truncated songs that yt-dlp later reported as "already
+// downloaded". The staging dir is hidden, so neither backend's library scan
+// descends into it.
+// ═══════════════════════════════════════════════════════════════════
+
+static const QString kStagingDirName = QStringLiteral(".octave-partial");
+
+static QString stagingDirFor(const QString &dlPath, const QString &songId)
+{
+    QString tag = songId;
+    tag.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]")), QStringLiteral("_"));
+    if (tag.isEmpty())
+        tag = QStringLiteral("song");
+    return QDir(dlPath).filePath(kStagingDirName + QLatin1Char('/') + tag);
+}
+
+// Delete a song's staging dir. Refuses any path outside a staging root, so
+// an empty or unexpected path can never wipe a real folder.
+static void removeStagingDir(const QString &dir)
+{
+    if (dir.isEmpty() || !QDir::cleanPath(dir).contains(QLatin1Char('/') + kStagingDirName))
+        return;
+    QDir(dir).removeRecursively();
+}
+
+// fsync the staged file, then rename it over finalPath (atomic on POSIX)
+static bool publishStagedFile(const QString &staged, const QString &finalPath, QString *error)
+{
+#ifndef Q_OS_WIN
+    const QByteArray from = QFile::encodeName(staged);
+    const QByteArray to = QFile::encodeName(finalPath);
+    int fd = ::open(from.constData(), O_RDONLY);
+    if (fd >= 0) {
+        ::fsync(fd);
+        ::close(fd);
+    }
+    if (::rename(from.constData(), to.constData()) != 0) {
+        *error = qt_error_string(errno);
+        return false;
+    }
+    // Persist the rename itself (the directory entry)
+    const QByteArray dir = QFile::encodeName(QFileInfo(finalPath).absolutePath());
+    fd = ::open(dir.constData(), O_RDONLY);
+    if (fd >= 0) {
+        ::fsync(fd);
+        ::close(fd);
+    }
+    return true;
+#else
+    // Qt has no atomic replace for an existing file; Windows isn't the
+    // power-cut target, so remove-then-rename is good enough here.
+    QFile::remove(finalPath);
+    QFile file(staged);
+    if (!file.rename(finalPath)) {
+        *error = file.errorString();
+        return false;
+    }
+    return true;
+#endif
+}
+#endif // Q_OS_MOBILE
 
 const QStringList DownloadManager::s_audioExtensions = {
     QStringLiteral(".mp3"),
@@ -849,6 +921,9 @@ void DownloadManager::cancel_download(const QString &songId)
         proc->disconnect();
         proc->kill();
         proc->waitForFinished(3000);
+#ifndef Q_OS_MOBILE
+        removeStagingDir(proc->property("outputDir").toString());
+#endif
         proc->deleteLater();
         m_downloadStdout.remove(songId);
     }
@@ -863,7 +938,11 @@ void DownloadManager::cancel_download(const QString &songId)
             : (task.artist + QStringLiteral(" - ") + task.songName);
         task.status = QStringLiteral("cancelled");
 
-        m_activeDownloads = qMax(0, m_activeDownloads - 1);
+        // A song waiting on its cover art already left the active count
+        // when its yt-dlp process finished; _finishDownload drops its file.
+        if (!m_awaitingCover.remove(songId)) {
+            m_activeDownloads = qMax(0, m_activeDownloads - 1);
+        }
         emit activeDownloadsChanged(m_activeDownloads);
         emit downloadError(songId, displayName, QStringLiteral("Download cancelled"));
         emit statusMessage(QStringLiteral("Cancelled: ") + displayName);
@@ -979,7 +1058,17 @@ void DownloadManager::_startNextDownload()
         // YouTube Music's artist field is missing — avoids " - Title.m4a".
         QString dlPath = _getDownloadPath();
         QString dlFormat = _getDownloadFormat();
-        QString outputTemplate = QDir(dlPath).filePath(
+        QString outputDir = dlPath;
+#ifndef Q_OS_MOBILE
+        // Nothing in flight: whatever is in staging was cut off by a power
+        // loss or quit mid-download — clear it out.
+        if (m_downloadProcesses.isEmpty() && m_awaitingCover.isEmpty())
+            QDir(QDir(dlPath).filePath(kStagingDirName)).removeRecursively();
+        outputDir = stagingDirFor(dlPath, songId);
+        removeStagingDir(outputDir);
+        QDir().mkpath(outputDir);
+#endif
+        QString outputTemplate = QDir(outputDir).filePath(
             QStringLiteral("%(artist,uploader)s - %(title)s.%(ext)s"));
 
         // Build yt-dlp arguments
@@ -1063,6 +1152,7 @@ void DownloadManager::_startNextDownload()
 
         YtDlpProcess *proc = new YtDlpProcess(this);
         proc->setProperty("songId", songId);
+        proc->setProperty("outputDir", outputDir);
 
         connect(proc, QOverload<int, QProcess::ExitStatus>::of(&YtDlpProcess::finished),
                 this, &DownloadManager::_onDownloadProcessFinished);
@@ -1183,14 +1273,15 @@ void DownloadManager::_pollMobileProgress()
 
 void DownloadManager::_onDownloadProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-    Q_UNUSED(exitStatus)
-
     auto *proc = qobject_cast<YtDlpProcess *>(sender());
     if (!proc) {
         return;
     }
 
     QString songId = proc->property("songId").toString();
+#ifndef Q_OS_MOBILE
+    const QString stageDir = proc->property("outputDir").toString();
+#endif
 
     // Read any remaining output
     m_downloadStdout[songId].append(proc->readAllStandardOutput());
@@ -1209,6 +1300,9 @@ void DownloadManager::_onDownloadProcessFinished(int exitCode, QProcess::ExitSta
 #endif
 
     if (!m_downloadTasks.contains(songId)) {
+#ifndef Q_OS_MOBILE
+        removeStagingDir(stageDir);
+#endif
         m_downloadStdout.remove(songId);
         _startNextDownload();
         return;
@@ -1216,7 +1310,11 @@ void DownloadManager::_onDownloadProcessFinished(int exitCode, QProcess::ExitSta
 
     DownloadTask &task = m_downloadTasks[songId];
 
-    if (exitCode != 0) {
+    // A crash (e.g. yt-dlp killed) can report exit code 0 — not a success
+    if (exitCode != 0 || exitStatus != QProcess::NormalExit) {
+#ifndef Q_OS_MOBILE
+        removeStagingDir(stageDir);
+#endif
         // Extract error info from stderr or stdout
         QString errorMsg = QStringLiteral("Download failed (exit code %1)").arg(exitCode);
         task.status = QStringLiteral("error");
@@ -1250,10 +1348,22 @@ void DownloadManager::_onDownloadProcessFinished(int exitCode, QProcess::ExitSta
             }
         }
 
-        // Fallback: scan download directory for most recently modified file
+#ifndef Q_OS_MOBILE
+        // Only accept a file inside this song's staging dir; otherwise take
+        // the newest audio file there.
+        if (!filePath.isEmpty() &&
+            QFileInfo(filePath).absolutePath() != QFileInfo(stageDir).absoluteFilePath()) {
+            filePath.clear();
+        }
+        const QString scanPath = stageDir;
+#else
+        const QString scanPath = _getDownloadPath();
+#endif
+
+        // Fallback: scan the output directory for most recently modified file
         if (filePath.isEmpty() || !QFile::exists(filePath)) {
-            QString dlPath = _getDownloadPath();
-            QDir dlDir(dlPath);
+            filePath.clear();
+            QDir dlDir(scanPath);
             QFileInfoList files = dlDir.entryInfoList(QDir::Files, QDir::Time);
             for (const QFileInfo &fi : files) {
                 QString suffix = QStringLiteral(".") + fi.suffix().toLower();
@@ -1265,20 +1375,22 @@ void DownloadManager::_onDownloadProcessFinished(int exitCode, QProcess::ExitSta
         }
 
         if (!filePath.isEmpty() && QFile::exists(filePath)) {
-            task.status = QStringLiteral("complete");
-            task.filePath = filePath;
-
-#ifndef Q_OS_ANDROID
-            // Embed metadata using TagLib (desktop only — Android uses
-            // yt-dlp's --embed-metadata / --add-metadata flags at download time
-            // and a mutagen post-pass for the cover).
+#ifndef Q_OS_MOBILE
+            // Tag the staged file (TagLib — desktop only; Android uses
+            // yt-dlp's --embed-metadata / --add-metadata flags at download
+            // time and a mutagen post-pass for the cover).
             _embedMetadata(filePath, task);
 
-            // Download cover art and embed if available
+            // Download cover art and embed it before publishing; the song
+            // moves into the library when the cover request ends.
             if (!task.coverUrl.isEmpty()) {
+                m_awaitingCover.insert(songId);
                 _downloadCoverArt(songId, task.coverUrl, filePath);
+            } else {
+                _finishDownload(songId, filePath);
             }
 #else
+#ifdef Q_OS_ANDROID
             // Swap yt-dlp's 16:9 YouTube thumbnail for the square ytmusicapi
             // cover we already cached locally during search parsing. task.coverUrl
             // is typically a file:// URL pointing into the thumb cache.
@@ -1296,28 +1408,13 @@ void DownloadManager::_onDownloadProcessFinished(int exitCode, QProcess::ExitSta
                 }
             }
 #endif
-
-            QString displayName = task.artist.isEmpty()
-                ? task.songName
-                : (task.artist + QStringLiteral(" - ") + task.songName);
-
-            emit downloadComplete(songId, filePath);
-            emit statusMessage(QStringLiteral("Downloaded: ") + displayName);
-            _emitStatusPatch(songId, QStringLiteral("is_downloaded"), true);
-
-            qCInfo(lcDownload) << "Download complete:" << displayName << "->" << filePath;
+            _finishDownload(songId, filePath);
+#endif
         } else {
-            task.status = QStringLiteral("error");
-            QString errorMsg = QStringLiteral("Download completed but file not found");
-            task.errorMessage = errorMsg;
-            QString displayName = task.artist.isEmpty()
-                ? task.songName
-                : (task.artist + QStringLiteral(" - ") + task.songName);
-            emit downloadError(songId, displayName, errorMsg);
-            emit statusMessage(QStringLiteral("Failed: ") + displayName);
-            _emitStatusPatch(songId, QStringLiteral("is_failed"), true);
-            _emitStatusPatch(songId, QStringLiteral("error_message"), errorMsg);
-
+#ifndef Q_OS_MOBILE
+            removeStagingDir(stageDir);
+#endif
+            _failDownload(songId, QStringLiteral("Download completed but file not found"));
             qCWarning(lcDownload) << "Download file not found for" << songId;
         }
     }
@@ -1339,6 +1436,9 @@ void DownloadManager::_onDownloadProcessError(QProcess::ProcessError error)
     }
 
     QString songId = proc->property("songId").toString();
+#ifndef Q_OS_MOBILE
+    removeStagingDir(proc->property("outputDir").toString());
+#endif
 
     m_downloadProcesses.remove(songId);
     m_downloadStdout.remove(songId);
@@ -1372,6 +1472,77 @@ void DownloadManager::_onDownloadProcessError(QProcess::ProcessError error)
 void DownloadManager::_processDownloadQueue()
 {
     _startNextDownload();
+}
+
+// Hand a finished, tagged download to the library and report it. On desktop
+// filePath is the staged file, which is fsynced and renamed into the
+// download folder first; a cancelled or cleared task just drops it.
+void DownloadManager::_finishDownload(const QString &songId, const QString &filePath)
+{
+    m_awaitingCover.remove(songId);
+
+    const auto it = m_downloadTasks.find(songId);
+    const bool live = it != m_downloadTasks.end() &&
+                      it->status != QStringLiteral("cancelled");
+    QString finalPath = filePath;
+
+#ifndef Q_OS_MOBILE
+    const QFileInfo staged(filePath);
+    const QString stageDir = staged.absolutePath();
+    if (!live) {
+        removeStagingDir(stageDir);
+        return;
+    }
+    // <downloadPath>/.octave-partial/<id>/file -> <downloadPath>/file
+    QDir libraryDir(stageDir);
+    libraryDir.cdUp();
+    libraryDir.cdUp();
+    finalPath = libraryDir.filePath(staged.fileName());
+
+    QString error;
+    const bool published = publishStagedFile(filePath, finalPath, &error);
+    removeStagingDir(stageDir);
+    if (!published) {
+        qCWarning(lcDownload) << "Could not move" << filePath << "to" << finalPath << ":" << error;
+        _failDownload(songId, QStringLiteral("Could not save download: ") + error);
+        return;
+    }
+#else
+    if (!live) {
+        return;
+    }
+#endif
+
+    DownloadTask &task = it.value();
+    task.status = QStringLiteral("complete");
+    task.filePath = finalPath;
+
+    QString displayName = task.artist.isEmpty()
+        ? task.songName
+        : (task.artist + QStringLiteral(" - ") + task.songName);
+
+    emit downloadComplete(songId, finalPath);
+    emit statusMessage(QStringLiteral("Downloaded: ") + displayName);
+    _emitStatusPatch(songId, QStringLiteral("is_downloaded"), true);
+
+    qCInfo(lcDownload) << "Download complete:" << displayName << "->" << finalPath;
+}
+
+void DownloadManager::_failDownload(const QString &songId, const QString &errorMsg)
+{
+    if (!m_downloadTasks.contains(songId)) {
+        return;
+    }
+    DownloadTask &task = m_downloadTasks[songId];
+    task.status = QStringLiteral("error");
+    task.errorMessage = errorMsg;
+    QString displayName = task.artist.isEmpty()
+        ? task.songName
+        : (task.artist + QStringLiteral(" - ") + task.songName);
+    emit downloadError(songId, displayName, errorMsg);
+    emit statusMessage(QStringLiteral("Failed: ") + displayName);
+    _emitStatusPatch(songId, QStringLiteral("is_failed"), true);
+    _emitStatusPatch(songId, QStringLiteral("error_message"), errorMsg);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1431,6 +1602,8 @@ void DownloadManager::_downloadCoverArt(const QString &songId, const QString &co
     QNetworkRequest request{QUrl(coverUrl)};
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
+    // The song waits in staging until this ends — don't let it hang
+    request.setTransferTimeout(15000);
     // Store songId and filePath as properties on the reply for retrieval in the finished handler
     QNetworkReply *reply = m_networkManager->get(request);
     reply->setProperty("songId", songId);
@@ -1441,16 +1614,30 @@ void DownloadManager::_onCoverDownloadFinished(QNetworkReply *reply)
 {
     reply->deleteLater();
 
-    if (reply->error() != QNetworkReply::NoError) {
-        qCDebug(lcDownload) << "Cover art download failed:" << reply->errorString();
+    const QString songId = reply->property("songId").toString();
+    const QString filePath = reply->property("filePath").toString();
+    if (songId.isEmpty() || filePath.isEmpty()) {
         return;
     }
 
-    QString songId = reply->property("songId").toString();
-    QString filePath = reply->property("filePath").toString();
-    QByteArray imageData = reply->readAll();
+    if (reply->error() != QNetworkReply::NoError) {
+        qCDebug(lcDownload) << "Cover art download failed:" << reply->errorString();
+    } else {
+        const QByteArray imageData = reply->readAll();
+        if (!imageData.isEmpty()) {
+            _embedCoverArt(filePath, imageData);
+            qCDebug(lcDownload) << "Cover art embedded for:" << songId;
+        }
+    }
 
-    if (imageData.isEmpty() || filePath.isEmpty()) {
+    // The staged song was waiting on its cover; publish it either way
+    _finishDownload(songId, filePath);
+    emit downloadQueueChanged();
+}
+
+void DownloadManager::_embedCoverArt(const QString &filePath, const QByteArray &imageData)
+{
+    if (!QFile::exists(filePath)) {
         return;
     }
 
@@ -1553,8 +1740,6 @@ void DownloadManager::_onCoverDownloadFinished(QNetworkReply *reply)
             }
         }
     }
-
-    qCDebug(lcDownload) << "Cover art embedded for:" << songId;
 }
 
 #endif // Q_OS_MOBILE — TagLib metadata embedding block

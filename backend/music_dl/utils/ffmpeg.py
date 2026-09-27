@@ -73,6 +73,17 @@ FFMPEG_FORMATS = {
     "wav": ["-codec:a", "pcm_s16le"],
 }
 
+# ffmpeg muxer per output format. Passed as -f when the output file name
+# doesn't end in the format's extension (the downloader's staging file).
+FFMPEG_MUXERS = {
+    "mp3": "mp3",
+    "flac": "flac",
+    "ogg": "ogg",
+    "opus": "opus",
+    "m4a": "ipod",
+    "wav": "wav",
+}
+
 DUR_REGEX = re.compile(
     r"Duration: (?P<hour>\d{2}):(?P<min>\d{2}):(?P<sec>\d{2})\.(?P<ms>\d{2})"
 )
@@ -287,6 +298,7 @@ def convert(
     bitrate: Optional[str] = None,
     ffmpeg_args: Optional[str] = None,
     progress_handler: Optional[Callable[[int], None]] = None,
+    force_container: bool = False,
 ) -> Tuple[bool, Optional[Dict[str, Any]]]:
     """
     Convert the input file to the output file synchronously with progress handler.
@@ -299,6 +311,8 @@ def convert(
     - bitrate: constant/variable bitrate.
     - ffmpeg_args: ffmpeg arguments.
     - progress_handler: progress handler, has to accept an integer as argument.
+    - force_container: pass -f for output_format, so output_file may have any
+      name (e.g. a ".song.mp3.part" staging file).
 
     ### Returns
     - Tuple of conversion status and error dictionary.
@@ -358,6 +372,10 @@ def convert(
     # Add other ffmpeg arguments if specified
     if ffmpeg_args:
         arguments.extend(shlex.split(ffmpeg_args))
+
+    # Name the container explicitly when the file name doesn't carry it
+    if force_container:
+        arguments.extend(["-f", FFMPEG_MUXERS[output_format]])
 
     # Add output file at the end
     arguments.append(str(output_file.resolve()))

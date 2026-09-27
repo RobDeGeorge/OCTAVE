@@ -16,6 +16,12 @@ from backend.logging_config import get_logger
 from backend.qt_threading import run_on_main
 logger = get_logger(__name__)
 
+# Longest partial line kept while waiting for its newline. Knob commands are
+# a few bytes; more than this without a newline is line noise (or a
+# misbehaving device), so it is dropped rather than buffered forever.
+# Same name and value as the C++ ESP32VolumeManager.
+ESP32_MAX_LINE_BYTES = 256
+
 
 class ESP32VolumeManager(QObject):
     """
@@ -476,6 +482,8 @@ class ESP32VolumeManager(QObject):
     def _read_loop(self):
         """Background thread to read serial data from ESP32."""
         buffer = ""
+        overflow_warned = False  # warn once per connection, not per chunk
+        resyncing = False  # after an overflow, skip to the next newline
 
         while not self._stop_thread and self._serial_connection:
             try:
@@ -485,7 +493,14 @@ class ESP32VolumeManager(QObject):
                 data = self._serial_connection.readline()
                 if not data:
                     continue
-                buffer += data.decode('utf-8', errors='ignore')
+                text = data.decode('utf-8', errors='ignore')
+                if resyncing:
+                    # The rest of the overlong line is noise too
+                    if '\n' not in text:
+                        continue
+                    text = text.split('\n', 1)[1]
+                    resyncing = False
+                buffer += text
 
                 # Process complete lines (readline may return a partial line on timeout)
                 while '\n' in buffer:
@@ -493,6 +508,16 @@ class ESP32VolumeManager(QObject):
                     line = line.strip()
                     if line:
                         self._process_command(line)
+
+                if len(buffer) > ESP32_MAX_LINE_BYTES:
+                    if not overflow_warned:
+                        logger.warning(
+                            f"ESP32 volume: dropping {len(buffer)} bytes with no newline "
+                            f"(limit {ESP32_MAX_LINE_BYTES}); further drops on this "
+                            f"connection are not logged")
+                        overflow_warned = True
+                    buffer = ""
+                    resyncing = True
 
             except serial.SerialException as e:
                 logger.error(f"ESP32 volume: serial read error: {e}")

@@ -10,7 +10,7 @@
 #include <QJsonObject>
 #include <QLoggingCategory>
 #include <QRegularExpression>
-#include <QTemporaryFile>
+#include <QSaveFile>
 
 Q_LOGGING_CATEGORY(lcDashboards, "octave.dashboards")
 
@@ -241,30 +241,21 @@ bool DashboardManager::writeSpec(const QString &absolutePath, const QVariantMap 
     QFileInfo fi(absolutePath);
     QDir().mkpath(fi.absolutePath());
 
-    // Atomic write: temp file + rename.
-    QTemporaryFile tmp(fi.absolutePath() + QStringLiteral("/.dashboard_tmp_XXXXXX.json"));
-    tmp.setAutoRemove(false);
-    if (!tmp.open()) {
-        qCWarning(lcDashboards) << "Cannot create temp file:" << tmp.errorString();
+    // Atomic write via QSaveFile (temp file, fsync, rename over the target) so
+    // a power cut leaves either the old dashboard or the new one. QFile::rename
+    // refuses to overwrite, so the old temp+rename always fell back to a
+    // non-atomic direct write when saving over an existing dashboard.
+    QSaveFile out(absolutePath);
+    if (!out.open(QIODevice::WriteOnly)) {
+        qCWarning(lcDashboards) << "Cannot open" << absolutePath << "for writing:"
+                                << out.errorString();
         return false;
     }
-    tmp.write(doc.toJson(QJsonDocument::Indented));
-    const QString tmpName = tmp.fileName();
-    tmp.close();
-
-#ifdef Q_OS_WIN
-    if (QFile::exists(absolutePath)) QFile::remove(absolutePath);
-#endif
-    if (!QFile::rename(tmpName, absolutePath)) {
-        qCWarning(lcDashboards) << "Atomic rename failed, falling back to direct write";
-        QFile::remove(tmpName);
-        QFile direct(absolutePath);
-        if (!direct.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            qCWarning(lcDashboards) << "Cannot open" << absolutePath << "for writing";
-            return false;
-        }
-        direct.write(doc.toJson(QJsonDocument::Indented));
-        direct.close();
+    const QByteArray data = doc.toJson(QJsonDocument::Indented);
+    if (out.write(data) != data.size() || !out.commit()) {
+        qCWarning(lcDashboards) << "Failed to write" << absolutePath << ":"
+                                << out.errorString();
+        return false;
     }
     return true;
 }

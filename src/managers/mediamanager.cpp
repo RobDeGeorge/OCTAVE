@@ -5,6 +5,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -49,6 +50,15 @@
 #include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(lcMedia, "octave.media")
+
+// A cached cover is usable only if it has content: older builds wrote covers
+// in place, so a power cut could leave a zero-byte file that the hash fast
+// path would otherwise serve (blank art) forever.
+static bool coverFileOk(const QString &path)
+{
+    const QFileInfo fi(path);
+    return fi.isFile() && fi.size() > 0;
+}
 
 // ─── Static members ────────────────────────────────────────────────
 
@@ -441,8 +451,9 @@ void MediaManager::_attempt_playback_recovery(bool force)
 }
 
 // The current file is unplayable: move on, or stop if the whole playlist is
-// turning out that way.
-void MediaManager::_skip_bad_track()
+// turning out that way. advance moves on even when nothing is playing yet
+// (play_file was asked to start a missing file).
+void MediaManager::_skip_bad_track(bool advance)
 {
     m_recoveryAttempts = 0;
     m_recoveryFile.clear();
@@ -458,7 +469,7 @@ void MediaManager::_skip_bad_track()
         emit playStateChanged(false);
         return;
     }
-    if (m_isPlaying)
+    if (m_isPlaying || advance)
         next_track();
 }
 
@@ -506,9 +517,11 @@ void MediaManager::_save_meta_store()
     QJsonObject root;
     root[QStringLiteral("version")] = 1;
     root[QStringLiteral("files")] = m_metaStore;
-    QFile f(m_metaStorePath);
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)
-        && f.write(QJsonDocument(root).toJson(QJsonDocument::Compact)) >= 0) {
+    // QSaveFile (temp + fsync + rename): a power cut leaves the old store or
+    // the new one, never a truncated one
+    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Compact);
+    QSaveFile f(m_metaStorePath);
+    if (f.open(QIODevice::WriteOnly) && f.write(data) == data.size() && f.commit()) {
         m_metaStoreDirty = false;   // only once the write succeeded: a failed one retries later
     } else {
         qCWarning(lcMedia) << "Could not write tag store:" << f.errorString();
@@ -562,7 +575,7 @@ QString MediaManager::_cached_art_url_for(const QString &albumId) const
     for (const char *ext : {"jpg", "png", "gif", "img"}) {
         const QString path = m_tempDir + QStringLiteral("/cover_") + QString::fromLatin1(hash)
                              + QLatin1Char('.') + QLatin1String(ext);
-        if (QFile::exists(path))
+        if (coverFileOk(path))
             return QUrl::fromLocalFile(path).toString();
     }
     return {};
@@ -636,9 +649,10 @@ void MediaManager::_cache_metadata_from_file(const QString &filename)
         const QByteArray hash = QCryptographicHash::hash(cacheKey, QCryptographicHash::Sha256).toHex().left(16);
         const QString tempPath = m_tempDir + QStringLiteral("/cover_")
                                 + QString::fromLatin1(hash) + QStringLiteral(".jpg");
-        if (!QFile::exists(tempPath) && OctaveAndroid::extractAlbumArt(filePath, tempPath)) {
+        if (!coverFileOk(tempPath) && OctaveAndroid::extractAlbumArt(filePath, tempPath)
+            && coverFileOk(tempPath)) {
             m_albumArtCache.insert(albumId, QUrl::fromLocalFile(tempPath).toString());
-        } else if (QFile::exists(tempPath)) {
+        } else if (coverFileOk(tempPath)) {
             m_albumArtCache.insert(albumId, QUrl::fromLocalFile(tempPath).toString());
         }
     }
@@ -761,6 +775,23 @@ QString MediaManager::_extract_album_art_flac(const QString &, const QString &) 
 QString MediaManager::_extract_album_art_ogg(const QString &, const QString &) { return {}; }
 #else
 
+// Write a cover into the temp dir unless a non-empty one is already there,
+// via QSaveFile so a power cut mid-write can't leave a truncated cover that
+// every later boot would serve. Returns the file URL, or {} if it failed.
+static QString writeCoverFile(const QString &path, const TagLib::ByteVector &data)
+{
+    if (!coverFileOk(path)) {
+        QSaveFile out(path);
+        if (!out.open(QIODevice::WriteOnly)
+            || out.write(data.data(), qint64(data.size())) != qint64(data.size())
+            || !out.commit()) {
+            qCWarning(lcMedia) << "Could not write cover" << path << ":" << out.errorString();
+            return {};
+        }
+    }
+    return QUrl::fromLocalFile(path).toString();
+}
+
 QString MediaManager::_extract_album_art_mp3(const QString &filePath, const QString &albumId)
 {
     TagLib::MPEG::File file(filePath.toUtf8().constData());
@@ -791,15 +822,7 @@ QString MediaManager::_extract_album_art_mp3(const QString &filePath, const QStr
     QByteArray hash = QCryptographicHash::hash(cacheKey, QCryptographicHash::Sha256).toHex().left(16);
     QString tempPath = m_tempDir + QStringLiteral("/cover_") + QString::fromLatin1(hash) + QStringLiteral(".") + ext;
 
-    if (!QFile::exists(tempPath)) {
-        QFile out(tempPath);
-        if (out.open(QIODevice::WriteOnly)) {
-            const TagLib::ByteVector &data = frame->picture();
-            out.write(data.data(), data.size());
-        }
-    }
-
-    return QUrl::fromLocalFile(tempPath).toString();
+    return writeCoverFile(tempPath, frame->picture());
 }
 
 QString MediaManager::_extract_album_art_mp4(const QString &filePath, const QString &albumId)
@@ -829,15 +852,7 @@ QString MediaManager::_extract_album_art_mp4(const QString &filePath, const QStr
     QByteArray hash = QCryptographicHash::hash(cacheKey, QCryptographicHash::Sha256).toHex().left(16);
     QString tempPath = m_tempDir + QStringLiteral("/cover_") + QString::fromLatin1(hash) + QStringLiteral(".") + ext;
 
-    if (!QFile::exists(tempPath)) {
-        QFile out(tempPath);
-        if (out.open(QIODevice::WriteOnly)) {
-            const TagLib::ByteVector &data = cover.data();
-            out.write(data.data(), data.size());
-        }
-    }
-
-    return QUrl::fromLocalFile(tempPath).toString();
+    return writeCoverFile(tempPath, cover.data());
 }
 
 QString MediaManager::_extract_album_art_flac(const QString &filePath, const QString &albumId)
@@ -863,15 +878,7 @@ QString MediaManager::_extract_album_art_flac(const QString &filePath, const QSt
     QByteArray hash = QCryptographicHash::hash(cacheKey, QCryptographicHash::Sha256).toHex().left(16);
     QString tempPath = m_tempDir + QStringLiteral("/cover_") + QString::fromLatin1(hash) + QStringLiteral(".") + ext;
 
-    if (!QFile::exists(tempPath)) {
-        QFile out(tempPath);
-        if (out.open(QIODevice::WriteOnly)) {
-            const TagLib::ByteVector &data = pic->data();
-            out.write(data.data(), data.size());
-        }
-    }
-
-    return QUrl::fromLocalFile(tempPath).toString();
+    return writeCoverFile(tempPath, pic->data());
 }
 
 QString MediaManager::_extract_album_art_ogg(const QString &filePath, const QString &albumId)
@@ -910,15 +917,7 @@ QString MediaManager::_extract_album_art_ogg(const QString &filePath, const QStr
     QByteArray hash = QCryptographicHash::hash(cacheKey, QCryptographicHash::Sha256).toHex().left(16);
     QString tempPath = m_tempDir + QStringLiteral("/cover_") + QString::fromLatin1(hash) + QStringLiteral(".") + ext;
 
-    if (!QFile::exists(tempPath)) {
-        QFile out(tempPath);
-        if (out.open(QIODevice::WriteOnly)) {
-            const TagLib::ByteVector &data = pic->data();
-            out.write(data.data(), data.size());
-        }
-    }
-
-    return QUrl::fromLocalFile(tempPath).toString();
+    return writeCoverFile(tempPath, pic->data());
 }
 
 #endif // Q_OS_MOBILE
@@ -1584,7 +1583,11 @@ void MediaManager::play_file(const QString &filename)
     // Play the file
     const QString filePath = _get_file_path(fileToPlay);
     if (filePath.isEmpty() || !QFile::exists(filePath)) {
-        qCInfo(lcMedia) << "File not found:" << filePath;
+        // Deleted/moved since the last scan (or an unmounted USB stick):
+        // handle it like any unplayable track so playback moves on, or stops
+        // cleanly once kMaxConsecutiveBadTracks are missing in a row.
+        qCWarning(lcMedia) << "File not found, skipping:" << filePath;
+        _skip_bad_track(true);
         return;
     }
 
@@ -2140,11 +2143,29 @@ void MediaManager::select_playlist(const QString &name)
         m_mediaDir = playlist.path;
     }
 
-    QStringList sorted = playlist.files;
-    std::sort(sorted.begin(), sorted.end(), [](const QString &a, const QString &b) {
-        return cleanForSort(a) < cleanForSort(b);
-    });
-    m_currentPlaylist = sorted;
+    if (m_shuffle) {
+        // Keep shuffle when (re)selecting a playlist — a library rescan
+        // re-selects the active one. Same as toggle_shuffle: a fresh shuffled
+        // order with the loaded song first, if it is in this list.
+        QString currentSong;
+        if (m_currentIndex >= 0 && m_currentIndex < m_currentPlaylist.size())
+            currentSong = m_currentPlaylist[m_currentIndex];
+        QStringList shuffled = playlist.files;
+        std::random_device rd;
+        std::mt19937 rng(rd());
+        std::shuffle(shuffled.begin(), shuffled.end(), rng);
+        const int idx = currentSong.isEmpty() ? -1 : int(shuffled.indexOf(currentSong));
+        if (idx > 0)
+            shuffled.swapItemsAt(0, idx);
+        m_originalFiles = playlist.files;
+        m_currentPlaylist = shuffled;
+    } else {
+        QStringList sorted = playlist.files;
+        std::sort(sorted.begin(), sorted.end(), [](const QString &a, const QString &b) {
+            return cleanForSort(a) < cleanForSort(b);
+        });
+        m_currentPlaylist = sorted;
+    }
     m_currentIndex = 0;
 
     m_metadataCache.clear();
@@ -2572,13 +2593,13 @@ void MediaManager::_save_display_names()
     for (auto it = m_displayNames.constBegin(); it != m_displayNames.constEnd(); ++it)
         obj.insert(it.key(), it.value());
 
-    QFile file(m_displayNamesPath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        qCWarning(lcMedia) << "Failed to save display names:" << m_displayNamesPath;
+    // QSaveFile (temp + fsync + rename) so a power cut can't truncate it
+    const QByteArray data = QJsonDocument(obj).toJson(QJsonDocument::Indented);
+    QSaveFile file(m_displayNamesPath);
+    if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit()) {
+        qCWarning(lcMedia) << "Failed to save display names:" << m_displayNamesPath << file.errorString();
         return;
     }
-    file.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
-    file.close();
     qCInfo(lcMedia) << "Saved" << m_displayNames.size() << "display names";
 }
 

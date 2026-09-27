@@ -15,6 +15,7 @@ from urllib.parse import urlparse, parse_qs
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
+from backend.atomic_io import atomic_write_text
 from backend.logging_config import get_logger
 logger = get_logger(__name__)
 
@@ -31,6 +32,25 @@ KEYRING_AVAILABLE = available("keyring")
 if not KEYRING_AVAILABLE:
     logger.warning("keyring not installed. Token storage will be less secure.")
 keyring = lazy_module("keyring")
+
+# Every spotipy HTTP call gets a hard timeout. spotipy's OAuth default is None
+# (wait forever), which on a weak hotspot stalls a token refresh indefinitely.
+# One connection retry covers a single dropped packet; status retries are off
+# because urllib3 sleeps for the full Retry-After of a 429/503, which can run to
+# minutes and would pin an executor worker. The 3 s poll is the retry instead.
+SPOTIFY_REQUEST_TIMEOUT = 5  # seconds
+SPOTIFY_RETRIES = 1
+SPOTIFY_STATUS_RETRIES = 0
+
+
+def _make_spotify_client(auth_manager):
+    """spotipy.Spotify with OCTAVE's timeout / retry policy."""
+    return spotipy.Spotify(
+        auth_manager=auth_manager,
+        requests_timeout=SPOTIFY_REQUEST_TIMEOUT,
+        retries=SPOTIFY_RETRIES,
+        status_retries=SPOTIFY_STATUS_RETRIES,
+    )
 
 
 # spotipy duck-types its cache handler (get_cached_token / save_token_to_cache),
@@ -83,10 +103,11 @@ class KeyringCacheHandler(_CacheHandlerBase):
             except Exception as e:
                 logger.debug(f"Keyring write error: {e}")
 
-        # Fallback to file cache
+        # Fallback to file cache. Written atomically (temp + fsync + replace) so
+        # a power cut mid-write can't leave a truncated token; the temp file
+        # comes from mkstemp, so it is owner-only (0600) before it is renamed.
         try:
-            with open(self._cache_file, 'w') as f:
-                json.dump(token_info, f)
+            atomic_write_text(self._cache_file, json.dumps(token_info))
         except Exception as e:
             logger.debug(f"File cache write error: {e}")
 
@@ -141,6 +162,9 @@ class SpotifyManager(QObject):
 
     # Internal signal for thread-safe initialization after auth
     _authCompleted = Signal()
+    # Cached-token check finished on a worker: generation, auth_manager,
+    # token_info (or None), error message ("" on success)
+    _cachedTokenChecked = Signal(int, object, object, str)
 
     # Queue neighbor signal — emitted when queue-based prev/next art is ready
     queueUpdated = Signal()
@@ -209,8 +233,15 @@ class SpotifyManager(QObject):
         # Store auth_manager for use after thread callback
         self._pending_auth_manager = None
 
+        # Cached-token check (may refresh over HTTP) runs on the executor.
+        # _auth_in_flight swallows double-taps on Connect; _auth_generation is
+        # bumped by disconnect()/cleanup() so a late result is ignored.
+        self._auth_in_flight = False
+        self._auth_generation = 0
+
         # Connect internal signals for thread-safe callbacks
         self._authCompleted.connect(self._on_auth_completed)
+        self._cachedTokenChecked.connect(self._on_cached_token_checked)
         self._playbackStateReady.connect(self._handle_playback_state)
         self._queueReady.connect(self._handle_queue_result)
         self._colorsReady.connect(self._handle_colors_result)
@@ -267,7 +298,7 @@ class SpotifyManager(QObject):
         """Called on main thread after successful OAuth callback"""
         if self._pending_auth_manager:
             self.statusProgress.emit("[SUCCESS] OAuth completed, setting up connection...")
-            self._sp = spotipy.Spotify(auth_manager=self._pending_auth_manager)
+            self._sp = _make_spotify_client(self._pending_auth_manager)
             self._is_connected = True
             self.connectionStateChanged.emit(True)
             self._poll_timer.start()
@@ -305,7 +336,16 @@ class SpotifyManager(QObject):
 
     @Slot()
     def authenticate(self):
-        """Start OAuth authentication flow"""
+        """Start OAuth authentication flow.
+
+        Returns immediately: the cached-token check can refresh an expired
+        token over HTTP, so it runs on the executor and the result is handled
+        on the GUI thread by _on_cached_token_checked.
+        """
+        if self._auth_in_flight:
+            self.statusProgress.emit("[INFO] Spotify authentication already in progress...")
+            return
+
         self.statusProgress.emit("[INFO] Starting Spotify authentication...")
 
         if not SPOTIPY_AVAILABLE:
@@ -339,16 +379,55 @@ class SpotifyManager(QObject):
                 scope=scope,
                 cache_handler=self._cache_handler,
                 open_browser=False,
-                state=self._oauth_state
+                state=self._oauth_state,
+                requests_timeout=SPOTIFY_REQUEST_TIMEOUT,
             )
+        except Exception as e:
+            self.statusProgress.emit(f"[ERROR] Authentication failed: {str(e)}")
+            self.errorOccurred.emit(f"Authentication failed: {str(e)}")
+            logger.error(f"Auth error: {e}")
+            return
 
-            # Check if we have a cached token
-            token_info = auth_manager.get_cached_token()
+        generation = self._auth_generation
+
+        def check_cached_token():
+            # Reads the keyring and, if the access token has expired, refreshes
+            # it over HTTP (bounded by requests_timeout). Must not run on the
+            # GUI thread.
+            try:
+                token_info = auth_manager.get_cached_token()
+                error = ""
+            except Exception as e:
+                token_info = None
+                error = str(e) or type(e).__name__
+            # Signal emitted from a worker thread -> queued to the GUI thread
+            self._cachedTokenChecked.emit(generation, auth_manager, token_info, error)
+
+        try:
+            self._executor.submit(check_cached_token)
+        except RuntimeError as e:
+            # Executor already shut down (app exiting)
+            logger.debug(f"Auth not started: {e}")
+            return
+        self._auth_in_flight = True
+        self.statusProgress.emit("[INFO] Checking for cached token...")
+
+    @Slot(int, object, object, str)
+    def _on_cached_token_checked(self, generation, auth_manager, token_info, error):
+        """GUI-thread half of authenticate(), after the cached-token check."""
+        self._auth_in_flight = False
+        if generation != self._auth_generation:
+            logger.debug("Ignoring stale Spotify auth result")
+            return
+
+        try:
+            if error:
+                raise RuntimeError(error)
 
             if token_info:
                 # We have a valid token, create client
                 self.statusProgress.emit("[INFO] Found cached token, connecting...")
-                self._sp = spotipy.Spotify(auth_manager=auth_manager)
+                self._sp = _make_spotify_client(auth_manager)
                 self._is_connected = True
                 self.connectionStateChanged.emit(True)
                 self._poll_timer.start()
@@ -475,6 +554,9 @@ class SpotifyManager(QObject):
     def disconnect(self):
         """Disconnect from Spotify"""
         self.statusProgress.emit("[INFO] Disconnecting from Spotify...")
+        # Drop any cached-token check still in flight
+        self._auth_generation += 1
+        self._auth_in_flight = False
         self._poll_timer.stop()
         self._interpolation_timer.stop()
         self._sp = None
@@ -503,6 +585,7 @@ class SpotifyManager(QObject):
 
         # Mark as not connected to prevent callbacks from doing work
         self._is_connected = False
+        self._auth_generation += 1
 
         # Clear the client to make API calls fail fast
         self._sp = None

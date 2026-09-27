@@ -111,6 +111,12 @@ private:
 
     QMutex m_lock;
     QString m_readBuffer;
+    bool m_readOverflowWarned = false;  // warn once per connection
+    bool m_readResyncing = false;       // after an overflow, skip to the next newline
+
+    // Longest partial line kept while waiting for its newline; longer is
+    // dropped. Same name and value as the Python backend.
+    static constexpr int ESP32_MAX_LINE_BYTES = 256;
 
     // Timers
     QTimer m_reconnectTimer;

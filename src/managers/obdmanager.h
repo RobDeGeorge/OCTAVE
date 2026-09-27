@@ -25,6 +25,7 @@
 // granted). All BLE work runs through OctaveOBDBridge.java via JNI instead.
 
 class OBDConnectionWorker;
+class QProcess;
 
 // ===========================================================================
 // OBDManager -- desktop (USB/serial) OBD-II manager using QSerialPort.
@@ -380,9 +381,13 @@ private:
 #ifdef Q_OS_LINUX
     // Linux/Pi only: when the user gives us a MAC, run `rfcomm bind 0 <mac> 1`
     // so the kernel hands us a /dev/rfcommN node we can open like any serial
-    // port. Returns the resulting device path on success, empty string on
-    // failure (and emits the failure reason to the connection log).
-    QString ensureRfcommBound(const QString &mac);
+    // port. Runs asynchronously (the bind can take seconds) and ends in
+    // finishRfcommBind() with the device path, or an empty string on failure
+    // (the reason goes to the connection log).
+    void startRfcommBind(const QString &mac);
+    void waitForRfcommNode(quint64 generation, int attemptsLeft);
+    void finishRfcommBind(quint64 generation, const QString &bound);
+    void releaseRfcommProc(QProcess *proc);
 #endif
 
     // Build the signal-name -> emit-lambda dispatch table
@@ -404,6 +409,11 @@ private:
     // Member variables
     // ======================================================================
     SettingsManager *m_settingsManager = nullptr;
+
+    // Bumped by every connect_to_adapter(); an rfcomm bind still running for
+    // an older request is ignored when it finishes.
+    quint64 m_rfcommBindGeneration = 0;
+    QProcess *m_rfcommBindProc = nullptr;  // in-flight `rfcomm bind` (Linux)
 
     // Serial port (owned by worker thread when polling)
     QSerialPort *m_serialPort = nullptr;

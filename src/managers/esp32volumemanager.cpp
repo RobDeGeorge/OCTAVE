@@ -405,6 +405,8 @@ void ESP32VolumeManager::connect_device()
 
     m_reconnectAttempts = 0;
     m_readBuffer.clear();
+    m_readOverflowWarned = false;
+    m_readResyncing = false;
 
     // Start keepalive (only if sleep is disabled)
     bool sleepEnabled = m_settingsManager
@@ -513,6 +515,14 @@ void ESP32VolumeManager::onSerialReadyRead()
         return;
 
     QByteArray data = m_serialPort->readAll();
+    if (m_readResyncing) {
+        // The rest of an overlong line is noise too — skip to its newline
+        const qsizetype nl = data.indexOf('\n');
+        if (nl < 0)
+            return;
+        data = data.mid(nl + 1);
+        m_readResyncing = false;
+    }
     m_readBuffer.append(QString::fromUtf8(data));
 
     // Process complete lines
@@ -523,6 +533,19 @@ void ESP32VolumeManager::onSerialReadyRead()
         if (!line.isEmpty()) {
             processCommand(line);
         }
+    }
+
+    // Knob commands are a few bytes; a partial line this long is line noise
+    // or a misbehaving device. Drop it instead of buffering forever.
+    if (m_readBuffer.size() > ESP32_MAX_LINE_BYTES) {
+        if (!m_readOverflowWarned) {
+            qCWarning(lcEsp32) << "dropping" << m_readBuffer.size()
+                               << "bytes with no newline (limit" << ESP32_MAX_LINE_BYTES
+                               << "); further drops on this connection are not logged";
+            m_readOverflowWarned = true;
+        }
+        m_readBuffer.clear();
+        m_readResyncing = true;
     }
 }
 

@@ -38,8 +38,12 @@ from mutagen.id3._frames import (
     USLT,
     WOAS,
 )
+from mutagen.flac import FLAC
 from mutagen.id3._specs import Encoding
-from mutagen.mp4 import MP4Cover
+from mutagen.mp3 import EasyMP3
+from mutagen.mp4 import MP4, MP4Cover
+from mutagen.oggopus import OggOpus
+from mutagen.oggvorbis import OggVorbis
 from mutagen.wave import WAVE
 
 from backend.music_dl.types.song import Song
@@ -63,6 +67,7 @@ __all__ = [
     "LRC_REGEX",
     "embed_metadata",
     "embed_cover",
+    "hires_cover_url",
     "embed_lyrics",
     "get_file_metadata",
 ]
@@ -163,11 +168,35 @@ MP3_TO_SONG = {
 LRC_REGEX = re.compile(r"(\[\d{2}:\d{2}.\d{2,3}\])")
 
 
+# Explicit mutagen loaders per format, used when the file's name doesn't
+# carry its format (the downloader tags a ".<name>.part" staging file).
+_MUTAGEN_TYPES = {
+    "mp3": EasyMP3,
+    "flac": FLAC,
+    "ogg": OggVorbis,
+    "opus": OggOpus,
+    "m4a": MP4,
+}
+
+
+def hires_cover_url(url: str) -> str:
+    """
+    Rewrite a Google CDN (YouTube Music) cover URL to request the full-size image.
+    The CDN never upscales, so asking for 2000px returns the original upload
+    (typically 1200-1400px) instead of the 60-120px thumbnails ytmusicapi returns.
+    """
+
+    if url and re.search(r"(lh3|yt3)\.googleusercontent\.com", url):
+        return re.sub(r"=(w\d+-h\d+|s\d+)[^/]*$", "=w2000-h2000-l100-rj", url)
+    return url
+
+
 def embed_metadata(
     output_file: Path,
     song: Song,
     id3_separator: str = "/",
     skip_album_art: Optional[bool] = False,
+    file_format: Optional[str] = None,
 ):
     """
     Set ID3 tags for generic files (FLAC, OPUS, OGG)
@@ -177,10 +206,12 @@ def embed_metadata(
     - song: Song object.
     - id3_separator: The separator used for the id3 tags.
     - skip_album_art: Boolean to skip album art embedding.
+    - file_format: Audio format ("mp3", "m4a", ...). Defaults to the file
+      extension; pass it when the file has a non-audio (staging) name.
     """
 
     # Get the file extension for the output file
-    encoding = output_file.suffix[1:]
+    encoding = file_format or output_file.suffix[1:]
 
     if encoding == "wav":
         embed_wav_file(output_file, song)
@@ -190,7 +221,10 @@ def embed_metadata(
     tag_preset = TAG_PRESET if encoding != "m4a" else M4A_TAG_PRESET
 
     try:
-        audio_file = File(str(output_file.resolve()), easy=encoding == "mp3")
+        if file_format and encoding in _MUTAGEN_TYPES:
+            audio_file = _MUTAGEN_TYPES[encoding](str(output_file.resolve()))
+        else:
+            audio_file = File(str(output_file.resolve()), easy=encoding == "mp3")
 
         if audio_file is None:
             raise MetadataError(
@@ -310,7 +344,7 @@ def embed_cover(audio_file, song: Song, encoding: str):
     # Try to download the cover art
     try:
         cover_data = requests.get(
-            song.cover_url,
+            hires_cover_url(song.cover_url),
             timeout=10,
             proxies=GlobalConfig.get_parameter("proxies"),
         ).content
@@ -645,7 +679,7 @@ def embed_wav_file(output_file: Path, song: Song):
 
     if song.cover_url:
         try:
-            cover_data = requests.get(song.cover_url, timeout=10).content
+            cover_data = requests.get(hires_cover_url(song.cover_url), timeout=10).content
             audio.tags.add(  # type: ignore
                 APIC(
                     encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover_data

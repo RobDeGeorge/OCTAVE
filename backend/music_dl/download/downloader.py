@@ -9,6 +9,7 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import shutil
 import sys
 import traceback
@@ -47,6 +48,30 @@ AUDIO_PROVIDERS: Dict[str, Type[AudioProvider]] = {
 }
 
 logger = logging.getLogger(__name__)
+
+
+def partial_path_for(output_file: Path) -> Path:
+    """Staging path for ``output_file``: same directory (so the final
+    os.replace is a rename, never a copy), hidden, and ending in ".part" so
+    library scans that match audio extensions skip it."""
+    return output_file.with_name(f".{output_file.name}.part")
+
+
+def publish_partial(partial_file: Path, output_file: Path) -> None:
+    """fsync ``partial_file``, then atomically rename it to ``output_file``."""
+    with open(partial_file, "rb+") as handle:
+        os.fsync(handle.fileno())
+    os.replace(partial_file, output_file)
+    if sys.platform != "win32":
+        # Persist the rename itself (the directory entry)
+        try:
+            dir_fd = os.open(output_file.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
 
 
 class DownloaderError(Exception):
@@ -348,98 +373,114 @@ class Downloader:
                 download_url, download=True
             )
 
-            temp_file = Path(
-                temp_folder / f"{download_info['id']}.{download_info['ext']}"
-            )
-
             if download_info is None:
                 raise DownloaderError(
                     f"yt-dlp failed to get metadata for: {song.name} - {song.artist}"
                 )
 
+            temp_file = Path(
+                temp_folder / f"{download_info['id']}.{download_info['ext']}"
+            )
+
             display_progress_tracker.notify_download_complete()
 
-            # Copy or convert
-            if (
-                self.settings["bitrate"] in ["auto", "disable", None]
-                and temp_file.suffix == output_file.suffix
-            ):
-                shutil.move(str(temp_file), output_file)
-                success = True
-                result = None
-            else:
-                if self.ffmpeg is None:
-                    raise DownloaderError(
-                        "Conversion needed but ffmpeg is not available"
-                    )
-
-                if self.settings["bitrate"] in ["auto", None]:
-                    bitrate = (
-                        f"{int(download_info['abr'])}k"
-                        if download_info.get("abr")
-                        else "128k"
-                    )
-                elif self.settings["bitrate"] == "disable":
-                    bitrate = None
-                else:
-                    bitrate = str(self.settings["bitrate"])
-
-                success, result = convert(
-                    input_file=temp_file,
-                    output_file=output_file,
-                    ffmpeg=self.ffmpeg,
-                    output_format=self.settings["format"],
-                    bitrate=bitrate,
-                    ffmpeg_args=self.settings["ffmpeg_args"],
-                    progress_handler=display_progress_tracker.ffmpeg_progress_hook,
-                )
-
-            # Remove temp file
-            if temp_file.exists():
-                try:
-                    temp_file.unlink()
-                except (PermissionError, OSError) as exc:
-                    logger.debug("Could not remove temp file: %s, %s", temp_file, exc)
-                    raise DownloaderError(
-                        f"Could not remove temp file: {temp_file}"
-                    ) from exc
-
-            if not success and result:
-                file_name = (
-                    get_errors_path()
-                    / f"ffmpeg_error_{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.txt"
-                )
-                error_message = ""
-                for key, value in result.items():
-                    error_message += f"### {key}:\n{str(value).strip()}\n\n"
-                with open(file_name, "w", encoding="utf-8") as error_path:
-                    error_path.write(error_message)
-                if output_file.exists():
-                    output_file.unlink()
-                raise FFmpegError(
-                    f"Failed to convert {song.display_name}, "
-                    f"error saved to: {str(file_name.absolute())}"
-                )
-
-            download_info["filepath"] = str(output_file)
-
-            if song.download_url is None:
-                song.download_url = download_url
-
-            display_progress_tracker.notify_conversion_complete()
-
-            # Embed metadata
+            # Build the song under a staging name and only rename it to
+            # output_file once converted, tagged and fsynced. A power cut
+            # mid-write then leaves a stray staging file instead of a
+            # truncated song that the "skip" overwrite mode would later treat
+            # as already downloaded. The name is hidden and ends in ".part",
+            # so neither backend's library scan lists it.
+            partial_file = partial_path_for(output_file)
             try:
-                embed_metadata(
-                    output_file,
-                    song,
-                    id3_separator=self.settings["id3_separator"],
-                    skip_album_art=self.settings["skip_album_art"],
-                )
-            except Exception as exception:
-                raise MetadataError(
-                    "Failed to embed metadata to the song"
-                ) from exception
+                # Copy or convert
+                if (
+                    self.settings["bitrate"] in ["auto", "disable", None]
+                    and temp_file.suffix == output_file.suffix
+                ):
+                    shutil.move(str(temp_file), partial_file)
+                    success = True
+                    result = None
+                else:
+                    if self.ffmpeg is None:
+                        raise DownloaderError(
+                            "Conversion needed but ffmpeg is not available"
+                        )
+
+                    if self.settings["bitrate"] in ["auto", None]:
+                        bitrate = (
+                            f"{int(download_info['abr'])}k"
+                            if download_info.get("abr")
+                            else "128k"
+                        )
+                    elif self.settings["bitrate"] == "disable":
+                        bitrate = None
+                    else:
+                        bitrate = str(self.settings["bitrate"])
+
+                    success, result = convert(
+                        input_file=temp_file,
+                        output_file=partial_file,
+                        ffmpeg=self.ffmpeg,
+                        output_format=self.settings["format"],
+                        bitrate=bitrate,
+                        ffmpeg_args=self.settings["ffmpeg_args"],
+                        progress_handler=display_progress_tracker.ffmpeg_progress_hook,
+                        force_container=True,
+                    )
+
+                # Remove temp file
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except (PermissionError, OSError) as exc:
+                        logger.debug("Could not remove temp file: %s, %s", temp_file, exc)
+                        raise DownloaderError(
+                            f"Could not remove temp file: {temp_file}"
+                        ) from exc
+
+                if not success and result:
+                    file_name = (
+                        get_errors_path()
+                        / f"ffmpeg_error_{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.txt"
+                    )
+                    error_message = ""
+                    for key, value in result.items():
+                        error_message += f"### {key}:\n{str(value).strip()}\n\n"
+                    with open(file_name, "w", encoding="utf-8") as error_path:
+                        error_path.write(error_message)
+                    raise FFmpegError(
+                        f"Failed to convert {song.display_name}, "
+                        f"error saved to: {str(file_name.absolute())}"
+                    )
+
+                download_info["filepath"] = str(output_file)
+
+                if song.download_url is None:
+                    song.download_url = download_url
+
+                display_progress_tracker.notify_conversion_complete()
+
+                # Embed metadata
+                try:
+                    embed_metadata(
+                        partial_file,
+                        song,
+                        id3_separator=self.settings["id3_separator"],
+                        skip_album_art=self.settings["skip_album_art"],
+                        file_format=self.settings["format"],
+                    )
+                except Exception as exception:
+                    raise MetadataError(
+                        "Failed to embed metadata to the song"
+                    ) from exception
+
+                publish_partial(partial_file, output_file)
+            except BaseException:
+                try:
+                    partial_file.unlink()
+                except OSError:
+                    pass
+                raise
 
             display_progress_tracker.notify_complete()
 
