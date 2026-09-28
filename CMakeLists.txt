@@ -286,6 +286,16 @@ if(APPLE)
     )
 endif()
 
+# ---- Windows: GUI subsystem ----
+# Without this OCTAVE.exe is a console program and a black console window
+# opens behind the app on every launch. Logging goes to rotating files
+# (src/util/logger.cpp), so nothing needs stdout; Qt's entry-point library
+# supplies WinMain, and QProcess children (adb, yt-dlp) get CREATE_NO_WINDOW
+# automatically when the parent has no console.
+if(WIN32)
+    set_target_properties(octave PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
 # ---- Android packaging ----
 if(ANDROID)
     # androiddeployqt packages the app, bundles Qt .so's, generates the APK.
