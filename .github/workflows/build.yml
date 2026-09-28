@@ -252,6 +252,16 @@ jobs:
           mkdir -p dist/OCTAVE/platform-tools
           cp tools/platform-tools/windows/* dist/OCTAVE/platform-tools/
           windeployqt --qmldir frontend --release dist/OCTAVE/octave.exe
+          # Visual C++ runtime, deployed app-local (Microsoft supports this for
+          # the CRT DLLs). windeployqt only adds vc_redist when the MSVC
+          # environment is set, which this bash step does not have, so the
+          # installer used to ship no runtime and a clean Windows could not
+          # start the app. Fail the build rather than ship without it.
+          VS="$(cygpath -u "$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -property installationPath)")"
+          CRT="$(ls -d "$VS"/VC/Redist/MSVC/*/x64/Microsoft.VC14*.CRT | sort -V | tail -1)"
+          echo "VC runtime from: $CRT"
+          cp "$CRT"/*.dll dist/OCTAVE/
+          ls -l dist/OCTAVE/msvcp140.dll dist/OCTAVE/vcruntime140.dll dist/OCTAVE/vcruntime140_1.dll
           # Inno Setup expects the binary at OCTAVE.exe (capitalized) per the .iss.
           mv dist/OCTAVE/octave.exe dist/OCTAVE/OCTAVE.exe
 
@@ -260,8 +270,10 @@ jobs:
         run: |
           # Inno Setup 6 ships pre-installed on windows-latest runners as iscc.exe.
           # Patch the .iss version to match the git tag (or 0.9.4 fallback for dispatches).
-          $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          if ([string]::IsNullOrEmpty($version)) { $version = '0.9.4' }
+          # Only a v* tag names the version; a dispatch runs on a branch
+          # ("main"), which used to end up as the installer's version.
+          if ($env:GITHUB_REF_NAME -match '^v\d') { $version = $env:GITHUB_REF_NAME -replace '^v', '' }
+          else { $version = '0.9.4' }
           (Get-Content build_scripts/installer_windows.iss) `
             -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$version`"" |
             Set-Content build_scripts/installer_windows.iss

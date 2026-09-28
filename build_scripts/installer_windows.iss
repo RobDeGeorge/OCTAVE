@@ -63,23 +63,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; Clean up user data on uninstall (optional - remove if you want to preserve settings)
 Type: filesandordirs; Name: "{userappdata}\OCTAVE"
 
-[Code]
-// Check for Visual C++ Redistributable
-function VCRedistInstalled: Boolean;
-var
-  Version: String;
-begin
-  Result := RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Version) or
-            RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Version);
-end;
-
-function InitializeSetup: Boolean;
-begin
-  Result := True;
-  if not VCRedistInstalled then
-  begin
-    MsgBox('Microsoft Visual C++ Redistributable is recommended for this application.' + #13#10 +
-           'If you experience issues, please install it from:' + #13#10 +
-           'https://aka.ms/vs/17/release/vc_redist.x64.exe', mbInformation, MB_OK);
-  end;
-end;
+; No Visual C++ Redistributable check: CI deploys the VC runtime DLLs
+; (msvcp140, vcruntime140, ...) app-local next to OCTAVE.exe, so a clean
+; Windows needs nothing extra. The old check showed a plain MsgBox, which
+; /SUPPRESSMSGBOXES cannot silence, so every /VERYSILENT install hung on it.
