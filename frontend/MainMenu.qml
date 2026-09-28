@@ -176,7 +176,11 @@ Item {
                     id: songTitleContainer
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignHCenter
-                    height: Math.ceil(App.Spacing.mainMenuSongTextSize * 1.4)
+                    // Layout.preferredHeight, not height: a ColumnLayout sizes its children
+                    // from Layout.* / implicit size, and a plain height here was sometimes
+                    // ignored (depending on startup timing), collapsing the row to 0 px so
+                    // the Home card showed no title/artist.
+                    Layout.preferredHeight: Math.ceil(App.Spacing.mainMenuSongTextSize * 1.4)
 
                     Flickable {
                         id: songTitleFlickable
@@ -198,12 +202,21 @@ Item {
                             font.family: mainMenu.globalFont
                         }
 
+                        // Title marquee. Runs only while mainMenu is visible: this page stays alive
+
+                        // hidden (StackView cache / pre-building), and a hidden marquee kept a 5 s
+
+                        // animation cycling forever, costing ~15% of a Pi core at idle. restart()
+
+                        // below bypasses the running binding, hence the visible checks there too.
+
                         Timer {
                             id: songScrollTimer
                             interval: 3000
-                            running: songTitleText.width > songTitleContainer.width
+                            running: songTitleText.width > songTitleContainer.width && mainMenu.visible
                             repeat: true
                             onTriggered: {
+                                if (!mainMenu.visible) return
                                 if (songTitleFlickable.contentX === 0) {
                                     songScrollAnimation.to = songTitleText.width - songTitleFlickable.width
                                     songScrollAnimation.start()
@@ -220,7 +233,7 @@ Item {
                             property: "contentX"
                             duration: 5000
                             easing.type: Easing.InOutQuad
-                            onFinished: songScrollTimer.restart()
+                            onFinished: if (mainMenu.visible) songScrollTimer.restart()
                         }
                     }
                 }
@@ -230,7 +243,7 @@ Item {
                     id: metadataContainer
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignHCenter
-                    height: Math.ceil(App.Spacing.mainMenuArtistTextSize * 1.4)
+                    Layout.preferredHeight: Math.ceil(App.Spacing.mainMenuArtistTextSize * 1.4)  // see songTitleContainer
 
                     Flickable {
                         id: metadataFlickable
@@ -273,9 +286,10 @@ Item {
                         Timer {
                             id: metadataScrollTimer
                             interval: 3000
-                            running: metadataRow.width > metadataContainer.width
+                            running: metadataRow.width > metadataContainer.width && mainMenu.visible
                             repeat: true
                             onTriggered: {
+                                if (!mainMenu.visible) return
                                 if (metadataFlickable.contentX === 0) {
                                     metadataScrollAnimation.to = metadataRow.width - metadataFlickable.width
                                     metadataScrollAnimation.start()
@@ -292,7 +306,7 @@ Item {
                             property: "contentX"
                             duration: 5000
                             easing.type: Easing.InOutQuad
-                            onFinished: metadataScrollTimer.restart()
+                            onFinished: if (mainMenu.visible) metadataScrollTimer.restart()
                         }
                     }
                 }

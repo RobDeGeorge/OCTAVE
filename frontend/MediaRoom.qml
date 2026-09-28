@@ -284,7 +284,13 @@ Item {
                 // Freeze blur texture during card animation — avoids a full-screen
                 // multi-pass re-render when grid images change source mid-transition
                 layer.enabled: true
-                layer.live: !mediaRoom._cardAnimBusy
+                // layer.live is set through a Binding, not declared as `layer.live:`.
+                // It is a revisioned property (Qt 6.5), and on Qt 6.7 whether the QML
+                // compiler accepts the declaration depends on which file first compiled
+                // the layer type: sometimes it fails with '".live" is not available due
+                // to component versioning', which made MediaRoom unloadable (seen when
+                // pages are pre-built at startup). A Binding sets it by name at runtime.
+                Binding { target: albumArtGrid.layer; property: "live"; value: !mediaRoom._cardAnimBusy }
                 layer.effect: MultiEffect {
                     blurEnabled: true
                     blurMax: 64
@@ -930,13 +936,22 @@ Item {
                                     font.family: mediaRoom.globalFont
                                 }
 
+                                // Title marquee. Runs only while mediaRoom is visible: this page stays alive
+
+                                // hidden (StackView cache / pre-building), and a hidden marquee kept a 5 s
+
+                                // animation cycling forever, costing ~15% of a Pi core at idle. restart()
+
+                                // below bypasses the running binding, hence the visible checks there too.
+
                                 Timer {
                                     id: songScrollTimer
                                     property real containerWidth: songTitleFlickable.parent ? songTitleFlickable.parent.width : 200
                                     interval: 3000
-                                    running: songTitleText.width > containerWidth
+                                    running: songTitleText.width > containerWidth && mediaRoom.visible
                                     repeat: true
                                     onTriggered: {
+                                        if (!mediaRoom.visible) return
                                         if (songTitleFlickable.contentX === 0) {
                                             songScrollAnimation.to = songTitleText.width - songTitleFlickable.width;
                                             songScrollAnimation.start();
@@ -953,7 +968,7 @@ Item {
                                     property: "contentX"
                                     duration: settingsManager ? settingsManager.textScrollSpeed : 5000
                                     easing.type: Easing.InOutQuad
-                                    onFinished: songScrollTimer.restart()
+                                    onFinished: if (mediaRoom.visible) songScrollTimer.restart()
                                 }
                             }
                         }
@@ -1007,9 +1022,10 @@ Item {
                                     id: metadataScrollTimer
                                     property real containerWidth: metadataFlickable.parent ? metadataFlickable.parent.width : 200
                                     interval: 3000
-                                    running: metadataRow.width > containerWidth
+                                    running: metadataRow.width > containerWidth && mediaRoom.visible
                                     repeat: true
                                     onTriggered: {
+                                        if (!mediaRoom.visible) return
                                         if (metadataFlickable.contentX === 0) {
                                             metadataScrollAnimation.to = metadataRow.width - metadataFlickable.width;
                                             metadataScrollAnimation.start();
@@ -1026,7 +1042,7 @@ Item {
                                     property: "contentX"
                                     duration: settingsManager ? settingsManager.textScrollSpeed : 5000
                                     easing.type: Easing.InOutQuad
-                                    onFinished: metadataScrollTimer.restart()
+                                    onFinished: if (mediaRoom.visible) metadataScrollTimer.restart()
                                 }
                             }
                         }
@@ -1193,7 +1209,8 @@ Item {
                 // Cache all bars as a single texture during card animation —
                 // collapses 96 individual gradient draw calls into one texture blit
                 layer.enabled: true
-                layer.live: !mediaRoom._cardAnimBusy
+                // Via Binding, see albumArtGrid above.
+                Binding { target: waveformBars.layer; property: "live"; value: !mediaRoom._cardAnimBusy }
 
                 property int numBars: audioAnalyzer ? audioAnalyzer.get_num_bars() : 96
 

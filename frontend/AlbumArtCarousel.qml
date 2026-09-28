@@ -754,7 +754,13 @@ Item {
         animating: carousel.animBusy
 
         image.layer.enabled: carousel.roundedArt || carousel.vinylMode
-        image.layer.live: !carousel.animBusy
+        // layer.live is set through a Binding, not declared as `layer.live:`.
+        // It is a revisioned property (Qt 6.5), and on Qt 6.7 whether the QML
+        // compiler accepts the declaration depends on which file first compiled
+        // the layer type: sometimes it fails with '".live" is not available due
+        // to component versioning', which made MediaRoom unloadable (seen when
+        // pages are pre-built at startup). A Binding sets it by name at runtime.
+        Binding { target: prevCard.image.layer; property: "live"; value: !carousel.animBusy }
     }
 
     // Next card (tilted right) — only visible with 3D preview
@@ -781,7 +787,7 @@ Item {
         animating: carousel.animBusy
 
         image.layer.enabled: carousel.roundedArt || carousel.vinylMode
-        image.layer.live: !carousel.animBusy
+        Binding { target: nextCard.image.layer; property: "live"; value: !carousel.animBusy }
     }
 
     // Exit snapshot — frozen texture of old art for transitions
