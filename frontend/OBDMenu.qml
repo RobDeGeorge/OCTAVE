@@ -298,7 +298,16 @@ Item {
                 bottomMargin: dp(10)
             }
             visible: obdPage.activeDashboardId !== "grid"
-            spec: (visible && typeof dashboardManager !== "undefined" && dashboardManager)
+            // Load the dashboard only while this is the active StackView page,
+            // not merely `visible`: page pre-building draws this page once
+            // offscreen (briefly visible), and a visible-keyed spec then
+            // started the widgets' async Loaders and tore them down mid-
+            // incubation ("Object or context destroyed during incubation"),
+            // leaving the render loop near full rate while hidden — ~20% of
+            // a Pi core at idle.
+            readonly property bool _pageActive: obdPage.StackView.status === StackView.Active
+                                                || obdPage.StackView.status === StackView.Activating
+            spec: (visible && _pageActive && typeof dashboardManager !== "undefined" && dashboardManager)
                   ? dashboardManager.loadDashboard(obdPage.activeDashboardId)
                   : null
         }

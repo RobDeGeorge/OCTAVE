@@ -1679,6 +1679,13 @@ Item {
         }
 
         function onPositionChanged(position) {
+            // Skip 10 Hz position ticks while hidden (this page is alive
+            // off-screen from startup): each one re-laid out the time text,
+            // moved the slider and the carousel, ~9% of a Pi core during
+            // playback for nothing on screen. StackView.onActivated ->
+            // syncNowPlaying() re-reads the position when the page returns.
+            if (!mediaRoom.visible)
+                return
             if (!userSeeking) {
                 mediaRoom.position = position
                 progressSlider.value = position
@@ -1746,6 +1753,8 @@ Item {
         }
 
         function onPositionChanged(position) {
+            if (!mediaRoom.visible)
+                return  // see the local-media handler above
             if (useSpotify && !userSeeking) {
                 mediaRoom.position = position
                 progressSlider.value = position
