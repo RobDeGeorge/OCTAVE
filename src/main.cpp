@@ -73,9 +73,16 @@ int main(int argc, char *argv[])
     // Persistent logging + crash handlers first, so anything the managers
     // say during construction (and any crash) reaches the log files.
     bool debugLogging = false;
-    for (int i = 1; i < argc; ++i)
+    // --smoke: load Main.qml, run 5 s (startup work, page pre-building), then
+    // exit 0. A packaged build that cannot start (missing DLL, no frontend/)
+    // exits non-zero or never starts, so CI can launch the real artifact.
+    bool smokeTest = false;
+    for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0)
             debugLogging = true;
+        else if (std::strcmp(argv[i], "--smoke") == 0)
+            smokeTest = true;
+    }
     OctaveLog::install(debugLogging);
 
 #ifdef OCTAVE_HAVE_WEBENGINE
@@ -397,6 +404,10 @@ int main(int argc, char *argv[])
     if (engine.rootObjects().isEmpty()) {
         qCritical("Failed to load Main.qml from %s", qPrintable(qmlUrl.toString()));
         return -1;
+    }
+    if (smokeTest) {
+        qInfo("Smoke test: Main.qml loaded, exiting in 5 s");
+        QTimer::singleShot(5000, &app, [&app]() { app.exit(0); });
     }
 
     // Quit the app when the last window is closed (Mod+Q, X button, etc.)

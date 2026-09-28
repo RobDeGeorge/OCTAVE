@@ -11,6 +11,8 @@ os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"
 parser = argparse.ArgumentParser(description='OCTAVE Infotainment System')
 parser.add_argument('--debug', action='store_true', help='Enable debug logging')
 parser.add_argument('--profile', action='store_true', help='Enable performance monitor')
+parser.add_argument('--smoke', action='store_true',
+                    help='Load Main.qml, run 5 s, then exit 0 (CI launch check; mirrors the C++ flag)')
 args, _ = parser.parse_known_args()
 
 # Initialize logging FIRST (before other imports that might log)
@@ -468,6 +470,9 @@ def setup_perf_profiling():
 if __name__ == "__main__":
     install_obd_manager(OBDManager(settings_manager))
     load_main_qml()
+    if args.smoke:
+        logger.info("Smoke test: Main.qml loaded, exiting in 5 s")
+        QTimer.singleShot(5000, lambda: app.exit(0))
     if args.profile:
         setup_perf_profiling()
     sys.exit(app.exec())

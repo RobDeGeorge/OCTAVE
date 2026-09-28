@@ -262,8 +262,41 @@ jobs:
           echo "VC runtime from: $CRT"
           cp "$CRT"/*.dll dist/OCTAVE/
           ls -l dist/OCTAVE/msvcp140.dll dist/OCTAVE/vcruntime140.dll dist/OCTAVE/vcruntime140_1.dll
+          # Every transitive DLL import (e.g. tag.dll -> z.dll, zlib) that a clean
+          # Windows lacks, copied from vcpkg / Qt; fails on anything unresolved.
+          # Up to 0.9.4 zlib was only on the runner's PATH, so no installer ever
+          # started on a clean PC ("z.dll was not found").
+          python -m pip install --quiet pefile
+          python packaging/windows/resolve_dlls.py dist/OCTAVE \
+            "$VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin" "$QT_ROOT_DIR/bin"
+          # The QML frontend, loaded at runtime from <appDir>/frontend (main.cpp),
+          # exactly like the AppImage's usr/frontend. Never shipped before 0.9.4:
+          # the installed app could not find Main.qml and exited.
+          cp -r frontend dist/OCTAVE/frontend
+          rm -rf dist/OCTAVE/frontend/assets/-src dist/OCTAVE/frontend/assets/readme
           # Inno Setup expects the binary at OCTAVE.exe (capitalized) per the .iss.
           mv dist/OCTAVE/octave.exe dist/OCTAVE/OCTAVE.exe
+
+      - name: Smoke-test the packaged app (clean PATH)
+        shell: pwsh
+        run: |
+          # Launch the exact files the installer will ship, with PATH reduced to
+          # Windows' own folders so nothing from vcpkg / Qt / msys on the runner
+          # can mask a missing DLL, and require Main.qml to load (--smoke exits 0
+          # after 5 s). A loader error dialog never exits, hence the timeout.
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $p = Start-Process -FilePath "dist\OCTAVE\OCTAVE.exe" -ArgumentList "--smoke" -PassThru
+          $ok = $p.WaitForExit(90000)
+          $logs = Join-Path $env:APPDATA "OCTAVE\logs"
+          if (-not $ok) {
+            $p.Kill()
+            Write-Host "::error::OCTAVE.exe --smoke did not exit within 90 s (loader error dialog or hang)"
+          } elseif ($p.ExitCode -ne 0) {
+            Write-Host "::error::OCTAVE.exe --smoke exited with $($p.ExitCode)"
+          }
+          if (Test-Path $logs) { Get-ChildItem $logs | ForEach-Object { Write-Host "== $($_.Name)"; Get-Content $_.FullName -Tail 40 } }
+          if (-not $ok -or $p.ExitCode -ne 0) { exit 1 }
+          Write-Host "Smoke test passed: the packaged app starts and loads Main.qml on a clean PATH"
 
       - name: Build Windows installer (Inno Setup)
         shell: pwsh

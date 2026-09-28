@@ -337,7 +337,7 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
 
         <h3 id="startup-cpp">C++ &mdash; <span class="file-path">src/main.cpp</span></h3>
         <ol class="steps">
-          <li><strong>Logging + crash handlers first</strong> &mdash; <code>argv</code> is scanned for <code>--debug</code> and <code>OctaveLog::install(debug)</code> runs <em>before</em> <code>QGuiApplication</code> exists, so anything a manager constructor logs (and any crash) reaches the files.</li>
+          <li><strong>Logging + crash handlers first</strong> &mdash; <code>argv</code> is scanned for <code>--debug</code> (and <code>--smoke</code>, which exits 0 five seconds after <code>Main.qml</code> loads; CI uses it to launch the packaged Windows build) and <code>OctaveLog::install(debug)</code> runs <em>before</em> <code>QGuiApplication</code> exists, so anything a manager constructor logs (and any crash) reaches the files.</li>
           <li><strong>QGuiApplication</strong> &mdash; organization/application name <code>OCTAVE</code>; <code>QQuickStyle::setStyle("Basic")</code> so sliders are fully customisable.</li>
           <li><strong>Auto-scale</strong> &mdash; <code>screenAutoScale = min(width, height) / 720</code>, clamped to 0.4&ndash;3.0. It scales off the <em>shorter</em> edge because Android reports the natural (portrait) size even when the app is locked landscape; using height alone gave a ~3&times; factor there.</li>
           <li><strong>Scalar context properties</strong> &mdash; <code>screenAutoScale</code>, <code>isAndroid</code>.</li>
@@ -359,7 +359,7 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
         <h3 id="startup-python">Python &mdash; <span class="file-path">main.py</span></h3>
         <ol class="steps">
           <li><strong>Environment</strong> &mdash; <code>QT_QUICK_CONTROLS_STYLE=Basic</code> is set before any Qt import.</li>
-          <li><strong>Arguments</strong> &mdash; <code>argparse</code> with <code>--debug</code> and <code>--profile</code> (<code>parse_known_args</code>, so Qt flags pass through).</li>
+          <li><strong>Arguments</strong> &mdash; <code>argparse</code> with <code>--debug</code>, <code>--profile</code> and <code>--smoke</code> (load <code>Main.qml</code>, run 5&nbsp;s, exit 0; mirrors the C++ flag) (<code>parse_known_args</code>, so Qt flags pass through).</li>
           <li><strong>Logging first</strong> &mdash; <code>setup_logging(debug=...)</code> runs before any backend import; it also installs the crash handlers and gives python-obd's logger the same handlers.</li>
           <li><strong>Imports</strong> &mdash; all managers are imported unconditionally; the Python backend is desktop-only, so there is no platform branching here. Heavy optional libraries are deferred via <code>backend/lazy_import.py</code> (see <a href="#design-decisions">why</a>).</li>
           <li><strong><code>QApplication</code></strong> (from <code>QtWidgets</code>) &mdash; auto-scale is <code>min(width, height) / 720</code> of <code>availableSize()</code>, clamped 0.4&ndash;3.0, the same shorter-edge rule as <code>src/main.cpp</code> (it used to divide the height alone).</li>

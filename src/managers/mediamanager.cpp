@@ -162,6 +162,17 @@ MediaManager::MediaManager(QObject *parent)
 #else
     m_defaultMediaDir = m_backendDir + QStringLiteral("/media");
     m_tempDir = m_backendDir + QStringLiteral("/temp");
+    // Installed builds: the app dir is read-only (C:\Program Files\OCTAVE, a
+    // mounted AppImage, a signed .app). Fall back to per-user locations
+    // instead of failing, or on Windows silently landing in VirtualStore.
+    // A source checkout (writable build dir) keeps the old layout, which is
+    // also what the Python backend (always run from a checkout) uses.
+    if (!QFileInfo(m_backendDir).isWritable()) {
+        const QString music = QStandardPaths::writableLocation(QStandardPaths::MusicLocation);
+        m_defaultMediaDir = (music.isEmpty() ? QDir::homePath() : music) + QStringLiteral("/OCTAVE");
+        m_tempDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)
+                    + QStringLiteral("/temp");
+    }
 #endif
     m_mediaDir = m_defaultMediaDir;
 
