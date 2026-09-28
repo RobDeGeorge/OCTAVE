@@ -1,2 +1,2 @@
 """OCTAVE version, mirrored from CMakeLists.txt project(OCTAVE VERSION ...)."""
-__version__ = "0.9.3"
+__version__ = "0.9.4"
