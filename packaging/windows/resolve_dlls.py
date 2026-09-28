@@ -9,8 +9,10 @@ a hand-kept list.
 
 Usage: python resolve_dlls.py <deploy_dir> <search_dir> [<search_dir> ...]
 
-A DLL counts as provided when it's in <deploy_dir> (the folder Windows
-searches first for the exe) or in C:\\Windows\\System32, except for the Visual
+A DLL counts as provided when it's next to the binary that imports it (a
+helper exe such as platform-tools\\adb.exe loads its own AdbWinApi.dll from
+there), in <deploy_dir> (the app folder, which Windows searches for the main
+exe and every plugin it loads), or in C:\\Windows\\System32, except for the Visual
 C++ runtime family, which the build runner has in System32 but a clean PC
 doesn't, so those must be in <deploy_dir>. API-set stubs (api-ms-*, ext-ms-*)
 are always provided by the OS. Missing DLLs are copied from the search dirs
@@ -57,7 +59,8 @@ def main():
                          if f.lower().endswith((".exe", ".dll"))]
         wanted = set()
         for b in binaries:
-            wanted |= imports_of(b)
+            beside = {f.lower() for f in os.listdir(os.path.dirname(b))}
+            wanted |= {d for d in imports_of(b) if d not in beside}
         added = False
         unresolved = set()
         for dll in sorted(wanted):
