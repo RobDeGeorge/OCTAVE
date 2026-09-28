@@ -15,7 +15,7 @@
 #   octave-update.sh           Old behaviour: fetch and reset now (manual use).
 #
 # i3 (~/.config/i3/config):
-#   exec --no-startup-id /home/rob/Roxy/octave-update.sh --apply; /home/rob/Roxy/octave-start.sh
+#   exec --no-startup-id /home/rob/Roxy/octave-update.sh --apply && /home/rob/Roxy/octave-start.sh
 #   exec --no-startup-id /home/rob/Roxy/octave-update.sh --fetch
 #
 # Every path exits 0, so a failure here never stops OCTAVE from starting.
