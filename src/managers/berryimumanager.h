@@ -218,6 +218,7 @@ private:
 
 #include <QObject>
 #include <QString>
+#include <QElapsedTimer>
 
 class QAccelerometer;
 class QCompass;
@@ -278,6 +279,11 @@ private:
 
     int    m_emitRate;
     bool   m_active = true;
+    // Software throttle while inactive: Android treats setDataRate() as a
+    // hint and kept delivering ~25 readings/s at the 5 Hz idle rate.
+    bool idleThrottled(QElapsedTimer &last) const;
+    QElapsedTimer m_lastAccelEmit;
+    QElapsedTimer m_lastCompassEmit;
     double m_tarePitch;
     double m_tareRoll;
     bool   m_enabled;

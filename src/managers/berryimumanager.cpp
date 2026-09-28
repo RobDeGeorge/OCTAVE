@@ -1083,10 +1083,26 @@ QString BerryIMUManager::getConnectionStatus()
     return m_connected ? QStringLiteral("Connected") : QStringLiteral("Unavailable");
 }
 
+// While no page shows the values (setActive(false)), emit at most every
+// 200 ms like the BerryIMU worker's IDLE_EMIT_INTERVAL. Android takes the 5 Hz
+// setDataRate() as a hint and delivered ~25 readings/s, and every emit
+// re-evaluated sensor-bound QML, keeping a static screen redrawing at ~24 fps
+// (~35% of a core on a Galaxy S22, 0.9.4 testing).
+bool BerryIMUManager::idleThrottled(QElapsedTimer &last) const
+{
+    if (m_active)
+        return false;
+    if (last.isValid() && last.elapsed() < 200)
+        return true;
+    last.start();
+    return false;
+}
+
 void BerryIMUManager::onAccelReading()
 {
     QAccelerometerReading *r = m_accel->reading();
     if (!r) return;
+    if (idleThrottled(m_lastAccelEmit)) return;
 
     const double ax = r->x();
     const double ay = r->y();
@@ -1123,6 +1139,7 @@ void BerryIMUManager::onCompassReading()
 {
     QCompassReading *r = m_compass->reading();
     if (!r) return;
+    if (idleThrottled(m_lastCompassEmit)) return;
     double az = r->azimuth();
     // Qt docs say 0–360 but some Android implementations emit -180..180.
     // Normalize so QML cardinal lookup (dirs[Math.round(h/45) % 8]) never
