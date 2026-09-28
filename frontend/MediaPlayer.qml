@@ -80,6 +80,21 @@ Item {
 
     // Core properties
     property var mediaFiles: []
+    // Unsorted list as last received from mediaListChanged. Every visit
+    // re-emits the folder listing; comparing against this lets an unchanged
+    // folder skip the model reset (which rebuilds every delegate) and the
+    // album-art rebind pass that follows it.
+    property var _rawMediaFiles: null
+    property bool _artPrimed: false
+
+    function _sameList(a, b) {
+        if (!a || !b || a.length !== b.length)
+            return false
+        for (var i = 0; i < a.length; ++i)
+            if (a[i] !== b[i])
+                return false
+        return true
+    }
     property string lastPlayedSong: ""
     property bool isPaused: false
     
@@ -181,7 +196,6 @@ Item {
                 // Pre-calculate scroll position for local files
                 initialScrollPosition = calculateScrollPosition(currentFile, mediaFiles)
             }
-            updateTimer.restart()
         }
 
         // Load Spotify playlists if connected
@@ -211,8 +225,14 @@ Item {
             scrollToCurrentTimer.restart()
         }
 
-        // Refresh album art after initial load to ensure cached art is displayed
-        albumArtRefreshTimer.restart()
+        // Refresh album art after the first load to ensure cached art is
+        // displayed. Later visits keep their delegates (an unchanged folder
+        // no longer resets the model), and a changed one restarts
+        // updateTimer -> albumArtRefreshTimer from onMediaListChanged.
+        if (!_artPrimed) {
+            _artPrimed = true
+            albumArtRefreshTimer.restart()
+        }
     }
 
     // Timer to trigger album art refresh after model changes settle
@@ -1269,6 +1289,9 @@ Item {
 
         // Media list updated
         function onMediaListChanged(files) {
+            if (_sameList(files, _rawMediaFiles))
+                return
+            _rawMediaFiles = files
             mediaFiles = files;
 
             if (currentSortColumn !== "none") {

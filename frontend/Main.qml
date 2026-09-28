@@ -316,6 +316,13 @@ ApplicationWindow {
                     navReloadTimer.pendingSection = section
                     navReloadTimer.pendingTile = stackView.currentItem.openTileId()
                     navReloadTimer.restart()
+                } else {
+                    // A cached (e.g. pre-built) Settings page off the stack was
+                    // laid out for the old orientation; drop it so the next
+                    // visit builds a fresh one.
+                    var cachedSettings = stackView._pageCache["SettingsMenu.qml"]
+                    if (cachedSettings && !stackView.containsItem(cachedSettings))
+                        stackView.forgetPage("SettingsMenu.qml").destroy()
                 }
             }
         }
@@ -457,6 +464,14 @@ ApplicationWindow {
                 var page = _pageCache[qmlFile]
                 if (page)
                     return page
+                var building = _incubating[qmlFile]
+                if (building) {
+                    // Pressed while prewarmPage() is still building it: finish
+                    // that build now rather than starting a second copy.
+                    building.incubator.forceCompletion()
+                    building.finish()
+                    return _pageCache[qmlFile] || null
+                }
                 var component = Qt.createComponent(qmlFile)
                 if (component.status !== Component.Ready) {
                     console.warn("[NAV] Failed to load", qmlFile, "-", component.errorString())
@@ -488,6 +503,8 @@ ApplicationWindow {
                 var page = cachedPage(qmlFile, props)
                 if (!page)
                     return null
+                if (pageWarmRenderer.sourceItem === page)
+                    pageWarmRenderer.finish()  // hideSource would keep it off screen
                 if (currentItem === page)
                     return page
                 if (containsItem(page))
@@ -495,6 +512,70 @@ ApplicationWindow {
                 else
                     push(page)
                 return page
+            }
+
+            // Background builds in flight, keyed like _pageCache:
+            // { incubator, finish }.
+            property var _incubating: ({})
+
+            // Build a page into the cache without showing it, then call
+            // done(page) (page is null if it was already cached or failed).
+            // Uses asynchronous incubation, so the build is spread across
+            // frames in small slices instead of blocking the GUI thread for
+            // the whole page (30-350 ms). Created hidden; StackView makes it
+            // visible when it is first pushed.
+            function prewarmPage(qmlFile, props, done) {
+                if (_pageCache[qmlFile] || _incubating[qmlFile]) {
+                    done(null)
+                    return
+                }
+                var component = Qt.createComponent(qmlFile)
+                if (component.status !== Component.Ready) {
+                    console.warn("[NAV] Failed to load", qmlFile, "-", component.errorString())
+                    done(null)
+                    return
+                }
+                var allProps = { stackView: stackView, mainWindow: mainWindow, visible: false }
+                for (var key in props)
+                    allProps[key] = props[key]
+                var incubator = component.incubateObject(stackView, allProps, Qt.Asynchronous)
+                if (!incubator) {
+                    console.warn("[NAV] Failed to instantiate", qmlFile)
+                    done(null)
+                    return
+                }
+                var finished = false
+                function finish() {
+                    if (finished)
+                        return
+                    finished = true
+                    delete _incubating[qmlFile]
+                    var page = incubator.status === Component.Ready ? incubator.object : null
+                    if (page) {
+                        // StackView only sizes a page when it is pushed; until
+                        // then it is 0x0, so its images would load at the wrong
+                        // size and the warm render would have nothing to draw.
+                        // Bound, not assigned, so it still follows the StackView
+                        // (e.g. orientation changes).
+                        page.width = Qt.binding(function() { return stackView.width })
+                        page.height = Qt.binding(function() { return stackView.height })
+                        _pageCache[qmlFile] = page
+                    } else {
+                        console.warn("[NAV] Failed to instantiate", qmlFile, "-", component.errorString())
+                    }
+                    // Deferred: when a nav press forced this build, the caller
+                    // pushes the page first and done() must see that.
+                    Qt.callLater(done, page)
+                }
+                if (incubator.status !== Component.Loading) {
+                    finish()
+                    return
+                }
+                _incubating[qmlFile] = { incubator: incubator, finish: finish }
+                incubator.onStatusChanged = function(status) {
+                    if (status !== Component.Loading)
+                        finish()
+                }
             }
 
             // Drop a page from the cache and hand it back; the caller decides
@@ -527,6 +608,109 @@ ApplicationWindow {
             popExit: null
             replaceEnter: null
             replaceExit: null
+        }
+
+        // Pre-build the pages the nav buttons open, so even the first press
+        // after launch is a cached push rather than a 30-350 ms page build
+        // plus scene setup (the 3D music device on MediaRoom). Starts shortly
+        // after launch, one page at a time, and backs off while the screen is
+        // being touched.
+        Timer {
+            id: pagePrewarmTimer
+            interval: 600
+            running: true
+            property var queue: null
+            onTriggered: {
+                // Never compete with a finger on the screen: a page build or
+                // warm render landing mid-tap would stall the press animation.
+                // Only a short window, though; backing off a full second per
+                // press meant steady tapping starved the queue entirely.
+                if (inputActivity.pressed || Date.now() - inputActivity.lastPress < 350) {
+                    interval = 150
+                    restart()
+                    return
+                }
+                if (queue === null) {
+                    var mediaDefault = settingsManager && settingsManager.musicButtonDefaultPage === "mediaPlayer"
+                        ? "MediaPlayer.qml" : "MediaRoom.qml"
+                    var lastObd = settingsManager ? settingsManager.get_setting_with_default("lastOBDPage", "") : ""
+                    var lastSensor = settingsManager ? settingsManager.get_setting_with_default("lastSensorPage", "") : ""
+                    // Most expensive first: MediaRoom (3D music device) and the
+                    // sensor page (CarMenu, a common lastSensorPage, builds a
+                    // Quick3D scene) cost 300+ ms cold. The rest build in
+                    // 30-50 ms, so a tap that beats them to it barely shows.
+                    queue = [
+                        { file: mediaDefault },
+                        { file: lastSensor !== "" ? lastSensor : "SensorHome.qml" },
+                        { file: lastObd !== "" ? lastObd : "OBDHome.qml" },
+                        { file: "SettingsMenu.qml", props: { initialSection: lastSettingsSection } },
+                        { file: mediaDefault === "MediaRoom.qml" ? "MediaPlayer.qml" : "MediaRoom.qml" }
+                    ]
+                }
+                if (queue.length === 0)
+                    return
+                var next = queue.shift()
+                stackView.prewarmPage(next.file, next.props || {}, function(page) {
+                    // Skip the warm render if a nav press already showed it.
+                    if (page && !stackView.containsItem(page))
+                        pageWarmRenderer.warm(page)  // resumes the queue when done
+                    else
+                        pagePrewarmTimer.continueQueue()
+                })
+            }
+            function continueQueue() {
+                if (queue && queue.length > 0) {
+                    interval = 150
+                    restart()
+                }
+            }
+        }
+
+        // Draws a pre-built page once, offscreen, so its first real appearance
+        // doesn't pay one-off GPU setup: texture uploads, glyph caches, blur
+        // buffers, Quick3D materials and pipelines. A hidden page is never
+        // drawn, so without this that work landed on the first nav press and
+        // froze the button's press animation (~300 ms for MediaRoom with a
+        // 3D music device). hideSource keeps the page off screen while it
+        // renders into this item's texture; the item itself is 1x1 behind
+        // everything, so nothing visible changes.
+        ShaderEffectSource {
+            id: pageWarmRenderer
+            z: -100
+            width: 1
+            height: 1
+            live: false
+            hideSource: true
+            property int framesLeft: 0
+
+            function warm(page) {
+                sourceItem = page       // hide before it becomes visible
+                page.visible = true     // a hidden subtree isn't rendered
+                framesLeft = 2
+                scheduleUpdate()
+                warmTimeout.restart()
+            }
+            function finish() {
+                warmTimeout.stop()
+                var page = sourceItem
+                sourceItem = null
+                framesLeft = 0
+                // The user may have opened it meanwhile; StackView owns it then.
+                if (page && !stackView.containsItem(page))
+                    page.visible = false
+                pagePrewarmTimer.continueQueue()
+            }
+
+            Connections {
+                target: mainWindow
+                enabled: pageWarmRenderer.framesLeft > 0
+                function onFrameSwapped() {
+                    if (--pageWarmRenderer.framesLeft <= 0)
+                        pageWarmRenderer.finish()
+                }
+            }
+            // Safety net if no frame arrives (e.g. window minimised).
+            Timer { id: warmTimeout; interval: 3000; onTriggered: pageWarmRenderer.finish() }
         }
 
         // Reload settings page after nav bar orientation change
@@ -668,6 +852,22 @@ ApplicationWindow {
                 var n = stackView.currentItem.objectName
                 berryIMU.setActive(n === "carMenu" || n === "sensorMenu" || n === "sensorHome"
                                    || n === "obdMenu" || (n === "mainMenu" && _homeShowsImuParam()))
+            }
+        }
+
+        // Notes when the screen was last pressed, so background work (page
+        // pre-building) can stay out of the way of taps. A PointHandler only
+        // takes a passive grab: it sees every press first (topmost item) but
+        // never accepts it, so delivery to the MouseAreas beneath is unchanged.
+        Item {
+            id: inputActivity
+            anchors.fill: parent
+            z: 1000000
+            property double lastPress: 0
+            readonly property bool pressed: pointProbe.active
+            PointHandler {
+                id: pointProbe
+                onActiveChanged: inputActivity.lastPress = Date.now()
             }
         }
 

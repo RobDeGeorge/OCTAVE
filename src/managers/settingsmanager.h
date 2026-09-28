@@ -35,6 +35,7 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool clockFormat24Hour READ clockFormat24Hour NOTIFY clockFormatChanged)
     Q_PROPERTY(bool clockShowSeconds READ clockShowSeconds NOTIFY clockShowSecondsChanged)
     Q_PROPERTY(int clockSize READ clockSize NOTIFY clockSizeChanged)
+    Q_PROPERTY(bool clockSizeAuto READ clockSizeAuto NOTIFY clockSizeAutoChanged)
     Q_PROPERTY(QString backgroundGrid READ backgroundGrid NOTIFY backgroundGridChanged)
     Q_PROPERTY(int screenWidth READ screenWidth NOTIFY screenWidthChanged)
     Q_PROPERTY(int screenHeight READ screenHeight NOTIFY screenHeightChanged)
@@ -141,6 +142,7 @@ public:
     bool clockFormat24Hour() const;
     bool clockShowSeconds() const;
     int clockSize() const;
+    bool clockSizeAuto() const;
     QString backgroundGrid() const;
     int screenWidth() const;
     int screenHeight() const;
@@ -242,6 +244,7 @@ signals:
     void clockFormatChanged(bool value);
     void clockShowSecondsChanged(bool value);
     void clockSizeChanged(int value);
+    void clockSizeAutoChanged(bool value);
     void backgroundGridChanged(const QString &value);
     void screenWidthChanged(int value);
     void screenHeightChanged(int value);
@@ -356,6 +359,7 @@ public slots:
     void save_clock_format(bool is24hour);
     void save_clock_show_seconds(bool show);
     void save_clock_size(int size);
+    void save_clock_size_auto(bool autoSize);
     void save_background_grid(const QString &grid);
     void save_screen_width(int width);
     void save_screen_height(int height);
@@ -587,6 +591,7 @@ private:
     bool m_clockFormat24Hour = true;
     bool m_clockShowSeconds = false;
     int m_clockSize = 18;
+    bool m_clockSizeAuto = true;
     QString m_backgroundGrid;
     int m_screenWidth = 1280;
     int m_screenHeight = 720;

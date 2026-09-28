@@ -1051,10 +1051,15 @@ Item {
                     Layout.maximumWidth: parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
                     Layout.alignment: Qt.AlignVCenter
 
+                    // Stays loaded while MediaRoom is hidden: rebuilding the
+                    // Quick3D scene (models, materials, pipelines) on every
+                    // visit cost ~300 ms per nav press. The scene pauses its own
+                    // motion timer and re-runs its arrival animation off
+                    // root.visible, so a hidden instance does no work.
                     Loader {
                         id: musicDeviceLoader
                         anchors.fill: parent
-                        active: mediaRoom.showMusicDevice && mediaRoom.visible
+                        active: mediaRoom.showMusicDevice
                         source: active ? "MusicDeviceScene.qml" : ""
                         onLoaded: mediaRoom.refreshDevicePlaying()
                     }

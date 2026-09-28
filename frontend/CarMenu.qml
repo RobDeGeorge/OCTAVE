@@ -76,7 +76,7 @@ Item {
     Timer {
         id: simulationTimer
         interval: 50
-        running: simulationRunning && !imuConnected
+        running: simulationRunning && !imuConnected && carMenu.visible
         repeat: true
         onTriggered: {
             // Create some simple motion for demonstration

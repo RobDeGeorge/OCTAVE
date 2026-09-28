@@ -127,6 +127,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("clockFormat24Hour")]    = true;
     d[QStringLiteral("clockShowSeconds")]     = false;
     d[QStringLiteral("clockSize")]            = 18;
+    d[QStringLiteral("clockSizeAuto")]        = true;
     d[QStringLiteral("backgroundGrid")]       = QStringLiteral("4x4");
     d[QStringLiteral("screenWidth")]          = 1280;
     d[QStringLiteral("screenHeight")]         = 720;
@@ -418,6 +419,7 @@ void SettingsManager::populateMembers()
     m_clockFormat24Hour = s(QStringLiteral("clockFormat24Hour")).toBool();
     m_clockShowSeconds  = s(QStringLiteral("clockShowSeconds")).toBool();
     m_clockSize         = s(QStringLiteral("clockSize")).toInt();
+    m_clockSizeAuto     = s(QStringLiteral("clockSizeAuto")).toBool();
     m_backgroundGrid    = s(QStringLiteral("backgroundGrid")).toString();
     m_screenWidth       = s(QStringLiteral("screenWidth")).toInt();
     m_screenHeight      = s(QStringLiteral("screenHeight")).toInt();
@@ -860,6 +862,7 @@ bool    SettingsManager::showClock() const         { return m_showClock; }
 bool    SettingsManager::clockFormat24Hour() const { return m_clockFormat24Hour; }
 bool    SettingsManager::clockShowSeconds() const  { return m_clockShowSeconds; }
 int     SettingsManager::clockSize() const         { return m_clockSize; }
+bool    SettingsManager::clockSizeAuto() const     { return m_clockSizeAuto; }
 QString SettingsManager::backgroundGrid() const    { return m_backgroundGrid; }
 int     SettingsManager::screenWidth() const       { return m_screenWidth; }
 int     SettingsManager::screenHeight() const      { return m_screenHeight; }
@@ -1046,6 +1049,14 @@ void SettingsManager::save_clock_size(int size)
     m_clockSize = size;
     updateSetting(QStringLiteral("clockSize"), size);
     emit clockSizeChanged(size);
+}
+
+void SettingsManager::save_clock_size_auto(bool autoSize)
+{
+    qCDebug(lcSettings) << "Saving clock size auto:" << autoSize;
+    m_clockSizeAuto = autoSize;
+    updateSetting(QStringLiteral("clockSizeAuto"), autoSize);
+    emit clockSizeAutoChanged(autoSize);
 }
 
 void SettingsManager::save_background_grid(const QString &grid)
@@ -2141,6 +2152,7 @@ void SettingsManager::reset_to_defaults()
     emit clockFormatChanged(m_clockFormat24Hour);
     emit clockShowSecondsChanged(m_clockShowSeconds);
     emit clockSizeChanged(m_clockSize);
+    emit clockSizeAutoChanged(m_clockSizeAuto);
     emit backgroundGridChanged(m_backgroundGrid);
     emit screenWidthChanged(m_screenWidth);
     emit screenHeightChanged(m_screenHeight);

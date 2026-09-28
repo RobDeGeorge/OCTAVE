@@ -95,9 +95,10 @@ Item {
         if (animateOnArrival) loadMedia(true)
     }
     // Deferred loads run from Timers, not Qt.callLater: the Loader that hosts
-    // this scene unloads it when MediaRoom is left, and a callLater closure
-    // fired after that logged "Property 'loadMedia' ... is not a function".
-    // A Timer dies with the scene, so it can never fire on a dead object.
+    // this scene unloads it when the music device is switched off, and a
+    // callLater closure fired after that logged "Property 'loadMedia' ... is
+    // not a function". A Timer dies with the scene, so it can never fire on a
+    // dead object.
     Timer { id: arrivalRetry; interval: 0; onTriggered: if (root.pendingArrival) root.loadMedia(true) }
     Timer { id: deviceChangeLoad; interval: 0; onTriggered: root.loadMedia(true) }
     onReadyChanged: {

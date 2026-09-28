@@ -101,6 +101,7 @@
             <tr><td><code>clockFormat24Hour</code></td><td><code>bool</code></td><td>read-only</td><td><code>clockFormatChanged</code></td><td>24-hour clock (notify signal is <code>clockFormatChanged</code>) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>clockShowSeconds</code></td><td><code>bool</code></td><td>read-only</td><td><code>clockShowSecondsChanged</code></td><td>Show seconds in the clock (Clock re-evaluates every second) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>clockSize</code></td><td><code>int</code></td><td>read-only</td><td><code>clockSizeChanged</code></td><td>Clock font size in px &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>clockSizeAuto</code></td><td><code>bool</code></td><td>read-only</td><td><code>clockSizeAutoChanged</code></td><td>Fit the clock to its nav bar slot instead of using <code>clockSize</code></td></tr>
             <tr><td><code>backgroundGrid</code></td><td><code>QString</code></td><td>read-only</td><td><code>backgroundGridChanged</code></td><td>Album-art background tiling: <code>"Normal"</code>, <code>"2x2"</code>, <code>"4x4"</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>screenWidth</code></td><td><code>int</code></td><td>read-only</td><td><code>screenWidthChanged</code></td><td>Window width (windowed mode) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>screenHeight</code></td><td><code>int</code></td><td>read-only</td><td><code>screenHeightChanged</code></td><td>Window height (windowed mode) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -181,6 +182,7 @@
             <tr><td><code>save_clock_format(bool is24hour)</code></td><td><code>void</code></td><td>Validate and persist <code>clockFormat24Hour</code>, then emit <code>clockFormat24HourChanged</code></td></tr>
             <tr><td><code>save_clock_show_seconds(bool show)</code></td><td><code>void</code></td><td>Validate and persist <code>clockShowSeconds</code>, then emit <code>clockShowSecondsChanged</code></td></tr>
             <tr><td><code>save_clock_size(int size)</code></td><td><code>void</code></td><td>Validate and persist <code>clockSize</code>, then emit <code>clockSizeChanged</code></td></tr>
+            <tr><td><code>save_clock_size_auto(bool autoSize)</code></td><td><code>void</code></td><td>Persist <code>clockSizeAuto</code>, then emit <code>clockSizeAutoChanged</code></td></tr>
             <tr><td><code>save_background_grid(QString grid)</code></td><td><code>void</code></td><td>Validate and persist <code>backgroundGrid</code>, then emit <code>backgroundGridChanged</code></td></tr>
             <tr><td><code>save_screen_width(int width)</code></td><td><code>void</code></td><td>Validate and persist <code>screenWidth</code>, then emit <code>screenWidthChanged</code></td></tr>
             <tr><td><code>save_screen_height(int height)</code></td><td><code>void</code></td><td>Validate and persist <code>screenHeight</code>, then emit <code>screenHeightChanged</code></td></tr>
@@ -327,6 +329,7 @@
             <tr><td><code>clockFormatChanged(bool value)</code></td><td>Notify for <code>clockFormat24Hour</code></td></tr>
             <tr><td><code>clockShowSecondsChanged(bool value)</code></td><td>Emitted after <code>clockShowSeconds</code> is saved</td></tr>
             <tr><td><code>clockSizeChanged(int value)</code></td><td>Emitted after <code>clockSize</code> is saved</td></tr>
+            <tr><td><code>clockSizeAutoChanged(bool value)</code></td><td>Emitted after <code>clockSizeAuto</code> is saved</td></tr>
             <tr><td><code>backgroundGridChanged(QString value)</code></td><td>Emitted after <code>backgroundGrid</code> is saved</td></tr>
             <tr><td><code>screenWidthChanged(int value)</code></td><td>Emitted after <code>screenWidth</code> is saved</td></tr>
             <tr><td><code>screenHeightChanged(int value)</code></td><td>Emitted after <code>screenHeight</code> is saved</td></tr>

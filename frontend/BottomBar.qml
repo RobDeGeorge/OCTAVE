@@ -297,6 +297,112 @@ Rectangle {
         GradientStop { position: 0.0; color: App.Style.bottomBarGradientEnd }
     }
 
+    // Which nav button owns the page on top of the stack ("" = none). Drives
+    // the NavHighlight behind that button in both layouts.
+    readonly property string activeSection: {
+        var item = stackView ? stackView.currentItem : null
+        var n = item ? item.objectName : ""
+        if (n === "mainMenu") return "home"
+        if (n.indexOf("obd") === 0) return "obd"
+        if (n === "mediaRoom" || n === "mediaPlayer" || n === "downloadPage") return "media"
+        if (n.indexOf("sensor") === 0 || n === "carMenu") return "sensor"
+        if (n === "settingsMenu") return "settings"
+        if (n === "androidAutoView") return "androidAuto"
+        if (n === "phoneMirrorView") return "phoneMirror"
+        return ""
+    }
+
+    // Accent-tinted plate behind the active nav button. Each button has its
+    // own plate that grows out from the button's centre when it becomes
+    // active and shrinks back when it doesn't. Lives beside the button layout
+    // (not in it) so the layout doesn't position it; declared before the
+    // layout so it draws behind the icons.
+    component NavHighlight: Item {
+        id: highlight
+        property Item layout
+        // { section: button } for this layout; ids inside the Loader
+        // components aren't reachable from bottomBar scope.
+        property var buttons: ({})
+
+        Repeater {
+            model: Object.keys(highlight.buttons)
+
+            Rectangle {
+                required property string modelData
+                readonly property Item button: highlight.buttons[modelData]
+                readonly property bool active: bottomBar.activeSection === modelData
+                                               && button !== null && button.visible
+
+                x: highlight.layout && button ? highlight.layout.x + button.x : 0
+                y: highlight.layout && button ? highlight.layout.y + button.y : 0
+                width: button ? button.width : 0
+                height: button ? button.height : 0
+                radius: dpMin(8, 2)  // matches the nav button outline
+                color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
+
+                scale: active ? 1 : 0
+                opacity: active ? 1 : 0
+                visible: opacity > 0
+                Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: 140 } }
+            }
+        }
+    }
+
+
+
+    // Nav presses run a frame late. The press handler is where a page may
+    // still have to be built (a tap before pre-building finishes can take
+    // 30-350 ms), and a press and release both handled before the next frame
+    // meant the button's squish never reached the screen. Waiting until the
+    // squish has been synced to the render thread (see PressBounce) lets it
+    // keep animating through any page work; the cost is about two frames
+    // (~30 ms) of latency.
+    property var _pendingNav: null
+    property int _navFramesLeft: 0
+    function navAfterFrame(fn) {
+        _pendingNav = fn
+        // Two swaps: the first may be a frame synced before the press.
+        _navFramesLeft = 2
+        navFrameFallback.restart()
+    }
+    function _runPendingNav() {
+        navFrameFallback.stop()
+        var fn = _pendingNav
+        _pendingNav = null
+        if (fn)
+            fn()
+    }
+    Connections {
+        target: bottomBar.mainWindow
+        enabled: bottomBar._pendingNav !== null
+        function onFrameSwapped() {
+            if (--bottomBar._navFramesLeft <= 0)
+                bottomBar._runPendingNav()
+        }
+    }
+    // In case no frame comes (nothing on screen changed).
+    Timer { id: navFrameFallback; interval: 80; onTriggered: bottomBar._runPendingNav() }
+
+    // Tap feedback for the nav buttons: squish, then spring back. Built only
+    // from Animators, so the whole bounce runs on the scene graph's render
+    // thread and keeps moving while the GUI thread is busy switching pages.
+    // (A Behavior/NumberAnimation on `pressed` runs on the GUI thread and froze
+    // whenever a page switch did real work.) It plays in full on every tap,
+    // however short, instead of tracking how long the finger stays down.
+    component PressBounce: ParallelAnimation {
+        id: bounce
+        required property Item target
+        SequentialAnimation {
+            ScaleAnimator { target: bounce.target; from: 1.0; to: 0.8; duration: 90; easing.type: Easing.OutQuad }
+            ScaleAnimator { target: bounce.target; from: 0.8; to: 1.0; duration: 220; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+        }
+        SequentialAnimation {
+            OpacityAnimator { target: bounce.target; from: 1.0; to: 0.7; duration: 90 }
+            OpacityAnimator { target: bounce.target; from: 0.7; to: 1.0; duration: 150 }
+        }
+    }
+
     signal clicked()
     
     MouseArea {
@@ -876,6 +982,11 @@ Rectangle {
                     // outermost buttons (e.g. Phone Mirror) still receive clicks.
                     z: 1
 
+                    NavHighlight {
+                        layout: navigationBar
+                        buttons: ({ "home": homeButton, "obd": obdButton, "media": mediaButton, "sensor": sensorButton, "settings": settingsButton, "androidAuto": androidAutoButton, "phoneMirror": phoneMirrorButton })
+                    }
+
                     RowLayout {
                         id: navigationBar
                         anchors.centerIn: parent
@@ -905,33 +1016,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaHome.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaHome.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaHome.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaHome.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: homeButtonImage
                                     anchors.centerIn: parent
@@ -953,13 +1040,15 @@ Rectangle {
                                 }
                             }
                             
+                            PressBounce { id: homeButtonBounce; target: homeButton }
+
                             MouseArea {
                                 id: mouseAreaHome
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openHomeSection()
+                                onPressed: { homeButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openHomeSection) }
                             }
                         }
                         
@@ -974,33 +1063,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaOBD.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaOBD.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaOBD.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaOBD.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: obdButtonImage
                                     anchors.centerIn: parent
@@ -1022,13 +1087,15 @@ Rectangle {
                                 }
                             }
                             
+                            PressBounce { id: obdButtonBounce; target: obdButton }
+
                             MouseArea {
                                 id: mouseAreaOBD
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openOBDSection()
+                                onPressed: { obdButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openOBDSection) }
                             }
                         }
 
@@ -1043,33 +1110,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaMedia.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaMedia.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaMedia.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaMedia.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: mediaButtonImage
                                     anchors.centerIn: parent
@@ -1091,13 +1134,15 @@ Rectangle {
                                 }
                             }
                             
+                            PressBounce { id: mediaButtonBounce; target: mediaButton }
+
                             MouseArea {
                                 id: mouseAreaMedia
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openMediaSection()
+                                onPressed: { mediaButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openMediaSection) }
                             }
                         }
 
@@ -1112,33 +1157,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaSensor.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSensor.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaSensor.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSensor.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: sensorButtonImage
                                     anchors.centerIn: parent
@@ -1160,13 +1181,15 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: sensorButtonBounce; target: sensorButton }
+
                             MouseArea {
                                 id: mouseAreaSensor
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openSensorSection()
+                                onPressed: { sensorButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSensorSection) }
                             }
                         }
 
@@ -1181,33 +1204,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaSettings.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSettings.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaSettings.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSettings.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: settingsButtonImage
                                     anchors.centerIn: parent
@@ -1250,6 +1249,8 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: settingsButtonBounce; target: settingsButton }
+
                             MouseArea {
                                 id: mouseAreaSettings
                                 width: parent.width * 1.5
@@ -1257,7 +1258,7 @@ Rectangle {
                                 anchors.centerIn: parent
                                 hoverEnabled: true
                                 onPressAndHold: settingsVisibilityPopup.open()
-                                onClicked: bottomBar.openSettingsSection()
+                                onPressed: { settingsButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSettingsSection) }
                             }
                         }
 
@@ -1273,33 +1274,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaAndroidAuto.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaAndroidAuto.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaAndroidAuto.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaAndroidAuto.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: androidAutoButtonImage
                                     anchors.centerIn: parent
@@ -1321,13 +1298,15 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: androidAutoButtonBounce; target: androidAutoButton }
+
                             MouseArea {
                                 id: mouseAreaAndroidAuto
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openAndroidAutoSection()
+                                onPressed: { androidAutoButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openAndroidAutoSection) }
                             }
                         }
 
@@ -1343,33 +1322,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaPhoneMirror.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaPhoneMirror.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaPhoneMirror.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaPhoneMirror.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: phoneMirrorButtonImage
                                     anchors.centerIn: parent
@@ -1391,13 +1346,15 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: phoneMirrorButtonBounce; target: phoneMirrorButton }
+
                             MouseArea {
                                 id: mouseAreaPhoneMirror
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openPhoneMirrorSection()
+                                onPressed: { phoneMirrorButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openPhoneMirrorSection) }
                             }
                         }
                     }
@@ -1447,7 +1404,7 @@ Rectangle {
                                 id: mouseAreaClock
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openClockSection()
+                                onPressed: bottomBar.navAfterFrame(bottomBar.openClockSection)
                             }
                         }
                     }
@@ -2092,7 +2049,13 @@ Rectangle {
                     Layout.fillHeight: true // Fill remaining space (centers content properly)
                     Layout.fillWidth: true
 
+                    NavHighlight {
+                        layout: navigationBarVertical
+                        buttons: ({ "home": homeButtonVertical, "obd": obdButtonVertical, "media": mediaButtonVertical, "sensor": sensorButtonVertical, "settings": settingsButtonVertical, "androidAuto": androidAutoButtonVertical, "phoneMirror": phoneMirrorButtonVertical })
+                    }
+
                     ColumnLayout {
+                        id: navigationBarVertical
                         anchors.centerIn: parent
                         spacing: App.Spacing.bottomBarBetweenButtonMargin * 3
 
@@ -2108,33 +2071,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaHomeVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaHomeVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaHomeVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaHomeVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: homeButtonImageVertical
                                     anchors.centerIn: parent
@@ -2156,13 +2095,15 @@ Rectangle {
                                 }
                             }
                             
+                            PressBounce { id: homeButtonVerticalBounce; target: homeButtonVertical }
+
                             MouseArea {
                                 id: mouseAreaHomeVertical
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openHomeSection()
+                                onPressed: { homeButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openHomeSection) }
                             }
                         }
                         // OBD Button
@@ -2177,33 +2118,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaOBDVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaOBDVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaOBDVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaOBDVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: obdButtonImageVertical
                                     anchors.centerIn: parent
@@ -2225,13 +2142,15 @@ Rectangle {
                                 }
                             }
                             
+                            PressBounce { id: obdButtonVerticalBounce; target: obdButtonVertical }
+
                             MouseArea {
                                 id: mouseAreaOBDVertical
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openOBDSection()
+                                onPressed: { obdButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openOBDSection) }
                             }
                         }
 
@@ -2247,33 +2166,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaMediaVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaMediaVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaMediaVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaMediaVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: mediaButtonImageVertical
                                     anchors.centerIn: parent
@@ -2295,13 +2190,15 @@ Rectangle {
                                 }
                             }
                             
+                            PressBounce { id: mediaButtonVerticalBounce; target: mediaButtonVertical }
+
                             MouseArea {
                                 id: mouseAreaMediaVertical
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openMediaSection()
+                                onPressed: { mediaButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openMediaSection) }
                             }
                         }
 
@@ -2317,33 +2214,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaSensorVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSensorVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaSensorVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSensorVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: sensorButtonImageVertical
                                     anchors.centerIn: parent
@@ -2365,13 +2238,15 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: sensorButtonVerticalBounce; target: sensorButtonVertical }
+
                             MouseArea {
                                 id: mouseAreaSensorVertical
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openSensorSection()
+                                onPressed: { sensorButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSensorSection) }
                             }
                         }
 
@@ -2387,33 +2262,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaSettingsVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSettingsVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaSettingsVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaSettingsVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: settingsButtonImageVertical
                                     anchors.centerIn: parent
@@ -2456,6 +2307,8 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: settingsButtonVerticalBounce; target: settingsButtonVertical }
+
                             MouseArea {
                                 id: mouseAreaSettingsVertical
                                 width: parent.width * 1.5
@@ -2463,7 +2316,7 @@ Rectangle {
                                 anchors.centerIn: parent
                                 hoverEnabled: true
                                 onPressAndHold: settingsVisibilityPopup.open()
-                                onClicked: bottomBar.openSettingsSection()
+                                onPressed: { settingsButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSettingsSection) }
                             }
                         }
 
@@ -2480,33 +2333,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaAndroidAutoVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaAndroidAutoVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaAndroidAutoVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaAndroidAutoVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: androidAutoButtonImageVertical
                                     anchors.centerIn: parent
@@ -2528,13 +2357,15 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: androidAutoButtonVerticalBounce; target: androidAutoButtonVertical }
+
                             MouseArea {
                                 id: mouseAreaAndroidAutoVertical
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openAndroidAutoSection()
+                                onPressed: { androidAutoButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openAndroidAutoSection) }
                             }
                         }
 
@@ -2551,33 +2382,9 @@ Rectangle {
                                 radius: dpMin(8, 2)
                                 border.color: App.Style.accent
                                 border.width: 1
-                                scale: mouseAreaPhoneMirrorVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaPhoneMirrorVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                             }
 
                             contentItem: Item {
-                                scale: mouseAreaPhoneMirrorVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaPhoneMirrorVertical.pressed ? 0.7 : 1.0
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
                                 Image {
                                     id: phoneMirrorButtonImageVertical
                                     anchors.centerIn: parent
@@ -2599,13 +2406,15 @@ Rectangle {
                                 }
                             }
 
+                            PressBounce { id: phoneMirrorButtonVerticalBounce; target: phoneMirrorButtonVertical }
+
                             MouseArea {
                                 id: mouseAreaPhoneMirrorVertical
                                 width: parent.width * 1.5
                                 height: parent.height * 1.5
                                 anchors.centerIn: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openPhoneMirrorSection()
+                                onPressed: { phoneMirrorButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openPhoneMirrorSection) }
                             }
                         }
                     }
@@ -2655,7 +2464,7 @@ Rectangle {
                                 id: mouseAreaClockVertical
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: bottomBar.openClockSection()
+                                onPressed: bottomBar.navAfterFrame(bottomBar.openClockSection)
                             }
                         }
                     }

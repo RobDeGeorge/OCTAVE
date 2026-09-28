@@ -352,7 +352,10 @@
           </tbody>
         </table>
 
-        <p>Every button ends in <code>stackView.openPage()</code> (see <a href="frontend-overview.html#page-cache">the page cache</a>): the page is built once with <code>stackView</code> and <code>mainWindow</code> supplied by <code>cachedPage()</code>, and every later press re-pushes or pops back to that same instance. Both bar orientations share one set of <code>open*Section()</code> functions on <code>bottomBar</code>; the horizontal and vertical <code>MouseArea</code>s only call them.</p>
+        <p>Every button ends in <code>stackView.openPage()</code> (see <a href="frontend-overview.html#page-cache">the page cache</a>): the page is built once with <code>stackView</code> and <code>mainWindow</code> supplied by <code>cachedPage()</code>, and every later press re-pushes or pops back to that same instance. Both bar orientations share one set of <code>open*Section()</code> functions on <code>bottomBar</code>; the horizontal and vertical <code>MouseArea</code>s only call them. They fire on <code>onPressed</code>, not <code>onClicked</code>, so a page changes on touch-down instead of waiting ~100 ms for the finger to lift. The switch is delayed by about two frames so the press animation is on screen first; see <a href="#animation-pattern">Button Animation Pattern</a>. Settings keeps <code>onPressAndHold</code>, so holding it opens Settings and then the Toggle View popup on top.</p>
+
+        <h3 id="active-highlight">Active Page Highlight</h3>
+        <p>The button for the page you are on gets a faint accent-tinted fill (18% opacity) inside its outline. <code>bottomBar.activeSection</code> maps <code>stackView.currentItem.objectName</code> to a section: <code>mainMenu</code> &rarr; home, <code>obd*</code> &rarr; obd, <code>mediaRoom</code> / <code>mediaPlayer</code> / <code>downloadPage</code> &rarr; media, <code>sensor*</code> / <code>carMenu</code> &rarr; sensor, <code>settingsMenu</code> &rarr; settings, <code>androidAutoView</code> &rarr; androidAuto, <code>phoneMirrorView</code> &rarr; phoneMirror. Any other page leaves every button unlit. Each orientation has one <code>NavHighlight</code> (an inline component) placed next to its button layout and declared before it, so it draws behind the icons. It is given a <code>{ section: button }</code> map, because ids inside the Loader components can't be reached from <code>bottomBar</code>. Each button has its own plate, made by a <code>Repeater</code> over that map. On a page change the new button's plate grows out from its centre while the old one shrinks away (240 ms scale, <code>OutCubic</code>, plus a 200 ms fade). A plate also fades out when its button is hidden through the Toggle View popup. A new page only lights a button if its <code>objectName</code> matches one of these rules.</p>
 
         <!-- Update notification -->
         <h2 id="update-notification">Update Notification</h2>
@@ -458,7 +461,7 @@
         <!-- Button Animation Pattern -->
         <h2 id="animation-pattern">Button Animation Pattern</h2>
 
-        <p>Every interactive button follows the same press feedback: scale to 0.8 with an <code>Easing.OutBack</code> overshoot of 1.1 over 200&nbsp;ms, and opacity to 0.7 over 150&nbsp;ms. Transport buttons animate the <code>Control</code>; navigation buttons animate both the bordered <code>background</code> and the <code>contentItem</code> separately so the border and icon shrink together:</p>
+        <p>Transport buttons (previous, play, next, shuffle, mute) track the press: scale to 0.8 with an <code>Easing.OutBack</code> overshoot of 1.1 over 200&nbsp;ms, and opacity to 0.7 over 150&nbsp;ms, while the finger is down:</p>
 
         <pre><code><span class="prop">scale</span>: mouseArea.pressed ? <span class="num">0.8</span> : <span class="num">1.0</span>
 <span class="cls">Behavior on</span> scale {
@@ -466,6 +469,10 @@
 }
 <span class="prop">opacity</span>: mouseArea.pressed ? <span class="num">0.7</span> : <span class="num">1.0</span>
 <span class="cls">Behavior on</span> opacity { <span class="cls">NumberAnimation</span> { <span class="prop">duration</span>: <span class="num">150</span> } }</code></pre>
+
+        <p>Navigation buttons use <code>PressBounce</code> instead, an inline component in BottomBar.qml. Each button's <code>onPressed</code> calls <code>restart()</code> on it, and it scales the whole <code>Control</code> 1.0 &rarr; 0.8 (90&nbsp;ms, <code>OutQuad</code>) &rarr; 1.0 (220&nbsp;ms, <code>OutBack</code> 1.1), with opacity 1.0 &rarr; 0.7 &rarr; 1.0. It is built only from <code>ScaleAnimator</code> / <code>OpacityAnimator</code>, so under the threaded render loop the whole bounce runs on the render thread and keeps moving while the GUI thread is busy switching pages. The <code>pressed</code>-bound <code>Behavior</code> version froze for as long as a page build took (up to ~350&nbsp;ms for CarMenu before pre-building finished), and a press and release handled in the same stall never showed the squish at all. The trade-off is that the bounce plays in full on every tap and does not hold while the finger stays down.</p>
+
+        <p>The page switch itself runs through <code>bottomBar.navAfterFrame(fn)</code>, which waits for two <code>frameSwapped</code> signals, or an 80&nbsp;ms fallback, before calling the <code>open*Section()</code> function. Two frames, because the first swap after a press can belong to a frame synced before it. By then the bounce has been handed to the render thread. The cost is about two frames of latency.</p>
 
         <!-- SVG and ColorOverlay Pattern -->
         <h2 id="svg-pattern">SVG Icon Pattern</h2>
