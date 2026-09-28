@@ -1023,7 +1023,7 @@ Item {
                                 // Pulse animation
                                 SequentialAnimation {
                                     id: pulseAnimation
-                                    running: delegate.isPlaying
+                                    running: delegate.isPlaying && delegate.visible  // visible includes hidden pages/sections
                                     loops: Animation.Infinite
                                     alwaysRunToEnd: true
                                     property real opacity: 1.0

@@ -24,6 +24,10 @@ Flickable {
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
     // Each entry: { cardId, title, iconSource, component }. Other layouts ignore
     // this and use the Repeater rendering below.
+    // False when the host shows tileModel as a tile grid instead of this
+    // page (the Sidebar layout); the stacked cards are then never built.
+    property bool renderCards: true
+
     property var tileModel: [
         { cardId: "device_name",    title: "Device Name", iconSource: App.Style.assetBase + "tile_device_name.svg", component: deviceNameContent },
         { cardId: "device_network", title: "Network",     iconSource: App.Style.assetBase + "tile_network.svg",     component: networkContent },
@@ -167,7 +171,7 @@ Flickable {
                     // chain resolved to undefined and logged a binding warning
                     // every time the Device page loaded.
                     SequentialAnimation on opacity {
-                        running: shutdownRow.confirmingShutdown
+                        running: shutdownRow.confirmingShutdown && shutdownRow.visible  // visible includes hidden pages/sections
                         loops: Animation.Infinite
                         NumberAnimation { from: 1.0; to: 0.4; duration: 800 }
                         NumberAnimation { from: 0.4; to: 1.0; duration: 800 }
@@ -185,7 +189,7 @@ Flickable {
         spacing: App.Spacing.sectionSpacing
 
         Repeater {
-            model: pageRoot.tileModel
+            model: pageRoot.renderCards ? pageRoot.tileModel : []
 
             SettingsCard {
                 Layout.fillWidth: true

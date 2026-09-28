@@ -177,7 +177,7 @@ Item {
                         color: App.Style.accent
 
                         SequentialAnimation on x {
-                            running: !launchFailed && !dhuEmbedded
+                            running: !launchFailed && !dhuEmbedded && androidAutoView.visible  // visible includes hidden pages/sections
                             loops: Animation.Infinite
                             NumberAnimation { to: 140; duration: 1000; easing.type: Easing.InOutQuad }
                             NumberAnimation { to: 0; duration: 1000; easing.type: Easing.InOutQuad }

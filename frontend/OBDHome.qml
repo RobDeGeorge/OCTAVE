@@ -94,7 +94,7 @@ Item {
                              : "#FF4444"
 
                         SequentialAnimation on opacity {
-                            running: obdHome.connectionStatus === "Connecting"
+                            running: obdHome.connectionStatus === "Connecting" && obdHome.visible  // visible includes hidden pages/sections
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.3; duration: 600 }
                             NumberAnimation { to: 1.0; duration: 600 }

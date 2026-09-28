@@ -42,6 +42,10 @@ Item {
     // The old single "Connection" card bundled four unrelated concerns in ~650
     // lines; it is split here so the page reads as a 2x2 tile grid like every
     // other settings page.
+    // False when the host shows tileModel as a tile grid instead of this
+    // page (the Sidebar layout); the stacked cards are then never built.
+    property bool renderCards: true
+
     property var tileModel: [
         { cardId: "obd_connection", title: "Connection", iconSource: App.Style.assetBase + "tile_connection.svg", component: connectionContent },
         { cardId: "obd_adapters",   title: "Adapters",   iconSource: App.Style.assetBase + "tile_adapters.svg",   component: adaptersContent },
@@ -121,7 +125,7 @@ Item {
                 // Pulse animation
                 SequentialAnimation {
                     id: pulseAnimation
-                    running: connectionStatusRect.connecting
+                    running: connectionStatusRect.connecting && connectionStatusRect.visible  // visible includes hidden pages/sections
                     loops: Animation.Infinite
 
                     NumberAnimation {
@@ -206,7 +210,7 @@ Item {
                                     to: 360
                                     duration: 1200
                                     loops: Animation.Infinite
-                                    running: connectionStatusRect.connecting
+                                    running: connectionStatusRect.connecting && connectionStatusRect.visible  // visible includes hidden pages/sections
                                 }
                             }
                         }
@@ -1732,7 +1736,7 @@ Item {
             // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard).
             //    Sidebar layout hides this and renders the tile grid + popup.
             Repeater {
-                model: pageRoot.tileModel
+                model: pageRoot.renderCards ? pageRoot.tileModel : []
 
                 SettingsCard {
                     Layout.fillWidth: true

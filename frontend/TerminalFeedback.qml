@@ -135,7 +135,7 @@ Rectangle {
 
                     // Pulsing when active
                     SequentialAnimation on opacity {
-                        running: App.EnvironmentTheme.active.terminalHeaderAccent && terminalFeedback.lines.length > 0
+                        running: App.EnvironmentTheme.active.terminalHeaderAccent && terminalFeedback.lines.length > 0 && terminalFeedback.visible  // visible includes hidden pages/sections
                         loops: Animation.Infinite
                         NumberAnimation { to: 0.4; duration: 1000; easing.type: Easing.InOutSine }
                         NumberAnimation { to: 1.0; duration: 1000; easing.type: Easing.InOutSine }

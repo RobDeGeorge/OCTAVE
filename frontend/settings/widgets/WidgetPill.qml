@@ -39,7 +39,7 @@ Rectangle {
                 property real pulseOpacity: 0.3
                 opacity: pulseOpacity
                 SequentialAnimation on pulseOpacity {
-                    running: pill.showDot
+                    running: pill.showDot && pill.visible  // visible includes hidden pages/sections
                     loops: Animation.Infinite
                     NumberAnimation { to: 0.5; duration: 1500; easing.type: Easing.InOutSine }
                     NumberAnimation { to: 0.1; duration: 1500; easing.type: Easing.InOutSine }

@@ -183,6 +183,7 @@ Item {
 
                         // Pulsing glow behind accent bar (spacecraft)
                         Rectangle {
+                            id: activeEntryPulse
                             anchors.centerIn: accentBar
                             width: accentBar.width + 6
                             height: accentBar.height + 6
@@ -192,7 +193,7 @@ Item {
 
                             property real accentBarPulse: 0.15
                             SequentialAnimation on accentBarPulse {
-                                running: App.EnvironmentTheme.active.pulsingElements && settingsMenu && settingsMenu.currentSection === delegateRoot.entry.section
+                                running: activeEntryPulse.visible  // visible includes hidden pages/sections
                                 loops: Animation.Infinite
                                 NumberAnimation { to: 0.35; duration: 1500; easing.type: Easing.InOutSine }
                                 NumberAnimation { to: 0.15; duration: 1500; easing.type: Easing.InOutSine }
@@ -260,6 +261,7 @@ Item {
 
                         // Update notification dot
                         Rectangle {
+                            id: aboutEntryPulse
                             width: dp(7)
                             height: dp(7)
                             radius: width / 2
@@ -272,8 +274,7 @@ Item {
                                      && settingsMenu && settingsMenu.updateAvailable
 
                             SequentialAnimation on opacity {
-                                running: delegateRoot.itemSection === "about"
-                                         && settingsMenu && settingsMenu.updateAvailable
+                                running: aboutEntryPulse.visible && settingsMenu && settingsMenu.updateAvailable  // visible includes hidden pages/sections
                                 loops: Animation.Infinite
                                 NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
                                 NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
@@ -393,7 +394,13 @@ Item {
                     fill: parent
                     margins: App.Spacing.settingsContentMargin
                 }
-                source: settingsMenu ? sourceForSection(settingsMenu.currentSection) : ""
+                // Loaded with setSource() rather than a `source` binding so
+                // renderCards is false before the page is built: this layout
+                // hides the page behind its tile grid, and building the
+                // page's stacked cards anyway cost 50+ ms per section switch.
+                readonly property string sectionSource: settingsMenu ? sourceForSection(settingsMenu.currentSection) : ""
+                onSectionSourceChanged: setSource(sectionSource, { renderCards: false })
+                Component.onCompleted: setSource(sectionSource, { renderCards: false })
 
                 // Track previous section for scroll save
                 property string previousSection: ""

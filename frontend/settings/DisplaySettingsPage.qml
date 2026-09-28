@@ -18,6 +18,10 @@ Flickable {
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
     // Each entry: { cardId, title, iconSource, component }. Other layouts ignore
     // this and use the Repeater rendering below.
+    // False when the host shows tileModel as a tile grid instead of this
+    // page (the Sidebar layout); the stacked cards are then never built.
+    property bool renderCards: true
+
     property var tileModel: [
         { cardId: "display_layout",     title: "Layout",     iconSource: App.Style.assetBase + "tile_layout.svg",     component: layoutContent },
         { cardId: "display_window",     title: "Window",     iconSource: App.Style.assetBase + "tile_window.svg",     component: windowContent },
@@ -741,7 +745,7 @@ Flickable {
         spacing: App.Spacing.sectionSpacing
 
         Repeater {
-            model: pageRoot.tileModel
+            model: pageRoot.renderCards ? pageRoot.tileModel : []
 
             SettingsCard {
                 Layout.fillWidth: true

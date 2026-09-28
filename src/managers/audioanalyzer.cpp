@@ -411,6 +411,8 @@ void AudioAnalyzer::analyze_file(const QString &filePath)
 
     m_currentFile = filePath;
     m_analyzing   = true;
+    // Don't keep driving the bars from the previous track meanwhile.
+    m_fftData.clear();
 
     emit analysisStarted();
     qCInfo(lcAudioAnalyzer) << "Starting audio analysis for:" << filePath;
@@ -431,6 +433,19 @@ void AudioAnalyzer::onAnalysisDone()
 {
     m_analyzing = false;
 
+    // The track changed while this one was analysed: drop the stale result
+    // and analyse the track that is actually playing. Clear before calling
+    // because analyze_file may itself set m_pendingFile again if yet another
+    // skip lands during this chained analysis.
+    if (!m_pendingFile.isEmpty() && m_pendingFile != m_currentFile) {
+        const QString next = m_pendingFile;
+        m_pendingFile.clear();
+        m_fftData.clear();
+        analyze_file(next);
+        return;
+    }
+    m_pendingFile.clear();
+
     AnalysisResult result = m_watcher.result();
     if (result.success) {
         m_fftData = std::move(result.fftData);
@@ -440,18 +455,6 @@ void AudioAnalyzer::onAnalysisDone()
     } else {
         m_fftData.clear();
         qCWarning(lcAudioAnalyzer) << "Analysis failed for" << m_currentFile;
-    }
-
-    // If the user skipped to another track while this analysis was running,
-    // service that latest request now. Clear before calling because
-    // analyze_file may itself set m_pendingFile again if yet another skip
-    // lands during this chained analysis.
-    if (!m_pendingFile.isEmpty() && m_pendingFile != m_currentFile) {
-        const QString next = m_pendingFile;
-        m_pendingFile.clear();
-        analyze_file(next);
-    } else {
-        m_pendingFile.clear();
     }
 }
 

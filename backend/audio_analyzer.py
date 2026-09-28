@@ -59,6 +59,8 @@ class AudioAnalyzer(QObject):
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._analyzing = False
         self._pending_future = None
+        # Newest file requested while an analysis was running; analysed next.
+        self._queued_file = None
 
         # Poll timer — checks if the worker thread finished, keeps Qt work on the main thread
         self._poll_timer = QTimer(self)
@@ -86,13 +88,18 @@ class AudioAnalyzer(QObject):
             logger.info(f"File already analyzed: {file_path}")
             return
 
-        # Skip if already analyzing
+        # One analysis at a time. Remember only the newest request: its
+        # result must not be replaced by the one still running (which used to
+        # leave the previous track's levels showing after a quick skip).
         if self._analyzing:
-            logger.info("Analysis already in progress, skipping")
+            logger.info("Analysis in progress, queued: %s", file_path)
+            self._queued_file = file_path
             return
 
         self._current_file = file_path
         self._analyzing = True
+        # Don't keep driving the bars from the previous track meanwhile.
+        self._fft_data = []
 
         self.analysisStarted.emit()
         logger.info(f"Starting audio analysis for: {file_path}")
@@ -110,6 +117,15 @@ class AudioAnalyzer(QObject):
         future = self._pending_future
         self._pending_future = None
         self._analyzing = False
+
+        queued, self._queued_file = self._queued_file, None
+        if queued and queued != self._current_file:
+            # The track changed while this one was analysed: drop the stale
+            # result and analyse the track that is actually playing.
+            future.cancel()
+            self._fft_data = []
+            self.analyze_file(queued)
+            return
 
         try:
             result = future.result()
@@ -137,27 +153,32 @@ class AudioAnalyzer(QObject):
                 logger.debug("No audio stream found")
                 return None
 
-            # Decode all audio frames
-            samples = []
+            # Decode all audio frames. Kept to one array per frame here; the
+            # mono mix, normalisation and FFT below each run as a single
+            # numpy call over the whole track. This runs on a worker thread,
+            # but Python-level loops (and numpy calls fed Python lists) hold
+            # the GIL, and every Python call the GUI thread makes during a
+            # track skip then waits for it: per-chunk / per-bar loops here
+            # used to stall the UI by 100-350 ms on each skip.
+            frames = []
             sample_rate = audio_stream.rate or 44100
 
             for frame in container.decode(audio_stream):
-                frame_data = frame.to_ndarray()
-
-                # If stereo, convert to mono by averaging channels
-                if len(frame_data.shape) > 1:
-                    frame_data = frame_data.mean(axis=0)
-
-                samples.append(frame_data)
+                frames.append(frame.to_ndarray())
 
             container.close()
 
-            if not samples:
+            if not frames:
                 logger.debug("No audio samples decoded")
                 return None
 
-            # Concatenate all samples
-            all_samples = np.concatenate(samples).astype(np.float32)
+            # Planar frames are (channels, n); packed ones are (1, n*channels)
+            # or 1-D. If stereo, convert to mono by averaging channels.
+            if frames[0].ndim > 1 and frames[0].shape[0] > 1:
+                all_samples = np.concatenate(frames, axis=1).mean(axis=0)
+            else:
+                all_samples = np.concatenate([f.reshape(-1) for f in frames])
+            all_samples = all_samples.astype(np.float32)
 
             # Normalize samples
             max_val = np.max(np.abs(all_samples))
@@ -177,64 +198,38 @@ class AudioAnalyzer(QObject):
                 logger.debug("Audio too short for analysis")
                 return None
 
-            # Pre-compute window function once
-            window = np.hanning(chunk_size)
-
             # Magnitudes of the positive frequencies, skipping DC: rfft bins
             # 1..N/2, i.e. 0-4 kHz at the 8 kHz effective rate (the C++
             # backend keeps the same range). The band edges depend only on
             # the bin count, so compute them once.
             fft_len = chunk_size // 2
-            log_indices = self._log_band_edges(fft_len, self._num_bars)
+            if fft_len == 0:
+                return [[0] * self._num_bars for _ in range(num_chunks)]
+            edges = np.asarray(self._log_band_edges(fft_len, self._num_bars))
 
-            # First pass: collect raw FFT magnitudes
-            raw_fft_data = []
-            for i in range(num_chunks):
-                chunk = all_samples[i * chunk_size:(i + 1) * chunk_size]
+            # All chunks at once: (num_chunks, chunk_size), Hann-windowed to
+            # reduce spectral leakage, then one rfft along the chunk axis.
+            chunks = all_samples[:num_chunks * chunk_size].reshape(num_chunks, chunk_size)
+            chunks = chunks * np.hanning(chunk_size)
+            fft = np.abs(np.fft.rfft(chunks, axis=1))[:, 1:1 + fft_len]
 
-                # Apply window function to reduce spectral leakage
-                windowed = chunk * window
+            # Mean magnitude per log band; an empty band (only possible when
+            # there are fewer bins than bars) is 0.
+            widths = np.diff(edges)
+            starts = np.minimum(edges[:-1], fft_len - 1)
+            sums = np.add.reduceat(fft, starts, axis=1)
+            raw = np.where(widths > 0, sums / np.maximum(widths, 1), 0.0)
 
-                # Compute FFT
-                fft = np.abs(np.fft.rfft(windowed))[1:1 + fft_len]  # Skip DC
+            # Global max for normalization (95th percentile to avoid outliers)
+            positive = raw[raw > 0]
+            global_max = np.percentile(positive, 95) if positive.size else 1.0
 
-                if len(fft) == 0:
-                    raw_fft_data.append([0.0] * self._num_bars)
-                    continue
-
-                levels = []
-                for j in range(self._num_bars):
-                    start_idx = log_indices[j]
-                    end_idx = log_indices[j + 1]
-                    if end_idx > start_idx:
-                        band = fft[start_idx:end_idx]
-                        levels.append(np.mean(band))
-                    else:
-                        levels.append(0.0)
-
-                raw_fft_data.append(levels)
-
-            # Find global max for normalization (use 95th percentile to avoid outliers)
-            all_values = [v for chunk in raw_fft_data for v in chunk if v > 0]
-            if all_values:
-                global_max = np.percentile(all_values, 95)
+            # Normalize and map to the 0-8 range
+            if global_max > 0:
+                levels = (np.minimum(1.0, raw / global_max) ** 0.6 * 8).astype(int)
             else:
-                global_max = 1.0
-
-            # Second pass: normalize and map to 0-8 range
-            fft_data = []
-            for levels in raw_fft_data:
-                normalized = []
-                for level in levels:
-                    if global_max > 0:
-                        norm = level / global_max
-                        norm = min(1.0, norm) ** 0.6
-                        normalized.append(int(norm * 8))
-                    else:
-                        normalized.append(0)
-                fft_data.append(normalized)
-
-            return fft_data
+                levels = np.zeros(raw.shape, dtype=int)
+            return levels.tolist()
 
         except Exception as e:
             logger.error(f"FFT analysis error: {e}")

@@ -20,6 +20,10 @@ Flickable {
     property var spotifyDevicesList: []
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
+    // False when the host shows tileModel as a tile grid instead of this
+    // page (the Sidebar layout); the stacked cards are then never built.
+    property bool renderCards: true
+
     property var tileModel: [
         { cardId: "media_library",     title: "Library",     iconSource: App.Style.assetBase + "tile_library.svg",     component: libraryContent },
         { cardId: "media_playback",    title: "Playback",    iconSource: App.Style.assetBase + "tile_playback.svg",    component: playbackContent },
@@ -1181,7 +1185,7 @@ Flickable {
         spacing: App.Spacing.sectionSpacing
 
         Repeater {
-            model: pageRoot.tileModel
+            model: pageRoot.renderCards ? pageRoot.tileModel : []
 
             SettingsCard {
                 Layout.fillWidth: true

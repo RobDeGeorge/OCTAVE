@@ -27,7 +27,7 @@ Rectangle {
     ListModel { id: trailModel }
 
     Timer {
-        running: connected
+        running: connected && card.visible
         interval: 50
         repeat: true
         onTriggered: {

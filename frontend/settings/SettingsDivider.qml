@@ -97,7 +97,7 @@ Item {
                 color: Qt.rgba(1, 1, 1, 0.6)
 
                 SequentialAnimation {
-                    running: App.EnvironmentTheme.active.dividerAnimated
+                    running: pulseGlow.visible  // visible includes hidden pages/sections
                     loops: Animation.Infinite
                     ParallelAnimation {
                         NumberAnimation { target: pulseGlow; property: "width"; from: 0; to: pulseGlow.parent ? pulseGlow.parent.width : 400; duration: 2500; easing.type: Easing.OutCubic }
@@ -118,7 +118,7 @@ Item {
                 color: App.Style.accent
 
                 SequentialAnimation on rotation {
-                    running: App.EnvironmentTheme.active.dividerDiamondRotate
+                    running: centerDiamond.visible && App.EnvironmentTheme.active.dividerDiamondRotate  // visible includes hidden pages/sections
                     loops: Animation.Infinite
                     NumberAnimation { from: 45; to: 135; duration: 3000; easing.type: Easing.InOutSine }
                     NumberAnimation { from: 135; to: 45; duration: 3000; easing.type: Easing.InOutSine }

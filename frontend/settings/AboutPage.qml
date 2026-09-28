@@ -5,6 +5,8 @@ import ".." as App
 
 Flickable {
     id: aboutPage
+    // Accepted for parity with the tile pages; About has no cards to skip.
+    property bool renderCards: true
     property var stackView: null
     property var wikiHost: null
 
@@ -81,6 +83,7 @@ Flickable {
                     z: 0
 
                     SequentialAnimation on opacity {
+                        running: glowText.visible  // visible includes hidden pages/sections
                         loops: Animation.Infinite
                         NumberAnimation { from: 0.3; to: 0.7; duration: 600; easing.type: Easing.InOutQuad }
                         NumberAnimation { from: 0.7; to: 0.3; duration: 600; easing.type: Easing.InOutQuad }
@@ -252,13 +255,15 @@ Flickable {
                             text: "Open folder"
                             height: dp(30)
                             Layout.fillWidth: true
-                            visible: diagnosticsManager.canOpenFolder
+                            visible: !!diagnosticsManager && diagnosticsManager.canOpenFolder
                             onClicked: diagnosticsManager.openLogFolder()
                         }
                     }
 
                     Text {
-                        text: "OCTAVE " + diagnosticsManager.appVersion + " (" + diagnosticsManager.backendName + " backend)  \u2022  "
+                        // Guarded: diagnosticsManager is gone during teardown while a
+                        // cached About page can still re-evaluate this.
+                        text: !diagnosticsManager ? "" : "OCTAVE " + diagnosticsManager.appVersion + " (" + diagnosticsManager.backendName + " backend)  \u2022  "
                               + diagnosticsManager.deviceInfo + "\nLogs: " + diagnosticsManager.logDir
                         color: App.Style.secondaryTextColor
                         font.pixelSize: App.Spacing.overallText * 0.8
@@ -300,7 +305,7 @@ Flickable {
                             color: App.Style.primaryTextColor
                             font.family: "monospace"
                             font.pixelSize: App.Spacing.overallText * 0.7
-                            text: diagnosticsManager.recentLogLines(200)
+                            text: diagnosticsManager ? diagnosticsManager.recentLogLines(200) : ""
                         }
                     }
                 }
@@ -345,6 +350,7 @@ Flickable {
 
                             // Update notification dot
                             Rectangle {
+                                id: updateAvailableDot
                                 width: dp(7)
                                 height: dp(7)
                                 radius: width / 2
@@ -357,7 +363,7 @@ Flickable {
                                 visible: networkManager && networkManager.updateStatus === "update-available"
 
                                 SequentialAnimation on opacity {
-                                    running: networkManager && networkManager.updateStatus === "update-available"
+                                    running: updateAvailableDot.visible  // visible includes hidden pages/sections
                                     loops: Animation.Infinite
                                     NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
                                     NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
@@ -373,6 +379,7 @@ Flickable {
                         visible: networkManager && networkManager.updateStatus !== ""
 
                         Rectangle {
+                            id: updateCheckDot
                             width: dp(8)
                             height: dp(8)
                             radius: width / 2
@@ -393,7 +400,7 @@ Flickable {
 
                             // Pulse animation when checking
                             SequentialAnimation on opacity {
-                                running: networkManager && networkManager.updateStatus === "checking"
+                                running: networkManager && networkManager.updateStatus === "checking" && updateCheckDot.visible  // visible includes hidden pages/sections
                                 loops: Animation.Infinite
                                 NumberAnimation { from: 1.0; to: 0.3; duration: 500 }
                                 NumberAnimation { from: 0.3; to: 1.0; duration: 500 }
@@ -507,6 +514,7 @@ Flickable {
                                 }
 
                                 Text {
+                                    id: confirmHint
                                     text: "This will overwrite local changes"
                                     color: "#FF9800"
                                     font.pixelSize: App.Spacing.overallText * 0.75
@@ -515,7 +523,7 @@ Flickable {
                                     Layout.alignment: Qt.AlignVCenter
 
                                     SequentialAnimation on opacity {
-                                        running: parent.parent.confirming === true
+                                        running: confirmHint.visible  // visible includes hidden pages/sections
                                         loops: Animation.Infinite
                                         NumberAnimation { from: 1.0; to: 0.4; duration: 800 }
                                         NumberAnimation { from: 0.4; to: 1.0; duration: 800 }
@@ -530,13 +538,14 @@ Flickable {
                                 visible: networkManager && networkManager.selfUpdateStatus === "fetching"
 
                                 Rectangle {
+                                    id: updateFetchDot
                                     width: dp(8)
                                     height: dp(8)
                                     radius: width / 2
                                     color: App.Style.accent
 
                                     SequentialAnimation on opacity {
-                                        running: networkManager && networkManager.selfUpdateStatus === "fetching"
+                                        running: updateFetchDot.visible  // visible includes hidden pages/sections
                                         loops: Animation.Infinite
                                         NumberAnimation { from: 1.0; to: 0.3; duration: 500 }
                                         NumberAnimation { from: 0.3; to: 1.0; duration: 500 }

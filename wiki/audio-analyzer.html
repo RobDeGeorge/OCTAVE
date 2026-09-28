@@ -113,21 +113,20 @@
         <h2 id="decoding">Audio Decoding</h2>
 
         <h3>Python: PyAV</h3>
-        <p>The Python backend decodes with <strong>PyAV</strong>, so virtually any container FFmpeg understands works. Every frame is converted to an ndarray; multi-channel frames are averaged to mono:</p>
+        <p>The Python backend decodes with <strong>PyAV</strong>, so virtually any container FFmpeg understands works. Every frame is converted to an ndarray; the frames are then joined and multi-channel audio is averaged to mono in one numpy call:</p>
 
         <pre><code>container = av.<span class="fn">open</span>(file_path)
 audio_stream = <span class="fn">next</span>((s <span class="kw">for</span> s <span class="kw">in</span> container.streams <span class="kw">if</span> s.type == <span class="str">'audio'</span>), <span class="kw">None</span>)
 
-samples = []
-sample_rate = audio_stream.rate <span class="kw">or</span> <span class="num">44100</span>
+frames = [frame.<span class="fn">to_ndarray</span>() <span class="kw">for</span> frame <span class="kw">in</span> container.<span class="fn">decode</span>(audio_stream)]
+container.<span class="fn">close</span>()
 
-<span class="kw">for</span> frame <span class="kw">in</span> container.<span class="fn">decode</span>(audio_stream):
-    frame_data = frame.<span class="fn">to_ndarray</span>()
-    <span class="kw">if</span> <span class="fn">len</span>(frame_data.shape) &gt; <span class="num">1</span>:
-        frame_data = frame_data.<span class="fn">mean</span>(axis=<span class="num">0</span>)   <span class="cmt"># stereo -&gt; mono</span>
-    samples.<span class="fn">append</span>(frame_data)
+<span class="kw">if</span> frames[<span class="num">0</span>].ndim &gt; <span class="num">1</span> <span class="kw">and</span> frames[<span class="num">0</span>].shape[<span class="num">0</span>] &gt; <span class="num">1</span>:      <span class="cmt"># planar (channels, n)</span>
+    all_samples = np.<span class="fn">concatenate</span>(frames, axis=<span class="num">1</span>).<span class="fn">mean</span>(axis=<span class="num">0</span>)   <span class="cmt"># stereo -&gt; mono</span>
+<span class="kw">else</span>:
+    all_samples = np.<span class="fn">concatenate</span>([f.<span class="fn">reshape</span>(-<span class="num">1</span>) <span class="kw">for</span> f <span class="kw">in</span> frames])</code></pre>
 
-container.<span class="fn">close</span>()</code></pre>
+        <p>Everything after decoding is vectorised: the chunks are one <code>(num_chunks, chunk_size)</code> array, Hann-windowed and transformed with a single <code>np.fft.rfft(..., axis=1)</code>, band means come from <code>np.add.reduceat</code>, and normalisation and quantisation are array operations. That matters on the Python backend in particular. The analysis runs on a worker thread, but Python-level loops, and numpy calls fed Python lists such as the old <code>np.percentile(list)</code>, hold the GIL. Every Python call the GUI thread made during a track skip then waited for it, freezing the UI for 135&ndash;354&nbsp;ms per skip. The vectorised version produces byte-identical levels, runs 2&ndash;3&times; faster, and never holds the GIL for more than a few milliseconds.</p>
 
         <h3>Python preprocessing</h3>
         <ol class="steps">
@@ -206,9 +205,9 @@ edges[num_bars] = fft_len</code></pre>
 
         <p>After the raw magnitudes of every chunk are known, a second pass normalizes and quantizes:</p>
 
-        <pre><code><span class="cmt"># 95th percentile of every non-zero band value in the track</span>
-all_values = [v <span class="kw">for</span> chunk <span class="kw">in</span> raw_fft_data <span class="kw">for</span> v <span class="kw">in</span> chunk <span class="kw">if</span> v &gt; <span class="num">0</span>]
-global_max = np.<span class="fn">percentile</span>(all_values, <span class="num">95</span>) <span class="kw">if</span> all_values <span class="kw">else</span> <span class="num">1.0</span>
+        <pre><code><span class="cmt"># 95th percentile of every non-zero band value in the track (raw: num_chunks x 96 array)</span>
+positive = raw[raw &gt; <span class="num">0</span>]
+global_max = np.<span class="fn">percentile</span>(positive, <span class="num">95</span>) <span class="kw">if</span> positive.size <span class="kw">else</span> <span class="num">1.0</span>
 
 <span class="kw">for</span> levels <span class="kw">in</span> raw_fft_data:
     <span class="kw">for</span> level <span class="kw">in</span> levels:
@@ -439,7 +438,7 @@ av = <span class="fn">lazy_module</span>(<span class="str">"av"</span>)</code></
             <tr><td><strong>QAudioDecoder in C++</strong></td><td>Qt Multimedia is already linked for <code>QMediaPlayer</code> and supplies the native codec on every target (including MediaCodec on Android, where shipping FFmpeg would be a separate build). An earlier C++ version shelled out to an <code>ffmpeg</code> CLI to mirror PyAV; the decoder route removed the external binary (Android sweep, commit <code>d751c9d</code>) and the source comments and log lines no longer mention ffmpeg. Running the decoder inside a local <code>QEventLoop</code> on the worker, with a watchdog, is what makes it usable off the GUI thread.</td></tr>
             <tr><td><strong>Native format from the decoder, own mix-down and decimation</strong></td><td>Requesting 8&nbsp;kHz mono Int16 from the decoder silently produced nothing for MP3 on Qt&nbsp;6.11's FFmpeg backend (every analysis timed out). Taking whatever the platform decoder emits and converting in <code>appendMono()</code> works on every backend, needs no assumptions about which sample formats MediaCodec accepts, and makes the C++ preprocessing identical to Python's (mono average, peak normalize, stride decimate).</td></tr>
             <tr><td><strong>Own radix-2 FFT</strong></td><td>The header labels the helpers "FFT helpers (no external deps)": a 1024-point transform ten times per second of audio does not justify another library across nine build targets, and zero-padding 800 samples to 1024 is the only cost.</td></tr>
-            <tr><td><strong>Pending-file chaining (C++)</strong></td><td>Rapid skip presses used to drop every request after the first, leaving the visualizer on the previous track's FFT or blank; remembering only the latest request and chaining into it when the current job ends fixes that without cancelling decoders mid-flight.</td></tr>
+            <tr><td><strong>Pending-file chaining (both backends)</strong></td><td>Rapid skip presses used to drop every request after the first, leaving the visualizer on the previous track's FFT or blank. Both backends now remember only the latest request (<code>m_pendingFile</code> / <code>_queued_file</code>). When the running job ends and a newer track is waiting, its result is discarded rather than applied, and the waiting track is analysed next, without cancelling decoders mid-flight. The previous track's levels are also cleared when a new analysis starts, so the bars sit at zero instead of dancing to the wrong song. Python was the backend that still dropped requests until this change.</td></tr>
             <tr><td><strong>Poll timer instead of callbacks (Python)</strong></td><td>A <code>concurrent.futures</code> callback would run on the worker thread, where Qt signals must not be emitted; a 100&nbsp;ms <code>QTimer</code> keeps every Qt interaction on the main thread with no cross-thread signal plumbing.</td></tr>
             <tr><td><strong>One toggle, no quality tiers</strong></td><td>Commit <code>118f484</code> removed the <code>visualizerQuality</code> setting and its plumbing from both SettingsManagers, both analyzers (the bar count is now a constant) and the settings page, leaving only <code>showWaveformVisualizer</code>; the QML keeps the former top tier as constants.</td></tr>
             <tr><td><strong>Lazy NumPy / PyAV import</strong></td><td>Both are only needed once a track is analyzed; importing them before Qt started cost ~0.2&nbsp;s of cold start on the Pi (<code>ee5a23e</code>), and a missing library must degrade to "no visualizer", not a crash.</td></tr>

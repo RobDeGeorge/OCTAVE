@@ -96,7 +96,7 @@ Item {
         // When stopped, opacity falls back to the static binding (1.0).
         opacity: 1.0
         SequentialAnimation on opacity {
-            running: root._active && root.pulse
+            running: root._active && root.pulse && root.visible  // visible includes hidden pages/sections
             loops: Animation.Infinite
             alwaysRunToEnd: false
             NumberAnimation { from: 1.0; to: 0.45; duration: 500; easing.type: Easing.InOutSine }

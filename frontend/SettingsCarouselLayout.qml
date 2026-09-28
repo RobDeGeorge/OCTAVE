@@ -91,6 +91,7 @@ Item {
 
                 // Update notification dot
                 Rectangle {
+                    id: aboutCardPulse
                     width: dp(7)
                     height: dp(7)
                     radius: width / 2
@@ -104,8 +105,7 @@ Item {
                              && settingsMenu && settingsMenu.updateAvailable
 
                     SequentialAnimation on opacity {
-                        running: hubModel[index] && hubModel[index].section === "about"
-                                 && settingsMenu && settingsMenu.updateAvailable
+                        running: aboutCardPulse.visible && settingsMenu && settingsMenu.updateAvailable  // visible includes hidden pages/sections
                         loops: Animation.Infinite
                         NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
                         NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }

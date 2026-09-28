@@ -46,6 +46,10 @@ Flickable {
     property var gestureNames: ["RIGHT", "LEFT", "UP", "DOWN", "FORWARD", "BACKWARD", "CLOCKWISE", "COUNTER-CLOCKWISE", "WAVE"]
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
+    // False when the host shows tileModel as a tile grid instead of this
+    // page (the Sidebar layout); the stacked cards are then never built.
+    property bool renderCards: true
+
     property var tileModel: [
         { cardId: "accessories_volume_knob", title: "Volume Knob",    iconSource: App.Style.assetBase + "tile_volume_knob.svg", component: volumeKnobContent },
         { cardId: "accessories_imu",         title: "IMU Sensor",     iconSource: App.Style.assetBase + "tile_imu.svg",         component: imuContent },
@@ -1851,7 +1855,7 @@ Flickable {
         spacing: App.Spacing.sectionSpacing
 
         Repeater {
-            model: pageRoot.tileModel
+            model: pageRoot.renderCards ? pageRoot.tileModel : []
 
             SettingsCard {
                 Layout.fillWidth: true
