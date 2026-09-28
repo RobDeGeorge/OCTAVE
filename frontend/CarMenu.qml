@@ -54,9 +54,15 @@ Item {
         console.log("CarMenu: IMU connected =", imuConnected)
     }
 
-    // Connections to live BerryIMU data
+    // Connections to live BerryIMU data. Only while this page is visible:
+    // it stays alive hidden (StackView cache, pre-built at startup), and the
+    // IMU streams at 60 Hz while OBD or a sensor page is open, so updating
+    // the 3D model's rotation off-screen kept the render loop at full rate
+    // (Orange Pi, 0.9.4 testing). The next sample after the page returns
+    // brings the model up to date.
     Connections {
         target: berryIMU
+        enabled: carMenu.visible
         // Quaternion drives the 3D model directly — no gimbal lock
         // Remap sensor frame (Z-up) to Qt3D frame (Y-up): (w,x,y,z) → (w,y,z,x)
         function onOrientationChanged(w, x, y, z) {
@@ -69,6 +75,10 @@ Item {
         function onAltitudeChanged(val) { currentAltitude = val }
         function onAccelMagnitudeChanged(val) { currentGForce = val }
         function onBaroTempChanged(val) { currentBaroTemp = val }
+    }
+    // Connection state stays tracked while hidden (cheap, and rare).
+    Connections {
+        target: berryIMU
         function onConnectionStatusChanged(status) { imuConnected = (status === "Connected") }
     }
 
