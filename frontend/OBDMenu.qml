@@ -150,8 +150,17 @@ Item {
     // OBD parameters from centralized singleton
     property var allParameters: App.OBDParameterModel.allParameters
 
-    // Live OBD values from singleton (updated via signal connections there)
-    property var paramValues: App.OBDParameterModel.paramValues
+    // Live OBD values from singleton (updated via signal connections there).
+    // Only while the parameter grid is actually on screen: paramValues is
+    // replaced up to ~30x/s (every OBD and IMU reading), and each replacement
+    // re-evaluated every card here and restarted its value/bar animations.
+    // This page stays alive hidden (StackView cache, pre-built at startup),
+    // so with the IMU streaming that kept the render loop near 50 fps and
+    // cost ~10% of a Pi core while nothing of it was visible. Hidden, the
+    // cards settle once to 0; on return they pick up the live values.
+    readonly property bool _gridLive: activeDashboardId === "grid"
+        && (StackView.status === StackView.Active || StackView.status === StackView.Activating)
+    property var paramValues: _gridLive ? App.OBDParameterModel.paramValues : ({})
     
     // Just update column count when parameters change
     function updateLayout() {
