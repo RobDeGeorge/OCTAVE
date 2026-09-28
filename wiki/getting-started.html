@@ -118,7 +118,7 @@
             <tr><td>macOS</td><td><code>OCTAVE-&lt;version&gt;-macos.dmg</code></td><td>Open, drag to Applications. <code>adb</code> is inside the bundle.</td></tr>
             <tr><td>Linux x86_64</td><td><code>OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code></td><td><code>chmod +x</code> and run. Built on Ubuntu 22.04, so it runs on 22.04+ and newer distros. Arch may need <code>fuse2</code>, or use <code>--appimage-extract-and-run</code>.</td></tr>
             <tr><td>Linux aarch64 (Pi / Orange Pi)</td><td><code>OCTAVE-&lt;version&gt;-linux-aarch64.AppImage</code></td><td>Same as above. Install the distro's <code>adb</code> (<code>sudo apt install adb</code>) if you want phone mirroring &mdash; Google ships no aarch64 platform-tools.</td></tr>
-            <tr><td>Android</td><td><code>OCTAVE-&lt;version&gt;-android-arm64-v8a.apk</code></td><td>Sideload. Each release is signed with a fresh keystore, so uninstall the previous version before installing a new one.</td></tr>
+            <tr><td>Android</td><td><code>OCTAVE-&lt;version&gt;-android-arm64-v8a.apk</code></td><td>Sideload. From 0.9.4 every release is signed with the same key, so a new APK installs over the previous one and keeps your settings. Releases up to 0.9.3 each used a throwaway key, so going from 0.9.3 (or earlier) to 0.9.4 needs a one-time uninstall.</td></tr>
           </tbody>
         </table>
 

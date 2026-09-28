@@ -634,27 +634,40 @@ jobs:
             exit 1
           fi
 
-      - name: Sign APK with test keystore
+      - name: Sign APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          # Quick-fix signing: generate a fresh keystore each release. This makes
-          # the APK installable on real devices, but updates from one release
-          # to the next will fail (different signing key) — users must
-          # uninstall before installing a newer version.
-          #
-          # PROPER FIX (TODO): persist a single keystore as a GitHub Secret
-          # (base64-encoded), decode in CI, and sign with it. Then over-the-air
-          # updates work and you have a stable signing identity for Play Store.
+          # Releases are signed with one permanent key (repository secrets,
+          # created 2026-09-27; backup kept outside the repo), so a new APK
+          # installs over the previous one and keeps the user's settings.
+          # Before 0.9.4 every run generated a throwaway key and each update
+          # forced an uninstall. Runs without the secrets (forks, PRs from
+          # forks) still get a throwaway key so the APK is installable.
           set -e
 
-          # 1. Generate keystore
-          keytool -genkeypair -v \
-            -keystore octave.keystore \
-            -alias octave \
-            -keyalg RSA -keysize 2048 \
-            -validity 10000 \
-            -storepass octavepass \
-            -keypass octavepass \
-            -dname "CN=OCTAVE Test Build, O=Rob DeGeorge, C=US"
+          # 1. Keystore
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > octave.keystore
+            KS_PASS="$ANDROID_KEYSTORE_PASSWORD"
+            KS_ALIAS="$ANDROID_KEY_ALIAS"
+            echo "Signing with the release key"
+          else
+            echo "::warning::No release signing secrets; using a throwaway key (updates will need an uninstall)"
+            KS_PASS=octavepass
+            KS_ALIAS=octave
+            keytool -genkeypair -v \
+              -keystore octave.keystore \
+              -alias octave \
+              -keyalg RSA -keysize 2048 \
+              -validity 10000 \
+              -storepass octavepass \
+              -keypass octavepass \
+              -dname "CN=OCTAVE Test Build, O=Rob DeGeorge, C=US"
+          fi
+          export KS_PASS   # apksigner reads it via env:KS_PASS, keeping it off the command line
 
           # 2. Locate unsigned APK (gradle drops it under build/outputs/apk/release/)
           UNSIGNED=$(find build-android -path '*/build/outputs/apk/release/*-unsigned.apk' | head -n1)
@@ -679,16 +692,18 @@ jobs:
           # v1+v2+v3 maximizes installer compatibility.
           "$BUILD_TOOLS/apksigner" sign \
             --ks octave.keystore \
-            --ks-pass pass:octavepass \
-            --key-pass pass:octavepass \
+            --ks-key-alias "$KS_ALIAS" \
+            --ks-pass env:KS_PASS \
+            --key-pass env:KS_PASS \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --out octave-signed.apk \
             octave-aligned.apk
 
-          # 5. Verify
-          "$BUILD_TOOLS/apksigner" verify --verbose octave-signed.apk
+          # 5. Verify, and never leave the decoded keystore on the runner
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs octave-signed.apk
+          rm -f octave.keystore
 
           # 6. Stage with a clean name for upload (unified scheme: strip leading 'v').
           mkdir -p dist
