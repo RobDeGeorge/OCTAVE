@@ -791,3 +791,8 @@ jobs:
             artifacts/OCTAVE-Linux-arm64-cpp-AppImage/OCTAVE-*-linux-aarch64.AppImage
             artifacts/OCTAVE-Android-APK/OCTAVE-*-android-arm64-v8a.apk
           generate_release_notes: true
+          # Published as a pre-release: public (so clean-VM testing can fetch the
+          # exact files users will download, with no auth), but not "Latest".
+          # After those files are verified, promote it:
+          #   gh release edit vX.Y.Z --prerelease=false --latest
+          prerelease: true

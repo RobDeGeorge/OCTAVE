@@ -374,7 +374,7 @@ PerfMonitor.end(t, <span class="str">"my_section"</span>)</code></pre>
           <li><code>cpp-compile-check</code> &mdash; Debug CMake/Ninja build of the C++ tree against Qt 6.7.3, then <code>qmllint</code> over <span class="file-path">frontend/</span> failing only on <code>critical</code> entries, so a C++ or QML break cannot sit on <code>main</code> until the next tag.</li>
           <li><code>phone-server</code> &mdash; rebuilds the phone-server jar from source (JDK 21) and checks the committed jar carries the same class and version string; hash mismatch is a warning.</li>
           <li><code>cpp-build-windows</code> / <code>cpp-build-macos</code> / <code>cpp-build-linux</code> / <code>cpp-build-linux-arm64</code> / <code>cpp-build-android</code> &mdash; Release builds and installers, only on <code>v*</code> tags or manual dispatch, each gated on <code>lint</code> + <code>test</code>.</li>
-          <li><code>release</code> &mdash; attaches the five installers to a single GitHub Release on a version tag.</li>
+          <li><code>release</code> &mdash; attaches the five installers to a single GitHub Release on a version tag, published as a pre-release until the published files pass clean-VM testing (see <a href="building.html">Building</a>).</li>
         </ul>
 
         <!-- TODO -->
