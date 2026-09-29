@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for the Linux AppImage. build-appimage.sh copies it to
+     AppDir/usr/share/metainfo/; AppImageHub and software centres read the
+     name, licence, description and screenshots from here. The id must match
+     the .desktop file's basename (com.robdegeorge.octave.desktop). -->
+<component type="desktop-application">
+  <id>com.robdegeorge.octave</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>OCTAVE</name>
+  <summary>Open-source cross-platform telematics for an augmented vehicle experience</summary>
+  <developer id="com.robdegeorge">
+    <name>Rob DeGeorge</name>
+  </developer>
+
+  <description>
+    <p>
+      OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi
+      behind the dash, a laptop in a project car, or a tablet. It plays local music
+      and Spotify, reads live data from the car over OBD-II, mirrors an Android phone
+      over USB, and recolours its interface to match the album art.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Local music player and Spotify control, with themes that follow the album art</li>
+      <li>Live OBD-II data through ELM327 adapters, with customisable gauge dashboards and a shift light</li>
+      <li>Android phone mirroring over USB, with nothing to install on the phone</li>
+      <li>3D vehicle view driven by an IMU, plus support for gesture sensors and a wireless volume knob</li>
+      <li>Touch-first interface designed for wide dash displays</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.robdegeorge.octave.desktop</launchable>
+  <provides>
+    <binary>octave</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/RobDeGeorge/OCTAVE</url>
+  <url type="bugtracker">https://github.com/RobDeGeorge/OCTAVE/issues</url>
+  <url type="vcs-browser">https://github.com/RobDeGeorge/OCTAVE</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Media room with waveform, controls and album art</caption>
+      <image>https://raw.githubusercontent.com/RobDeGeorge/OCTAVE/main/frontend/assets/readme/media_media_room_playing.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Sport dashboard with speed readout and RPM arc</caption>
+      <image>https://raw.githubusercontent.com/RobDeGeorge/OCTAVE/main/frontend/assets/readme/dashboards_sport.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Live OBD-II parameter cards</caption>
+      <image>https://raw.githubusercontent.com/RobDeGeorge/OCTAVE/main/frontend/assets/readme/drive_drive_cards.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Android phone mirrored over USB</caption>
+      <image>https://raw.githubusercontent.com/RobDeGeorge/OCTAVE/main/frontend/assets/readme/mirror_live.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>3D vehicle view with doors and hood open</caption>
+      <image>https://raw.githubusercontent.com/RobDeGeorge/OCTAVE/main/frontend/assets/readme/jeep_open.png</image>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+
+  <keywords>
+    <keyword>car</keyword>
+    <keyword>infotainment</keyword>
+    <keyword>head unit</keyword>
+    <keyword>OBD</keyword>
+    <keyword>music</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+</component>

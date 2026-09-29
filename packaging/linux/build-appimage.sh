@@ -45,6 +45,7 @@ rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin"
 mkdir -p "$APPDIR/usr/frontend"
 mkdir -p "$APPDIR/usr/share/applications"
+mkdir -p "$APPDIR/usr/share/metainfo"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 
@@ -59,8 +60,14 @@ if [ -d "$REPO_ROOT/tools/platform-tools/linux" ]; then
     cp -r "$REPO_ROOT/tools/platform-tools/linux/." "$APPDIR/usr/bin/platform-tools/"
 fi
 
-# ---- 3. Desktop file + icon ---------------------------------------------
-cat > "$APPDIR/usr/share/applications/octave.desktop" <<'EOF'
+# ---- 3. Desktop file, AppStream metainfo + icon ---------------------------
+# The desktop file is named after the AppStream id so the metainfo's
+# <launchable> resolves; AppImageHub reads the licence, description and
+# screenshots from the metainfo.
+APP_ID="com.robdegeorge.octave"
+DESKTOP_FILE="$APPDIR/usr/share/applications/${APP_ID}.desktop"
+cp "$REPO_ROOT/packaging/linux/${APP_ID}.metainfo.xml" "$APPDIR/usr/share/metainfo/${APP_ID}.appdata.xml"
+cat > "$DESKTOP_FILE" <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=OCTAVE
@@ -96,7 +103,7 @@ EOF
 fi
 
 # linuxdeploy expects the .desktop and icon to also live at the AppDir root.
-cp "$APPDIR/usr/share/applications/octave.desktop" "$APPDIR/octave.desktop"
+cp "$DESKTOP_FILE" "$APPDIR/${APP_ID}.desktop"
 if [ -f "$APPDIR/usr/share/icons/hicolor/256x256/apps/octave.png" ]; then
     cp "$APPDIR/usr/share/icons/hicolor/256x256/apps/octave.png" "$APPDIR/octave.png"
 elif [ -f "$APPDIR/usr/share/icons/hicolor/scalable/apps/octave.svg" ]; then
@@ -204,7 +211,7 @@ echo "==> Running linuxdeploy"
 "$TOOLS_DIR/$LD_BIN" \
     --appdir "$APPDIR" \
     --executable "$APPDIR/usr/bin/octave" \
-    --desktop-file "$APPDIR/usr/share/applications/octave.desktop" \
+    --desktop-file "$DESKTOP_FILE" \
     $([ -f "$APPDIR/usr/share/icons/hicolor/256x256/apps/octave.png" ] \
         && echo "--icon-file=$APPDIR/usr/share/icons/hicolor/256x256/apps/octave.png" \
         || echo "--icon-file=$APPDIR/usr/share/icons/hicolor/scalable/apps/octave.svg") \
