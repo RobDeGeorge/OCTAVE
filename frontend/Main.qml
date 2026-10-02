@@ -612,21 +612,39 @@ ApplicationWindow {
 
         // Pre-build the pages the nav buttons open, so even the first press
         // after launch is a cached push rather than a 30-350 ms page build
-        // plus scene setup (the 3D music device on MediaRoom). Starts shortly
-        // after launch, one page at a time, and backs off while the screen is
-        // being touched.
+        // plus scene setup (the 3D music device on MediaRoom). One page at a
+        // time, backing off while the screen is being touched.
+        //
+        // Paced to the hardware rather than by fixed delays: it starts once
+        // startup has settled (prewarmSettleTimer) and rests after each page
+        // for twice as long as that page took, so pre-building uses at most
+        // about a third of the time. A desktop PC still finishes the queue
+        // 2-3 s after its first frame. On a slow machine the load is spread out:
+        // run flat out on top of the first frame and the first track's audio
+        // analysis, it made a startup power spike that browned out an Orange
+        // Pi 5 Plus on a car's 12V-to-5V supply.
         Timer {
             id: pagePrewarmTimer
-            interval: 600
-            running: true
+            interval: gapFloor
             property var queue: null
+            // Rest after a page = restFactor x the time it took, within these.
+            readonly property real restFactor: 2
+            readonly property int gapFloor: 150
+            readonly property int gapCeiling: 4000
+            // Pages with a Quick3D scene (MediaRoom's music device, CarMenu's
+            // vehicle): 300+ ms cold and the heaviest GPU setup.
+            readonly property var heavyPages: ["MediaRoom.qml", "CarMenu.qml"]
+            property string stepFile: ""
+            property double stepStart: 0
+            property double queueStart: 0
+            property int pagesBuilt: 0
             onTriggered: {
                 // Never compete with a finger on the screen: a page build or
                 // warm render landing mid-tap would stall the press animation.
                 // Only a short window, though; backing off a full second per
                 // press meant steady tapping starved the queue entirely.
                 if (inputActivity.pressed || Date.now() - inputActivity.lastPress < 350) {
-                    interval = 150
+                    interval = gapFloor
                     restart()
                     return
                 }
@@ -635,22 +653,30 @@ ApplicationWindow {
                         ? "MediaPlayer.qml" : "MediaRoom.qml"
                     var lastObd = settingsManager ? settingsManager.get_setting_with_default("lastOBDPage", "") : ""
                     var lastSensor = settingsManager ? settingsManager.get_setting_with_default("lastSensorPage", "") : ""
-                    // Most expensive first: MediaRoom (3D music device) and the
-                    // sensor page (CarMenu, a common lastSensorPage, builds a
-                    // Quick3D scene) cost 300+ ms cold. The rest build in
-                    // 30-50 ms, so a tap that beats them to it barely shows.
-                    queue = [
+                    var pages = [
                         { file: mediaDefault },
                         { file: lastSensor !== "" ? lastSensor : "SensorHome.qml" },
                         { file: lastObd !== "" ? lastObd : "OBDHome.qml" },
                         { file: "SettingsMenu.qml", props: { initialSection: lastSettingsSection } },
                         { file: mediaDefault === "MediaRoom.qml" ? "MediaPlayer.qml" : "MediaRoom.qml" }
                     ]
+                    // Cheaper pages first, the Quick3D ones (the heaviest
+                    // GPU setup) last. The heavy builds then land as late as possible
+                    // after the startup load, each with a long rest before
+                    // it, instead of stacking on top of the first frame. A
+                    // tap that beats a page to it builds it on demand.
+                    var isHeavy = function(p) { return heavyPages.indexOf(p.file) !== -1 }
+                    queue = pages.filter(function(p) { return !isHeavy(p) }).concat(pages.filter(isHeavy))
+                    queueStart = Date.now()
                 }
                 if (queue.length === 0)
                     return
                 var next = queue.shift()
+                stepFile = next.file
+                stepStart = Date.now()
                 stackView.prewarmPage(next.file, next.props || {}, function(page) {
+                    if (!page)
+                        pagePrewarmTimer.stepStart = 0  // already built by a nav press: nothing to time
                     // Skip the warm render if a nav press already showed it.
                     if (page && !stackView.containsItem(page))
                         pageWarmRenderer.warm(page)  // resumes the queue when done
@@ -659,11 +685,90 @@ ApplicationWindow {
                 })
             }
             function continueQueue() {
+                var gap = gapFloor
+                if (stepStart > 0) {
+                    // Build plus warm render. console.info, not log: debug
+                    // messages are left out of the main log file.
+                    var took = Date.now() - stepStart
+                    stepStart = 0
+                    pagesBuilt++
+                    gap = Math.max(gapFloor, Math.min(gapCeiling, Math.round(took * restFactor)))
+                    var last = !queue || queue.length === 0
+                    console.info("[NAV] Pre-built", stepFile, "in", took, "ms" + (last ? "" : ", resting " + gap + " ms"))
+                    if (last)
+                        console.info("[NAV] Pre-building finished:", pagesBuilt, "pages in", Date.now() - queueStart, "ms")
+                }
                 if (queue && queue.length > 0) {
-                    interval = 150
+                    interval = gap
                     restart()
                 }
             }
+        }
+
+        // Starts pre-building once startup has settled. An idle window stops
+        // swapping frames (nothing animates, nothing redraws), so "settled"
+        // is no frame for `interval` ms after the first one; a fast machine
+        // gets there about as soon as the old fixed 600 ms delay did. If
+        // something keeps animating (a title marquee, the visualizer), a
+        // second of frames arriving on time counts as settled too, and
+        // prewarmCapTimer starts it regardless after 30 s.
+        Timer {
+            id: prewarmSettleTimer
+            // Until the first frame, allow for a slow first render; with no
+            // frames at all (hidden or offscreen window) there is no
+            // rendering to stay clear of.
+            interval: firstFrame > 0 ? 400 : 3000
+            running: true
+            property bool started: false
+            property double armedAt: Date.now()
+            property double firstFrame: 0
+            property double lastFrame: 0
+            property int smoothFrames: 0
+            function arm() {
+                armedAt = Date.now()
+                restart()
+            }
+            function begin(why) {
+                if (started)
+                    return
+                started = true
+                stop()
+                prewarmCapTimer.stop()
+                console.info("[NAV] Pre-building starts (" + why + "),",
+                             firstFrame > 0 ? (Date.now() - firstFrame) + " ms after the first frame" : "no frame yet")
+                pagePrewarmTimer.start()
+            }
+            onTriggered: {
+                // Fired late: the GUI thread was busy the whole time, which
+                // is why no frame came. That is startup work, not quiet.
+                if (Date.now() - armedAt > interval + 100)
+                    arm()
+                else
+                    begin("window quiet")
+            }
+        }
+        Connections {
+            target: mainWindow
+            enabled: !prewarmSettleTimer.started
+            function onFrameSwapped() {
+                var now = Date.now()
+                if (prewarmSettleTimer.firstFrame === 0)
+                    prewarmSettleTimer.firstFrame = now
+                else
+                    prewarmSettleTimer.smoothFrames = now - prewarmSettleTimer.lastFrame <= 34
+                        ? prewarmSettleTimer.smoothFrames + 1 : 0
+                prewarmSettleTimer.lastFrame = now
+                if (prewarmSettleTimer.smoothFrames >= 60)
+                    prewarmSettleTimer.begin("steady frames")
+                else
+                    prewarmSettleTimer.arm()
+            }
+        }
+        Timer {
+            id: prewarmCapTimer
+            interval: 30000
+            running: true
+            onTriggered: prewarmSettleTimer.begin("30 s cap")
         }
 
         // Draws a pre-built page once, offscreen, so its first real appearance
