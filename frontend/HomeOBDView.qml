@@ -59,6 +59,9 @@ Item {
                                 {title: param, unit: "", minValue: 0, maxValue: 100}
                 // Live value from centralized singleton
                 property real value: App.OBDParameterModel.paramValues[param] || 0
+                // False until a reading arrives, so the card shows "--"
+                // rather than a misleading 0.0 while OBD is disconnected.
+                readonly property bool hasValue: App.OBDParameterModel.paramValues[param] !== undefined
 
                 // Animated display value - fast rolling effect
                 property real displayValue: value
@@ -252,17 +255,21 @@ Item {
                     }
                 }
 
-                // Progress bar strip at bottom of card
+                // Progress bar strip at bottom of card. Inset by the border
+                // width: full-bleed, its background-coloured track painted over
+                // the card's bottom border and rounded corners.
                 Rectangle {
                     anchors.bottom: parent.bottom
                     anchors.left: parent.left
                     anchors.right: parent.right
+                    anchors.margins: parent.border.width
                     height: dp(4)
                     color: App.Style.backgroundColor
                     radius: parent.radius
 
                     Rectangle {
-                        width: Math.max(dp(4), parent.width * Math.min(1, (value - info.minValue) / (info.maxValue - info.minValue)))
+                        visible: display.hasValue
+                        width: Math.max(dp(4), parent.width * Math.max(0, Math.min(1, (value - info.minValue) / (info.maxValue - info.minValue))))
                         height: parent.height
                         color: App.Style.accent
                         radius: parent.radius
@@ -287,11 +294,13 @@ Item {
                     }
 
                     Text {
-                        text: displayValue.toFixed(1) + " " + info.unit
+                        text: display.hasValue
+                              ? displayValue.toFixed(App.OBDParameterModel.decimalsFor(param)) + " " + info.unit
+                              : "-- " + info.unit
                         font.pixelSize: App.Spacing.mainMenuOBDDataSize
                         font.bold: true
                         font.family: homeOBDView.globalFont
-                        color: App.Style.primaryTextColor
+                        color: display.hasValue ? App.Style.primaryTextColor : App.Style.secondaryTextColor
                         Layout.alignment: Qt.AlignLeft
                     }
                 }

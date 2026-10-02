@@ -243,6 +243,18 @@ QtObject {
         return paramValues[paramId] || 0;
     }
 
+    // Decimal places for a plain-text readout. Whole-number readings
+    // (speed, RPM, distances, counters...) gain nothing from ".0" and read
+    // slower at a glance; everything else keeps one decimal.
+    readonly property var _integerParams: ({
+        "SPEED": true, "RPM": true, "DISTANCE_W_MIL": true,
+        "DISTANCE_SINCE_DTC_CLEAR": true, "RUN_TIME": true,
+        "RUN_TIME_MIL": true, "ENGINE_RUN_TIME_TOTAL": true
+    })
+    function decimalsFor(paramId) {
+        return _integerParams[paramId] === true ? 0 : 1;
+    }
+
     // ── Simulated data (dashboard-editor demo mode) ───────────────────
     // Pure-QML fake data so dashboards can be built/tested without a live
     // OBD connection: every parameter sweeps a sine between its min/max,

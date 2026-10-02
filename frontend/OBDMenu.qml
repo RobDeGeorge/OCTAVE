@@ -178,8 +178,10 @@ Item {
             parametersGrid.columns = 2;
         } else if (visibleCount <= 9) {
             parametersGrid.columns = 3;
-        } else {
+        } else if (visibleCount <= 20) {
             parametersGrid.columns = 4;
+        } else {
+            parametersGrid.columns = 5;
         }
     }
     
@@ -362,6 +364,9 @@ Item {
                     Layout.preferredHeight: visible ? implicitHeight : 0
 
                     // Animated display value - fast rolling effect
+                    // False until a reading arrives (adapter disconnected or PID
+                    // unsupported) so the card shows "--" instead of a fake 0.0.
+                    readonly property bool hasValue: paramValues[modelData.id] !== undefined
                     property real targetValue: paramValues[modelData.id] || 0
                     property real displayValue: targetValue
                     Behavior on displayValue {
@@ -376,6 +381,7 @@ Item {
                         id: squareCard
                         anchors.fill: parent
                         visible: !obdPage.useCircularCards
+                        clip: true
 
                         color: squareCardMouseArea.containsMouse && modelData.id === "RPM" ?
                                Qt.lighter(Qt.darker(backgroundColor, 0.9), 1.1) : Qt.darker(backgroundColor, 0.9)
@@ -395,51 +401,77 @@ Item {
                             }
                         }
 
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: dp(8)
-                            spacing: dp(4)
+                        // Title + value centred in the space above the bar. The
+                        // bar is pinned to the card's bottom edge (not stacked in
+                        // the column) so with many parameters enabled the cards
+                        // can shrink without the bar spilling out of the card.
+                        Column {
+                            anchors.centerIn: parent
+                            anchors.verticalCenterOffset: -bar.height / 2
+                            width: parent.width - dp(16)
+                            spacing: dp(2)
 
                             Text {
+                                width: parent.width
                                 text: modelData.title
                                 color: labelColor
                                 font.pixelSize: App.Spacing.overallText
                                 font.family: obdPage.globalFont
-                                Layout.alignment: Qt.AlignHCenter
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
                             }
 
                             Text {
-                                text: cardContainer.displayValue.toFixed(1) + " " + modelData.unit
-                                color: textColor
+                                width: parent.width
+                                text: cardContainer.hasValue
+                                      ? cardContainer.displayValue.toFixed(App.OBDParameterModel.decimalsFor(modelData.id)) + " " + modelData.unit
+                                      : "--"
+                                color: cardContainer.hasValue ? textColor : labelColor
                                 font.pixelSize: App.Spacing.overallText
                                 font.bold: true
                                 font.family: obdPage.globalFont
-                                Layout.alignment: Qt.AlignHCenter
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            id: bar
+                            anchors {
+                                left: parent.left
+                                right: parent.right
+                                bottom: parent.bottom
+                                margins: dp(8)
+                            }
+                            height: Math.max(3, App.Spacing.overallSliderHeight * .4)
+                            color: Qt.darker(backgroundColor, 1.1)
+                            radius: height / 2
+
+                            // Signed ranges (fuel trims, timing, pitch/roll, G)
+                            // fill outward from the zero point, so a reading of 0
+                            // shows an empty bar instead of a half-full one.
+                            readonly property real zeroFrac: modelData.min < 0 && modelData.max > 0
+                                ? -modelData.min / (modelData.max - modelData.min) : 0
+                            readonly property real valueFrac: {
+                                const value = paramValues[modelData.id] || 0;
+                                return Math.max(0, Math.min(1,
+                                    (value - modelData.min) / (modelData.max - modelData.min)));
                             }
 
                             Rectangle {
-                                Layout.fillWidth: true
-                                height: App.Spacing.overallSliderHeight * .5
-                                color: Qt.darker(backgroundColor, 1.1)
-                                radius: 3
-                                Layout.topMargin: dp(4)
+                                id: progressBar
+                                visible: cardContainer.hasValue
+                                height: parent.height
+                                radius: parent.radius
+                                color: App.Style.obdBarColor
+                                x: parent.width * Math.min(bar.zeroFrac, bar.valueFrac)
+                                width: Math.max(parent.height,
+                                                parent.width * Math.abs(bar.valueFrac - bar.zeroFrac))
 
-                                Rectangle {
-                                    id: progressBar
-                                    height: parent.height
-                                    radius: 3
-                                    color: App.Style.obdBarColor
-                                    width: {
-                                        const value = paramValues[modelData.id] || 0;
-                                        return Math.max(6, parent.width * Math.min(1,
-                                            (value - modelData.min) / (modelData.max - modelData.min)));
-                                    }
-
-                                    Behavior on width {
-                                        NumberAnimation {
-                                            duration: 100
-                                            easing.type: Easing.OutCubic
-                                        }
+                                Behavior on width {
+                                    NumberAnimation {
+                                        duration: 100
+                                        easing.type: Easing.OutCubic
                                     }
                                 }
                             }
@@ -517,7 +549,7 @@ Item {
                         // Value arc (on top) - GPU-accelerated Shape
                         Shape {
                             anchors.fill: parent
-                            visible: circularCard.animatedGaugeValue > 0.001
+                            visible: cardContainer.hasValue && circularCard.animatedGaugeValue > 0.001
 
                             ShapePath {
                                 fillColor: "transparent"
@@ -553,8 +585,8 @@ Item {
                             }
 
                             Text {
-                                text: cardContainer.displayValue.toFixed(1)
-                                color: textColor
+                                text: cardContainer.hasValue ? cardContainer.displayValue.toFixed(App.OBDParameterModel.decimalsFor(modelData.id)) : "--"
+                                color: cardContainer.hasValue ? textColor : labelColor
                                 font.pixelSize: App.Spacing.overallText * 1.4
                                 font.bold: true
                                 font.family: obdPage.globalFont

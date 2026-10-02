@@ -22,6 +22,21 @@ Item {
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
 
+    // Theme the stock Basic-style Buttons/Sliders/Labels on this page so the
+    // vehicle and simulation controls match the rest of the app instead of
+    // rendering as default light-grey widgets. Basic reads: button/buttonText
+    // (idle), dark/brightText (checked button, slider fill + handle border),
+    // mid (pressed blend), midlight (slider groove), window/light (handle).
+    palette.button: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.14)
+    palette.buttonText: App.Style.primaryTextColor
+    palette.dark: App.Style.accent
+    palette.brightText: App.Style.backgroundColor
+    palette.mid: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.45)
+    palette.midlight: Qt.rgba(App.Style.primaryTextColor.r, App.Style.primaryTextColor.g, App.Style.primaryTextColor.b, 0.18)
+    palette.window: App.Style.primaryTextColor
+    palette.light: App.Style.accent
+    palette.windowText: App.Style.primaryTextColor
+
     // Simulation properties for accelerometer
     property real currentPitch: 0
     property real currentRoll: 0
@@ -99,10 +114,9 @@ Item {
         }
     }
 
-    // Background with accent color
     Rectangle {
         anchors.fill: parent
-        color: App.Style.accent
+        color: App.Style.backgroundColor
 
         // 3D View container
         Rectangle {
@@ -114,7 +128,13 @@ Item {
                 bottom: controlPanel.top
                 margins: App.Spacing.overallMargin
             }
-            color: "black"
+            // Same colour as the scene clearColor so the control strip and the
+            // 3D view read as one panel.
+            color: "#18232F"
+            radius: dpMin(10, 2)
+            clip: true
+            border.width: 1
+            border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.45)
 
             View3D {
                 id: view3d
@@ -201,7 +221,7 @@ Item {
                 Button { text: "Close all"; onClicked: jeep.closeAll() }
                 Row {
                     spacing: 6
-                    Label { text: "Steer"; color: "white"; anchors.verticalCenter: parent.verticalCenter }
+                    Label { text: "Steer"; anchors.verticalCenter: parent.verticalCenter }
                     Slider {
                         objectName: "jeepSteering"
                         width: carMenu.dp(130)
@@ -224,7 +244,7 @@ Item {
                     }
                     Label {
                         text: jeep.wheelSpeedKph.toFixed(0) + " km/h"
-                        color: "white"; anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
             }
@@ -232,7 +252,6 @@ Item {
                 anchors.centerIn: view3d
                 visible: !jeep.ready
                 text: jeep.error ? "Unable to load Jeep: " + jeep.error : "Loading Jeep…"
-                color: "white"
                 width: parent.width - 24
                 wrapMode: Text.Wrap
                 horizontalAlignment: Text.AlignHCenter
@@ -272,8 +291,10 @@ Item {
             anchors.margins: App.Spacing.overallMargin
             width: parent.width - (App.Spacing.overallMargin * 2)
             height: dp(60)
-            color: "#333333"
+            color: App.Style.contentColor
             radius: dpMin(10, 2)
+            border.width: 1
+            border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.25)
 
             // LIVE mode: show status and IMU readings
             RowLayout {
@@ -286,7 +307,7 @@ Item {
                     width: dp(70)
                     height: dp(30)
                     radius: 5
-                    color: "#00AA00"
+                    color: App.Style.statusConnected
 
                     Text {
                         anchors.centerIn: parent
@@ -304,7 +325,7 @@ Item {
                     width: dp(70)
                     height: dp(30)
                     radius: 5
-                    color: tareMouseArea.pressed ? "#0066AA" : "#0088CC"
+                    color: tareMouseArea.pressed ? Qt.darker(App.Style.accent, 1.3) : App.Style.accent
 
                     Text {
                         anchors.centerIn: parent
@@ -328,7 +349,7 @@ Item {
                     width: dp(70)
                     height: dp(30)
                     radius: 5
-                    color: resetTareMouseArea.pressed ? "#664400" : "#886600"
+                    color: resetTareMouseArea.pressed ? Qt.darker(App.Style.statusWarning, 1.3) : App.Style.statusWarning
 
                     Text {
                         anchors.centerIn: parent
@@ -348,35 +369,35 @@ Item {
 
                 Text {
                     text: "Pitch: " + currentPitch.toFixed(1) + "\u00B0"
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: "Roll: " + currentRoll.toFixed(1) + "\u00B0"
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: "Heading: " + currentHeading.toFixed(1) + "\u00B0 " + headingToCardinal(currentHeading)
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: "Alt: " + currentAltitude.toFixed(1) + " m"
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: currentBaroTemp.toFixed(1) + " \u00B0C"
-                    color: "#AAAAAA"
+                    color: App.Style.secondaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
@@ -393,12 +414,14 @@ Item {
                     width: dp(90)
                     height: dp(30)
                     radius: 5
-                    color: "#666666"
+                    color: "transparent"
+                    border.width: 1
+                    border.color: App.Style.secondaryTextColor
 
                     Text {
                         anchors.centerIn: parent
                         text: "NO IMU"
-                        color: "#CCCCCC"
+                        color: App.Style.secondaryTextColor
                         font.pixelSize: dp(12)
                         font.bold: true
                         font.family: carMenu.globalFont
@@ -436,7 +459,7 @@ Item {
                     Text {
                         anchors.bottom: parent.top
                         text: "Pitch"
-                        color: "white"
+                        color: App.Style.secondaryTextColor
                         font.pixelSize: dp(12)
                         font.family: carMenu.globalFont
                     }
@@ -457,7 +480,7 @@ Item {
                     Text {
                         anchors.bottom: parent.top
                         text: "Roll"
-                        color: "white"
+                        color: App.Style.secondaryTextColor
                         font.pixelSize: dp(12)
                         font.family: carMenu.globalFont
                     }

@@ -166,7 +166,7 @@ Item {
                     barValue: -1
                     globalFont: sensorMenu.globalFont
                     connected: imuConnected
-                    visible: showTemperature && (berryIMU.hasTemperature !== false)
+                    visible: showTemperature && (!berryIMU || berryIMU.hasTemperature !== false)
                 }
             }
 
