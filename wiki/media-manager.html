@@ -115,11 +115,23 @@ AUDIO_EXTENSIONS = (<span class="str">'.mp3'</span>, <span class="str">'.m4a'</s
           (10&nbsp;MB) and <code>analyzeduration</code> (5&nbsp;s) dynamic properties on the player for more reliable
           format probing; the C++ constructor does not.
         </p>
+        <p>
+          <strong>Output device.</strong> A <code>QAudioOutput</code> stays bound to the device that was the system
+          default when it was created, so an output that disappears and returns (HDMI audio across a display sleep,
+          a USB DAC) used to leave playback silently on the old device. Both constructors now create a
+          <code>QMediaDevices</code> and connect <code>audioOutputsChanged</code> to <code>_follow_default_output()</code>,
+          which sets the output to <code>QMediaDevices::defaultAudioOutput()</code> whenever that differs from the
+          current device (a null device is ignored) and logs "Audio output changed, now using: ...".
+        </p>
         <pre><code><span class="cmt">// src/managers/mediamanager.cpp — constructor</span>
 m_player = <span class="kw">new</span> <span class="cls">QMediaPlayer</span>(<span class="kw">this</span>);
 m_audioOutput = <span class="kw">new</span> <span class="cls">QAudioOutput</span>(<span class="kw">this</span>);
 m_player-&gt;<span class="fn">setAudioOutput</span>(m_audioOutput);
 m_audioOutput-&gt;<span class="fn">setVolume</span>(<span class="num">0.5f</span>);
+
+<span class="cmt">// Follow the system default output device</span>
+m_mediaDevices = <span class="kw">new</span> <span class="cls">QMediaDevices</span>(<span class="kw">this</span>);
+<span class="fn">connect</span>(m_mediaDevices, &amp;<span class="cls">QMediaDevices</span>::audioOutputsChanged, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_follow_default_output);
 
 <span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::durationChanged,    <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::durationChanged);
 <span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::positionChanged,    <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::positionChanged);
@@ -138,7 +150,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <p>Connected signals from QMediaPlayer:</p>
         <ul>
           <li><code>durationChanged</code> / <code>positionChanged</code> - forwarded directly to QML as the manager's own signals of the same name</li>
-          <li><code>mediaStatusChanged</code> - routed to <code>_handle_media_status()</code>: <code>EndOfMedia</code> advances to the next track, <code>LoadedMedia</code> / <code>BufferedMedia</code> reset the recovery counters, <code>StalledMedia</code> / <code>InvalidMedia</code> trigger <a href="#error-recovery">recovery</a></li>
+          <li><code>mediaStatusChanged</code> - routed to <code>_handle_media_status()</code>: <code>EndOfMedia</code> advances to the next track, <code>LoadedMedia</code> / <code>BufferedMedia</code> apply a pending seek left by <code>_reseat_source()</code> (if the source still matches) and reset the recovery counters, <code>StalledMedia</code> / <code>InvalidMedia</code> trigger <a href="#error-recovery">recovery</a></li>
           <li><code>errorOccurred</code> - also triggers recovery (ignored while nothing is playing)</li>
           <li><code>playbackStateChanged</code> - forwarded as <code>playbackStateChanged(int)</code> with the raw <code>QMediaPlayer::PlaybackState</code> value (0 stopped, 1 playing, 2 paused); the manager's own <code>playStateChanged(bool)</code> remains the signal the QML actually binds</li>
         </ul>
@@ -359,7 +371,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <tbody>
             <tr><td><code>next_track()</code></td><td>Advances the index by 1 (wraps around), calls <code>play_file()</code>, restarts the debounced state save. Also called on <code>EndOfMedia</code></td></tr>
             <tr><td><code>previous_track()</code></td><td>Decrements the index by 1 (wraps around), calls <code>play_file()</code>, restarts the debounced state save</td></tr>
-            <tr><td><code>toggle_play()</code></td><td>If no source is set, plays the current file. If playing, pauses and saves state. If paused, checks for a bad media status (<code>InvalidMedia</code>, <code>NoMedia</code>, <code>StalledMedia</code>) and forces recovery instead of resuming; after <code>play()</code> it verifies <code>playbackState()</code> is <code>PlayingState</code> and forces recovery if not</td></tr>
+            <tr><td><code>toggle_play()</code></td><td>If no source is set, plays the current file. If playing, pauses and saves state. If paused, checks for a bad media status (<code>InvalidMedia</code>, <code>NoMedia</code>, <code>StalledMedia</code>) and forces recovery instead of resuming. If the pause lasted at least 30&nbsp;s (<code>kLongPauseMs</code> / <code>LONG_PAUSE_SECONDS</code>) and the file exists, it reloads the track at its current position with <code>_reseat_source()</code> before <code>play()</code>, re-applies mute and emits <code>playStateChanged(true)</code> without the state check (the source is still loading). Otherwise, after <code>play()</code> it verifies <code>playbackState()</code> is <code>PlayingState</code> and forces recovery if not</td></tr>
             <tr><td><code>pause()</code></td><td>Pauses the player, emits <code>playStateChanged(false)</code>, starts the debounced state save, remembers the volume for unmute</td></tr>
             <tr><td><code>set_position(ms)</code></td><td>Seeks to a position in milliseconds</td></tr>
           </tbody>
@@ -611,7 +623,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         <ul>
           <li><strong>EndOfMedia</strong> - calls <code>next_track()</code></li>
           <li><strong>StalledMedia / InvalidMedia</strong> and <strong>player errors</strong> - call <code>_attempt_playback_recovery()</code>, but only while something is playing; a stopped player keeps reporting its last failure, so those events are ignored (commits <code>2884c65</code>, <code>1e5f585</code>)</li>
-          <li><strong>LoadedMedia / BufferedMedia</strong> - the file decodes, which is what "recovered" actually means: the attempt counters are reset and, if there were attempts, "Playback recovered" is logged</li>
+          <li><strong>LoadedMedia / BufferedMedia</strong> - the file decodes, which is what "recovered" actually means: any pending seek from <code>_reseat_source()</code> is applied, the attempt counters are reset and, if there were attempts, "Playback recovered" is logged</li>
         </ul>
         <pre><code><span class="cmt">// src/managers/mediamanager.cpp</span>
 <span class="kw">static constexpr int</span> kMaxRecoveryAttempts = <span class="num">2</span>;        <span class="cmt">// per file, then skip it</span>
@@ -630,10 +642,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
     <span class="kw">const</span> <span class="cls">qint64</span> position = m_player-&gt;<span class="fn">position</span>();
     <span class="cmt">// Clear then re-set the source: Qt does not reload (or re-report an</span>
     <span class="cmt">// error for) a source identical to the current one.</span>
-    m_player-&gt;<span class="fn">setSource</span>(<span class="cls">QUrl</span>());
-    m_player-&gt;<span class="fn">setSource</span>(<span class="cls">QUrl</span>::<span class="fn">fromLocalFile</span>(filePath));
-    <span class="kw">if</span> (position &gt; <span class="num">0</span>)
-        m_player-&gt;<span class="fn">setPosition</span>(position);
+    <span class="fn">_reseat_source</span>(filePath, position);      <span class="cmt">// seek deferred to LoadedMedia</span>
     <span class="kw">if</span> (wasPlaying)
         m_player-&gt;<span class="fn">play</span>();
     <span class="kw">if</span> (m_isMuted)
@@ -649,6 +658,27 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           emitted instead of looping the library. <code>toggle_play()</code> passes <code>force</code> so a user pressing
           play on a bad state still gets a recovery attempt. The Python constants are
           <code>MAX_RECOVERY_ATTEMPTS</code> / <code>MAX_CONSECUTIVE_BAD_TRACKS</code> with the same values.
+        </p>
+
+        <h3>Reseating the source</h3>
+        <p>
+          <code>_reseat_source(file, ms)</code> reloads a track at a position, which gives the player a fresh audio
+          sink. It clears the source first (Qt does not reload a source identical to the current one), then sets it
+          again. The seek is <strong>deferred</strong>: a <code>setPosition()</code> issued straight after
+          <code>setSource()</code> is dropped and playback restarts at 0, which also affected recovery before this
+          change. The pending <code>(file, ms)</code> (<code>m_pendingSeekFile</code> / <code>m_pendingSeekMs</code>,
+          Python <code>_pending_seek</code>) is stored before the second <code>setSource()</code>, because
+          <code>LoadedMedia</code> can arrive during that call, and <code>_handle_media_status()</code> applies it on
+          <code>LoadedMedia</code> / <code>BufferedMedia</code> only if the player's source is still that file. A
+          position of 0 sets no pending seek.
+        </p>
+        <p>
+          Both recovery and the long-pause resume in <code>toggle_play()</code> use it. The long-pause path exists
+          because on the Orange Pi, resuming after a long pause sometimes produced no sound while the player reported
+          <code>PlayingState</code>; only skipping to another track brought audio back. <code>pause()</code> and
+          <code>toggle_play()</code> record when playback paused (<code>m_pausedSince</code> /
+          <code>_paused_at</code>); a resume after 30&nbsp;s or more reloads the track instead of calling a plain
+          <code>play()</code>.
         </p>
 
         <!-- Signals -->

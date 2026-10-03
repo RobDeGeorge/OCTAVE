@@ -18,6 +18,8 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QColor>
+#include <QMediaDevices>
+#include <QAudioDevice>
 
 #ifndef Q_OS_MOBILE
 #include <taglib/fileref.h>
@@ -139,6 +141,14 @@ MediaManager::MediaManager(QObject *parent)
     m_audioOutput = new QAudioOutput(this);
     m_player->setAudioOutput(m_audioOutput);
     m_audioOutput->setVolume(0.5f);
+
+    // QAudioOutput stays on the device that was the default when it was
+    // made. Follow the system default instead, so an output that goes away
+    // and comes back (HDMI audio across a display sleep, a USB DAC) doesn't
+    // leave playback silently bound to the old device.
+    m_mediaDevices = new QMediaDevices(this);
+    connect(m_mediaDevices, &QMediaDevices::audioOutputsChanged,
+            this, &MediaManager::_follow_default_output);
 
     // Ducking ramp: fast attack so a prompt is not stepped on, slower release
     // so music does not jump back up between sentences.
@@ -374,6 +384,11 @@ void MediaManager::_handle_media_status(QMediaPlayer::MediaStatus status)
         qCInfo(lcMedia) << "Song ended, playing next track";
         next_track();
     } else if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia) {
+        if (!m_pendingSeekFile.isEmpty()) {
+            if (m_player->source().toLocalFile() == m_pendingSeekFile)
+                m_player->setPosition(m_pendingSeekMs);
+            m_pendingSeekFile.clear();
+        }
         // The file decodes: this is what "recovered" actually means
         if (m_recoveryAttempts)
             qCInfo(lcMedia) << "Playback recovered for:" << m_recoveryFile;
@@ -399,6 +414,34 @@ void MediaManager::_handle_player_error(QMediaPlayer::Error error, const QString
 }
 
 static constexpr int kMaxRecoveryAttempts = 2;        // per file, then skip it
+// A resume after a pause this long reloads the track at its position rather
+// than calling play(): after a long pause the audio sink can come back
+// silent while the player reports PlayingState (seen on the Orange Pi; only
+// a skip brought the sound back). Python: LONG_PAUSE_SECONDS.
+static constexpr qint64 kLongPauseMs = 30 * 1000;
+
+void MediaManager::_follow_default_output()
+{
+    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    if (device.isNull() || device == m_audioOutput->device())
+        return;
+    qCInfo(lcMedia) << "Audio output changed, now using:" << device.description();
+    m_audioOutput->setDevice(device);
+}
+
+// Reload filePath at position (ms), which gives the player a fresh audio
+// sink. Clear first: Qt does not reload a source identical to the current one.
+void MediaManager::_reseat_source(const QString &filePath, qint64 position)
+{
+    // A seek straight after setSource is dropped (playback restarts at 0),
+    // so it waits for LoadedMedia in _handle_media_status. Set first:
+    // LoadedMedia can arrive during setSource itself.
+    m_pendingSeekFile.clear();
+    m_player->setSource(QUrl());
+    m_pendingSeekFile = position > 0 ? filePath : QString();
+    m_pendingSeekMs = position;
+    m_player->setSource(QUrl::fromLocalFile(filePath));
+}
 static constexpr int kMaxConsecutiveBadTracks = 10;   // then stop instead of looping the library
 
 // Re-seat the current source and resume playback. Capped per file: after
@@ -443,10 +486,7 @@ void MediaManager::_attempt_playback_recovery(bool force)
 
     // Clear then re-set the source: Qt does not reload (or re-report an
     // error for) a source identical to the current one.
-    m_player->setSource(QUrl());
-    m_player->setSource(QUrl::fromLocalFile(filePath));
-    if (position > 0)
-        m_player->setPosition(position);
+    _reseat_source(filePath, position);
 
     if (wasPlaying) {
         m_player->play();
@@ -1667,6 +1707,7 @@ void MediaManager::previous_track()
 void MediaManager::pause()
 {
     m_player->pause();
+    m_pausedSince.start();
     m_isPaused = true;
     m_isPlaying = false;
     emit playStateChanged(false);
@@ -1688,6 +1729,7 @@ void MediaManager::toggle_play()
 
     if (m_isPlaying) {
         m_player->pause();
+        m_pausedSince.start();
         m_isPaused = true;
         m_isPlaying = false;
         _save_playback_state_debounced();
@@ -1702,9 +1744,27 @@ void MediaManager::toggle_play()
             return;
         }
 
+        const qint64 pausedFor = m_pausedSince.isValid() ? m_pausedSince.elapsed() : 0;
+        m_pausedSince.invalidate();
+        const QString currentFile = get_current_file();
+        const QString filePath = currentFile.isEmpty() ? QString() : _get_file_path(currentFile);
+        const bool reseated = pausedFor >= kLongPauseMs && !filePath.isEmpty() && QFile::exists(filePath);
+        if (reseated) {
+            qCInfo(lcMedia) << "Resuming after a" << pausedFor / 1000 << "s pause: reloading the track";
+            _reseat_source(filePath, m_player->position());
+        }
         m_player->play();
         m_isPaused = false;
         m_isPlaying = true;
+
+        if (reseated) {
+            // Still loading, so not PlayingState yet; a load failure reaches
+            // _handle_media_status / _handle_player_error.
+            if (m_isMuted)
+                m_audioOutput->setVolume(0.0f);
+            emit playStateChanged(true);
+            return;
+        }
 
         // Verify player started
         if (m_player->playbackState() != QMediaPlayer::PlayingState) {

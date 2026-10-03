@@ -14,6 +14,8 @@
 #include <QJsonObject>
 #include <QMediaPlayer>
 #include <QAudioOutput>
+#include <QElapsedTimer>
+#include <QMediaDevices>
 #include <QRegularExpression>
 
 class SettingsManager;
@@ -195,6 +197,8 @@ private:
     QString _get_album_id(const QString &filename);
     void _manage_cache(const QString &newAlbumId);
     void _attempt_playback_recovery(bool force = false);
+    void _reseat_source(const QString &filePath, qint64 position);
+    void _follow_default_output();
     QStringList _shuffle_playlist();
     QStringList _get_current_playlist_files();
     QString _get_file_path(const QString &filename);
@@ -232,6 +236,10 @@ private:
     // ──────────────────────────────────────────────────────────────
     QMediaPlayer *m_player = nullptr;
     QAudioOutput *m_audioOutput = nullptr;
+    QMediaDevices *m_mediaDevices = nullptr;
+    QElapsedTimer m_pausedSince;   // valid while paused by pause()/toggle_play()
+    QString m_pendingSeekFile;     // seek to m_pendingSeekMs once this has loaded
+    qint64 m_pendingSeekMs = 0;
     SettingsManager *m_settingsManager = nullptr;
 
     // Directories

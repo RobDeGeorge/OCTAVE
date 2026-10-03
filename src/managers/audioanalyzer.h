@@ -36,14 +36,16 @@ public slots:
     bool is_analyzed() const;
     void clear();
 
-private:
+public:
     // ── FFT helpers (no external deps) ─────────────────────────
+    //    Public so the streaming analysis state in the .cpp can use them.
     static void fft_radix2(std::vector<std::complex<float>> &x);
     static std::vector<float> hannWindow(int N);
 
+private:
     // ── Audio decoding + analysis ──────────────────────────────
     struct AnalysisResult {
-        std::vector<std::vector<int>> fftData;
+        std::vector<quint8> fftData;    // numBars levels per chunk, flat
         bool success = false;
     };
 
@@ -52,9 +54,9 @@ private:
     void onAnalysisDone();
 
     // ── Pre-computed FFT data ──────────────────────────────────
-    //    Outer vector: one entry per time chunk (~100 ms)
-    //    Inner vector: bar levels 0-8
-    std::vector<std::vector<int>> m_fftData;
+    //    Bar levels 0-8, m_numBars per time chunk (~100 ms), flat
+    std::vector<quint8> m_fftData;
+    size_t chunkCount() const { return m_fftData.size() / m_numBars; }
 
     QString      m_currentFile;
     int          m_numBars        = 96;

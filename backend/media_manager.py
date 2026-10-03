@@ -1,7 +1,7 @@
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QUrl, Qt, QVariantAnimation, QEasingCurve
 import time
 from PySide6.QtGui import QImage
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, TPE1, TALB
 import base64
@@ -100,6 +100,17 @@ class MediaManager(QObject):
         self._player = QMediaPlayer()
         self._audio_output = QAudioOutput()
         self._player.setAudioOutput(self._audio_output)
+
+        # QAudioOutput stays on the device that was the default when it was
+        # made. Follow the system default instead, so an output that goes
+        # away and comes back (HDMI audio across a display sleep, a USB DAC)
+        # doesn't leave playback silently bound to the old device.
+        self._media_devices = QMediaDevices(self)
+        self._media_devices.audioOutputsChanged.connect(self._follow_default_output)
+        # time.monotonic() of the last pause, None while playing
+        self._paused_at = None
+        # (file_path, ms) to seek to once a reseated source has loaded
+        self._pending_seek = None
         
         # Set default volume
         self._audio_output.setVolume(0.5)
@@ -319,6 +330,9 @@ class MediaManager(QObject):
                 logger.info("Song ended, playing next track")
                 self.next_track()
             elif status in (QMediaPlayer.MediaStatus.LoadedMedia, QMediaPlayer.MediaStatus.BufferedMedia):
+                pending, self._pending_seek = self._pending_seek, None
+                if pending and self._player.source().toLocalFile() == pending[0]:
+                    self._player.setPosition(pending[1])
                 # The file decodes: this is what "recovered" actually means
                 if self._recovery_attempts:
                     logger.info(f"Playback recovered for: {self._recovery_file}")
@@ -343,6 +357,11 @@ class MediaManager(QObject):
         self._attempt_playback_recovery()
 
     MAX_RECOVERY_ATTEMPTS = 2          # per file, then skip it
+    # A resume after a pause this long reloads the track at its position
+    # rather than calling play(): after a long pause the audio sink can
+    # come back silent while the player reports PlayingState (seen on the
+    # Orange Pi; only a skip brought the sound back).
+    LONG_PAUSE_SECONDS = 30
     MAX_CONSECUTIVE_BAD_TRACKS = 10    # then stop instead of looping the library
 
     def _attempt_playback_recovery(self, force: bool = False):
@@ -383,10 +402,7 @@ class MediaManager(QObject):
 
             # Clear then re-set the source: Qt does not reload (or re-report an
             # error for) a source identical to the current one.
-            self._player.setSource(QUrl())
-            self._player.setSource(QUrl.fromLocalFile(file_path))
-            if position > 0:
-                self._player.setPosition(position)
+            self._reseat_source(file_path, position)
 
             if was_playing:
                 self._player.play()
@@ -1463,10 +1479,30 @@ class MediaManager(QObject):
         except Exception as e:
             logger.error(f"Error in previous_track: {e}")
         
+    def _follow_default_output(self):
+        device = QMediaDevices.defaultAudioOutput()
+        if device.isNull() or device == self._audio_output.device():
+            return
+        logger.info(f"Audio output changed, now using: {device.description()}")
+        self._audio_output.setDevice(device)
+
+    def _reseat_source(self, file_path, position):
+        """Reload file_path at position (ms), which gives the player a fresh
+        audio sink. Clear first: Qt does not reload a source identical to
+        the current one."""
+        # A seek straight after setSource is dropped (playback restarts at
+        # 0), so it waits for LoadedMedia in _handle_media_status. Set first:
+        # LoadedMedia can arrive during setSource itself.
+        self._pending_seek = None
+        self._player.setSource(QUrl())
+        self._pending_seek = (file_path, position) if position > 0 else None
+        self._player.setSource(QUrl.fromLocalFile(file_path))
+
     @Slot()
     def pause(self):
         """Pause playback"""
         self._player.pause()
+        self._paused_at = time.monotonic()
         self._is_paused = True
         self._is_playing = False
         self.playStateChanged.emit(False)
@@ -1486,6 +1522,7 @@ class MediaManager(QObject):
 
         if self._is_playing:
             self._player.pause()
+            self._paused_at = time.monotonic()
             self._is_paused = True
             self._is_playing = False
             self._save_playback_state()
@@ -1501,9 +1538,25 @@ class MediaManager(QObject):
                 self._attempt_playback_recovery(force=True)
                 return
 
+            paused_for = time.monotonic() - self._paused_at if self._paused_at is not None else 0
+            self._paused_at = None
+            current_file = self.get_current_file()
+            file_path = self._get_file_path(current_file) if current_file else None
+            reseated = paused_for >= self.LONG_PAUSE_SECONDS and file_path and os.path.exists(file_path)
+            if reseated:
+                logger.info(f"Resuming after a {paused_for:.0f} s pause: reloading the track")
+                self._reseat_source(file_path, self._player.position())
             self._player.play()
             self._is_paused = False
             self._is_playing = True
+
+            if reseated:
+                # Still loading, so not PlayingState yet; a load failure
+                # reaches _handle_media_status / _handle_player_error.
+                if self._is_muted:
+                    self._audio_output.setVolume(0.0)
+                self.playStateChanged.emit(True)
+                return
 
             # Verify the player actually started — if not, recover
             actual_state = self._player.playbackState()

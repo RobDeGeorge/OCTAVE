@@ -128,13 +128,14 @@ static std::vector<int> logBandEdges(int fftLen, int numBars)
 }
 
 // ════════════════════════════════════════════════════════════════
-// Append one decoded buffer to `mono`, averaging channels, in whatever
-// sample format the platform decoder chose. Mirrors the Python backend's
-// frame.to_ndarray().mean(axis=0).
+// Append one decoded buffer to `mono` (cleared first), averaging
+// channels, in whatever sample format the platform decoder chose.
+// Mirrors the Python backend's per-frame mono mix.
 // ════════════════════════════════════════════════════════════════
 
 static void appendMono(const QAudioBuffer &buf, std::vector<float> &mono, int &sampleRate)
 {
+    mono.clear();
     const QAudioFormat f = buf.format();
     const int frames   = static_cast<int>(buf.frameCount());
     const int channels = std::max(1, f.channelCount());
@@ -191,13 +192,110 @@ static void appendMono(const QAudioBuffer &buf, std::vector<float> &mono, int &s
 }
 
 // ════════════════════════════════════════════════════════════════
+// Streaming analysis state: decoded audio goes in buffer by buffer and
+// only the per-chunk band magnitudes are kept (~4 KB per second of
+// audio). Collecting the whole decoded track first used hundreds of MB
+// per hour of audio, and the Python twin of this code froze an Orange Pi
+// on a long mix. At most kMaxAnalysisSeconds are analysed (Python:
+// MAX_ANALYSIS_SECONDS).
+// ════════════════════════════════════════════════════════════════
+
+static constexpr int kMaxAnalysisSeconds = 3 * 60 * 60;
+
+namespace {
+struct ChunkStream {
+    int numBars;
+    double chunkDuration;
+
+    bool ready = false;
+    int factor = 1;             // keep every factor-th native sample
+    int chunkSize = 0;
+    int fftSize = 0;
+    int fftLen = 0;
+    long long position = 0;     // native samples seen (decimation phase)
+    long long kept = 0;         // decimated samples kept
+    long long maxSamples = 0;
+    std::vector<float> window;
+    std::vector<int> edges;
+    std::vector<float> chunk;   // decimated samples of the chunk being filled
+    std::vector<std::complex<float>> buf;
+    std::vector<float> raw;     // numBars magnitudes per finished chunk
+
+    ChunkStream(int bars, double dur) : numBars(bars), chunkDuration(dur) {}
+
+    // Decimate to ~8 kHz: every (rate // 8000)th sample of the whole
+    // track, effective rate rate // factor, like the Python backend.
+    bool init(int nativeRate)
+    {
+        factor = std::max(1, nativeRate / 8000);
+        const int sampleRate = nativeRate / factor;
+        chunkSize = static_cast<int>(sampleRate * chunkDuration);
+        if (chunkSize < 2)
+            return false;
+        // Magnitudes of the positive frequencies, skipping DC: bins 1..N/2,
+        // i.e. 0 to sampleRate/2 (~4 kHz) at the decimated rate (the Python
+        // backend keeps the same range: np.abs(np.fft.rfft(chunk))[1:]).
+        fftSize = nextPow2(chunkSize);
+        fftLen = fftSize / 2;
+        window = AudioAnalyzer::hannWindow(chunkSize);
+        edges = logBandEdges(fftLen, numBars);
+        chunk.reserve(chunkSize);
+        buf.resize(fftSize);
+        maxSamples = static_cast<long long>(kMaxAnalysisSeconds) * sampleRate;
+        ready = true;
+        return true;
+    }
+
+    bool full() const { return ready && kept >= maxSamples; }
+
+    void add(const std::vector<float> &mono)
+    {
+        const long long n = static_cast<long long>(mono.size());
+        long long i = (factor - position % factor) % factor;
+        for (; i < n && !full(); i += factor) {
+            chunk.push_back(mono[i]);
+            ++kept;
+            if (static_cast<int>(chunk.size()) == chunkSize)
+                finishChunk();
+        }
+        position += n;
+    }
+
+    void finishChunk()
+    {
+        // Zero-padded, windowed complex buffer
+        std::fill(buf.begin(), buf.end(), std::complex<float>(0.0f, 0.0f));
+        for (int i = 0; i < chunkSize; ++i)
+            buf[i] = {chunk[i] * window[i], 0.0f};
+        chunk.clear();
+
+        AudioAnalyzer::fft_radix2(buf);
+
+        // Mean magnitude per log band (+1 skips DC)
+        for (int b = 0; b < numBars; ++b) {
+            const int startIdx = edges[b];
+            const int endIdx   = edges[b + 1];
+            float level = 0.0f;
+            if (endIdx > startIdx) {
+                float sum = 0.0f;
+                for (int i = startIdx; i < endIdx; ++i)
+                    sum += std::abs(buf[i + 1]);
+                level = sum / static_cast<float>(endIdx - startIdx);
+            }
+            raw.push_back(level);
+        }
+    }
+};
+} // namespace
+
+// ════════════════════════════════════════════════════════════════
 // Worker: decode audio file and compute per-chunk FFT levels
 // Runs on a QtConcurrent thread — must NOT touch Qt GUI objects.
 //
 // Decodes with QAudioDecoder (driven by a local QEventLoop so it
-// works on this worker thread) in the file's native format, then
-// mixes to mono and decimates to ~8 kHz exactly as the Python
-// backend does after its PyAV decode.
+// works on this worker thread) in the file's native format, mixing
+// each buffer to mono and decimating to ~8 kHz as it arrives, exactly
+// as the Python backend does with each PyAV frame.
 // ════════════════════════════════════════════════════════════════
 
 AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
@@ -215,24 +313,35 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
     // (the decode just sat on the watchdog for 30 s and the visualizer stayed
     // dark), while the native format decodes in a few hundred ms. WAV sources
     // converted fine, which is what hid the failure. The mono mix-down and
-    // the decimation happen below in appendMono() and the stride loop, so the
+    // the decimation happen below in appendMono() and ChunkStream, so the
     // decoder's choice of rate, channel count and sample format no longer
     // matters — on Android this also sidesteps MediaCodec's format quirks.
     QAudioDecoder decoder;
     decoder.setSource(QUrl::fromLocalFile(filePath));
 
-    std::vector<float> mono;       // mixed to mono, native sample rate
+    ChunkStream stream(numBars, chunkDuration);
+    std::vector<float> mono;       // one buffer, mixed to mono, native rate
     int  nativeRate = 0;
     bool errorFlag  = false;
     bool timedOut   = false;
+    bool badRate    = false;
 
     QEventLoop loop;
-    auto drain = [&decoder, &mono, &nativeRate]() {
-        while (decoder.bufferAvailable()) {
+    auto drain = [&]() {
+        while (decoder.bufferAvailable() && !stream.full() && !badRate) {
             QAudioBuffer buf = decoder.read();
             if (!buf.isValid()) break;
             appendMono(buf, mono, nativeRate);
+            if (mono.empty())
+                continue;
+            if (!stream.ready && !stream.init(nativeRate)) {
+                badRate = true;
+                break;
+            }
+            stream.add(mono);
         }
+        if (stream.full() || badRate)
+            loop.quit();
     };
     QObject::connect(&decoder, &QAudioDecoder::bufferReady, &decoder, drain);
     QObject::connect(&decoder, &QAudioDecoder::finished, &loop, &QEventLoop::quit);
@@ -264,116 +373,49 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
         return result;
     if (timedOut) {
         qCWarning(lcAudioAnalyzer) << "QAudioDecoder timed out after 30 s for" << filePath
-                                   << "-" << mono.size() << "samples decoded at" << nativeRate << "Hz";
+                                   << "-" << stream.kept << "samples analysed at"
+                                   << nativeRate << "Hz";
         return result;
     }
-    if (mono.empty() || nativeRate <= 0) {
-        qCWarning(lcAudioAnalyzer) << "QAudioDecoder produced no audio data for" << filePath;
+    if (badRate || nativeRate <= 0 || stream.kept == 0) {
+        qCWarning(lcAudioAnalyzer) << "QAudioDecoder produced no usable audio data for" << filePath;
         return result;
     }
+    if (stream.full())
+        qCInfo(lcAudioAnalyzer) << "Analysing only the first" << kMaxAnalysisSeconds
+                                << "s of" << filePath;
 
-    // ── Normalise (before decimation, like the Python backend) ─
-    float maxVal = 0.0f;
-    for (float v : mono)
-        maxVal = std::max(maxVal, std::abs(v));
-    if (maxVal > 0.0f) {
-        const float inv = 1.0f / maxVal;
-        for (float &v : mono)
-            v *= inv;
-    }
-
-    // ── Decimate to ~8 kHz: every (rate // 8000)th sample, effective rate
-    //    rate // factor — identical to Python's all_samples[::factor]. ──
-    const int factor     = std::max(1, nativeRate / 8000);
-    const int sampleRate = nativeRate / factor;
-    std::vector<float> normalised;
-    normalised.reserve(mono.size() / factor + 1);
-    for (size_t i = 0; i < mono.size(); i += factor)
-        normalised.push_back(mono[i]);
-    mono.clear();
-    mono.shrink_to_fit();
-
-    const int sampleCount = static_cast<int>(normalised.size());
-    if (sampleCount == 0)
-        return result;
-
-    // ── Chunk into ~chunkDuration windows and FFT each ─────────
-    const int chunkSize = static_cast<int>(sampleRate * chunkDuration);
-    const int numChunks = sampleCount / chunkSize;
-
-    if (numChunks == 0)
-        return result;
-
-    const int fftSize = nextPow2(chunkSize);
-    const auto window = hannWindow(chunkSize);
-
-    // Magnitudes of the positive frequencies, skipping DC: bins 1..N/2, i.e.
-    // 0 to sampleRate/2 (~4 kHz) at the decimated rate (the Python backend
-    // keeps the same range: np.abs(np.fft.rfft(chunk))[1:]).
-    const int fftLen = fftSize / 2;
-    const std::vector<int> logIndices = logBandEdges(fftLen, numBars);
-
-    // First pass: raw magnitudes per chunk per bar
-    std::vector<std::vector<float>> rawFftData(numChunks);
-
-    for (int c = 0; c < numChunks; ++c) {
-        const int offset = c * chunkSize;
-
-        // Zero-padded, windowed complex buffer
-        std::vector<std::complex<float>> buf(fftSize, {0.0f, 0.0f});
-        for (int i = 0; i < chunkSize; ++i)
-            buf[i] = {normalised[offset + i] * window[i], 0.0f};
-
-        fft_radix2(buf);
-
-        std::vector<float> mag(fftLen);
-        for (int i = 0; i < fftLen; ++i)
-            mag[i] = std::abs(buf[i + 1]);   // +1 to skip DC
-
-        // Bin into bars
-        std::vector<float> levels(numBars, 0.0f);
-        for (int b = 0; b < numBars; ++b) {
-            int startIdx = logIndices[b];
-            int endIdx   = logIndices[b + 1];
-            if (endIdx > startIdx) {
-                float sum = 0.0f;
-                for (int i = startIdx; i < endIdx; ++i)
-                    sum += mag[i];
-                levels[b] = sum / static_cast<float>(endIdx - startIdx);
-            }
-        }
-
-        rawFftData[c] = std::move(levels);
-    }
+    std::vector<float> &raw = stream.raw;
+    if (raw.empty())
+        return result;   // shorter than one chunk
 
     // ── Global normalisation (95th percentile, matching Python) ─
+    // Scaling the samples scales every magnitude and this max alike, so
+    // the levels need no peak normalisation of the samples first.
     std::vector<float> allValues;
-    allValues.reserve(numChunks * numBars);
-    for (const auto &chunk : rawFftData)
-        for (float v : chunk)
-            if (v > 0.0f)
-                allValues.push_back(v);
+    allValues.reserve(raw.size());
+    for (float v : raw)
+        if (v > 0.0f)
+            allValues.push_back(v);
 
     float globalMax = 1.0f;
     if (!allValues.empty()) {
-        std::sort(allValues.begin(), allValues.end());
-        int idx95 = static_cast<int>(allValues.size() * 0.95);
-        idx95 = std::min(idx95, static_cast<int>(allValues.size()) - 1);
+        const size_t idx95 = std::min(static_cast<size_t>(allValues.size() * 0.95),
+                                      allValues.size() - 1);
+        std::nth_element(allValues.begin(), allValues.begin() + idx95, allValues.end());
         globalMax = allValues[idx95];
         if (globalMax <= 0.0f)
             globalMax = 1.0f;
     }
+    allValues.clear();
+    allValues.shrink_to_fit();
 
-    // ── Second pass: normalise → 0-8 integer levels ────────────
-    result.fftData.resize(numChunks);
-    for (int c = 0; c < numChunks; ++c) {
-        result.fftData[c].resize(numBars);
-        for (int b = 0; b < numBars; ++b) {
-            float norm = rawFftData[c][b] / globalMax;
-            norm = std::min(1.0f, norm);
-            norm = std::pow(norm, 0.6f);                   // perceptual curve
-            result.fftData[c][b] = static_cast<int>(norm * 8.0f);
-        }
+    // ── Normalise → 0-8 integer levels ─────────────────────────
+    result.fftData.resize(raw.size());
+    for (size_t i = 0; i < raw.size(); ++i) {
+        float norm = std::min(1.0f, raw[i] / globalMax);
+        norm = std::pow(norm, 0.6f);                   // perceptual curve
+        result.fftData[i] = static_cast<quint8>(norm * 8.0f);
     }
 
     result.success = true;
@@ -451,7 +493,7 @@ void AudioAnalyzer::onAnalysisDone()
         m_fftData = std::move(result.fftData);
         emit analysisComplete();
         qCInfo(lcAudioAnalyzer) << "Analysis complete:"
-                                << m_fftData.size() << "chunks generated";
+                                << chunkCount() << "chunks generated";
     } else {
         m_fftData.clear();
         qCWarning(lcAudioAnalyzer) << "Analysis failed for" << m_currentFile;
@@ -463,16 +505,20 @@ void AudioAnalyzer::update_position(float positionSeconds)
     if (m_fftData.empty() || !m_isActive)
         return;
 
-    int chunkIndex = static_cast<int>(positionSeconds * 10.0f);
-    chunkIndex = std::clamp(chunkIndex, 0, static_cast<int>(m_fftData.size()) - 1);
+    const int chunkIndex = std::max(0, static_cast<int>(positionSeconds * 10.0f));
 
-    const auto &newLevels = m_fftData[chunkIndex];
-
-    // Build QVariantList and compare
+    // Build QVariantList and compare; flat bars past the analysed part
+    // (kMaxAnalysisSeconds)
     QVariantList varList;
-    varList.reserve(static_cast<int>(newLevels.size()));
-    for (int v : newLevels)
-        varList.append(v);
+    varList.reserve(m_numBars);
+    if (static_cast<size_t>(chunkIndex) >= chunkCount()) {
+        for (int b = 0; b < m_numBars; ++b)
+            varList.append(0);
+    } else {
+        const quint8 *levels = m_fftData.data() + static_cast<size_t>(chunkIndex) * m_numBars;
+        for (int b = 0; b < m_numBars; ++b)
+            varList.append(static_cast<int>(levels[b]));
+    }
 
     if (varList != m_currentLevels) {
         m_currentLevels = varList;
@@ -483,7 +529,7 @@ void AudioAnalyzer::update_position(float positionSeconds)
 void AudioAnalyzer::set_active(bool active)
 {
     qCInfo(lcAudioAnalyzer) << "set_active called with:" << active
-                            << ", has FFT data:" << m_fftData.size() << "chunks";
+                            << ", has FFT data:" << chunkCount() << "chunks";
     m_isActive = active;
     if (!active) {
         // Emit zeros to clear the visualizer

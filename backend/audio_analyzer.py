@@ -24,6 +24,11 @@ if not AV_AVAILABLE:
     logger.warning("PyAV not available - waveform visualization will be disabled")
 av = lazy_module("av")
 
+# Longest stretch of a track that is analysed; the bars stay flat after it.
+MAX_ANALYSIS_SECONDS = 3 * 60 * 60
+# Chunks FFT'd per batch while decoding (60 s at 100 ms chunks).
+ANALYSIS_BATCH_CHUNKS = 600
+
 
 class AudioAnalyzer(QObject):
     """
@@ -43,7 +48,8 @@ class AudioAnalyzer(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # FFT data storage - list of lists, each inner list is FFT levels for a time chunk
+        # FFT data storage - (num_chunks, num_bars) uint8 array of levels,
+        # one row per time chunk; [] when there is none
         self._fft_data = []
         self._current_file = ""
         self._num_bars = 96
@@ -84,7 +90,7 @@ class AudioAnalyzer(QObject):
             return
 
         # Skip if already analyzed
-        if file_path == self._current_file and self._fft_data:
+        if file_path == self._current_file and len(self._fft_data):
             logger.info(f"File already analyzed: {file_path}")
             return
 
@@ -143,97 +149,128 @@ class AudioAnalyzer(QObject):
         """
         Decode audio and compute FFT for visualization.
         Runs on a worker thread — must not touch Qt objects.
-        Returns the computed FFT data list, or None on failure.
+        Returns a (num_chunks, num_bars) uint8 array of 0-8 levels, or None
+        on failure.
+
+        Streams: each decoded frame is mixed to mono and decimated to ~8 kHz
+        on arrival, and the FFT runs every ANALYSIS_BATCH_CHUNKS chunks, so
+        only the per-chunk band magnitudes are kept for the whole track
+        (~4 KB per second of audio). Decoding whole tracks first used ~1 MB
+        of RAM per second of audio: a long mix or podcast needed several GB
+        and froze the Orange Pi. At most MAX_ANALYSIS_SECONDS are analysed.
         """
         try:
             container = av.open(file_path)
+        except Exception as e:
+            logger.error(f"FFT analysis error: {e}")
+            return None
+        try:
             audio_stream = next((s for s in container.streams if s.type == 'audio'), None)
 
             if not audio_stream:
                 logger.debug("No audio stream found")
                 return None
 
-            # Decode all audio frames. Kept to one array per frame here; the
-            # mono mix, normalisation and FFT below each run as a single
-            # numpy call over the whole track. This runs on a worker thread,
-            # but Python-level loops (and numpy calls fed Python lists) hold
-            # the GIL, and every Python call the GUI thread makes during a
-            # track skip then waits for it: per-chunk / per-bar loops here
-            # used to stall the UI by 100-350 ms on each skip.
-            frames = []
+            # Decimate to ~8 kHz: every factor-th sample of the whole track,
+            # effective rate rate // factor (the C++ backend does the same).
             sample_rate = audio_stream.rate or 44100
-
-            for frame in container.decode(audio_stream):
-                frames.append(frame.to_ndarray())
-
-            container.close()
-
-            if not frames:
-                logger.debug("No audio samples decoded")
-                return None
-
-            # Planar frames are (channels, n); packed ones are (1, n*channels)
-            # or 1-D. If stereo, convert to mono by averaging channels.
-            if frames[0].ndim > 1 and frames[0].shape[0] > 1:
-                all_samples = np.concatenate(frames, axis=1).mean(axis=0)
-            else:
-                all_samples = np.concatenate([f.reshape(-1) for f in frames])
-            all_samples = all_samples.astype(np.float32)
-
-            # Normalize samples
-            max_val = np.max(np.abs(all_samples))
-            if max_val > 0:
-                all_samples = all_samples / max_val
-
-            # Downsample to ~8kHz for faster processing
-            downsample_factor = max(1, sample_rate // 8000)
-            all_samples = all_samples[::downsample_factor]
-            effective_rate = sample_rate // downsample_factor
-
-            # Compute FFT for time chunks
+            factor = max(1, sample_rate // 8000)
+            effective_rate = sample_rate // factor
             chunk_size = int(effective_rate * self._chunk_duration)
-            num_chunks = len(all_samples) // chunk_size
-
-            if num_chunks == 0:
-                logger.debug("Audio too short for analysis")
+            fft_len = chunk_size // 2
+            if fft_len == 0:
+                logger.debug("Sample rate too low for analysis")
                 return None
 
             # Magnitudes of the positive frequencies, skipping DC: rfft bins
             # 1..N/2, i.e. 0-4 kHz at the 8 kHz effective rate (the C++
             # backend keeps the same range). The band edges depend only on
             # the bin count, so compute them once.
-            fft_len = chunk_size // 2
-            if fft_len == 0:
-                return [[0] * self._num_bars for _ in range(num_chunks)]
             edges = np.asarray(self._log_band_edges(fft_len, self._num_bars))
-
-            # All chunks at once: (num_chunks, chunk_size), Hann-windowed to
-            # reduce spectral leakage, then one rfft along the chunk axis.
-            chunks = all_samples[:num_chunks * chunk_size].reshape(num_chunks, chunk_size)
-            chunks = chunks * np.hanning(chunk_size)
-            fft = np.abs(np.fft.rfft(chunks, axis=1))[:, 1:1 + fft_len]
-
-            # Mean magnitude per log band; an empty band (only possible when
-            # there are fewer bins than bars) is 0.
             widths = np.diff(edges)
             starts = np.minimum(edges[:-1], fft_len - 1)
-            sums = np.add.reduceat(fft, starts, axis=1)
-            raw = np.where(widths > 0, sums / np.maximum(widths, 1), 0.0)
+            window = np.hanning(chunk_size).astype(np.float32)
 
-            # Global max for normalization (95th percentile to avoid outliers)
+            def band_levels(samples):
+                # (n, chunk_size) Hann-windowed chunks, one rfft along the
+                # chunk axis, then the mean magnitude per log band; an empty
+                # band (only possible when there are fewer bins than bars)
+                # is 0.
+                chunks = samples.reshape(-1, chunk_size) * window
+                fft = np.abs(np.fft.rfft(chunks, axis=1))[:, 1:1 + fft_len]
+                sums = np.add.reduceat(fft, starts, axis=1)
+                return np.where(widths > 0, sums / np.maximum(widths, 1), 0.0).astype(np.float32)
+
+            max_samples = int(MAX_ANALYSIS_SECONDS * effective_rate)
+            batch_samples = ANALYSIS_BATCH_CHUNKS * chunk_size
+            pending = []        # decimated samples not yet FFT'd
+            pending_len = 0
+            kept = 0            # decimated samples so far
+            position = 0        # native samples so far (decimation phase)
+            raw_batches = []
+
+            def flush(final):
+                nonlocal pending, pending_len
+                if not pending:
+                    return
+                samples = np.concatenate(pending)
+                usable = (len(samples) // chunk_size) * chunk_size
+                if usable:
+                    raw_batches.append(band_levels(samples[:usable]))
+                rest = samples[usable:]
+                pending = [rest] if len(rest) and not final else []
+                pending_len = len(rest) if pending else 0
+
+            for frame in container.decode(audio_stream):
+                data = frame.to_ndarray()
+                channels = len(frame.layout.channels)
+                if data.ndim > 1 and data.shape[0] > 1:
+                    # Planar: (channels, n)
+                    mono = data.mean(axis=0, dtype=np.float32)
+                elif channels > 1:
+                    # Packed: (1, n * channels), interleaved
+                    mono = data.reshape(-1, channels).mean(axis=1, dtype=np.float32)
+                else:
+                    mono = data.reshape(-1).astype(np.float32)
+
+                piece = mono[(-position) % factor::factor]
+                position += len(mono)
+                if kept + len(piece) > max_samples:
+                    piece = piece[:max_samples - kept]
+                pending.append(piece)
+                pending_len += len(piece)
+                kept += len(piece)
+
+                if pending_len >= batch_samples:
+                    flush(final=False)
+                if kept >= max_samples:
+                    logger.info("Analysing only the first %d s of %s",
+                                MAX_ANALYSIS_SECONDS, file_path)
+                    break
+            flush(final=True)
+
+            if not raw_batches:
+                logger.debug("Audio too short for analysis")
+                return None
+            raw = np.concatenate(raw_batches)
+
+            # Global max for normalization (95th percentile to avoid
+            # outliers). Scaling the samples scales every magnitude and this
+            # max alike, so the levels need no peak normalisation of the
+            # samples first.
             positive = raw[raw > 0]
             global_max = np.percentile(positive, 95) if positive.size else 1.0
 
             # Normalize and map to the 0-8 range
             if global_max > 0:
-                levels = (np.minimum(1.0, raw / global_max) ** 0.6 * 8).astype(int)
-            else:
-                levels = np.zeros(raw.shape, dtype=int)
-            return levels.tolist()
+                return (np.minimum(1.0, raw / global_max) ** 0.6 * 8).astype(np.uint8)
+            return np.zeros(raw.shape, dtype=np.uint8)
 
         except Exception as e:
             logger.error(f"FFT analysis error: {e}")
             return None
+        finally:
+            container.close()
 
     @staticmethod
     def _log_band_edges(fft_len, num_bars):
@@ -262,13 +299,15 @@ class AudioAnalyzer(QObject):
         and emit them directly to QML. No intermediate animation — QML
         handles any smoothing it needs.
         """
-        if not self._fft_data or not self._is_active:
+        if not len(self._fft_data) or not self._is_active:
             return
 
         chunk_index = int(position_seconds * 10)
-        chunk_index = max(0, min(chunk_index, len(self._fft_data) - 1))
-
-        new_levels = self._fft_data[chunk_index]
+        if chunk_index >= len(self._fft_data):
+            # Past the analysed part (MAX_ANALYSIS_SECONDS): flat bars
+            new_levels = [0] * self._num_bars
+        else:
+            new_levels = self._fft_data[max(0, chunk_index)].tolist()
 
         # Only emit if levels actually changed
         if new_levels != self._current_levels:
