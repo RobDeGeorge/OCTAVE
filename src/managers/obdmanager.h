@@ -436,6 +436,7 @@ private:
     int m_connectionProgress = 0;
     int m_connectionTimeout = 5;  // seconds
     bool m_forceStopReconnect = false;
+    QString m_activePort;   // port of the attempt in flight / the live connection
 
     // Diagnostic mode
     bool m_diagnosticMode = false;

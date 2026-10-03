@@ -606,6 +606,7 @@ void OBDManager::startConnection()
 #endif
 
     QString port = getConfiguredPort();
+    m_activePort = port;
     bool fastMode = m_settingsManager ? m_settingsManager->obdFastMode() : true;
 
     // Check if device exists
@@ -699,6 +700,15 @@ void OBDManager::cleanupConnection()
 
     cleanupWorkerThread();
     m_connected = false;
+    // Any attempt in flight was just abandoned, and its initComplete is
+    // disconnected, so nothing else would clear this. Left set, the
+    // startConnection() that usually follows (reconnect(), the port-change
+    // debounce) skipped as "Already connecting" and OBD sat in
+    // "Connecting" for good (Pi, 2026-10-03).
+    {
+        QMutexLocker locker(&m_lock);
+        m_isConnecting = false;
+    }
 }
 
 void OBDManager::cleanupWorkerThread()
@@ -1059,6 +1069,14 @@ void OBDManager::onSettingsPortChanged()
 void OBDManager::onPortChangeDebounce()
 {
     if (!m_pendingPort.isEmpty()) {
+        // connect_to_adapter() saves the port and connects straight away;
+        // the save lands here a second later. Reconnecting then would kill
+        // that fresh attempt mid-handshake.
+        if (m_pendingPort == m_activePort && (m_connected || m_isConnecting)) {
+            qDebug() << "[OBD] Port change to" << m_pendingPort << "already in use";
+            m_pendingPort.clear();
+            return;
+        }
         qDebug() << "[OBD] Port changed to:" << m_pendingPort;
         m_connectionAttempts = 0;
         reconnect();
@@ -1918,7 +1936,16 @@ void OBDConnectionWorker::doConnect()
     }
 
     // Run ELM327 init sequence
-    if (!sendInitSequence()) {
+    const bool initOk = sendInitSequence();
+    if (QThread::currentThread()->isInterruptionRequested()) {
+        // Superseded (reconnect, port change, quit): every command above
+        // returned at once without a word, so say why the link went quiet
+        qCInfo(lcElm327) << "connect to" << m_portName << "abandoned (superseded by a newer connect)";
+        releasePort();
+        emit initComplete(false, QStringLiteral("Superseded"));
+        return;
+    }
+    if (!initOk) {
         releasePort();
         emit initComplete(false, QStringLiteral("ELM327 init failed -- adapter not responding"));
         return;

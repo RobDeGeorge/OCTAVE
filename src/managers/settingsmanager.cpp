@@ -1375,15 +1375,18 @@ void SettingsManager::save_obd_saved_adapters(const QString &json)
 
 void SettingsManager::add_obd_saved_adapter(const QString &name, const QString &mac)
 {
-    const QString trimmed = mac.trimmed().toUpper();
+    QString trimmed = mac.trimmed().toUpper();
     if (trimmed.isEmpty()) return;
+    // Upper-case the MAC, not the scheme of a direct-Bluetooth URL
+    if (trimmed.startsWith(QStringLiteral("RFCOMM://")))
+        trimmed.replace(0, 9, QStringLiteral("rfcomm://"));
 
     QJsonArray arr = QJsonDocument::fromJson(m_obdSavedAdapters.toUtf8()).array();
     // Remove any existing entry with the same MAC, then prepend the new one
     // so the most recently used adapter is first.
     for (int i = arr.size() - 1; i >= 0; --i) {
         const QJsonObject o = arr.at(i).toObject();
-        if (o.value(QStringLiteral("mac")).toString().toUpper() == trimmed) {
+        if (o.value(QStringLiteral("mac")).toString().compare(trimmed, Qt::CaseInsensitive) == 0) {
             arr.removeAt(i);
         }
     }

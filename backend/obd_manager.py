@@ -428,6 +428,7 @@ class OBDManager(QObject):
         # Auto-reconnect settings (loaded from settings_manager)
         self._auto_reconnect_delay = 5.0  # seconds
         self._force_stop_reconnect = False  # Used to stop reconnects on close()
+        self._active_port = None  # port of the attempt in flight / the live connection
 
         # Connection timeout (configurable) - reduced from 10s for faster connection
         self._connection_timeout = 5  # seconds
@@ -636,6 +637,12 @@ class OBDManager(QObject):
     def _on_port_changed(self):
         """Handle port change after debounce"""
         if self._pending_port:
+            # connect_to_adapter() saves the port and connects straight away;
+            # the save lands here a second later, so don't restart that attempt
+            if self._pending_port == self._active_port and (self._connected or self._is_connecting):
+                logger.debug(f"[OBD] Port change to {self._pending_port} already in use")
+                self._pending_port = None
+                return
             logger.info(f"[OBD] Port changed to: {self._pending_port}")
             self._connection_attempts = 0  # Reset on port change
             self.reconnect()
@@ -671,6 +678,7 @@ class OBDManager(QObject):
 
         # Get settings
         port = self._get_configured_port()
+        self._active_port = port
         fast_mode = True
         if self._settings_manager:
             fast_mode = self._settings_manager.obdFastMode

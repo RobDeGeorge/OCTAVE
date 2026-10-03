@@ -1172,6 +1172,9 @@ class SettingsManager(QObject):
         trimmed = (mac or "").strip().upper()
         if not trimmed:
             return
+        # Upper-case the MAC, not the scheme of a direct-Bluetooth URL
+        if trimmed.startswith("RFCOMM://"):
+            trimmed = "rfcomm://" + trimmed[len("RFCOMM://"):]
         try:
             arr = _json.loads(self._obd_saved_adapters) if self._obd_saved_adapters else []
             if not isinstance(arr, list):
@@ -1179,7 +1182,7 @@ class SettingsManager(QObject):
         except (ValueError, TypeError):
             arr = []
         # Drop any existing entry for this MAC, then prepend so most-recent is first.
-        arr = [e for e in arr if isinstance(e, dict) and (e.get("mac") or "").upper() != trimmed]
+        arr = [e for e in arr if isinstance(e, dict) and (e.get("mac") or "").upper() != trimmed.upper()]
         arr.insert(0, {"name": name or trimmed, "mac": trimmed})
         # Cap at 8 entries.
         del arr[8:]

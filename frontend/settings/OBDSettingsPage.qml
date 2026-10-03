@@ -401,8 +401,18 @@ Item {
     Component {
         id: adaptersContent
         ColumnLayout {
+            id: adaptersColumn
             width: parent ? parent.width : 0
             spacing: App.Spacing.rowSpacing
+
+            // The adapter rows open right under the finger that tapped the
+            // Adapters tile; a tap that lands here in the first moment is
+            // that same press, not a choice (it once re-pointed the OBD port
+            // on the Pi). Rows and chips ignore clicks until this passes.
+            property real tapsAllowedAt: 0
+            function tapsAllowed() { return Date.now() >= tapsAllowedAt }
+            Component.onCompleted: tapsAllowedAt = Date.now() + 600
+            onVisibleChanged: if (visible) tapsAllowedAt = Date.now() + 600
 
             SettingLabel {
                 text: "OBD Adapter"
@@ -421,8 +431,8 @@ Item {
                     Layout.preferredHeight: dp(44)
                     radius: dpMin(4, 2)
                     color: adapterItemMouse.pressed
-                        ? Qt.darker(App.Style.cardBackground, 1.2)
-                        : App.Style.cardBackground
+                        ? Qt.darker(App.Style.hoverColor, 1.2)
+                        : App.Style.hoverColor
                     border.width: 1
                     border.color: App.Style.accent
 
@@ -435,7 +445,7 @@ Item {
                         Text {
                             Layout.fillWidth: true
                             text: modelData.name || ""
-                            color: App.Style.textColor
+                            color: App.Style.primaryTextColor
                             font.pixelSize: App.Spacing.overallText * 0.9
                             font.family: App.Style.fontFamily
                             elide: Text.ElideRight
@@ -464,6 +474,7 @@ Item {
                         id: adapterItemMouse
                         anchors.fill: parent
                         onClicked: {
+                            if (!adaptersColumn.tapsAllowed()) return
                             var ident = modelData.identifier || ""
                             if (!ident) return
                             manualMacField.text = ident
@@ -589,7 +600,7 @@ Item {
                         width: chipLayout.implicitWidth + dp(20)
                         radius: dpMin(16, 2)
                         color: chipMouse.pressed
-                            ? Qt.darker(App.Style.cardBackground, 1.3)
+                            ? Qt.darker(App.Style.hoverColor, 1.3)
                             : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
                         border.width: 1
                         border.color: App.Style.accent
@@ -630,6 +641,7 @@ Item {
                             id: chipMouse
                             anchors.fill: parent
                             onClicked: {
+                                if (!adaptersColumn.tapsAllowed()) return
                                 var mac = modelData.mac || ""
                                 if (!mac) return
                                 manualMacField.text = mac
