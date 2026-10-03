@@ -13,6 +13,8 @@ import glob
 from backend.logging_config import get_logger
 from backend.qt_threading import run_on_main
 from backend.elm327_protocol import EXTENDED_PID_TABLE, decode_extended_pid, decode_vin
+from backend.obd_transports import (
+    is_rfcomm_url, parse_rfcomm_url, make_rfcomm_url, register_handlers as register_obd_transports)
 
 # python-obd drags in pint (~0.5 s on the Pi); import it when a connection is attempted.
 obd = lazy_module("obd")
@@ -117,6 +119,9 @@ class OBDConnectionWorker(QObject):
             # SPEED OPTIMIZATIONS:
             # - delay_cmds=0: No delay between polling cycles (default is 0.25s!)
             # - protocol: Use cached protocol to skip auto-detection (saves 1-3 sec)
+            if is_rfcomm_url(self._port):
+                register_obd_transports()
+                self.connectionProgress.emit(15, "Connecting over Bluetooth...")
             connection = obd.Async(
                 portstr=self._port,
                 fast=self._fast_mode,
@@ -569,6 +574,16 @@ class OBDManager(QObject):
         except Exception as e:
             logger.error(f"[OBD] Error scanning for devices: {e}")
 
+        # A direct Bluetooth adapter never shows up as a new /dev node, so the
+        # passive scan just retries it: the dongle is usually only powered
+        # with the ignition on, and the connect fails fast while it is off
+        configured_port = self._get_configured_port()
+        if (is_rfcomm_url(configured_port) and not self._connected and not self._is_connecting
+                and not self._force_stop_reconnect and not self._diagnostic_mode):
+            logger.debug(f"[OBD] Retrying direct Bluetooth adapter {configured_port}")
+            self._connection_attempts = 0
+            self._start_connection()
+
         self._last_device_scan = time.time()
 
     def _get_configured_port(self):
@@ -589,6 +604,10 @@ class OBDManager(QObject):
 
     def _check_port_exists(self, port):
         """Check if a port exists, cross-platform"""
+        # A direct Bluetooth link has no device node; reachability is only
+        # known by connecting (protocol_rfcomm reports why it failed)
+        if is_rfcomm_url(port):
+            return parse_rfcomm_url(port) is not None
         platform = self._get_platform()
 
         if platform == 'windows':
@@ -757,6 +776,12 @@ class OBDManager(QObject):
     def _on_connection_complete(self, connection, status):
         """Handle connection result on main thread"""
         logger.info(f"[OBD] Connection complete, status: {status}")
+        port = self._get_configured_port()
+        if is_rfcomm_url(port) and status == obd.OBDStatus.NOT_CONNECTED:
+            # python-obd swallows the SerialException; the reason (e.g. "Host
+            # is down") is in the log from the obd.elm327 logger
+            self.connectionLogLineAppended.emit(
+                f"Bluetooth: could not reach {parse_rfcomm_url(port)[0]} (adapter off or out of range?)")
 
         if status == obd.OBDStatus.CAR_CONNECTED:
             self._connection = connection
@@ -1865,6 +1890,8 @@ class OBDManager(QObject):
     def _kind_for_identifier(self, identifier):
         if self._MAC_RE.match(identifier):
             return "ble"
+        if is_rfcomm_url(identifier):
+            return "bt-direct"
         if identifier.startswith("/dev/rfcomm"):
             return "serial-rfcomm"
         if identifier.startswith("/dev/ttyUSB") or identifier.startswith("/dev/ttyACM"):
@@ -1879,6 +1906,10 @@ class OBDManager(QObject):
         kind = self._kind_for_identifier(identifier)
         if kind == "ble":            return f"Bluetooth · {identifier}"
         if kind == "serial-rfcomm":  return f"Bluetooth (bound) · {identifier}"
+        if kind == "bt-direct":
+            mac, channel = parse_rfcomm_url(identifier) or (identifier, 1)
+            return (f"Bluetooth (direct) · {mac}" if channel == 1
+                    else f"Bluetooth (direct) · {mac} ch {channel}")
         if kind == "serial-usb":     return f"USB ELM327 · {identifier}"
         if kind == "tty":            return identifier
         if kind == "com":            return f"Serial · {identifier}"
@@ -2002,7 +2033,7 @@ class OBDManager(QObject):
 
         if self._settings_manager:
             self._settings_manager.save_obd_bluetooth_port(trimmed)
-            if is_mac:
+            if is_mac or is_rfcomm_url(trimmed):
                 self._settings_manager.add_obd_saved_adapter(trimmed, trimmed)
 
         if self._get_platform() == "linux" and is_mac:
@@ -2011,6 +2042,22 @@ class OBDManager(QObject):
             return
 
         self.force_connect()
+
+    @Slot(str)
+    @Slot(str, int)
+    def connect_direct(self, mac, channel=1):
+        """Linux: connect over a direct Bluetooth RFCOMM socket (no rfcomm
+        bind, no /dev node). Saves "rfcomm://<MAC>[/<channel>]" as the OBD port."""
+        m = (mac or "").strip()
+        if is_rfcomm_url(m):
+            self.connect_to_adapter(m)
+            return
+        url = make_rfcomm_url(m, channel if channel > 0 else 1)
+        if parse_rfcomm_url(url) is None:
+            self.connectionLogLineAppended.emit(
+                "Direct connect needs a Bluetooth MAC like 88:1B:99:66:DD:5F")
+            return
+        self.connect_to_adapter(url)
 
     @Slot(bool)
     def set_auto_reconnect(self, enabled):

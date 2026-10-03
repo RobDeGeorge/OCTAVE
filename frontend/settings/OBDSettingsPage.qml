@@ -490,7 +490,7 @@ Item {
                 SettingsTextField {
                     id: manualMacField
                     Layout.fillWidth: true
-                    placeholderText: "MAC address, /dev path, or COM port"
+                    placeholderText: "MAC address, rfcomm://MAC, /dev path, or COM port"
                     text: settingsManager ? settingsManager.obdBluetoothPort : ""
                 }
 
@@ -527,6 +527,39 @@ Item {
                                     obdManager.set_target_address(entered)
                                 obdManager.force_connect()
                             }
+                        }
+                    }
+                }
+
+                // Linux: open a Bluetooth socket straight to the MAC instead
+                // of going through an rfcomm-bound /dev node. Saved as
+                // rfcomm://<MAC>, so reconnects and restarts reuse it.
+                Rectangle {
+                    visible: typeof obdManager !== "undefined" && obdManager
+                             && typeof obdManager.connect_direct === "function"
+                             && typeof obdManager.platform_hint === "function"
+                             && obdManager.platform_hint() === "linux"
+                    Layout.preferredWidth: dp(80)
+                    Layout.preferredHeight: dp(40)
+                    radius: dpMin(6, 2)
+                    color: directConnectMouse.pressed ? Qt.darker("#2980b9", 1.3) : "#2980b9"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Direct"
+                        color: "white"
+                        font.pixelSize: App.Spacing.overallText
+                        font.family: App.Style.fontFamily
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: directConnectMouse
+                        anchors.fill: parent
+                        onClicked: {
+                            var entered = manualMacField.text.trim()
+                            if (entered)
+                                obdManager.connect_direct(entered)
                         }
                     }
                 }
@@ -625,8 +658,9 @@ Item {
                     if (hint === "android")
                         return "Pair your ELM327 in Android Settings first, then enter its MAC here and press Go."
                     if (hint === "linux")
-                        return "Enter MAC (auto-binds rfcomm) or /dev/rfcomm0. " +
-                               "USB ELM327 also works (/dev/ttyUSB0). See Connection Log for rfcomm errors."
+                        return "Enter the adapter's MAC and press Direct to connect over Bluetooth straight away " +
+                               "(most reliable; retries every 10 s while the adapter is off). Go binds /dev/rfcomm0 instead. " +
+                               "USB ELM327 also works (/dev/ttyUSB0). See Connection Log for errors."
                     if (hint === "windows")
                         return "Enter the COM port assigned to your paired ELM327 (e.g. COM5), or its MAC."
                     if (hint === "macos")

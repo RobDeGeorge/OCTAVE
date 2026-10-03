@@ -1,5 +1,6 @@
 #include "obdmanager.h"
 #include "elm327protocol.h"
+#include "rfcommsocket.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -122,6 +123,10 @@ QString OBDManager::getConfiguredPort() const
 
 bool OBDManager::checkPortExists(const QString &port) const
 {
+    // A direct Bluetooth link has no device node; reachability is only
+    // known by connecting (RfcommSocket::connectTo reports why it failed)
+    if (RfcommSocket::isUrl(port))
+        return RfcommSocket::parseUrl(port, nullptr, nullptr);
     if (detectPlatform() == Platform::Android) {
         // On Android, "port" is a Bluetooth MAC address. We don't probe the
         // adapter here -- a real reachability test happens when
@@ -550,6 +555,18 @@ void OBDManager::scanForDevices()
         }
     }
 
+    // A direct Bluetooth adapter never shows up as a new /dev node, so the
+    // passive scan just retries it (every 10 s scan tick): the dongle is
+    // usually only powered with the ignition on, and connectTo() fails
+    // fast with "Host is down" while it is off
+    const QString configured = getConfiguredPort();
+    if (RfcommSocket::isUrl(configured) && !m_connected && !m_isConnecting
+        && !m_forceStopReconnect && !m_diagnosticMode) {
+        qDebug() << "[OBD] Retrying direct Bluetooth adapter" << configured;
+        m_connectionAttempts = 0;
+        startConnection();
+    }
+
     m_lastDeviceScan = QDateTime::currentMSecsSinceEpoch();
 }
 
@@ -655,6 +672,8 @@ void OBDManager::startConnection()
                      this, &OBDManager::onWorkerScanComplete, Qt::QueuedConnection);
     QObject::connect(m_worker, &OBDConnectionWorker::scanOutput,
                      this, &OBDManager::onWorkerScanOutput, Qt::QueuedConnection);
+    QObject::connect(m_worker, &OBDConnectionWorker::logLine,
+                     this, &OBDManager::connectionLogLineAppended, Qt::QueuedConnection);
 
     // Start connection on worker thread
     QObject::connect(m_workerThread, &QThread::started,
@@ -1181,6 +1200,7 @@ QString OBDManager::kindForIdentifier(const QString &id) const
     static const QRegularExpression macRe(
         QStringLiteral("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"));
     if (macRe.match(id).hasMatch())                     return QStringLiteral("ble");
+    if (RfcommSocket::isUrl(id))                        return QStringLiteral("bt-direct");
     if (id.startsWith(QStringLiteral("/dev/rfcomm")))   return QStringLiteral("serial-rfcomm");
     if (id.startsWith(QStringLiteral("/dev/ttyUSB"))
         || id.startsWith(QStringLiteral("/dev/ttyACM"))) return QStringLiteral("serial-usb");
@@ -1199,6 +1219,13 @@ QString OBDManager::displayNameForIdentifier(const QString &id) const
 #endif
     if (kind == QStringLiteral("ble"))           return QStringLiteral("Bluetooth · %1").arg(id);
     if (kind == QStringLiteral("serial-rfcomm")) return QStringLiteral("Bluetooth (bound) · %1").arg(id);
+    if (kind == QStringLiteral("bt-direct")) {
+        QString mac;
+        int channel = 1;
+        RfcommSocket::parseUrl(id, &mac, &channel);
+        return channel == 1 ? QStringLiteral("Bluetooth (direct) · %1").arg(mac)
+                            : QStringLiteral("Bluetooth (direct) · %1 ch %2").arg(mac).arg(channel);
+    }
     if (kind == QStringLiteral("serial-usb"))    return QStringLiteral("USB ELM327 · %1").arg(id);
     if (kind == QStringLiteral("tty"))           return id;
     if (kind == QStringLiteral("com"))           return QStringLiteral("Serial · %1").arg(id);
@@ -1407,7 +1434,7 @@ void OBDManager::connect_to_adapter(const QString &identifier)
     // Persist the choice so reconnects + restarts use it.
     if (m_settingsManager) {
         m_settingsManager->save_obd_bluetooth_port(trimmed);
-        if (isMac) {
+        if (isMac || RfcommSocket::isUrl(trimmed)) {
             // Re-add as a saved chip; SettingsManager dedupes.
             m_settingsManager->add_obd_saved_adapter(trimmed, trimmed);
         }
@@ -1425,6 +1452,22 @@ void OBDManager::connect_to_adapter(const QString &identifier)
 #endif
 
     force_connect();
+}
+
+void OBDManager::connect_direct(const QString &mac, int channel)
+{
+    QString m = mac.trimmed();
+    if (RfcommSocket::isUrl(m)) {
+        connect_to_adapter(m);
+        return;
+    }
+    const QString url = RfcommSocket::makeUrl(m, channel > 0 ? channel : 1);
+    if (!RfcommSocket::parseUrl(url, nullptr, nullptr)) {
+        emit connectionLogLineAppended(
+            QStringLiteral("Direct connect needs a Bluetooth MAC like 88:1B:99:66:DD:5F"));
+        return;
+    }
+    connect_to_adapter(url);
 }
 
 // ---------------------------------------------------------------------------
@@ -1848,28 +1891,31 @@ void OBDConnectionWorker::doConnect()
 {
     qDebug() << "[OBD Worker] Connecting to" << m_portName;
 
-    // Create serial port on this thread
-    m_serial = new QSerialPort(this);
-    m_serial->setPortName(m_portName);
-    m_serial->setBaudRate(QSerialPort::Baud38400);
-    m_serial->setDataBits(QSerialPort::Data8);
-    m_serial->setParity(QSerialPort::NoParity);
-    m_serial->setStopBits(QSerialPort::OneStop);
-    m_serial->setFlowControl(QSerialPort::NoFlowControl);
-
-    QObject::connect(m_serial, &QSerialPort::errorOccurred,
-                     this, &OBDConnectionWorker::onSerialError);
-
-    if (!m_serial->open(QIODevice::ReadWrite)) {
-        const QString err = m_serial->errorString();
-        qCWarning(lcElm327) << "could not open" << m_portName << ":" << err;
-        releasePort();
-        emit initComplete(false, QStringLiteral("Failed to open port: %1").arg(err));
+    if (RfcommSocket::isUrl(m_portName)) {
+        QString mac;
+        int channel = 1;
+        if (!RfcommSocket::parseUrl(m_portName, &mac, &channel)) {
+            emit initComplete(false, QStringLiteral("Bad Bluetooth address: %1").arg(m_portName));
+            return;
+        }
+        emit logLine(QStringLiteral("Bluetooth: connecting to %1, channel %2").arg(mac).arg(channel));
+        QElapsedTimer t;
+        t.start();
+        m_rfcomm = new RfcommSocket(this);
+        if (!m_rfcomm->connectTo(mac, channel, qMax(10, m_timeout) * 1000)) {
+            const QString err = m_rfcomm->errorString();
+            qCWarning(lcElm327) << "could not connect" << m_portName << ":" << err;
+            emit logLine(err);
+            releasePort();
+            emit initComplete(false, err);
+            return;
+        }
+        qCInfo(lcElm327) << "connected" << m_portName << "in" << t.elapsed() << "ms";
+        emit logLine(QStringLiteral("Bluetooth: connected in %1 ms, initialising ELM327").arg(t.elapsed()));
+        m_io = m_rfcomm;
+    } else if (!openSerialPort()) {
         return;
     }
-
-    qCInfo(lcElm327) << "opened" << m_portName;
-    m_serial->setReadBufferSize(4096);
 
     // Run ELM327 init sequence
     if (!sendInitSequence()) {
@@ -1877,6 +1923,7 @@ void OBDConnectionWorker::doConnect()
         emit initComplete(false, QStringLiteral("ELM327 init failed -- adapter not responding"));
         return;
     }
+
 
     // Try to read a PID to verify vehicle connection. Send RPM request as a
     // quick check, waiting up to the configured connection timeout (the
@@ -1902,6 +1949,34 @@ void OBDConnectionWorker::doConnect()
     doReadVin();
 }
 
+bool OBDConnectionWorker::openSerialPort()
+{
+    // Create serial port on this thread
+    m_serial = new QSerialPort(this);
+    m_serial->setPortName(m_portName);
+    m_serial->setBaudRate(QSerialPort::Baud38400);
+    m_serial->setDataBits(QSerialPort::Data8);
+    m_serial->setParity(QSerialPort::NoParity);
+    m_serial->setStopBits(QSerialPort::OneStop);
+    m_serial->setFlowControl(QSerialPort::NoFlowControl);
+
+    QObject::connect(m_serial, &QSerialPort::errorOccurred,
+                     this, &OBDConnectionWorker::onSerialError);
+
+    if (!m_serial->open(QIODevice::ReadWrite)) {
+        const QString err = m_serial->errorString();
+        qCWarning(lcElm327) << "could not open" << m_portName << ":" << err;
+        releasePort();
+        emit initComplete(false, QStringLiteral("Failed to open port: %1").arg(err));
+        return false;
+    }
+
+    qCInfo(lcElm327) << "opened" << m_portName;
+    m_serial->setReadBufferSize(4096);
+    m_io = m_serial;
+    return true;
+}
+
 void OBDConnectionWorker::doReadVin()
 {
     if (!m_initialized)
@@ -1923,6 +1998,12 @@ void OBDConnectionWorker::releasePort()
         m_serial->deleteLater();
         m_serial = nullptr;
     }
+    if (m_rfcomm) {
+        m_rfcomm->close();
+        m_rfcomm->deleteLater();
+        m_rfcomm = nullptr;
+    }
+    m_io = nullptr;
     m_responseBuffer.clear();
 }
 
@@ -1955,7 +2036,7 @@ bool OBDConnectionWorker::sendInitSequence()
 
 QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
 {
-    if (!m_serial || !m_serial->isOpen())
+    if (!m_io || !m_io->isOpen())
         return QString();
     // The manager abandoned this worker (reconnect, port change, quit):
     // fail fast so a blocking doConnect() unwinds and the thread can finish
@@ -1965,11 +2046,13 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
     // QSerialPort errors are sticky until cleared: without this, one
     // transient error (e.g. during rfcomm link-up) failed every later
     // command of the init sequence instantly
-    m_serial->clearError();
+    if (m_serial)
+        m_serial->clearError();
     m_responseBuffer.clear();
     qCDebug(lcElm327) << "TX" << cmd.trimmed();
-    m_serial->write(cmd);
-    m_serial->flush();
+    m_io->write(cmd);
+    if (m_serial)
+        m_serial->flush();
 
     // Wait for response with timeout (blocking within worker thread is OK)
     QElapsedTimer timer;
@@ -1981,8 +2064,8 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
             return QString();
         QElapsedTimer waitTimer;
         waitTimer.start();
-        if (m_serial->waitForReadyRead(100)) {
-            const QByteArray chunk = m_serial->readAll();
+        if (m_io->waitForReadyRead(100)) {
+            const QByteArray chunk = m_io->readAll();
             if (!chunk.isEmpty()) {
                 emptyReads = 0;
                 m_responseBuffer.feed(chunk);
@@ -2002,6 +2085,17 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
                 releasePort();
                 m_initialized = false;
                 emit connectionLost(QStringLiteral("Adapter stopped responding"));
+                return QString();
+            }
+        } else if (m_rfcomm) {
+            if (m_rfcomm->isBroken()) {
+                const QString err = m_rfcomm->errorString();
+                qCWarning(lcElm327) << err << "on" << m_portName;
+                emit logLine(err);
+                stopPolling();
+                releasePort();
+                m_initialized = false;
+                emit connectionLost(err);
                 return QString();
             }
         } else {
@@ -2060,7 +2154,7 @@ void OBDConnectionWorker::stopPolling()
 
 void OBDConnectionWorker::onPollTimer()
 {
-    if (!m_polling || !m_serial || !m_serial->isOpen())
+    if (!m_polling || !m_io || !m_io->isOpen())
         return;
 
     if (m_pidsToWatch.isEmpty())

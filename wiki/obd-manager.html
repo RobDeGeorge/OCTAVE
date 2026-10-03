@@ -125,7 +125,7 @@ Desktop (Python)                Desktop (C++)                       Android (C++
             <tr><td><span class="file-path">frontend/OBDDiagnostics.qml</span></td><td><code>enter_diagnostic_mode()</code> on creation and on every <code>visible</code> transition, <code>exit_diagnostic_mode()</code> when hidden or destroyed, plus <code>read_dtc</code> / <code>read_current_dtc</code> / <code>read_status</code> / <code>read_freeze_frame</code> / <code>clear_dtc</code>.</td></tr>
             <tr><td><span class="file-path">frontend/HomeOBDView.qml</span></td><td>Home-screen cards for the parameters in <code>homeOBDParameters</code>, plus the RPM card's shift-light disc.</td></tr>
             <tr><td><span class="file-path">frontend/Main.qml</span></td><td>Connects <code>obdManager.rpmChanged</code> by hand in <code>Component.onCompleted</code> to drive the global full-screen flash and aura overlays.</td></tr>
-            <tr><td><span class="file-path">frontend/settings/OBDSettingsPage.qml</span></td><td>Connection card (a <code>status</code> string seeded from <code>get_connection_status()</code> and refreshed by <code>onConnectionStatusChanged</code>, <code>connectionDetail</code>, <code>connectionProgress</code>, <code>reset_connection()</code>), a 60-line Connection Log, the adapter list bound to <code>availableAdapters</code>, <code>connect_to_adapter()</code>, <code>platform_hint()</code>, fast mode, auto-reconnect attempts and the parameter toggles. The status dot's colour map is keyed on the full <code>connectionStatusChanged</code> vocabulary (including <code>Reconnecting</code>, <code>Connection Failed</code>, <code>Stale Connection</code>, <code>Device Lost</code> and the Android BLE states).</td></tr>
+            <tr><td><span class="file-path">frontend/settings/OBDSettingsPage.qml</span></td><td>Connection card (a <code>status</code> string seeded from <code>get_connection_status()</code> and refreshed by <code>onConnectionStatusChanged</code>, <code>connectionDetail</code>, <code>connectionProgress</code>, <code>reset_connection()</code>), a 60-line Connection Log, the adapter list bound to <code>availableAdapters</code>, <code>connect_to_adapter()</code> (the "Go" button), <code>connect_direct()</code> (the Linux-only "Direct" button beside it), <code>platform_hint()</code>, fast mode, auto-reconnect attempts and the parameter toggles. The status dot's colour map is keyed on the full <code>connectionStatusChanged</code> vocabulary (including <code>Reconnecting</code>, <code>Connection Failed</code>, <code>Stale Connection</code>, <code>Device Lost</code> and the Android BLE states).</td></tr>
           </tbody>
         </table>
 
@@ -385,12 +385,13 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             <tr><th>Slot / Property</th><th>Signature</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>availableAdapters</code></td><td>property: list</td><td>List of <code>{name, identifier, kind}</code> maps built from the discovered ports. <code>kind</code> is classified by regex/prefix: <code>ble</code> (MAC), <code>serial-rfcomm</code> (<code>/dev/rfcomm</code>), <code>serial-usb</code> (<code>/dev/ttyUSB</code>, <code>/dev/ttyACM</code>), <code>tty</code> (<code>/dev/tty.</code>, <code>/dev/cu.</code>), <code>com</code> (<code>COM</code>), else <code>serial</code>. Names: <em>Bluetooth · MAC</em> (on Android <em>&lt;device name&gt; · MAC</em> when the bonded-device listing supplied a name), <em>Bluetooth (bound) · /dev/rfcommN</em>, <em>USB ELM327 · /dev/ttyUSBn</em>, <em>Serial · COMn</em>.</td></tr>
+            <tr><td><code>availableAdapters</code></td><td>property: list</td><td>List of <code>{name, identifier, kind}</code> maps built from the discovered ports. <code>kind</code> is classified by regex/prefix: <code>ble</code> (MAC), <code>bt-direct</code> (<code>rfcomm://</code>), <code>serial-rfcomm</code> (<code>/dev/rfcomm</code>), <code>serial-usb</code> (<code>/dev/ttyUSB</code>, <code>/dev/ttyACM</code>), <code>tty</code> (<code>/dev/tty.</code>, <code>/dev/cu.</code>), <code>com</code> (<code>COM</code>), else <code>serial</code>. Names: <em>Bluetooth · MAC</em> (on Android <em>&lt;device name&gt; · MAC</em> when the bonded-device listing supplied a name), <em>Bluetooth (bound) · /dev/rfcommN</em>, <em>Bluetooth (direct) · MAC</em> (plus <em>ch N</em> when the channel isn't 1), <em>USB ELM327 · /dev/ttyUSBn</em>, <em>Serial · COMn</em>.</td></tr>
             <tr><td><code>availableAdaptersChanged</code></td><td>signal(list)</td><td>Emitted alongside <code>availablePortsChanged</code> with the rich shape.</td></tr>
             <tr><td><code>scan</code></td><td>()</td><td>Trigger a discovery sweep. Alias of <code>refresh_ports()</code> (C++) / <code>_scan_for_devices()</code> (Python).</td></tr>
-            <tr><td><code>connect_to_adapter</code></td><td>(identifier: str)</td><td>One-shot connect: trims, classifies, logs <code>connect → &lt;name&gt;</code> to the connection log, saves the identifier with <code>save_obd_bluetooth_port()</code> (and <code>add_obd_saved_adapter()</code> for MACs), runs the rfcomm bind on Linux when given a MAC (asynchronously; <code>force_connect()</code> follows once the bind succeeds), otherwise calls <code>force_connect()</code> directly. The QML calls this for adapter-row taps, saved-adapter chips and the manual-entry "Go" button.</td></tr>
+            <tr><td><code>connect_to_adapter</code></td><td>(identifier: str)</td><td>One-shot connect: trims, classifies, logs <code>connect → &lt;name&gt;</code> to the connection log, saves the identifier with <code>save_obd_bluetooth_port()</code> (and <code>add_obd_saved_adapter()</code> for MACs and <code>rfcomm://</code> URLs), runs the rfcomm bind on Linux when given a MAC (asynchronously; <code>force_connect()</code> follows once the bind succeeds), otherwise calls <code>force_connect()</code> directly. The QML calls this for adapter-row taps, saved-adapter chips and the manual-entry "Go" button.</td></tr>
+            <tr><td><code>connect_direct</code></td><td>(mac: str, channel: int = 1)</td><td>Linux: turns a MAC into <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> (an <code>rfcomm://</code> URL is passed through) and hands it to <code>connect_to_adapter()</code>, which saves it and calls <code>force_connect()</code> with no bind. Anything else logs <em>Direct connect needs a Bluetooth MAC</em>. The settings page's "Direct" button (Linux only) calls it with the entry field's text. See <a href="#direct-bluetooth">Direct Bluetooth</a>.</td></tr>
             <tr><td><code>platform_hint</code></td><td>() -&gt; str</td><td>C++: <code>"windows"</code> / <code>"macos"</code> / <code>"linux"</code> / <code>"android"</code>; Python: <code>"windows"</code> / <code>"macos"</code> / <code>"linux"</code>. The QML uses it only to pick the hint string under the entry field, never for structural branching. (The QML also has an <code>"ios"</code> branch; neither backend returns it today.)</td></tr>
-            <tr><td><code>connectionLogLineAppended</code></td><td>signal(str)</td><td>One-line-at-a-time live log (added in <code>542b446</code>). <code>OBDHome</code> keeps the last 40 lines, the settings page the last 60, both auto-scrolling. Sources: <code>connect_to_adapter</code>, the rfcomm bind steps, and every Android BLE state transition via <code>logAndroid()</code>, which also mirrors the line into <code>connectionStatusDetailChanged</code>.</td></tr>
+            <tr><td><code>connectionLogLineAppended</code></td><td>signal(str)</td><td>One-line-at-a-time live log (added in <code>542b446</code>). <code>OBDHome</code> keeps the last 40 lines, the settings page the last 60, both auto-scrolling. Sources: <code>connect_to_adapter</code>, the rfcomm bind steps, the direct Bluetooth connect (C++: <code>OBDConnectionWorker::logLine</code>; Python: one line when python-obd could not reach the adapter), and every Android BLE state transition via <code>logAndroid()</code>, which also mirrors the line into <code>connectionStatusDetailChanged</code>.</td></tr>
           </tbody>
         </table>
 
@@ -416,6 +417,37 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             <code>force_connect()</code> is called from the completion handler.
           </p>
         </div>
+
+        <h3 id="direct-bluetooth">Direct Bluetooth (<code>rfcomm://</code>, Linux)</h3>
+        <p>
+          A port of the form <code>rfcomm://&lt;MAC&gt;</code> or <code>rfcomm://&lt;MAC&gt;/&lt;channel&gt;</code> (channel 1 by
+          default) skips the bound <code>/dev/rfcommN</code> node and opens a Bluetooth Classic RFCOMM socket straight to the
+          adapter. It needs no <code>rfcomm bind</code> (root), connects explicitly with a timeout and a real error
+          (<em>Host is down</em>, <em>Connection refused</em>), and nothing else on the system (blueman) can release it
+          underneath us. It came out of 2026-10-03 on the Pi: the NEXAS (classic SPP, channel 1) never connected through
+          <code>/dev/rfcomm0</code>, but a raw socket reached it in about 1.1 s and the Jeep's ECU answered.
+        </p>
+        <ul>
+          <li><strong>C++:</strong> <span class="file-path">src/managers/rfcommsocket.{h,cpp}</span>, class
+            <code>RfcommSocket</code> (a <code>QIODevice</code> over an <code>AF_BLUETOOTH</code> socket; the three
+            constants and <code>sockaddr_rc</code> are spelled out so the build needs no libbluetooth-dev). The worker
+            picks it in <code>doConnect()</code> when <code>RfcommSocket::isUrl(port)</code> and otherwise calls
+            <code>openSerialPort()</code>. Everything after that talks through <code>m_io</code>, whichever device is open.
+            <code>connectTo()</code> waits up to <code>max(10, timeout)</code> s in 100 ms slices, so a reconnect can
+            abandon it. A hang-up or failed read sets <code>isBroken()</code>, which <code>sendCommand()</code> turns into
+            <code>connectionLost</code>. On other platforms <code>connectTo()</code> fails with <em>only supported on
+            Linux</em>.</li>
+          <li><strong>Python:</strong> <span class="file-path">backend/obd_transports/</span>. The package holds the URL
+            helpers (<code>is_rfcomm_url</code>, <code>parse_rfcomm_url</code>, <code>make_rfcomm_url</code>) and
+            <code>register_handlers()</code>, which adds the package to <code>serial.protocol_handler_packages</code>.
+            <code>protocol_rfcomm.Serial</code> subclasses pyserial's socket handler with an RFCOMM connect, so python-obd
+            opens <code>rfcomm://</code> through <code>serial_for_url()</code> unchanged. The worker registers it just
+            before <code>obd.Async()</code>.</li>
+          <li><strong>Both:</strong> <code>checkPortExists</code> only validates the URL, since there is no node to look
+            for. The passive device scan (every 10 s) retries a configured <code>rfcomm://</code> adapter whenever we're
+            not connected, connecting, closed or in diagnostic mode. The dongle is usually only powered with the ignition
+            on, and while it's off the connect fails within a few seconds (<em>Host is down</em>).</li>
+        </ul>
 
         <!-- Auto-Reconnect -->
         <h2 id="auto-reconnect">Auto-Reconnect and Passive Scanning</h2>

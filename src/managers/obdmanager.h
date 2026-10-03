@@ -25,6 +25,7 @@
 // granted). All BLE work runs through OctaveOBDBridge.java via JNI instead.
 
 class OBDConnectionWorker;
+class RfcommSocket;
 class QProcess;
 
 // ===========================================================================
@@ -313,6 +314,9 @@ public slots:
     void refresh_values();
     void open_bluetooth_settings();
     void set_target_address(const QString &address);
+    // Linux: connect over a direct Bluetooth RFCOMM socket (no rfcomm bind,
+    // no /dev node). Saves "rfcomm://<MAC>[/<channel>]" as the OBD port.
+    void connect_direct(const QString &mac, int channel = 1);
     void set_auto_reconnect(bool enabled);
     void set_connection_timeout(int timeoutSeconds);
     bool check_device_presence();
@@ -650,6 +654,9 @@ signals:
     void scanComplete(const QStringList &supported);
     void scanOutput(const QString &line);
 
+    // One line for the settings page's connection log
+    void logLine(const QString &line);
+
 public slots:
     // Called from OBDManager (via queued connection)
     void doConnect();
@@ -675,6 +682,7 @@ private slots:
 private:
     // ELM327 init sequence
     bool sendInitSequence();
+    bool openSerialPort();   // QSerialPort path of doConnect(); emits initComplete(false) itself
 
     // Send a command and wait for response (blocking, with timeout)
     QString sendCommand(const QByteArray &cmd, int timeoutMs = 2000);
@@ -682,8 +690,12 @@ private:
     // Query supported PIDs from vehicle
     QSet<int> querySupportedPids();
 
-    // Serial port (created on worker thread)
+    // The link to the adapter, created on the worker thread: a QSerialPort
+    // (USB, /dev/rfcommN, COM) or, for "rfcomm://<MAC>", a direct Bluetooth
+    // socket. m_io is whichever one is open; everything talks through it.
     QSerialPort *m_serial = nullptr;
+    RfcommSocket *m_rfcomm = nullptr;
+    QIODevice *m_io = nullptr;
     ResponseBuffer m_responseBuffer;
 
     // Configuration
