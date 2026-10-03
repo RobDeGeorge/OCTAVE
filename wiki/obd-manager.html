@@ -252,7 +252,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
         <!-- Poll loop -->
         <h2 id="poll-loop">Poll Loop and Pacing (C++)</h2>
         <p>
-          <code>startPolling()</code> starts <code>m_pollTimer</code> on the worker thread with interval <strong>0 ms</strong>
+          <code>startPolling()</code> starts <code>m_pollTimer</code> (constructed with the worker as parent, so <code>moveToThread()</code> carries it along; before 2026-10-03 it stayed on the GUI thread and Qt refused to start it with &ldquo;Timers cannot be started from another thread&rdquo;) on the worker thread with interval <strong>0 ms</strong>
           when <code>obdFastMode</code> is on (the default -- "poll as fast as possible, like <code>delay_cmds=0</code>") or
           <strong>50 ms</strong> otherwise. Each tick (<code>onPollTimer()</code>) sends the next PID in round-robin order with
           a <strong>500 ms</strong> timeout, parses it with <code>ELM327Protocol::parseResponse()</code> /

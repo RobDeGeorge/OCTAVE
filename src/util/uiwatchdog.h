@@ -7,6 +7,7 @@
 // duration when it recovers), so a frozen head unit leaves a trace.
 // Mirrors backend/ui_watchdog.py.
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QThread>
 #include <atomic>
@@ -27,7 +28,10 @@ private:
     const int m_pingMs;
     const int m_stallMs;
     std::atomic<bool> m_running{false};
-    std::atomic<qint64> m_lastPong{0};   // ms since epoch, written on the GUI thread
+    // Monotonic (a wall-clock jump, e.g. NTP setting the RTC-less Pi's clock,
+    // must not read as a stall); m_lastPong is ms on m_clock, written on the GUI thread
+    QElapsedTimer m_clock;
+    std::atomic<qint64> m_lastPong{0};
     QThread m_thread;
 };
 

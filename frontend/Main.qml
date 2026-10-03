@@ -52,37 +52,6 @@ ApplicationWindow {
     // animation (matches SettingsCardPopup): studio grows from the clicked
     // tile's rect to fill the window.
     property bool nowPlayingStudioOpen: false
-
-    // True while the startup splash is up and the nav pages are being
-    // pre-built behind it. Heavy work that can wait (the first track's audio
-    // analysis on MediaRoom) holds off until it turns false.
-    property bool startupPreloading: true
-
-    // Friendly names for the splash status line
-    readonly property var _pageLabels: ({
-        "MediaRoom.qml": "Now Playing",
-        "MediaPlayer.qml": "Music Library",
-        "SensorHome.qml": "Sensors",
-        "OBDHome.qml": "Vehicle Data",
-        "OBDMenu.qml": "Vehicle Data",
-        "SettingsMenu.qml": "Settings",
-        "CarMenu.qml": "Vehicle"
-    })
-
-    // Ends the startup phase: the splash fades out and held-back work runs.
-    // Pre-building that is still queued (after a tap to skip) carries on in
-    // the background with its usual pacing and touch back-off.
-    function finishStartup(why) {
-        if (!startupPreloading)
-            return
-        console.info("[NAV] Startup splash done (" + why + ")")
-        startupPreloading = false
-        startupCapTimer.stop()
-        if (startupSplash.item)
-            startupSplash.item.finish()
-        else
-            startupSplash.active = false
-    }
     property rect nowPlayingStudioOriginRect: Qt.rect(0, 0, 0, 0)
     function openNowPlayingStudio(originRect) {
         if (originRect && originRect.width > 0)
@@ -668,7 +637,6 @@ ApplicationWindow {
             property string stepFile: ""
             property double stepStart: 0
             property double queueStart: 0
-            property int queueTotal: 0
             property int pagesBuilt: 0
             onTriggered: {
                 // Never compete with a finger on the screen: a page build or
@@ -699,20 +667,11 @@ ApplicationWindow {
                     // tap that beats a page to it builds it on demand.
                     var isHeavy = function(p) { return heavyPages.indexOf(p.file) !== -1 }
                     queue = pages.filter(function(p) { return !isHeavy(p) }).concat(pages.filter(isHeavy))
-                    queueTotal = queue.length
                     queueStart = Date.now()
                 }
-                if (queue.length === 0) {
-                    mainWindow.finishStartup("nothing to build")
+                if (queue.length === 0)
                     return
-                }
                 var next = queue.shift()
-                if (startupSplash.item) {
-                    var label = mainWindow._pageLabels[next.file.split("/").pop()]
-                    // Unlisted pages (a remembered sensor/OBD page): "FooBar.qml" -> "Foo Bar"
-                    startupSplash.item.status = "Preparing " + (label
-                        || next.file.split("/").pop().replace(".qml", "").replace(/([a-z])([A-Z])/g, "$1 $2"))
-                }
                 stepFile = next.file
                 stepStart = Date.now()
                 stackView.prewarmPage(next.file, next.props || {}, function(page) {
@@ -739,13 +698,9 @@ ApplicationWindow {
                     if (last)
                         console.info("[NAV] Pre-building finished:", pagesBuilt, "pages in", Date.now() - queueStart, "ms")
                 }
-                if (queue && queueTotal > 0 && startupSplash.item)
-                    startupSplash.item.progress = (queueTotal - queue.length) / queueTotal
                 if (queue && queue.length > 0) {
                     interval = gap
                     restart()
-                } else {
-                    mainWindow.finishStartup("all pages built")
                 }
             }
         }
@@ -1104,35 +1059,6 @@ ApplicationWindow {
 
     // Icon-glyph font used by every symbol-drawing Text (App.Style.symbolFont).
     // Lives in its own subfolder so the picker's folder scan below skips it.
-    // Startup splash, above everything (including the input probe, so a tap
-    // on it skips it rather than counting as nav activity). See
-    // StartupSplash.qml and pagePrewarmTimer.
-    Loader {
-        id: startupSplash
-        parent: mainWindow.contentItem
-        anchors.fill: parent
-        z: 2000000
-        active: true
-        source: "StartupSplash.qml"
-        onLoaded: {
-            if (!mainWindow.startupPreloading)
-                item.finish()
-        }
-        Connections {
-            target: startupSplash.item
-            function onSkipRequested() { mainWindow.finishStartup("skipped") }
-            function onFaded() { startupSplash.active = false }
-        }
-    }
-
-    // Never keep the splash up longer than this, whatever the queue is doing
-    Timer {
-        id: startupCapTimer
-        interval: 45000
-        running: true
-        onTriggered: mainWindow.finishStartup("45 s cap")
-    }
-
     FontLoader {
         id: symbolFontLoader
         source: Qt.resolvedUrl("assets/fonts/symbols/OCTAVESymbols-Regular.ttf")

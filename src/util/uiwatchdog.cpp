@@ -1,7 +1,6 @@
 #include "uiwatchdog.h"
 
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QLoggingCategory>
 #include <QMetaObject>
 
@@ -21,7 +20,8 @@ void UiWatchdog::start()
 {
     if (m_running.exchange(true))
         return;
-    m_lastPong = QDateTime::currentMSecsSinceEpoch();
+    m_clock.start();
+    m_lastPong = 0;
     // The worker owns nothing Qt-side; it only posts queued calls to `this`,
     // which lives on the GUI thread.
     QObject::connect(&m_thread, &QThread::started, [this] { loop(); });
@@ -46,9 +46,9 @@ void UiWatchdog::loop()
         if (!m_running.load())
             break;
         // Ping: runs on the GUI thread when the event loop gets to it
-        QMetaObject::invokeMethod(this, [this] { m_lastPong = QDateTime::currentMSecsSinceEpoch(); },
+        QMetaObject::invokeMethod(this, [this] { m_lastPong = m_clock.elapsed(); },
                                   Qt::QueuedConnection);
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const qint64 now = m_clock.elapsed();
         const qint64 silent = now - m_lastPong.load();
         if (!stalled && silent > m_stallMs) {
             stalled = true;

@@ -1806,6 +1806,7 @@ bool OBDManager::check_device_presence()
 
 OBDConnectionWorker::OBDConnectionWorker(QObject *parent)
     : QObject(parent)
+    , m_pollTimer(this)  // a child, so moveToThread() takes it to the worker thread
 {
     m_pollTimer.setInterval(0);  // Poll as fast as possible (like delay_cmds=0)
     QObject::connect(&m_pollTimer, &QTimer::timeout, this, &OBDConnectionWorker::onPollTimer);
