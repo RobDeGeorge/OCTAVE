@@ -223,6 +223,31 @@ Item {
     // Driven by AlbumArtCarousel.animBusy via onAnimBusyChanged binding.
     property bool _cardAnimBusy: false
 
+    // Audio analysis requested while the startup splash is up; started when
+    // it goes away, so the first track's decode + FFT doesn't land on top of
+    // the page pre-builds (that stacked load browned out an Orange Pi).
+    property string _heldAnalysisPath: ""
+
+    function _analyzeTrack(fullPath) {
+        if (mainWindow && mainWindow.startupPreloading) {
+            _heldAnalysisPath = fullPath
+            return
+        }
+        audioAnalyzer.analyze_file(fullPath)
+    }
+
+    Connections {
+        target: mainWindow
+        enabled: mediaRoom._heldAnalysisPath !== ""
+        function onStartupPreloadingChanged() {
+            if (mainWindow.startupPreloading || !audioAnalyzer)
+                return
+            var path = mediaRoom._heldAnalysisPath
+            mediaRoom._heldAnalysisPath = ""
+            audioAnalyzer.analyze_file(path)
+        }
+    }
+
     // Heavy work deferred until after animation settles — FFT analysis
     // doesn't compete with animation frames.  Called by carousel's settled signal.
     function _doTrackChangeWork() {
@@ -231,7 +256,7 @@ Item {
             if (currentFile) {
                 var fullPath = mediaManager.get_full_file_path(currentFile)
                 if (fullPath) {
-                    audioAnalyzer.analyze_file(fullPath)
+                    _analyzeTrack(fullPath)
                     waveformContainer.lastAnalyzedFile = currentFile
                 }
             }
@@ -1334,7 +1359,7 @@ Item {
                     if (currentFile) {
                         var fullPath = mediaManager.get_full_file_path(currentFile)
                         if (fullPath) {
-                            audioAnalyzer.analyze_file(fullPath)
+                            mediaRoom._analyzeTrack(fullPath)
                             waveformContainer.lastAnalyzedFile = currentFile
                         }
                     }
