@@ -9,7 +9,9 @@ python-obd opens its port with serial.serial_for_url(), which finds this
 module once backend.obd_transports.register_handlers() has run.
 """
 
+import errno
 import socket
+import time
 
 from serial.serialutil import SerialException
 from serial.urlhandler import protocol_socket
@@ -32,14 +34,25 @@ class Serial(protocol_socket.Serial):
         mac, channel = self.from_url(self.portstr)
         if not hasattr(socket, "AF_BLUETOOTH"):
             raise SerialException("Direct Bluetooth (rfcomm://) is only supported on Linux")
-        sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-        try:
-            sock.settimeout(CONNECT_TIMEOUT_S)
-            sock.connect((mac, channel))
-        except OSError as e:
-            sock.close()
-            reason = e.strerror or str(e) or "timed out"
-            raise SerialException(f"Bluetooth connect failed: {reason}") from e
+        deadline = time.monotonic() + 3
+        while True:
+            sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+            try:
+                sock.settimeout(CONNECT_TIMEOUT_S)
+                sock.connect((mac, channel))
+                break
+            except OSError as e:
+                sock.close()
+                # EBUSY: one link per channel, and a previous connection (or a
+                # process holding /dev/rfcommN open) still has it; switching
+                # transports releases it on another thread, so give it a moment
+                if e.errno == errno.EBUSY and time.monotonic() < deadline:
+                    time.sleep(0.25)
+                    continue
+                reason = e.strerror or str(e) or "timed out"
+                if e.errno == errno.EBUSY:
+                    reason += " (another connection, e.g. an open /dev/rfcomm node, holds the adapter)"
+                raise SerialException(f"Bluetooth connect failed: {reason}") from e
         sock.setblocking(False)
         self._socket = sock
         self._reconfigure_port()

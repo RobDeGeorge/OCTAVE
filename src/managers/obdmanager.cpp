@@ -1944,6 +1944,8 @@ void OBDConnectionWorker::doConnect()
     }
 
     m_initialized = true;
+    qCInfo(lcElm327) << "ELM327 initialised, vehicle answered on" << m_portName;
+    emit logLine(QStringLiteral("Connected: the vehicle is answering"));
     emit initComplete(true, QStringLiteral("Connected"));
     // Queued startPolling() from the manager runs after this returns
     doReadVin();

@@ -434,7 +434,9 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             picks it in <code>doConnect()</code> when <code>RfcommSocket::isUrl(port)</code> and otherwise calls
             <code>openSerialPort()</code>. Everything after that talks through <code>m_io</code>, whichever device is open.
             <code>connectTo()</code> waits up to <code>max(10, timeout)</code> s in 100 ms slices, so a reconnect can
-            abandon it. A hang-up or failed read sets <code>isBroken()</code>, which <code>sendCommand()</code> turns into
+            abandon it. An <em>EBUSY</em> (one link per channel, still held by the previous worker or by a process with
+            <code>/dev/rfcommN</code> open) is retried every 250 ms for up to 3 s, since switching transports releases the
+            old link on its own thread. Python's handler does the same. A hang-up or failed read sets <code>isBroken()</code>, which <code>sendCommand()</code> turns into
             <code>connectionLost</code>. On other platforms <code>connectTo()</code> fails with <em>only supported on
             Linux</em>.</li>
           <li><strong>Python:</strong> <span class="file-path">backend/obd_transports/</span>. The package holds the URL

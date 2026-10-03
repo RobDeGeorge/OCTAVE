@@ -89,43 +89,54 @@ bool RfcommSocket::connectTo(const QString &mac, int channel, int timeoutMs)
         addr.rc_bdaddr[i] = static_cast<unsigned char>(parts[5 - i].toUInt(nullptr, 16));
     addr.rc_channel = static_cast<unsigned char>(channel);
 
-    m_fd = ::socket(kAfBluetooth, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, kBtProtoRfcomm);
-    if (m_fd < 0) {
-        fail(QStringLiteral("Bluetooth socket unavailable"), errno);
-        return false;
-    }
+    QElapsedTimer t;
+    t.start();
+    // One attempt: 0 on success (m_fd open), else the errno
+    auto attempt = [&]() -> int {
+        m_fd = ::socket(kAfBluetooth, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, kBtProtoRfcomm);
+        if (m_fd < 0)
+            return errno;
+        int err = 0;
+        if (::connect(m_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
+            err = errno;
+            if (err == EINPROGRESS || err == EAGAIN) {
+                // Wait in short slices so a reconnect/quit can abandon us
+                bool writable = false;
+                while (t.elapsed() < timeoutMs) {
+                    if (QThread::currentThread()->isInterruptionRequested())
+                        break;
+                    pollfd pfd{m_fd, POLLOUT, 0};
+                    const int r = ::poll(&pfd, 1, 100);
+                    if (r > 0) { writable = true; break; }
+                    if (r < 0 && errno != EINTR) break;
+                }
+                socklen_t len = sizeof(err);
+                if (!writable)
+                    err = ETIMEDOUT;
+                else if (::getsockopt(m_fd, SOL_SOCKET, SO_ERROR, &err, &len) != 0)
+                    err = errno;
+            }
+        }
+        if (err != 0) {
+            ::close(m_fd);
+            m_fd = -1;
+        }
+        return err;
+    };
 
-    if (::connect(m_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
-        if (errno != EINPROGRESS && errno != EAGAIN) {
-            fail(QStringLiteral("Bluetooth connect failed"), errno);
-            ::close(m_fd);
-            m_fd = -1;
-            return false;
-        }
-        // Wait in short slices so a reconnect/quit can abandon us
-        QElapsedTimer t;
-        t.start();
-        bool writable = false;
-        while (t.elapsed() < timeoutMs) {
-            if (QThread::currentThread()->isInterruptionRequested())
-                break;
-            pollfd pfd{m_fd, POLLOUT, 0};
-            const int r = ::poll(&pfd, 1, 100);
-            if (r > 0) { writable = true; break; }
-            if (r < 0 && errno != EINTR) break;
-        }
-        int soErr = 0;
-        socklen_t len = sizeof(soErr);
-        if (!writable)
-            soErr = ETIMEDOUT;
-        else if (::getsockopt(m_fd, SOL_SOCKET, SO_ERROR, &soErr, &len) != 0)
-            soErr = errno;
-        if (soErr != 0) {
-            fail(QStringLiteral("Bluetooth connect failed"), soErr);
-            ::close(m_fd);
-            m_fd = -1;
-            return false;
-        }
+    int err = attempt();
+    // EBUSY: one link per channel, and a previous worker (or a process
+    // holding /dev/rfcommN open) still has it. Switching transports
+    // releases the old link on its own thread, so give it a moment.
+    while (err == EBUSY && t.elapsed() < qMin(timeoutMs, 3000)
+           && !QThread::currentThread()->isInterruptionRequested()) {
+        QThread::msleep(250);
+        err = attempt();
+    }
+    if (err != 0) {
+        fail(err == EBUSY ? QStringLiteral("Bluetooth connect failed (another connection, e.g. an open /dev/rfcomm node, holds the adapter)")
+                          : QStringLiteral("Bluetooth connect failed"), err);
+        return false;
     }
     return QIODevice::open(QIODevice::ReadWrite | QIODevice::Unbuffered);
 #else
