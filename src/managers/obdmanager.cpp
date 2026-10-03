@@ -1862,12 +1862,13 @@ void OBDConnectionWorker::doConnect()
 
     if (!m_serial->open(QIODevice::ReadWrite)) {
         const QString err = m_serial->errorString();
+        qCWarning(lcElm327) << "could not open" << m_portName << ":" << err;
         releasePort();
         emit initComplete(false, QStringLiteral("Failed to open port: %1").arg(err));
         return;
     }
 
-    // Set read timeout
+    qCInfo(lcElm327) << "opened" << m_portName;
     m_serial->setReadBufferSize(4096);
 
     // Run ELM327 init sequence
@@ -1936,7 +1937,12 @@ bool OBDConnectionWorker::sendInitSequence()
 {
     const auto cmds = ELM327Protocol::initCommands();
     for (const InitCommand &cmd : cmds) {
-        QString response = sendCommand(cmd.command, cmd.timeoutMs);
+        // A bound /dev/rfcommN opens instantly but the kernel only brings the
+        // Bluetooth link up on the first write, so ATZ's answer includes the
+        // link-up as well as the reset: ~2.2 s on a NEXAS in the Jeep, past
+        // the 1.5 s the protocol table allows. Returns as soon as it answers.
+        const bool reset = cmd.command.startsWith("ATZ");
+        QString response = sendCommand(cmd.command, reset ? qMax(cmd.timeoutMs, 5000) : cmd.timeoutMs);
         qDebug() << "[OBD Worker] Init:" << cmd.command.trimmed() << "->" << response;
         // ATZ response usually contains "ELM327" -- verify
         if (cmd.command.startsWith("ATZ") && !response.toUpper().contains(QStringLiteral("ELM"))) {
@@ -1956,6 +1962,10 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
     if (QThread::currentThread()->isInterruptionRequested())
         return QString();
 
+    // QSerialPort errors are sticky until cleared: without this, one
+    // transient error (e.g. during rfcomm link-up) failed every later
+    // command of the init sequence instantly
+    m_serial->clearError();
     m_responseBuffer.clear();
     qCDebug(lcElm327) << "TX" << cmd.trimmed();
     m_serial->write(cmd);
@@ -1996,8 +2006,11 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
             }
         } else {
             const auto err = m_serial->error();
-            if (err != QSerialPort::NoError && err != QSerialPort::TimeoutError)
+            if (err == QSerialPort::ResourceError || err == QSerialPort::DeviceNotFoundError ||
+                err == QSerialPort::PermissionError || err == QSerialPort::NotOpenError)
                 break;  // port is gone; onSerialError reports it
+            if (err != QSerialPort::NoError)
+                m_serial->clearError();  // transient (timeout, read hiccup): keep waiting
         }
         // When the wait returned without data, never iterate faster than
         // ~10 Hz: an rfcomm node with no remote returns from the wait
@@ -2111,7 +2124,9 @@ void OBDConnectionWorker::onSerialError(QSerialPort::SerialPortError error)
     if (error == QSerialPort::NoError)
         return;
 
-    qDebug() << "[OBD Worker] Serial error:" << error << m_serial->errorString();
+    // TimeoutError is every empty 100 ms wait in sendCommand(), not news
+    if (error != QSerialPort::TimeoutError)
+        qCWarning(lcElm327) << "serial error on" << m_portName << ":" << error << m_serial->errorString();
 
     if (error == QSerialPort::ResourceError || error == QSerialPort::DeviceNotFoundError) {
         stopPolling();

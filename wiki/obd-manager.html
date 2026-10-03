@@ -225,7 +225,9 @@ ATAT2   300 ms   <span class="cmt"># aggressive adaptive timing</span>
 ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
         <p>
           <strong>C++ desktop</strong> (<code>sendInitSequence()</code>): each command is sent with
-          <code>sendCommand()</code> and its own timeout; an <code>ATZ</code> reply without <em>ELM</em> only logs a warning
+          <code>sendCommand()</code> and its own timeout, except that <code>ATZ</code> gets at least 5 s: a bound
+          <code>/dev/rfcommN</code> opens instantly, but the kernel only brings the Bluetooth link up on the first write,
+          so the reset's answer also includes the link-up (about 2.2 s for a NEXAS in the Jeep). An <code>ATZ</code> reply without <em>ELM</em> only logs a warning
           (clones omit the banner), and the function always returns <code>true</code>. The real test is the vehicle probe
           that follows: one <code>010C</code> (RPM) request that waits up to the connection timeout (<code>m_timeout</code>, 5 s
           unless <code>set_connection_timeout()</code> changed it -- the same value python-obd gets as <code>timeout=</code>).
@@ -272,8 +274,13 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             PID because the ELM327 often sends the data and the prompt as separate chunks (<code>ee5a23e</code>).</li>
           <li>Readable but <strong>zero bytes</strong> 50 times in a row: the port is dead (see next section) --
             <code>stopPolling()</code>, <code>releasePort()</code>, <code>connectionLost("Adapter stopped responding")</code>.</li>
-          <li>Any real <code>QSerialPort</code> error other than <code>TimeoutError</code> breaks out; <code>onSerialError</code>
-            reports <code>ResourceError</code> / <code>DeviceNotFoundError</code> as <code>connectionLost</code>.</li>
+          <li>The port's error is cleared before every command (<code>QSerialPort</code> errors are sticky; before
+            2026-10-03, one transient error during rfcomm link-up made every later init command fail in the same
+            millisecond). Only a fatal error (<code>ResourceError</code>, <code>DeviceNotFoundError</code>,
+            <code>PermissionError</code>, <code>NotOpenError</code>) breaks out; anything else is cleared and the wait
+            continues. <code>onSerialError</code> reports <code>ResourceError</code> / <code>DeviceNotFoundError</code> as
+            <code>connectionLost</code>, and logs every error except <code>TimeoutError</code> on <code>octave.elm327</code>
+            at WARNING, alongside the port open result (INFO / WARNING), so a failed connect is visible without debug logging.</li>
           <li>Every iteration that delivered no data sleeps out the remainder of 100 ms, so the loop never spins faster than
             ~10 Hz while waiting.</li>
         </ul>
