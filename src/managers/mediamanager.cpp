@@ -2331,11 +2331,11 @@ bool MediaManager::delete_song(const QString &filename)
     if (filePath.isEmpty() || !QFile::exists(filePath))
         return false;
 
-    // Stop if currently playing
+    // Stop if it is the loaded track (playing or paused) so the player
+    // doesn't keep a handle on a file that is about to disappear
     bool isCurrent = (!m_currentPlaylist.isEmpty()
                       && m_currentIndex >= 0 && m_currentIndex < m_currentPlaylist.size()
-                      && m_currentPlaylist[m_currentIndex] == filename
-                      && m_isPlaying);
+                      && m_currentPlaylist[m_currentIndex] == filename);
     if (isCurrent) {
         m_player->stop();
         m_isPlaying = false;
@@ -2423,6 +2423,14 @@ bool MediaManager::move_song_to_playlist(const QString &filename, const QString 
     if (!_is_safe_path(m_libraryRoot, sourcePath))
         return false;
 
+    // Already in that folder (e.g. picked from "All Music") — a "move" would
+    // only rename it to "name (1).mp3"
+    if (QDir::cleanPath(QFileInfo(sourcePath).absolutePath())
+        == QDir::cleanPath(QDir(targetDir).absolutePath())) {
+        qCInfo(lcMedia) << "move_song_to_playlist: already in" << targetPlaylist;
+        return false;
+    }
+
     const QString originalName = _get_original_filename(filename);
     QString destPath = targetDir + QDir::separator() + originalName;
 
@@ -2442,11 +2450,11 @@ bool MediaManager::move_song_to_playlist(const QString &filename, const QString 
         }
     }
 
-    // Stop if currently playing
+    // Stop if it is the loaded track (playing or paused) so the player
+    // doesn't keep a handle on a file that is about to disappear
     bool isCurrent = (!m_currentPlaylist.isEmpty()
                       && m_currentIndex >= 0 && m_currentIndex < m_currentPlaylist.size()
-                      && m_currentPlaylist[m_currentIndex] == filename
-                      && m_isPlaying);
+                      && m_currentPlaylist[m_currentIndex] == filename);
     if (isCurrent) {
         m_player->stop();
         m_isPlaying = false;
@@ -2471,6 +2479,23 @@ QStringList MediaManager::get_movable_playlist_names()
             result.append(n);
     }
     return result;
+}
+
+// The playlist folder a song actually lives in, regardless of which playlist
+// it is being viewed through ("All Music" spans every folder). Empty if unknown.
+QString MediaManager::get_song_playlist_name(const QString &filename)
+{
+    const QString filePath = _get_file_path(filename);
+    if (filePath.isEmpty())
+        return {};
+
+    const QString dir = QDir::cleanPath(QFileInfo(filePath).absolutePath());
+    for (const QString &n : m_playlistNames) {
+        const PlaylistInfo info = m_playlists.value(n);
+        if (!info.isCombined && QDir::cleanPath(QDir(info.path).absolutePath()) == dir)
+            return n;
+    }
+    return {};
 }
 
 bool MediaManager::delete_playlist(const QString &name)

@@ -444,10 +444,11 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <thead><tr><th>Slot</th><th>What it does</th></tr></thead>
           <tbody>
             <tr><td><code>create_playlist(name)</code></td><td>Creates <code>&lt;root&gt;/&lt;name&gt;</code> (rejects separators, <code>..</code>, hidden names; reuses an existing <em>empty</em> folder), then rescans</td></tr>
-            <tr><td><code>move_song_to_playlist(file, playlist)</code></td><td>Renames the file into the target folder, appending <code>" (n)"</code> on collision, stops playback if it was the current song, then rescans</td></tr>
-            <tr><td><code>delete_song(file)</code></td><td>Stops playback if current, deletes the file and its display name, rescans, emits <code>songDeleted(file)</code></td></tr>
+            <tr><td><code>move_song_to_playlist(file, playlist)</code></td><td>Renames the file into the target folder, appending <code>" (n)"</code> on collision, stops playback if it was the loaded song (playing or paused), then rescans. Returns false if the file already lives in that folder</td></tr>
+            <tr><td><code>delete_song(file)</code></td><td>Stops playback if it was the loaded song (playing or paused), deletes the file and its display name, rescans, emits <code>songDeleted(file)</code></td></tr>
             <tr><td><code>delete_playlist(name)</code></td><td>Recursively deletes the folder (never "All Music" / "Unsorted"), rescans, and selects the first playlist if the deleted one was active</td></tr>
             <tr><td><code>get_movable_playlist_names()</code></td><td>All names except "All Music" (valid move targets)</td></tr>
+            <tr><td><code>get_song_playlist_name(file)</code></td><td>The playlist folder the file actually lives in, even when viewed through "All Music"; empty if unknown</td></tr>
             <tr><td><code>play_downloaded_song(artist, title, playlist)</code> / <code>play_file_at_path(path)</code></td><td>Used by the <a href="download-manager.html">Download Manager</a>: rescan, find the file (exact then fuzzy match on the sanitized <code>"artist - title"</code> stem, or by directory), select its playlist and play it</td></tr>
           </tbody>
         </table>
@@ -748,6 +749,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>create_playlist</code> / <code>delete_playlist</code></td><td>(str) -&gt; bool</td><td>Create or remove a playlist folder</td></tr>
             <tr><td><code>move_song_to_playlist</code></td><td>(str, str) -&gt; bool</td><td>Move a file into another playlist folder</td></tr>
             <tr><td><code>delete_song</code></td><td>(str) -&gt; bool</td><td>Delete a file from disk (emits <code>songDeleted</code>)</td></tr>
+            <tr><td><code>get_song_playlist_name</code></td><td>(str) -&gt; str</td><td>Playlist folder a file lives in</td></tr>
             <tr><td><code>play_downloaded_song</code></td><td>(str, str, str) -&gt; bool</td><td>Play a freshly downloaded track by artist / title / playlist</td></tr>
             <tr><td><code>play_file_at_path</code></td><td>(str) -&gt; bool</td><td>Play a file by absolute path (selects its playlist)</td></tr>
             <tr><td><code>get_full_file_path</code> / <code>get_song_file_path</code></td><td>(str) -&gt; str</td><td>Absolute path for a filename (the former returns "" for a missing file; used by the audio analyzer)</td></tr>

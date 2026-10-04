@@ -580,6 +580,7 @@
             <tr><td><code>get_current_playlist_name()</code></td><td><code>QString</code></td><td>Active playlist name</td></tr>
             <tr><td><code>get_current_song_list()</code></td><td><code>QStringList</code></td><td>Filenames of the active playlist in queue order</td></tr>
             <tr><td><code>get_movable_playlist_names()</code></td><td><code>QStringList</code></td><td>Playlist names excluding "All Music" (targets for <code>move_song_to_playlist</code>)</td></tr>
+            <tr><td><code>get_song_playlist_name(QString filename)</code></td><td><code>QString</code></td><td>Playlist folder the file actually lives in (not "All Music"); empty if unknown</td></tr>
             <tr><td><code>get_song_file_path(QString filename)</code></td><td><code>QString</code></td><td>Absolute path for a filename in the library (<code>""</code> if unknown)</td></tr>
             <tr><td><code>get_full_file_path(QString filename)</code></td><td><code>QString</code></td><td>Absolute path, but only when the file exists on disk</td></tr>
             <tr><td><code>get_display_name(QString filename)</code></td><td><code>QString</code></td><td>Cleaned display name (tags/stripped filename) for a file</td></tr>

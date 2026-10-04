@@ -2072,12 +2072,12 @@ class MediaManager(QObject):
             logger.warning("delete_song: file not found: %s", file_path)
             return False
 
-        # Don't delete the currently playing file
+        # Stop if it is the loaded track (playing or paused) so the player
+        # doesn't keep a handle on a file that is about to disappear
         is_current = (
             self._current_playlist
             and 0 <= self._current_index < len(self._current_playlist)
             and self._current_playlist[self._current_index] == filename
-            and self._is_playing
         )
         if is_current:
             self._player.stop()
@@ -2177,6 +2177,13 @@ class MediaManager(QObject):
             logger.warning("move_song_to_playlist: source path not safe")
             return False
 
+        # Already in that folder (e.g. picked from "All Music") — a "move" would
+        # only rename it to "name (1).mp3"
+        if os.path.normpath(os.path.dirname(os.path.abspath(source_path))) == \
+                os.path.normpath(os.path.abspath(target_dir)):
+            logger.info("move_song_to_playlist: '%s' already in '%s'", filename, target_playlist)
+            return False
+
         # Use the original filename (strip All Music prefix if present)
         original_name = self._get_original_filename(filename)
         dest_path = os.path.join(target_dir, original_name)
@@ -2193,12 +2200,12 @@ class MediaManager(QObject):
                 dest_path = os.path.join(target_dir, f"{base} ({counter}){ext}")
                 counter += 1
 
-        # Stop playback if this is the current song
+        # Stop if it is the loaded track (playing or paused) so the player
+        # doesn't keep a handle on a file that is about to disappear
         is_current = (
             self._current_playlist
             and 0 <= self._current_index < len(self._current_playlist)
             and self._current_playlist[self._current_index] == filename
-            and self._is_playing
         )
         if is_current:
             self._player.stop()
@@ -2219,6 +2226,23 @@ class MediaManager(QObject):
     def get_movable_playlist_names(self):
         """Return playlist names excluding 'All Music' (valid move targets)."""
         return [n for n in self._playlist_names if n != "All Music"]
+
+    @Slot(str, result=str)
+    def get_song_playlist_name(self, filename):
+        """The playlist folder a song actually lives in, regardless of which
+        playlist it is being viewed through ("All Music" spans every folder).
+        Empty if unknown."""
+        file_path = self._get_file_path(filename)
+        if not file_path:
+            return ""
+        song_dir = os.path.normpath(os.path.dirname(os.path.abspath(file_path)))
+        for name in self._playlist_names:
+            info = self._playlists.get(name, {})
+            if info.get("is_combined"):
+                continue
+            if os.path.normpath(os.path.abspath(info.get("path", ""))) == song_dir:
+                return name
+        return ""
 
     @Slot(str, result=bool)
     def delete_playlist(self, name):

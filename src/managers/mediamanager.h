@@ -149,6 +149,7 @@ public slots:
     Q_INVOKABLE QString get_current_playlist_name();
     Q_INVOKABLE QStringList get_current_song_list();
     Q_INVOKABLE QStringList get_movable_playlist_names();
+    Q_INVOKABLE QString get_song_playlist_name(const QString &filename);
     Q_INVOKABLE QString get_song_file_path(const QString &filename);
     Q_INVOKABLE QString get_full_file_path(const QString &filename);
     Q_INVOKABLE QString get_display_name(const QString &filename);
