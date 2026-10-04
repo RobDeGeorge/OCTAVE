@@ -94,6 +94,27 @@ Item {
 
                     model: hubModel.length
 
+                    // One shared label size for every row: the largest size
+                    // (capped at the design size) at which the longest section
+                    // name still fits, so rows never shrink individually.
+                    readonly property real labelBaseSize: App.Spacing.overallText * 1.6
+                    readonly property real labelFontSize: {
+                        var avail = width - 24 - 12
+                        var widest = 0
+                        for (var i = 0; i < hubModel.length; i++)
+                            widest = Math.max(widest, labelMetrics.advanceWidth(hubModel[i].name || ""))
+                        if (widest <= 0 || avail <= 0 || widest <= avail)
+                            return labelBaseSize
+                        return Math.max(dp(8), Math.floor(labelBaseSize * avail / widest))
+                    }
+                    FontMetrics {
+                        id: labelMetrics
+                        // Bold, since the selected row is bold and therefore widest.
+                        font.pixelSize: navListView.labelBaseSize
+                        font.bold: true
+                        font.family: App.Style.fontFamily
+                    }
+
                     delegate: Item {
                         id: delegateRoot
                         property var entry: hubModel[index] || {}
@@ -250,12 +271,11 @@ Item {
                             }
                             text: parent.itemName
                             color: settingsMenu && settingsMenu.currentSection === parent.itemSection ? App.Style.primaryTextColor : App.Style.secondaryTextColor
-                            font.pixelSize: App.Spacing.overallText * 1.6
+                            // Shared size (see navListView.labelFontSize) so every
+                            // title shows the whole word at the same size.
+                            font.pixelSize: navListView.labelFontSize
                             font.bold: settingsMenu && settingsMenu.currentSection === parent.itemSection
                             font.family: App.Style.fontFamily
-                            // Shrink to fit rather than truncate so titles always show the whole word.
-                            fontSizeMode: Text.HorizontalFit
-                            minimumPixelSize: dp(8)
                             elide: Text.ElideNone
                         }
 

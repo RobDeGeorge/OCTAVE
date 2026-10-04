@@ -909,16 +909,12 @@ ApplicationWindow {
             originRect: mainWindow.nowPlayingStudioOriginRect
             openProgress: mainWindow.nowPlayingStudioOpen ? 1.0 : 0.0
             // Fully-open target excludes the BottomBar (so the nav stays
-            // visible) and — when settings is in Sidebar layout — also the
-            // settings sidebar on the left, so the user can switch sections
-            // without closing the studio.
-            readonly property bool _reserveSettingsSidebar:
-                settingsManager && settingsManager.settingsLayoutStyle === "Sidebar"
-            readonly property int _sidebarReserve:
-                _reserveSettingsSidebar ? App.Spacing.settingsNavWidth : 0
-            targetX: (isVerticalLayout ? bottomBar.width : 0) + _sidebarReserve
+            // visible) but covers the settings sidebar: the section list is
+            // hidden while the studio is open so its left settings panel gets
+            // that width. The studio's own back header returns to settings.
+            targetX: isVerticalLayout ? bottomBar.width : 0
             targetY: 0
-            targetWidth: parent.width - (isVerticalLayout ? bottomBar.width : 0) - _sidebarReserve
+            targetWidth: parent.width - (isVerticalLayout ? bottomBar.width : 0)
             targetHeight: parent.height - (isVerticalLayout ? 0 : bottomBar.height)
             onCloseRequested: mainWindow.closeNowPlayingStudio()
         }
