@@ -22,6 +22,7 @@
             <li><a href="#overview">Overview</a></li>
             <li><a href="#files">Files at a Glance</a></li>
             <li><a href="#parameter-model">Data Flow: OBDParameterModel</a></li>
+            <li><a href="#vehicle-gate">Vehicle Gate and Polling Demand</a></li>
             <li><a href="#binding-api">Shared Binding API</a></li>
             <li><a href="#primitives">Gauge Primitives</a></li>
             <li><a href="#self-binding">Self-Binding Widgets</a></li>
@@ -29,6 +30,7 @@
             <li><a href="#schema">Dashboard JSON Schema (schema 1)</a></li>
             <li><a href="#presets">Built-in Presets</a></li>
             <li><a href="#dashboard-manager">DashboardManager (C++ and Python)</a></li>
+            <li><a href="#sharing">Sharing: Export and Import</a></li>
             <li><a href="#renderer">DashboardRenderer: Spec to QML</a></li>
             <li><a href="#widget-catalog">WidgetCatalog</a></li>
             <li><a href="#obdmenu">OBDMenu Integration: Active Dashboard and Chooser</a></li>
@@ -49,9 +51,12 @@
           users build their own in an in-app editor, or drop a JSON file into the user dashboards directory.
           <code>DashboardManager</code> (C++ <span class="file-path">src/managers/dashboardmanager.{h,cpp}</span>, Python
           <span class="file-path">backend/dashboard_manager.py</span>, full parity) enumerates both sources, watches the
-          user directory, and exposes save / delete / duplicate. <span class="file-path">frontend/dashboards/DashboardRenderer.qml</span>
+          user directory, and exposes save / delete / duplicate plus export / import for sharing.
+          <span class="file-path">frontend/dashboards/DashboardRenderer.qml</span>
           turns a spec into live widgets; the chooser popup shows every dashboard as a scaled live miniature; the selection
-          persists as the <code>activeDashboard</code> setting.
+          persists as the <code>activeDashboard</code> setting, and a horizontal swipe on the OBD page cycles through
+          Parameter Cards and every dashboard. Parameter Cards lists every PID the connected vehicle supports, and a
+          <a href="#vehicle-gate">vehicle gate</a> keeps dashboards from showing PIDs that vehicle doesn't report.
         </p>
         <p>
           Every gauge binds to the <code>OBDParameterModel</code> singleton by <code>paramId</code> (<code>"RPM"</code>,
@@ -68,8 +73,8 @@
         <h2 id="files">Files at a Glance</h2>
         <pre class="diagram">
 frontend/
-  OBDParameterModel.qml          singleton: allParameters (92 ids + kinds), paramValues, simulation
-  OBDMenu.qml                    Parameter Cards grid, DashboardRenderer host, chooser popup, gallery
+  OBDParameterModel.qml          singleton: allParameters (92 ids + kinds), paramValues, simulation, vehicle gate
+  OBDMenu.qml                    Parameter Cards (vehicle PIDs), DashboardRenderer host, swipe, chooser (Import/Share), gallery
   qmldir                         registers OBDParameterModel and WidgetCatalog as singletons
   gauges/
     CircularGauge.qml            arc + ticks + optional needle + centre readout
@@ -83,21 +88,25 @@ frontend/
     CompassGauge.qml             self-binding HEADING compass card
   dashboards/
     DashboardRenderer.qml        spec -> absolutely positioned Loaders
-    WidgetCatalog.qml            singleton: type -> url, palette meta, supportedKinds, editableProps
+    WidgetCatalog.qml            singleton: type -> url, palette meta, supportedKinds, label/range/color flags,
+                                 editableProps, colorSwatches
     presets/                     sport, minimal, fullgrid, performance, tj-wrangler (.json)
     widgets/
       NowPlayingWidget.qml       self-binding media card
       MediaControlsWidget.qml    self-binding transport buttons
     editor/
       DashboardEditor.qml        page: owns the working spec, save / cancel / draft / demo
-      EditorCanvas.qml           [+] targets, selection, drag-to-move, occupancy map
+      EditorCanvas.qml           [+] targets, selection, drag-to-move, corner resize grip, occupancy map
       PalettePopup.qml           widget palette (reads WidgetCatalog)
-      PIDPicker.qml              searchable, kind-filtered PID list
-      PropertiesPanel.qml        PID / position / span / curated props inspector
+      PIDPicker.qml              searchable, kind-filtered, vehicle-gated PID list
+      PropertiesPanel.qml        PID / position &amp; size / options / label &amp; range / color inspector
 src/managers/dashboardmanager.{h,cpp}   C++ DashboardManager
 backend/dashboard_manager.py            Python DashboardManager
 docs/GAUGE_AUTHORING.md                 authoring spec (source of truth for the API)
 dev/tests/drive_dashboard_editor.py     end-to-end editor scenario (command server)
+dev/tests/drive_dashboard_features.py   overrides, resize, swipe, sharing scenario (command server)
+tests/test_dashboard_sharing.py         import sanitizer + export/import round trip (pytest)
+tests/test_vehicle_gate_qml.py          headless QML gate test with a fake obdManager (pytest)
         </pre>
 
         <h2 id="parameter-model">Data Flow: OBDParameterModel</h2>
@@ -121,6 +130,10 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>paramValues</code>, <code>getParamValue(id)</code></td><td>Live values. A plain object that is <em>replaced</em> (never mutated) so bindings re-evaluate; missing ids read as 0.</td></tr>
             <tr><td><code>updateParamValue(id, v)</code></td><td>Writes into <code>_pendingValues</code> and arms the one-shot 33 ms <code>_flushTimer</code>; the flush does <code>Object.assign({}, paramValues, _pendingValues)</code> once. This coalescing landed in <code>486a809</code> after the IMU's ~440 signals/s pegged the QML thread at 100 % on an idle Orange Pi.</td></tr>
             <tr><td><code>simulationActive</code></td><td>Demo mode: a 100 ms timer sweeps every parameter along a sine between min and max (period 4-16 s and phase vary per index so the screen does not pulse in lockstep; big ranges are rounded to integers). While on, backend writes are ignored; switching off clears both maps.</td></tr>
+            <tr><td><code>sensorParameters</code>, <code>isSensorParameter(id)</code></td><td>The eight BerryIMU ids. They are not OBD PIDs, so the vehicle gate never applies to them.</td></tr>
+            <tr><td><code>vehicleKnown</code>, <code>vehicleSupportedParameters</code></td><td>Mirrors of <code>obdManager.vehicleScanComplete</code> / <code>vehicleSupportedParameters</code>: this session's supported-PID scan, cleared on disconnect, never loaded from the saved list. Guarded with <code>typeof obdManager</code>.</td></tr>
+            <tr><td><code>isSupported(id)</code></td><td>True for sensor ids, and for OBD ids the scanned vehicle reported. False otherwise, including when no vehicle is known (callers wanting "anything goes offline", like the PID picker, check <code>vehicleKnown</code> first).</td></tr>
+            <tr><td><code>vehicleParameters</code></td><td>The supported OBD entries of <code>allParameters</code>, in <code>allParameters</code> order; empty until a vehicle has been scanned. Feeds Parameter Cards.</td></tr>
             <tr><td><code>_obdConnections</code>, <code>_imuConnections</code></td><td>Two <code>Connections</code> blocks, one handler per signal. The IMU one is guarded with <code>typeof berryIMU !== "undefined"</code> and <code>ignoreUnknownSignals</code> so stripped builds still load.</td></tr>
           </tbody>
         </table>
@@ -142,6 +155,42 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
           The full 84-id OBD list with units and ranges is in <span class="file-path">docs/GAUGE_AUTHORING.md</span> §6 and,
           authoritatively, in the QML file. Note the C++ backend can only feed 61 of the 84 OBD ids (see
           <a href="obd-manager.html#supported-parameters">OBD Manager</a>); the rest simply stay at 0 on C++.
+        </p>
+
+        <h2 id="vehicle-gate">Vehicle Gate and Polling Demand</h2>
+        <p>
+          Every connect runs a supported-PID scan; both backends publish the result as
+          <code>obdManager.vehicleSupportedParameters</code> + <code>vehicleScanComplete</code>, which
+          <code>OBDParameterModel</code> mirrors (see the table above). The gate only ever describes the vehicle that is
+          answering right now:
+        </p>
+        <table>
+          <thead><tr><th>Where</th><th>No vehicle scanned</th><th>Vehicle scanned</th></tr></thead>
+          <tbody>
+            <tr><td>Parameter Cards (<code>OBDMenu</code>)</td><td>Empty, with "No vehicle connected" (adapter not connected) or "Reading your vehicle's PIDs…" (connected, scan pending)</td><td>One card per <code>vehicleParameters</code> entry; "No supported PIDs reported" when the scan came back empty.</td></tr>
+            <tr><td><code>DashboardRenderer</code></td><td>Every cell renders</td><td>A cell bound to an unsupported PID shows a "Not supported by this vehicle" placeholder (<code>objectName: dashUnsupported_&lt;i&gt;</code>) instead of a gauge stuck at 0.</td></tr>
+            <tr><td>Editor <code>PIDPicker</code></td><td>Every PID, with the note "No vehicle connected. Showing every PID."</td><td>The vehicle's PIDs sort first in each kind group; the rest are greyed and labelled "Not supported by this vehicle" but stay assignable (a dashboard may be meant for another car, or shared).</td></tr>
+            <tr><td>Editor <code>PropertiesPanel</code></td><td>-</td><td>Red note under the PID button when the bound PID isn't supported.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Polling is demand-driven.</strong> The backend polls only PIDs that some on-screen consumer asked for through
+          <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list withdraws the consumer). QML consumers:
+        </p>
+        <table>
+          <thead><tr><th>Consumer</th><th>Registered by</th><th>Ids</th></tr></thead>
+          <tbody>
+            <tr><td><code>"dashboard"</code></td><td><code>OBDMenu</code> while it is the active StackView page and a dashboard is showing</td><td><code>DashboardRenderer.paramIds</code> (distinct ids in the spec)</td></tr>
+            <tr><td><code>"cards"</code></td><td><code>OBDMenu</code> while Parameter Cards is showing</td><td>every id in <code>vehicleParameters</code></td></tr>
+            <tr><td><code>"editor"</code></td><td><code>DashboardEditor</code> for its lifetime</td><td>the canvas cells' ids (live preview while editing)</td></tr>
+            <tr><td><code>"home"</code></td><td><code>HomeOBDView</code> while visible</td><td>the Home tiles' ids</td></tr>
+            <tr><td><code>"settings"</code></td><td><code>OBDSettingsPage</code> while its list is visible</td><td>its visible parameters</td></tr>
+          </tbody>
+        </table>
+        <p>
+          How the union is filtered, the heartbeat PID, the debounce and live re-apply are backend matters: see
+          <a href="obd-manager.html">OBD Manager</a>. A new dashboard needs no wiring -- the renderer's <code>paramIds</code>
+          is registered automatically. The gate is covered headlessly by <span class="file-path">tests/test_vehicle_gate_qml.py</span>.
         </p>
 
         <h2 id="binding-api">Shared Binding API</h2>
@@ -297,7 +346,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>fillBelow</code></td><td>bool</td><td>true</td><td>Area fill at 22 % alpha of <code>obdBarColor</code>.</td></tr>
             <tr><td><code>showHeader</code></td><td>bool</td><td>true</td><td>"Title  Value Unit" strip.</td></tr>
             <tr><td><code>autoScale</code></td><td>bool</td><td>false</td><td>Y-range from the visible window's min/max instead of the PID range -- for fuel trim, timing and other small-swing values.</td></tr>
-            <tr><td><code>lineColor</code>, <code>fillColor</code>, <code>backgroundColor</code></td><td>color</td><td>theme</td><td></td></tr>
+            <tr><td><code>lineColor</code>, <code>fillColor</code>, <code>backgroundColor</code></td><td>color</td><td>theme</td><td><code>fillColor</code> defaults to <code>lineColor</code> at 22 % alpha, so the editor's single Color pick (which writes <code>lineColor</code>) recolors line and area together.</td></tr>
           </tbody>
         </table>
 
@@ -377,7 +426,9 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
       <span class="prop">"paramId"</span>: <span class="str">"RPM"</span>,             <span class="cmt">// an OBDParameterModel id; omit or "" for self-binding widgets</span>
       <span class="prop">"col"</span>: <span class="num">6</span>, <span class="prop">"row"</span>: <span class="num">0</span>,             <span class="cmt">// 0-based grid position, default 0/0</span>
       <span class="prop">"colSpan"</span>: <span class="num">6</span>, <span class="prop">"rowSpan"</span>: <span class="num">7</span>,     <span class="cmt">// default 1/1</span>
-      <span class="prop">"props"</span>: { <span class="prop">"showNeedle"</span>: <span class="kw">true</span>, <span class="prop">"redlineStart"</span>: <span class="num">6500</span> }   <span class="cmt">// any QML property of the widget</span>
+      <span class="prop">"props"</span>: { <span class="prop">"showNeedle"</span>: <span class="kw">true</span>, <span class="prop">"redlineStart"</span>: <span class="num">6500</span>,   <span class="cmt">// any QML property of the widget</span>
+                 <span class="prop">"title"</span>: <span class="str">"Revs"</span>, <span class="prop">"max"</span>: <span class="num">6000</span>,          <span class="cmt">// per-widget overrides (Label &amp; Range)</span>
+                 <span class="prop">"fillColor"</span>: <span class="str">"#2ECC71"</span>, <span class="prop">"needleColor"</span>: <span class="str">"#2ECC71"</span> }  <span class="cmt">// Color row</span>
     }
   ]
 }</code></pre>
@@ -386,13 +437,13 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
           <tbody>
             <tr><td><code>id</code></td><td>yes</td><td>DashboardManager, OBDMenu</td><td>Missing id: file skipped (logged). Duplicate of a built-in: user file skipped. <code>"grid"</code> is reserved for the Parameter Cards sentinel (the editor's id generator excludes it; the manager does not). <code>saveDashboard</code> writes <code>&lt;id&gt;.json</code>.</td></tr>
             <tr><td><code>label</code></td><td>yes (for save)</td><td>DashboardManager, OBDMenu</td><td><code>saveDashboard</code> rejects an empty label; a preset with an empty label loads with a blank name.</td></tr>
-            <tr><td><code>schema</code></td><td>by convention</td><td>nobody yet</td><td>Written by the editor and every preset; no reader checks it today. It exists so a future format can degrade gracefully instead of stranding files.</td></tr>
+            <tr><td><code>schema</code></td><td>by convention</td><td>DashboardManager import</td><td>Written by the editor and every preset. The renderer and the directory scan don't check it; the <a href="#sharing">import sanitizer</a> does: a spec newer than <code>kSupportedSchema</code> / <code>SUPPORTED_SCHEMA</code> (1) is refused with "This dashboard needs a newer version of OCTAVE". A missing <code>schema</code> imports as 1.</td></tr>
             <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>no</td><td>Renderer, Editor</td><td>Falsy values (0, missing) fall back to 12 / 6.</td></tr>
             <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>Renderer and editor</td><td>Applied through <code>App.Spacing.dp()</code>. The editor keeps a loaded spec's values (<code>specMargins</code> / <code>specSpacing</code>), renders its canvas with them and writes them back into saves and drafts (<code>_withGridGeometry()</code>), but only when the spec had them &mdash; a dashboard without the keys keeps relying on the 20 / 16 defaults and its JSON stays minimal.</td></tr>
             <tr><td><code>cells[].type</code></td><td>yes</td><td>Renderer, Editor, WidgetCatalog</td><td>Unknown type: renderer logs and skips the cell; editor drops it on load.</td></tr>
             <tr><td><code>cells[].paramId</code></td><td>no</td><td>Renderer, Editor</td><td>Unknown id: renderer logs and leaves the widget unbound; editor clears it to <code>""</code>. Ignored for widgets without a <code>paramId</code> property.</td></tr>
             <tr><td><code>cells[].col/row/colSpan/rowSpan</code></td><td>no</td><td>Renderer, Editor</td><td>Renderer trusts them; editor clamps into the grid on load.</td></tr>
-            <tr><td><code>cells[].props</code></td><td>no</td><td>Renderer, Editor</td><td>Applied after <code>paramId</code> so overrides win over model defaults. Keys the widget does not declare are silently skipped. The string <code>"NaN"</code> is coerced to <code>NaN</code> (JSON cannot encode it; used to un-set thresholds).</td></tr>
+            <tr><td><code>cells[].props</code></td><td>no</td><td>Renderer, Editor</td><td>Applied after <code>paramId</code> so overrides win over model defaults. This is also where the editor's per-widget overrides live: <code>title</code>, <code>unit</code>, <code>min</code>, <code>max</code> and the color keys from the catalog's <code>colorProps</code>; omit a key to follow the PID metadata / live theme. Keys the widget does not declare are silently skipped. The string <code>"NaN"</code> is coerced to <code>NaN</code> (JSON cannot encode it; used to un-set thresholds).</td></tr>
           </tbody>
         </table>
 
@@ -429,6 +480,12 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
             <tr><td><code>deleteDashboard(id)</code></td><td>Slot -&gt; bool</td><td>Removes the user file; false for unknown or built-in ids.</td></tr>
             <tr><td><code>duplicateDashboard(sourceId, newLabel)</code></td><td>Slot -&gt; id or <code>""</code></td><td>Reads the source spec (built-in or user), sets <code>label</code> to <code>newLabel</code> or <code>"&lt;source label&gt; (Copy)"</code>, generates a unique id, and calls <code>saveDashboard</code>.</td></tr>
             <tr><td><code>refresh()</code></td><td>Slot</td><td>Full rescan of both directories.</td></tr>
+            <tr><td><code>exportDashboard(id)</code></td><td>Slot -&gt; path or <code>""</code></td><td>Writes the spec to <code>&lt;Downloads&gt;/OCTAVE-dashboards/&lt;id&gt;.json</code> (Documents if there is no Downloads location), atomically.</td></tr>
+            <tr><td><code>copyDashboardToClipboard(id)</code></td><td>Slot -&gt; bool</td><td>Puts the spec on the clipboard as compact JSON.</td></tr>
+            <tr><td><code>importDashboard(pathOrUrl)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Accepts a plain path, a <code>file://</code> URL, or an Android <code>content://</code> URL (C++ hands it to <code>QFile</code>). Reads at most 512 KB, then as <code>importDashboardFromText</code>.</td></tr>
+            <tr><td><code>importDashboardFromClipboard()</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Clipboard text through <code>importDashboardFromText</code>; "The clipboard is empty" otherwise.</td></tr>
+            <tr><td><code>importDashboardFromText(json)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Parse, <a href="#sharing">sanitize</a>, assign a fresh id from the label, <code>saveDashboard</code>.</td></tr>
+            <tr><td><code>lastShareError</code></td><td>Property (string), notify <code>lastShareErrorChanged</code></td><td>Human-readable reason the last export/import failed; <code>""</code> after a success. The chooser's status banner shows it.</td></tr>
           </tbody>
         </table>
         <ul>
@@ -445,6 +502,32 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
           <code>dashboardsChanged</code> synchronously at the end of every rescan -- which is why the chooser's delete
           button must not run code after <code>deleteDashboard()</code> in its own delegate (see below).
         </div>
+
+        <h2 id="sharing">Sharing: Export and Import</h2>
+        <p>
+          In the chooser, every JSON dashboard card has a <strong>Share</strong> action (a menu: <em>Save to Downloads</em>
+          -&gt; <code>exportDashboard</code>, <em>Copy as text</em> -&gt; <code>copyDashboardToClipboard</code>), and the header has
+          an <strong>Import</strong> button (<em>From file…</em> opens a <code>FileDialog</code> filtered to <code>*.json</code>;
+          <em>Paste from clipboard</em>). Results show in a status banner at the bottom of the chooser for 4.5 s (accent on
+          success, <code>statusDanger</code> with <code>lastShareError</code> on failure).
+        </p>
+        <p>
+          <strong>Imports never overwrite.</strong> The incoming <code>id</code> is discarded and a new one is generated from the
+          label with the same <code>uniqueUserIdFromLabel</code> rule as Duplicate, so importing the same file twice gives
+          <code>name</code> and <code>name-2</code>. Both backends run the same sanitizer
+          (<code>DashboardManager::sanitizeImportedSpec</code> / <code>sanitize_imported_spec</code>) first:
+        </p>
+        <ul>
+          <li>Root must be a JSON object with a <code>cells</code> array; <code>schema</code> (default 1) must be 1 -- newer is refused with "This dashboard needs a newer version of OCTAVE".</li>
+          <li>Only <code>schema</code>, <code>label</code>, <code>gridColumns</code>, <code>gridRows</code>, <code>margins</code>, <code>spacing</code>, <code>cells</code> survive; per cell only <code>type</code>, <code>paramId</code>, <code>col</code>, <code>row</code>, <code>colSpan</code>, <code>rowSpan</code>, <code>props</code>. Anything else -- an <code>id</code>, a <code>source</code> field, unknown keys -- is dropped.</li>
+          <li><code>props</code> keeps scalar values only (bool, number, string &le; 200 chars); nested objects and arrays are dropped.</li>
+          <li>Numbers must be JSON numbers (no bools, no numeric strings); geometry is clamped into the grid, grid size into 1..48, margins/spacing into 0..200. Label is whitespace-collapsed, capped at 80 chars, default "Imported dashboard".</li>
+          <li>Caps: 512 KB of text, 256 cells. Cells with an empty or over-long <code>type</code> are skipped; unknown types are kept (the renderer skips them, so a newer catalog's widgets survive a round trip).</li>
+        </ul>
+        <p>
+          Shared dashboards are pure data -- no QML or script is ever loaded from an import. Covered by
+          <span class="file-path">tests/test_dashboard_sharing.py</span> (sanitizer rules, rejections, export/import round trip).
+        </p>
 
         <h2 id="renderer">DashboardRenderer: Spec to QML</h2>
         <p>
@@ -471,7 +554,9 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <li>The Loader is <code>active</code> only for known types; its <code>source</code> is <code>WidgetCatalog.urlFor(type)</code>.</li>
           <li><code>onLoaded</code> binds <code>item.width/height</code> to the Loader (Loader auto-sizing is unreliable when the loaded root has no implicit size), sets <code>item.paramId</code> first (only if the widget has that property and the id is known), then walks <code>props</code> applying every key the item already declares, through <code>_coerce()</code> for the <code>"NaN"</code> sentinel.</li>
           <li><code>Loader.Error</code> is logged with the source URL; it never throws into the page.</li>
+          <li><strong>Vehicle gate</strong>: <code>_unsupported</code> is true when the cell has a known <code>paramId</code>, <code>OBDParameterModel.vehicleKnown</code> and <code>!isSupported(paramId)</code>; the Loader is hidden and a placeholder (<code>dashUnsupported_&lt;index&gt;</code>) shows the title (or the <code>title</code> override) and "Not supported by this vehicle".</li>
         </ol>
+        <p>The renderer also exposes <code>paramIds</code> (distinct <code>paramId</code>s in the spec), which <code>OBDMenu</code> registers as the <code>"dashboard"</code> polling demand.</p>
         <p>
           Cells without a <code>paramId</code> are still placed -- a <code>WarningLight</code> with an explicit <code>value</code>
           can be decorative. The renderer is instantiated in two places: full-size in <code>OBDMenu</code> for the active
@@ -486,38 +571,49 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           "what can render" and "what can be placed" cannot drift. URLs are <code>Qt.resolvedUrl("../gauges/X.qml")</code>
           or <code>"widgets/X.qml"</code>, resolved relative to the catalog's own location.
         </p>
+        <p>Each entry declares, besides <code>type</code> / <code>url</code> / <code>displayName</code> / <code>glyph</code> / default span / <code>supportedKinds</code>:</p>
         <table>
-          <thead><tr><th>type</th><th>Palette name / glyph</th><th>Default span</th><th>supportedKinds</th><th>Curated editableProps (kind, default)</th></tr></thead>
+          <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
           <tbody>
-            <tr><td><code>CircularGauge</code></td><td>Circular ◯</td><td>4 × 4</td><td><code>*</code></td><td>showNeedle (bool, false), showTicks (bool, true), redlineStart (real, unset)</td></tr>
-            <tr><td><code>ArcGauge</code></td><td>Arc ◠</td><td>6 × 3</td><td><code>*</code></td><td>showNeedle, showTicks, redlineStart</td></tr>
-            <tr><td><code>BarGauge</code></td><td>Bar ▮</td><td>3 × 2</td><td>percentage, temperature, numeric, pressure, voltage</td><td>warnAbove (real, unset)</td></tr>
-            <tr><td><code>LinearGauge</code></td><td>Linear ↔</td><td>4 × 2</td><td>bidirectional</td><td>showTicks (bool, true)</td></tr>
-            <tr><td><code>DigitalReadout</code></td><td>Digital 88</td><td>4 × 2</td><td><code>*</code></td><td>showTitle (true), showUnit (true), padDigits (int, 0)</td></tr>
-            <tr><td><code>SparklineGauge</code></td><td>Sparkline ∿</td><td>6 × 2</td><td><code>*</code></td><td>autoScale (false), fillBelow (true), maxSamples (int, 60)</td></tr>
-            <tr><td><code>WarningLight</code></td><td>Warning ⚠</td><td>2 × 2</td><td><code>*</code></td><td>triggerAbove, triggerBelow (real, unset), pulse (false)</td></tr>
-            <tr><td><code>GForceGauge</code></td><td>G-Force ◎</td><td>4 × 4</td><td>(none: self-binding)</td><td>maxG (real, 1.5), showTrail (true), showValue (true)</td></tr>
-            <tr><td><code>CompassGauge</code></td><td>Compass N</td><td>4 × 4</td><td>(none)</td><td>showDegrees (true)</td></tr>
-            <tr><td><code>NowPlayingWidget</code></td><td>Now Playing ♪</td><td>6 × 2</td><td>(none)</td><td>showArt, showArtist, showProgress (true)</td></tr>
-            <tr><td><code>MediaControlsWidget</code></td><td>Media Keys ▶</td><td>4 × 2</td><td>(none)</td><td>(none)</td></tr>
+            <tr><td><code>labelProps</code></td><td><code>true</code> if the widget has <code>title</code> + <code>unit</code> string props that default to the PID metadata: the panel offers Title / Unit overrides.</td></tr>
+            <tr><td><code>rangeProps</code></td><td><code>true</code> if it has <code>min</code> + <code>max</code> real props: the panel offers Min / Max overrides and warns when min &ge; max.</td></tr>
+            <tr><td><code>colorProps</code></td><td>Props the single Color swatch row writes, all to the same value (e.g. <code>["fillColor", "needleColor"]</code>). Unset = the live theme color.</td></tr>
+            <tr><td><code>editableProps</code></td><td><code>{ key, label, kind, def[, min, max][, options] }</code>; <code>kind</code> is <code>bool</code> (Switch), <code>int</code> / <code>real</code> (number field clamped to <code>min</code>/<code>max</code>), <code>string</code> (text field) or <code>enum</code> (segmented buttons over <code>options</code>). <code>def</code> is the gauge's real default (<code>null</code> = NaN-when-unset threshold, shown empty with placeholder "off").</td></tr>
+          </tbody>
+        </table>
+        <p>The catalog also carries <code>colorSwatches</code>: the eight colors after the panel's "T" (theme) swatch.</p>
+        <table>
+          <thead><tr><th>type</th><th>Palette name / glyph</th><th>Default span</th><th>supportedKinds</th><th>label / range</th><th>colorProps</th><th>editableProps</th></tr></thead>
+          <tbody>
+            <tr><td><code>CircularGauge</code></td><td>Circular ◯</td><td>4 × 4</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showCenterReadout, redlineStart, decimals (0-4), majorTickCount (2-20), minorTicksPerMajor (0-10), startAngle, sweepAngle</td></tr>
+            <tr><td><code>ArcGauge</code></td><td>Arc ◠</td><td>6 × 3</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showReadout, redlineStart, decimals, majorTickCount, minorTicksPerMajor</td></tr>
+            <tr><td><code>BarGauge</code></td><td>Bar ▮</td><td>3 × 2</td><td>percentage, temperature, numeric, pressure, voltage</td><td>yes / yes</td><td>fillColor</td><td>orientation (enum horizontal/vertical), warnAbove, showLabel, showValue, decimals</td></tr>
+            <tr><td><code>LinearGauge</code></td><td>Linear ↔</td><td>4 × 2</td><td>bidirectional</td><td>yes / yes</td><td>fillColor</td><td>showTicks, decimals, majorTickCount, minorTicksPerMajor</td></tr>
+            <tr><td><code>DigitalReadout</code></td><td>Digital 88</td><td>4 × 2</td><td><code>*</code></td><td>yes / no</td><td>valueColor</td><td>showTitle, showUnit, decimals, padDigits (0-8), valueScale ("Digit size", 0.5-12)</td></tr>
+            <tr><td><code>SparklineGauge</code></td><td>Sparkline ∿</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>lineColor</td><td>autoScale, fillBelow, showHeader, decimals, maxSamples (10-300), sampleIntervalMs (100-5000)</td></tr>
+            <tr><td><code>WarningLight</code></td><td>Warning ⚠</td><td>2 × 2</td><td><code>*</code></td><td>no / no</td><td>activeColor</td><td>label (string), triggerAbove, triggerBelow, pulse</td></tr>
+            <tr><td><code>GForceGauge</code></td><td>G-Force ◎</td><td>4 × 4</td><td>(none: self-binding)</td><td>no / no</td><td>dotColor</td><td>maxG (0.2-5), showTrail, showValue</td></tr>
+            <tr><td><code>CompassGauge</code></td><td>Compass N</td><td>4 × 4</td><td>(none)</td><td>no / no</td><td>northColor</td><td>showDegrees</td></tr>
+            <tr><td><code>NowPlayingWidget</code></td><td>Now Playing ♪</td><td>6 × 2</td><td>(none)</td><td>no / no</td><td>progressColor</td><td>showArt, showArtist, showProgress</td></tr>
+            <tr><td><code>MediaControlsWidget</code></td><td>Media Keys ▶</td><td>4 × 2</td><td>(none)</td><td>no / no</td><td>accentColor</td><td>(none)</td></tr>
           </tbody>
         </table>
         <p>
-          <code>editableProps</code> is deliberately a <em>curated subset</em> with an honest <code>def</code> for each
-          (<code>null</code> = NaN-when-unset thresholds, shown as an empty field with placeholder "off"). The gauges' own
-          <code>octaveEditableProps</code> manifests are richer (tick counts, angles, <code>maxThickness</code>, label text,
-          colours, enum orientation) and use a different key shape (<code>name/type/default</code> vs <code>key/kind/def</code>);
-          the panel ignores them today. Anything not curated is still settable in the JSON by hand.
+          The catalog lists are kept in step with each gauge's own <code>octaveEditableProps</code> manifest (which uses the
+          <code>name/type/default</code> key shape); the catalog is what the panel reads, so the gauge never has to be
+          instantiated to build the inspector. Anything not listed is still settable in the JSON by hand.
         </p>
 
         <h2 id="obdmenu">OBDMenu Integration: Active Dashboard and Chooser</h2>
         <ul>
           <li><strong>Registry</strong>: <code>dashboardRegistry = [ { id: "grid", label: "Parameter Cards", builtIn: true } ].concat(dashboardManager.dashboards)</code>, rebuilt in a <code>Connections</code> handler on <code>dashboardsChanged</code> (guarded with <code>typeof dashboardManager</code> so the page loads without the manager).</li>
-          <li><strong>Active dashboard</strong>: <code>activeDashboardId</code> is read from the generic setting <code>activeDashboard</code> (default <code>"grid"</code>) and written by <code>setActiveDashboard(id)</code>. The header shows the registry label; the <code>DashboardRenderer</code> is <code>visible</code> and loads <code>dashboardManager.loadDashboard(activeDashboardId)</code> only when the id is not <code>"grid"</code>, otherwise the <code>GridLayout</code> of parameter cards (3 columns, one card per parameter passing <code>get_obd_parameter_enabled</code>, square or circular per <code>obdCardStyleCircular</code>) is shown.</li>
+          <li><strong>Active dashboard</strong>: <code>activeDashboardId</code> is read from the generic setting <code>activeDashboard</code> (default <code>"grid"</code>) and written by <code>setActiveDashboard(id)</code>. The header shows the registry label; the <code>DashboardRenderer</code> is <code>visible</code> and loads <code>dashboardManager.loadDashboard(activeDashboardId)</code> only when the id is not <code>"grid"</code>, otherwise Parameter Cards is shown.</li>
+          <li><strong>Parameter Cards</strong>: one card per <code>OBDParameterModel.vehicleParameters</code> entry -- the connected vehicle's full supported-PID list from this session's scan (no longer driven by the per-PID settings toggles). Square or circular per <code>obdCardStyleCircular</code>; 2 / 3 / 4 columns for up to 4 / 9 / 16 cards, 5 beyond that on wide screens. The grid sits in a vertical <code>Flickable</code> (<code>parameterCardsScroll</code>) and rows keep a 120 dp minimum height, so a long list scrolls instead of shrinking. Empty states (<code>parameterCardsEmpty</code>): "No vehicle connected", "Reading your vehicle's PIDs…", "No supported PIDs reported". While visible it registers every card's id as the <code>"cards"</code> polling demand.</li>
+          <li><strong>Swipe between dashboards</strong>: a horizontal-only <code>DragHandler</code> (<code>dashboardSwipeHandler</code>) on the page content cycles <code>dashboardRegistry</code> (Parameter Cards + every dashboard, wrapping). The content follows the finger via a <code>Translate</code> bound to <code>_swipeOffset</code>; on release it commits when the drag passed 20 % of the width, or for a fast flick (&gt; 800 dp/s) that passed 8 % (so a tap that skids on a bumpy road never flips the page), else it springs back. A commit slides out (160 ms), switches with <code>setActiveDashboard</code>, then slides the new one in from the far side (220 ms) -- only the active dashboard is ever instantiated, so there is no cost for neighbours. Page dots under the header title (<code>dashboardPageDots</code>) show the position. Being xAxis-only, it leaves the cards' vertical scroll and widget buttons alone. <code>swipeDashboard(dir)</code> is callable directly.</li>
           <li><strong>Fallback</strong>: if the active id is no longer in the registry after a rescan (deleted in-app or externally), the handler calls <code>setActiveDashboard("grid")</code>. Delete goes through the page-level <code>deleteUserDashboard(id)</code> because <code>dashboardsChanged</code> is emitted synchronously inside <code>deleteDashboard()</code>, which destroys the card delegate that tapped Delete -- any code after the call in the delegate threw "obdPage is not defined" (<code>c754f3d</code>).</li>
           <li><strong>Chooser popup</strong> (square Dashboards button top-right, <code>openDashboardChooser()</code> / <code>closeDashboardChooser()</code> are also callable from the command server): a modal <code>Popup</code> up to 960 dp wide with a 2-column grid of cards. Each card renders a live miniature -- a second <code>DashboardRenderer</code> laid out at the page's full size and scaled down with <code>transformOrigin: Item.Center</code>. The miniature Loaders activate at <code>aboutToShow</code> (<code>preloadMinis</code>) so instantiation overlaps the popup's enter animation, and the stage fades in 180 ms after the spec lands so the gauges' 140 ms zero-to-value animation is never visible. The "grid" card uses a schematic 3 × 3 placeholder instead.</li>
-          <li><strong>Card actions</strong>: always-visible buttons, no long-press ("discoverability-hostile in a glance-and-go in-car UI"). <strong>Copy</strong> on every JSON dashboard (calls <code>duplicateDashboard(id, "")</code>), <strong>Edit</strong> and <strong>Delete</strong> only when <code>builtIn === false</code>; Delete is two-tap ("Delete" -&gt; "Sure?" with a 3 s timer). The grid sentinel has no actions.</li>
-          <li><strong>+ New</strong> pushes <code>dashboards/editor/DashboardEditor.qml</code> onto the page's <code>StackView</code> with <code>{ stackView, callerPage }</code>; <strong>Edit</strong> adds <code>editingId</code>. <strong>▲ Draft</strong> appears when the <code>dashboardEditorDraft</code> setting is non-empty (re-read on every <code>aboutToShow</code>) and pushes the editor with <code>draftJson</code>.</li>
+          <li><strong>Card actions</strong>: always-visible buttons, no long-press ("discoverability-hostile in a glance-and-go in-car UI"). <strong>Copy</strong> on every JSON dashboard (calls <code>duplicateDashboard(id, "")</code>), <strong>Share</strong> on every JSON dashboard (see <a href="#sharing">Sharing</a>), <strong>Edit</strong> and <strong>Delete</strong> only when <code>builtIn === false</code>; Delete is two-tap ("Delete" -&gt; "Sure?" with a 3 s timer). The grid sentinel has no actions.</li>
+          <li><strong>+ New</strong> pushes <code>dashboards/editor/DashboardEditor.qml</code> onto the page's <code>StackView</code> with <code>{ stackView, callerPage }</code>; <strong>Edit</strong> adds <code>editingId</code>. <strong>▲ Draft</strong> appears when the <code>dashboardEditorDraft</code> setting is non-empty (re-read on every <code>aboutToShow</code>) and pushes the editor with <code>draftJson</code>. <strong>Import</strong> (<code>importDashboardButton</code>) opens a menu: From file… / Paste from clipboard.</li>
           <li><strong>Primitives Gallery</strong>: a second popup with eight <code>GalleryTile</code>s showing every gauge with hard-coded values -- a dev/showcase screen the source marks for removal now that the editor exists.</li>
         </ul>
 
@@ -525,7 +621,9 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <p>
           The editor is pure QML -- it needed nothing new from either backend because <code>DashboardManager</code> already
           exposed save/delete/duplicate with parity. Interaction model (decided 2026-06-10, "hybrid"): tap an empty cell to
-          place, drag a placed widget to move, tap to select and edit in a floating panel.
+          place, drag a placed widget to move, drag the selected widget's corner grip to resize, tap to select and edit in a
+          floating panel. While open, the editor registers its cells' PIDs as the <code>"editor"</code> polling demand so
+          gauges preview live values from a connected car.
         </p>
 
         <h3>DashboardEditor.qml -- owner of the working spec</h3>
@@ -547,7 +645,9 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
             <tr><td><code>addCellAt(type, col, row)</code></td><td>Starts from the catalog's default span, clamps to the grid, then shrinks toward 1 × 1 (wider side first) until <code>canPlace()</code> succeeds; the tapped cell itself is guaranteed free. Selects the new cell and opens the PID picker unless the widget is self-binding.</td></tr>
             <tr><td><code>moveCell(index, col, row)</code></td><td>Clamps, checks <code>canPlace</code> excluding the cell itself, patches -- or, on a rejected drop, reassigns <code>cells = cells.slice()</code> so the dragged delegate is rebuilt at its origin.</td></tr>
             <tr><td><code>nudgeCell</code>, <code>resizeCell</code></td><td>Stepper helpers (±1 column/row/span) built on the same checks.</td></tr>
+            <tr><td><code>resizeCellTo(index, colSpan, rowSpan)</code></td><td>Absolute resize for the drag grip: clamps into the grid, applies if <code>canPlace</code> passes, otherwise reassigns <code>cells</code> so the canvas snaps back.</td></tr>
             <tr><td><code>removeCell</code>, <code>setCellParam</code>, <code>setCellProp</code>, <code>clearCellProp</code></td><td>Patch helpers; clearing a prop removes the key so the gauge default applies again.</td></tr>
+            <tr><td><code>setCellProps(index, keys, value)</code></td><td>Writes one value to several props in a single mutation (the Color row's <code>colorProps</code>); <code>value === undefined</code> removes them all (back to theme).</td></tr>
             <tr><td><code>save()</code></td><td>Label defaults to "Untitled"; id = <code>editingId</code> or <code>_uniqueId(label)</code> (slugify + uniquify against <code>dashboardManager.dashboards</code> and the reserved <code>"grid"</code>); builds <code>{ schema: 1, id, label, gridColumns, gridRows, cells }</code> plus <code>margins</code> / <code>spacing</code> when the loaded spec carried them; on success clears <code>dirty</code>, clears the stored draft if this session resumed one, calls <code>callerPage.setActiveDashboard(savedId)</code> and pops. Failure shows a 3 s error banner.</td></tr>
             <tr><td><code>cancel()</code></td><td>First tap with unsaved work arms "Discard?" for 3 s; the second tap clears <code>dirty</code>, clears a resumed draft and pops. "Editing in a car -- accidental data loss hurts."</td></tr>
             <tr><td><code>_sanitizeCells(raw)</code></td><td>Applied to every spec arriving from disk or a draft: drops unknown types, clamps col/row/span into the grid, clears unknown <code>paramId</code>s (the panel then shows "Choose PID…").</td></tr>
@@ -576,14 +676,25 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <li><code>canPlace(col, row, colSpan, rowSpan, exceptIndex)</code>: inside the grid and no rectangle overlap with any other cell.</li>
           <li><code>_occupied</code>: a flat <code>row * cols + col</code> boolean map recomputed whenever <code>cells</code> is reassigned; a <code>Repeater</code> over <code>gridColumns * gridRows</code> shows a <code>[+]</code> target on every free index (dimmed while dragging).</li>
           <li>Placed cells: a synchronous <code>Loader</code> (synchronous so panel tweaks, which rebuild the Repeater, do not flicker) with the same bind/props logic as the renderer, a "no PID" hint for unbound PID widgets, a selection frame, and a <code>MouseArea</code> with <code>drag.target: cellRoot</code>. <code>onPressed</code> selects; while dragging, <code>_updateDragCandidate()</code> rounds the item position to the nearest cell, clamps, and sets <code>dragCol/dragRow/dragValid</code> for the highlight rectangle (accent when valid, <code>statusDanger</code> when not); <code>onReleased</code> emits <code>cellMoveRequested</code>.</li>
-          <li>Signals: <code>emptyCellTapped(col, row)</code>, <code>cellTapped(index)</code>, <code>cellMoveRequested(index, col, row)</code>, <code>backgroundTapped()</code>. The canvas never mutates <code>cells</code>.</li>
+          <li><strong>Resize grip</strong> (<code>editorResizeGrip_&lt;index&gt;</code>): on the selected cell only, a 22 dp accent square on the bottom-right corner with a 44 dp touch target. Its <code>MouseArea</code> (<code>preventStealing</code>) maps the pointer into canvas coordinates, snaps the far corner to the cell under it, and drives the same drop highlight (accent = valid, <code>statusDanger</code> = overlap / out of bounds); release emits <code>cellResizeRequested</code>. The selected cell gets <code>z: 5</code> so the grip, which pokes past the corner, stays above neighbours.</li>
+          <li>Signals: <code>emptyCellTapped(col, row)</code>, <code>cellTapped(index)</code>, <code>cellMoveRequested(index, col, row)</code>, <code>cellResizeRequested(index, colSpan, rowSpan)</code>, <code>backgroundTapped()</code>. The canvas never mutates <code>cells</code>.</li>
         </ul>
 
         <h3>PalettePopup, PIDPicker, PropertiesPanel</h3>
         <ul>
           <li><strong>PalettePopup</strong>: modal, 4-column grid of cards from <code>WidgetCatalog.widgets</code> (glyph + display name); tapping emits <code>widgetPicked(type)</code> and closes.</li>
-          <li><strong>PIDPicker</strong>: modal, 85 % of the window height, a search field focused on open, and a flat row model built from <code>allParameters</code> filtered by <code>supportedKinds</code> (<code>"*"</code> passes all) and by the query against title or id, grouped under headers in the order numeric, percentage, temperature, pressure, voltage, bidirectional. The current PID is highlighted; empty results show "No matching PIDs".</li>
-          <li><strong>PropertiesPanel</strong>: header (glyph, name, deselect ✕); PID button (red border while unbound; hidden for self-binding widgets); Column / Row / Width / Height <code>◄ value ►</code> steppers calling <code>nudgeCell</code> / <code>resizeCell</code>; an OPTIONS repeater over the catalog's <code>editableProps</code> rendering a <code>Switch</code> for bools and a numeric <code>TextField</code> otherwise (empty = unset = gauge default; parsed with <code>parseInt</code> / <code>parseFloat</code> on <code>editingFinished</code>); "Remove widget". Because <code>Repeater</code> delegates survive selection changes between same-type cells and user input breaks bindings, each control re-syncs from the cell on a <code>_cellRef</code> change. The panel never mutates the cell; every control calls back into the editor page.</li>
+          <li><strong>PIDPicker</strong>: modal, 85 % of the window height, a search field focused on open, and a flat row model built from <code>allParameters</code> filtered by <code>supportedKinds</code> (<code>"*"</code> passes all) and by the query against title or id, grouped under headers in the order numeric, percentage, temperature, pressure, voltage, bidirectional. The current PID is highlighted; empty results show "No matching PIDs". Vehicle-gated (see <a href="#vehicle-gate">Vehicle Gate</a>): once a vehicle is scanned, its PIDs come first in each group and the rest are greyed (45 % opacity, "Not supported by this vehicle") but still pickable; a note under the title (<code>pidPickerVehicleNote</code>) explains which mode is active.</li>
+          <li><strong>PropertiesPanel</strong> (scrollable <code>Flickable</code>, <code>editorPanelScroll</code>), top to bottom, ordered by how often each section is used:
+            <ol>
+              <li>Header (glyph, name, deselect ✕).</li>
+              <li><strong>PID</strong> button (red border while unbound; hidden for self-binding widgets), plus a red note (<code>panelPidUnsupported</code>) when the connected vehicle doesn't report the bound PID.</li>
+              <li><strong>Position &amp; Size</strong>: Column / Row / Width / Height <code>◄ value ►</code> steppers calling <code>nudgeCell</code> / <code>resizeCell</code>.</li>
+              <li><strong>Options</strong>: the catalog's <code>editableProps</code> -- <code>Switch</code> for bool, segmented buttons for enum (<code>panelOptEnum_&lt;key&gt;_&lt;value&gt;</code>), a text field for string, a number field for int/real (empty = unset = gauge default; values are clamped to the option's <code>min</code>/<code>max</code> on <code>editingFinished</code>).</li>
+              <li><strong>Label &amp; Range</strong> (when the catalog sets <code>labelProps</code> / <code>rangeProps</code>): Title, Unit, Min, Max override fields (<code>panelOverride_&lt;key&gt;</code>) whose placeholders show the bound PID's own values; empty = follow the PID. A warning (<code>panelRangeWarning</code>) appears when the effective min &ge; max.</li>
+              <li><strong>Color</strong>: a "T" (theme) swatch plus <code>WidgetCatalog.colorSwatches</code> (<code>panelSwatch_theme</code>, <code>panelSwatch_&lt;hex&gt;</code>); a pick writes every <code>colorProps</code> key through <code>setCellProps</code>, "T" removes them.</li>
+              <li>"Remove widget".</li>
+            </ol>
+            Text fields use a dark field background so typed values stay readable against the light theme text color. Because <code>Repeater</code> delegates survive selection changes between same-type cells and user input breaks bindings, each control re-syncs from the cell on a <code>_cellRef</code> change. The panel never mutates the cell; every control calls back into the editor page.</li>
         </ul>
         <p>Every interactive control carries an <code>objectName</code> (<code>newDashboardButton</code>, <code>dashCard_&lt;id&gt;_edit</code>, <code>editorEmptyCell_&lt;c&gt;_&lt;r&gt;</code>, <code>paletteCard_&lt;type&gt;</code>, <code>pidRow_&lt;id&gt;</code>, <code>stepper_Width_inc</code>, <code>panelOpt_&lt;key&gt;</code>, ...) for the command-server test driver.</p>
 
@@ -594,25 +705,45 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
             <tr><td>DashboardManager (both backends)</td><td>JSON parses to an object; <code>id</code> present; unique vs presets</td><td>File skipped with a warning; the rest of the list still loads.</td></tr>
             <tr><td>DashboardRenderer</td><td><code>WidgetCatalog.isKnownType(type)</code>; <code>OBDParameterModel.hasParameter(paramId)</code></td><td>Unknown type: cell skipped, <code>console.warn</code> with dashboard id. Unknown PID: widget rendered unbound (shows 0 / placeholder), warned.</td></tr>
             <tr><td>DashboardEditor <code>_sanitizeCells</code></td><td>Same two checks plus geometry clamping</td><td>Unknown type dropped; unknown PID cleared; out-of-grid cells pulled inside.</td></tr>
+            <tr><td>DashboardManager import (both backends)</td><td>Schema version, allowed keys, scalar props, number types, geometry, size caps</td><td>Refused with a <code>lastShareError</code> reason, or reduced to the known keys and clamped (see <a href="#sharing">Sharing</a>).</td></tr>
             <tr><td>OBDMenu</td><td>Active id still exists after <code>dashboardsChanged</code></td><td>Falls back to Parameter Cards.</td></tr>
             <tr><td>Hot reload</td><td>Watcher + 300 ms debounce + signature</td><td>A spec dropped into or removed from the user dir from a terminal or sync client shows up in the chooser within about a second, no restart.</td></tr>
           </tbody>
         </table>
-        <p>Not validated: <code>schema</code> (unread), <code>props</code> types (an invalid value is assigned as-is and the QML property coerces or ignores it), overlapping cells in hand-written specs (rendered overlapping; the editor will refuse to move them onto each other but does not repair them on load).</p>
+        <p>Not validated for presets and hand-dropped files: <code>schema</code> (only imports check it), <code>props</code> types (an invalid value is assigned as-is and the QML property coerces or ignores it), overlapping cells in hand-written specs (rendered overlapping; the editor will refuse to move them onto each other but does not repair them on load).</p>
 
         <h2 id="testing">Testing</h2>
-        <p>
-          <span class="file-path">dev/tests/drive_dashboard_editor.py</span> (gitignored <code>dev/</code> tree) drives the
-          running Python app through the <code>--profile</code> command server: opens the chooser, creates a dashboard,
+        <p><strong>Headless (pytest, runs in CI):</strong></p>
+        <ul>
+          <li><span class="file-path">tests/test_dashboard_sharing.py</span> -- 8 tests: the import sanitizer keeps only known keys and clamps geometry, rejects newer/bad schema, missing cells, too many cells and non-object JSON; export writes <code>OCTAVE-dashboards/&lt;id&gt;.json</code> (Downloads location stubbed to a temp dir), importing it twice gives two new ids, and failures set <code>lastShareError</code>.</li>
+          <li><span class="file-path">tests/test_vehicle_gate_qml.py</span> -- loads the real <code>OBDParameterModel</code> and <code>DashboardRenderer</code> against a fake <code>obdManager</code> and checks the gate before a scan, after a scan (only the unreported PID shows the placeholder; sensor ids exempt; <code>vehicleParameters</code> order) and after disconnect.</li>
+          <li><span class="file-path">tests/test_obd_poll_demand.py</span> -- the backend side of demand-driven polling (see <a href="obd-manager.html">OBD Manager</a>).</li>
+        </ul>
+        <p><strong>End-to-end (gitignored <code>dev/</code> tree, drives the running Python app through the <code>--profile</code> command server):</strong></p>
+        <ul>
+          <li><span class="file-path">dev/tests/drive_dashboard_editor.py</span> -- opens the chooser, creates a dashboard,
           opens the palette, picks a PID via the searchable picker, moves and resizes with the steppers, drags with a valid
           and a rejected drop, toggles an option switch and edits a numeric field, removes a widget, toggles demo data,
           saves, reopens via Edit, copies, deletes, exercises draft rescue by leaving through <code>go_home</code>, verifies
           hot reload by writing a JSON file directly, and checks that built-in cards expose only Copy -- 42 <code>step()</code>
-          assertions, exit code 1 on any failure, screenshots under <span class="file-path">dev/screenshots/output/editor/</span>.
-          Modes: <code>xvfb</code> (default, deterministic 1280 × 720), <code>visible</code>, <code>offscreen</code>. It passed on
-          the desktop Python backend on 2026-09-08 (<code>c754f3d</code>); per <span class="file-path">TODO/dashboards-roadmap.md</span>
-          the only open item is a short on-device pass on the Android tablet (touch drag feel, palette/picker sizing).
-          See <a href="development.html#command-server">Development → Command Server</a>.
+          assertions, screenshots under <span class="file-path">dev/screenshots/output/editor/</span>. Taps on canvas cells
+          deselect first (the floating panel can cover them, and a finger can't tap through it); card actions and panel
+          controls are scrolled into view before tapping.</li>
+          <li><span class="file-path">dev/tests/drive_dashboard_features.py</span> -- reuses those helpers for 19 checks:
+          Parameter Cards empty state with no vehicle, swipe next / back / short-drag snap-back, the picker's offline note,
+          title / max / min overrides and the min &ge; max warning, color swatch and theme reset, the Bar orientation enum, the
+          resize grip (valid and refused), the saved JSON, Share -&gt; Copy as text -&gt; Import -&gt; Paste (new id, identical
+          cells) and Share -&gt; Save to Downloads. Screenshots under <span class="file-path">dev/screenshots/output/features/</span>;
+          its test dashboards and the exported file are removed afterwards.</li>
+        </ul>
+        <p>
+          Both exit 1 on any failure. Modes: <code>xvfb</code> (default, deterministic 1280 × 720), <code>visible</code>,
+          <code>offscreen</code>. The command server injects mouse input through <code>QTest</code> (via
+          <code>QWindowSystemInterface</code>), so pointer handlers such as the swipe <code>DragHandler</code> see a real press
+          / move / release sequence; hand-built <code>QMouseEvent</code>s sent with <code>sendEvent()</code> looked like a fresh
+          press on every move, which made the handler steal taps. Per <span class="file-path">TODO/dashboards-roadmap.md</span>
+          an on-device pass on the Android tablet (touch drag feel, palette/picker sizing) is still open. See
+          <a href="development.html#command-server">Development → Command Server</a>.
         </p>
 
         <h2 id="authoring">Authoring New Gauges and Dashboards</h2>

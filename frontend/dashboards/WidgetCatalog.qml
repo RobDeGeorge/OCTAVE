@@ -28,12 +28,23 @@ QtObject {
     //                    `octaveSupportedKinds` declared in the gauge QML itself
     //                    (the catalog exists so the PID picker can filter without
     //                    instantiating a widget). "*" = any PID.
-    //   editableProps:   curated props the properties panel exposes. Each:
-    //                    { key, label, kind, def } where kind ∈ "bool" | "real" |
-    //                    "int" and `def` is the gauge's actual default (null for
+    //   labelProps:      true if the widget has `title` + `unit` string props
+    //                    that default to the bound PID's metadata — the panel
+    //                    then offers per-widget Title / Unit overrides.
+    //   rangeProps:      true if the widget has `min` + `max` real props that
+    //                    default to the PID's range — the panel offers Min / Max.
+    //   colorProps:      props the panel's single "Color" swatch row writes
+    //                    (all set to the same color; empty = no color control).
+    //                    Unset = the theme color, so dashboards keep following
+    //                    EnvironmentTheme unless the user picks a color.
+    //   editableProps:   widget-specific props the properties panel exposes.
+    //                    Each: { key, label, kind, def[, min, max][, options] }
+    //                    where kind ∈ "bool" | "real" | "int" | "string" | "enum".
+    //                    `def` is the gauge's actual default (null for
     //                    NaN-when-unset thresholds — the panel shows these as
-    //                    empty/unset). Kept minimal and honest — only props with
-    //                    a simple scalar editor.
+    //                    empty/unset). `min`/`max` clamp numeric input; `options`
+    //                    lists the enum values. Keep in step with the gauge's own
+    //                    `octaveEditableProps`.
     readonly property var widgets: [
         {
             "type": "CircularGauge",
@@ -42,10 +53,18 @@ QtObject {
             "glyph": "◯",
             "defaultColSpan": 4, "defaultRowSpan": 4,
             "supportedKinds": ["*"],
+            "labelProps": true, "rangeProps": true,
+            "colorProps": ["fillColor", "needleColor"],
             "editableProps": [
-                { "key": "showNeedle",   "label": "Needle",        "kind": "bool", "def": false },
-                { "key": "showTicks",    "label": "Ticks",         "kind": "bool", "def": true },
-                { "key": "redlineStart", "label": "Redline start", "kind": "real", "def": null }
+                { "key": "showNeedle",         "label": "Needle",          "kind": "bool", "def": false },
+                { "key": "showTicks",          "label": "Ticks",           "kind": "bool", "def": true },
+                { "key": "showCenterReadout",  "label": "Readout",         "kind": "bool", "def": true },
+                { "key": "redlineStart",       "label": "Redline start",   "kind": "real", "def": null },
+                { "key": "decimals",           "label": "Decimals",        "kind": "int",  "def": 0, "min": 0, "max": 4 },
+                { "key": "majorTickCount",     "label": "Major ticks",     "kind": "int",  "def": 9, "min": 2, "max": 20 },
+                { "key": "minorTicksPerMajor", "label": "Minor per major", "kind": "int",  "def": 5, "min": 0, "max": 10 },
+                { "key": "startAngle",         "label": "Start angle",     "kind": "real", "def": 135, "min": 0, "max": 360 },
+                { "key": "sweepAngle",         "label": "Sweep angle",     "kind": "real", "def": 270, "min": 30, "max": 360 }
             ]
         },
         {
@@ -55,10 +74,16 @@ QtObject {
             "glyph": "◠",
             "defaultColSpan": 6, "defaultRowSpan": 3,
             "supportedKinds": ["*"],
+            "labelProps": true, "rangeProps": true,
+            "colorProps": ["fillColor", "needleColor"],
             "editableProps": [
-                { "key": "showNeedle",   "label": "Needle",        "kind": "bool", "def": false },
-                { "key": "showTicks",    "label": "Ticks",         "kind": "bool", "def": true },
-                { "key": "redlineStart", "label": "Redline start", "kind": "real", "def": null }
+                { "key": "showNeedle",         "label": "Needle",          "kind": "bool", "def": false },
+                { "key": "showTicks",          "label": "Ticks",           "kind": "bool", "def": true },
+                { "key": "showReadout",        "label": "Readout",         "kind": "bool", "def": true },
+                { "key": "redlineStart",       "label": "Redline start",   "kind": "real", "def": null },
+                { "key": "decimals",           "label": "Decimals",        "kind": "int",  "def": 0, "min": 0, "max": 4 },
+                { "key": "majorTickCount",     "label": "Major ticks",     "kind": "int",  "def": 5, "min": 2, "max": 20 },
+                { "key": "minorTicksPerMajor", "label": "Minor per major", "kind": "int",  "def": 4, "min": 0, "max": 10 }
             ]
         },
         {
@@ -68,8 +93,15 @@ QtObject {
             "glyph": "▮",
             "defaultColSpan": 3, "defaultRowSpan": 2,
             "supportedKinds": ["percentage", "temperature", "numeric", "pressure", "voltage"],
+            "labelProps": true, "rangeProps": true,
+            "colorProps": ["fillColor"],
             "editableProps": [
-                { "key": "warnAbove", "label": "Warn above", "kind": "real", "def": null }
+                { "key": "orientation", "label": "Orientation", "kind": "enum", "def": "horizontal",
+                  "options": ["horizontal", "vertical"] },
+                { "key": "warnAbove",   "label": "Warn above",  "kind": "real", "def": null },
+                { "key": "showLabel",   "label": "Label",       "kind": "bool", "def": true },
+                { "key": "showValue",   "label": "Value",       "kind": "bool", "def": true },
+                { "key": "decimals",    "label": "Decimals",    "kind": "int",  "def": 0, "min": 0, "max": 4 }
             ]
         },
         {
@@ -79,8 +111,13 @@ QtObject {
             "glyph": "↔",
             "defaultColSpan": 4, "defaultRowSpan": 2,
             "supportedKinds": ["bidirectional"],
+            "labelProps": true, "rangeProps": true,
+            "colorProps": ["fillColor"],
             "editableProps": [
-                { "key": "showTicks", "label": "Ticks", "kind": "bool", "def": true }
+                { "key": "showTicks",          "label": "Ticks",           "kind": "bool", "def": true },
+                { "key": "decimals",           "label": "Decimals",        "kind": "int",  "def": 0, "min": 0, "max": 4 },
+                { "key": "majorTickCount",     "label": "Major ticks",     "kind": "int",  "def": 5, "min": 2, "max": 20 },
+                { "key": "minorTicksPerMajor", "label": "Minor per major", "kind": "int",  "def": 4, "min": 0, "max": 10 }
             ]
         },
         {
@@ -90,10 +127,14 @@ QtObject {
             "glyph": "88",
             "defaultColSpan": 4, "defaultRowSpan": 2,
             "supportedKinds": ["*"],
+            "labelProps": true, "rangeProps": false,
+            "colorProps": ["valueColor"],
             "editableProps": [
-                { "key": "showTitle", "label": "Title", "kind": "bool", "def": true },
-                { "key": "showUnit",  "label": "Unit",  "kind": "bool", "def": true },
-                { "key": "padDigits", "label": "Pad digits", "kind": "int", "def": 0 }
+                { "key": "showTitle",  "label": "Title",       "kind": "bool", "def": true },
+                { "key": "showUnit",   "label": "Unit",        "kind": "bool", "def": true },
+                { "key": "decimals",   "label": "Decimals",    "kind": "int",  "def": 0,   "min": 0,   "max": 4 },
+                { "key": "padDigits",  "label": "Pad digits",  "kind": "int",  "def": 0,   "min": 0,   "max": 8 },
+                { "key": "valueScale", "label": "Digit size",  "kind": "real", "def": 3.5, "min": 0.5, "max": 12 }
             ]
         },
         {
@@ -103,10 +144,15 @@ QtObject {
             "glyph": "∿",
             "defaultColSpan": 6, "defaultRowSpan": 2,
             "supportedKinds": ["*"],
+            "labelProps": true, "rangeProps": true,
+            "colorProps": ["lineColor"],
             "editableProps": [
-                { "key": "autoScale",  "label": "Auto-scale", "kind": "bool", "def": false },
-                { "key": "fillBelow",  "label": "Area fill",  "kind": "bool", "def": true },
-                { "key": "maxSamples", "label": "Samples",    "kind": "int",  "def": 60 }
+                { "key": "autoScale",        "label": "Auto-scale",  "kind": "bool", "def": false },
+                { "key": "fillBelow",        "label": "Area fill",   "kind": "bool", "def": true },
+                { "key": "showHeader",       "label": "Header",      "kind": "bool", "def": true },
+                { "key": "decimals",         "label": "Decimals",    "kind": "int",  "def": 0,   "min": 0,   "max": 4 },
+                { "key": "maxSamples",       "label": "Samples",     "kind": "int",  "def": 60,  "min": 10,  "max": 300 },
+                { "key": "sampleIntervalMs", "label": "Sample (ms)", "kind": "int",  "def": 500, "min": 100, "max": 5000 }
             ]
         },
         {
@@ -116,10 +162,13 @@ QtObject {
             "glyph": "⚠",
             "defaultColSpan": 2, "defaultRowSpan": 2,
             "supportedKinds": ["*"],
+            "labelProps": false, "rangeProps": false,
+            "colorProps": ["activeColor"],
             "editableProps": [
-                { "key": "triggerAbove", "label": "Trigger above", "kind": "real", "def": null },
-                { "key": "triggerBelow", "label": "Trigger below", "kind": "real", "def": null },
-                { "key": "pulse",        "label": "Pulse",         "kind": "bool", "def": false }
+                { "key": "label",        "label": "Light text",    "kind": "string", "def": "" },
+                { "key": "triggerAbove", "label": "Trigger above", "kind": "real",   "def": null },
+                { "key": "triggerBelow", "label": "Trigger below", "kind": "real",   "def": null },
+                { "key": "pulse",        "label": "Pulse",         "kind": "bool",   "def": false }
             ]
         },
         // ── Self-binding widgets (supportedKinds: [] = no PID picker) ──
@@ -130,10 +179,12 @@ QtObject {
             "glyph": "◎",
             "defaultColSpan": 4, "defaultRowSpan": 4,
             "supportedKinds": [],
+            "labelProps": false, "rangeProps": false,
+            "colorProps": ["dotColor"],
             "editableProps": [
-                { "key": "maxG",      "label": "Max G",     "kind": "real", "def": 1.5 },
-                { "key": "showTrail", "label": "Trail",     "kind": "bool", "def": true },
-                { "key": "showValue", "label": "Readout",   "kind": "bool", "def": true }
+                { "key": "maxG",      "label": "Max G",   "kind": "real", "def": 1.5, "min": 0.2, "max": 5 },
+                { "key": "showTrail", "label": "Trail",   "kind": "bool", "def": true },
+                { "key": "showValue", "label": "Readout", "kind": "bool", "def": true }
             ]
         },
         {
@@ -143,6 +194,8 @@ QtObject {
             "glyph": "N",
             "defaultColSpan": 4, "defaultRowSpan": 4,
             "supportedKinds": [],
+            "labelProps": false, "rangeProps": false,
+            "colorProps": ["northColor"],
             "editableProps": [
                 { "key": "showDegrees", "label": "Degrees", "kind": "bool", "def": true }
             ]
@@ -154,6 +207,8 @@ QtObject {
             "glyph": "♪",
             "defaultColSpan": 6, "defaultRowSpan": 2,
             "supportedKinds": [],
+            "labelProps": false, "rangeProps": false,
+            "colorProps": ["progressColor"],
             "editableProps": [
                 { "key": "showArt",      "label": "Album art", "kind": "bool", "def": true },
                 { "key": "showArtist",   "label": "Artist",    "kind": "bool", "def": true },
@@ -167,8 +222,17 @@ QtObject {
             "glyph": "▶",
             "defaultColSpan": 4, "defaultRowSpan": 2,
             "supportedKinds": [],
+            "labelProps": false, "rangeProps": false,
+            "colorProps": ["accentColor"],
             "editableProps": []
         }
+    ]
+
+    // Swatches offered by the properties panel's Color row. Unset (the first,
+    // "theme" swatch) keeps the widget on the live EnvironmentTheme colors.
+    readonly property var colorSwatches: [
+        "#00BFFF", "#2ECC71", "#F1C40F", "#E67E22",
+        "#E74C3C", "#FF00AA", "#9C27B0", "#FFFFFF"
     ]
 
     // type-string → entry, or null if unknown.

@@ -158,7 +158,7 @@ Rolling history line showing recent values. Use when motion matters more than ab
 | `fillBelow`          | bool   | `true`                                   | Area fill under the line.                                      |
 | `showHeader`         | bool   | `true`                                   | Title + current value strip above the plot.                    |
 | `autoScale`          | bool   | `false`                                  | If true, y-axis rescales to window's min/max instead of PID min/max. Use for small-swing values (fuel trim, timing) where full PID range dwarfs real motion. |
-| `lineColor`, `fillColor`, `labelColor`, `valueColor`, `backgroundColor` | color | theme | Manual overrides. |
+| `lineColor`, `fillColor`, `labelColor`, `valueColor`, `backgroundColor` | color | theme | Manual overrides. `fillColor` defaults to `lineColor` at 22 % alpha, so overriding `lineColor` (the editor's Color row) recolors line and area together. |
 
 Sampling only runs while the item is `visible`. Samples are right-aligned — the newest value sits flush with the right edge and older values scroll left as new ones come in.
 
@@ -257,7 +257,7 @@ automatically look correct.
 
 ## 5. Recipe: add a new dashboard
 
-As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRenderer.qml` reads a spec and instantiates widgets into a grid. `OBDMenu.qml` hosts the renderer and a modal chooser popup; the active dashboard id persists under the `activeDashboard` setting. The default choice (`"grid"`) shows the built-in parameter-card view in `OBDMenu.qml` itself.
+As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRenderer.qml` reads a spec and instantiates widgets into a grid. `OBDMenu.qml` hosts the renderer and a modal chooser popup; the active dashboard id persists under the `activeDashboard` setting. The default choice (`"grid"`) shows the built-in Parameter Cards view in `OBDMenu.qml` itself: one card for every PID the connected vehicle reported in this session's supported-PID scan (empty, with an explanatory message, until a vehicle answers). A horizontal swipe anywhere on the page cycles Parameter Cards and every dashboard (wrapping); page dots under the header show the position.
 
 ### 5.1 Dashboard JSON schema (v1)
 
@@ -283,6 +283,27 @@ As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRe
 
 Required fields: `id`, `label`, `schema`, `cells`. Optional: `gridColumns` (default 12), `gridRows` (default 6), `margins` (default 20 dp, outer padding), `spacing` (default 16 dp, gap between cells).
 
+**Per-widget overrides are just `props` keys.** The editor's Label & Range and
+Color sections write ordinary props — a cell that renames, rescales and
+recolors its gauge looks like this:
+
+```json
+{
+  "type": "CircularGauge", "paramId": "RPM",
+  "col": 0, "row": 0, "colSpan": 6, "rowSpan": 5,
+  "props": {
+    "title": "Revs", "unit": "rpm", "min": 0, "max": 6000,
+    "fillColor": "#2ECC71", "needleColor": "#2ECC71",
+    "showNeedle": true, "redlineStart": 5500
+  }
+}
+```
+
+Omit a key to follow the bound PID's metadata (`title`, `unit`, `min`, `max`)
+or the live theme (colors). Which keys a widget accepts is declared in its
+`WidgetCatalog` entry (`labelProps`, `rangeProps`, `colorProps`,
+`editableProps` — see §7).
+
 Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge primitives in `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SparklineGauge`, `WarningLight`, and the self-binding `GForceGauge` and `CompassGauge`, which ignore `paramId`) plus the media widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`, no `paramId`). `paramId` must be one of §6 — an unknown id is logged by `DashboardRenderer` and the widget is left unbound; an unknown `type` is logged and the cell is skipped. `props` keys must be exposed `Q_PROPERTY` on the widget — unknown keys are silently skipped. `"NaN"` (string) decodes to JS `NaN` since JSON can't encode it natively.
 
 ### 5.2 Add a built-in preset
@@ -297,13 +318,32 @@ chooser (square Dashboards button at the top-right of `OBDMenu.qml`), tap
 **+ New** — or **Edit** on a user dashboard, or **Copy** to fork a built-in.
 The editor is hybrid tap-and-drag: tap an empty grid cell to place a widget
 from the palette, drag a placed widget to move it (snaps to the grid, invalid
-drops bounce back), tap a widget to select it and edit its PID / position /
-span / curated props in the side panel. Saving writes the JSON below through
+drops bounce back), drag the selected widget's corner grip to resize it
+(snaps to the grid; a red preview means overlap / out of bounds and the size
+is refused), tap a widget to select it and edit it in the side panel. The
+panel runs, top to bottom: **PID** → **Position & Size** steppers →
+**Options** (the widget's `editableProps`) → **Label & Range** (title / unit /
+min / max overrides; empty = follow the PID; warns when min ≥ max) → **Color**
+(swatches; "T" = theme/unset; one pick writes every `colorProps` key) →
+**Remove**. Saving writes the JSON below through
 `dashboardManager.saveDashboard()` and the chooser refreshes immediately.
 Editor sources live in `frontend/dashboards/editor/` (`DashboardEditor`,
 `EditorCanvas`, `PalettePopup`, `PIDPicker`, `PropertiesPanel`); the widget
 set, palette metadata, and curated editable props all come from the
 `WidgetCatalog` singleton (`frontend/dashboards/WidgetCatalog.qml`).
+
+**PID picker and the vehicle gate.** With no vehicle scanned this session the
+picker lists every PID. Once a connected vehicle has answered the
+supported-PID scan, its PIDs sort first in each group and the rest are greyed
+("Not supported by this vehicle") but stay assignable — a dashboard may be
+built for another car or shared. The panel warns when the bound PID is
+unsupported, and at render time `DashboardRenderer` swaps such a cell for a
+"Not supported by this vehicle" placeholder (see §5.5).
+
+**Sharing path.** In the chooser, **Share** on any JSON dashboard card offers
+*Save to Downloads* (`<Downloads>/OCTAVE-dashboards/<id>.json`) or *Copy as
+text*; **Import** offers *From file…* or *Paste from clipboard*. Imports are
+validated and always become a new user dashboard (§5.4).
 
 **Manual path.** Drop a JSON file with the same schema under the OS config dir:
 
@@ -320,7 +360,35 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 - Built-in preset ids must be unique. User ids colliding with a built-in are rejected at load time (logged).
 - Built-ins are read-only (`deleteDashboard` returns false). "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id.
 - **Validation.** `DashboardRenderer` checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`; failures are `console.warn`ed with the dashboard id and never crash the view. The editor applies the same checks when loading a spec (`_sanitizeCells`) — unknown types are dropped, unknown PIDs cleared so the panel shows "Choose PID…".
+- **Import sanitizing.** `importDashboard` / `importDashboardFromClipboard` /
+  `importDashboardFromText` (both backends, same rules) refuse a spec whose
+  `schema` is newer than `kSupportedSchema` / `SUPPORTED_SCHEMA` (1) with
+  "This dashboard needs a newer version of OCTAVE", keep only `schema`,
+  `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `cells` and per
+  cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`
+  (scalar props only; strings capped at 200 chars), clamp geometry into the
+  grid, and cap input at 512 KB / 256 cells / 48×48 grid. Anything else (an
+  `id`, a `source` field, nested objects) is dropped. The id is always
+  regenerated from the label, so an import never overwrites an existing
+  dashboard. Failures set `dashboardManager.lastShareError`.
 - **Hot reload.** Both `DashboardManager` backends watch the user dashboards directory (`QFileSystemWatcher`, 300 ms debounce, rescans only when the file-name/mtime/size signature changed). Drop a JSON in from a terminal or sync client and it appears in the chooser without restarting; delete one and it disappears. If the deleted file was the active dashboard, `OBDMenu` falls back to Parameter Cards.
+
+### 5.5 Vehicle gate and polling demand
+
+- **Gate.** `OBDParameterModel` mirrors `obdManager.vehicleSupportedParameters`
+  / `vehicleScanComplete` — this session's scan only, cleared on disconnect —
+  as `vehicleKnown`, `vehicleSupportedParameters`, `vehicleParameters` (the
+  supported OBD params in `allParameters` order) and `isSupported(id)`.
+  BerryIMU ids (`sensorParameters`, `isSensorParameter(id)`) are never gated.
+  When `vehicleKnown` is true, `DashboardRenderer` hides a cell bound to an
+  unsupported PID behind a placeholder (`objectName: dashUnsupported_<i>`).
+- **Polling is demand-driven.** The backend polls only what QML asks for via
+  `obdManager.setParameterDemand(consumer, ids)`. A dashboard needs no extra
+  wiring: `DashboardRenderer.paramIds` lists its distinct PIDs and
+  `OBDMenu` registers them as the `"dashboard"` consumer while the page is
+  active. Other consumers: `"cards"` (Parameter Cards), `"editor"`
+  (`DashboardEditor` canvas), `"home"` (`HomeOBDView`), `"settings"`
+  (`OBDSettingsPage`). Backend side: `wiki/obd-manager.html`.
 
 ### Legacy recipe (pure-QML dashboard)
 
@@ -475,12 +543,22 @@ Full metadata (units, min, max) lives in `frontend/OBDParameterModel.qml`
    Use `Rectangle` + `transformOrigin` + `rotation` for small marks.
 5. Declare `octaveSupportedKinds` (array of PID `kind` strings, or `["*"]`)
    near the top — the editor's PID picker filters on it.
-6. Register the widget in `frontend/dashboards/WidgetCatalog.qml`: type, url,
-   display name, palette glyph, default span, `supportedKinds` (must mirror
-   step 5), and the curated `editableProps` (with honest `def` values) the
-   editor's properties panel exposes. The renderer, palette, and properties
-   panel all read from the catalog — a widget missing there won't render or
-   be placeable.
+6. Register the widget in `frontend/dashboards/WidgetCatalog.qml`. The
+   renderer, palette, and properties panel all read from the catalog — a
+   widget missing there won't render or be placeable. Each entry declares:
+   - `type`, `url`, `displayName`, `glyph`, `defaultColSpan` / `defaultRowSpan`
+   - `supportedKinds` — must mirror step 5 (`[]` = self-binding, no PID picker)
+   - `labelProps` — `true` if the widget has `title` + `unit` string props
+     that default to the PID's metadata (enables the Title / Unit overrides)
+   - `rangeProps` — `true` if it has `min` + `max` real props (Min / Max)
+   - `colorProps` — the color props the single Color swatch row writes, all
+     set to the same value (e.g. `["fillColor", "needleColor"]`); `[]` hides
+     the row. Swatches come from the catalog's `colorSwatches`.
+   - `editableProps` — `{ key, label, kind, def[, min, max][, options] }` with
+     `kind` ∈ `bool` (switch) · `int` / `real` (number field, clamped to
+     `min`/`max`) · `string` (text field) · `enum` (segmented buttons over
+     `options`). `def` is the gauge's real default (`null` for NaN-when-unset
+     thresholds). Keep it in step with the gauge's own `octaveEditableProps`.
 7. Add an entry to this document under §3.
 
 ### Needle/angle math cheat sheet
@@ -537,13 +615,14 @@ frontend/
 │   │   └── MediaControlsWidget.qml prev / play-pause / next transport
 │   ├── DashboardRenderer.qml  JSON spec → grid of widget instances
 │   ├── WidgetCatalog.qml      singleton: type → url + palette metadata +
-│   │                          supportedKinds + curated editableProps
+│   │                          supportedKinds + label/range/color flags +
+│   │                          editableProps + colorSwatches
 │   ├── editor/                Phase 3 in-app editor ("create-a-park")
 │   │   ├── DashboardEditor.qml   full-screen page; owns the working spec
-│   │   ├── EditorCanvas.qml      tap-to-place targets + drag-to-move grid
+│   │   ├── EditorCanvas.qml      tap-to-place targets, drag-to-move, corner resize grip
 │   │   ├── PalettePopup.qml      widget palette (reads WidgetCatalog)
-│   │   ├── PIDPicker.qml         searchable PID list, kind-filtered
-│   │   └── PropertiesPanel.qml   PID / position / span / props inspector
+│   │   ├── PIDPicker.qml         searchable PID list, kind-filtered, vehicle-gated
+│   │   └── PropertiesPanel.qml   PID / position & size / options / label & range / color
 │   └── presets/               built-in dashboard JSON specs (ship with bundle)
 │       ├── sport.json         big speed + RPM dial + vitals strip
 │       ├── minimal.json       three round gauges: speed, RPM, fuel
@@ -551,12 +630,15 @@ frontend/
 │       ├── performance.json   arc speed + sparklines + warning lights
 │       └── tj-wrangler.json   "TJ Wrangler 4.0": 17-cell board from the Orange Pi rig
 ├── OBDParameterModel.qml      singleton aggregator (SOURCE OF TRUTH for PIDs)
-└── OBDMenu.qml                hosts DashboardRenderer, the chooser popup, and
-                               a Primitives Gallery dev screen
+└── OBDMenu.qml                hosts DashboardRenderer, Parameter Cards, swipe
+                               between dashboards, the chooser popup (Import /
+                               Share), and a Primitives Gallery dev screen
 
 src/managers/
 ├── dashboardmanager.h         enumerates presets + user dashboards, save/
-└── dashboardmanager.cpp       delete/duplicate slots, emits dashboardsChanged
+└── dashboardmanager.cpp       delete/duplicate + export/import slots,
+                               emits dashboardsChanged
+backend/dashboard_manager.py   Python peer (same API, same import sanitizer)
 ```
 
 User dashboards (outside the repo) live at:

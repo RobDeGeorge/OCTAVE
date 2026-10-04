@@ -17,21 +17,113 @@ import re
 import tempfile
 import time
 
-from PySide6.QtCore import QObject, Property, Signal, Slot, QFileSystemWatcher, QTimer
+from PySide6.QtCore import (QObject, Property, Signal, Slot, QFileSystemWatcher, QTimer,
+                            QStandardPaths, QUrl)
+from PySide6.QtGui import QGuiApplication
 
 from backend.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Highest dashboard `schema` this build understands (C++: kSupportedSchema).
+SUPPORTED_SCHEMA = 1
+
+# Import caps — shared dashboards are a few KB; these only stop a wrong or
+# hostile file from tying up the UI thread. Must match dashboardmanager.cpp.
+MAX_IMPORT_BYTES = 512 * 1024
+MAX_CELLS = 256
+MAX_GRID = 48
+MAX_LABEL_LENGTH = 80
+MAX_PROP_STRING = 200
+
+
+def _int_in(value, lo, hi, default):
+    """Clamp a JSON number into [lo, hi]; `default` for missing/non-numeric."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    return max(lo, min(hi, int(value)))
+
+
+def sanitize_imported_spec(raw):
+    """Validate a shared dashboard and reduce it to the known schema-1 keys.
+
+    Returns (spec, "") on success or ({}, reason). Mirrors
+    DashboardManager::sanitizeImportedSpec in C++ — keep them in step.
+    """
+    if not isinstance(raw, dict):
+        return {}, "Not an OCTAVE dashboard (invalid JSON)"
+    schema = raw.get("schema", 1)
+    if isinstance(schema, bool) or not isinstance(schema, (int, float)):
+        schema = 0
+    if schema > SUPPORTED_SCHEMA:
+        return {}, "This dashboard needs a newer version of OCTAVE"
+    if schema < 1:
+        return {}, "Not an OCTAVE dashboard (bad schema)"
+
+    raw_cells = raw.get("cells")
+    if not isinstance(raw_cells, list):
+        return {}, "Not an OCTAVE dashboard (no cells)"
+    if len(raw_cells) > MAX_CELLS:
+        return {}, "Dashboard has too many widgets"
+
+    label = " ".join(str(raw.get("label") or "").split())[:MAX_LABEL_LENGTH]
+    cols = _int_in(raw.get("gridColumns"), 1, MAX_GRID, 12)
+    rows = _int_in(raw.get("gridRows"), 1, MAX_GRID, 6)
+    out = {
+        "schema": SUPPORTED_SCHEMA,
+        "label": label or "Imported dashboard",
+        "gridColumns": cols,
+        "gridRows": rows,
+    }
+    for key in ("margins", "spacing"):
+        if key in raw:
+            out[key] = _int_in(raw.get(key), 0, 200, 0)
+
+    cells = []
+    for c in raw_cells:
+        if not isinstance(c, dict):
+            continue
+        cell_type = c.get("type")
+        if not isinstance(cell_type, str) or not cell_type or len(cell_type) > 64:
+            continue
+        col = _int_in(c.get("col"), 0, cols - 1, 0)
+        row = _int_in(c.get("row"), 0, rows - 1, 0)
+        param_id = c.get("paramId")
+        props = {}
+        raw_props = c.get("props")
+        if isinstance(raw_props, dict):
+            # Scalars only (bool / number / short string) — nested values
+            # mean nothing to any widget.
+            for k, v in raw_props.items():
+                if not isinstance(k, str) or len(k) > 64:
+                    continue
+                if isinstance(v, (bool, int, float)):
+                    props[k] = v
+                elif isinstance(v, str):
+                    props[k] = v[:MAX_PROP_STRING]
+        cells.append({
+            "type": cell_type,
+            "paramId": param_id[:64] if isinstance(param_id, str) else "",
+            "col": col,
+            "row": row,
+            "colSpan": _int_in(c.get("colSpan"), 1, cols - col, 1),
+            "rowSpan": _int_in(c.get("rowSpan"), 1, rows - row, 1),
+            "props": props,
+        })
+    out["cells"] = cells
+    return out, ""
+
 
 class DashboardManager(QObject):
     dashboardsChanged = Signal()
+    lastShareErrorChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._presets_dir = ""
         self._user_dir = ""
         self._dashboards = []
+        self._last_share_error = ""
 
         # User-dir hot reload: a JSON dropped into / removed from the user
         # dashboards folder while the app runs shows up in the chooser without
@@ -178,6 +270,96 @@ class DashboardManager(QObject):
     @Slot()
     def refresh(self):
         self._rescan_all()
+
+    # ------------------------------------------------------------------
+    # Sharing (export / import) — mirrors dashboardmanager.cpp
+    # ------------------------------------------------------------------
+
+    @Property(str, notify=lastShareErrorChanged)
+    def lastShareError(self):
+        return self._last_share_error
+
+    def _set_share_error(self, message: str):
+        if message != self._last_share_error:
+            self._last_share_error = message
+            self.lastShareErrorChanged.emit()
+
+    @Slot(str, result=str)
+    def exportDashboard(self, dashboard_id: str) -> str:
+        """Write the spec to <Downloads>/OCTAVE-dashboards/<id>.json; returns the path."""
+        spec = self.loadDashboard(dashboard_id)
+        if not spec:
+            self._set_share_error("Dashboard not found")
+            return ""
+        base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation) \
+            or QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+        path = os.path.join(base, "OCTAVE-dashboards", dashboard_id + ".json")
+        if not self._write_spec(path, spec):
+            self._set_share_error(f"Could not write to {os.path.dirname(path)}")
+            return ""
+        logger.info("Exported dashboard %s to %s", dashboard_id, path)
+        self._set_share_error("")
+        return path
+
+    @Slot(str, result=bool)
+    def copyDashboardToClipboard(self, dashboard_id: str) -> bool:
+        spec = self.loadDashboard(dashboard_id)
+        cb = QGuiApplication.clipboard()
+        if not spec or cb is None:
+            self._set_share_error("Dashboard not found" if not spec else "Clipboard unavailable")
+            return False
+        cb.setText(json.dumps(spec, separators=(",", ":")))
+        self._set_share_error("")
+        return True
+
+    @Slot(str, result=str)
+    def importDashboard(self, file_or_url: str) -> str:
+        """Import a shared dashboard file as a NEW user dashboard; returns its id."""
+        url = QUrl(file_or_url)
+        path = url.toLocalFile() if url.isLocalFile() else file_or_url
+        try:
+            if os.path.getsize(path) > MAX_IMPORT_BYTES:
+                self._set_share_error("File is too large to be a dashboard")
+                return ""
+            with open(path, encoding="utf-8") as f:
+                text = f.read(MAX_IMPORT_BYTES + 1)
+        except (OSError, UnicodeDecodeError):
+            self._set_share_error("Could not open the file")
+            return ""
+        return self.importDashboardFromText(text)
+
+    @Slot(result=str)
+    def importDashboardFromClipboard(self) -> str:
+        cb = QGuiApplication.clipboard()
+        text = cb.text() if cb is not None else ""
+        if not text.strip():
+            self._set_share_error("The clipboard is empty")
+            return ""
+        return self.importDashboardFromText(text)
+
+    @Slot(str, result=str)
+    def importDashboardFromText(self, text: str) -> str:
+        data = (text or "").strip().encode("utf-8")
+        if len(data) > MAX_IMPORT_BYTES:
+            self._set_share_error("Text is too large to be a dashboard")
+            return ""
+        try:
+            raw = json.loads(data)
+        except ValueError:
+            self._set_share_error("Not an OCTAVE dashboard (invalid JSON)")
+            return ""
+        spec, error = sanitize_imported_spec(raw)
+        if not spec:
+            self._set_share_error(error)
+            return ""
+        spec["id"] = self._unique_user_id_from_label(spec["label"])
+        saved = self.saveDashboard(spec)
+        if not saved:
+            self._set_share_error("Could not save the imported dashboard")
+            return ""
+        logger.info("Imported dashboard as %s", saved)
+        self._set_share_error("")
+        return saved
 
     # ------------------------------------------------------------------
     # Internals

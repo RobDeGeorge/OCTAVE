@@ -49,9 +49,8 @@ Item {
 
     // ── Style ───────────────────────────────────────────────────────
     property color lineColor: App.Style.obdBarColor
-    property color fillColor: Qt.rgba(App.Style.obdBarColor.r,
-                                       App.Style.obdBarColor.g,
-                                       App.Style.obdBarColor.b, 0.22)
+    // Follows lineColor so a single color override recolors line + area.
+    property color fillColor: Qt.rgba(lineColor.r, lineColor.g, lineColor.b, 0.22)
     property color labelColor: App.Style.obdLabelColor
     property color valueColor: App.Style.obdValueColor
     property color backgroundColor: Qt.darker(App.Style.obdBoxBackground, 1.1)

@@ -2,7 +2,12 @@
 
 #include "dashboardmanager.h"
 
+#include <QClipboard>
 #include <QDateTime>
+#include <QGuiApplication>
+#include <QJsonArray>
+#include <QStandardPaths>
+#include <QUrl>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -362,4 +367,216 @@ QString DashboardManager::uniqueUserIdFromLabel(const QString &label) const
     }
     // Astronomically unlikely; last resort.
     return base + QStringLiteral("-") + QString::number(QDateTime::currentMSecsSinceEpoch());
+}
+
+// ---------------------------------------------------------------------------
+// Sharing (export / import)
+// ---------------------------------------------------------------------------
+
+namespace {
+// Shared dashboards are small (a busy one is a few KB); the caps only stop a
+// wrong or hostile file from tying up the UI thread.
+constexpr qint64 kMaxImportBytes = 512 * 1024;
+constexpr int kMaxCells = 256;
+constexpr int kMaxGrid = 48;
+constexpr int kMaxLabelLength = 80;
+constexpr int kMaxPropString = 200;
+}
+
+void DashboardManager::setShareError(const QString &message)
+{
+    if (m_lastShareError == message) return;
+    m_lastShareError = message;
+    emit lastShareErrorChanged();
+}
+
+QString DashboardManager::exportDashboard(const QString &id)
+{
+    const QVariantMap spec = loadDashboard(id).toMap();
+    if (spec.isEmpty()) {
+        setShareError(QStringLiteral("Dashboard not found"));
+        return {};
+    }
+    QString base = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    if (base.isEmpty())
+        base = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString path = base + QStringLiteral("/OCTAVE-dashboards/") + id + QStringLiteral(".json");
+    if (!writeSpec(path, spec)) {
+        setShareError(QStringLiteral("Could not write to %1").arg(QFileInfo(path).absolutePath()));
+        return {};
+    }
+    qCInfo(lcDashboards) << "Exported dashboard" << id << "to" << path;
+    setShareError({});
+    return path;
+}
+
+bool DashboardManager::copyDashboardToClipboard(const QString &id)
+{
+    const QVariantMap spec = loadDashboard(id).toMap();
+    QClipboard *cb = QGuiApplication::clipboard();
+    if (spec.isEmpty() || !cb) {
+        setShareError(spec.isEmpty() ? QStringLiteral("Dashboard not found")
+                                     : QStringLiteral("Clipboard unavailable"));
+        return false;
+    }
+    cb->setText(QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(spec))
+                                      .toJson(QJsonDocument::Compact)));
+    setShareError({});
+    return true;
+}
+
+QString DashboardManager::importDashboard(const QString &fileOrUrl)
+{
+    // file:// → local path; content:// (Android picker) and plain paths are
+    // handed to QFile as-is (Qt's Android file engine opens content URIs).
+    const QUrl url(fileOrUrl);
+    const QString path = url.isLocalFile() ? url.toLocalFile() : fileOrUrl;
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) {
+        setShareError(QStringLiteral("Could not open the file"));
+        return {};
+    }
+    if (f.size() > kMaxImportBytes) {
+        setShareError(QStringLiteral("File is too large to be a dashboard"));
+        return {};
+    }
+    return importDashboardFromText(QString::fromUtf8(f.read(kMaxImportBytes + 1)));
+}
+
+QString DashboardManager::importDashboardFromClipboard()
+{
+    QClipboard *cb = QGuiApplication::clipboard();
+    const QString text = cb ? cb->text() : QString();
+    if (text.trimmed().isEmpty()) {
+        setShareError(QStringLiteral("The clipboard is empty"));
+        return {};
+    }
+    return importDashboardFromText(text);
+}
+
+QString DashboardManager::importDashboardFromText(const QString &json)
+{
+    const QByteArray data = json.trimmed().toUtf8();
+    if (data.size() > kMaxImportBytes) {
+        setShareError(QStringLiteral("Text is too large to be a dashboard"));
+        return {};
+    }
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        setShareError(QStringLiteral("Not an OCTAVE dashboard (invalid JSON)"));
+        return {};
+    }
+    return importSpec(doc.object().toVariantMap());
+}
+
+QString DashboardManager::importSpec(const QVariantMap &raw)
+{
+    QString error;
+    QVariantMap spec = sanitizeImportedSpec(raw, &error);
+    if (spec.isEmpty()) {
+        setShareError(error);
+        return {};
+    }
+    const QString id = uniqueUserIdFromLabel(spec.value(QStringLiteral("label")).toString());
+    spec.insert(QStringLiteral("id"), id);
+    const QString saved = saveDashboard(spec);
+    if (saved.isEmpty()) {
+        setShareError(QStringLiteral("Could not save the imported dashboard"));
+        return {};
+    }
+    qCInfo(lcDashboards) << "Imported dashboard as" << saved;
+    setShareError({});
+    return saved;
+}
+
+QVariantMap DashboardManager::sanitizeImportedSpec(const QVariantMap &raw, QString *error)
+{
+    auto fail = [error](const QString &msg) { if (error) *error = msg; return QVariantMap{}; };
+
+    // JSON numbers only (no bools, no numeric strings) — same rule as the
+    // Python _int_in().
+    auto intIn = [](const QVariant &v, int lo, int hi, int def) {
+        switch (v.typeId()) {
+        case QMetaType::Int:
+        case QMetaType::LongLong:
+        case QMetaType::Double:
+            return qBound(lo, int(qBound(-1e9, v.toDouble(), 1e9)), hi);
+        default:
+            return def;
+        }
+    };
+
+    const int schema = intIn(raw.value(QStringLiteral("schema"), 1), -1, 1000, 0);
+    if (schema > kSupportedSchema)
+        return fail(QStringLiteral("This dashboard needs a newer version of OCTAVE"));
+    if (schema < 1)
+        return fail(QStringLiteral("Not an OCTAVE dashboard (bad schema)"));
+
+    const QVariant cellsVar = raw.value(QStringLiteral("cells"));
+    if (cellsVar.typeId() != QMetaType::QVariantList)
+        return fail(QStringLiteral("Not an OCTAVE dashboard (no cells)"));
+    const QVariantList rawCells = cellsVar.toList();
+    if (rawCells.size() > kMaxCells)
+        return fail(QStringLiteral("Dashboard has too many widgets"));
+
+    QVariantMap out;
+    out.insert(QStringLiteral("schema"), kSupportedSchema);
+
+    QString label = raw.value(QStringLiteral("label")).toString().simplified().left(kMaxLabelLength);
+    if (label.isEmpty()) label = QStringLiteral("Imported dashboard");
+    out.insert(QStringLiteral("label"), label);
+
+    const int cols = intIn(raw.value(QStringLiteral("gridColumns")), 1, kMaxGrid, 12);
+    const int rows = intIn(raw.value(QStringLiteral("gridRows")), 1, kMaxGrid, 6);
+    out.insert(QStringLiteral("gridColumns"), cols);
+    out.insert(QStringLiteral("gridRows"), rows);
+    for (const QString key : {QStringLiteral("margins"), QStringLiteral("spacing")}) {
+        if (raw.contains(key))
+            out.insert(key, intIn(raw.value(key), 0, 200, 0));
+    }
+
+    QVariantList cells;
+    for (const QVariant &cv : rawCells) {
+        if (cv.typeId() != QMetaType::QVariantMap) continue;
+        const QVariantMap c = cv.toMap();
+        const QString type = c.value(QStringLiteral("type")).toString();
+        if (type.isEmpty() || type.size() > 64) continue;
+
+        QVariantMap cell;
+        cell.insert(QStringLiteral("type"), type);
+        cell.insert(QStringLiteral("paramId"), c.value(QStringLiteral("paramId")).toString().left(64));
+        const int col = intIn(c.value(QStringLiteral("col")), 0, cols - 1, 0);
+        const int row = intIn(c.value(QStringLiteral("row")), 0, rows - 1, 0);
+        cell.insert(QStringLiteral("col"), col);
+        cell.insert(QStringLiteral("row"), row);
+        cell.insert(QStringLiteral("colSpan"), intIn(c.value(QStringLiteral("colSpan")), 1, cols - col, 1));
+        cell.insert(QStringLiteral("rowSpan"), intIn(c.value(QStringLiteral("rowSpan")), 1, rows - row, 1));
+
+        // Props: scalar values only (bool / number / short string). Nested
+        // objects or arrays have no meaning to any widget — drop them.
+        QVariantMap props;
+        const QVariantMap rawProps = c.value(QStringLiteral("props")).toMap();
+        for (auto it = rawProps.constBegin(); it != rawProps.constEnd(); ++it) {
+            if (it.key().size() > 64) continue;
+            const QVariant &v = it.value();
+            switch (v.typeId()) {
+            case QMetaType::Bool:
+            case QMetaType::Int:
+            case QMetaType::LongLong:
+            case QMetaType::Double:
+                props.insert(it.key(), v);
+                break;
+            case QMetaType::QString:
+                props.insert(it.key(), v.toString().left(kMaxPropString));
+                break;
+            default:
+                break;
+            }
+        }
+        cell.insert(QStringLiteral("props"), props);
+        cells.append(cell);
+    }
+    out.insert(QStringLiteral("cells"), cells);
+    return out;
 }

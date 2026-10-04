@@ -8,6 +8,8 @@
 //   - tapping a placed widget selects it           → cellTapped(index)
 //   - dragging a placed widget moves it, snapping
 //     to the grid on release                       → cellMoveRequested(index, col, row)
+//   - dragging the selected widget's corner grip
+//     resizes it, snapping to the grid on release  → cellResizeRequested(index, colSpan, rowSpan)
 //   - tapping the background clears the selection  → backgroundTapped()
 //
 // The canvas never mutates `cells` itself — DashboardEditor owns the working
@@ -36,6 +38,7 @@ Item {
     signal emptyCellTapped(int col, int row)
     signal cellTapped(int index)
     signal cellMoveRequested(int index, int col, int row)
+    signal cellResizeRequested(int index, int colSpan, int rowSpan)
     signal backgroundTapped()
 
     // ── Grid geometry (matches DashboardRenderer defaults) ──────────────
@@ -186,7 +189,9 @@ Item {
             y: canvas._cellY(_r)
             width: canvas._spanW(_cs)
             height: canvas._spanH(_rs)
-            z: dragArea.drag.active ? 10 : 1
+            // Selected sits above neighbours so its resize grip (which pokes
+            // past the cell corner) stays grabbable.
+            z: dragArea.drag.active ? 10 : (selected ? 5 : 1)
             opacity: dragArea.drag.active ? 0.85 : 1.0
 
             function _updateDragCandidate() {
@@ -286,6 +291,74 @@ Item {
                 }
 
                 onCanceled: canvas.dragActive = false
+            }
+
+            // ── Resize grip (selected widget only) ──────────────────────
+            // Bottom-right corner. The drag tracks the pointer in canvas
+            // coordinates, snaps the far corner to the grid cell under it,
+            // and previews the new span with the shared drop highlight.
+            Item {
+                id: resizeGrip
+                objectName: "editorResizeGrip_" + cellRoot.cellIndex
+                visible: cellRoot.selected && !dragArea.drag.active
+                z: 20
+                // 44dp touch target centred on the corner; 22dp visual.
+                width: canvas.dp(44)
+                height: canvas.dp(44)
+                x: cellRoot.width - width / 2 - canvas.dp(4)
+                y: cellRoot.height - height / 2 - canvas.dp(4)
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: canvas.dp(22)
+                    height: canvas.dp(22)
+                    radius: canvas.dp(4)
+                    color: App.Style.accent
+                    border.color: App.Style.obdBoxBackground
+                    border.width: 2
+                    Text {
+                        anchors.centerIn: parent
+                        text: "⤡"
+                        color: App.Style.obdBoxBackground
+                        font.pixelSize: canvas.dp(14)
+                        font.bold: true
+                    }
+                }
+
+                MouseArea {
+                    id: gripMouse
+                    anchors.fill: parent
+                    preventStealing: true
+                    cursorShape: Qt.SizeFDiagCursor
+
+                    function _update(mouse) {
+                        var p = mapToItem(canvas, mouse.x, mouse.y)
+                        var stepX = canvas._cellW + canvas._spacing
+                        var stepY = canvas._cellH + canvas._spacing
+                        var endCol = Math.floor((p.x - canvas._margin + canvas._spacing / 2) / stepX)
+                        var endRow = Math.floor((p.y - canvas._margin + canvas._spacing / 2) / stepY)
+                        var cs = Math.max(1, Math.min(canvas.gridColumns - cellRoot._c, endCol - cellRoot._c + 1))
+                        var rs = Math.max(1, Math.min(canvas.gridRows - cellRoot._r, endRow - cellRoot._r + 1))
+                        canvas.dragCol = cellRoot._c
+                        canvas.dragRow = cellRoot._r
+                        canvas.dragColSpan = cs
+                        canvas.dragRowSpan = rs
+                        canvas.dragValid = canvas.canPlace(cellRoot._c, cellRoot._r, cs, rs, cellRoot.cellIndex)
+                    }
+
+                    onPressed: function(mouse) {
+                        canvas.dragActive = true
+                        _update(mouse)
+                    }
+                    onPositionChanged: function(mouse) { if (canvas.dragActive) _update(mouse) }
+                    onReleased: {
+                        if (!canvas.dragActive) return
+                        canvas.dragActive = false
+                        canvas.cellResizeRequested(cellRoot.cellIndex,
+                                                   canvas.dragColSpan, canvas.dragRowSpan)
+                    }
+                    onCanceled: canvas.dragActive = false
+                }
             }
         }
     }

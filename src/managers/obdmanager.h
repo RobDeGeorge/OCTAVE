@@ -1,6 +1,7 @@
 #ifndef OBDMANAGER_H
 #define OBDMANAGER_H
 
+#include <QHash>
 #include <QObject>
 #include <QMutex>
 #include <QSerialPort>
@@ -56,6 +57,14 @@ class OBDManager : public QObject
     Q_PROPERTY(QString vin READ vin NOTIFY vinChanged)
     Q_PROPERTY(QString vehicleMake READ vehicleMake NOTIFY vinChanged)
     Q_PROPERTY(int vehicleModelYear READ vehicleModelYear NOTIFY vinChanged)
+
+    // This session's vehicle scan result (OBDParameterModel ids) and whether
+    // the scan has finished. Both reset on disconnect -- never loaded from the
+    // persisted list, so they always describe the car that is connected now.
+    Q_PROPERTY(QStringList vehicleSupportedParameters READ vehicleSupportedParameters
+                   NOTIFY vehicleSupportedParametersChanged)
+    Q_PROPERTY(bool vehicleScanComplete READ vehicleScanComplete
+                   NOTIFY vehicleSupportedParametersChanged)
 
 signals:
     // ======================================================================
@@ -177,6 +186,7 @@ signals:
     void scanProgressChanged(int progress, const QString &message);
     void scanCompleteChanged(const QVariantList &supportedParams);
     void scanOutputChanged(const QString &output);
+    void vehicleSupportedParametersChanged();
 
     // ======================================================================
     // Diagnostic signals
@@ -212,6 +222,16 @@ public:
     QString vin() const { return m_vin.vin; }
     QString vehicleMake() const { return m_vin.make; }
     int vehicleModelYear() const { return m_vin.modelYear; }
+    QStringList vehicleSupportedParameters() const { return m_vehicleSupportedParameters; }
+    bool vehicleScanComplete() const { return m_vehicleScanComplete; }
+
+    // Demand-driven polling: replace `consumer`'s wanted parameter ids
+    // ("dashboard", "cards", "home", "editor", ...); an empty list removes the
+    // consumer. The poll set is the union of every consumer, filtered to this
+    // session's scan result, plus the RPM heartbeat (ELM_VOLTAGE when the car
+    // has no RPM). BerryIMU and unknown ids are ignored. Applied live after a
+    // 250 ms debounce. Mirrors Python OBDManager.setParameterDemand.
+    Q_INVOKABLE void setParameterDemand(const QString &consumer, const QStringList &paramIds);
 
 public slots:
     // ======================================================================
@@ -342,7 +362,8 @@ private slots:
     void onDeviceScanTimer();
     void onPortChangeDebounce();
     void onSettingsPortChanged();
-    void onSettingsParametersChanged();
+    // Swap the poll list in place (no reconnect) after a demand or scan change.
+    void applyPollList();
 
     // Post-diagnostic reconnect
     void delayedReconnectAfterDiagnostic();
@@ -397,10 +418,17 @@ private:
     // Build the signal-name -> emit-lambda dispatch table
     void buildSignalDispatch();
 
-    // The poll list: every PID-table entry whose python-obd command name is
-    // enabled in settings (the original 17 default to on). Used on connect
-    // and again, live, when the parameter toggles change.
+    // The poll list: the union of every consumer's demand mapped to PID keys
+    // (a multi-value PID when any of its signals is wanted), filtered to this
+    // session's scan result, plus the heartbeat. Used on connect and live
+    // from applyPollList().
     QList<PidKey> buildPidsToWatch() const;
+
+    QHash<QString, QSet<QString>> m_paramDemand;
+    QTimer m_demandDebounce;
+    QStringList m_vehicleSupportedParameters;
+    bool m_vehicleScanComplete = false;
+    void setVehicleSupport(const QStringList &names, bool complete);
 
     // Queue a worker slot by name; logs and returns false when there is no
     // worker (Android drives the adapter from this thread instead).
@@ -584,8 +612,8 @@ private:
     void sendNextAndroidInitCommand();
     void queryAndroidSupportedPids();
     void finalizeAndroidConnection();
-    // Settings-enabled PIDs filtered by the vehicle's supported set; called
-    // on connect and live from onSettingsParametersChanged().
+    // buildPidsToWatch() filtered by the vehicle's supported bitmap; called
+    // on connect and live from applyPollList().
     void rebuildAndroidPollList();
     void pollNextAndroidPid();
 

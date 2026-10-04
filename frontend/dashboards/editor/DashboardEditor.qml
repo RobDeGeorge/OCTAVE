@@ -64,6 +64,23 @@ Item {
     // button. Non-empty = restore it instead of loading editingId.
     property string draftJson: ""
 
+    // Live preview: ask obdManager to poll the PIDs on the canvas while the
+    // editor is open (polling is demand-driven; the OBD page withdraws its
+    // own demand while this page is pushed over it).
+    readonly property var _demandIds: {
+        var seen = {}, out = []
+        for (var i = 0; i < cells.length; i++) {
+            var id = cells[i].paramId
+            if (id && !seen[id]) { seen[id] = true; out.push(id) }
+        }
+        return out
+    }
+    function _pushDemand(ids) {
+        if (typeof obdManager !== "undefined" && obdManager && obdManager.setParameterDemand)
+            obdManager.setParameterDemand("editor", ids)
+    }
+    on_DemandIdsChanged: _pushDemand(_demandIds)
+
     // Cell the next palette pick lands in (set by emptyCellTapped).
     property int _pendingCol: 0
     property int _pendingRow: 0
@@ -91,6 +108,7 @@ Item {
     // offered back via "Resume draft" in the chooser. Normal exits (Save,
     // confirmed Discard) clear `dirty` first, so they don't leave a draft.
     Component.onDestruction: {
+        _pushDemand([])
         // Never let editor demo data leak into the real OBD views.
         App.OBDParameterModel.simulationActive = false
         if (!dirty) return
@@ -247,6 +265,22 @@ Item {
             _patchCell(index, { "colSpan": cs, "rowSpan": rs })
     }
 
+    // Absolute resize (drag handles). Same clamping/overlap rule as the
+    // steppers; a rejected size reassigns so the canvas snaps back.
+    function resizeCellTo(index, colSpan, rowSpan) {
+        var c = cells[index]
+        if (!c) return
+        var col = c.col !== undefined ? c.col : 0
+        var row = c.row !== undefined ? c.row : 0
+        var cs = Math.max(1, Math.min(gridColumns - col, colSpan))
+        var rs = Math.max(1, Math.min(gridRows - row, rowSpan))
+        if (cs === c.colSpan && rs === c.rowSpan) { cells = cells.slice(); return }
+        if (editorCanvas.canPlace(col, row, cs, rs, index))
+            _patchCell(index, { "colSpan": cs, "rowSpan": rs })
+        else
+            cells = cells.slice()
+    }
+
     function removeCell(index) {
         var next = cells.slice()
         next.splice(index, 1)
@@ -266,6 +300,21 @@ Item {
         var existing = c.props || {}
         for (var k in existing) props[k] = existing[k]
         props[key] = value
+        _patchCell(index, { "props": props })
+    }
+
+    // Set several props to one value in a single mutation (the Color row
+    // writes e.g. fillColor + needleColor). `value === undefined` clears them.
+    function setCellProps(index, keys, value) {
+        var c = cells[index]
+        if (!c) return
+        var props = {}
+        var existing = c.props || {}
+        for (var k in existing) props[k] = existing[k]
+        for (var i = 0; i < keys.length; i++) {
+            if (value === undefined) delete props[keys[i]]
+            else props[keys[i]] = value
+        }
         _patchCell(index, { "props": props })
     }
 
@@ -401,6 +450,13 @@ Item {
                 objectName: "editorNameField"
                 Layout.fillWidth: true
                 placeholderText: "Dashboard name"
+                placeholderTextColor: Qt.darker(App.Style.obdLabelColor, 1.4)
+                background: Rectangle {
+                    radius: editor.dpMin(6, 2)
+                    color: Qt.darker(App.Style.obdBoxBackground, 1.25)
+                    border.color: nameField.activeFocus ? App.Style.accent : Qt.darker(App.Style.obdBarColor, 1.6)
+                    border.width: 1
+                }
                 font.family: App.Style.fontFamily
                 font.pixelSize: App.Spacing.overallText * 1.1
                 color: App.Style.primaryTextColor
@@ -460,6 +516,7 @@ Item {
             }
             onCellTapped: function(index) { editor.selectedIndex = index }
             onCellMoveRequested: function(index, col, row) { editor.moveCell(index, col, row) }
+            onCellResizeRequested: function(index, cs, rs) { editor.resizeCellTo(index, cs, rs) }
             onBackgroundTapped: editor.clearSelection()
         }
 

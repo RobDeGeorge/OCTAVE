@@ -299,6 +299,17 @@ Item {
         }
     }
     
+    // Polling is demand-driven (obdManager.setParameterDemand): ask for the
+    // Home tiles' PIDs while this view is actually on screen.
+    readonly property var _demandIds: visible ? obdRepeater.model : []
+    function _pushDemand(ids) {
+        if (typeof obdManager !== "undefined" && obdManager && obdManager.setParameterDemand)
+            obdManager.setParameterDemand("home", ids)
+    }
+    on_DemandIdsChanged: _pushDemand(_demandIds)
+    Component.onCompleted: _pushDemand(_demandIds)
+    Component.onDestruction: _pushDemand([])
+
     // Single connection to settings changes
     Connections {
         target: settingsManager

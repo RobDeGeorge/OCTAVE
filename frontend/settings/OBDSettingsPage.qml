@@ -832,118 +832,34 @@ Item {
             }
 
 
-            // ── Controls row ─────────────────────────────────────
-            RowLayout {
+            // ── Polling demand ───────────────────────────────────
+            // OCTAVE polls only what is on screen (obdManager.setParameterDemand),
+            // so this list registers its own parameters for the live values
+            // while it is shown. There are no per-parameter enable toggles any
+            // more — the Parameter Cards page and dashboards drive polling.
+            function _updateDemand() {
+                if (typeof obdManager === "undefined" || !obdManager || !obdManager.setParameterDemand)
+                    return;
+                obdManager.setParameterDemand("settings", parametersCard.visible
+                    ? parametersCard.visibleParameters.map(function(p) { return p.id; })
+                    : []);
+            }
+            onVisibleChanged: _updateDemand()
+            onVisibleParametersChanged: _updateDemand()
+            Component.onCompleted: _updateDemand()
+            Component.onDestruction: {
+                if (typeof obdManager !== "undefined" && obdManager && obdManager.setParameterDemand)
+                    obdManager.setParameterDemand("settings", []);
+            }
+
+            // ── Parameter count ──────────────────────────────────
+            Text {
                 Layout.fillWidth: true
                 Layout.bottomMargin: dp(6)
-
-                // Select All button
-                Button {
-                    id: selectAllButton
-                    text: "Select All"
-                    implicitHeight: App.Spacing.overallSpacing * 2
-                    implicitWidth: selectAllButtonText.implicitWidth + App.Spacing.overallSpacing * 1.5
-
-                    scale: selectAllMouseArea.pressed ? 0.95 : 1.0
-                    opacity: selectAllMouseArea.pressed ? 0.8 : 1.0
-
-                    Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutBack } }
-                    Behavior on opacity { NumberAnimation { duration: 100 } }
-
-                    background: Rectangle {
-                        color: App.Style.accent
-                        radius: 4
-                    }
-
-                    contentItem: Text {
-                        id: selectAllButtonText
-                        text: selectAllButton.text
-                        color: App.Style.primaryTextColor
-                        font.pixelSize: App.Spacing.overallText
-                        font.family: App.Style.fontFamily
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-
-                    MouseArea {
-                        id: selectAllMouseArea
-                        anchors.fill: parent
-                        onClicked: {
-                            if (settingsManager) {
-                                parametersCard.visibleParameters.forEach(function(p) {
-                                    settingsManager.save_obd_parameter_enabled(p.id, true);
-                                });
-                            }
-                        }
-                    }
-                }
-
-                // Deselect All button
-                Button {
-                    id: deselectAllButton
-                    text: "Deselect All"
-                    implicitHeight: App.Spacing.overallSpacing * 2
-                    implicitWidth: deselectAllButtonText.implicitWidth + App.Spacing.overallSpacing * 1.5
-
-                    scale: deselectAllMouseArea.pressed ? 0.95 : 1.0
-                    opacity: deselectAllMouseArea.pressed ? 0.8 : 1.0
-
-                    Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutBack } }
-                    Behavior on opacity { NumberAnimation { duration: 100 } }
-
-                    background: Rectangle {
-                        color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.5)
-                        radius: 4
-                    }
-
-                    contentItem: Text {
-                        id: deselectAllButtonText
-                        text: deselectAllButton.text
-                        color: App.Style.primaryTextColor
-                        font.pixelSize: App.Spacing.overallText
-                        font.family: App.Style.fontFamily
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-
-                    MouseArea {
-                        id: deselectAllMouseArea
-                        anchors.fill: parent
-                        onClicked: {
-                            if (settingsManager) {
-                                parametersCard.visibleParameters.forEach(function(p) {
-                                    settingsManager.save_obd_parameter_enabled(p.id, false);
-                                });
-                            }
-                        }
-                    }
-                }
-
-                Item { Layout.fillWidth: true }
-
-                // Parameter counter
-                Text {
-                    id: enabledCount
-                    text: "0 of 0 enabled"
-                    color: App.Style.secondaryTextColor
-                    font.pixelSize: App.Spacing.overallText
-                    font.family: App.Style.fontFamily
-
-                    function updateEnabledCount() {
-                        if (!settingsManager) return;
-                        var visible = parametersCard.visibleParameters;
-                        var count = 0;
-                        visible.forEach(function(p) {
-                            var isOrig = App.OBDParameterModel.isOriginalParameter(p.id);
-                            if (settingsManager.get_obd_parameter_enabled(p.id, isOrig)) {
-                                count++;
-                            }
-                        });
-                        enabledCount.text = count + " of " + visible.length + " enabled";
-                    }
-
-                    Component.onCompleted: updateEnabledCount()
-                }
+                text: parametersCard.visibleParameters.length + " parameters available"
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.overallText
+                font.family: App.Style.fontFamily
             }
 
             // ── Auto-scan progress (shown during scan) ───────────
@@ -988,12 +904,6 @@ Item {
                     }
                     function onScanCompleteChanged(supportedParams) {
                         scanProgressRow.isScanning = false;
-                        // Auto-enable all supported parameters
-                        if (supportedParams.length > 0 && settingsManager) {
-                            supportedParams.forEach(function(param) {
-                                settingsManager.save_obd_parameter_enabled(param, true);
-                            });
-                        }
                     }
                 }
             }
@@ -1098,8 +1008,8 @@ Item {
 
                                         property string paramId: modelData.id
                                         property bool isOriginal: App.OBDParameterModel.isOriginalParameter(paramId)
-                                        property bool isEnabled: settingsManager ?
-                                            settingsManager.get_obd_parameter_enabled(paramId, isOriginal) : isOriginal
+                                        // Every listed parameter is available (no enable toggles).
+                                        readonly property bool isEnabled: true
                                         property bool onHome: parametersCard.isOnHomeGrid(paramId)
                                         property var info: App.OBDParameterModel.getParamInfo(paramId)
                                         property real liveValue: App.OBDParameterModel.paramValues[paramId] || 0
@@ -1124,9 +1034,6 @@ Item {
                                         // Update when settings change
                                         Connections {
                                             target: settingsManager
-                                            function onObdParametersChanged() {
-                                                leftCard.isEnabled = settingsManager.get_obd_parameter_enabled(leftCard.paramId, leftCard.isOriginal);
-                                            }
                                             function onHomeOBDParametersChanged() {
                                                 parametersCard.refreshHomeParams();
                                                 leftCard.onHome = parametersCard.isOnHomeGrid(leftCard.paramId);
@@ -1199,7 +1106,7 @@ Item {
                                             }
                                         }
 
-                                        // Interaction: click to toggle, click-and-drag to move
+                                        // Interaction: click-and-drag to add to the home grid
                                         // No parent Flickable — events come straight to us
                                         MouseArea {
                                             id: leftCardMouse
@@ -1274,12 +1181,6 @@ Item {
                                                     dragProxy.Drag.drop();
                                                     dragProxy.visible = false;
                                                     dragProxy.Drag.active = false;
-                                                } else if (!dragging && !scrolling) {
-                                                    // Simple click — toggle enabled
-                                                    if (settingsManager) {
-                                                        settingsManager.save_obd_parameter_enabled(leftCard.paramId, !leftCard.isEnabled);
-                                                        updateCountTimer.restart();
-                                                    }
                                                 }
                                                 dragging = false;
                                                 scrolling = false;
@@ -1730,7 +1631,7 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                text: "Tap to enable/disable. Drag sideways to add to home grid. Reorder by dragging within the grid."
+                text: "Drag sideways to add to the home grid. Reorder by dragging within the grid. OCTAVE polls only the parameters on screen, so there is nothing to enable here."
                 color: Qt.rgba(App.Style.secondaryTextColor.r, App.Style.secondaryTextColor.g, App.Style.secondaryTextColor.b, 0.7)
                 font.pixelSize: App.Spacing.overallText * 0.85
                 font.family: App.Style.fontFamily
@@ -1738,21 +1639,10 @@ Item {
             }
 
             // ── Settings change connections ───────────────────────
-            Timer {
-                id: updateCountTimer
-                interval: 10
-                repeat: false
-                onTriggered: enabledCount.updateEnabledCount()
-            }
-
             Connections {
                 target: settingsManager
-                function onObdParametersChanged() {
-                    updateCountTimer.restart();
-                }
                 function onSupportedOBDParametersChanged() {
                     parametersCard.supportedParamsVersion++;
-                    updateCountTimer.restart();
                 }
                 function onHomeOBDParametersChanged() {
                     parametersCard.refreshHomeParams();

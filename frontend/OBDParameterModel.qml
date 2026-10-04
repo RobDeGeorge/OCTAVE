@@ -302,6 +302,55 @@ QtObject {
         return parameterInfo[paramId] !== undefined;
     }
 
+    // ── Vehicle support gate ──────────────────────────────────────────
+    // obdManager scans the connected vehicle's supported-PID bitmaps on
+    // every connect and publishes the result (model-id vocabulary) as
+    // `vehicleSupportedParameters`; `vehicleScanComplete` is true from the
+    // end of that scan until the connection drops. Neither is persisted —
+    // the gate only ever describes the car that is answering right now.
+    //
+    //   vehicleKnown    — a vehicle has been scanned this session
+    //   isSupported(id) — true for sensor params (not OBD), and for OBD
+    //                     params the scanned vehicle reports. False for
+    //                     everything else, including when no vehicle is
+    //                     known (callers that want "anything goes while
+    //                     offline", like the editor's PID picker, check
+    //                     vehicleKnown first).
+    readonly property var sensorParameters: [
+        "PITCH", "ROLL", "HEADING", "ALTITUDE", "ACCEL_MAG",
+        "LATERAL_G", "LONGITUDINAL_G", "BARO_TEMP"
+    ]
+    function isSensorParameter(paramId) {
+        return sensorParameters.indexOf(paramId) !== -1;
+    }
+
+    readonly property bool _obdAvailable: typeof obdManager !== "undefined" && obdManager !== null
+    readonly property bool vehicleKnown: _obdAvailable && obdManager.vehicleScanComplete === true
+    readonly property var vehicleSupportedParameters:
+        (_obdAvailable && obdManager.vehicleSupportedParameters) ? obdManager.vehicleSupportedParameters : []
+
+    // id → true lookup, rebuilt only when the scan result changes.
+    readonly property var _supportedSet: {
+        var s = {};
+        for (var i = 0; i < vehicleSupportedParameters.length; i++)
+            s[vehicleSupportedParameters[i]] = true;
+        return s;
+    }
+
+    function isSupported(paramId) {
+        if (isSensorParameter(paramId)) return true;
+        return vehicleKnown && _supportedSet[paramId] === true;
+    }
+
+    // Parameters a live vehicle can actually feed: the scanned OBD set in
+    // allParameters order. Empty until a vehicle has been scanned.
+    readonly property var vehicleParameters: {
+        if (!vehicleKnown) return [];
+        return allParameters.filter(function(p) {
+            return !root.isSensorParameter(p.id) && root._supportedSet[p.id] === true;
+        });
+    }
+
     // ── Signal connections to berryIMU for the sensor parameters ─────
     // Same pattern as _obdConnections below; guarded because the IMU
     // manager may legitimately be absent (e.g. stripped-down builds).

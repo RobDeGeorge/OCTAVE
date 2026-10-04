@@ -30,6 +30,9 @@ class DashboardManager : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
+    // Human-readable reason the last export/import failed ("" after a
+    // success) — the chooser shows it in its status line.
+    Q_PROPERTY(QString lastShareError READ lastShareError NOTIFY lastShareErrorChanged)
 
 public:
     explicit DashboardManager(QObject *parent = nullptr);
@@ -52,6 +55,12 @@ public:
     // True if `id` refers to a built-in preset (read-only).
     Q_INVOKABLE bool isBuiltIn(const QString &id) const;
 
+    QString lastShareError() const { return m_lastShareError; }
+
+    // Highest dashboard `schema` this build understands. Imports declaring a
+    // newer schema are refused rather than half-rendered.
+    static constexpr int kSupportedSchema = 1;
+
 public slots:
     // Writes a user dashboard JSON file. `spec` must include at least `id`
     // and `label`. Returns the saved id on success, empty string on
@@ -68,14 +77,39 @@ public slots:
     // on success, empty string on failure.
     QString duplicateDashboard(const QString &sourceId, const QString &newLabel);
 
+    // ── Sharing ──────────────────────────────────────────────────────
+    // Export writes the spec to <Downloads>/OCTAVE-dashboards/<id>.json and
+    // returns that path ("" on failure). The clipboard variant copies the
+    // same JSON as text, for pasting into a chat or forum post.
+    QString exportDashboard(const QString &id);
+    bool copyDashboardToClipboard(const QString &id);
+
+    // Import a shared dashboard as a NEW user dashboard (never overwrites:
+    // the id is always regenerated from the label). Accepts a local path,
+    // a file:// URL or an Android content:// URL. The spec is validated and
+    // reduced to the known schema-1 keys first (see sanitizeImportedSpec).
+    // Returns the new id, or "" with lastShareError set.
+    QString importDashboard(const QString &fileOrUrl);
+    QString importDashboardFromClipboard();
+    QString importDashboardFromText(const QString &json);
+
     // Re-scan both directories. Emits dashboardsChanged() afterwards.
     // Call this after editing JSON externally while the app is running.
     void refresh();
 
 signals:
     void dashboardsChanged();
+    void lastShareErrorChanged();
 
 private:
+    QString m_lastShareError;
+    void setShareError(const QString &message);
+
+    // Validate an imported spec and reduce it to known keys. Returns an
+    // empty map (and sets *error) when the data isn't a usable dashboard.
+    static QVariantMap sanitizeImportedSpec(const QVariantMap &raw, QString *error);
+    QString importSpec(const QVariantMap &raw);
+
     QString m_presetsDir;
     QString m_userDir;
     QVariantList m_dashboards;

@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Shapes 1.15
+import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
 import "." as App
 import "gauges" as Gauges
@@ -82,6 +83,51 @@ Item {
     }
 
     // Scriptable (dev tooling drives these through the command server's `call`)
+    // ── Swipe between dashboards (see swipeHandler) ──────────────────
+    property real _swipeOffset: 0
+    property int _swipeDir: 0
+
+    function _registryIndex(id) {
+        for (var i = 0; i < dashboardRegistry.length; i++)
+            if (dashboardRegistry[i].id === id) return i
+        return 0
+    }
+
+    // dir = +1 next, -1 previous; wraps around the registry.
+    function swipeDashboard(dir) {
+        var n = dashboardRegistry.length
+        if (n < 2) return
+        _swipeDir = dir
+        swipeAnim.restart()
+    }
+
+    function _commitSwipe() {
+        var n = dashboardRegistry.length
+        var next = (_registryIndex(activeDashboardId) + _swipeDir + n) % n
+        setActiveDashboard(dashboardRegistry[next].id)
+        _swipeOffset = _swipeDir * Math.max(1, cardsScroll.width)   // enter from the far side
+    }
+
+    SequentialAnimation {
+        id: swipeAnim
+        NumberAnimation {
+            target: obdPage; property: "_swipeOffset"
+            to: -obdPage._swipeDir * Math.max(1, cardsScroll.width)
+            duration: 160; easing.type: Easing.InCubic
+        }
+        ScriptAction { script: obdPage._commitSwipe() }
+        NumberAnimation {
+            target: obdPage; property: "_swipeOffset"
+            to: 0; duration: 220; easing.type: Easing.OutCubic
+        }
+    }
+
+    NumberAnimation {
+        id: swipeBack
+        target: obdPage; property: "_swipeOffset"
+        to: 0; duration: 180; easing.type: Easing.OutCubic
+    }
+
     function openDashboardChooser() { dashboardChooserPopup.open() }
     function closeDashboardChooser() { dashboardChooserPopup.close() }
 
@@ -91,6 +137,62 @@ Item {
     // tapped Delete — any code after the call in the delegate context throws
     // "obdPage is not defined". Active-dashboard fallback happens in the
     // onDashboardsChanged handler.
+    // ── Sharing ──────────────────────────────────────────────────────
+    property string shareStatus: ""
+    property bool shareStatusIsError: false
+    Timer {
+        id: shareStatusTimer
+        interval: 4500
+        onTriggered: obdPage.shareStatus = ""
+    }
+    function showShareStatus(msg, isError) {
+        shareStatus = msg
+        shareStatusIsError = isError
+        shareStatusTimer.restart()
+    }
+    function finishImport(newId) {
+        if (newId && newId.length > 0) {
+            var label = newId
+            for (var i = 0; i < dashboardRegistry.length; i++)
+                if (dashboardRegistry[i].id === newId) label = dashboardRegistry[i].label
+            showShareStatus("Imported \"" + label + "\"", false)
+        } else {
+            showShareStatus(dashboardManager.lastShareError || "Import failed", true)
+        }
+    }
+
+    Menu {
+        id: shareMenu
+        objectName: "shareMenu"
+        property string dashId: ""
+        MenuItem {
+            objectName: "shareExport"
+            text: "Save to Downloads"
+            onTriggered: {
+                var path = dashboardManager.exportDashboard(shareMenu.dashId)
+                if (path.length > 0) obdPage.showShareStatus("Saved to " + path, false)
+                else obdPage.showShareStatus(dashboardManager.lastShareError || "Export failed", true)
+            }
+        }
+        MenuItem {
+            objectName: "shareClipboard"
+            text: "Copy as text"
+            onTriggered: {
+                if (dashboardManager.copyDashboardToClipboard(shareMenu.dashId))
+                    obdPage.showShareStatus("Copied. Paste it anywhere to share.", false)
+                else
+                    obdPage.showShareStatus(dashboardManager.lastShareError || "Copy failed", true)
+            }
+        }
+    }
+
+    FileDialog {
+        id: importFileDialog
+        title: "Import a dashboard"
+        nameFilters: ["OCTAVE dashboards (*.json)", "All files (*)"]
+        onAccepted: obdPage.finishImport(dashboardManager.importDashboard(selectedFile.toString()))
+    }
+
     function deleteUserDashboard(id) {
         if (typeof dashboardManager === "undefined" || !dashboardManager) return false
         return dashboardManager.deleteDashboard(id)
@@ -162,30 +264,55 @@ Item {
         && (StackView.status === StackView.Active || StackView.status === StackView.Activating)
     property var paramValues: _gridLive ? App.OBDParameterModel.paramValues : ({})
     
-    // Just update column count when parameters change
+    // Parameter Cards = the connected vehicle's full PID list: every OBD
+    // parameter its supported-PID scan reported this session. Empty until a
+    // vehicle has been scanned (see the empty state over the grid).
+    readonly property var vehicleParameters: App.OBDParameterModel.vehicleParameters
+
+    // Column count from the card count; past ~16 cards the grid scrolls
+    // (cards keep a minimum height instead of shrinking to slivers).
     function updateLayout() {
-        // Count visible parameters
-        let visibleCount = 0;
-        for (let i = 0; i < allParameters.length; i++) {
-            const param = allParameters[i];
-            if (settingsManager && settingsManager.get_obd_parameter_enabled(param.id, true)) {
-                visibleCount++;
-            }
-        }
-        
-        // Determine column count based on visible parameters
-        if (visibleCount <= 4) {
+        const n = vehicleParameters.length;
+        if (n <= 4) {
             parametersGrid.columns = 2;
-        } else if (visibleCount <= 9) {
+        } else if (n <= 9) {
             parametersGrid.columns = 3;
-        } else {
+        } else if (n <= 16 || cardsScroll.width < dp(900)) {
             parametersGrid.columns = 4;
+        } else {
+            parametersGrid.columns = 5;
         }
+    }
+    onVehicleParametersChanged: updateTimer.restart()
+
+    // ── Polling demand ────────────────────────────────────────────────
+    // obdManager polls only what is on screen. While this page is the
+    // active StackView page: the active dashboard's PIDs, or — on Parameter
+    // Cards — every PID the vehicle supports. Leaving the page withdraws
+    // both demands.
+    readonly property bool _pageActiveForDemand:
+        StackView.status === StackView.Active || StackView.status === StackView.Activating
+    readonly property var _dashboardDemand:
+        (_pageActiveForDemand && activeDashboardId !== "grid") ? dashboardRenderer.paramIds : []
+    readonly property var _cardsDemand: {
+        if (!_pageActiveForDemand || activeDashboardId !== "grid") return [];
+        return vehicleParameters.map(function(p) { return p.id; });
+    }
+    function _pushDemand(consumer, ids) {
+        if (typeof obdManager === "undefined" || !obdManager || !obdManager.setParameterDemand) return;
+        obdManager.setParameterDemand(consumer, ids);
+    }
+    on_DashboardDemandChanged: _pushDemand("dashboard", _dashboardDemand)
+    on_CardsDemandChanged: _pushDemand("cards", _cardsDemand)
+    Component.onDestruction: {
+        _pushDemand("dashboard", []);
+        _pushDemand("cards", []);
     }
     
     Rectangle {
         anchors.fill: parent
         color: backgroundColor
+        clip: true      // swipe slides content past the page edges
 
         // ── Header bar ─────────────────────────────────────────────────
         // Hosts the current dashboard's label and the chooser button.
@@ -201,6 +328,26 @@ Item {
             height: App.Spacing.bottomBarNavButtonHeight + App.Spacing.mediaRoomMargin * 2
             color: Qt.darker(obdPage.backgroundColor, 1.12)
             z: 2
+
+            // Page dots: one per registry entry, active one filled — shows
+            // where you are when swiping between dashboards.
+            Row {
+                objectName: "dashboardPageDots"
+                visible: obdPage.dashboardRegistry.length > 1
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: dp(5)
+                spacing: dp(6)
+                Repeater {
+                    model: obdPage.dashboardRegistry.length
+                    delegate: Rectangle {
+                        readonly property bool _active: index === obdPage._registryIndex(obdPage.activeDashboardId)
+                        width: dp(6); height: dp(6); radius: width / 2
+                        color: _active ? App.Style.accent : App.Style.obdLabelColor
+                        opacity: _active ? 1.0 : 0.35
+                    }
+                }
+            }
 
             Text {
                 anchors.centerIn: parent
@@ -296,6 +443,8 @@ Item {
         // widgets into a grid. Replaces the old per-dashboard QML loader.
         Dashboards.DashboardRenderer {
             id: dashboardRenderer
+            objectName: "activeDashboardRenderer"
+            transform: Translate { x: obdPage._swipeOffset }
             anchors {
                 top: obdHeader.bottom
                 left: parent.left
@@ -321,8 +470,9 @@ Item {
                   : null
         }
 
-        GridLayout {
-            id: parametersGrid
+        Flickable {
+            id: cardsScroll
+            objectName: "parameterCardsScroll"
             visible: obdPage.activeDashboardId === "grid"
             anchors {
                 top: obdHeader.bottom
@@ -334,32 +484,41 @@ Item {
                 topMargin: dp(10)
                 bottomMargin: dp(10)
             }
+            clip: true
+            contentWidth: width
+            contentHeight: parametersGrid.height
+            flickableDirection: Flickable.VerticalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height + 1
+            transform: Translate { x: obdPage._swipeOffset }
+
+            // Rows needed for the current card count, and the height a row
+            // may not shrink below before the grid starts scrolling.
+            readonly property int _rows: Math.ceil(obdPage.vehicleParameters.length
+                                                   / Math.max(1, parametersGrid.columns))
+            readonly property real _minRowH: dp(120)
+
+        GridLayout {
+            id: parametersGrid
+            width: cardsScroll.width
+            height: Math.max(cardsScroll.height,
+                             cardsScroll._rows * cardsScroll._minRowH
+                             + Math.max(0, cardsScroll._rows - 1) * rowSpacing)
             columns: 3
             rowSpacing: dp(10)
             columnSpacing: dp(10)
             
             // Use Repeater to create parameter cards
             Repeater {
-                model: allParameters
-                
+                model: obdPage.vehicleParameters
+
                 Item {
                     id: cardContainer
+                    objectName: "paramCard_" + modelData.id
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    visible: settingsManager ? settingsManager.get_obd_parameter_enabled(modelData.id, true) : true
-
-                    // Update layout when visibility changes
-                    onVisibleChanged: {
-                        if (updateTimer.running) {
-                            updateTimer.restart();
-                        } else {
-                            updateTimer.start();
-                        }
-                    }
-
-                    // Only take up space when visible
-                    Layout.preferredWidth: visible ? implicitWidth : 0
-                    Layout.preferredHeight: visible ? implicitHeight : 0
+                    Layout.preferredWidth: 1     // equal column widths
+                    Layout.preferredHeight: 1
 
                     // Animated display value - fast rolling effect
                     property real targetValue: paramValues[modelData.id] || 0
@@ -573,6 +732,79 @@ Item {
                 }
             }
         }
+        }   // cardsScroll
+
+        // ── Parameter Cards empty states ────────────────────────────────
+        // The page lists the connected vehicle's PIDs, so it is empty until
+        // a vehicle has answered the supported-PID scan.
+        Column {
+            objectName: "parameterCardsEmpty"
+            visible: obdPage.activeDashboardId === "grid" && obdPage.vehicleParameters.length === 0
+            anchors.centerIn: cardsScroll
+            width: Math.min(cardsScroll.width - dp(40), dp(560))
+            spacing: dp(10)
+            transform: Translate { x: obdPage._swipeOffset }
+
+            readonly property bool _connected: typeof obdManager !== "undefined" && obdManager
+                                               && obdManager.connected === true
+
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: !parent._connected ? "No vehicle connected"
+                      : (App.OBDParameterModel.vehicleKnown ? "No supported PIDs reported"
+                                                            : "Reading your vehicle's PIDs…")
+                color: textColor
+                font.pixelSize: App.Spacing.overallText * 1.2
+                font.bold: true
+                font.family: obdPage.globalFont
+            }
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: !parent._connected
+                      ? "Connect your OBD adapter and turn the ignition on. Every PID your vehicle supports will show up here."
+                      : (App.OBDParameterModel.vehicleKnown
+                         ? "The adapter is connected, but the vehicle didn't report any PIDs. Check that the ignition is on."
+                         : "The adapter is connected. Waiting for the vehicle to answer.")
+                color: labelColor
+                font.pixelSize: App.Spacing.overallText * 0.9
+                font.family: obdPage.globalFont
+            }
+        }
+
+        // ── Swipe between dashboards ────────────────────────────────────
+        // Horizontal drag anywhere on the content cycles through the
+        // registry (Parameter Cards + every dashboard, wrapping). Only the
+        // active dashboard is ever instantiated: the content follows the
+        // finger, slides out, the dashboard switches, and the new one slides
+        // in from the other side. xAxis-only, so the cards' vertical scroll
+        // and taps on widget buttons are unaffected.
+        DragHandler {
+            id: swipeHandler
+            objectName: "dashboardSwipeHandler"
+            target: null
+            xAxis.enabled: true
+            yAxis.enabled: false
+            enabled: obdPage.dashboardRegistry.length > 1 && !swipeAnim.running
+            onTranslationChanged: if (active) obdPage._swipeOffset = translation.x
+            onActiveChanged: {
+                if (active) return
+                // translation is already reset when this fires; the offset
+                // tracked during the drag holds the distance travelled.
+                var w = Math.max(1, cardsScroll.width)
+                var dx = obdPage._swipeOffset
+                var vx = centroid.velocity.x
+                // A fast flick counts only past a minimum distance, so a tap
+                // that skids a little on a bumpy road never flips the page.
+                var flick = Math.abs(dx) > w * 0.08
+                if (dx < -w * 0.2 || (flick && vx < -dp(800))) obdPage.swipeDashboard(1)
+                else if (dx > w * 0.2 || (flick && vx > dp(800))) obdPage.swipeDashboard(-1)
+                else swipeBack.restart()
+            }
+        }
     }
     
     // Use a timer to delay layout updates to prevent rapid successive updates
@@ -608,7 +840,16 @@ Item {
     // Lay the grid out immediately. The debounce timer above is only for the
     // later settings/resize churn — routing the first layout through it left
     // the page visible with the wrong column count for 100 ms on every open.
-    Component.onCompleted: updateLayout()
+    Component.onCompleted: {
+        updateLayout()
+        // The saved active dashboard may have been deleted (or its JSON
+        // removed) while the app was closed — fall back to Parameter Cards
+        // instead of rendering an empty page. Runtime deletions are handled
+        // in onDashboardsChanged.
+        if (activeDashboardId !== "grid" && _registryIndex(activeDashboardId) === 0
+                && dashboardRegistry[0].id !== activeDashboardId)
+            setActiveDashboard("grid")
+    }
 
     // ── Dashboard Chooser Popup ──────────────────────────────────────
     Popup {
@@ -681,6 +922,33 @@ Item {
                     height: 1
                     color: Qt.darker(App.Style.obdBarColor, 1.8)
                     opacity: 0.6
+                }
+            }
+
+            // Share/import result line (auto-hides).
+            Rectangle {
+                id: shareStatusBanner
+                objectName: "shareStatusBanner"
+                visible: obdPage.shareStatus.length > 0
+                z: 10
+                anchors.bottom: parent.bottom
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottomMargin: dp(14)
+                width: Math.min(parent.width - dp(40), shareStatusText.implicitWidth + dp(32))
+                height: shareStatusText.implicitHeight + dp(18)
+                radius: dpMin(8, 2)
+                color: obdPage.shareStatusIsError ? App.Style.statusDanger : App.Style.accent
+
+                Text {
+                    id: shareStatusText
+                    anchors.centerIn: parent
+                    width: parent.width - dp(24)
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: obdPage.shareStatus
+                    color: "white"
+                    font.pixelSize: App.Spacing.overallText * 0.85
+                    font.family: obdPage.globalFont
                 }
             }
 
@@ -769,6 +1037,59 @@ Item {
                             callerPage: obdPage,
                             draftJson: obdPage._editorDraft
                         })
+                    }
+                }
+            }
+
+            // Import a shared dashboard (file or clipboard) — always becomes
+            // a new user dashboard; the backend validates and re-ids it.
+            Rectangle {
+                id: importDashboardButton
+                objectName: "importDashboardButton"
+                anchors.top: parent.top
+                anchors.left: resumeDraftButton.visible ? resumeDraftButton.right : newDashboardButton.right
+                anchors.topMargin: App.Spacing.mediaRoomMargin
+                anchors.leftMargin: dp(8)
+                height: App.Spacing.bottomBarNavButtonHeight
+                width: importLabel.implicitWidth + dp(24)
+                radius: dpMin(8, 2)
+                color: "transparent"
+                border.color: App.Style.accent
+                border.width: 1
+                scale: importMouse.pressed ? 0.9 : 1.0
+                Behavior on scale {
+                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+                }
+
+                Text {
+                    id: importLabel
+                    anchors.centerIn: parent
+                    text: "Import"
+                    color: App.Style.accent
+                    font.pixelSize: App.Spacing.overallText
+                    font.bold: true
+                    font.family: obdPage.globalFont
+                }
+
+                MouseArea {
+                    id: importMouse
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: importMenu.popup(importDashboardButton, 0, importDashboardButton.height)
+                }
+
+                Menu {
+                    id: importMenu
+                    objectName: "importMenu"
+                    MenuItem {
+                        objectName: "importFromFile"
+                        text: "From file…"
+                        onTriggered: importFileDialog.open()
+                    }
+                    MenuItem {
+                        objectName: "importFromClipboard"
+                        text: "Paste from clipboard"
+                        onTriggered: obdPage.finishImport(dashboardManager.importDashboardFromClipboard())
                     }
                 }
             }
@@ -891,6 +1212,9 @@ Item {
                                         callerPage: obdPage,
                                         editingId: card.dash.id
                                     })
+                                } else if (action === "share") {
+                                    shareMenu.dashId = card.dash.id
+                                    shareMenu.popup()
                                 } else if (action === "duplicate") {
                                     // Empty label → manager appends " (Copy)".
                                     dashboardManager.duplicateDashboard(card.dash.id, "")
@@ -1064,6 +1388,7 @@ Item {
                                     model: [
                                         { "action": "edit",      "label": "Edit",   "danger": false, "show": card.dash.builtIn === false },
                                         { "action": "duplicate", "label": "Copy",   "danger": false, "show": true },
+                                        { "action": "share",     "label": "Share",  "danger": false, "show": true },
                                         { "action": "delete",    "label": "Delete", "danger": true,  "show": card.dash.builtIn === false }
                                     ]
                                     delegate: Rectangle {

@@ -120,7 +120,7 @@ Desktop (Python)                Desktop (C++)                       Android (C++
           <thead><tr><th>QML file</th><th>What it uses</th></tr></thead>
           <tbody>
             <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Connects to all 84 parameter signals and mirrors them into <code>paramValues</code>. Every gauge, the parameter-card grid and the home cards read from here, never from <code>obdManager</code> directly.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per enabled parameter, filtered with <code>settingsManager.get_obd_parameter_enabled</code>), the dashboards chooser/renderer, the RPM/shift-light settings popup.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the dashboards chooser/renderer, the RPM/shift-light settings popup.</td></tr>
             <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code>, a 40-line rolling log fed by <code>connectionLogLineAppended</code>, and the sub-page buttons.</td></tr>
             <tr><td><span class="file-path">frontend/OBDDiagnostics.qml</span></td><td><code>enter_diagnostic_mode()</code> on creation and on every <code>visible</code> transition, <code>exit_diagnostic_mode()</code> when hidden or destroyed, plus <code>read_dtc</code> / <code>read_current_dtc</code> / <code>read_status</code> / <code>read_freeze_frame</code> / <code>clear_dtc</code>.</td></tr>
             <tr><td><span class="file-path">frontend/HomeOBDView.qml</span></td><td>Home-screen cards for the parameters in <code>homeOBDParameters</code>, plus the RPM card's shift-light disc.</td></tr>
@@ -235,7 +235,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           <code>UNABLE</code> means "adapter but no vehicle": the worker <em>releases the port</em> and emits
           <code>initComplete(false, "Connected to adapter, no vehicle response")</code>. Note the header comment claims
           <code>ELM327Protocol::defaultPids()</code> lists "the 16 most common"; that list is not used by the worker --
-          the poll list is built from settings by <code>buildPidsToWatch()</code> (see <a href="#watcher-system">Which PIDs Get Polled</a>).
+          the poll list is built from consumer demand by <code>buildPidsToWatch()</code> (see <a href="#watcher-system">Which PIDs Get Polled</a>).
         </p>
         <p>
           <strong>C++ Android</strong>: the same table is walked by a single-shot <code>QTimer</code>
@@ -327,7 +327,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             <tr><td>Reduced timeout</td><td><code>timeout=5</code></td><td>5 s connection timeout (python-obd default 10 s). <code>set_connection_timeout()</code> clamps to 5-60 s.</td></tr>
             <tr><td>Fast mode</td><td><code>fast=settingsManager.obdFastMode</code></td><td>python-obd fast mode (command-response optimisation).</td></tr>
             <tr><td>Force watch</td><td><code>watch(..., force=True)</code></td><td>Bypasses python-obd's <code>supported_commands</code> check when registering callbacks, so watchers are not silently skipped before the first scan.</td></tr>
-            <tr><td>One watchdog wrapper</td><td><code>_wrap_callback_with_watchdog</code></td><td>Only one callback (RPM if enabled, else the first) stamps the watchdog timestamp, to avoid overhead on every parameter.</td></tr>
+            <tr><td>One watchdog wrapper</td><td><code>_wrap_callback_with_watchdog</code></td><td>Only one callback (the RPM / ELM_VOLTAGE heartbeat, which is always polled) stamps the watchdog timestamp, to avoid overhead on every parameter.</td></tr>
           </tbody>
         </table>
         <h3>C++ equivalents</h3>
@@ -624,38 +624,50 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
 
         <!-- Watcher System -->
         <h2 id="watcher-system">Which PIDs Get Polled</h2>
-        <h3>Python: <code>_setup_watchers()</code></h3>
-        <pre><code><span class="kw">def</span> <span class="fn">_setup_watchers</span>(self):
-    commands_to_watch = self._get_all_commands()
-    <span class="kw">for</span> param, (command, callback) <span class="kw">in</span> commands_to_watch.items():
-        default_enabled = param <span class="kw">in</span> ORIGINAL_17
-        should_watch = self._settings_manager.get_obd_parameter_enabled(param, default_enabled)
-        <span class="kw">if</span> should_watch:
-            self._connection.watch(command, callback=final_callback, force=<span class="kw">True</span>)</code></pre>
         <p>
+          Polling is <strong>demand-driven</strong>: OCTAVE polls what is on screen, not a list of parameters switched on
+          in settings. Every consumer registers the parameter ids it shows with
+          <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list removes the consumer). The QML
+          consumers are <code>"dashboard"</code> (the active dashboard's PIDs), <code>"cards"</code> (every supported PID
+          while Parameter Cards is open), <code>"home"</code> (the Home screen OBD tiles), <code>"editor"</code> (the
+          dashboard editor canvas) and <code>"settings"</code> (the OBD settings parameter list while it is shown).
+        </p>
+        <p>The poll set is built the same way in both backends (Python <code>compute_poll_params()</code>, C++
+          <code>buildPidsToWatch()</code>):</p>
+        <ul>
+          <li>Union of every consumer's ids. BerryIMU ids (<code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, ...) and unknown ids are dropped.</li>
+          <li>Filtered to <code>vehicleSupportedParameters</code> once this session's scan produced a result (an unknown or empty result filters nothing).</li>
+          <li>A multi-value PID (0x61+) is polled when any of its signals is wanted.</li>
+          <li><strong>Heartbeat</strong>: <code>RPM</code> is always polled (<code>ELM_VOLTAGE</code> when the car has no RPM), which keeps the data watchdog fed and the global RPM shift light working on every screen.</li>
+        </ul>
+        <p>
+          Changes are debounced for <strong>250 ms</strong> (one re-watch per page switch) and applied live, without a
+          reconnect. A scan completing also re-applies the set, since the supported filter changed.
+        </p>
+        <h3>Python: <code>_setup_watchers()</code> / <code>_refresh_watchers()</code></h3>
+        <p>
+          <code>_setup_watchers()</code> watches the poll set with <code>watch(command, callback, force=True)</code>;
+          the heartbeat callback carries the watchdog wrapper. The debounce timer calls <code>_refresh_watchers()</code>,
+          which does <code>stop()</code>, <code>unwatch_all()</code>, <code>_setup_watchers()</code>, <code>start()</code>.
           Callbacks follow one pattern -- <code>if not r.is_null(): self._x = float(r.value.magnitude); self.xChanged.emit(self._x)</code>
           -- so null/error responses never reach QML (python-obd uses Pint quantities, hence <code>.magnitude</code>).
-          When the settings page toggles a parameter, <code>SettingsManager</code> debounces the change for 800 ms and
-          emits <code>obdParametersChanged</code>; the manager's <code>_refresh_watchers()</code> then does
-          <code>stop()</code>, <code>unwatch_all()</code>, <code>_setup_watchers()</code>, <code>start()</code>
-          <strong>without</strong> reconnecting. <code>refresh_values()</code> re-runs every callback with
-          <code>conn.query(command)</code>, which on an <code>Async</code> connection returns the cached response without
-          touching the adapter -- the home screen calls it after <code>homeOBDParametersChanged</code> so newly enabled
-          tiles show a value immediately.
+          <code>refresh_values()</code> re-runs every callback with <code>conn.query(command)</code>, which on an
+          <code>Async</code> connection returns the cached response without touching the adapter.
         </p>
-        <h3>C++: <code>buildPidsToWatch()</code>, on connect and live</h3>
+        <h3>C++: <code>buildPidsToWatch()</code> / <code>applyPollList()</code></h3>
         <p>
-          <code>buildPidsToWatch()</code> walks <code>ELM327Protocol::pidTable()</code>, asks
-          <code>get_obd_parameter_enabled(commandName, isDefault)</code> for each entry (the original 17 command names
-          default to on, as in Python's <code>_setup_watchers()</code>), sorts the result by PID so the round-robin order is
-          deterministic, and <code>startConnection()</code> hands the <code>QList&lt;PidKey&gt;</code> to the worker before
-          the thread starts. When the settings page toggles a parameter, <code>onSettingsParametersChanged()</code> now
-          mirrors the Python hot-refresh: while connected it rebuilds the list and queues
-          <code>OBDConnectionWorker::updatePidsToWatch()</code>, which swaps the list in place, starts polling if it was
-          paused on an empty list and pauses it if the list emptied -- no reconnect. On Android the same handler calls
-          <code>rebuildAndroidPollList()</code> and restarts the response-driven chain if it had died on an empty list.
-          While disconnected the change simply applies to the next connection, and in diagnostic mode it is deferred to the
-          reconnect that <code>exit_diagnostic_mode()</code> performs anyway.
+          <code>startConnection()</code> hands the current <code>QList&lt;PidKey&gt;</code> (sorted by PID so the
+          round-robin order is deterministic) to the worker before the thread starts. The debounce timer calls
+          <code>applyPollList()</code>: while connected it rebuilds the list and queues
+          <code>OBDConnectionWorker::updatePidsToWatch()</code>, which swaps it in place. On Android it calls
+          <code>rebuildAndroidPollList()</code> (additionally filtered by the 0100 bitmap, falling back to ATRV) and restarts
+          the response-driven chain if it had died. While disconnected the change applies to the next connection; in
+          diagnostic mode it is deferred to the reconnect <code>exit_diagnostic_mode()</code> performs anyway.
+        </p>
+        <p>
+          The per-parameter <code>obdParameters</code> enable settings no longer drive polling. The keys are still read
+          and written (<code>enable_all_supported()</code> / <code>enable_scanned_parameters()</code> keep working) so
+          existing settings files stay compatible.
         </p>
 
         <!-- Vehicle Scanning -->
@@ -666,8 +678,12 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           <code>[OK] NAME</code>, a <code>====</code> summary), progress through <code>scanProgressChanged(pct, "Checking NAME...")</code>,
           and finishes with <code>supportedCommandsChanged(list)</code> + <code>scanCompleteChanged(list)</code> +
           <code>scanProgressChanged(100, "Found N supported parameters")</code>. The list is persisted under the
-          <code>supportedOBDParameters</code> settings key, and <code>enable_all_supported()</code> /
-          <code>enable_scanned_parameters(list)</code> flip the matching parameter toggles on.
+          <code>supportedOBDParameters</code> settings key. The same list (base command names plus multi-value signal ids,
+          in <code>OBDParameterModel</code> vocabulary on both backends) becomes this session's
+          <code>vehicleSupportedParameters</code> and sets <code>vehicleScanComplete</code> (true even for an empty
+          result); both reset on disconnect, connection loss and <code>close()</code>, and are never loaded from the
+          persisted key, so they always describe the car connected right now. They drive the QML "supported by this
+          vehicle" gate and filter the poll set.
         </p>
         <ul>
           <li><strong>Python</strong>: <code>_do_vehicle_scan()</code> runs on a daemon thread but sends nothing to the

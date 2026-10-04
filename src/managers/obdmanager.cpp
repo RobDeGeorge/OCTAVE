@@ -65,9 +65,13 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
     if (m_settingsManager) {
         QObject::connect(m_settingsManager, &SettingsManager::obdBluetoothPortChanged,
                          this, &OBDManager::onSettingsPortChanged);
-        QObject::connect(m_settingsManager, &SettingsManager::obdParametersChanged,
-                         this, &OBDManager::onSettingsParametersChanged);
+        // Per-parameter enable settings no longer drive polling -- the poll
+        // set follows setParameterDemand() (what is on screen).
     }
+
+    m_demandDebounce.setSingleShot(true);
+    m_demandDebounce.setInterval(250);
+    QObject::connect(&m_demandDebounce, &QTimer::timeout, this, &OBDManager::applyPollList);
 
     // Start the deferred init
     m_startupTimer.start();
@@ -687,6 +691,7 @@ void OBDManager::cleanupConnection()
 {
     m_dataWatchdogTimer.stop();
     m_lastDataReceived = 0;
+    setVehicleSupport({}, false);  // the next car may support a different set
 
 #ifdef Q_OS_ANDROID
     cleanupAndroidConnection();
@@ -751,41 +756,54 @@ void OBDManager::cleanupWorkerThread()
         qWarning() << "[OBD] Worker thread still busy; it will clean up when it finishes";
 }
 
-// The original 17 parameters default to enabled; everything else is opt-in
-// through the OBD settings page (same list as the Python _setup_watchers()).
-static const QSet<QString> &defaultEnabledCommands()
+// BerryIMU parameters ride through OBDParameterModel like PIDs but are fed by
+// berryIMU, not the adapter -- demand for them never reaches the poll set.
+// (Same list as Python IMU_PARAM_IDS.)
+static const QSet<QString> &imuParamIds()
 {
-    static const QSet<QString> defaults = {
-        QStringLiteral("COOLANT_TEMP"), QStringLiteral("CONTROL_MODULE_VOLTAGE"),
-        QStringLiteral("ENGINE_LOAD"), QStringLiteral("THROTTLE_POS"),
-        QStringLiteral("INTAKE_TEMP"), QStringLiteral("TIMING_ADVANCE"),
-        QStringLiteral("MAF"), QStringLiteral("SPEED"), QStringLiteral("RPM"),
-        QStringLiteral("COMMANDED_EQUIV_RATIO"), QStringLiteral("FUEL_LEVEL"),
-        QStringLiteral("INTAKE_PRESSURE"), QStringLiteral("SHORT_FUEL_TRIM_1"),
-        QStringLiteral("LONG_FUEL_TRIM_1"), QStringLiteral("O2_B1S1"),
-        QStringLiteral("FUEL_PRESSURE"), QStringLiteral("OIL_TEMP"),
+    static const QSet<QString> ids = {
+        QStringLiteral("PITCH"), QStringLiteral("ROLL"), QStringLiteral("HEADING"),
+        QStringLiteral("ALTITUDE"), QStringLiteral("ACCEL_MAG"), QStringLiteral("LATERAL_G"),
+        QStringLiteral("LONGITUDINAL_G"), QStringLiteral("BARO_TEMP"),
     };
-    return defaults;
+    return ids;
 }
+
+static const PidKey kRpmKey{1, 0x0C};
 
 QList<PidKey> OBDManager::buildPidsToWatch() const
 {
+    // Mirror of Python compute_poll_params().
+    QSet<QString> wanted;
+    for (auto it = m_paramDemand.constBegin(); it != m_paramDemand.constEnd(); ++it)
+        wanted.unite(it.value());
+    wanted.subtract(imuParamIds());
+
+    // Filter to this session's scan once it produced a result; an unknown or
+    // empty result filters nothing (the adapter answers NO DATA, which the
+    // decode paths already ignore).
+    const QSet<QString> supported(m_vehicleSupportedParameters.cbegin(),
+                                  m_vehicleSupportedParameters.cend());
+    auto ok = [&supported](const QString &id) { return supported.isEmpty() || supported.contains(id); };
+
     QList<PidKey> pids;
     const auto &table = ELM327Protocol::pidTable();
     for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
         const QString &cmdName = it.value().commandName;
-        const bool isDefault = defaultEnabledCommands().contains(cmdName);
-        const bool shouldWatch = m_settingsManager
-            ? m_settingsManager->get_obd_parameter_enabled(cmdName, isDefault)
-            : isDefault;
-        if (shouldWatch)
+        if (wanted.contains(cmdName) && ok(cmdName))
             pids.append(it.key());
     }
-    // Multi-value PIDs: poll when any of their values is enabled (all opt-in)
+    // Heartbeat: always poll RPM (ELM_VOLTAGE when the car has no RPM) so the
+    // data watchdog stays fed and the global RPM shift light works everywhere.
+    const PidKey heartbeat = ok(QStringLiteral("RPM")) ? kRpmKey : kElmVoltageKey;
+    if (!pids.contains(heartbeat))
+        pids.append(heartbeat);
+
+    // Multi-value PIDs: poll when any of their values is demanded
     const auto &ext = ELM327Protocol::extendedPidTable();
     for (auto it = ext.constBegin(); it != ext.constEnd(); ++it) {
         for (const ExtendedSignal &sig : it.value()) {
-            if (m_settingsManager && m_settingsManager->get_obd_parameter_enabled(sig.paramId, false)) {
+            if (wanted.contains(sig.paramId) && ok(sig.paramId)) {
                 pids.append(it.key());
                 break;
             }
@@ -793,6 +811,35 @@ QList<PidKey> OBDManager::buildPidsToWatch() const
     }
     std::sort(pids.begin(), pids.end());  // deterministic poll order (by PID)
     return pids;
+}
+
+void OBDManager::setParameterDemand(const QString &consumer, const QStringList &paramIds)
+{
+    QSet<QString> ids;
+    for (const QString &id : paramIds) {
+        if (!id.isEmpty())
+            ids.insert(id);
+    }
+    if (ids.isEmpty()) {
+        if (m_paramDemand.remove(consumer) == 0)
+            return;
+    } else {
+        if (m_paramDemand.value(consumer) == ids)
+            return;
+        m_paramDemand.insert(consumer, ids);
+    }
+    m_demandDebounce.start();
+}
+
+void OBDManager::setVehicleSupport(const QStringList &names, bool complete)
+{
+    QStringList sorted = names;
+    sorted.sort();
+    if (sorted == m_vehicleSupportedParameters && complete == m_vehicleScanComplete)
+        return;
+    m_vehicleSupportedParameters = sorted;
+    m_vehicleScanComplete = complete;
+    emit vehicleSupportedParametersChanged();
 }
 
 bool OBDManager::invokeWorker(const char *method)
@@ -986,6 +1033,7 @@ void OBDManager::onWorkerConnectionLost(const QString &reason)
 {
     qDebug() << "[OBD] Connection lost:" << reason;
     m_connected = false;
+    setVehicleSupport({}, false);
     emit connectionStatusChanged(QStringLiteral("Disconnected"));
     emit connectionStatusDetailChanged(reason);
     emit connectionProgressChanged(0);
@@ -1003,6 +1051,8 @@ void OBDManager::onWorkerScanComplete(const QStringList &supported)
 {
     m_supportedCommands = supported;
     m_isScanning = false;
+    setVehicleSupport(supported, true);
+    applyPollList();  // the supported set now filters the poll list
 
     QVariantList varList;
     for (const QString &s : supported)
@@ -1084,24 +1134,23 @@ void OBDManager::onPortChangeDebounce()
     }
 }
 
-void OBDManager::onSettingsParametersChanged()
+void OBDManager::applyPollList()
 {
     // Mirror of the Python _refresh_watchers(): swap the poll list in place,
     // no reconnect.
     if (!m_connected) {
-        qDebug() << "[OBD] OBD parameters changed -- will take effect on next connection";
+        qDebug() << "[OBD] Poll set changed -- applied on next connection";
         return;
     }
     if (m_diagnosticMode) {
         // Polling is deliberately paused; exit_diagnostic_mode() reconnects
-        // and rebuilds the list from settings anyway.
-        qDebug() << "[OBD] OBD parameters changed -- applied when diagnostic mode exits";
+        // and rebuilds the list from the current demand anyway.
+        qDebug() << "[OBD] Poll set changed -- applied when diagnostic mode exits";
         return;
     }
 #ifdef Q_OS_ANDROID
     rebuildAndroidPollList();
-    qDebug() << "[OBD] OBD parameters changed -- poll list refreshed live,"
-             << m_androidEnabledPids.size() << "PIDs";
+    qDebug() << "[OBD] Poll set refreshed live," << m_androidEnabledPids.size() << "PIDs";
     // If the response-driven chain died on an empty list, restart it.
     if (m_androidPolling && !m_androidEnabledPids.isEmpty() && !m_androidPollWatchdog.isActive())
         pollNextAndroidPid();
@@ -1110,7 +1159,7 @@ void OBDManager::onSettingsParametersChanged()
         return;
     const QList<PidKey> pids = buildPidsToWatch();
     m_hasActiveWatchers = !pids.isEmpty();
-    qDebug() << "[OBD] OBD parameters changed -- poll list refreshed live," << pids.size() << "PIDs";
+    qDebug() << "[OBD] Poll set refreshed live," << pids.size() << "PIDs";
     OBDConnectionWorker *worker = m_worker;
     QMetaObject::invokeMethod(worker, [worker, pids]() { worker->updatePidsToWatch(pids); },
                               Qt::QueuedConnection);
@@ -2418,10 +2467,12 @@ void OBDConnectionWorker::doScanVehicle()
             emit scanOutput(QStringLiteral("[OK] %1").arg(cmdName));
         }
     }
-    supportedNames.sort();
+    // Report in the shared vocabulary (base command names + multi-value
+    // signal ids for PIDs 0x61+), same as the Android path and Python.
+    const int unsupported = total - supportedNames.size();
+    supportedNames = ELM327Protocol::supportedCommandNames(supportedPids);
 
     // Summary
-    int unsupported = total - supportedNames.size();
     emit scanOutput(QString());
     emit scanOutput(QStringLiteral("========================================"));
     emit scanOutput(QStringLiteral("[DONE] Scan complete!"));
@@ -2623,6 +2674,7 @@ void OBDManager::onAndroidBlePoll()
         m_androidPolling = false;
         m_bleNotifyPoller.stop();
         m_androidPollWatchdog.stop();
+        setVehicleSupport({}, false);
         emit connectionStatusChanged(QStringLiteral("Disconnected"));
         emit connectionProgressChanged(0);
         if (wasConnected && m_androidReconnectAttempts < m_androidMaxReconnect) {
@@ -2784,18 +2836,8 @@ void OBDManager::rebuildAndroidPollList()
         }
         pids = filtered;
     }
-    if (pids.isEmpty()) {
-        // Vehicle didn't answer 0100 (or nothing enabled matched) -- fall
-        // back to the default set so the user still sees readings. ELM327
-        // will return NO DATA for unsupported PIDs which our code paths
-        // already ignore.
-        const auto &table = ELM327Protocol::pidTable();
-        for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
-            if (defaultEnabledCommands().contains(it.value().commandName))
-                pids.append(it.key());
-        }
-        std::sort(pids.begin(), pids.end());
-    }
+    if (pids.isEmpty())
+        pids.append(kElmVoltageKey);  // heartbeat filtered out: ATRV always answers
     m_androidEnabledPids = pids;
     if (m_androidPollIndex >= m_androidEnabledPids.size())
         m_androidPollIndex = 0;

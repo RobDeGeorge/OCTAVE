@@ -34,6 +34,11 @@
 // Unknown cell `type` values render as nothing (logged). Cells without a
 // `paramId` are still placed — some widgets (WarningLight driven by
 // explicit `value`) can be used decoratively.
+//
+// Vehicle gate: once a connected vehicle has been scanned
+// (OBDParameterModel.vehicleKnown), a cell bound to a PID that vehicle
+// doesn't report shows a "not supported" placeholder instead of a gauge
+// that would sit at zero forever.
 
 import QtQuick 2.15
 import ".." as App
@@ -44,6 +49,18 @@ Item {
     // The dashboard spec to render. Typically a JS object parsed from JSON
     // by DashboardManager; can also be an inline object literal for testing.
     property var spec: null
+
+    // Every distinct paramId the spec binds — the host registers these with
+    // obdManager.setParameterDemand() so exactly these PIDs get polled.
+    readonly property var paramIds: {
+        var seen = {}, out = []
+        var cells = (spec && spec.cells) ? spec.cells : []
+        for (var i = 0; i < cells.length; i++) {
+            var id = cells[i].paramId
+            if (id && !seen[id]) { seen[id] = true; out.push(id) }
+        }
+        return out
+    }
 
     // Widget registry: type-string → absolute QML source URL. Owned by the
     // App.WidgetCatalog singleton so the renderer, the editor palette, and the
@@ -116,10 +133,16 @@ Item {
                                  + (root.spec && root.spec.id ? root.spec.id : "?") + "\" — left unbound")
             }
 
+            readonly property bool _unsupported:
+                _knownParam && modelData.paramId !== undefined && modelData.paramId !== ""
+                && App.OBDParameterModel.vehicleKnown
+                && !App.OBDParameterModel.isSupported(modelData.paramId)
+
             Loader {
                 id: widgetLoader
                 anchors.fill: parent
                 asynchronous: true
+                visible: !cell._unsupported
                 active: cell._knownType
                 source: cell._knownType ? root.sourceForType(modelData.type) : ""
 
@@ -158,6 +181,48 @@ Item {
                     if (status === Loader.Error) {
                         console.warn("DashboardRenderer: load error for type",
                                      modelData.type, "source:", source)
+                    }
+                }
+            }
+
+            // "Not supported by this vehicle" placeholder (see header).
+            Rectangle {
+                objectName: "dashUnsupported_" + index
+                visible: cell._unsupported
+                anchors.fill: parent
+                radius: App.Spacing.dp(8)
+                color: Qt.darker(App.Style.obdBoxBackground, 1.08)
+                border.color: Qt.darker(App.Style.obdBarColor, 1.8)
+                border.width: 1
+                opacity: 0.8
+
+                Column {
+                    anchors.centerIn: parent
+                    width: parent.width - App.Spacing.dp(12)
+                    spacing: App.Spacing.dp(2)
+                    Text {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        text: (modelData.props && modelData.props.title)
+                              ? modelData.props.title
+                              : App.OBDParameterModel.getParamInfo(modelData.paramId).title
+                        color: App.Style.obdLabelColor
+                        font.family: App.Style.fontFamily
+                        font.pixelSize: Math.max(9, Math.min(App.Spacing.overallText, cell.height * 0.18))
+                        font.bold: true
+                    }
+                    Text {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        text: "Not supported by this vehicle"
+                        color: App.Style.obdLabelColor
+                        opacity: 0.75
+                        font.family: App.Style.fontFamily
+                        font.pixelSize: Math.max(8, Math.min(App.Spacing.overallText * 0.75, cell.height * 0.13))
                     }
                 }
             }

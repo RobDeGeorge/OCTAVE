@@ -23,6 +23,44 @@ logger = get_logger(__name__)
 
 _extended_commands = {}
 
+# BerryIMU parameters ride through OBDParameterModel like PIDs but are fed by
+# berryIMU, not the adapter — demand for them never reaches the poll set.
+IMU_PARAM_IDS = frozenset({"PITCH", "ROLL", "HEADING", "ALTITUDE", "ACCEL_MAG",
+                           "LATERAL_G", "LONGITUDINAL_G", "BARO_TEMP"})
+
+# Always polled while connected: keeps the data watchdog fed and the global
+# RPM shift light working on every screen. First one the vehicle supports wins.
+HEARTBEAT_PARAMS = ("RPM", "ELM_VOLTAGE")
+
+
+def compute_poll_params(demand, supported, base_params, extended_table=EXTENDED_PID_TABLE):
+    """Demand-driven poll set (mirror of C++ OBDManager::buildPidsToWatch).
+
+    demand:       {consumer: iterable of parameter ids} from setParameterDemand
+    supported:    this session's scan result (parameter ids); empty/None = not
+                  known yet, so nothing is filtered out
+    base_params:  parameter ids with a single-value command (_get_all_commands)
+    Returns (sorted base parameter ids, sorted extended (mode, pid) keys). A
+    multi-value PID is polled when any of its signals is demanded."""
+    wanted = set()
+    for ids in demand.values():
+        wanted.update(ids)
+    wanted -= IMU_PARAM_IDS
+    supported = set(supported or ())
+
+    def ok(param_id):
+        return not supported or param_id in supported
+
+    base_params = set(base_params)
+    base = {p for p in wanted if p in base_params and ok(p)}
+    for hb in HEARTBEAT_PARAMS:
+        if hb in base_params and ok(hb):
+            base.add(hb)
+            break
+    extended = sorted(key for key, signals in extended_table.items()
+                      if any(sig[0] in wanted and ok(sig[0]) for sig in signals))
+    return sorted(base), extended
+
 
 def extended_command(mode, pid):
     """python-obd command for a multi-value PID from EXTENDED_PID_TABLE.
@@ -262,6 +300,9 @@ class OBDManager(QObject):
     scanProgressChanged = Signal(int, str)  # progress (0-100), message
     scanCompleteChanged = Signal(list)  # list of supported command names
     scanOutputChanged = Signal(str)  # Terminal-style output for vehicle scanning
+    # This session's scan result (parameter ids) + whether the scan finished;
+    # both reset on disconnect. Drives the QML "supported by this vehicle" gate.
+    vehicleSupportedParametersChanged = Signal()
 
     # Diagnostic signals
     dtcCodesChanged = Signal(list)  # List of DTC tuples [(code, description), ...]
@@ -396,6 +437,17 @@ class OBDManager(QObject):
         self._supported_commands = []
         self._is_scanning = False
 
+        # Demand-driven polling: consumer name -> set of parameter ids. The
+        # poll set is their union (filtered to this session's scan result),
+        # rebuilt on a short debounce so a page switch costs one re-watch.
+        self._param_demand = {}
+        self._vehicle_supported_parameters = []
+        self._vehicle_scan_complete = False
+        self._demand_debounce = QTimer(self)
+        self._demand_debounce.setSingleShot(True)
+        self._demand_debounce.setInterval(250)
+        self._demand_debounce.timeout.connect(self._refresh_watchers)
+
         # Diagnostic data
         self._dtc_codes = []  # List of (code, description) tuples
         self._dtc_count = 0
@@ -490,9 +542,9 @@ class OBDManager(QObject):
         if self._settings_manager:
             # Port changes trigger reconnect (debounced)
             self._settings_manager.obdBluetoothPortChanged.connect(self._schedule_port_change)
-            # Fast mode changes are applied on next connection, no immediate reconnect needed
-            # Parameter changes just refresh watchers, don't need full reconnect
-            self._settings_manager.obdParametersChanged.connect(self._refresh_watchers)
+            # Fast mode changes are applied on next connection, no immediate reconnect needed.
+            # Per-parameter enable settings no longer drive polling — the poll
+            # set follows setParameterDemand() (what is on screen).
 
     def _get_platform(self):
         """Detect the current platform"""
@@ -998,6 +1050,7 @@ class OBDManager(QObject):
                         with self._lock:
                             self._connected = False
                         # Hand off to the main thread (QTimer.singleShot never fires from a plain thread)
+                        run_on_main(self._reset_vehicle_support)
                         run_on_main(lambda: self.connectionStatusChanged.emit("Disconnected"))
                         run_on_main(lambda: self.connectionStatusDetailChanged.emit("Connection to vehicle lost"))
                         run_on_main(lambda: self.connectionProgressChanged.emit(0))
@@ -1055,10 +1108,53 @@ class OBDManager(QObject):
         """Called by data callbacks to mark that fresh data was received"""
         self._last_data_received = time.time()
 
+    # ------------------------------------------------------------------
+    # Demand-driven polling (parity: C++ OBDManager::setParameterDemand)
+    # ------------------------------------------------------------------
+
+    @Slot(str, list)
+    def setParameterDemand(self, consumer, param_ids):
+        """Replace `consumer`'s wanted parameter ids ("dashboard", "cards",
+        "home", "editor", ...); an empty list removes the consumer. The poll
+        set is the union of every consumer, filtered to what this session's
+        scan says the vehicle supports, plus the RPM heartbeat."""
+        ids = {str(p) for p in (param_ids or []) if p}
+        if ids:
+            if self._param_demand.get(consumer) == ids:
+                return
+            self._param_demand[consumer] = ids
+        elif self._param_demand.pop(consumer, None) is None:
+            return
+        self._demand_debounce.start()
+
+    def _get_vehicle_supported_parameters(self):
+        return list(self._vehicle_supported_parameters)
+
+    vehicleSupportedParameters = Property(list, _get_vehicle_supported_parameters,
+                                          notify=vehicleSupportedParametersChanged)
+
+    def _get_vehicle_scan_complete(self):
+        return self._vehicle_scan_complete
+
+    vehicleScanComplete = Property(bool, _get_vehicle_scan_complete,
+                                   notify=vehicleSupportedParametersChanged)
+
+    def _set_vehicle_support(self, names, complete):
+        names = sorted(names or [])
+        if names == self._vehicle_supported_parameters and complete == self._vehicle_scan_complete:
+            return
+        self._vehicle_supported_parameters = names
+        self._vehicle_scan_complete = complete
+        self.vehicleSupportedParametersChanged.emit()
+
+    def _reset_vehicle_support(self):
+        """Disconnected: the next car may support a different set."""
+        self._set_vehicle_support([], False)
+
     def _refresh_watchers(self):
-        """Refresh OBD watchers when parameters change (no full reconnect needed)"""
+        """Re-watch the current poll set in place (no full reconnect needed)"""
         if not self._connection or not self._connected:
-            logger.info("[OBD] Cannot refresh watchers - not connected")
+            logger.debug("[OBD] Poll set changed - applied on next connection")
             return
 
         logger.info("[OBD] Refreshing watchers for parameter changes...")
@@ -1189,62 +1285,45 @@ class OBDManager(QObject):
         return wrapped
 
     def _setup_watchers(self):
-        """Set up watchers based on settings"""
+        """Watch the demand-driven poll set (see compute_poll_params)"""
         if not self._connection:
             return
 
-        commands_to_watch = self._get_all_commands()
+        commands = self._get_all_commands()
+        base, extended = compute_poll_params(
+            self._param_demand, self._vehicle_supported_parameters, commands.keys())
         watcher_count = 0
         watchdog_attached = False  # Only attach watchdog to ONE param for efficiency
 
-        for param, (command, callback) in commands_to_watch.items():
-            should_watch = True
-            if self._settings_manager:
-                # Default to False for new parameters, True for original ones
-                default_enabled = param in [
-                    "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE", "ENGINE_LOAD", "THROTTLE_POS",
-                    "INTAKE_TEMP", "TIMING_ADVANCE", "MAF", "SPEED", "RPM", "COMMANDED_EQUIV_RATIO",
-                    "FUEL_LEVEL", "INTAKE_PRESSURE", "SHORT_FUEL_TRIM_1", "LONG_FUEL_TRIM_1",
-                    "O2_B1S1", "FUEL_PRESSURE", "OIL_TEMP"
-                ]
-                should_watch = self._settings_manager.get_obd_parameter_enabled(param, default_enabled)
+        for param in base:
+            command, callback = commands[param]
+            try:
+                # Only wrap ONE callback with watchdog (reduces overhead
+                # significantly); the heartbeat (RPM / ELM_VOLTAGE) is always
+                # in the set, so prefer it, else the first param.
+                if not watchdog_attached and (param in HEARTBEAT_PARAMS or watcher_count == 0):
+                    final_callback = self._wrap_callback_with_watchdog(callback)
+                    watchdog_attached = True
+                    logger.info(f"[OBD] Watching: {param} (with watchdog)")
+                else:
+                    final_callback = callback
+                    logger.debug(f"[OBD] Watching: {param}")
+                # force=True bypasses the supported_commands check in watch().
+                # This prevents silent skip if supported_commands wasn't yet populated
+                # when called from _on_connection_complete (before scan runs).
+                # The async run loop uses force=True internally anyway.
+                self._connection.watch(command, callback=final_callback, force=True)
+                watcher_count += 1
+            except Exception as e:
+                logger.warning(f"[OBD] Could not watch {param}: {e}")
 
-            if should_watch:
-                try:
-                    # Only wrap ONE callback with watchdog (reduces overhead significantly)
-                    # Prefer RPM (typically always enabled), fallback to first available param
-                    if not watchdog_attached:
-                        if param == "RPM" or watcher_count == 0:
-                            final_callback = self._wrap_callback_with_watchdog(callback)
-                            watchdog_attached = True
-                            logger.info(f"[OBD] Watching: {param} (with watchdog)")
-                        else:
-                            final_callback = callback
-                            logger.debug(f"[OBD] Watching: {param}")
-                    else:
-                        final_callback = callback
-                        logger.debug(f"[OBD] Watching: {param}")
-                    # force=True bypasses the supported_commands check in watch().
-                    # This prevents silent skip if supported_commands wasn't yet populated
-                    # when called from _on_connection_complete (before scan runs).
-                    # The async run loop uses force=True internally anyway.
-                    self._connection.watch(command, callback=final_callback, force=True)
-                    watcher_count += 1
-                except Exception as e:
-                    logger.warning(f"[OBD] Could not watch {param}: {e}")
-
-        # Multi-value PIDs: watch when any of their values is enabled (all opt-in)
-        for (mode, pid), signals in EXTENDED_PID_TABLE.items():
-            enabled = [sig[0] for sig in signals
-                       if self._settings_manager
-                       and self._settings_manager.get_obd_parameter_enabled(sig[0], False)]
-            if not enabled:
-                continue
+        # Multi-value PIDs: watched when any of their values is demanded
+        for mode, pid in extended:
             try:
                 self._connection.watch(extended_command(mode, pid),
                                        callback=self._update_extended, force=True)
                 watcher_count += 1
-                logger.debug(f"[OBD] Watching: PID {pid:02X} ({', '.join(enabled)})")
+                logger.debug(f"[OBD] Watching: PID {pid:02X}")
             except Exception as e:
                 logger.warning(f"[OBD] Could not watch PID {pid:02X}: {e}")
 
@@ -1847,6 +1926,7 @@ class OBDManager(QObject):
                 logger.debug(f"[OBD] Error closing connection during cleanup: {e}")
             self._connection = None
         self._connected = False
+        self._reset_vehicle_support()
 
     @Slot(result=bool)
     def is_connected(self):
@@ -2143,6 +2223,7 @@ class OBDManager(QObject):
             if not supported:
                 self._emit_scan_output("[WARN] No supported commands returned from vehicle")
                 run_on_main(lambda: self.scanProgressChanged.emit(100, "No supported commands found"))
+                run_on_main(lambda: self._set_vehicle_support([], True))
                 run_on_main(lambda: self.scanCompleteChanged.emit([]))
                 return
 
@@ -2195,6 +2276,7 @@ class OBDManager(QObject):
 
             # Emit completion signals on main thread
             run_on_main(lambda: self.scanProgressChanged.emit(100, f"Found {len(supported_names)} supported parameters"))
+            run_on_main(lambda names=list(supported_names): self._set_vehicle_support(names, True))
             run_on_main(lambda: self.supportedCommandsChanged.emit(supported_names))
             run_on_main(lambda: self.scanCompleteChanged.emit(supported_names))
 

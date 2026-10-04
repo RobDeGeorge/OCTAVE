@@ -4,9 +4,13 @@
 //   - the widget type and a deselect button
 //   - the bound PID (button opens the PIDPicker)
 //   - position / size steppers (◄ value ► — no drag handles, per roadmap)
+//   - label & range overrides (title / unit / min / max) for PID-bound
+//     widgets that have them (WidgetCatalog `labelProps` / `rangeProps`);
+//     empty = follow the bound PID's metadata
+//   - a color swatch row writing the catalog's `colorProps` (unset = theme)
 //   - the widget's curated editable props from WidgetCatalog `editableProps`
-//     (bool → switch, int/real → text field; empty field = unset, so the
-//     gauge's own default applies)
+//     (bool → switch, enum → segmented buttons, int/real/string → text field;
+//     empty field = unset, so the gauge's own default applies)
 //   - a delete button
 //
 // The panel never mutates the cell itself — every control calls back into
@@ -41,6 +45,50 @@ Rectangle {
         if (cell && cell.props && cell.props[key] !== undefined)
             return cell.props[key]
         return def
+    }
+
+    // Metadata of the bound PID (title/unit/min/max), or null.
+    readonly property var pidMeta: {
+        if (!cell || !cell.paramId) return null
+        var all = App.OBDParameterModel.allParameters
+        for (var i = 0; i < all.length; i++)
+            if (all[i].id === cell.paramId) return all[i]
+        return null
+    }
+
+    // True when a vehicle is scanned and the bound PID isn't one it reports.
+    readonly property bool pidUnsupported:
+        cell !== null && !!cell.paramId && App.OBDParameterModel.vehicleKnown
+        && !App.OBDParameterModel.isSupported(cell.paramId)
+
+    // Min/max as they will render (override, else PID default) — drives the
+    // "min must be below max" warning.
+    readonly property real _effMin: (cell && cell.props && cell.props.min !== undefined)
+                                    ? cell.props.min : (pidMeta ? pidMeta.min : 0)
+    readonly property real _effMax: (cell && cell.props && cell.props.max !== undefined)
+                                    ? cell.props.max : (pidMeta ? pidMeta.max : 100)
+
+    // Current override color ("" = theme), read from the first color prop.
+    readonly property string currentColor: {
+        if (!meta || !meta.colorProps || meta.colorProps.length === 0) return ""
+        var v = (cell && cell.props) ? cell.props[meta.colorProps[0]] : undefined
+        return v === undefined ? "" : String(v).toUpperCase()
+    }
+
+    function setColor(hex) {
+        if (!editorPage || !meta) return
+        editorPage.setCellProps(cellIndex, meta.colorProps, hex === "" ? undefined : hex)
+    }
+
+    // Parse a text field into a number/string prop value, clamped to the
+    // option's bounds. Returns undefined when the text isn't usable.
+    function parseOption(opt, t) {
+        if (opt.kind === "string") return t
+        var num = opt.kind === "int" ? parseInt(t) : parseFloat(t)
+        if (isNaN(num)) return undefined
+        if (opt.min !== undefined) num = Math.max(opt.min, num)
+        if (opt.max !== undefined) num = Math.min(opt.max, num)
+        return num
     }
 
     function pidTitle() {
@@ -124,6 +172,69 @@ Rectangle {
         }
     }
 
+    // ── Override text field: empty = follow the default shown as placeholder ──
+    component OverrideField: RowLayout {
+        id: of
+        property string label: ""
+        property string key: ""
+        property bool numeric: false
+        property string placeholder: ""
+
+        spacing: panel.dp(6)
+
+        Text {
+            Layout.fillWidth: true
+            text: of.label
+            elide: Text.ElideRight
+            color: App.Style.obdLabelColor
+            font.family: App.Style.fontFamily
+            font.pixelSize: App.Spacing.overallText * 0.9
+        }
+
+        TextField {
+            id: ofField
+            objectName: "panelOverride_" + of.key
+            Layout.preferredWidth: of.numeric ? panel.dp(90) : panel.dp(150)
+            horizontalAlignment: of.numeric ? TextInput.AlignRight : TextInput.AlignLeft
+            inputMethodHints: of.numeric ? Qt.ImhFormattedNumbersOnly : Qt.ImhNone
+            font.family: App.Style.fontFamily
+            font.pixelSize: App.Spacing.overallText * 0.9
+            color: App.Style.primaryTextColor
+            placeholderText: of.placeholder
+            placeholderTextColor: Qt.darker(App.Style.obdLabelColor, 1.4)
+            background: Rectangle {
+                radius: panel.dpMin(6, 2)
+                color: Qt.darker(App.Style.obdBoxBackground, 1.25)
+                border.color: parent.activeFocus ? App.Style.accent : Qt.darker(App.Style.obdBarColor, 1.6)
+                border.width: 1
+            }
+
+            function _currentText() {
+                var v = (panel.cell && panel.cell.props) ? panel.cell.props[of.key] : undefined
+                return (v === undefined || v === null) ? "" : String(v)
+            }
+            text: _currentText()
+            // Typing breaks the binding; re-sync when the selection changes.
+            property var _cellRef: panel.cell
+            on_CellRefChanged: if (!activeFocus) text = _currentText()
+
+            onEditingFinished: {
+                var t = text.trim()
+                if (t === "") {
+                    panel.editorPage.clearCellProp(panel.cellIndex, of.key)
+                    return
+                }
+                if (of.numeric) {
+                    var num = parseFloat(t)
+                    if (!isNaN(num)) panel.editorPage.setCellProp(panel.cellIndex, of.key, num)
+                    else text = _currentText()
+                } else {
+                    panel.editorPage.setCellProp(panel.cellIndex, of.key, t)
+                }
+            }
+        }
+    }
+
     component SectionLabel: Text {
         color: App.Style.obdLabelColor
         font.family: App.Style.fontFamily
@@ -140,6 +251,7 @@ Rectangle {
     }
 
     Flickable {
+        objectName: "editorPanelScroll"
         anchors.fill: parent
         anchors.margins: panel.dp(14)
         contentWidth: width
@@ -233,6 +345,18 @@ Rectangle {
                 }
             }
 
+            // Vehicle-gate warning: bound PID won't read on the connected car.
+            Text {
+                objectName: "panelPidUnsupported"
+                visible: panel.pidUnsupported
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Your vehicle doesn't report this PID, so it won't show data on this car."
+                color: App.Style.statusDanger
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText * 0.8
+            }
+
             // ── Position & size ─────────────────────────────────────────
             SectionLabel { text: "POSITION & SIZE"; Layout.topMargin: panel.dp(6) }
 
@@ -283,6 +407,44 @@ Rectangle {
                         font.pixelSize: App.Spacing.overallText * 0.9
                     }
 
+                    // Enum → segmented buttons.
+                    Row {
+                        visible: modelData.kind === "enum"
+                        spacing: panel.dp(4)
+                        // The option entry — the inner Repeater's modelData
+                        // (the enum value) shadows it inside the buttons.
+                        readonly property var opt: modelData
+                        Repeater {
+                            model: modelData.kind === "enum" ? modelData.options : []
+                            delegate: Rectangle {
+                                id: enumBtn
+                                readonly property var opt: parent ? parent.opt : null
+                                readonly property bool _selected: opt !== null
+                                    && panel.propValue(opt.key, opt.def) === modelData
+                                objectName: "panelOptEnum_" + (opt ? opt.key : "") + "_" + modelData
+                                width: enumLabel.implicitWidth + panel.dp(14)
+                                height: panel.dp(34)
+                                radius: panel.dpMin(6, 2)
+                                color: _selected ? App.Style.accent : Qt.darker(App.Style.obdBoxBackground, 1.12)
+                                border.color: Qt.darker(App.Style.obdBarColor, 1.6)
+                                border.width: 1
+                                Text {
+                                    id: enumLabel
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    color: enumBtn._selected ? App.Style.obdBoxBackground : App.Style.obdValueColor
+                                    font.family: App.Style.fontFamily
+                                    font.pixelSize: App.Spacing.overallText * 0.8
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: if (enumBtn.opt)
+                                        panel.editorPage.setCellProp(panel.cellIndex, enumBtn.opt.key, modelData)
+                                }
+                            }
+                        }
+                    }
+
                     Switch {
                         objectName: "panelOpt_" + modelData.key
                         visible: modelData.kind === "bool"
@@ -298,14 +460,23 @@ Rectangle {
 
                     TextField {
                         objectName: "panelOptField_" + modelData.key
-                        visible: modelData.kind !== "bool"
-                        Layout.preferredWidth: panel.dp(90)
-                        horizontalAlignment: TextInput.AlignRight
-                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                        visible: modelData.kind !== "bool" && modelData.kind !== "enum"
+                        Layout.preferredWidth: modelData.kind === "string" ? panel.dp(150) : panel.dp(90)
+                        horizontalAlignment: modelData.kind === "string" ? TextInput.AlignLeft : TextInput.AlignRight
+                        inputMethodHints: modelData.kind === "string" ? Qt.ImhNone : Qt.ImhFormattedNumbersOnly
                         font.family: App.Style.fontFamily
                         font.pixelSize: App.Spacing.overallText * 0.9
                         color: App.Style.primaryTextColor
-                        placeholderText: modelData.def === null ? "off" : String(modelData.def)
+                        placeholderText: modelData.def === null ? "off"
+                                         : (modelData.kind === "string" && modelData.def === "" ? "none"
+                                            : String(modelData.def))
+                        placeholderTextColor: Qt.darker(App.Style.obdLabelColor, 1.4)
+                        background: Rectangle {
+                            radius: panel.dpMin(6, 2)
+                            color: Qt.darker(App.Style.obdBoxBackground, 1.25)
+                            border.color: parent.activeFocus ? App.Style.accent : Qt.darker(App.Style.obdBarColor, 1.6)
+                            border.width: 1
+                        }
 
                         function _currentText() {
                             var v = panel.propValue(modelData.key, modelData.def)
@@ -324,9 +495,102 @@ Rectangle {
                                 panel.editorPage.clearCellProp(panel.cellIndex, modelData.key)
                                 return
                             }
-                            var num = modelData.kind === "int" ? parseInt(t) : parseFloat(t)
-                            if (!isNaN(num))
-                                panel.editorPage.setCellProp(panel.cellIndex, modelData.key, num)
+                            var v = panel.parseOption(modelData, t)
+                            if (v !== undefined) {
+                                panel.editorPage.setCellProp(panel.cellIndex, modelData.key, v)
+                                text = String(v)     // show the clamped value
+                            } else {
+                                text = _currentText()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Label & range overrides ─────────────────────────────────
+            SectionLabel {
+                text: "LABEL & RANGE"
+                Layout.topMargin: panel.dp(6)
+                visible: panel.meta !== null && (panel.meta.labelProps || panel.meta.rangeProps)
+            }
+
+            OverrideField {
+                Layout.fillWidth: true
+                visible: panel.meta !== null && panel.meta.labelProps === true
+                label: "Title"; key: "title"
+                placeholder: panel.pidMeta ? panel.pidMeta.title : "PID title"
+            }
+            OverrideField {
+                Layout.fillWidth: true
+                visible: panel.meta !== null && panel.meta.labelProps === true
+                label: "Unit"; key: "unit"
+                placeholder: panel.pidMeta ? panel.pidMeta.unit : "PID unit"
+            }
+            OverrideField {
+                Layout.fillWidth: true
+                visible: panel.meta !== null && panel.meta.rangeProps === true
+                label: "Min"; key: "min"; numeric: true
+                placeholder: panel.pidMeta ? String(panel.pidMeta.min) : "0"
+            }
+            OverrideField {
+                Layout.fillWidth: true
+                visible: panel.meta !== null && panel.meta.rangeProps === true
+                label: "Max"; key: "max"; numeric: true
+                placeholder: panel.pidMeta ? String(panel.pidMeta.max) : "100"
+            }
+            Text {
+                objectName: "panelRangeWarning"
+                visible: panel.meta !== null && panel.meta.rangeProps === true
+                         && panel._effMin >= panel._effMax
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Min must be lower than max. The gauge will stay empty until it is."
+                color: App.Style.statusDanger
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText * 0.8
+            }
+
+            // ── Color ───────────────────────────────────────────────────
+            SectionLabel {
+                text: "COLOR"
+                Layout.topMargin: panel.dp(6)
+                visible: panel.meta !== null && panel.meta.colorProps && panel.meta.colorProps.length > 0
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                visible: panel.meta !== null && panel.meta.colorProps && panel.meta.colorProps.length > 0
+                spacing: panel.dp(6)
+
+                // First swatch = theme (unset).
+                Repeater {
+                    model: [""].concat(App.WidgetCatalog.colorSwatches)
+                    delegate: Rectangle {
+                        objectName: "panelSwatch_" + (modelData === "" ? "theme" : modelData.substring(1))
+                        readonly property bool _selected: panel.currentColor === modelData.toUpperCase()
+                        width: panel.dp(34)
+                        height: panel.dp(34)
+                        radius: width / 2
+                        color: modelData === "" ? App.Style.obdBarColor : modelData
+                        border.color: _selected ? App.Style.primaryTextColor
+                                                : Qt.darker(App.Style.obdBarColor, 1.6)
+                        border.width: _selected ? 3 : 1
+
+                        // "Theme" swatch: label so it reads as "follow theme".
+                        Text {
+                            visible: modelData === ""
+                            anchors.centerIn: parent
+                            text: "T"
+                            color: App.Style.obdBoxBackground
+                            font.family: App.Style.fontFamily
+                            font.pixelSize: App.Spacing.overallText * 0.8
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: panel.setColor(modelData)
                         }
                     }
                 }

@@ -225,7 +225,7 @@
             <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>obdFastMode</code>, then emit <code>obdFastModeChanged</code></td></tr>
             <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td><code>void</code></td><td>Validate and persist <code>obdAutoReconnectAttempts</code>, then emit <code>obdAutoReconnectAttemptsChanged</code></td></tr>
             <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td><code>void</code></td><td>Validate and persist <code>fuelTankCapacity</code>, then emit <code>fuelTankCapacityChanged</code></td></tr>
-            <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td><code>void</code></td><td>Enable/disable polling of one PID; writes are debounced (800 ms) then <code>obdParametersChanged</code> fires</td></tr>
+            <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td><code>void</code></td><td>Legacy per-PID enable flag, kept for settings-file compatibility; writes are debounced (800 ms) then <code>obdParametersChanged</code> fires. No longer drives polling (see <code>obdManager.setParameterDemand</code>)</td></tr>
             <tr><td><code>save_supported_obd_parameters(QVariantList parameters)</code></td><td><code>void</code></td><td>Store the PID list found by the last vehicle scan; emits <code>supportedOBDParametersChanged</code></td></tr>
             <tr><td><code>save_home_obd_parameters(QVariantList parameters)</code></td><td><code>void</code></td><td>Store the ordered home-screen PID list; emits <code>homeOBDParametersChanged</code></td></tr>
             <tr><td><code>save_to_directory_history(QString folderPath)</code></td><td><code>void</code></td><td>Prepend a folder to <code>directoryHistory</code> (deduplicated, capped at 10)</td></tr>
@@ -264,7 +264,7 @@
             <tr><td><code>save_setting(QString key, QVariant value)</code></td><td><code>void</code></td><td>Generic write of any key; emits <code>genericSettingChanged(key)</code> (typed properties are not refreshed)</td></tr>
             <tr><td><code>get_setting(QString key)</code> <span class="cmt">(Python takes 2 arg(s): key, default_value)</span></td><td><code>QVariant</code></td><td>Raw value of any key (<code>undefined</code>/null when missing). Python also accepts an optional <code>default_value</code></td></tr>
             <tr><td><code>get_setting_with_default(QString key, QVariant defaultValue)</code></td><td><code>QVariant</code></td><td>Raw value of any key, or <code>defaultValue</code> when missing</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(QString parameter, bool defaultVal)</code></td><td><code>bool</code></td><td>Whether polling of a PID is enabled (default <code>true</code> when never set)</td></tr>
+            <tr><td><code>get_obd_parameter_enabled(QString parameter, bool defaultVal)</code></td><td><code>bool</code></td><td>Legacy per-PID enable flag (default <code>true</code> when never set); no longer drives polling</td></tr>
             <tr><td><code>get_supported_obd_parameters()</code></td><td><code>QVariantList</code></td><td>PID list saved by the last vehicle scan</td></tr>
             <tr><td><code>get_directory_history()</code></td><td><code>QVariantList</code></td><td>Same list as the <code>directoryHistory</code> property</td></tr>
             <tr><td><code>get_home_obd_parameters()</code></td><td><code>QVariantList</code></td><td>Same list as the <code>homeOBDParameters</code> property</td></tr>
@@ -729,7 +729,7 @@
         <!-- OBDManager -->
         <h2 id="obdManager">OBDManager <span class="cmt">&mdash; <code>obdManager</code></span></h2>
         <p><span class="file-path">src/managers/obdmanager.h</span> / <span class="file-path">backend/obd_manager.py</span> &mdash; QML context property <code>obdManager</code></p>
-        <p>OBD-II diagnostics over an ELM327 adapter: USB / Bluetooth serial on desktop (worker thread), BLE GATT on Android. Every PID has its own <code>&lt;name&gt;Changed(float)</code> signal so QML gauges bind directly. PID numbers, command names and decoders follow python-obd on both backends (C++ <code>ELM327Protocol::buildPidTable()</code> carries all 82 mode-01 commands plus <code>ELM_VOLTAGE</code>), and parameter toggles in Settings take effect on a live connection without reconnecting (C++ swaps the worker's poll list via <code>updatePidsToWatch()</code>, Android via <code>rebuildAndroidPollList()</code>).</p>
+        <p>OBD-II diagnostics over an ELM327 adapter: USB / Bluetooth serial on desktop (worker thread), BLE GATT on Android. Every PID has its own <code>&lt;name&gt;Changed(float)</code> signal so QML gauges bind directly. PID numbers, command names and decoders follow python-obd on both backends (C++ <code>ELM327Protocol::buildPidTable()</code> carries all 82 mode-01 commands plus <code>ELM_VOLTAGE</code>), and polling is demand-driven: only the PIDs that registered consumers (dashboard, Parameter Cards, Home, editor, settings list) ask for via <code>setParameterDemand()</code> are polled, plus an RPM heartbeat, filtered to what this session's scan found. Changes apply on a live connection without reconnecting (C++ swaps the worker's poll list via <code>updatePidsToWatch()</code>, Android via <code>rebuildAndroidPollList()</code>, Python re-watches). See <a href="obd-manager.html#watcher-system">OBD Manager &rarr; Which PIDs Get Polled</a>.</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class bypasses the serial worker and talks BLE through <code>OctaveOBDBridge.java</code> (JNI); the QML-facing API is identical. Connect chains the <code>0100</code> through <code>01C0</code> supported-PID bitmaps so default PIDs above 0x20 (fuel level, module voltage, oil temperature) and the multi-value PIDs are polled, the first poll slot reads the VIN, and the bridge requests <code>BLUETOOTH_CONNECT</code> on the first Connect tap (the former <code>requestAndroidBluetoothPermission()</code> helper is gone).</div>
         <h3>Properties</h3>
         <table>
@@ -743,6 +743,8 @@
             <tr><td><code>vin</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>17-character VIN read at connect (Mode 09 PID 02); <code>""</code> when the vehicle reports none</td></tr>
             <tr><td><code>vehicleMake</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>Manufacturer decoded from the VIN's WMI; <code>""</code> if unknown</td></tr>
             <tr><td><code>vehicleModelYear</code></td><td><code>int</code></td><td>read-only</td><td><code>vinChanged</code></td><td>Model year from VIN position 10; <code>0</code> if unknown</td></tr>
+            <tr><td><code>vehicleSupportedParameters</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>vehicleSupportedParametersChanged</code></td><td>This session's scan result in <code>OBDParameterModel</code> ids (base commands + multi-value signals); <code>[]</code> until the scan finishes and again after disconnect. Never loaded from the persisted <code>supportedOBDParameters</code></td></tr>
+            <tr><td><code>vehicleScanComplete</code></td><td><code>bool</code></td><td>read-only</td><td><code>vehicleSupportedParametersChanged</code></td><td>True once this session's scan finished (even with an empty result); false while disconnected</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -765,12 +767,13 @@
             <tr><td><code>connect_to_adapter(QString identifier)</code></td><td><code>void</code></td><td>Single entry point of the OBD settings page: normalise the identifier (MAC / <code>/dev</code> path / COM), save it, <code>rfcomm bind</code> on Linux when given a MAC, then <code>force_connect()</code></td></tr>
             <tr><td><code>connect_direct(QString mac, int channel = 1)</code></td><td><code>void</code></td><td>Linux: connect over a direct Bluetooth RFCOMM socket; saves <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> as the OBD port and goes through <code>connect_to_adapter()</code> (no bind)</td></tr>
             <tr><td><code>platform_hint()</code></td><td><code>QString</code></td><td><code>"linux"</code> / <code>"macos"</code> / <code>"windows"</code> / <code>"android"</code> / <code>"ios"</code>; drives hint copy only, never structural branching</td></tr>
+            <tr><td><code>setParameterDemand(QString consumer, QStringList paramIds)</code></td><td><code>void</code></td><td>Replace one consumer's wanted parameter ids (empty list removes it). The poll set is the union of all consumers, filtered to <code>vehicleSupportedParameters</code>, plus the RPM heartbeat (<code>ELM_VOLTAGE</code> if the car has no RPM); BerryIMU and unknown ids are ignored. Debounced 250 ms, applied live</td></tr>
             <tr><td><code>scan_vehicle()</code></td><td><code>void</code></td><td>Probe every known PID on the worker thread (Android: answer from the supported-PID bitmaps read at connect time); progress via <code>scanProgressChanged</code>/<code>scanOutputChanged</code>, result via <code>scanCompleteChanged</code></td></tr>
             <tr><td><code>is_scanning()</code></td><td><code>bool</code></td><td>A vehicle scan is running</td></tr>
             <tr><td><code>get_all_parameter_names()</code></td><td><code>QStringList</code></td><td>Every PID command name the manager knows (<code>COOLANT_TEMP</code>, <code>RPM</code>, &hellip;)</td></tr>
             <tr><td><code>get_supported_commands()</code></td><td><code>QVariantList</code></td><td>PID names found by the last scan</td></tr>
-            <tr><td><code>enable_scanned_parameters(QVariantList paramNames)</code></td><td><code>void</code></td><td>Enable polling for a list of PID names via SettingsManager</td></tr>
-            <tr><td><code>enable_all_supported()</code></td><td><code>void</code></td><td>Enable every PID the last scan found</td></tr>
+            <tr><td><code>enable_scanned_parameters(QVariantList paramNames)</code></td><td><code>void</code></td><td>Set the legacy per-PID enable keys for a list of PID names (no longer affects polling)</td></tr>
+            <tr><td><code>enable_all_supported()</code></td><td><code>void</code></td><td>Set the legacy per-PID enable keys for every PID the last scan found (no longer affects polling)</td></tr>
             <tr><td><code>enter_diagnostic_mode()</code></td><td><code>void</code></td><td>Pause live polling so DTC commands get the bus</td></tr>
             <tr><td><code>exit_diagnostic_mode()</code></td><td><code>void</code></td><td>Resume live polling (after a short delay)</td></tr>
             <tr><td><code>is_diagnostic_mode()</code></td><td><code>bool</code></td><td>Diagnostic mode active</td></tr>
@@ -907,6 +910,7 @@
             <tr><td><code>supportedCommandsChanged(QVariantList commands)</code></td><td>PID names the vehicle answered during the scan</td></tr>
             <tr><td><code>scanProgressChanged(int progress, QString message)</code></td><td>Vehicle scan progress percent and message</td></tr>
             <tr><td><code>scanCompleteChanged(QVariantList supportedParams)</code></td><td>Vehicle scan finished; list of supported PID names</td></tr>
+            <tr><td><code>vehicleSupportedParametersChanged()</code></td><td><code>vehicleSupportedParameters</code> / <code>vehicleScanComplete</code> changed (scan finished, or reset on disconnect)</td></tr>
             <tr><td><code>scanOutputChanged(QString output)</code></td><td>Terminal-style scan output line</td></tr>
             <tr><td><code>dtcCodesChanged(QVariantList codes)</code></td><td>Stored DTCs read (<code>[{code, description}, &hellip;]</code>)</td></tr>
             <tr><td><code>dtcCountChanged(int count)</code></td><td>Number of stored DTCs</td></tr>
@@ -1258,6 +1262,7 @@
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>dashboards</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Merged headers <code>[{id, label, builtIn, path}, &hellip;]</code>, built-ins first</td></tr>
+            <tr><td><code>lastShareError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastShareErrorChanged</code></td><td>Reason the last export/import failed; <code>""</code> after a success</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1270,13 +1275,19 @@
             <tr><td><code>deleteDashboard(QString id)</code></td><td><code>bool</code></td><td>Delete a user dashboard file; false for built-ins</td></tr>
             <tr><td><code>duplicateDashboard(QString sourceId, QString newLabel)</code></td><td><code>QString</code></td><td>Clone any dashboard into a new user dashboard with a unique id derived from the label; returns the new id</td></tr>
             <tr><td><code>refresh()</code></td><td><code>void</code></td><td>Rescan both directories and emit <code>dashboardsChanged</code></td></tr>
+            <tr><td><code>exportDashboard(QString id)</code></td><td><code>QString</code></td><td>Write the spec to <code>&lt;Downloads&gt;/OCTAVE-dashboards/&lt;id&gt;.json</code>; returns the path, <code>""</code> on failure</td></tr>
+            <tr><td><code>copyDashboardToClipboard(QString id)</code></td><td><code>bool</code></td><td>Copy the spec to the clipboard as compact JSON</td></tr>
+            <tr><td><code>importDashboard(QString fileOrUrl)</code></td><td><code>QString</code></td><td>Import a shared dashboard from a path, <code>file://</code> or <code>content://</code> URL as a <em>new</em> user dashboard (fresh id from the label, sanitized to schema 1); returns the new id, <code>""</code> with <code>lastShareError</code> set on failure</td></tr>
+            <tr><td><code>importDashboardFromClipboard()</code></td><td><code>QString</code></td><td>Same, from clipboard text</td></tr>
+            <tr><td><code>importDashboardFromText(QString json)</code></td><td><code>QString</code></td><td>Same, from a JSON string</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>dashboardsChanged()</code></td><td>After any rescan (save, delete, duplicate, <code>refresh()</code>, or the user dir changing on disk)</td></tr>
+            <tr><td><code>dashboardsChanged()</code></td><td>After any rescan (save, delete, duplicate, import, <code>refresh()</code>, or the user dir changing on disk)</td></tr>
+            <tr><td><code>lastShareErrorChanged()</code></td><td>When <code>lastShareError</code> changes</td></tr>
           </tbody>
         </table>
 

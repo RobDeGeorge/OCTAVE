@@ -1,7 +1,7 @@
 # Dashboards Roadmap — "Tony Hawk Create-A-Park for OBD Dashboards"
 
-**Status:** Phases 1–3 complete and **verified on desktop 2026-09-08** — `dev/tests/drive_dashboard_editor.py` runs ~45 assertions against the live app (place / bind / drag / resize / options / save / edit / duplicate / delete / draft rescue / hot reload), all passing with a clean QML log. The Phase 2 fast-follow (renderer validation + user-dir hot reload) also landed 2026-09-08. Bugs fixed during verification: deleting the active dashboard left it selected (delegate context died mid-handler → moved into a page-level function + registry-level fallback), StackView anchors warning on the editor page, clipped option labels. **Only remaining item: a ten-minute on-device pass on the Android tablet** (touch drag feel, palette/picker sizing) — delete this file once that's done.
-**Last updated:** 2026-09-08
+**Status:** Phases 1–3 complete and verified on desktop (2026-09-08). A 2026-10-04 pass added per-widget label/range/color overrides, enum/string options, a drag-to-resize grip, swipe between dashboards, dashboard share/import, a vehicle support gate and demand-driven OBD polling (both backends), all verified on desktop with xvfb, the Python backend and real X input (`dev/tests/drive_dashboard_editor.py` 42/42, `dev/tests/drive_dashboard_features.py` 19/19, pytest 130/130). **Remaining: the on-device checks listed below** — delete this file once they pass.
+**Last updated:** 2026-10-04
 
 ---
 
@@ -238,8 +238,36 @@ the editor only ever emits valid specs — fold in after Milestone B.
 
 ---
 
+## Remaining on-device checks (from the 2026-10-04 pass)
+
+These need hardware; none can be done on the desktop rig.
+
+**Android tablet (touch):**
+- [ ] Drag feel, palette and PID-picker sizing (left over from 2026-09-08).
+- [ ] Swipe between dashboards with a finger: a 20% drag or a flick past 8%
+      commits, and a short skid snaps back. Taps on Media Keys / Now Playing inside a
+      dashboard must still register, since the DragHandler sits on the page.
+- [ ] Resize grip (44dp touch target) reachable at the canvas edges.
+- [ ] Import "From file…" via the Android picker (content:// URL into
+      `importDashboard`), and Export landing in Downloads/OCTAVE-dashboards.
+
+**Real vehicle (Jeep or the Orange Pi rig with an ECU sim):**
+- [ ] Parameter Cards: empty before the scan, then the car's full supported list.
+      Note the refresh rate with every supported PID demanded (ELM327 manages
+      ~10–20 PIDs/s total).
+- [ ] Switching pages changes what is polled (watch the OBD log). Python's live
+      re-watch calls `Async.stop()`, which can block the GUI for one poll cycle.
+      Check that it isn't noticeable.
+- [ ] The RPM / ELM_VOLTAGE heartbeat keeps the data watchdog quiet on an empty
+      demand (e.g. on Settings pages).
+- [ ] A dashboard bound to a PID the car lacks shows "Not supported by this
+      vehicle", and the PID picker greys it out but still allows it.
+- [ ] Android BLE path: the poll list rebuilds on demand changes (that `#ifdef` code
+      was only reviewed by reading, never compiled on desktop).
+
 ## Cross-references
 
+- `TODO/user-primitives.md` — user-created, shareable primitives (presets/composites first, code widgets only behind an opt-in). Builds on this roadmap's WidgetCatalog.
 - `TODO/god-object-splits.md` — if `OBDMenu.qml` is on the split list, coordinate: the chooser popup and dashboard registry logic will move during Phase 2 and would interact with any split plan.
 
 ---
