@@ -44,7 +44,7 @@ Item {
           subSections: ["Volume Knob", "IMU Sensor", "Gesture Sensor", "Phone Dock"] },
         { name: "Device",      section: "deviceSettings",      source: "settings/DeviceSettingsPage.qml",      widget: "widgets/DeviceWidget.qml",      icon: "\u2699", iconSource: Style.assetBase + "cat_device.svg",
           group: "System",
-          subSections: ["Device Name", "Network", "Power"] },
+          subSections: ["Device Name", "Network", "Power", "Diagnostics"] },
         { name: "About",       section: "about",               source: "settings/AboutPage.qml",               widget: "widgets/AboutWidget.qml",       icon: "\u2139", iconSource: Style.assetBase + "cat_about.svg",
           group: "System",
           subSections: [] }

@@ -31,7 +31,8 @@ Flickable {
     property var tileModel: [
         { cardId: "device_name",    title: "Device Name", iconSource: App.Style.assetBase + "tile_device_name.svg", component: deviceNameContent },
         { cardId: "device_network", title: "Network",     iconSource: App.Style.assetBase + "tile_network.svg",     component: networkContent },
-        { cardId: "device_power",   title: "Power",       iconSource: App.Style.assetBase + "tile_power.svg",       component: powerContent }
+        { cardId: "device_power",   title: "Power",       iconSource: App.Style.assetBase + "tile_power.svg",       component: powerContent },
+        { cardId: "device_diagnostics", title: "Diagnostics", iconSource: App.Style.assetBase + "tile_diagnostics.svg", component: diagnosticsContent }
     ]
 
     // ── Card body components — shared between the Flickable rendering (below)
@@ -176,6 +177,121 @@ Flickable {
                         NumberAnimation { from: 1.0; to: 0.4; duration: 800 }
                         NumberAnimation { from: 0.4; to: 1.0; duration: 800 }
                     }
+                }
+            }
+        }
+    }
+
+    // Read and get the logs out without a laptop
+    Component {
+        id: diagnosticsContent
+        ColumnLayout {
+            id: diagColumn
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+
+            property string status: ""
+
+            SettingDescription {
+                text: typeof diagnosticsManager !== "undefined"
+                      ? "Recent log lines, and ways to get the full logs off the device."
+                      : "Diagnostics are not available on this backend."
+            }
+
+            // Two-by-two grid: four labels side by side overflow the card
+            // at dash scale, and a Layout cannot shrink a button below
+            // its label. Each button takes half the card width.
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: App.Spacing.overallSpacing
+                rowSpacing: App.Spacing.overallSpacing * 0.5
+                visible: typeof diagnosticsManager !== "undefined"
+
+                SettingsButton {
+                    text: "Refresh"
+                    height: pageRoot.dp(30)
+                    Layout.fillWidth: true
+                    onClicked: logTail.text = diagnosticsManager.recentLogLines(200)
+                }
+                SettingsButton {
+                    text: "Copy"
+                    tooltipText: "Copy the recent log lines and device info to the clipboard"
+                    height: pageRoot.dp(30)
+                    Layout.fillWidth: true
+                    onClicked: diagColumn.status = diagnosticsManager.copyLogsToClipboard(400)
+                                                    ? "Copied to clipboard" : "Copy failed"
+                }
+                SettingsButton {
+                    text: "Export logs"
+                    tooltipText: "Copy every log file into your Downloads folder, ready to attach to an email"
+                    height: pageRoot.dp(30)
+                    Layout.fillWidth: true
+                    onClicked: {
+                        var p = diagnosticsManager.exportLogs()
+                        diagColumn.status = p !== "" ? "Exported to " + p : "Export failed"
+                    }
+                }
+                SettingsButton {
+                    text: "Open folder"
+                    height: pageRoot.dp(30)
+                    Layout.fillWidth: true
+                    visible: typeof diagnosticsManager !== "undefined" && !!diagnosticsManager
+                             && diagnosticsManager.canOpenFolder
+                    onClicked: diagnosticsManager.openLogFolder()
+                }
+            }
+
+            Text {
+                // Guarded: diagnosticsManager is gone during teardown while a
+                // cached page can still re-evaluate this.
+                text: typeof diagnosticsManager === "undefined" || !diagnosticsManager ? ""
+                      : "OCTAVE " + diagnosticsManager.appVersion + " (" + diagnosticsManager.backendName + " backend)  \u2022  "
+                        + diagnosticsManager.deviceInfo + "\nLogs: " + diagnosticsManager.logDir
+                visible: text !== ""
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.8
+                font.family: App.Style.fontFamily
+                wrapMode: Text.WrapAnywhere
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0   // wrap to the card, never widen it
+            }
+
+            Text {
+                text: diagColumn.status
+                visible: text !== ""
+                color: App.Style.primaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.8
+                font.family: App.Style.fontFamily
+                wrapMode: Text.WrapAnywhere
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0
+            }
+
+            // Last lines of the main log (plus the error log); newest at the bottom
+            Flickable {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0
+                Layout.preferredHeight: pageRoot.dp(180)
+                visible: typeof diagnosticsManager !== "undefined"
+                contentWidth: width
+                contentHeight: logTail.implicitHeight
+                clip: true
+                flickableDirection: Flickable.VerticalFlick
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                Component.onCompleted: contentY = Math.max(0, contentHeight - height)
+
+                TextEdit {
+                    id: logTail
+                    width: parent.width
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.WrapAnywhere
+                    color: App.Style.primaryTextColor
+                    font.family: "monospace"
+                    font.pixelSize: App.Spacing.overallText * 0.7
+                    text: typeof diagnosticsManager !== "undefined" && diagnosticsManager
+                          ? diagnosticsManager.recentLogLines(200) : ""
                 }
             }
         }

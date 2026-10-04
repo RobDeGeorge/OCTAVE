@@ -544,7 +544,7 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
 │   ├── JeepVehicle.qml  JeepHinge.qml  JeepLamp.qml  JeepLink.qml  JeepSteering.js
 │   ├── gauges/          <span class="cmt"># gauge primitives</span>
 │   ├── dashboards/      <span class="cmt"># DashboardRenderer, WidgetCatalog, presets/*.json, editor/, widgets/</span>
-│   ├── settings/        <span class="cmt"># settings pages and components (AboutPage has Diagnostics)</span>
+│   ├── settings/        <span class="cmt"># settings pages and components (DeviceSettingsPage has Diagnostics)</span>
 │   ├── shaders/         <span class="cmt"># .qsb shaders (compiled into the C++ binary as resources)</span>
 │   └── assets/          <span class="cmt"># icons, fonts, jeep_tj_2003.glb + jeep_tj/ part GLBs, readme media</span>
 ├── <span class="prop">phone_server/</span>        <span class="cmt"># OCTAVE's fork of the scrcpy server (Java) + build_without_gradle.sh</span>
@@ -595,7 +595,7 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
           </li>
           <li>
             <strong>Explore Settings</strong> &mdash; OCTAVE has 100+ configurable settings across display, media, OBD,
-            accessories and device, all persisted to <code>settingsConfigure.json</code>. Settings &gt; About &gt;
+            accessories and device, all persisted to <code>settingsConfigure.json</code>. Settings &gt; Device &gt;
             Diagnostics shows the running backend, its version, and lets you export the logs.
           </li>
         </ol>
