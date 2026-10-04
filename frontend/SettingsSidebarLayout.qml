@@ -89,10 +89,21 @@ Item {
                     id: navListView
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    interactive: true
+                    // Scroll only in the fallback case where rows hit their floor
+                    // (1 px slack absorbs fractional row-height rounding), and
+                    // never rubber-band past the ends.
+                    interactive: contentHeight > height + 1
+                    boundsBehavior: Flickable.StopAtBounds
                     clip: true
 
                     model: hubModel.length
+
+                    // Rows split the panel height evenly so the list always
+                    // fills it exactly — no gap below the last entry. The floor
+                    // keeps rows tappable on very short windows (list scrolls).
+                    readonly property real rowHeight: count > 0 && height > 0
+                        ? Math.max(dp(36), height / count)
+                        : App.Spacing.settingsButtonHeight
 
                     // One shared label size for every row: the largest size
                     // (capped at the design size) at which the longest section
@@ -103,8 +114,11 @@ Item {
                         var widest = 0
                         for (var i = 0; i < hubModel.length; i++)
                             widest = Math.max(widest, labelMetrics.advanceWidth(hubModel[i].name || ""))
-                        if (widest <= 0 || avail <= 0 || widest <= avail)
-                            return labelBaseSize
+                        // Never taller than about half a row, so labels stay
+                        // inside their row when many sections squeeze rows short.
+                        var size = Math.min(labelBaseSize, rowHeight * 0.45)
+                        if (widest <= 0 || avail <= 0 || widest * size / labelBaseSize <= avail)
+                            return size
                         return Math.max(dp(8), Math.floor(labelBaseSize * avail / widest))
                     }
                     FontMetrics {
@@ -122,7 +136,7 @@ Item {
                         property string itemName: entry.name || ""
 
                         width: navListView.width
-                        height: App.Spacing.settingsButtonHeight
+                        height: navListView.rowHeight
 
                         // Elevation shadow - outer
                         Rectangle {
@@ -200,44 +214,6 @@ Item {
 
                             Behavior on color { ColorAnimation { duration: 150 } }
                             Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
-                        }
-
-                        // Pulsing glow behind accent bar (spacecraft)
-                        Rectangle {
-                            id: activeEntryPulse
-                            anchors.centerIn: accentBar
-                            width: accentBar.width + 6
-                            height: accentBar.height + 6
-                            radius: accentBar.radius + 3
-                            color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, accentBarPulse)
-                            visible: App.EnvironmentTheme.active.pulsingElements && settingsMenu && settingsMenu.currentSection === parent.itemSection
-
-                            property real accentBarPulse: 0.15
-                            SequentialAnimation on accentBarPulse {
-                                running: activeEntryPulse.visible  // visible includes hidden pages/sections
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.35; duration: 1500; easing.type: Easing.InOutSine }
-                                NumberAnimation { to: 0.15; duration: 1500; easing.type: Easing.InOutSine }
-                            }
-                        }
-
-                        // Left accent bar for selected item
-                        Rectangle {
-                            id: accentBar
-                            anchors {
-                                left: parent.left
-                                leftMargin: 4
-                                verticalCenter: parent.verticalCenter
-                            }
-                            width: App.EnvironmentTheme.active.navAccentBarWidth
-                            height: settingsMenu && settingsMenu.currentSection === parent.itemSection
-                                ? (App.EnvironmentTheme.active.navAccentBarFullHeight
-                                    ? parent.height * 0.8 : parent.height * 0.5)
-                                : 0
-                            radius: App.EnvironmentTheme.active.navAccentBarWidth / 2
-                            color: App.Style.accent
-
-                            Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
                         }
 
                         // Hover effect - rounded

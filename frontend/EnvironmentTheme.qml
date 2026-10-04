@@ -58,8 +58,6 @@ QtObject {
         // Sidebar / Nav
         sidebarGrid: false,
         navItemRadius: 8,
-        navAccentBarWidth: 3,
-        navAccentBarFullHeight: false,
 
         // Chips
         chipRadius: 8,
