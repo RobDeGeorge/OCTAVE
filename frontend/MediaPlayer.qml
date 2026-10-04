@@ -14,6 +14,12 @@ Item {
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
 
+    // Column split shared by the header and every song row. Album names run
+    // longest, artists shortest.
+    readonly property real titleColumnRatio: 0.4
+    readonly property real artistColumnRatio: 0.25
+    readonly property real albumColumnRatio: 0.35
+
     // Local dp() / dpMin() helpers — Qt on Android loads QML singletons from
     // assets:/ URLs with functions un-callable (properties still work). These
     // inline wrappers use only App.Spacing.effectiveScale (a property), so they
@@ -256,8 +262,9 @@ Item {
         }
     }
 
-    // Function to scroll to the currently playing track (instant, no animation)
-    function scrollToCurrentTrack() {
+    // Scroll so the currently playing track is centered. Instant by default
+    // (page open, model load); animated when following a track change.
+    function scrollToCurrentTrack(animate) {
         var currentTrackName = ""
         var model = []
 
@@ -275,16 +282,37 @@ Item {
         for (var i = 0; i < model.length; i++) {
             if (model[i] === currentTrackName) {
                 // Calculate the content position to center this item
-                var itemHeight = App.Spacing.mediaPlayerRowHeight * 1.4 + 6  // height + spacing
+                var itemHeight = App.Spacing.mediaPlayerRowHeight * 1.4 + mediaListView.spacing
                 var targetY = (i * itemHeight) - (mediaListView.height / 2) + (itemHeight / 2)
                 // Clamp to valid range
                 targetY = Math.max(0, Math.min(targetY, mediaListView.contentHeight - mediaListView.height))
-                // Set position directly (instant, no animation)
-                mediaListView.contentY = targetY
+                followScrollAnimation.stop()
+                if (animate) {
+                    followScrollAnimation.to = targetY
+                    followScrollAnimation.start()
+                } else {
+                    mediaListView.contentY = targetY
+                }
                 console.log("Scrolled to track at index: " + i)
                 break
             }
         }
+    }
+
+    // Follow the active song when it changes while this page is showing
+    // (next / previous, track end). Left alone while the user is scrolling.
+    function followCurrentTrack() {
+        if (StackView.status !== StackView.Active) return
+        if (mediaListView.dragging || mediaListView.flicking) return
+        scrollToCurrentTrack(true)
+    }
+
+    NumberAnimation {
+        id: followScrollAnimation
+        target: mediaListView
+        property: "contentY"
+        duration: 350
+        easing.type: Easing.OutCubic
     }
 
     // Timer to scroll to current track after model is loaded
@@ -787,7 +815,7 @@ Item {
 
                         // Title header with sort functionality
                         Item {
-                            Layout.preferredWidth: parent.width * 0.4
+                            Layout.preferredWidth: parent.width * mediaPlayer.titleColumnRatio
                             Layout.fillHeight: true
 
                             MouseArea {
@@ -816,7 +844,7 @@ Item {
 
                         // Artist header with sort functionality
                         Item {
-                            Layout.preferredWidth: parent.width * 0.3
+                            Layout.preferredWidth: parent.width * mediaPlayer.artistColumnRatio
                             Layout.fillHeight: true
 
                             MouseArea {
@@ -845,7 +873,7 @@ Item {
 
                         // Album header with sort functionality
                         Item {
-                            Layout.preferredWidth: parent.width * 0.3
+                            Layout.preferredWidth: parent.width * mediaPlayer.albumColumnRatio
                             Layout.fillHeight: true
 
                             MouseArea {
@@ -884,6 +912,9 @@ Item {
                     clip: true
                     model: isSpotifyPlaylist ? spotifyTrackNames : mediaFiles
                     cacheBuffer: height * 0.5
+                    // No rubber-band past the first/last song; the overshoot drag
+                    // lagged behind the finger and bounced back
+                    boundsBehavior: Flickable.StopAtBounds
                     displayMarginBeginning: dp(40)
                     displayMarginEnd: dp(40)
                     reuseItems: true
@@ -930,6 +961,9 @@ Item {
                         // Title, artist and album share one text size on one centered line;
                         // the duration hangs below the title.
                         readonly property real lineTextSize: App.Spacing.mediaPlayerTextSize * 1.2
+                        // Long titles/artists/albums wrap to a second line before eliding;
+                        // the gutter keeps a full-width column from running into the next
+                        readonly property real columnGutter: App.Spacing.overallMargin * 3
 
                         // Modern glass-style card with theme awareness
                         Rectangle {
@@ -1042,7 +1076,7 @@ Item {
 
                                 // Title section (with album art)
                                 RowLayout {
-                                    Layout.preferredWidth: parent.width * 0.4
+                                    Layout.preferredWidth: parent.width * mediaPlayer.titleColumnRatio
                                     Layout.fillHeight: true
                                     spacing: App.Spacing.overallMargin * 2
 
@@ -1064,6 +1098,7 @@ Item {
                                             id: titleText
                                             anchors.left: parent.left
                                             anchors.right: parent.right
+                                            anchors.rightMargin: delegate.columnGutter
                                             anchors.verticalCenter: parent.verticalCenter
                                             // Reference playlistRefreshCounter to force rebinding when mode changes
                                             text: {
@@ -1074,6 +1109,8 @@ Item {
                                             font.pixelSize: delegate.lineTextSize
                                             font.family: mediaPlayer.globalFont
                                             font.bold: true
+                                            wrapMode: Text.Wrap
+                                            maximumLineCount: 2
                                             elide: Text.ElideRight
                                         }
 
@@ -1102,13 +1139,14 @@ Item {
 
                                 // Artist column
                                 Item {
-                                    Layout.preferredWidth: parent.width * 0.3
+                                    Layout.preferredWidth: parent.width * mediaPlayer.artistColumnRatio
                                     Layout.fillHeight: true
                                     clip: true
 
                                     Text {
                                         anchors.left: parent.left
                                         anchors.right: parent.right
+                                        anchors.rightMargin: delegate.columnGutter
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: {
                                             // Reference playlistRefreshCounter to force rebinding
@@ -1121,19 +1159,22 @@ Item {
                                         color: App.Style.secondaryTextColor
                                         font.pixelSize: delegate.lineTextSize
                                         font.family: mediaPlayer.globalFont
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 2
                                         elide: Text.ElideRight
                                     }
                                 }
 
                                 // Album column
                                 Item {
-                                    Layout.preferredWidth: parent.width * 0.3
+                                    Layout.preferredWidth: parent.width * mediaPlayer.albumColumnRatio
                                     Layout.fillHeight: true
                                     clip: true
 
                                     Text {
                                         anchors.left: parent.left
                                         anchors.right: parent.right
+                                        anchors.rightMargin: delegate.columnGutter
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: {
                                             // Reference playlistRefreshCounter to force rebinding
@@ -1146,6 +1187,8 @@ Item {
                                         color: App.Style.secondaryTextColor
                                         font.pixelSize: delegate.lineTextSize
                                         font.family: mediaPlayer.globalFont
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 2
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -1261,6 +1304,7 @@ Item {
         // Current media changed
         function onCurrentMediaChanged(filename) {
             lastPlayedSong = filename
+            if (!mediaPlayer.isSpotifyPlaylist) mediaPlayer.followCurrentTrack()
         }
 
         // Play state changed
@@ -1349,6 +1393,7 @@ Item {
         function onCurrentTrackChanged(title, artist, album, artUrl) {
             // Update cached track name - delegates will automatically update via binding
             currentSpotifyTrackName = title
+            if (mediaPlayer.isSpotifyPlaylist) mediaPlayer.followCurrentTrack()
         }
 
         function onPlayStateChanged(playing) {
