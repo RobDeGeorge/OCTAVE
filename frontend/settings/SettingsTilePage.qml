@@ -12,6 +12,8 @@ Item {
     // While a tile's popup is open, that tile is invisible in the grid so the
     // hero morph isn't doubled up by the source card showing through.
     property string hiddenCardId: ""
+    // 0 = automatic (2x2 for 4 tiles, otherwise square-ish).
+    property int columns: 0
 
     signal tileSelected(string cardId, var originRect)
 
@@ -23,7 +25,8 @@ Item {
         rowSpacing: App.Spacing.settingsHubGridSpacing
 
         // 2x2 grid for 4 tiles; otherwise square-ish auto-fit.
-        columns: tilePage.tileModel && tilePage.tileModel.length === 4
+        columns: tilePage.columns > 0 ? tilePage.columns
+            : tilePage.tileModel && tilePage.tileModel.length === 4
             ? 2
             : Math.max(2, Math.ceil(Math.sqrt(tilePage.tileModel ? tilePage.tileModel.length : 0)))
 

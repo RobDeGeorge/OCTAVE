@@ -30,12 +30,95 @@ Item {
         return contentArea.detailCardId
     }
 
+    // ── "All settings" view ───────────────────────────────────────────
+    // The settings button (SettingsMenu.handleSettingsButton → navigateToHub)
+    // toggles between the normal sidebar + section view and one flat grid of
+    // every settings card from every section, like an app drawer.
+    property bool allSettingsMode: false
+
+    function navigateToHub() {
+        contentArea.closeTile()
+        allSettingsMode = !allSettingsMode
+    }
+
+    // Every visible section's tiles, tagged with their section. Sections
+    // without tiles (About) get a single tile that jumps to the section.
+    // Bumped as hidden pages load — Repeater.itemAt() is not a binding dependency.
+    property int _allPagesLoaded: 0
+    readonly property var allTiles: {
+        var _ = _allPagesLoaded
+        var tiles = []
+        for (var i = 0; i < hubModel.length; i++) {
+            var entry = hubModel[i]
+            var loader = allPagesRepeater.itemAt(i)
+            var page = loader ? loader.item : null
+            if (page && typeof page.tileModel !== "undefined") {
+                for (var j = 0; j < page.tileModel.length; j++) {
+                    var t = page.tileModel[j]
+                    tiles.push({ cardId: t.cardId, title: t.title, icon: t.icon || "",
+                                 iconSource: t.iconSource || "", component: t.component,
+                                 section: entry.section })
+                }
+            } else if (loader && !loader.active) {
+                tiles.push({ cardId: "section:" + entry.section, title: entry.name,
+                             icon: entry.icon || "", iconSource: entry.iconSource || "",
+                             section: entry.section })
+            }
+        }
+        return tiles
+    }
+
+    // One hidden instance of each section page while the grid is open, so
+    // its tile components (which live in the page) can fill the popup.
+    // Built with renderCards false, like contentLoader, so it stays cheap.
+    Repeater {
+        id: allPagesRepeater
+        model: sidebarLayout.allSettingsMode ? sidebarLayout.hubModel : []
+        onItemAdded: sidebarLayout._allPagesLoaded++
+        onItemRemoved: sidebarLayout._allPagesLoaded++
+        delegate: Loader {
+            visible: false
+            active: modelData.section !== "about"
+            Component.onCompleted: if (active) setSource(modelData.source, { renderCards: false })
+            onLoaded: {
+                sidebarLayout._allPagesLoaded++
+                if (typeof item.mainWindow !== "undefined" && settingsMenu)
+                    item.mainWindow = settingsMenu.mainWindow
+                if (typeof item.stackView !== "undefined" && settingsMenu)
+                    item.stackView = settingsMenu.stackView
+                if (typeof item.currentSection !== "undefined")
+                    item.currentSection = modelData.section
+            }
+        }
+    }
+
+    // Shared by both tile grids. "Now Playing" hijacks the whole window — see
+    // SettingsHubCard; a section tile leaves the grid for that section.
+    function selectTile(cardId, rect, sourceGrid) {
+        if (cardId === "media_now_playing"
+            && settingsMenu && settingsMenu.mainWindow
+            && typeof settingsMenu.mainWindow.openNowPlayingStudio === "function") {
+            var p = sourceGrid.parent.mapToItem(null, rect.x, rect.y)
+            settingsMenu.mainWindow.openNowPlayingStudio(
+                Qt.rect(p.x, p.y, rect.width, rect.height))
+            return
+        }
+        if (cardId.indexOf("section:") === 0) {
+            allSettingsMode = false
+            if (settingsMenu)
+                settingsMenu.navigateToCategory(cardId.substring(8))
+            return
+        }
+        contentArea.openTile(cardId, rect)
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
         Rectangle { // Left Navigation Panel
             id: sidebarPanel
+            visible: !sidebarLayout.allSettingsMode
             Layout.preferredWidth: App.Spacing.settingsNavWidth
             Layout.fillHeight: true
             color: App.Style.sidebarColor
@@ -334,9 +417,11 @@ Item {
             property rect originRect: Qt.rect(0, 0, 0, 0)
 
             function openTile(cardId, rect) {
-                if (!contentLoader.item || typeof contentLoader.item.tileModel === "undefined")
+                var tm = sidebarLayout.allSettingsMode ? sidebarLayout.allTiles
+                    : (contentLoader.item && typeof contentLoader.item.tileModel !== "undefined"
+                        ? contentLoader.item.tileModel : null)
+                if (!tm)
                     return
-                var tm = contentLoader.item.tileModel
                 for (var i = 0; i < tm.length; i++) {
                     if (tm[i].cardId === cardId) {
                         detailTile = tm[i]
@@ -484,22 +569,52 @@ Item {
                     margins: App.Spacing.settingsContentMargin
                 }
                 z: 2
-                visible: contentArea.useTileLayout
+                visible: contentArea.useTileLayout && !sidebarLayout.allSettingsMode
                 tileModel: contentArea.useTileLayout && contentLoader.item
                     ? contentLoader.item.tileModel : []
                 hiddenCardId: contentArea.detailCardId
-                onTileSelected: function(cardId, rect) {
-                    // "Now Playing" hijacks the whole window — see SettingsHubCard.
-                    if (cardId === "media_now_playing"
-                        && settingsMenu && settingsMenu.mainWindow
-                        && typeof settingsMenu.mainWindow.openNowPlayingStudio === "function") {
-                        var src = tileGrid.parent
-                        var p = src.mapToItem(null, rect.x, rect.y)
-                        settingsMenu.mainWindow.openNowPlayingStudio(
-                            Qt.rect(p.x, p.y, rect.width, rect.height))
-                        return
+                onTileSelected: function(cardId, rect) { sidebarLayout.selectTile(cardId, rect, tileGrid) }
+            }
+
+            // ── All-settings grid (settings button toggles it) ─────────────
+            // Covers the section page. Columns: near-square tiles for the
+            // pane's aspect ratio, preferring a count that fills the last row.
+            Rectangle {
+                anchors.fill: parent
+                z: 2
+                color: App.Style.contentColor
+                visible: opacity > 0
+                opacity: sidebarLayout.allSettingsMode ? 1.0 : 0.0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
+
+                SettingsTilePage {
+                    id: allTilesGrid
+                    anchors {
+                        fill: parent
+                        margins: App.Spacing.settingsContentMargin
                     }
-                    contentArea.openTile(cardId, rect)
+                    tileModel: sidebarLayout.allTiles
+                    columns: {
+                        var n = tileModel.length
+                        if (n === 0 || height <= 0) return 4
+                        var ideal = Math.max(2, Math.min(n, Math.round(Math.sqrt(n * width / height))))
+                        var rowMin = dp(100) + App.Spacing.settingsHubGridSpacing
+                        var best = ideal, bestEmpty = n
+                        for (var c = Math.max(2, ideal - 1); c <= Math.min(n, ideal + 1); c++) {
+                            var empty = Math.ceil(n / c) * c - n
+                            if (empty < bestEmpty || (empty === bestEmpty && c === ideal)) {
+                                best = c
+                                bestEmpty = empty
+                            }
+                        }
+                        // Add columns if the rows would not fit at the tiles'
+                        // minimum height.
+                        while (best < n && Math.ceil(n / best) * rowMin > height)
+                            best++
+                        return best
+                    }
+                    hiddenCardId: contentArea.detailCardId
+                    onTileSelected: function(cardId, rect) { sidebarLayout.selectTile(cardId, rect, allTilesGrid) }
                 }
             }
 
@@ -507,7 +622,7 @@ Item {
             SettingsCardPopup {
                 id: detailPopup
                 z: 3
-                visible: contentArea.useTileLayout && (openProgress > 0.001 || contentArea.detailCardId !== "")
+                visible: (contentArea.useTileLayout || sidebarLayout.allSettingsMode) && (openProgress > 0.001 || contentArea.detailCardId !== "")
                 title: contentArea.detailTile ? contentArea.detailTile.title : ""
                 contentComponent: contentArea.detailTile ? contentArea.detailTile.component : null
 
