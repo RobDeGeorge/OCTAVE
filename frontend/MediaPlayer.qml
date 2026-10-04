@@ -879,6 +879,8 @@ Item {
                     id: mediaListView
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    // Same gap under the column header as the page leaves above the bottom bar
+                    Layout.topMargin: App.Spacing.overallMargin
                     clip: true
                     model: isSpotifyPlaylist ? spotifyTrackNames : mediaFiles
                     cacheBuffer: height * 0.5
@@ -925,16 +927,10 @@ Item {
                             return mediaManager ? (mediaManager.get_album_art(modelData) || "./assets/missing_art.png") : "./assets/missing_art.png"
                         }
                         
-                        // Generate consistent value based on song name
-                        property real randomValue: {
-                            var hash = 0;
-                            for (var i = 0; i < modelData.length; i++) {
-                                hash = ((hash << 5) - hash) + modelData.charCodeAt(i);
-                                hash = hash & hash;
-                            }
-                            return Math.abs(hash) / 2147483647;
-                        }
-                                                
+                        // Title, artist and album share one text size on one centered line;
+                        // the duration hangs below the title.
+                        readonly property real lineTextSize: App.Spacing.mediaPlayerTextSize * 1.2
+
                         // Modern glass-style card with theme awareness
                         Rectangle {
                             id: glassCard
@@ -993,56 +989,47 @@ Item {
                                     }
                                 }
                                 
-                                // Album art as texture overlay with varying opacity
+                                // Album art as texture overlay with varying opacity,
+                                // filling the card edge to edge with its rounded corners
                                 Image {
+                                    id: cardArt
                                     anchors.fill: parent
                                     source: delegate.albumArtSource
                                     fillMode: Image.PreserveAspectCrop
                                     opacity: delegate.isCurrentSong ? 0.10 : 0.03
-                                    
-                                    // Create a small random offset for visual interest
-                                    transform: Translate {
-                                        x: -10 + (delegate.randomValue * 20)
-                                        y: -10 + ((1 - delegate.randomValue) * 20)
+                                    layer.enabled: true
+                                    layer.effect: OpacityMask {
+                                        maskSource: Rectangle {
+                                            width: cardArt.width
+                                            height: cardArt.height
+                                            radius: glassCard.radius
+                                        }
                                     }
                                 }
                             }
                             
-                            // Active song indicator - glowing accent bar
-                            Rectangle {
-                                visible: delegate.isCurrentSong
-                                width: dp(6)
-                                height: parent.height
-                                radius: width / 2
+                            // Album art: full card height, flush with the card's left edge,
+                            // inset by the border so the selected outline stays visible
+                            Image {
+                                id: albumArt
                                 anchors.left: parent.left
-                                anchors.leftMargin: dp(2)
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: App.Style.accent
-                                opacity: pulseAnimation.opacity
-                                
-                                // Pulse animation
-                                SequentialAnimation {
-                                    id: pulseAnimation
-                                    running: delegate.isPlaying && delegate.visible  // visible includes hidden pages/sections
-                                    loops: Animation.Infinite
-                                    alwaysRunToEnd: true
-                                    property real opacity: 1.0
-                                    
-                                    NumberAnimation {
-                                        target: pulseAnimation
-                                        property: "opacity"
-                                        from: 0.7
-                                        to: 1.0
-                                        duration: 800
-                                        easing.type: Easing.InOutQuad
-                                    }
-                                    NumberAnimation {
-                                        target: pulseAnimation
-                                        property: "opacity"
-                                        from: 1.0
-                                        to: 0.7
-                                        duration: 800
-                                        easing.type: Easing.InOutQuad
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.margins: glassCard.border.width
+                                width: height
+                                source: delegate.albumArtSource
+                                sourceSize.width: width * 1.5
+                                sourceSize.height: height * 1.5
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                                smooth: true
+                                layer.enabled: true
+                                layer.effect: OpacityMask {
+                                    maskSource: Rectangle {
+                                        width: albumArt.width
+                                        height: albumArt.height
+                                        radius: Math.max(0, glassCard.radius - glassCard.border.width)
                                     }
                                 }
                             }
@@ -1059,42 +1046,11 @@ Item {
                                     Layout.fillHeight: true
                                     spacing: App.Spacing.overallMargin * 2
 
-                                    // Album art with frame - simplified
-                                    Rectangle {
-                                        id: albumArtContainer
-                                        Layout.preferredWidth: App.Spacing.mediaPlayerRowHeight * 1.25
-                                        Layout.preferredHeight: App.Spacing.mediaPlayerRowHeight * 1.25
-                                        radius: dpMin(8, 2)
-                                        color: Qt.rgba(1, 1, 1, 0.08) // Subtle glass effect
-                                        border.width: 1
-                                        border.color: Qt.rgba(1, 1, 1, 0.2)
-                                        clip: true // Simple clipping for rounded corners
-                                        
-                                        // Album art image
-                                        Image {
-                                            id: albumArt
-                                            anchors.fill: parent
-                                            anchors.margins: dp(3)
-                                            source: delegate.albumArtSource
-                                            sourceSize.width: width * 1.5
-                                            sourceSize.height: height * 1.5
-                                            fillMode: Image.PreserveAspectCrop
-                                            asynchronous: true
-                                            cache: true
-                                            smooth: true
-                                        }
-                                        
-                                        // Simple highlight effect for glass appearance
-                                        Rectangle {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.top: parent.top
-                                            anchors.margins: dp(3)
-                                            height: parent.height * 0.3
-                                            radius: dpMin(6, 2)
-                                            color: "white"
-                                            opacity: 0.1
-                                        }
+                                    // Room for the album art, which is anchored to the card
+                                    // edge below; the row's left margin already covers part of it
+                                    Item {
+                                        Layout.preferredWidth: albumArt.width - App.Spacing.overallMargin * 2
+                                        Layout.fillHeight: true
                                     }
 
                                     // Title and duration container
@@ -1103,42 +1059,43 @@ Item {
                                         Layout.fillHeight: true
                                         clip: true
                                         
-                                        ColumnLayout {
+                                        // Song title — shares a line with artist and album
+                                        Text {
+                                            id: titleText
                                             anchors.left: parent.left
                                             anchors.right: parent.right
                                             anchors.verticalCenter: parent.verticalCenter
-                                            spacing: App.Spacing.overallMargin
-
-                                            // Song title
-                                            Text {
-                                                Layout.fillWidth: true
-                                                // Reference playlistRefreshCounter to force rebinding when mode changes
-                                                text: {
-                                                    var _ = mediaPlayer.playlistRefreshCounter
-                                                    return mediaPlayer.isSpotifyPlaylist ? modelData : (mediaManager ? mediaManager.get_display_name(modelData) : modelData.replace('.mp3', ''))
-                                                }
-                                                color: delegate.isCurrentSong ? App.Style.accent : App.Style.primaryTextColor
-                                                font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
-                                                font.family: mediaPlayer.globalFont
-                                                font.bold: true
-                                                elide: Text.ElideRight
+                                            // Reference playlistRefreshCounter to force rebinding when mode changes
+                                            text: {
+                                                var _ = mediaPlayer.playlistRefreshCounter
+                                                return mediaPlayer.isSpotifyPlaylist ? modelData : (mediaManager ? mediaManager.get_display_name(modelData) : modelData.replace('.mp3', ''))
                                             }
+                                            color: delegate.isCurrentSong ? App.Style.accent : App.Style.primaryTextColor
+                                            font.pixelSize: delegate.lineTextSize
+                                            font.family: mediaPlayer.globalFont
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
 
-                                            // Duration
-                                            Text {
-                                                text: {
-                                                    // Reference playlistRefreshCounter to force rebinding
-                                                    var _ = mediaPlayer.playlistRefreshCounter
-                                                    if (mediaPlayer.isSpotifyPlaylist && spotifyManager) {
-                                                        return spotifyManager.get_spotify_track_duration_formatted(modelData)
-                                                    }
-                                                    return mediaManager ? mediaManager.get_formatted_duration(modelData) : "0:00"
+                                        // Duration, on the row below the title
+                                        Text {
+                                            id: durationText
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.top: titleText.bottom
+                                            anchors.topMargin: App.Spacing.overallMargin
+                                            text: {
+                                                // Reference playlistRefreshCounter to force rebinding
+                                                var _ = mediaPlayer.playlistRefreshCounter
+                                                if (mediaPlayer.isSpotifyPlaylist && spotifyManager) {
+                                                    return spotifyManager.get_spotify_track_duration_formatted(modelData)
                                                 }
-                                                color: App.Style.secondaryTextColor
-                                                font.pixelSize: App.Spacing.mediaPlayerSecondaryTextSize * 1.1
-                                                font.family: mediaPlayer.globalFont
-                                                elide: Text.ElideRight
+                                                return mediaManager ? mediaManager.get_formatted_duration(modelData) : "0:00"
                                             }
+                                            color: App.Style.secondaryTextColor
+                                            font.pixelSize: App.Spacing.mediaPlayerSecondaryTextSize * 1.1
+                                            font.family: mediaPlayer.globalFont
+                                            elide: Text.ElideRight
                                         }
                                     }
                                 }
@@ -1162,7 +1119,7 @@ Item {
                                             return mediaManager ? mediaManager.get_band(modelData) : "Unknown Artist"
                                         }
                                         color: App.Style.secondaryTextColor
-                                        font.pixelSize: App.Spacing.mediaPlayerSecondaryTextSize * 1.2
+                                        font.pixelSize: delegate.lineTextSize
                                         font.family: mediaPlayer.globalFont
                                         elide: Text.ElideRight
                                     }
@@ -1187,7 +1144,7 @@ Item {
                                             return mediaManager ? mediaManager.get_album(modelData) : "Unknown Album"
                                         }
                                         color: App.Style.secondaryTextColor
-                                        font.pixelSize: App.Spacing.mediaPlayerSecondaryTextSize * 1.2
+                                        font.pixelSize: delegate.lineTextSize
                                         font.family: mediaPlayer.globalFont
                                         elide: Text.ElideRight
                                     }
