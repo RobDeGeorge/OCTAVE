@@ -43,6 +43,7 @@ from backend.dashboard_manager import DashboardManager
 from backend.settings_manager import get_app_data_dir
 
 from backend.obd_manager import OBDManager
+from backend.obd_adapter_finder import OBDAdapterFinder
 from backend.spotify_manager import SpotifyManager
 from backend.android_auto import AndroidAutoManager, EmbeddedDhuItem
 from backend.phone_mirror import PhoneMirrorManager
@@ -130,6 +131,11 @@ engine.rootContext().setContextProperty("audioAnalyzer", audio_analyzer)
 # at the bottom of this file or by dev/dev_runtime.install_dev_runtime().
 obd_manager = None
 
+# Bluetooth OBD adapter discovery + pairing (the "Connect" sheet); gets its
+# OBD manager from install_obd_manager()
+obd_adapter_finder = OBDAdapterFinder(None, settings_manager)
+engine.rootContext().setContextProperty("obdAdapterFinder", obd_adapter_finder)
+
 
 def install_obd_manager(manager):
     """Register an OBD manager (real or mock) as the QML context property.
@@ -137,6 +143,7 @@ def install_obd_manager(manager):
     global obd_manager
     obd_manager = manager
     engine.rootContext().setContextProperty("obdManager", manager)
+    obd_adapter_finder.set_obd_manager(manager)
 
 
 # Spotify Manager

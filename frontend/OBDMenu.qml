@@ -761,17 +761,64 @@ Item {
                 font.family: obdPage.globalFont
             }
             Text {
+                visible: parent._connected
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
-                text: !parent._connected
-                      ? "Connect your OBD adapter and turn the ignition on. Every PID your vehicle supports will show up here."
-                      : (App.OBDParameterModel.vehicleKnown
-                         ? "The adapter is connected, but the vehicle didn't report any PIDs. Check that the ignition is on."
-                         : "The adapter is connected. Waiting for the vehicle to answer.")
+                text: App.OBDParameterModel.vehicleKnown
+                      ? "The adapter is connected, but the vehicle didn't report any PIDs. Check that the ignition is on."
+                      : "The adapter is connected. Waiting for the vehicle to answer."
                 color: labelColor
                 font.pixelSize: App.Spacing.overallText * 0.9
                 font.family: obdPage.globalFont
+            }
+
+            // Connect straight from the empty page: opens the adapter sheet,
+            // which scans, pairs and connects (OBDAdapterSheet.qml).
+            Rectangle {
+                id: obdConnectButton
+                objectName: "obdConnectButton"
+                visible: !parent._connected
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: App.Spacing.bottomBarNavButtonHeight
+                width: obdConnectLabel.implicitWidth + dp(32)
+                radius: dpMin(8, 2)
+                color: "transparent"
+                border.color: App.Style.accent
+                border.width: 1
+                scale: obdConnectMouse.pressed ? 0.9 : 1.0
+                Behavior on scale {
+                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+                }
+
+                readonly property bool _connecting: typeof obdManager !== "undefined" && obdManager
+                                                    && obdManager.connectionStatus === "Connecting"
+
+                Text {
+                    id: obdConnectLabel
+                    anchors.centerIn: parent
+                    text: obdConnectButton._connecting ? "Connecting…" : "Connect Bluetooth OBD2"
+                    color: App.Style.accent
+                    font.pixelSize: App.Spacing.overallText
+                    font.bold: true
+                    font.family: obdPage.globalFont
+                }
+
+                MouseArea {
+                    id: obdConnectMouse
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: obdAdapterSheet.open()
+                }
+            }
+        }
+
+        App.OBDAdapterSheet {
+            id: obdAdapterSheet
+            offerSettings: true
+            onSettingsRequested: {
+                if (obdPage.mainWindow && typeof obdPage.mainWindow.navigateToSettings === "function")
+                    obdPage.mainWindow.navigateToSettings("obdSettings")
             }
         }
 

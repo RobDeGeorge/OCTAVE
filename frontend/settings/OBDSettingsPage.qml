@@ -418,6 +418,36 @@ Item {
                 text: "OBD Adapter"
             }
 
+            // Scan, pair and connect without knowing the MAC (OBDAdapterSheet)
+            Rectangle {
+                objectName: "findAdaptersButton"
+                Layout.fillWidth: true
+                Layout.preferredHeight: dp(44)
+                radius: dpMin(6, 2)
+                color: findAdaptersMouse.pressed ? Qt.darker(App.Style.hoverColor, 1.2) : "transparent"
+                border.width: 1
+                border.color: App.Style.accent
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Find Bluetooth Adapters"
+                    color: App.Style.accent
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.family: App.Style.fontFamily
+                    font.bold: true
+                }
+
+                MouseArea {
+                    id: findAdaptersMouse
+                    anchors.fill: parent
+                    onClicked: if (adaptersColumn.tapsAllowed()) adapterSheet.open()
+                }
+            }
+
+            App.OBDAdapterSheet {
+                id: adapterSheet
+            }
+
             // Discovered adapters — bound to obdManager.availableAdapters
             // ({name, identifier, kind} on every OS). The "kind" tag tells
             // the user what flavour each row is so they can pick.

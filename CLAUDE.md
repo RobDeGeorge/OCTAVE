@@ -84,6 +84,7 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `mediamanager` — Local audio playback via QMediaPlayer
 - `spotifymanager` — Spotify Web API integration
 - `obdmanager` + `elm327protocol` — OBD-II diagnostics
+- `obdadapterfinder` (+ `src/platform/bluezpairer`) — Bluetooth OBD adapter scan / PIN pairing / trust / connect (desktop Linux so far; see `TODO/obd-adapter-discovery.md`)
 - `esp32volumemanager` — Wireless rotary encoder (serial)
 - `berryimumanager` — I²C sensor hub
 - `gesturemanager` — PAJ7620U2 gesture sensor
@@ -103,6 +104,7 @@ Key managers:
 - `media_manager.py` — Local MP3 playback via QMediaPlayer
 - `spotify_manager.py` — Spotify API integration (spotipy), credentials stored in OS keychain
 - `obd_manager.py` — OBD-II vehicle diagnostics with threaded connection worker
+- `obd_adapter_finder.py` — Bluetooth OBD adapter scan / PIN pairing (BlueZ agent over QtDBus) / trust / connect
 - `esp32_volume_manager.py` — Wireless rotary encoder volume control over serial
 - `berryimu_manager.py` — I2C accelerometer/gyro/magnetometer/barometer sensor
 - `gesture_manager.py` — PAJ7620U2 I2C gesture sensor for touchless control

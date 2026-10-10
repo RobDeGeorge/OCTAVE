@@ -48,6 +48,7 @@
 
 // Phase 4 managers
 #include "managers/obdmanager.h"
+#include "managers/obdadapterfinder.h"
 #include "managers/esp32volumemanager.h"  // desktop-only; empty on Q_OS_MOBILE
 #include "managers/berryimumanager.h"     // desktop-only; empty on Q_OS_MOBILE
 #include "managers/gesturemanager.h"      // desktop-only; empty on Q_OS_MOBILE
@@ -240,6 +241,10 @@ int main(int argc, char *argv[])
     // OBD Manager — vehicle diagnostics via ELM327
     OBDManager obdManager(&settingsManager);
     ctx->setContextProperty("obdManager", &obdManager);
+
+    // Bluetooth OBD adapter discovery + pairing (the "Connect" sheet)
+    OBDAdapterFinder obdAdapterFinder(&obdManager, &settingsManager);
+    ctx->setContextProperty("obdAdapterFinder", &obdAdapterFinder);
 
     // Hardware managers (USB-serial / I2C on desktop, stubbed on mobile via header).
     ESP32VolumeManager esp32VolumeManager;

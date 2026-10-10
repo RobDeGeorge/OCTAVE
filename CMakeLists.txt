@@ -137,6 +137,8 @@ qt_add_executable(octave
     src/managers/obdmanager.cpp
     src/managers/rfcommsocket.h
     src/managers/rfcommsocket.cpp
+    src/managers/obdadapterfinder.h
+    src/managers/obdadapterfinder.cpp
     src/managers/esp32volumemanager.h
     src/managers/esp32volumemanager.cpp
     src/managers/berryimumanager.h
@@ -210,6 +212,18 @@ target_link_libraries(octave PRIVATE
     Qt6::SerialPort
     Qt6::Bluetooth
 )
+# Desktop Linux pairs OBD adapters through BlueZ over D-Bus (PIN agent +
+# trust), see src/platform/bluezpairer.h. Qt Bluetooth already depends on
+# Qt DBus there, so this adds no new runtime library.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
+    find_package(Qt6 REQUIRED COMPONENTS DBus)
+    target_sources(octave PRIVATE
+        src/platform/bluezpairer.h
+        src/platform/bluezpairer.cpp
+    )
+    target_link_libraries(octave PRIVATE Qt6::DBus)
+    target_compile_definitions(octave PRIVATE OCTAVE_BLUEZ)
+endif()
 if(OCTAVE_HAVE_FFMPEG)
     if(WIN32)
         target_include_directories(octave PRIVATE ${FFMPEG_INCLUDE_DIRS})

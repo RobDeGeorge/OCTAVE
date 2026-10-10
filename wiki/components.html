@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Components</div>
           <h1 class="page-title">Components</h1>
-          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, GalleryTile, SensorCard, GForceDisplay, HomeOBDView, the OBDParameterModel singleton and the rigged Jeep TJ</p>
+          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, GalleryTile, SensorCard, GForceDisplay, HomeOBDView, OBDAdapterSheet, the OBDParameterModel singleton and the rigged Jeep TJ</p>
         </div>
 
         <nav class="toc">
@@ -30,6 +30,7 @@
             <li><a href="#gforce-display">GForceDisplay</a></li>
             <li><a href="#phone-qr-pairing-panel">PhoneQrPairingPanel</a></li>
             <li><a href="#home-obd-view">HomeOBDView</a></li>
+            <li><a href="#obd-adapter-sheet">OBDAdapterSheet</a></li>
             <li><a href="#obd-parameter-model">OBDParameterModel</a></li>
             <li><a href="#jeep-rig">The Jeep TJ Rig</a></li>
             <li><a href="#design-decisions">Design Decisions</a></li>
@@ -54,6 +55,7 @@
             <tr><td><code>GalleryTile</code></td><td><code>Rectangle</code></td><td>the Primitives Gallery popup in <span class="file-path">OBDMenu.qml</span></td></tr>
             <tr><td><code>SensorCard</code>, <code>GForceDisplay</code></td><td><code>Rectangle</code></td><td><span class="file-path">SensorMenu.qml</span></td></tr>
             <tr><td><code>HomeOBDView</code></td><td><code>Item</code></td><td><span class="file-path">MainMenu.qml</span></td></tr>
+            <tr><td><code>OBDAdapterSheet</code></td><td><code>Popup</code></td><td><span class="file-path">OBDMenu.qml</span> (empty-state Connect button), <span class="file-path">settings/OBDSettingsPage.qml</span> (Adapters card)</td></tr>
             <tr><td><code>OBDParameterModel</code></td><td><code>QtObject</code> singleton</td><td>every OBD view, the gauges, the dashboard editor, Main.qml's IMU gating</td></tr>
             <tr><td><code>JeepVehicle</code>, <code>JeepHinge</code>, <code>JeepLamp</code>, <code>JeepLink</code></td><td>Quick3D <code>Node</code></td><td><span class="file-path">CarMenu.qml</span></td></tr>
           </tbody>
@@ -323,6 +325,10 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
         </ul>
 
         <p>The window-wide full-screen and aura flashes for the same flags live in <span class="file-path">Main.qml</span> (see <a href="frontend-overview.html#shift-light">Shift Light Overlays</a>); the flags are edited in the RPM popup on <a href="pages.html#obdmenu">OBDMenu</a>.</p>
+
+        <!-- OBDAdapterSheet -->
+        <h2 id="obd-adapter-sheet">OBDAdapterSheet</h2>
+        <p><span class="file-path">frontend/OBDAdapterSheet.qml</span> is the "Connect OBD2 Adapter" <code>Popup</code> (parented to <code>Overlay.overlay</code>, centred, at most 720 &times; 620 dp, styled like the dashboard chooser). Opening it starts <code>obdAdapterFinder.startScan()</code>; closing it stops the scan but leaves a pairing that's under way running. From the top: a title with a busy spinner and &#x2715;, the finder's <code>status</code> line (red when <code>statusIsError</code>, or "Bluetooth is off." with a "Turn Bluetooth On" button), "Saved:" chips from <code>settingsManager.obdSavedAdapters</code> (a tap calls <code>obdManager.connect_to_adapter()</code>), the device list (signal bars, name, address &middot; Classic / Bluetooth LE / Classic + LE &middot; Paired, and "Connect" / "Working&hellip;"; rows the finder marks not <code>connectable</code> are dimmed with the reason), and a footer with Scan Again, Show All Devices (N) / OBD Adapters Only, and Cancel while busy. It closes itself 1.5 s after <code>obdManager.connected</code> turns true. When <code>obdAdapterFinder.supported</code> is false it lists <code>obdManager.availableAdapters</code> instead and, when the host sets <code>offerSettings</code>, shows an "OBD Settings" button that emits <code>settingsRequested()</code>. See <a href="obd-manager.html#adapter-finder">OBD Manager &rarr; Adapter Finder</a>.</p>
 
         <!-- OBDParameterModel -->
         <h2 id="obd-parameter-model">OBDParameterModel</h2>

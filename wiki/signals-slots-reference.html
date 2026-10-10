@@ -30,6 +30,7 @@
             <li><a href="#audioAnalyzer">AudioAnalyzer</a></li>
             <li><a href="#spotifyManager">SpotifyManager</a></li>
             <li><a href="#obdManager">OBDManager</a></li>
+            <li><a href="#obdAdapterFinder">OBDAdapterFinder</a></li>
             <li><a href="#esp32VolumeManager">ESP32VolumeManager</a></li>
             <li><a href="#berryIMU">BerryIMUManager</a></li>
             <li><a href="#gestureSensor">GestureManager</a></li>
@@ -49,7 +50,7 @@
         </div>
 
         <h2 id="registry">Context property registry</h2>
-        <p>16 context properties (plus one sub-object and one profiler) &mdash; 846 public members in total.</p>
+        <p>17 context properties (plus one sub-object and one profiler) &mdash; 863 public members in total.</p>
         <table>
           <thead><tr><th>QML name</th><th>C++ class &amp; file</th><th>Python class &amp; file</th><th>Notes</th></tr></thead>
           <tbody>
@@ -62,6 +63,7 @@
             <tr><td><a href="#audioAnalyzer"><code>audioAnalyzer</code></a></td><td><code>AudioAnalyzer</code> &mdash; <span class="file-path">src/managers/audioanalyzer.h</span></td><td><code>AudioAnalyzer</code> &mdash; <span class="file-path">backend/audio_analyzer.py</span></td><td></td></tr>
             <tr><td><a href="#spotifyManager"><code>spotifyManager</code></a></td><td><code>SpotifyManager</code> &mdash; <span class="file-path">src/managers/spotifymanager.h</span></td><td><code>SpotifyManager</code> &mdash; <span class="file-path">backend/spotify_manager.py</span></td><td>C++ mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td><code>OBDManager</code> &mdash; <span class="file-path">backend/obd_manager.py</span></td><td>Python: registered through <code>install_obd_manager()</code> so <code>dev/</code> can swap in a <code>MockOBDManager</code></td></tr>
+            <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">backend/obd_adapter_finder.py</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
             <tr><td><a href="#esp32VolumeManager"><code>esp32VolumeManager</code></a></td><td><code>ESP32VolumeManager</code> &mdash; <span class="file-path">src/managers/esp32volumemanager.h</span></td><td><code>ESP32VolumeManager</code> &mdash; <span class="file-path">backend/esp32_volume_manager.py</span></td><td>C++ mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#berryIMU"><code>berryIMU</code></a></td><td><code>BerryIMUManager</code> &mdash; <span class="file-path">src/managers/berryimumanager.h</span></td><td><code>BerryIMUManager</code> &mdash; <span class="file-path">backend/berryimu_manager.py</span></td><td>C++ Android build uses a QtSensors implementation</td></tr>
             <tr><td><a href="#gestureSensor"><code>gestureSensor</code></a></td><td><code>GestureManager</code> &mdash; <span class="file-path">src/managers/gesturemanager.h</span></td><td><code>GestureManager</code> &mdash; <span class="file-path">backend/gesture_manager.py</span></td><td>C++ mobile builds register a stub (see the section)</td></tr>
@@ -925,6 +927,46 @@
             <tr><td><code>obdParameterChanged(QString paramId, float value)</code></td><td>One value from a multi-value PID (0x61 and up: torque, boost, odometer, &hellip;); <code>OBDParameterModel</code> routes it by id</td></tr>
             <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>
             <tr><td><code>connectionLogLineAppended(QString line)</code></td><td>One live line for the OBD settings Connection Log card</td></tr>
+          </tbody>
+        </table>
+
+        <!-- OBDAdapterFinder -->
+        <h2 id="obdAdapterFinder">OBDAdapterFinder <span class="cmt">&mdash; <code>obdAdapterFinder</code></span></h2>
+        <p><span class="file-path">src/managers/obdadapterfinder.h</span> / <span class="file-path">backend/obd_adapter_finder.py</span> &mdash; QML context property <code>obdAdapterFinder</code></p>
+        <p>Finds, pairs (answering the PIN itself through a BlueZ agent), trusts and connects a Bluetooth OBD-II adapter for <span class="file-path">frontend/OBDAdapterSheet.qml</span>. See <a href="obd-manager.html#adapter-finder">OBD Manager &rarr; Adapter Finder</a>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Notify</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>supported</code></td><td><code>bool</code></td><td>constant</td><td>Discovery + pairing + connect work here (desktop Linux). False elsewhere; the sheet then falls back to <code>obdManager.availableAdapters</code></td></tr>
+            <tr><td><code>bluetoothOn</code></td><td><code>bool</code></td><td><code>bluetoothOnChanged</code></td><td>A controller exists and is powered</td></tr>
+            <tr><td><code>scanning</code></td><td><code>bool</code></td><td><code>scanningChanged</code></td><td>Discovery running (15 s)</td></tr>
+            <tr><td><code>devices</code></td><td><code>QVariantList</code> / <code>list</code></td><td><code>devicesChanged</code></td><td><code>[{address, name, rssi, kind: "classic"|"ble"|"dual", likelyObd, paired, connectable, note}]</code>; likely adapters first, then by signal (<code>rssi</code> 0 = cached, not heard this scan)</td></tr>
+            <tr><td><code>busyAddress</code></td><td><code>QString</code></td><td><code>busyChanged</code></td><td>Adapter being paired / connected, <code>""</code> when idle</td></tr>
+            <tr><td><code>status</code></td><td><code>QString</code></td><td><code>statusChanged</code></td><td>Human-readable progress or outcome</td></tr>
+            <tr><td><code>statusIsError</code></td><td><code>bool</code></td><td><code>statusChanged</code></td><td><code>status</code> describes a failure</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>startScan()</code></td><td><code>void</code></td><td>Clear the list and run Classic + LE discovery; no-op while pairing</td></tr>
+            <tr><td><code>stopScan()</code></td><td><code>void</code></td><td>Stop discovery (the sheet calls it on close; a pairing under way continues)</td></tr>
+            <tr><td><code>connectAdapter(QString address)</code></td><td><code>void</code></td><td>Pair with PINs 1234 / 0000 / 6789 / 1111, trust, look up the SPP channel, then <code>obdManager.connect_direct()</code> and a named saved-adapter chip</td></tr>
+            <tr><td><code>cancel()</code></td><td><code>void</code></td><td>Cancel pairing / channel lookup / scan and clear the status</td></tr>
+            <tr><td><code>powerOn()</code></td><td><code>void</code></td><td>Power the Bluetooth controller on</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>bluetoothOnChanged()</code></td><td>Controller powered on/off</td></tr>
+            <tr><td><code>scanningChanged()</code></td><td>Discovery started or stopped</td></tr>
+            <tr><td><code>devicesChanged()</code></td><td>The list changed (device found, signal updated, paired)</td></tr>
+            <tr><td><code>busyChanged()</code></td><td><code>busyAddress</code> changed</td></tr>
+            <tr><td><code>statusChanged()</code></td><td><code>status</code> / <code>statusIsError</code> changed</td></tr>
           </tbody>
         </table>
 

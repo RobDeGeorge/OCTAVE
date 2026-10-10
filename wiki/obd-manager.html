@@ -30,6 +30,7 @@
             <li><a href="#speed-optimizations">Speed Optimizations</a></li>
             <li><a href="#device-discovery">Device Discovery</a></li>
             <li><a href="#unified-adapter-api">Unified Adapter API</a></li>
+            <li><a href="#adapter-finder">Adapter Finder: Scan, Pair, Connect</a></li>
             <li><a href="#auto-reconnect">Auto-Reconnect and Passive Scanning</a></li>
             <li><a href="#data-watchdog">Data Watchdog</a></li>
             <li><a href="#supported-parameters">Supported OBD Parameters</a></li>
@@ -88,6 +89,9 @@
             <tr><td><span class="file-path">src/managers/obdmanager.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td><code>OBDManager</code> (main thread: timers, settings, signal dispatch table) and <code>OBDConnectionWorker</code> (worker thread: <code>QSerialPort</code>, init, polling, DTC, scan). The Android BLE state machine lives at the bottom of the .cpp under <code>#ifdef Q_OS_ANDROID</code>.</td></tr>
             <tr><td><span class="file-path">src/managers/elm327protocol.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td>Static <code>ELM327Protocol</code> class (init commands, PID table with a <code>commandName</code> column, parsers, <code>elmVoltageRequest()</code> / <code>parseElmVoltage()</code>, <code>supportedCommandNames()</code>, <code>defaultPids()</code>), <code>ResponseBuffer</code>, and the <code>octave.elm327</code> logging category.</td></tr>
             <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td><span class="platform-badge android">Android</span></td><td>Static Java class wrapping <code>BluetoothGatt</code>. Called from C++ via <code>QJniObject</code>: <code>connect</code>, <code>disconnect</code>, <code>write</code>, <code>stateCode</code>, <code>pollResponse</code>, <code>pollLog</code>, <code>lastError</code>, <code>lastEvent</code>, <code>bondedDevices</code> (paired adapters as <code>"MAC|name"</code>).</td></tr>
+            <tr><td><span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>, <span class="file-path">src/platform/bluezpairer.{h,cpp}</span></td><td><span class="platform-badge all">All (C++); full flow on Linux</span></td><td><code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>): Bluetooth discovery, PIN pairing through BlueZ, trust, SPP channel lookup, then hand-off to <code>connect_direct()</code>. See <a href="#adapter-finder">Adapter Finder</a>.</td></tr>
+            <tr><td><span class="file-path">backend/obd_adapter_finder.py</span></td><td><span class="platform-badge desktop">Desktop (Linux)</span></td><td>Python peer of the above (<code>_BluezPinAgent</code>, <code>_BluezPairer</code>, <code>OBDAdapterFinder</code>), built on PySide6 <code>QtBluetooth</code> + <code>QtDBus</code>.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td><span class="platform-badge all">QML</span></td><td>The "Connect OBD2 Adapter" sheet the finder drives.</td></tr>
             <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td><span class="platform-badge all">QML</span></td><td>Singleton that maps every <code>*Changed</code> signal to a <code>paramId</code> and holds the live <code>paramValues</code> map every gauge binds to (see <a href="#parameter-model">below</a>).</td></tr>
             <tr><td><span class="file-path">dev/mock_obd_manager.py</span></td><td><span class="platform-badge desktop">Dev mode</span></td><td><code>MockOBDManager</code>: simulated ELM327 with the same signal surface, installed instead of the real manager by <span class="file-path">dev/dev_runtime.py</span> (<code>python -m dev.main_dev</code>).</td></tr>
           </tbody>
@@ -120,12 +124,13 @@ Desktop (Python)                Desktop (C++)                       Android (C++
           <thead><tr><th>QML file</th><th>What it uses</th></tr></thead>
           <tbody>
             <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Connects to all 84 parameter signals and mirrors them into <code>paramValues</code>. Every gauge, the parameter-card grid and the home cards read from here, never from <code>obdManager</code> directly.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the dashboards chooser/renderer, the RPM/shift-light settings popup.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the dashboards chooser/renderer, the RPM/shift-light settings popup. While no adapter is connected the empty grid shows "No vehicle connected" and a "Connect Bluetooth OBD2" button (<code>obdConnectButton</code>) that opens <code>OBDAdapterSheet</code>.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td>Everything on <code>obdAdapterFinder</code>; in fallback mode <code>availableAdapters</code>, <code>scan()</code> and <code>connect_to_adapter()</code>; <code>connected</code> closes the sheet 1.5 s after the adapter comes up.</td></tr>
             <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code>, a 40-line rolling log fed by <code>connectionLogLineAppended</code>, and the sub-page buttons.</td></tr>
             <tr><td><span class="file-path">frontend/OBDDiagnostics.qml</span></td><td><code>enter_diagnostic_mode()</code> on creation and on every <code>visible</code> transition, <code>exit_diagnostic_mode()</code> when hidden or destroyed, plus <code>read_dtc</code> / <code>read_current_dtc</code> / <code>read_status</code> / <code>read_freeze_frame</code> / <code>clear_dtc</code>.</td></tr>
             <tr><td><span class="file-path">frontend/HomeOBDView.qml</span></td><td>Home-screen cards for the parameters in <code>homeOBDParameters</code>, plus the RPM card's shift-light disc.</td></tr>
             <tr><td><span class="file-path">frontend/Main.qml</span></td><td>Connects <code>obdManager.rpmChanged</code> by hand in <code>Component.onCompleted</code> to drive the global full-screen flash and aura overlays.</td></tr>
-            <tr><td><span class="file-path">frontend/settings/OBDSettingsPage.qml</span></td><td>Connection card (a <code>status</code> string seeded from <code>get_connection_status()</code> and refreshed by <code>onConnectionStatusChanged</code>, <code>connectionDetail</code>, <code>connectionProgress</code>, <code>reset_connection()</code>), a 60-line Connection Log, the adapter list bound to <code>availableAdapters</code>, <code>connect_to_adapter()</code> (the "Go" button), <code>connect_direct()</code> (the Linux-only "Direct" button beside it), <code>platform_hint()</code>, fast mode, auto-reconnect attempts and the parameter toggles. The status dot's colour map is keyed on the full <code>connectionStatusChanged</code> vocabulary (including <code>Reconnecting</code>, <code>Connection Failed</code>, <code>Stale Connection</code>, <code>Device Lost</code> and the Android BLE states).</td></tr>
+            <tr><td><span class="file-path">frontend/settings/OBDSettingsPage.qml</span></td><td>Connection card (a <code>status</code> string seeded from <code>get_connection_status()</code> and refreshed by <code>onConnectionStatusChanged</code>, <code>connectionDetail</code>, <code>connectionProgress</code>, <code>reset_connection()</code>), a 60-line Connection Log, the adapter list bound to <code>availableAdapters</code>, <code>connect_to_adapter()</code> (the "Go" button), <code>connect_direct()</code> (the Linux-only "Direct" button beside it), a "Find Bluetooth Adapters" button that opens <code>OBDAdapterSheet</code>, <code>platform_hint()</code>, fast mode, auto-reconnect attempts and the parameter toggles. The status dot's colour map is keyed on the full <code>connectionStatusChanged</code> vocabulary (including <code>Reconnecting</code>, <code>Connection Failed</code>, <code>Stale Connection</code>, <code>Device Lost</code> and the Android BLE states).</td></tr>
           </tbody>
         </table>
 
@@ -450,6 +455,48 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
             not connected, connecting, closed or in diagnostic mode. The dongle is usually only powered with the ignition
             on, and while it's off the connect fails within a few seconds (<em>Host is down</em>).</li>
         </ul>
+
+        <!-- Adapter Finder -->
+        <h2 id="adapter-finder">Adapter Finder: Scan, Pair, Connect</h2>
+        <p>
+          <code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>, C++ <span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>,
+          Python <span class="file-path">backend/obd_adapter_finder.py</span>) lets someone connect an adapter without knowing its MAC or
+          pairing it in the OS first. The "Connect Bluetooth OBD2" button on the empty Parameter Cards page and "Find Bluetooth
+          Adapters" in Settings &rarr; OBD &rarr; Adapters both open <span class="file-path">frontend/OBDAdapterSheet.qml</span>, which starts a scan.
+          Phase 1 of <span class="file-path">TODO/obd-adapter-discovery.md</span>: the full flow runs on desktop Linux (Pi / Orange Pi included).
+          On every other platform <code>supported</code> is false and the sheet lists <code>obdManager.availableAdapters</code> instead
+          (the ports and paired devices the OS already knows), with an "OBD Settings" shortcut.
+        </p>
+        <ol>
+          <li><strong>Scan</strong> (<code>startScan()</code>): <code>QBluetoothDeviceDiscoveryAgent</code>, Classic + LE, 15 s. Unnamed
+            devices (BlueZ names them after their address) are dropped. <code>likelyObd</code> is set when the name matches the
+            common ELM327 adapters (OBDII / OBD2 / V-LINK / OBDLink / Vgate iCar / Veepeak / BAFX / Konnwei / NEXAS / LELink /
+            Viecar / ...) or a BLE device advertises one of the ELM327 BLE services (FFF0, FFE0/FFE1, ISSC). The sheet shows
+            likely adapters only, sorted by signal, with "Show All Devices (N)" for the rest. A dual-mode adapter keeps every
+            mode seen during the scan (the NEXAS reports Classic once and LE-only afterwards).</li>
+          <li><strong>Pair</strong> (<code>connectAdapter(address)</code>, Classic only): the scan stops, then <code>BluezPairer</code>
+            registers its own <code>org.bluez.Agent1</code> on the system bus and calls <code>Device1.Pair()</code>. BlueZ sends the
+            PIN request to the agent of the client that called <code>Pair()</code>, so OCTAVE answers it and the desktop's
+            own PIN dialog never appears. On <em>AuthenticationFailed</em> it retries with the next PIN: 1234, 0000, 6789, 1111.
+            Already-paired devices skip this step.</li>
+          <li><strong>Trust</strong>: <code>Device1.Trusted = true</code>, so the adapter reconnects later without being asked again. If
+            pairing failed but the adapter answered (refused PIN, timeout), it is still trusted and the connection is tried
+            anyway, because some adapters (the NEXAS) accept RFCOMM from a trusted host without pairing. If that connection
+            also fails, the pairing error is shown.</li>
+          <li><strong>Channel</strong>: an SDP lookup for the Serial Port service (<code>QBluetoothServiceDiscoveryAgent</code>, 8 s);
+            channel 1 if it finds nothing.</li>
+          <li><strong>Hand-off</strong>: <code>obdManager.connect_direct(mac, channel)</code> (see <a href="#direct-bluetooth">Direct
+            Bluetooth</a>), and <code>add_obd_saved_adapter(name, url)</code> so the saved chip shows the adapter's name. The
+            finder then follows <code>connectionStatusChanged</code>. It ignores the <em>Disconnected</em> that
+            <code>force_connect()</code> emits first, then reports <em>Connected to &lt;name&gt;</em>, <em>... isn't answering,
+            turn the ignition on</em> (<code>No Vehicle</code>), or the failure.</li>
+        </ol>
+        <p>
+          BLE-only devices are listed but greyed out on desktop ("Bluetooth LE adapters aren't supported on this device yet"):
+          the desktop OBD worker has no GATT transport. BLE ELM327 adapters connect on Android through
+          <a href="#android-ble">OctaveOBDBridge</a>. Signals and properties are listed in
+          <a href="signals-slots-reference.html#obdAdapterFinder">the signals &amp; slots reference</a>.
+        </p>
 
         <!-- Auto-Reconnect -->
         <h2 id="auto-reconnect">Auto-Reconnect and Passive Scanning</h2>
