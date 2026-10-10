@@ -225,6 +225,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("scrcpyAudioDuckEnabled")]  = true;  // duck local media while the phone produces sound
     d[QStringLiteral("scrcpyAudioDuckLevel")]    = 0.1;   // linear factor applied to local media while ducked (-20 dB)
     d[QStringLiteral("scrcpyPhoneScreenOff")]    = true;  // keep the phone's own panel dark while mirroring
+    d[QStringLiteral("scrcpyWirelessAddress")]   = QString();  // last phone connected over Wi-Fi ("ip:port"), "" = none
 
     // Settings menu visibility
     QJsonObject menuVis;
@@ -494,6 +495,7 @@ void SettingsManager::populateMembers()
     m_scrcpyAudioDuckEnabled = s(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
     m_scrcpyAudioDuckLevel   = s(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
     m_scrcpyPhoneScreenOff   = s(QStringLiteral("scrcpyPhoneScreenOff")).toBool();
+    m_scrcpyWirelessAddress  = s(QStringLiteral("scrcpyWirelessAddress")).toString();
 
     // Settings menu visibility
     {
@@ -944,6 +946,7 @@ double  SettingsManager::scrcpyAudioGain() const     { return m_scrcpyAudioGain;
 bool    SettingsManager::scrcpyAudioDuckEnabled() const { return m_scrcpyAudioDuckEnabled; }
 double  SettingsManager::scrcpyAudioDuckLevel() const { return m_scrcpyAudioDuckLevel; }
 bool    SettingsManager::scrcpyPhoneScreenOff() const { return m_scrcpyPhoneScreenOff; }
+QString SettingsManager::scrcpyWirelessAddress() const { return m_scrcpyWirelessAddress; }
 
 // --- ESP32 ---
 bool    SettingsManager::esp32VolumeEnabled() const    { return m_esp32VolumeEnabled; }
@@ -1796,6 +1799,17 @@ void SettingsManager::save_scrcpy_phone_screen_off(bool off)
     emit scrcpyPhoneScreenOffChanged(off);
 }
 
+void SettingsManager::save_scrcpy_wireless_address(const QString &address)
+{
+    const QString value = address.trimmed();
+    if (value == m_scrcpyWirelessAddress)
+        return;
+    qCDebug(lcSettings) << "Saving scrcpy wireless address:" << value;
+    m_scrcpyWirelessAddress = value;
+    updateSetting(QStringLiteral("scrcpyWirelessAddress"), value);
+    emit scrcpyWirelessAddressChanged(value);
+}
+
 // --- ESP32 ---
 void SettingsManager::save_esp32_volume_enabled(bool enabled)
 {
@@ -2029,6 +2043,7 @@ double  SettingsManager::get_scrcpy_audio_gain()       { return m_scrcpyAudioGai
 bool    SettingsManager::get_scrcpy_audio_duck_enabled() { return m_scrcpyAudioDuckEnabled; }
 double  SettingsManager::get_scrcpy_audio_duck_level() { return m_scrcpyAudioDuckLevel; }
 bool    SettingsManager::get_scrcpy_phone_screen_off() { return m_scrcpyPhoneScreenOff; }
+QString SettingsManager::get_scrcpy_wireless_address() { return m_scrcpyWirelessAddress; }
 bool    SettingsManager::get_esp32_volume_enabled()    { return m_esp32VolumeEnabled; }
 QString SettingsManager::get_esp32_volume_port()       { return m_esp32VolumePort; }
 double  SettingsManager::get_esp32_volume_step_size()  { return m_esp32VolumeStepSize; }
@@ -2194,6 +2209,7 @@ void SettingsManager::reset_to_defaults()
     emit scrcpyAudioDuckEnabledChanged(m_scrcpyAudioDuckEnabled);
     emit scrcpyAudioDuckLevelChanged(m_scrcpyAudioDuckLevel);
     emit scrcpyPhoneScreenOffChanged(m_scrcpyPhoneScreenOff);
+    emit scrcpyWirelessAddressChanged(m_scrcpyWirelessAddress);
     emit settingsMenuVisibilityChanged();
     emit esp32VolumeEnabledChanged(m_esp32VolumeEnabled);
     emit esp32VolumePortChanged(m_esp32VolumePort);

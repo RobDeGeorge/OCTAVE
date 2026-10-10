@@ -237,6 +237,20 @@ void ScrcpyClient::setVideoSink(QObject *sink)
     m_sink = qobject_cast<QVideoSink *>(sink);
 }
 
+bool ScrcpyClient::isNetworkSerial(const QString &serial)
+{
+    // USB serials never contain ':'; "ip:port" and "[v6]:port" always do
+    return serial.contains(QLatin1Char(':')) || serial.contains(QLatin1String("._adb-tls-connect._tcp"))
+        || serial.contains(QLatin1String("._adb._tcp"));
+}
+
+QString ScrcpyClient::disconnectedMessage(const QString &serial)
+{
+    return isNetworkSerial(serial)
+        ? QStringLiteral("Phone disconnected. Check that it is on the same Wi-Fi network and Wireless debugging is on.")
+        : QStringLiteral("Phone disconnected. Reconnect the USB cable.");
+}
+
 bool ScrcpyClient::start(const QString &serial, const QString &displaySize,
                          int maxFps, int bitRate, bool audio, bool stayAwake, const QString &attachScid)
 {
@@ -679,7 +693,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     if (m_running.exchange(false)) {
         // Ended without a fail(): the peer closed the stream
         if (!m_stopping.exchange(true))
-            emit disconnected(QStringLiteral("Phone disconnected. Reconnect the USB cable."));
+            emit disconnected(disconnectedMessage(m_serial));
     }
 }
 

@@ -26,6 +26,7 @@ extend-exclude = [
     "__pycache__",
     "tools",
     "wiki",
+    "backend/phone_mirror/qrcodegen.py",  # vendored (Project Nayuki, MIT)
 ]
 
 [tool.ruff.lint]

@@ -98,6 +98,8 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool scrcpyAudioDuckEnabled READ scrcpyAudioDuckEnabled NOTIFY scrcpyAudioDuckEnabledChanged)
     Q_PROPERTY(double scrcpyAudioDuckLevel READ scrcpyAudioDuckLevel NOTIFY scrcpyAudioDuckLevelChanged)
     Q_PROPERTY(bool scrcpyPhoneScreenOff READ scrcpyPhoneScreenOff NOTIFY scrcpyPhoneScreenOffChanged)
+    // Last phone connected over Wi-Fi ("ip:port"); reconnected automatically, "" = none
+    Q_PROPERTY(QString scrcpyWirelessAddress READ scrcpyWirelessAddress NOTIFY scrcpyWirelessAddressChanged)
 
     // --- ESP32 Volume Knob ---
     Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled NOTIFY esp32VolumeEnabledChanged)
@@ -205,6 +207,7 @@ public:
     bool scrcpyAudioDuckEnabled() const;
     double scrcpyAudioDuckLevel() const;
     bool scrcpyPhoneScreenOff() const;
+    QString scrcpyWirelessAddress() const;
 
     // ESP32
     bool esp32VolumeEnabled() const;
@@ -316,6 +319,7 @@ signals:
     void scrcpyAudioDuckEnabledChanged(bool value);
     void scrcpyAudioDuckLevelChanged(double value);
     void scrcpyPhoneScreenOffChanged(bool value);
+    void scrcpyWirelessAddressChanged(const QString &value);
 
     // ESP32
     void esp32VolumeEnabledChanged(bool value);
@@ -440,6 +444,7 @@ public slots:
     void save_scrcpy_audio_duck_enabled(bool enabled);
     void save_scrcpy_audio_duck_level(double level);
     void save_scrcpy_phone_screen_off(bool off);
+    void save_scrcpy_wireless_address(const QString &address);
 
     // ESP32
     void save_esp32_volume_enabled(bool enabled);
@@ -505,6 +510,7 @@ public slots:
     Q_INVOKABLE bool get_scrcpy_audio_duck_enabled();
     Q_INVOKABLE double get_scrcpy_audio_duck_level();
     Q_INVOKABLE bool get_scrcpy_phone_screen_off();
+    Q_INVOKABLE QString get_scrcpy_wireless_address();
     Q_INVOKABLE bool get_esp32_volume_enabled();
     Q_INVOKABLE QString get_esp32_volume_port();
     Q_INVOKABLE double get_esp32_volume_step_size();
@@ -638,6 +644,7 @@ private:
     bool m_scrcpyAudioDuckEnabled = true;
     double m_scrcpyAudioDuckLevel = 0.1;
     bool m_scrcpyPhoneScreenOff = true;
+    QString m_scrcpyWirelessAddress;
 
     // Settings menu visibility
     QVariantMap m_settingsMenuVisibility;

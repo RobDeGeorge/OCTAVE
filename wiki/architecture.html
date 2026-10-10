@@ -804,6 +804,7 @@ esp32VolumeManager.connectionStatusChanged ─► initial volume / mute / colour
 settingsManager.scrcpyAudioGainChanged ─────► phoneMirrorManager.setAudioGain()
 settingsManager.scrcpyAudioDuck*Changed ────► phoneMirrorManager.setAudioDuck*()
 settingsManager.scrcpyPhoneScreenOffChanged ► phoneMirrorManager.setPhoneScreenOff()
+phoneMirrorManager.wirelessAddressChanged ► settingsManager.save_scrcpy_wireless_address()
 phoneMirrorManager.duckingChanged ──────────► mediaManager.setDucking()
 
                    Download → Library

@@ -2,15 +2,18 @@
 
 #include "phonemirrormanager.h"
 #include "../phone_mirror/scrcpyclient.h"
+#include "../phone_mirror/qrcodegen.hpp"
 
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QProcess>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QThread>
 
 Q_LOGGING_CATEGORY(lcPhoneMirror, "octave.phonemirror")
 
@@ -26,11 +29,16 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     : QObject(parent), m_displaySize(kDefaultDisplaySize)
 {
     m_adbPath = findAdb();
+    // Wireless jobs run one at a time, so a reconnect never races a pairing
+    m_wirelessPool.setMaxThreadCount(1);
 }
 
 PhoneMirrorManager::~PhoneMirrorManager()
 {
     cleanup();
+    ++m_qrGeneration;   // a QR pairing wait gives up within a second
+    m_wirelessPool.clear();
+    m_wirelessPool.waitForDone();
 }
 
 // ─── Availability / environment ───────────────────────────────────────
@@ -62,7 +70,8 @@ QString PhoneMirrorManager::getInstallInstructions()
     if (!missing.isEmpty())
         return QStringLiteral("Phone mirroring needs ") + missing.join(QStringLiteral(" and ")) + QLatin1Char('.');
     return QStringLiteral("Enable USB debugging on the phone (Settings > Developer options), connect it "
-                          "over USB and accept the authorization prompt.");
+                          "over USB and accept the authorization prompt. To go wireless, open Phone Mirror and "
+                          "scan its QR code from the phone's Wireless debugging screen.");
 }
 
 // ─── adb discovery ────────────────────────────────────────────────────
@@ -131,6 +140,36 @@ QString PhoneMirrorManager::runAdb(const QStringList &args, int timeoutMs) const
     return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
 }
 
+QString PhoneMirrorManager::runAdbFull(const QStringList &args, int timeoutMs, int *exitCode) const
+{
+    if (exitCode)
+        *exitCode = -1;
+    if (m_adbPath.isEmpty())
+        return {};
+    QProcess proc;
+    proc.setProcessChannelMode(QProcess::MergedChannels);
+    ScrcpyClient::hideConsoleWindow(&proc);
+    proc.start(m_adbPath, args);
+    if (!proc.waitForFinished(timeoutMs)) {
+        proc.kill();
+        proc.waitForFinished(1000);
+        return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+    }
+    if (exitCode)
+        *exitCode = proc.exitCode();
+    return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+}
+
+QStringList PhoneMirrorManager::serialArgs()
+{
+    // With a phone on both USB and Wi-Fi (or two phones) a bare `adb shell`
+    // fails with "more than one device", so every probe names its phone.
+    const QString serial = getDeviceSerial();
+    if (serial.isEmpty())
+        return {};
+    return {QStringLiteral("-s"), serial};
+}
+
 QList<QPair<QString, QString>> PhoneMirrorManager::devices() const
 {
     QList<QPair<QString, QString>> rows;
@@ -154,6 +193,9 @@ QString PhoneMirrorManager::getDeviceState()
         states << d.second;
     if (states.contains(QLatin1String("device")))
         return QStringLiteral("device");
+    // Nothing usable: if a Wi-Fi phone is remembered, try to reach it in the
+    // background (throttled). The view polls this, so it is retried for free.
+    maybeReconnectWireless();
     if (states.contains(QLatin1String("unauthorized")))
         return QStringLiteral("unauthorized");
     if (states.contains(QLatin1String("offline")))
@@ -180,22 +222,56 @@ bool PhoneMirrorManager::hasConnectedDevice()
     return getDeviceState() == QLatin1String("device");
 }
 
+QString PhoneMirrorManager::describeProblem(const QString &state)
+{
+    // describeDeviceState() with the Wi-Fi case spelled out. The phrases the
+    // view keys its auto-retry on (No Android device / not authorized /
+    // offline) are kept.
+    bool wireless = false;
+    if (state == QLatin1String("offline") || state == QLatin1String("unauthorized")) {
+        wireless = true;
+        for (const auto &d : devices())
+            if (d.second == state && !ScrcpyClient::isNetworkSerial(d.first))
+                wireless = false;
+    }
+    if (wireless && state == QLatin1String("offline"))
+        return QStringLiteral("The phone's Wi-Fi link is offline. Check that it is on the same Wi-Fi network "
+                              "as OCTAVE and that Wireless debugging is on.");
+    if (wireless && state == QLatin1String("unauthorized"))
+        return QStringLiteral("Phone is connected over Wi-Fi but debugging is not authorized. "
+                              "Unlock the phone and tap 'Allow' on the debugging prompt.");
+    if (state == QLatin1String("none") && !m_wirelessAddress.isEmpty())
+        return QStringLiteral("No Android device connected. Waiting for %1 over Wi-Fi: turn on Wireless "
+                              "debugging on the phone (same Wi-Fi network as OCTAVE), or plug it in over USB.")
+            .arg(m_wirelessAddress);
+    return describeDeviceState(state);
+}
+
 QString PhoneMirrorManager::getDeviceSerial()
 {
-    for (const auto &d : devices())
-        if (d.second == QLatin1String("device"))
+    // USB first: it is the faster, steadier link when the phone is on both
+    QString wireless;
+    for (const auto &d : devices()) {
+        if (d.second != QLatin1String("device"))
+            continue;
+        if (!ScrcpyClient::isNetworkSerial(d.first))
             return d.first;
-    return {};
+        if (wireless.isEmpty())
+            wireless = d.first;
+    }
+    return wireless;
 }
 
 QString PhoneMirrorManager::getDeviceName()
 {
-    return runAdb({QStringLiteral("shell"), QStringLiteral("getprop"), QStringLiteral("ro.product.model")});
+    return runAdb(serialArgs() + QStringList{QStringLiteral("shell"), QStringLiteral("getprop"),
+                                             QStringLiteral("ro.product.model")});
 }
 
 QString PhoneMirrorManager::getDeviceResolution()
 {
-    const QStringList lines = runAdb({QStringLiteral("shell"), QStringLiteral("wm"), QStringLiteral("size")})
+    const QStringList lines = runAdb(serialArgs() + QStringList{QStringLiteral("shell"), QStringLiteral("wm"),
+                                                                QStringLiteral("size")})
                                   .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     for (const QString &line : lines) {
         if (line.contains(QLatin1String("Physical size:")))
@@ -207,8 +283,8 @@ QString PhoneMirrorManager::getDeviceResolution()
 int PhoneMirrorManager::getDeviceSdk()
 {
     bool ok = false;
-    const int sdk = runAdb({QStringLiteral("shell"), QStringLiteral("getprop"),
-                            QStringLiteral("ro.build.version.sdk")}).toInt(&ok);
+    const int sdk = runAdb(serialArgs() + QStringList{QStringLiteral("shell"), QStringLiteral("getprop"),
+                                                      QStringLiteral("ro.build.version.sdk")}).toInt(&ok);
     return ok ? sdk : 0;
 }
 
@@ -218,8 +294,12 @@ void PhoneMirrorManager::killStaleServer()
     if (!m_adbPath.isEmpty()) {
         QProcess proc;
         proc.setProgram(m_adbPath);
-        proc.setArguments({QStringLiteral("shell"), QStringLiteral("pkill"),
-                           QStringLiteral("-f"), QLatin1String(ScrcpyClient::kServerProcessPattern)});
+        QStringList args;
+        if (!m_serial.isEmpty())
+            args << QStringLiteral("-s") << m_serial;
+        args << QStringLiteral("shell") << QStringLiteral("pkill")
+             << QStringLiteral("-f") << QLatin1String(ScrcpyClient::kServerProcessPattern);
+        proc.setArguments(args);
         ScrcpyClient::hideConsoleWindow(&proc);
         proc.startDetached();
     }
@@ -387,10 +467,11 @@ void PhoneMirrorManager::startScrcpy()
     }
     const QString state = getDeviceState();
     if (state != QLatin1String("device")) {
-        emit scrcpyError(describeDeviceState(state));
+        emit scrcpyError(describeProblem(state));
         return;
     }
     const QString serial = getDeviceSerial();
+    const bool wireless = ScrcpyClient::isNetworkSerial(serial);
     const QString jar = ScrcpyClient::bundledServerJar();
     if (jar.isEmpty()) {
         emit scrcpyError(QStringLiteral("Bundled scrcpy server could not be extracted"));
@@ -407,7 +488,7 @@ void PhoneMirrorManager::startScrcpy()
     m_attaching = !attachScid.isEmpty();
     if (!m_attaching) {
         m_persistScid.clear();
-        runAdb({QStringLiteral("shell"), QStringLiteral("pkill"), QStringLiteral("-f"),
+        runAdb({QStringLiteral("-s"), serial, QStringLiteral("shell"), QStringLiteral("pkill"), QStringLiteral("-f"),
                 QLatin1String(ScrcpyClient::kServerProcessPattern)}, 5000);  // clear a stale server first
     }
 
@@ -451,13 +532,15 @@ void PhoneMirrorManager::startScrcpy()
     }
     qCInfo(lcPhoneMirror) << "Starting phone mirror (server" << serverVersion() << ") for" << serial
                           << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize)
-                          << ", audio" << (m_audioEnabled ? "on" : "off") << ")";
+                          << ", audio" << (m_audioEnabled ? "on" : "off")
+                          << "," << (wireless ? "Wi-Fi" : "USB") << ")";
     m_serial = serial;
+    setConnectionType(wireless ? QStringLiteral("wifi") : QStringLiteral("usb"));
     if (!m_attaching)
         m_vdisplayId = -1;
     else
         qCInfo(lcPhoneMirror) << "Reattaching to the phone's running mirror session (scid" << attachScid << ")";
-    m_client->start(serial, displaySize, 60, 8000000, m_audioEnabled, true, attachScid);
+    m_client->start(serial, displaySize, 60, wireless ? kWirelessBitRate : 8000000, m_audioEnabled, true, attachScid);
     emit isRunningChanged();
 }
 
@@ -500,6 +583,7 @@ void PhoneMirrorManager::onDisconnected(const QString &reason)
         m_persistScid = m_client->scid();
         m_persistUntilMs = QDateTime::currentMSecsSinceEpoch() + ScrcpyClient::kPersistMs - 5000;
     }
+    setConnectionType(QString());
     emit isRunningChanged();
     if (reason.isEmpty())
         emit scrcpyStopped();
@@ -524,6 +608,7 @@ void PhoneMirrorManager::stopScrcpy()
         client->deleteLater();
         killStaleServer();
     }
+    setConnectionType(QString());
     emit scrcpyStopped();
     emit isRunningChanged();
 }
@@ -615,6 +700,270 @@ void PhoneMirrorManager::onServerLog(const QString &line)
 void PhoneMirrorManager::cleanup()
 {
     stopScrcpy();
+}
+
+// ── Wi-Fi ─────────────────────────────────────────────────────────────
+// adb itself carries the session over TCP: once the phone is listed by
+// `adb devices` as "ip:port" (adb connect) or as an mDNS name (adb
+// auto-connects phones it has paired with), the client's `adb -s <serial>`
+// push / forward / shell work exactly as over USB. This code only gets the
+// phone into that list and keeps it there.
+
+void PhoneMirrorManager::setConnectionType(const QString &type)
+{
+    if (type == m_connectionType)
+        return;
+    m_connectionType = type;
+    emit connectionTypeChanged();
+}
+
+// "192.168.1.5:5555" -> "192.168.1.5", "[fe80::1]:5555" -> "fe80::1"
+static QString hostOf(const QString &address)
+{
+    QString host = address.trimmed();
+    const int colon = host.lastIndexOf(QLatin1Char(':'));
+    if (colon > 0 && host.indexOf(QLatin1Char(':')) == colon)
+        host = host.left(colon);
+    else if (host.startsWith(QLatin1Char('[')) && host.contains(QLatin1String("]:")))
+        host = host.mid(1, host.indexOf(QLatin1String("]:")) - 1);
+    return host;
+}
+
+QList<PhoneMirrorManager::MdnsService> PhoneMirrorManager::mdnsServices() const
+{
+    // "adb-R5CT…-AbCdEf  _adb-tls-connect._tcp  192.168.1.5:37199" per line
+    QList<MdnsService> out;
+    const QStringList lines = runAdbFull({QStringLiteral("mdns"), QStringLiteral("services")}, 5000)
+                                  .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    static const QRegularExpression ws(QStringLiteral("\\s+"));
+    for (const QString &line : lines) {
+        const QStringList parts = line.trimmed().split(ws, Qt::SkipEmptyParts);
+        if (parts.size() < 3 || !parts[1].startsWith(QLatin1String("_adb")))
+            continue;
+        out.append({parts[0], parts[1], parts[2]});
+    }
+    return out;
+}
+
+QString PhoneMirrorManager::mdnsConnectAddressFor(const QString &host) const
+{
+    for (const MdnsService &s : mdnsServices())
+        if (s.type.contains(QLatin1String("_adb-tls-connect")) && hostOf(s.address) == host)
+            return s.address;
+    return {};
+}
+
+bool PhoneMirrorManager::adbConnect(const QString &address, QString *message) const
+{
+    const QString out = runAdbFull({QStringLiteral("connect"), address}, 10000);
+    // adb connect exits 0 on failure too; "already connected to" counts as success
+    const bool ok = out.contains(QLatin1String("connected to")) && !out.contains(QLatin1String("failed"))
+                    && !out.contains(QLatin1String("cannot"));
+    if (message)
+        *message = out.isEmpty() ? QStringLiteral("No answer from %1").arg(address) : out.section(QLatin1Char('\n'), -1);
+    return ok;
+}
+
+void PhoneMirrorManager::runWirelessJob(std::function<void()> job, bool ui)
+{
+    if (ui) {
+        if (m_wirelessJobs++ == 0)
+            emit wirelessBusyChanged();
+    }
+    m_wirelessPool.start([this, job = std::move(job), ui]() {
+        job();
+        if (ui) {
+            QMetaObject::invokeMethod(this, [this]() {
+                if (--m_wirelessJobs == 0)
+                    emit wirelessBusyChanged();
+            }, Qt::QueuedConnection);
+        }
+    });
+}
+
+void PhoneMirrorManager::setWirelessAddress(const QString &address)
+{
+    const QString value = address.trimmed();
+    if (value == m_wirelessAddress)
+        return;
+    m_wirelessAddress = value;
+    emit wirelessAddressChanged(value);
+    if (!value.isEmpty()) {
+        m_lastAutoConnectMs = 0;
+        maybeReconnectWireless();
+    }
+}
+
+void PhoneMirrorManager::maybeReconnectWireless()
+{
+    static constexpr qint64 kAutoConnectIntervalMs = 5000;
+    if (m_wirelessAddress.isEmpty() || m_adbPath.isEmpty() || m_wirelessJobs > 0 || m_autoConnectRunning)
+        return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_lastAutoConnectMs < kAutoConnectIntervalMs)
+        return;
+    m_lastAutoConnectMs = now;
+    m_autoConnectRunning = true;
+    const QString saved = m_wirelessAddress;
+    runWirelessJob([this, saved]() {
+        QString msg;
+        bool ok = adbConnect(saved, &msg);
+        QString reached = ok ? saved : QString();
+        if (!ok) {
+            // Wireless debugging picks a new port every time it is switched
+            // on; the phone advertises the current one over mDNS.
+            const QString fresh = mdnsConnectAddressFor(hostOf(saved));
+            if (!fresh.isEmpty() && fresh != saved && adbConnect(fresh, &msg))
+                reached = fresh;
+        }
+        if (!reached.isEmpty())
+            qCInfo(lcPhoneMirror) << "Reconnected to the phone over Wi-Fi at" << reached;
+        else
+            qCDebug(lcPhoneMirror) << "Wi-Fi phone" << saved << "not reachable:" << msg;
+        QMetaObject::invokeMethod(this, [this, saved, reached]() {
+            m_autoConnectRunning = false;
+            // The phone moved to a new port: remember that one
+            if (!reached.isEmpty() && reached != saved && m_wirelessAddress == saved) {
+                m_wirelessAddress = reached;
+                emit wirelessAddressChanged(reached);
+            }
+        }, Qt::QueuedConnection);
+    }, false);
+}
+
+QString PhoneMirrorManager::connectPairedHost(const QString &host) const
+{
+    // The connect port differs from the pairing port; the phone advertises
+    // it over mDNS. adb may already have auto-connected (then "already
+    // connected" is the answer).
+    QString msg;
+    for (int i = 0; i < 16; ++i) {
+        const QString connectAddr = mdnsConnectAddressFor(host);
+        if (!connectAddr.isEmpty() && adbConnect(connectAddr, &msg))
+            return connectAddr;
+        QThread::msleep(500);
+    }
+    return {};
+}
+
+void PhoneMirrorManager::forgetWireless()
+{
+    const QString addr = m_wirelessAddress;
+    if (m_connectionType == QLatin1String("wifi"))
+        stopScrcpy();
+    m_wirelessAddress.clear();
+    emit wirelessAddressChanged(QString());
+    if (addr.isEmpty())
+        return;
+    qCInfo(lcPhoneMirror) << "Forgetting the Wi-Fi phone at" << addr;
+    runWirelessJob([this, addr]() {
+        runAdbFull({QStringLiteral("disconnect"), addr}, 5000);
+    }, false);
+}
+
+// ── QR pairing ──
+// Android Studio's flow: the host shows WIFI:T:ADB;S:<name>;P:<password>;;
+// the phone's "Pair device with QR code" scanner reads it and advertises an
+// _adb-tls-pairing service under <name>; the host then runs
+// `adb pair <ip:port> <password>` against it and connects as usual.
+
+QString PhoneMirrorManager::qrPairingPayload(const QString &service, const QString &password)
+{
+    return QStringLiteral("WIFI:T:ADB;S:%1;P:%2;;").arg(service, password);
+}
+
+static QString randomToken(int length)
+{
+    static const char kChars[] = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    QString out;
+    for (int i = 0; i < length; ++i)
+        out += QLatin1Char(kChars[QRandomGenerator::system()->bounded(int(sizeof(kChars) - 1))]);
+    return out;
+}
+
+void PhoneMirrorManager::startQrPairing()
+{
+    if (m_adbPath.isEmpty()) {
+        emit wirelessResult(false, describeDeviceState(QStringLiteral("no-adb")));
+        return;
+    }
+    const QString service = QStringLiteral("octave-") + randomToken(8);
+    const QString password = randomToken(12);
+    const QByteArray payload = qrPairingPayload(service, password).toUtf8();
+    const qrcodegen::QrCode qr = qrcodegen::QrCode::encodeText(payload.constData(), qrcodegen::QrCode::Ecc::MEDIUM);
+    QStringList rows;
+    for (int y = 0; y < qr.getSize(); ++y) {
+        QString row;
+        for (int x = 0; x < qr.getSize(); ++x)
+            row += qr.getModule(x, y) ? QLatin1Char('1') : QLatin1Char('0');
+        rows << row;
+    }
+    m_qrRows = rows;
+    emit qrPairingChanged();
+    const int generation = ++m_qrGeneration;
+    qCInfo(lcPhoneMirror) << "QR pairing: waiting for the phone to scan (service" << service << ")";
+
+    runWirelessJob([this, service, password, generation]() {
+        const qint64 deadline = QDateTime::currentMSecsSinceEpoch() + kQrPairingTimeoutMs;
+        QString pairAddr;
+        while (pairAddr.isEmpty() && m_qrGeneration == generation
+               && QDateTime::currentMSecsSinceEpoch() < deadline) {
+            for (const MdnsService &s : mdnsServices())
+                if (s.name == service && s.type.contains(QLatin1String("_adb-tls-pairing")))
+                    pairAddr = s.address;
+            if (pairAddr.isEmpty())
+                QThread::msleep(1000);
+        }
+        if (m_qrGeneration != generation)
+            return;   // cancelled or restarted: the newer request reports
+        bool ok = false;
+        QString reached, detail;
+        if (pairAddr.isEmpty()) {
+            detail = QStringLiteral("The phone did not scan the code within %1 s.").arg(kQrPairingTimeoutMs / 1000);
+        } else {
+            const QString out = runAdbFull({QStringLiteral("pair"), pairAddr, password}, 20000);
+            if (out.contains(QLatin1String("Successfully paired"))) {
+                ok = true;
+                reached = connectPairedHost(hostOf(pairAddr));
+            } else {
+                detail = out.isEmpty() ? QStringLiteral("no answer") : out.section(QLatin1Char('\n'), -1);
+            }
+        }
+        QMetaObject::invokeMethod(this, [this, generation, ok, reached, detail, pairAddr]() {
+            if (m_qrGeneration != generation)
+                return;
+            finishQrPairing();
+            if (!ok) {
+                qCWarning(lcPhoneMirror) << "QR pairing failed:" << detail;
+                emit wirelessResult(false, pairAddr.isEmpty()
+                    ? detail + QStringLiteral(" Check that the phone is on the same Wi-Fi network and try again.")
+                    : QStringLiteral("Pairing failed. Try again. (%1)").arg(detail));
+            } else if (reached.isEmpty()) {
+                emit wirelessResult(false, QStringLiteral("Paired, but the phone did not accept a connection. Keep its "
+                                                          "Wireless debugging screen open and try again."));
+            } else {
+                qCInfo(lcPhoneMirror) << "QR pairing: paired and connected over Wi-Fi at" << reached;
+                setWirelessAddress(reached);
+                emit wirelessResult(true, QStringLiteral("Paired and connected to %1 over Wi-Fi.").arg(reached));
+            }
+        }, Qt::QueuedConnection);
+    }, true);
+}
+
+void PhoneMirrorManager::cancelQrPairing()
+{
+    if (m_qrRows.isEmpty())
+        return;
+    ++m_qrGeneration;   // the waiting job notices within a second and returns
+    finishQrPairing();
+}
+
+void PhoneMirrorManager::finishQrPairing()
+{
+    if (m_qrRows.isEmpty())
+        return;
+    m_qrRows.clear();
+    emit qrPairingChanged();
 }
 
 #endif // Q_OS_MOBILE

@@ -1564,7 +1564,7 @@ Flickable {
             // ── Phone Mirror ──
             SettingCategory {
                 title: "Phone Mirror"
-                description: "Mirror your phone over USB. Nothing to install: enable USB debugging on the phone and plug it in."
+                description: "Mirror your phone over USB or Wi-Fi. Nothing to install: enable USB debugging on the phone and plug it in, or pair it over Wi-Fi below."
 
                 SettingsToggle {
                     id: phoneMirrorEnabledToggle
@@ -1586,6 +1586,106 @@ Flickable {
                         target: settingsManager
                         function onPhoneMirrorEnabledChanged() {
                             phoneMirrorEnabledToggle.checked = settingsManager.phoneMirrorEnabled
+                        }
+                    }
+                }
+
+                // Wi-Fi: QR pairing (Android 11+ Wireless debugging). The manager
+                // remembers the phone and reconnects to it on its own.
+                ColumnLayout {
+                    id: wirelessSection
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+                    visible: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null
+                             && phoneMirrorManager.nativeAvailable
+
+                    readonly property string remembered: phoneMirrorManager ? phoneMirrorManager.wirelessAddress : ""
+                    property string resultText: ""
+                    property bool resultOk: true
+
+                    Connections {
+                        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
+                        function onWirelessResult(ok, message) {
+                            wirelessSection.resultOk = ok
+                            wirelessSection.resultText = message
+                        }
+                    }
+
+                    SettingLabel {
+                        text: "Wireless"
+                    }
+
+                    SettingDescription {
+                        text: wirelessSection.remembered !== ""
+                            ? "Remembered phone: " + wirelessSection.remembered + ". OCTAVE reconnects to it whenever it is on "
+                              + "the same Wi-Fi network with Wireless debugging on"
+                              + (phoneMirrorManager && phoneMirrorManager.connectionType === "wifi" ? " (mirroring over Wi-Fi now)." : ".")
+                              + " A USB cable is used instead while one is plugged in."
+                            : "Mirror without a cable (Android 11+): tap Connect phone and scan the QR code from the phone's "
+                              + "Developer options > Wireless debugging > Pair device with QR code. Phone Mirror shows the same "
+                              + "code when no phone is connected."
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.rowSpacing
+
+                        SettingsButton {
+                            objectName: "phoneMirrorQrButton"
+                            text: wirelessSection.remembered !== "" ? "Connect a different phone" : "Connect phone"
+                            Layout.preferredHeight: pageRoot.dp(56)
+                            enabled: phoneMirrorManager ? !phoneMirrorManager.wirelessBusy : false
+                            opacity: enabled ? 1.0 : 0.6
+                            onClicked: {
+                                wirelessSection.resultText = ""
+                                qrPanel.start()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        SettingsButton {
+                            text: "Forget"
+                            buttonColor: App.Style.statusError
+                            Layout.preferredHeight: pageRoot.dp(56)
+                            visible: wirelessSection.remembered !== ""
+                            onClicked: {
+                                wirelessSection.resultOk = true
+                                wirelessSection.resultText = "Forgot " + wirelessSection.remembered
+                                    + ". To revoke it completely, remove OCTAVE from the phone's paired devices."
+                                phoneMirrorManager.forgetWireless()
+                            }
+                        }
+                    }
+
+                    SettingDescription {
+                        visible: wirelessSection.resultText !== ""
+                        text: wirelessSection.resultText
+                        color: wirelessSection.resultOk ? App.Style.secondaryTextColor : App.Style.statusError
+                    }
+
+                    // The code in a centred modal (the card may be scrolled anywhere)
+                    Popup {
+                        id: qrPopup
+                        parent: Overlay.overlay
+                        anchors.centerIn: parent
+                        modal: true
+                        dim: true
+                        closePolicy: Popup.NoAutoClose
+                        padding: App.Spacing.overallSpacing * 1.5
+                        visible: phoneMirrorManager ? phoneMirrorManager.qrPairingActive : false
+                        width: parent ? parent.width * 0.75 : pageRoot.dp(900)
+
+                        background: Rectangle {
+                            color: App.Style.contentColor
+                            radius: pageRoot.dpMin(12, 2)
+                            border.color: App.Style.accent
+                            border.width: 1
+                        }
+
+                        contentItem: App.PhoneQrPairingPanel {
+                            id: qrPanel
+                            qrSize: qrPopup.parent ? Math.round(qrPopup.parent.height * 0.55) : pageRoot.dp(380)
                         }
                     }
                 }

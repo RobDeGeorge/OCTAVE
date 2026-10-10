@@ -30,6 +30,7 @@
                 <li><a href="#pm-audio">Audio and ducking</a></li>
                 <li><a href="#pm-keeper">Phone screen, sleep and the MirrorKeeper</a></li>
                 <li><a href="#pm-persist">Persistent sessions and USB drops</a></li>
+                <li><a href="#pm-wifi">Mirroring over Wi-Fi</a></li>
                 <li><a href="#pm-input">Touch and navigation</a></li>
                 <li><a href="#pm-recovery">Errors and recovery</a></li>
                 <li><a href="#pm-server">The phone server fork and the version invariant</a></li>
@@ -120,7 +121,7 @@
               <tr><td><span class="file-path">phone_server/src/main/java/org/octave/phoneserver/</span></td>
                   <td><code>Server</code>, <code>DesktopConnection</code>, <code>Streamer</code>, <code>Controller</code>, <code>MirrorKeeper</code>, <code>NewDisplayCapture</code>, <code>CleanUp</code></td><td>The program running on the phone</td></tr>
               <tr><td><span class="file-path">frontend/PhoneMirrorView.qml</span></td><td>--</td><td><code>VideoOutput</code> + <code>MultiPointTouchArea</code> + nav row, reconnect and asleep overlays, error/retry screen</td></tr>
-              <tr><td><span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td><td>--</td><td>Phone mirror settings card (display size, phone screen, audio, gain, ducking, status line)</td></tr>
+              <tr><td><span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td><td>--</td><td>Phone mirror settings card (Wi-Fi QR pairing, display size, phone screen, audio, gain, ducking, status line)</td></tr>
             </tbody>
           </table>
           <p>Logging: C++ categories <code>octave.phonemirror</code> (manager) and <code>octave.phonemirror.client</code>;
@@ -153,6 +154,10 @@
               <tr><td><code>audioPlaying</code></td><td><code>bool</code></td><td>The phone is producing sound right now (peak above the threshold within the last 1.5 s); drives ducking</td></tr>
               <tr><td><code>phoneAsleep</code></td><td><code>bool</code></td><td>The keeper reports the phone dozing (power button / lock); the virtual display stops compositing and drops touch until it is awake again</td></tr>
               <tr><td><code>phoneInUse</code></td><td><code>bool</code></td><td>The keeper reports the user has the phone in hand (keyguard dismissed, or a repeated power press); its panel is left alone until it is locked again or <code>resumeMirroring()</code></td></tr>
+              <tr><td><code>wirelessAddress</code></td><td><code>str</code></td><td><code>"ip:port"</code> of the phone last connected over Wi-Fi (setting <code>scrcpyWirelessAddress</code>), see <a href="#pm-wifi">Mirroring over Wi-Fi</a></td></tr>
+              <tr><td><code>connectionType</code></td><td><code>str</code></td><td><code>"usb"</code> / <code>"wifi"</code> for the running session, <code>""</code> when idle</td></tr>
+              <tr><td><code>wirelessBusy</code></td><td><code>bool</code></td><td>A QR pairing started from the UI is in progress</td></tr>
+              <tr><td><code>qrPairingRows</code>, <code>qrPairingActive</code></td><td><code>list</code>, <code>bool</code></td><td>The QR code being shown (one <code>'0'</code>/<code>'1'</code> string per row) and whether one is waiting</td></tr>
             </tbody>
           </table>
           <h4>Signals</h4>
@@ -161,12 +166,15 @@
             <tbody>
               <tr><td><code>scrcpyStarted</code></td><td><code>int</code></td><td>Handshake done, stream is up (handle is always 1; the name predates the built-in client and <code>PhoneMirrorView.qml</code> depends on it)</td></tr>
               <tr><td><code>scrcpyStopped</code></td><td>--</td><td>Session ended by request</td></tr>
-              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>The only error channel (a never-emitted <code>error</code> signal was removed from both backends). Specific failure text: <code>describeDeviceState()</code> for unauthorized / offline / no device / no adb, <code>getInstallInstructions()</code> for a missing prerequisite, or the client's own reason ("Phone disconnected. Reconnect the USB cable.", "scrcpy server did not answer within 20 s", "handshake failed", ...)</td></tr>
+              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>The only error channel (a never-emitted <code>error</code> signal was removed from both backends). Specific failure text: <code>describeDeviceState()</code> for unauthorized / offline / no device / no adb, <code>getInstallInstructions()</code> for a missing prerequisite, or the client's own reason ("Phone disconnected. Reconnect the USB cable." / its Wi-Fi variant, "scrcpy server did not answer within 20 s", "handshake failed", ...)</td></tr>
               <tr><td><code>isRunningChanged</code>, <code>displaySizeChanged</code>, <code>videoSinkChanged</code></td><td>--</td><td>Property notifications</td></tr>
               <tr><td><code>frameSizeChanged</code></td><td><code>int, int</code></td><td>Frame size; also notifies <code>activeDisplaySize</code>, <code>frameWidth</code>, <code>frameHeight</code></td></tr>
               <tr><td><code>frameReady</code></td><td>--</td><td>A frame reached the sink (the view counts these as proof of life; "Connecting..." shows until the first one)</td></tr>
               <tr><td><code>audioActiveChanged</code>, <code>audioPlayingChanged</code>, <code>phoneAsleepChanged</code>, <code>phoneInUseChanged</code></td><td><code>bool</code></td><td>Property notifications</td></tr>
               <tr><td><code>duckingChanged</code></td><td><code>float</code></td><td>Factor other sources should apply: the duck level while <code>audioPlaying</code> and ducking is on, 1.0 otherwise. <code>main</code> routes it to <code>MediaManager.setDucking()</code></td></tr>
+              <tr><td><code>wirelessAddressChanged</code></td><td><code>str</code></td><td>Remembered Wi-Fi phone changed; <code>main</code> saves it to <code>scrcpyWirelessAddress</code></td></tr>
+              <tr><td><code>connectionTypeChanged</code>, <code>wirelessBusyChanged</code>, <code>qrPairingChanged</code></td><td>--</td><td>Property notifications</td></tr>
+              <tr><td><code>wirelessResult</code></td><td><code>bool, str</code></td><td>Outcome of QR pairing, message ready to show</td></tr>
             </tbody>
           </table>
           <h4>Slots</h4>
@@ -185,6 +193,7 @@
               <tr><td><code>injectKey(keycode)</code>, <code>pressBack()</code>, <code>pressHome()</code>, <code>pressAppSwitch()</code></td><td>--</td><td>Android key events (down + up). <code>pressHome()</code> on a virtual display runs <code>am start --display &lt;id&gt;</code> instead, see <a href="#pm-input">Touch and navigation</a></td></tr>
               <tr><td><code>wakePhone()</code></td><td>--</td><td><code>adb shell input keyevent 224</code> (<code>KEYCODE_WAKEUP</code>) from OCTAVE's side; the keeper normally wakes the phone itself, this is the asleep overlay's tap-to-retry</td></tr>
               <tr><td><code>resumeMirroring()</code></td><td>--</td><td>Sends <code>OCTAVE_TAKE_BACK</code>: the keeper leaves the in-use state, wakes the phone if needed and re-applies the panel policy. Implemented in both backends, not exposed in the view</td></tr>
+              <tr><td><code>forgetWireless()</code>, <code>setWirelessAddress(address)</code>, <code>startQrPairing()</code>, <code>cancelQrPairing()</code></td><td>--</td><td>Wi-Fi, see <a href="#pm-wifi">Mirroring over Wi-Fi</a></td></tr>
             </tbody>
           </table>
         </section>
@@ -449,6 +458,60 @@
             error page after 10 s. Because the keeper is process-wide, in-use / panel state survives the reconnect too.</p>
         </section>
 
+        <section id="pm-wifi">
+          <h3>Mirroring over Wi-Fi</h3>
+          <p>adb carries the whole session over TCP, so the client needs no changes for Wi-Fi: once the phone is listed by
+            <code>adb devices</code> -- as <code>"ip:port"</code> after <code>adb connect</code>, or as an mDNS name
+            (<code>adb-&lt;serial&gt;-&lt;id&gt;._adb-tls-connect._tcp</code>) when adb auto-connects a phone it has paired with -- the
+            client's <code>adb -s &lt;serial&gt;</code> push, forward and shell work exactly as over USB. The manager only gets the phone
+            into that list and keeps it there. <code>ScrcpyClient::isNetworkSerial()</code> / <code>is_network_serial()</code> tells the
+            two apart (USB serials never contain <code>:</code>).</p>
+          <p><strong>QR code is the only way to connect wirelessly</strong> (Android 11+). Typing a pairing code, an IP:port, or
+            scanning for adb services was removed again in favour of it; USB needs no setup and stays as it was.</p>
+          <ul>
+            <li><strong>Where the code appears</strong>: <code>PhoneMirrorView</code> becomes the QR screen whenever no phone is connected
+              and none is remembered (<code>noPhone</code>: the error text starts with "No Android device"); it starts pairing on its own
+              and cancels when the view is left or mirroring starts. With a remembered phone the page says "Waiting for your phone" and
+              offers "Connect a different phone". In Settings &rarr; Accessories &rarr; Phone Dock the "Connect phone" button opens the same
+              panel in a centred modal. Both use <span class="file-path">frontend/PhoneQrPairingPanel.qml</span>: the code on a
+              <code>Canvas</code>, black on white with a 4-module quiet zone, sized from the screen height (55 %) so it scans from arm's
+              length, the three steps, the result line and Cancel / "Show QR code".</li>
+            <li><strong>Protocol</strong> (Android Studio's): <code>startQrPairing()</code> makes a random service name
+              (<code>octave-&lt;8 chars&gt;</code>) and password (12 chars) and encodes
+              <code>WIFI:T:ADB;S:&lt;name&gt;;P:&lt;password&gt;;;</code> (<code>qrPairingPayload()</code> / <code>qr_pairing_payload()</code>,
+              ECC level M) with Project Nayuki's QR library, vendored in both backends (<span class="file-path">src/phone_mirror/qrcodegen.{hpp,cpp}</span>,
+              <span class="file-path">backend/phone_mirror/qrcodegen.py</span>, MIT, credited in <span class="file-path">NOTICE</span>). The rows reach QML as
+              <code>qrPairingRows</code>. The phone's Wireless debugging &rarr; Pair device with QR code reads it and advertises an
+              <code>_adb-tls-pairing</code> service under that name; the worker polls <code>adb mdns services</code> every second for up to
+              2 minutes (<code>kQrPairingTimeoutMs</code> / <code>QR_PAIRING_TIMEOUT_S</code>), runs <code>adb pair &lt;ip:port&gt; &lt;password&gt;</code>,
+              then finds the phone's <code>_adb-tls-connect</code> port on the same host over mDNS (polled up to 8 s) and runs
+              <code>adb connect</code> (adb exits 0 on failure, so success is read from the output). Cancel bumps a generation counter the
+              waiting job checks every second; the outcome arrives as <code>wirelessResult</code>.</li>
+            <li><strong>Remembering and reconnecting</strong>: a successful pairing sets <code>wirelessAddress</code>, which <code>main</code>
+              saves to <code>scrcpyWirelessAddress</code>. At startup and whenever <code>getDeviceState()</code> finds no usable phone (the
+              view polls it), the manager tries that address in the background at most every 5 s. Wireless debugging picks a new port each
+              time it is switched on, so when the saved address fails it looks for an <code>_adb-tls-connect</code> service on the same host
+              and, if that connects, remembers the new port; adb itself also auto-connects paired phones it sees over mDNS. Forget
+              (<code>forgetWireless()</code>) stops a Wi-Fi session, runs <code>adb disconnect</code> and clears the address; adb may still
+              auto-connect a paired phone until OCTAVE is removed from the phone's paired devices.</li>
+            <li><strong>USB first</strong>: <code>getDeviceSerial()</code> prefers a USB serial when the phone is on both, and every probe
+              (<code>getDeviceName/Resolution/Sdk</code>, the stale-server pkill) passes <code>-s</code>, since a bare <code>adb shell</code>
+              fails with "more than one device". Unplugging the cable mid-session drops into the normal quiet reconnect, which then finds the
+              Wi-Fi serial and carries on (attaching to the persisted virtual display).</li>
+            <li><strong>Bit rate</strong>: Wi-Fi sessions use <code>video_bit_rate=4000000</code> (<code>kWirelessBitRate</code> /
+              <code>WIRELESS_BIT_RATE</code>), USB keeps 8 Mbps.</li>
+            <li><strong>Messages</strong>: a dropped Wi-Fi link reports "Phone disconnected. Check that it is on the same Wi-Fi network and
+              Wireless debugging is on." instead of the USB-cable text; offline / unauthorized network devices and "no device while a Wi-Fi
+              phone is remembered" get Wi-Fi wording. All keep the phrases the view's retry regex matches.</li>
+          </ul>
+          <p><strong>Threading</strong>: QR waits and reconnects block on adb, so they run on one worker (C++: a <code>QThreadPool</code> with
+            one thread; Python: one daemon thread fed by a queue) and post results back to the GUI thread. One worker serialises them, so a
+            background reconnect never races a pairing; the C++ destructor cancels a QR wait and waits for the worker.</p>
+          <p><strong>Networking</strong>: OCTAVE does not create the network. The phone and the OCTAVE machine just have to share one -- a home
+            router, or in a car the head unit's own access point (e.g. a 5 GHz <code>hostapd</code> / NetworkManager hotspot) that the phone
+            joins. A phone-hosted hotspot does not work, because Android only enables Wireless debugging while the phone is a Wi-Fi client.</p>
+        </section>
+
         <section id="pm-input">
           <h3>Touch and navigation</h3>
           <p><code>PhoneMirrorView.qml</code> uses a <code>MultiPointTouchArea</code> (<code>mouseEnabled</code>, 1–10 points; mouse arrives as one
@@ -520,6 +583,7 @@
               <tr><td><code>phoneMirrorEnabled</code></td><td>false</td><td>Shows the Phone Mirror button in the bottom bar (hidden on Android regardless)</td><td>live</td></tr>
               <tr><td><code>scrcpyDisplaySize</code></td><td><code>"1280x800"</code></td><td>Virtual display size (<code>new_display=</code>); <code>""</code> = phone screen. The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyPhoneScreenOff</code></td><td>true</td><td>Keeper <code>panelDark</code></td><td>live (<code>OCTAVE_SET_KEEPER</code>)</td></tr>
+              <tr><td><code>scrcpyWirelessAddress</code></td><td><code>""</code></td><td>Phone last connected over Wi-Fi; written by the manager (<code>wirelessAddressChanged</code> &rarr; <code>save_scrcpy_wireless_address</code>)</td><td>startup + live</td></tr>
               <tr><td><code>scrcpyAudioEnabled</code></td><td>false</td><td><code>audio=true audio_codec=raw</code></td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyAudioGain</code></td><td>2.0</td><td>Linear PCM gain before OCTAVE's volume (UI shows dB)</td><td>live</td></tr>
               <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>true</td><td>Duck local media while the phone makes sound</td><td>live</td></tr>

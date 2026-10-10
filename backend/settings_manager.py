@@ -208,6 +208,7 @@ class SettingsManager(QObject):
     scrcpyAudioDuckEnabledChanged = Signal(bool)
     scrcpyAudioDuckLevelChanged = Signal(float)
     scrcpyPhoneScreenOffChanged = Signal(bool)
+    scrcpyWirelessAddressChanged = Signal(str)
     albumArtColorsChanged = Signal(str)  # JSON string with album art theme colors
 
     # Settings menu visibility signals
@@ -451,6 +452,7 @@ class SettingsManager(QObject):
             "scrcpyAudioDuckEnabled": True,  # Duck local media while the phone produces sound
             "scrcpyAudioDuckLevel": 0.1,  # Linear factor applied to local media while ducked (-20 dB)
             "scrcpyPhoneScreenOff": True,  # Keep the phone's own panel dark while mirroring
+            "scrcpyWirelessAddress": "",  # Last phone connected over Wi-Fi ("ip:port"), "" = none
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
                 "displaySettings": True,
@@ -633,6 +635,7 @@ class SettingsManager(QObject):
         self._scrcpy_audio_duck_enabled = bool(self._settings.get("scrcpyAudioDuckEnabled", True))
         self._scrcpy_audio_duck_level = float(self._settings.get("scrcpyAudioDuckLevel", 0.1))
         self._scrcpy_phone_screen_off = bool(self._settings.get("scrcpyPhoneScreenOff", True))
+        self._scrcpy_wireless_address = str(self._settings.get("scrcpyWirelessAddress", "") or "")
 
         # Settings menu visibility
         self._settings_menu_visibility = dict(self._settings.get(
@@ -1883,6 +1886,24 @@ class SettingsManager(QObject):
         self._scrcpy_phone_screen_off = off
         self.update_setting("scrcpyPhoneScreenOff", off, self.scrcpyPhoneScreenOffChanged)
 
+    @Property(str, notify=scrcpyWirelessAddressChanged)
+    def scrcpyWirelessAddress(self):
+        """Last phone connected over Wi-Fi ("ip:port"); reconnected automatically, "" = none"""
+        return self._scrcpy_wireless_address
+
+    @Slot(result=str)
+    def get_scrcpy_wireless_address(self):
+        return self._scrcpy_wireless_address
+
+    @Slot(str)
+    def save_scrcpy_wireless_address(self, address):
+        value = (address or "").strip()
+        if value == self._scrcpy_wireless_address:
+            return
+        logger.debug(f"Saving scrcpy wireless address: {value}")
+        self._scrcpy_wireless_address = value
+        self.update_setting("scrcpyWirelessAddress", value, self.scrcpyWirelessAddressChanged)
+
     @Property(bool, notify=esp32VolumeEnabledChanged)
     def esp32VolumeEnabled(self):
         """Get whether ESP32 volume controller is enabled"""
@@ -2429,6 +2450,7 @@ class SettingsManager(QObject):
         self.scrcpyAudioDuckEnabledChanged.emit(self._scrcpy_audio_duck_enabled)
         self.scrcpyAudioDuckLevelChanged.emit(self._scrcpy_audio_duck_level)
         self.scrcpyPhoneScreenOffChanged.emit(self._scrcpy_phone_screen_off)
+        self.scrcpyWirelessAddressChanged.emit(self._scrcpy_wireless_address)
         self.settingsMenuVisibilityChanged.emit()
         self.esp32VolumeEnabledChanged.emit(self._esp32_volume_enabled)
         self.esp32VolumePortChanged.emit(self._esp32_volume_port)

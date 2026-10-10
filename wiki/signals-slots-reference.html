@@ -49,7 +49,7 @@
         </div>
 
         <h2 id="registry">Context property registry</h2>
-        <p>16 context properties (plus one sub-object and one profiler) &mdash; 828 public members in total.</p>
+        <p>16 context properties (plus one sub-object and one profiler) &mdash; 846 public members in total.</p>
         <table>
           <thead><tr><th>QML name</th><th>C++ class &amp; file</th><th>Python class &amp; file</th><th>Notes</th></tr></thead>
           <tbody>
@@ -154,6 +154,7 @@
             <tr><td><code>scrcpyAudioDuckEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyAudioDuckEnabledChanged</code></td><td>Duck local media while the phone produces sound &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyAudioDuckLevel</code></td><td><code>double</code></td><td>read-only</td><td><code>scrcpyAudioDuckLevelChanged</code></td><td>Duck factor (linear, e.g. 0.1 = -20 dB) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyPhoneScreenOff</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyPhoneScreenOffChanged</code></td><td>Keep the handset panel dark while mirroring &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>scrcpyWirelessAddress</code></td><td><code>QString</code></td><td>read-only</td><td><code>scrcpyWirelessAddressChanged</code></td><td>Phone last connected over Wi-Fi &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32VolumeEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>esp32VolumeEnabledChanged</code></td><td>Enable the ESP32 rotary knob &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32VolumePort</code></td><td><code>QString</code></td><td>read-only</td><td><code>esp32VolumePortChanged</code></td><td>Serial port of the ESP32 (default <code>""</code> = auto-select the ESP32-S3 at startup) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32VolumeStepSize</code></td><td><code>double</code></td><td>read-only</td><td><code>esp32VolumeStepSizeChanged</code></td><td>Volume percent per encoder tick (float, default <code>1.0</code>; fractional steps such as 0.25 persist on both backends) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -245,6 +246,7 @@
             <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioDuckEnabled</code>, then emit <code>scrcpyAudioDuckEnabledChanged</code></td></tr>
             <tr><td><code>save_scrcpy_audio_duck_level(double level)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioDuckLevel</code>, then emit <code>scrcpyAudioDuckLevelChanged</code></td></tr>
             <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyPhoneScreenOff</code>, then emit <code>scrcpyPhoneScreenOffChanged</code></td></tr>
+            <tr><td><code>save_scrcpy_wireless_address(QString address)</code></td><td><code>void</code></td><td>Persist <code>scrcpyWirelessAddress</code> (trimmed; no-op when unchanged), then emit <code>scrcpyWirelessAddressChanged</code></td></tr>
             <tr><td><code>save_esp32_volume_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumeEnabled</code>, then emit <code>esp32VolumeEnabledChanged</code></td></tr>
             <tr><td><code>save_esp32_volume_port(QString port)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumePort</code>, then emit <code>esp32VolumePortChanged</code></td></tr>
             <tr><td><code>save_esp32_volume_step_size(double stepSize)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumeStepSize</code>, then emit <code>esp32VolumeStepSizeChanged</code></td></tr>
@@ -292,6 +294,7 @@
             <tr><td><code>get_scrcpy_audio_duck_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>scrcpyAudioDuckEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_audio_duck_level()</code></td><td><code>double</code></td><td>Returns the current <code>scrcpyAudioDuckLevel</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_phone_screen_off()</code></td><td><code>bool</code></td><td>Returns the current <code>scrcpyPhoneScreenOff</code> value (same as the property)</td></tr>
+            <tr><td><code>get_scrcpy_wireless_address()</code></td><td><code>QString</code></td><td>Returns the current <code>scrcpyWirelessAddress</code> value (same as the property)</td></tr>
             <tr><td><code>get_esp32_volume_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>esp32VolumeEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_esp32_volume_port()</code></td><td><code>QString</code></td><td>Returns the current <code>esp32VolumePort</code> value (same as the property)</td></tr>
             <tr><td><code>get_esp32_volume_step_size()</code></td><td><code>double</code></td><td>Returns the current <code>esp32VolumeStepSize</code> value (same as the property)</td></tr>
@@ -385,6 +388,7 @@
             <tr><td><code>scrcpyAudioDuckEnabledChanged(bool value)</code></td><td>Emitted after <code>scrcpyAudioDuckEnabled</code> is saved</td></tr>
             <tr><td><code>scrcpyAudioDuckLevelChanged(double value)</code></td><td>Emitted after <code>scrcpyAudioDuckLevel</code> is saved</td></tr>
             <tr><td><code>scrcpyPhoneScreenOffChanged(bool value)</code></td><td>Emitted after <code>scrcpyPhoneScreenOff</code> is saved</td></tr>
+            <tr><td><code>scrcpyWirelessAddressChanged(QString value)</code></td><td>Emitted after <code>scrcpyWirelessAddress</code> is saved</td></tr>
             <tr><td><code>esp32VolumeEnabledChanged(bool value)</code></td><td>Emitted after <code>esp32VolumeEnabled</code> is saved</td></tr>
             <tr><td><code>esp32VolumePortChanged(QString value)</code></td><td>Emitted after <code>esp32VolumePort</code> is saved</td></tr>
             <tr><td><code>esp32VolumeStepSizeChanged(double value)</code></td><td>Emitted after <code>esp32VolumeStepSize</code> is saved</td></tr>
@@ -1124,7 +1128,7 @@
         <h2 id="phoneMirrorManager">PhoneMirrorManager <span class="cmt">&mdash; <code>phoneMirrorManager</code></span></h2>
         <p><span class="file-path">src/managers/phonemirrormanager.h</span> / <span class="file-path">backend/phone_mirror/manager.py</span> &mdash; QML context property <code>phoneMirrorManager</code></p>
         <p>Built-in scrcpy-protocol client (see <a href="phone-mirror-android-auto.html">Phone Mirror</a>): pushes <span class="file-path">tools/phone-server/octave-phone-server</span> over adb, decodes H.264 itself and injects touch. Desktop only; the mobile build registers a stub. adb discovery (<code>findAdb()</code>, public static in C++) is shared with AndroidAutoManager; on Windows every adb / server process goes through <code>ScrcpyClient::hideConsoleWindow()</code> so no console flashes. Errors are reported through <code>scrcpyError</code> only &mdash; there is no separate <code>error</code> signal in either backend.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub keeps every property (all <code>CONSTANT</code>), every signal except <code>phoneAsleepChanged</code> / <code>phoneInUseChanged</code>, and every slot except <code>describeDeviceState</code>, <code>getDeviceSerial</code>, <code>getDeviceName</code>, <code>getDeviceResolution</code>, <code>getDeviceSdk</code> and <code>cleanup</code>.</div>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub keeps every property (all <code>CONSTANT</code>), every signal except <code>phoneAsleepChanged</code> / <code>phoneInUseChanged</code> / <code>connectionTypeChanged</code> / <code>wirelessBusyChanged</code> / <code>qrPairingChanged</code>, and every slot except <code>describeDeviceState</code>, <code>getDeviceSerial</code>, <code>getDeviceName</code>, <code>getDeviceResolution</code>, <code>getDeviceSdk</code> and <code>cleanup</code>.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1142,6 +1146,11 @@
             <tr><td><code>audioPlaying</code></td><td><code>bool</code></td><td>read-only</td><td><code>audioPlayingChanged</code></td><td>The phone is producing sound right now (drives ducking)</td></tr>
             <tr><td><code>phoneAsleep</code></td><td><code>bool</code></td><td>read-only</td><td><code>phoneAsleepChanged</code></td><td>The phone was locked / put to sleep during a session; OCTAVE is waking it</td></tr>
             <tr><td><code>phoneInUse</code></td><td><code>bool</code></td><td>read-only</td><td><code>phoneInUseChanged</code></td><td>The user unlocked the phone during a session; OCTAVE leaves its panel alone until <code>resumeMirroring()</code> or the phone is locked again</td></tr>
+            <tr><td><code>wirelessAddress</code></td><td><code>QString</code></td><td>read-only</td><td><code>wirelessAddressChanged</code></td><td><code>"ip:port"</code> of the phone last connected over Wi-Fi (setting <code>scrcpyWirelessAddress</code>); reconnected automatically, <code>""</code> = none</td></tr>
+            <tr><td><code>connectionType</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionTypeChanged</code></td><td><code>"usb"</code> / <code>"wifi"</code> for the running session, <code>""</code> when idle</td></tr>
+            <tr><td><code>wirelessBusy</code></td><td><code>bool</code></td><td>read-only</td><td><code>wirelessBusyChanged</code></td><td>A QR pairing started from the UI is in progress</td></tr>
+            <tr><td><code>qrPairingRows</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>qrPairingChanged</code></td><td>Modules of the QR code shown by <code>startQrPairing()</code>, one <code>'0'</code>/<code>'1'</code> string per row; empty when no pairing is waiting</td></tr>
+            <tr><td><code>qrPairingActive</code></td><td><code>bool</code></td><td>read-only</td><td><code>qrPairingChanged</code></td><td>A QR pairing is waiting for the phone</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1174,6 +1183,10 @@
             <tr><td><code>startScrcpy()</code></td><td><code>void</code></td><td>Push the server jar, start a session and begin decoding</td></tr>
             <tr><td><code>stopScrcpy()</code></td><td><code>void</code></td><td>End the session</td></tr>
             <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Stop the session at exit</td></tr>
+            <tr><td><code>setWirelessAddress(QString address)</code></td><td><code>void</code></td><td>Remembered Wi-Fi phone (primed from settings at startup); tries to reach it at once</td></tr>
+            <tr><td><code>forgetWireless()</code></td><td><code>void</code></td><td>Stop a Wi-Fi session, <code>adb disconnect</code> and clear <code>wirelessAddress</code></td></tr>
+            <tr><td><code>startQrPairing()</code></td><td><code>void</code></td><td>Show a QR code for the phone's &ldquo;Pair device with QR code&rdquo; scanner, wait up to 2 min for its mDNS pairing service, then <code>adb pair</code> and connect; result via <code>wirelessResult</code></td></tr>
+            <tr><td><code>cancelQrPairing()</code></td><td><code>void</code></td><td>Drop the shown code; the waiting job gives up within a second</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -1193,6 +1206,10 @@
             <tr><td><code>phoneAsleepChanged(bool asleep)</code></td><td>Phone went to sleep / woke up while mirrored</td></tr>
             <tr><td><code>phoneInUseChanged(bool inUse)</code></td><td>Phone taken in hand / handed back</td></tr>
             <tr><td><code>duckingChanged(float factor)</code></td><td>Duck factor while the phone makes sound and ducking is on, 1.0 otherwise; <code>main</code> routes it to <code>mediaManager.setDucking</code></td></tr>
+            <tr><td><code>wirelessAddressChanged(QString address)</code></td><td>Remembered Wi-Fi phone changed (paired, moved to a new port, forgotten); <code>main</code> saves it with <code>save_scrcpy_wireless_address</code></td></tr>
+            <tr><td><code>connectionTypeChanged()</code> / <code>wirelessBusyChanged()</code></td><td>Property notifications</td></tr>
+            <tr><td><code>wirelessResult(bool ok, QString message)</code></td><td>Outcome of QR pairing, message ready to show</td></tr>
+            <tr><td><code>qrPairingChanged()</code></td><td>Notify for <code>qrPairingRows</code> / <code>qrPairingActive</code></td></tr>
           </tbody>
         </table>
 

@@ -287,6 +287,11 @@ int main(int argc, char *argv[])
     phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
     QObject::connect(&settingsManager, &SettingsManager::scrcpyPhoneScreenOffChanged,
                      &phoneMirrorManager, &PhoneMirrorManager::setPhoneScreenOff);
+    // Phone last connected over Wi-Fi: reconnected at startup, and kept
+    // current when it is paired, moves to a new port, or is forgotten
+    phoneMirrorManager.setWirelessAddress(settingsManager.get_scrcpy_wireless_address());
+    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::wirelessAddressChanged,
+                     &settingsManager, &SettingsManager::save_scrcpy_wireless_address);
 #endif
 
     // Register custom QML types for video embedding (stub types on mobile)

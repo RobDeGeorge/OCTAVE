@@ -28,6 +28,7 @@
             <li><a href="#gallery-tile">GalleryTile</a></li>
             <li><a href="#sensor-card">SensorCard</a></li>
             <li><a href="#gforce-display">GForceDisplay</a></li>
+            <li><a href="#phone-qr-pairing-panel">PhoneQrPairingPanel</a></li>
             <li><a href="#home-obd-view">HomeOBDView</a></li>
             <li><a href="#obd-parameter-model">OBDParameterModel</a></li>
             <li><a href="#jeep-rig">The Jeep TJ Rig</a></li>
@@ -286,6 +287,28 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
           <li><strong>Marker</strong> &mdash; a 22&nbsp;dp accent glow at 20&nbsp;% alpha behind a 10&nbsp;dp dot; the position properties have 50&nbsp;ms <code>OutQuad</code> <code>Behavior</code>s and snap to the centre when disconnected.</li>
           <li><strong>Readout</strong> &mdash; <code>magnitude.toFixed(decimalPlaces) + " g"</code> in <code>dp(20)</code> bold, or <code>"--"</code>.</li>
         </ul>
+
+        <!-- PhoneQrPairingPanel -->
+        <h2 id="phone-qr-pairing-panel">PhoneQrPairingPanel</h2>
+        <p><span class="file-path">frontend/PhoneQrPairingPanel.qml</span> connects a phone over Wi-Fi by QR code, the only wireless
+          route (see <a href="phone-mirror-android-auto.html#pm-wifi">Mirroring over Wi-Fi</a>). A <code>RowLayout</code>: on the left the
+          code, drawn on a <code>Canvas</code> from <code>phoneMirrorManager.qrPairingRows</code> (one <code>'0'</code>/<code>'1'</code>
+          string per row) in whole pixels per module, black on white with a 4-module quiet zone whatever the theme; while no code is
+          shown, a same-size placeholder holds a "Show QR code" button. On the right "Connect your phone", the three steps (same Wi-Fi
+          network &rarr; Developer options &rarr; Wireless debugging &rarr; Pair device with QR code &rarr; scan), the
+          <code>wirelessResult</code> message (green / red), "The code expires after two minutes." and an optional Cancel.</p>
+        <table>
+          <thead><tr><th>Member</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>qrSize</code></td><td>Side of the code box. Callers size it from the screen (55 % of the window height), not dp, so it scans from arm's length</td></tr>
+            <tr><td><code>showCancel</code></td><td>Show the Cancel button while a code is up (default true)</td></tr>
+            <tr><td><code>start()</code> / <code>cancel()</code></td><td><code>startQrPairing()</code> unless one is running / <code>cancelQrPairing()</code></td></tr>
+            <tr><td><code>cancelled()</code></td><td>Emitted after Cancel was tapped</td></tr>
+          </tbody>
+        </table>
+        <p>Used twice: by <a href="pages.html#phonemirror">PhoneMirrorView</a> as its no-phone screen (it calls <code>start()</code> when
+          that screen appears and <code>cancel()</code> when it goes away), and inside a centred modal <code>Popup</code> on the Phone Dock
+          settings card ("Connect phone").</p>
 
         <!-- HomeOBDView -->
         <h2 id="home-obd-view">HomeOBDView</h2>

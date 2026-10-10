@@ -16,6 +16,9 @@
 #include <QList>
 #include <QLoggingCategory>
 #include <QTimer>
+#include <QThreadPool>
+#include <atomic>
+#include <functional>
 
 Q_DECLARE_LOGGING_CATEGORY(lcPhoneMirror)
 
@@ -49,6 +52,17 @@ class PhoneMirrorManager : public QObject
     // alone and does not undo a lock until they lock it again or tap
     // resumeMirroring(). The mirror keeps working while the phone is awake.
     Q_PROPERTY(bool phoneInUse READ phoneInUse NOTIFY phoneInUseChanged)
+    // Wi-Fi (adb over TCP): "ip:port" of the phone last connected wirelessly.
+    // OCTAVE reconnects to it on its own (setting scrcpyWirelessAddress).
+    Q_PROPERTY(QString wirelessAddress READ wirelessAddress NOTIFY wirelessAddressChanged)
+    // "usb" | "wifi" for the running session, "" when idle
+    Q_PROPERTY(QString connectionType READ connectionType NOTIFY connectionTypeChanged)
+    // A pair / connect / scan started from the UI is in progress
+    Q_PROPERTY(bool wirelessBusy READ wirelessBusy NOTIFY wirelessBusyChanged)
+    // QR pairing (startQrPairing): the code's modules, one string of '0'/'1'
+    // per row (empty when no pairing is waiting), for QML to draw
+    Q_PROPERTY(QStringList qrPairingRows READ qrPairingRows NOTIFY qrPairingChanged)
+    Q_PROPERTY(bool qrPairingActive READ qrPairingActive NOTIFY qrPairingChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -68,6 +82,16 @@ public:
     bool audioPlaying() const;
     bool phoneAsleep() const { return m_phoneAsleep; }
     bool phoneInUse() const { return m_phoneInUse; }
+    QString wirelessAddress() const { return m_wirelessAddress; }
+    QString connectionType() const { return m_connectionType; }
+    bool wirelessBusy() const { return m_wirelessJobs > 0; }
+    QStringList qrPairingRows() const { return m_qrRows; }
+    bool qrPairingActive() const { return !m_qrRows.isEmpty(); }
+    // "WIFI:T:ADB;S:<service>;P:<password>;;" -- the payload Android's
+    // "Pair device with QR code" scanner expects (Android Studio's format)
+    static QString qrPairingPayload(const QString &service, const QString &password);
+    // How long a shown QR code waits for the phone to scan it
+    static constexpr int kQrPairingTimeoutMs = 120000;
     // Factor other sources should currently apply: duck level while the phone
     // is producing sound and ducking is on, 1.0 otherwise
     float duckingFactor() const;
@@ -79,6 +103,8 @@ public:
     // adb discovery: bundled platform-tools, then PATH, then common SDK
     // locations. Shared with AndroidAutoManager so both find the same binary.
     static QString findAdb();
+    // Video bit rate over Wi-Fi; USB keeps the client default (8 Mbps)
+    static constexpr int kWirelessBitRate = 4000000;
 
 signals:
     // Session state (names kept from the original scrcpy-binary design;
@@ -98,6 +124,13 @@ signals:
     // Emitted whenever duckingFactor() changes; main.cpp routes it to the
     // other audio sources (MediaManager::setDucking).
     void duckingChanged(float factor);
+    // Wi-Fi: main.cpp saves wirelessAddressChanged to the settings
+    void wirelessAddressChanged(const QString &address);
+    void connectionTypeChanged();
+    void wirelessBusyChanged();
+    // Outcome of QR pairing, message ready to show
+    void wirelessResult(bool ok, const QString &message);
+    void qrPairingChanged();
 
 public slots:
     // Called by VolumeController on every volume change (0..1 linear);
@@ -139,8 +172,37 @@ public slots:
     void stopScrcpy();
     void cleanup();
 
+    // ── Wi-Fi ──
+    // Remembered phone (from settings at startup); tries to reach it at once
+    void setWirelessAddress(const QString &address);
+    // Disconnect the Wi-Fi phone and stop reconnecting to it
+    void forgetWireless();
+    // Show a QR code for the phone's "Pair device with QR code" scanner, wait
+    // for the phone to advertise it over mDNS, then pair and connect.
+    // Outcome via wirelessResult; qrPairingRows clears when it ends.
+    void startQrPairing();
+    void cancelQrPairing();
+
 private:
     QString runAdb(const QStringList &args, int timeoutMs = 10000) const;
+    // Output and exit code whatever the result; safe from any thread
+    QString runAdbFull(const QStringList &args, int timeoutMs, int *exitCode = nullptr) const;
+    // ["-s", serial] for the phone getDeviceSerial() picks, [] when none
+    QStringList serialArgs();
+    QString describeProblem(const QString &state);
+    // Blocking helpers for the wireless worker thread
+    struct MdnsService { QString name; QString type; QString address; };
+    QList<MdnsService> mdnsServices() const;
+    QString mdnsConnectAddressFor(const QString &host) const;
+    bool adbConnect(const QString &address, QString *message) const;
+    // After a successful adb pair: find the phone's connect port over mDNS
+    // (polled up to 8 s) and connect. Returns the address reached, "" if none.
+    QString connectPairedHost(const QString &host) const;
+    void finishQrPairing();
+    // Runs on m_wirelessPool (one job at a time); ui jobs drive wirelessBusy
+    void runWirelessJob(std::function<void()> job, bool ui);
+    void maybeReconnectWireless();
+    void setConnectionType(const QString &type);
     QList<QPair<QString, QString>> devices() const;  // (serial, state)
     void killStaleServer();
     void onConnected(int w, int h);
@@ -181,12 +243,22 @@ private:
     QString m_persistScid;
     qint64 m_persistUntilMs = 0;
     bool m_attaching = false;
+
+    QString m_wirelessAddress;
+    QString m_connectionType;
+    QThreadPool m_wirelessPool;
+    int m_wirelessJobs = 0;                       // UI-started jobs in flight (GUI thread)
+    std::atomic<bool> m_autoConnectRunning{false};
+    qint64 m_lastAutoConnectMs = 0;
+    QStringList m_qrRows;
+    std::atomic<int> m_qrGeneration{0};           // bumped on start/cancel; a stale wait gives up
 };
 
 #else // Q_OS_MOBILE — mobile stub
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 class PhoneMirrorManager : public QObject
 {
@@ -204,6 +276,11 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool audioPlaying READ audioPlaying CONSTANT)
     Q_PROPERTY(bool phoneAsleep READ phoneAsleep CONSTANT)
     Q_PROPERTY(bool phoneInUse READ phoneInUse CONSTANT)
+    Q_PROPERTY(QString wirelessAddress READ wirelessAddress CONSTANT)
+    Q_PROPERTY(QString connectionType READ connectionType CONSTANT)
+    Q_PROPERTY(bool wirelessBusy READ wirelessBusy CONSTANT)
+    Q_PROPERTY(QStringList qrPairingRows READ qrPairingRows CONSTANT)
+    Q_PROPERTY(bool qrPairingActive READ qrPairingActive CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
     bool audioActive() const { return false; }
@@ -222,6 +299,11 @@ public:
     void setVideoSink(QObject *) {}
     int frameWidth() const { return 0; }
     int frameHeight() const { return 0; }
+    QString wirelessAddress() const { return {}; }
+    QString connectionType() const { return {}; }
+    bool wirelessBusy() const { return false; }
+    QStringList qrPairingRows() const { return {}; }
+    bool qrPairingActive() const { return false; }
 
 public slots:
     void setVolume(float) {}
@@ -244,6 +326,10 @@ public slots:
     void pressAppSwitch() {}
     void startScrcpy() {}
     void stopScrcpy() {}
+    void setWirelessAddress(const QString &) {}
+    void forgetWireless() {}
+    void startQrPairing() {}
+    void cancelQrPairing() {}
 
 signals:
     void scrcpyStarted(int);
@@ -257,6 +343,8 @@ signals:
     void audioActiveChanged(bool);
     void audioPlayingChanged(bool);
     void duckingChanged(float);
+    void wirelessAddressChanged(const QString &);
+    void wirelessResult(bool, const QString &);
 };
 
 #endif // Q_OS_MOBILE

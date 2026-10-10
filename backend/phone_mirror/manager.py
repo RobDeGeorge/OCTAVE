@@ -13,7 +13,9 @@ Mirrors src/managers/phonemirrormanager.{h,cpp}.
 
 import os
 import platform
+import queue
 import re
+import secrets
 import shutil
 import subprocess
 import threading
@@ -24,10 +26,11 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 
 from backend.logging_config import get_logger
+from backend.phone_mirror.qrcodegen import QrCode
 
 from backend.phone_mirror.scrcpy_client import (
     ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION, SERVER_PROCESS_PATTERN, PERSIST_MS,
-    KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH, KEYCODE_WAKEUP,
+    is_network_serial, KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH, KEYCODE_WAKEUP,
 )
 
 logger = get_logger(__name__)
@@ -43,6 +46,23 @@ NEW_DISPLAY_MIN_SDK = 30  # Android 11
 # in that window the user wants their phone, not the mirror's screen-off;
 # otherwise the panel is blanked again.
 WAKE_GRACE_MS = 8000
+# Video bit rate over Wi-Fi; USB keeps the client default (8 Mbps)
+WIRELESS_BIT_RATE = 4_000_000
+# Minimum gap between background attempts to reach the remembered Wi-Fi phone
+AUTO_CONNECT_INTERVAL_S = 5.0
+# How long a shown QR code waits for the phone to scan it
+QR_PAIRING_TIMEOUT_S = 120.0
+_TOKEN_CHARS = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def qr_pairing_payload(service: str, password: str) -> str:
+    """"WIFI:T:ADB;S:<service>;P:<password>;;" -- the payload Android's "Pair
+    device with QR code" scanner expects (Android Studio's format)."""
+    return f"WIFI:T:ADB;S:{service};P:{password};;"
+
+
+def _random_token(length: int) -> str:
+    return "".join(secrets.choice(_TOKEN_CHARS) for _ in range(length))
 
 
 def normalize_display_size(value: str) -> str:
@@ -55,6 +75,16 @@ def normalize_display_size(value: str) -> str:
     w = max(8, (w // 8) * 8)
     h = max(8, (h // 8) * 8)
     return f"{w}x{h}"
+
+
+def host_of(address: str) -> str:
+    """"192.168.1.5:5555" -> "192.168.1.5", "[fe80::1]:5555" -> "fe80::1"."""
+    host = (address or "").strip()
+    if host.startswith("[") and "]:" in host:
+        return host[1:host.index("]:")]
+    if host.count(":") == 1:
+        return host.split(":", 1)[0]
+    return host
 
 
 def _bundled_adb() -> Optional[str]:
@@ -124,6 +154,13 @@ class PhoneMirrorManager(QObject):
     # Emitted whenever duckingFactor changes; main.py routes it to the other
     # audio sources (MediaManager.setDucking).
     duckingChanged = Signal(float)
+    # Wi-Fi: main.py saves wirelessAddressChanged to the settings
+    wirelessAddressChanged = Signal(str)
+    connectionTypeChanged = Signal()
+    wirelessBusyChanged = Signal()
+    wirelessResult = Signal(bool, str)          # outcome of QR pairing
+    qrPairingChanged = Signal()
+    _post = Signal(object)                      # worker thread -> GUI thread callable
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -158,6 +195,19 @@ class PhoneMirrorManager(QObject):
         self._persist_until: float = 0.0
         self._attaching: bool = False
 
+        self._wireless_address: str = ""
+        self._connection_type: str = ""
+        # Wireless jobs run one at a time on one worker thread, so a
+        # reconnect never races a pairing
+        self._jobs: queue.Queue = queue.Queue()
+        self._worker: Optional[threading.Thread] = None
+        self._wireless_jobs: int = 0             # UI-started jobs in flight (GUI thread)
+        self._auto_connect_running: bool = False
+        self._last_auto_connect: float = 0.0
+        self._qr_rows: list = []
+        self._qr_generation: int = 0             # bumped on start/cancel; a stale wait gives up
+        self._post.connect(self._run_posted)
+
     # ── availability / environment ──────────────────────────────────
 
     @Property(str, constant=True)
@@ -191,7 +241,8 @@ class PhoneMirrorManager(QObject):
         if missing:
             return "Phone mirroring needs " + " and ".join(missing) + "."
         return ("Enable USB debugging on the phone (Settings > Developer options), connect it "
-                "over USB and accept the authorization prompt.")
+                "over USB and accept the authorization prompt. To go wireless, open Phone Mirror and "
+                "scan its QR code from the phone's Wireless debugging screen.")
 
     # ── device probes ───────────────────────────────────────────────
 
@@ -205,6 +256,29 @@ class PhoneMirrorManager(QObject):
             return result.stdout if result.returncode == 0 else ""
         except (subprocess.SubprocessError, OSError):
             return ""
+
+    def _run_adb_full(self, args, timeout: float = 10) -> str:
+        """stdout+stderr whatever the exit code; safe from any thread."""
+        if not self._adb_path:
+            return ""
+        try:
+            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+            result = subprocess.run([self._adb_path] + list(args), stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, timeout=timeout,
+                                    creationflags=creationflags)
+            return (result.stdout or "").strip()
+        except subprocess.TimeoutExpired as e:
+            out = e.stdout or ""
+            return (out.decode(errors="replace") if isinstance(out, bytes) else out).strip()
+        except (subprocess.SubprocessError, OSError):
+            return ""
+
+    def _serial_args(self) -> list:
+        """["-s", serial] for the phone getDeviceSerial() picks. With a phone on
+        both USB and Wi-Fi (or two phones) a bare `adb shell` fails with
+        "more than one device", so every probe names its phone."""
+        serial = self.getDeviceSerial()
+        return ["-s", serial] if serial else []
 
     def _devices(self) -> list:
         """[(serial, state)] from `adb devices`."""
@@ -224,6 +298,9 @@ class PhoneMirrorManager(QObject):
         states = [st for _, st in self._devices()]
         if "device" in states:
             return "device"
+        # Nothing usable: if a Wi-Fi phone is remembered, try to reach it in
+        # the background (throttled). The view polls this, so it is retried for free.
+        self._maybe_reconnect_wireless()
         for st in ("unauthorized", "offline"):
             if st in states:
                 return st
@@ -239,24 +316,48 @@ class PhoneMirrorManager(QObject):
             "none": "No Android device connected. Connect via USB and enable USB debugging.",
         }.get(state, "")
 
+    def _describe_problem(self, state: str) -> str:
+        """describeDeviceState() with the Wi-Fi case spelled out. The phrases the
+        view keys its auto-retry on (No Android device / not authorized /
+        offline) are kept."""
+        wireless = False
+        if state in ("offline", "unauthorized"):
+            matching = [serial for serial, st in self._devices() if st == state]
+            wireless = bool(matching) and all(is_network_serial(s) for s in matching)
+        if wireless and state == "offline":
+            return ("The phone's Wi-Fi link is offline. Check that it is on the same Wi-Fi network "
+                    "as OCTAVE and that Wireless debugging is on.")
+        if wireless and state == "unauthorized":
+            return ("Phone is connected over Wi-Fi but debugging is not authorized. "
+                    "Unlock the phone and tap 'Allow' on the debugging prompt.")
+        if state == "none" and self._wireless_address:
+            return (f"No Android device connected. Waiting for {self._wireless_address} over Wi-Fi: turn on "
+                    "Wireless debugging on the phone (same Wi-Fi network as OCTAVE), or plug it in over USB.")
+        return self.describeDeviceState(state)
+
     @Slot(result=bool)
     def hasConnectedDevice(self) -> bool:
         return self.getDeviceState() == "device"
 
     @Slot(result=str)
     def getDeviceSerial(self) -> str:
+        """USB first: it is the faster, steadier link when the phone is on both."""
+        wireless = ""
         for serial, st in self._devices():
-            if st == "device":
+            if st != "device":
+                continue
+            if not is_network_serial(serial):
                 return serial
-        return ""
+            wireless = wireless or serial
+        return wireless
 
     @Slot(result=str)
     def getDeviceName(self) -> str:
-        return self._run_adb(["shell", "getprop", "ro.product.model"]).strip()
+        return self._run_adb(self._serial_args() + ["shell", "getprop", "ro.product.model"]).strip()
 
     @Slot(result=str)
     def getDeviceResolution(self) -> str:
-        for line in self._run_adb(["shell", "wm", "size"]).split("\n"):
+        for line in self._run_adb(self._serial_args() + ["shell", "wm", "size"]).split("\n"):
             if "Physical size:" in line:
                 return line.split(":", 1)[1].strip()
         return ""
@@ -264,13 +365,14 @@ class PhoneMirrorManager(QObject):
     @Slot(result=int)
     def getDeviceSdk(self) -> int:
         try:
-            return int(self._run_adb(["shell", "getprop", "ro.build.version.sdk"]).strip())
+            return int(self._run_adb(self._serial_args() + ["shell", "getprop", "ro.build.version.sdk"]).strip())
         except (TypeError, ValueError):
             return 0
 
     def _kill_stale_server(self):
         """A crashed session can leave the device-side server running."""
-        self._run_adb(["shell", "pkill", "-f", SERVER_PROCESS_PATTERN], timeout=5)
+        serial_args = ["-s", self._serial] if self._serial else []
+        self._run_adb(serial_args + ["shell", "pkill", "-f", SERVER_PROCESS_PATTERN], timeout=5)
 
     # ── settings ────────────────────────────────────────────────────
 
@@ -540,9 +642,10 @@ class PhoneMirrorManager(QObject):
             return
         state = self.getDeviceState()
         if state != "device":
-            self.scrcpyError.emit(self.describeDeviceState(state))
+            self.scrcpyError.emit(self._describe_problem(state))
             return
         serial = self.getDeviceSerial()
+        wireless = is_network_serial(serial)
 
         self._is_starting = True
         self._is_stopping = False
@@ -554,6 +657,7 @@ class PhoneMirrorManager(QObject):
         self._attaching = bool(attach_scid)
         if not attach_scid:
             self._persist_scid = ""
+            self._serial = serial
             self._kill_stale_server()
 
         if self._client is not None:
@@ -580,13 +684,16 @@ class PhoneMirrorManager(QObject):
                 display_size = ""
                 self._active_display_size = ""
         logger.info(f"Starting phone mirror (server {SERVER_VERSION}) for {serial} "
-                    f"(display {display_size or 'phone screen'}, audio {'on' if self._audio_enabled else 'off'})")
+                    f"(display {display_size or 'phone screen'}, audio {'on' if self._audio_enabled else 'off'}, "
+                    f"{'Wi-Fi' if wireless else 'USB'})")
         self._serial = serial
+        self._set_connection_type("wifi" if wireless else "usb")
         if not attach_scid:
             self._vdisplay_id = -1
         if attach_scid:
             logger.info(f"Reattaching to the phone's running mirror session (scid {attach_scid})")
-        client.start(serial, display_size=display_size, audio=self._audio_enabled, attach_scid=attach_scid)
+        client.start(serial, display_size=display_size, audio=self._audio_enabled, attach_scid=attach_scid,
+                     bit_rate=WIRELESS_BIT_RATE if wireless else 8_000_000)
         self.isRunningChanged.emit()
 
     def _on_connected(self, w: int, h: int):
@@ -628,6 +735,7 @@ class PhoneMirrorManager(QObject):
             # Link drop mid-stream: the server keeps the virtual display for PERSIST_MS
             self._persist_scid = self._client.scid
             self._persist_until = time.monotonic() + PERSIST_MS / 1000.0 - 5.0
+        self._set_connection_type("")
         self.isRunningChanged.emit()
         if reason:
             self.scrcpyError.emit(reason)
@@ -649,10 +757,261 @@ class PhoneMirrorManager(QObject):
             client.stop()
             client.deleteLater()
             self._kill_stale_server()
+        self._set_connection_type("")
         self.scrcpyStopped.emit()
         self.isRunningChanged.emit()
 
     @Slot()
     def cleanup(self):
         """Cleanup when OCTAVE is closing."""
+        self._qr_generation += 1   # a QR pairing wait gives up within a second
         self.stopScrcpy()
+
+    # ── Wi-Fi ───────────────────────────────────────────────────────
+    # adb itself carries the session over TCP: once the phone is listed by
+    # `adb devices` as "ip:port" (adb connect) or as an mDNS name (adb
+    # auto-connects phones it has paired with), the client's `adb -s <serial>`
+    # push / forward / shell work exactly as over USB. This code only gets the
+    # phone into that list and keeps it there.
+
+    @Property(str, notify=wirelessAddressChanged)
+    def wirelessAddress(self) -> str:
+        """"ip:port" of the phone last connected wirelessly; reconnected automatically."""
+        return self._wireless_address
+
+    @Property(str, notify=connectionTypeChanged)
+    def connectionType(self) -> str:
+        """"usb" | "wifi" for the running session, "" when idle."""
+        return self._connection_type
+
+    @Property(bool, notify=wirelessBusyChanged)
+    def wirelessBusy(self) -> bool:
+        """A pair / connect / scan started from the UI is in progress."""
+        return self._wireless_jobs > 0
+
+    def _set_connection_type(self, kind: str):
+        if kind != self._connection_type:
+            self._connection_type = kind
+            self.connectionTypeChanged.emit()
+
+    @Slot(object)
+    def _run_posted(self, fn):
+        fn()
+
+    def _job_loop(self):
+        while True:
+            job = self._jobs.get()
+            try:
+                job()
+            except Exception:
+                logger.exception("phone mirror: wireless job failed")
+
+    def _run_wireless_job(self, job, ui: bool):
+        """Queue job on the wireless worker; ui jobs drive wirelessBusy."""
+        if ui:
+            self._wireless_jobs += 1
+            if self._wireless_jobs == 1:
+                self.wirelessBusyChanged.emit()
+
+        def wrapped():
+            try:
+                job()
+            finally:
+                if ui:
+                    self._post.emit(self._ui_job_done)
+
+        if self._worker is None or not self._worker.is_alive():
+            self._worker = threading.Thread(target=self._job_loop, daemon=True, name="phone-mirror-wifi")
+            self._worker.start()
+        self._jobs.put(wrapped)
+
+    def _ui_job_done(self):
+        self._wireless_jobs -= 1
+        if self._wireless_jobs == 0:
+            self.wirelessBusyChanged.emit()
+
+    def _mdns_services(self) -> list:
+        """[(name, type, address)] from `adb mdns services`, e.g.
+        ("adb-R5CT…-AbCdEf", "_adb-tls-connect._tcp", "192.168.1.5:37199")."""
+        rows = []
+        for line in self._run_adb_full(["mdns", "services"], timeout=5).split("\n"):
+            parts = line.split()
+            if len(parts) >= 3 and parts[1].startswith("_adb"):
+                rows.append((parts[0], parts[1], parts[2]))
+        return rows
+
+    def _mdns_connect_address_for(self, host: str) -> str:
+        for _name, kind, address in self._mdns_services():
+            if "_adb-tls-connect" in kind and host_of(address) == host:
+                return address
+        return ""
+
+    def _adb_connect(self, address: str):
+        """(ok, message). adb connect exits 0 on failure too; "already
+        connected to" counts as success."""
+        out = self._run_adb_full(["connect", address], timeout=10)
+        ok = "connected to" in out and "failed" not in out and "cannot" not in out
+        message = out.split("\n")[-1] if out else f"No answer from {address}"
+        return ok, message
+
+    @Slot(str)
+    def setWirelessAddress(self, address: str):
+        """Remembered phone (from settings at startup); tries to reach it at once."""
+        value = (address or "").strip()
+        if value == self._wireless_address:
+            return
+        self._wireless_address = value
+        self.wirelessAddressChanged.emit(value)
+        if value:
+            self._last_auto_connect = 0.0
+            self._maybe_reconnect_wireless()
+
+    def _maybe_reconnect_wireless(self):
+        if (not self._wireless_address or not self._adb_path or self._wireless_jobs > 0
+                or self._auto_connect_running):
+            return
+        now = time.monotonic()
+        if self._last_auto_connect and now - self._last_auto_connect < AUTO_CONNECT_INTERVAL_S:
+            return
+        self._last_auto_connect = now
+        self._auto_connect_running = True
+        saved = self._wireless_address
+
+        def job():
+            ok, msg = self._adb_connect(saved)
+            reached = saved if ok else ""
+            if not ok:
+                # Wireless debugging picks a new port every time it is switched
+                # on; the phone advertises the current one over mDNS.
+                fresh = self._mdns_connect_address_for(host_of(saved))
+                if fresh and fresh != saved:
+                    ok, msg = self._adb_connect(fresh)
+                    if ok:
+                        reached = fresh
+            if reached:
+                logger.info(f"Phone mirror: reconnected to the phone over Wi-Fi at {reached}")
+            else:
+                logger.debug(f"Phone mirror: Wi-Fi phone {saved} not reachable: {msg}")
+
+            def done():
+                self._auto_connect_running = False
+                # The phone moved to a new port: remember that one
+                if reached and reached != saved and self._wireless_address == saved:
+                    self._wireless_address = reached
+                    self.wirelessAddressChanged.emit(reached)
+            self._post.emit(done)
+
+        self._run_wireless_job(job, ui=False)
+
+    def _connect_paired_host(self, host: str) -> str:
+        """After a successful adb pair: the connect port differs from the
+        pairing port; the phone advertises it over mDNS (polled up to 8 s).
+        adb may already have auto-connected ("already connected" then).
+        Returns the address reached, "" if none."""
+        for _ in range(16):
+            connect_addr = self._mdns_connect_address_for(host)
+            if connect_addr and self._adb_connect(connect_addr)[0]:
+                return connect_addr
+            time.sleep(0.5)
+        return ""
+
+    @Slot()
+    def forgetWireless(self):
+        """Disconnect the Wi-Fi phone and stop reconnecting to it."""
+        addr = self._wireless_address
+        if self._connection_type == "wifi":
+            self.stopScrcpy()
+        self._wireless_address = ""
+        self.wirelessAddressChanged.emit("")
+        if not addr:
+            return
+        logger.info(f"Phone mirror: forgetting the Wi-Fi phone at {addr}")
+        self._run_wireless_job(lambda: self._run_adb_full(["disconnect", addr], timeout=5), ui=False)
+
+    # ── QR pairing ──
+    # Android Studio's flow: the host shows WIFI:T:ADB;S:<name>;P:<password>;;
+    # the phone's "Pair device with QR code" scanner reads it and advertises an
+    # _adb-tls-pairing service under <name>; the host then runs
+    # `adb pair <ip:port> <password>` against it and connects as usual.
+
+    @Property(list, notify=qrPairingChanged)
+    def qrPairingRows(self) -> list:
+        """The QR code's modules, one string of '0'/'1' per row (empty when no
+        pairing is waiting), for QML to draw."""
+        return self._qr_rows
+
+    @Property(bool, notify=qrPairingChanged)
+    def qrPairingActive(self) -> bool:
+        return bool(self._qr_rows)
+
+    @Slot()
+    def startQrPairing(self):
+        """Show a QR code for the phone's "Pair device with QR code" scanner,
+        wait for the phone to advertise it over mDNS, then pair and connect.
+        Outcome via wirelessResult; qrPairingRows clears when it ends."""
+        if not self._adb_path:
+            self.wirelessResult.emit(False, self.describeDeviceState("no-adb"))
+            return
+        service = "octave-" + _random_token(8)
+        password = _random_token(12)
+        qr = QrCode.encode_text(qr_pairing_payload(service, password), QrCode.Ecc.MEDIUM)
+        size = qr.get_size()
+        self._qr_rows = ["".join("1" if qr.get_module(x, y) else "0" for x in range(size)) for y in range(size)]
+        self.qrPairingChanged.emit()
+        self._qr_generation += 1
+        generation = self._qr_generation
+        logger.info(f"Phone mirror: QR pairing, waiting for the phone to scan (service {service})")
+
+        def job():
+            deadline = time.monotonic() + QR_PAIRING_TIMEOUT_S
+            pair_addr = ""
+            while not pair_addr and self._qr_generation == generation and time.monotonic() < deadline:
+                for name, kind, address in self._mdns_services():
+                    if name == service and "_adb-tls-pairing" in kind:
+                        pair_addr = address
+                if not pair_addr:
+                    time.sleep(1.0)
+            if self._qr_generation != generation:
+                return   # cancelled or restarted: the newer request reports
+            ok, reached, detail = False, "", ""
+            if not pair_addr:
+                detail = f"The phone did not scan the code within {int(QR_PAIRING_TIMEOUT_S)} s."
+            else:
+                out = self._run_adb_full(["pair", pair_addr, password], timeout=20)
+                if "Successfully paired" in out:
+                    ok = True
+                    reached = self._connect_paired_host(host_of(pair_addr))
+                else:
+                    detail = out.split("\n")[-1] if out else "no answer"
+
+            def done():
+                if self._qr_generation != generation:
+                    return
+                self._finish_qr_pairing()
+                if not ok:
+                    logger.warning(f"Phone mirror: QR pairing failed: {detail}")
+                    self.wirelessResult.emit(False, detail + " Check that the phone is on the same Wi-Fi network "
+                                                             "and try again." if not pair_addr
+                                             else f"Pairing failed. Try again. ({detail})")
+                elif not reached:
+                    self.wirelessResult.emit(False, "Paired, but the phone did not accept a connection. Keep its "
+                                                    "Wireless debugging screen open and try again.")
+                else:
+                    logger.info(f"Phone mirror: QR pairing, paired and connected over Wi-Fi at {reached}")
+                    self.setWirelessAddress(reached)
+                    self.wirelessResult.emit(True, f"Paired and connected to {reached} over Wi-Fi.")
+            self._post.emit(done)
+
+        self._run_wireless_job(job, ui=True)
+
+    @Slot()
+    def cancelQrPairing(self):
+        if not self._qr_rows:
+            return
+        self._qr_generation += 1   # the waiting job notices within a second and returns
+        self._finish_qr_pairing()
+
+    def _finish_qr_pairing(self):
+        if self._qr_rows:
+            self._qr_rows = []
+            self.qrPairingChanged.emit()

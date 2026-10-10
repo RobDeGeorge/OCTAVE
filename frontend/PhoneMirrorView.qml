@@ -40,6 +40,22 @@ Item {
     property bool reconnecting: false
     readonly property int reconnectGraceMs: 10000
     property double reconnectSince: 0
+    // No phone at all (not a cable blip or an unauthorized prompt): the page
+    // becomes the QR pairing screen, the default way to connect. With a
+    // phone already remembered over Wi-Fi it waits for that one and offers
+    // the QR code on request ("Connect a different phone").
+    readonly property bool noPhone: launchFailed && setupOk && deviceError && /^No Android device/.test(errorMessage)
+    readonly property bool phoneRemembered: phoneMirrorManager ? phoneMirrorManager.wirelessAddress !== "" : false
+    property bool wantQr: false
+    readonly property bool showQr: noPhone && (!phoneRemembered || wantQr)
+             && phoneMirrorView.StackView.status === StackView.Active
+    onShowQrChanged: {
+        if (showQr)
+            qrPanel.start()
+        else
+            qrPanel.cancel()
+    }
+    StackView.onDeactivated: wantQr = false
     function refreshSetupOk() {
         setupOk = (phoneMirrorManager && phoneMirrorManager.environmentOk) ? phoneMirrorManager.environmentOk() : false
     }
@@ -322,19 +338,46 @@ Item {
                 }
             }
 
+            // No phone: connect by QR code (or plug in over USB)
+            ColumnLayout {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
+                spacing: dp(16)
+                visible: showQr
+
+                App.PhoneQrPairingPanel {
+                    id: qrPanel
+                    Layout.fillWidth: true
+                    qrSize: Math.round(phoneMirrorView.height * 0.55)
+                    showCancel: phoneRemembered
+                    onCancelled: wantQr = false
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Or plug the phone in over USB with USB debugging on (Settings > Developer options)."
+                    font.pixelSize: App.Spacing.overallText * 0.85
+                    font.family: phoneMirrorView.globalFont
+                    color: App.Style.secondaryTextColor
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+
             // Error state
             ColumnLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: dp(15)
-                visible: launchFailed
+                visible: launchFailed && !showQr
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Phone Mirror Failed"
+                    // Not a failure when a remembered Wi-Fi phone is simply not around yet
+                    text: noPhone ? "Waiting for your phone" : "Phone Mirror Failed"
                     font.pixelSize: dp(28)
                     font.family: phoneMirrorView.globalFont
                     font.bold: true
-                    color: "#FF6666"
+                    color: noPhone ? App.Style.primaryTextColor : "#FF6666"
                 }
 
                 Text {
@@ -359,6 +402,31 @@ Item {
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                     Layout.maximumWidth: parent.width * 0.8
+                }
+
+                // Waiting for the remembered Wi-Fi phone; pair another instead
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: noPhone && phoneRemembered
+                    text: "Connect a different phone"
+                    font.pixelSize: dp(16)
+                    font.family: phoneMirrorView.globalFont
+                    background: Rectangle {
+                        color: parent.pressed ? App.Style.accent : "transparent"
+                        border.color: App.Style.accent
+                        border.width: 2
+                        radius: dpMin(8, 2)
+                        implicitWidth: dp(260)
+                        implicitHeight: dp(50)
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        font: parent.font
+                        color: App.Style.primaryTextColor
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: wantQr = true
                 }
 
                 // Setup failure: say what is missing

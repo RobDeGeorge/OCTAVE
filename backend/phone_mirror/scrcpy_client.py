@@ -124,6 +124,20 @@ KEYCODE_POWER = 26
 KEYCODE_WAKEUP = 224   # wakes the device, never puts it to sleep
 
 
+def is_network_serial(serial: str) -> bool:
+    """adb serial of a phone reached over the network ("ip:port" from adb
+    connect, or an mDNS "adb-…._adb-tls-connect._tcp" name) rather than USB.
+    USB serials never contain ':'; "ip:port" and "[v6]:port" always do."""
+    return ":" in serial or "._adb-tls-connect._tcp" in serial or "._adb._tcp" in serial
+
+
+def disconnected_message(serial: str) -> str:
+    """What the user should check when this session's link drops."""
+    if is_network_serial(serial or ""):
+        return "Phone disconnected. Check that it is on the same Wi-Fi network and Wireless debugging is on."
+    return "Phone disconnected. Reconnect the USB cable."
+
+
 def bundled_server_jar() -> Optional[str]:
     """Locate the bundled phone server jar (repo: tools/phone-server/)."""
     root = Path(__file__).resolve().parents[2]
@@ -640,7 +654,7 @@ class ScrcpyClient(QObject):
             pass
         code = proc.poll()
         if proc is self._proc and not self._stopping:
-            self._fail("Phone disconnected. Reconnect the USB cable." if self._running
+            self._fail(disconnected_message(self._serial) if self._running
                        else f"scrcpy server exited (code {code})")
 
     def _drain_audio(self, audio_sock: socket.socket):
@@ -822,7 +836,7 @@ class ScrcpyClient(QObject):
                         logger.info(f"scrcpy client: first frame at +{time.monotonic() - t0:.2f} s")
         except (ConnectionError, OSError) as e:
             if not self._stopping:
-                self._fail("Phone disconnected. Reconnect the USB cable." if self._running
+                self._fail(disconnected_message(self._serial) if self._running
                            else f"video stream ended: {e}")
         except Exception as e:
             self._fail(f"decode error: {e}")

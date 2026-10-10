@@ -169,6 +169,10 @@ phone_mirror_manager.duckingChanged.connect(media_manager.setDucking)
 # Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
 phone_mirror_manager.setPhoneScreenOff(settings_manager.get_scrcpy_phone_screen_off())
 settings_manager.scrcpyPhoneScreenOffChanged.connect(phone_mirror_manager.setPhoneScreenOff)
+# Phone last connected over Wi-Fi: reconnected at startup, and kept current
+# when it is paired, moves to a new port, or is forgotten
+phone_mirror_manager.setWirelessAddress(settings_manager.get_scrcpy_wireless_address())
+phone_mirror_manager.wirelessAddressChanged.connect(settings_manager.save_scrcpy_wireless_address)
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
 settings_manager.scrcpyAudioEnabledChanged.connect(

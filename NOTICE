@@ -6,3 +6,10 @@ Created by Robert DeGeorge & Marquis Johnson
 https://github.com/RobDeGeorge/OCTAVE
 
 Licensed under the MIT License. See LICENSE for details.
+
+Third-party code bundled in this repository:
+
+- QR Code generator library, Copyright (c) Project Nayuki, MIT License
+  (https://www.nayuki.io/page/qr-code-generator-library).
+  src/phone_mirror/qrcodegen.{hpp,cpp}, backend/phone_mirror/qrcodegen.py
+- phone_server/: fork of the scrcpy server, Apache License 2.0 (see phone_server/LICENSE.scrcpy)
