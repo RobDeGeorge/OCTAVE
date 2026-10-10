@@ -47,8 +47,9 @@ Rectangle {
 
     function closeTile() {
         detailCardId = ""
-        // Null detailTile too so the popup's Loader unloads and the inner
-        // component's Component.onDestruction fires (e.g. Now Playing live PiP).
+        // The popup keeps showing this tile's content while it shrinks and
+        // unloads it once closed, so the inner component's
+        // Component.onDestruction still fires (e.g. Now Playing live PiP).
         detailTile = null
     }
 
@@ -142,6 +143,7 @@ Rectangle {
             active: hubCard.isCenter
 
             onSourceChanged: {
+                detailPopup.snapShut()
                 hubCard.detailCardId = ""
                 hubCard.detailTile = null
                 hubCard.useTileLayout = false
@@ -184,7 +186,6 @@ Rectangle {
             visible: hubCard.useTileLayout
             tileModel: hubCard.useTileLayout && pageLoader.item
                 ? pageLoader.item.tileModel : []
-            hiddenCardId: hubCard.detailCardId
             onTileSelected: function(cardId, rect) {
                 // "Now Playing" hijacks the whole window via mainWindow,
                 // not the in-card popup, since it needs every pixel.
@@ -208,35 +209,13 @@ Rectangle {
         SettingsCardPopup {
             id: detailPopup
             z: 3
-            visible: hubCard.useTileLayout && (openProgress > 0.001 || hubCard.detailCardId !== "")
+            visible: hubCard.useTileLayout && morphing
+            open: hubCard.detailCardId !== ""
+            originRect: hubCard.originRect
             title: hubCard.detailTile ? hubCard.detailTile.title : ""
             contentComponent: hubCard.detailTile ? hubCard.detailTile.component : null
 
-            // 0.0 = collapsed onto the originating tile, 1.0 = filling cardContent.
-            property real openProgress: hubCard.detailCardId === "" ? 0.0 : 1.0
-
-            // Geometry interpolates between the tile rect and the full card body.
-            x: hubCard.originRect.x * (1.0 - openProgress)
-            y: hubCard.originRect.y * (1.0 - openProgress)
-            width: hubCard.originRect.width
-                + (parent.width - hubCard.originRect.width) * openProgress
-            height: hubCard.originRect.height
-                + (parent.height - hubCard.originRect.height) * openProgress
-
-            // Header + body fade in during the second half of the morph.
-            contentOpacity: Math.max(0.0, (openProgress - 0.45) / 0.55)
-
-            // Suppress animation on initial mount so the popup doesn't
-            // visibly animate at startup.
-            property bool _animEnabled: false
-            Component.onCompleted: Qt.callLater(function() { _animEnabled = true })
-
             onBackRequested: hubCard.closeTile()
-
-            Behavior on openProgress {
-                enabled: detailPopup._animEnabled
-                NumberAnimation { duration: 320; easing.type: Easing.OutCubic }
-            }
         }
 
         // Polls until the Flickable has valid dimensions, then restores scroll

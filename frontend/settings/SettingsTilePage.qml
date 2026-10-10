@@ -9,13 +9,23 @@ Item {
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
 
     property var tileModel: []
-    // While a tile's popup is open, that tile is invisible in the grid so the
-    // hero morph isn't doubled up by the source card showing through.
-    property string hiddenCardId: ""
     // 0 = automatic (2x2 for 4 tiles, otherwise square-ish).
     property int columns: 0
 
     signal tileSelected(string cardId, var originRect)
+
+    // Rect of a tile in tilePage.parent coordinates (as tileSelected
+    // reports it), or null if this grid has no such tile.
+    function tileRect(cardId) {
+        for (var i = 0; i < tileRepeater.count; i++) {
+            var t = tileRepeater.itemAt(i)
+            if (t && t.cardId === cardId) {
+                var pt = t.mapToItem(tilePage.parent, 0, 0)
+                return Qt.rect(pt.x, pt.y, t.width, t.height)
+            }
+        }
+        return null
+    }
 
     GridLayout {
         id: grid
@@ -31,6 +41,7 @@ Item {
             : Math.max(2, Math.ceil(Math.sqrt(tilePage.tileModel ? tilePage.tileModel.length : 0)))
 
         Repeater {
+            id: tileRepeater
             model: tilePage.tileModel
 
             SettingsTile {
@@ -38,8 +49,6 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: tilePage.dp(100)
-                opacity: cardId !== "" && cardId === tilePage.hiddenCardId ? 0.0 : 1.0
-                Behavior on opacity { NumberAnimation { duration: 120 } }
                 cardId: modelData && modelData.cardId !== undefined ? modelData.cardId : ""
                 title: modelData && modelData.title !== undefined ? modelData.title : ""
                 icon: modelData && modelData.icon !== undefined ? modelData.icon : ""

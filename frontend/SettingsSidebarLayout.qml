@@ -36,9 +36,25 @@ Item {
     // every settings card from every section, like an app drawer.
     property bool allSettingsMode: false
 
+    // An open card stays open across the switch, in both directions. Grid
+    // to sidebar goes to the card's own section first (its tile may be on
+    // a different section than the one the sidebar last showed).
     function navigateToHub() {
-        contentArea.closeTile()
+        var openId = contentArea.detailCardId
+        var openSection = openId === "" ? ""
+            : (contentArea.detailTile && contentArea.detailTile.section
+               ? contentArea.detailTile.section
+               : (settingsMenu ? settingsMenu.currentSection : ""))
         allSettingsMode = !allSettingsMode
+        if (openId === "")
+            return
+        if (!allSettingsMode && settingsMenu && openSection !== settingsMenu.currentSection) {
+            // The section page reloads and reopens initialTile in onLoaded.
+            settingsMenu.initialTile = openId
+            settingsMenu.navigateToCategory(openSection)
+        } else {
+            contentArea.openTile(openId, null)
+        }
     }
 
     // Every visible section's tiles, tagged with their section. Sections
@@ -432,15 +448,33 @@ Item {
                 }
             }
 
+            // Section switch: the new page fades and rises in rather than
+            // cutting over in one frame.
+            property real sectionReveal: 1.0
+            function revealSection() {
+                sectionRevealAnim.restart()
+            }
+            NumberAnimation {
+                id: sectionRevealAnim
+                target: contentArea
+                property: "sectionReveal"
+                from: 0.0
+                to: 1.0
+                duration: 220
+                easing.type: Easing.OutCubic
+            }
+
             function closeTile() {
+                // Shrink into wherever the tile is in the grid on screen now;
+                // the card may have been opened from the other view.
+                var grid = sidebarLayout.allSettingsMode ? allTilesGrid : tileGrid
+                var r = detailCardId !== "" ? grid.tileRect(detailCardId) : null
+                if (r) originRect = r
                 detailCardId = ""
-                // Null detailTile too so the popup's Loader unloads and the
-                // inner component's Component.onDestruction fires. Without
-                // this, page-scoped resources (e.g. the Now Playing live PiP)
-                // would persist after the user backs out of the tile. The
-                // popup's body has already faded out via contentOpacity by
-                // the time openProgress passes 0.45, so destroying the
-                // content is not visible.
+                // The popup keeps showing this tile's content while it shrinks
+                // and unloads it once closed, so the inner component's
+                // Component.onDestruction still fires (page-scoped resources
+                // such as the Now Playing live PiP are released).
                 detailTile = null
             }
 
@@ -475,6 +509,8 @@ Item {
                     fill: parent
                     margins: App.Spacing.settingsContentMargin
                 }
+                opacity: contentArea.sectionReveal
+                transform: Translate { y: (1.0 - contentArea.sectionReveal) * sidebarLayout.dp(16) }
                 // Loaded with setSource() rather than a `source` binding so
                 // renderCards is false before the page is built: this layout
                 // hides the page behind its tile grid, and building the
@@ -493,13 +529,17 @@ Item {
                     }
                     previousSection = settingsMenu ? settingsMenu.currentSection : ""
 
-                    // Reset tile-mode state for the new page
+                    // Reset tile-mode state for the new page. The open card's
+                    // tile is gone, so the popup closes at once rather than
+                    // shrinking into the new section's grid.
+                    detailPopup.snapShut()
                     contentArea.detailCardId = ""
                     contentArea.detailTile = null
                     contentArea.useTileLayout = false
                 }
 
                 onLoaded: {
+                    contentArea.revealSection()
                     // Bind optional properties if the page declares them
                     if (item && typeof item.mainWindow !== "undefined" && settingsMenu)
                         item.mainWindow = settingsMenu.mainWindow
@@ -570,9 +610,10 @@ Item {
                 }
                 z: 2
                 visible: contentArea.useTileLayout && !sidebarLayout.allSettingsMode
+                opacity: contentArea.sectionReveal
+                transform: Translate { y: (1.0 - contentArea.sectionReveal) * sidebarLayout.dp(16) }
                 tileModel: contentArea.useTileLayout && contentLoader.item
                     ? contentLoader.item.tileModel : []
-                hiddenCardId: contentArea.detailCardId
                 onTileSelected: function(cardId, rect) { sidebarLayout.selectTile(cardId, rect, tileGrid) }
             }
 
@@ -583,9 +624,9 @@ Item {
                 anchors.fill: parent
                 z: 2
                 color: App.Style.contentColor
-                visible: opacity > 0
-                opacity: sidebarLayout.allSettingsMode ? 1.0 : 0.0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
+                // Switches in one frame: the sidebar shows/hides instantly, so
+                // a fade here only made the two views overlap mid-change.
+                visible: sidebarLayout.allSettingsMode
 
                 SettingsTilePage {
                     id: allTilesGrid
@@ -613,7 +654,6 @@ Item {
                             best++
                         return best
                     }
-                    hiddenCardId: contentArea.detailCardId
                     onTileSelected: function(cardId, rect) { sidebarLayout.selectTile(cardId, rect, allTilesGrid) }
                 }
             }
@@ -622,38 +662,13 @@ Item {
             SettingsCardPopup {
                 id: detailPopup
                 z: 3
-                visible: (contentArea.useTileLayout || sidebarLayout.allSettingsMode) && (openProgress > 0.001 || contentArea.detailCardId !== "")
+                visible: (contentArea.useTileLayout || sidebarLayout.allSettingsMode) && morphing
+                open: contentArea.detailCardId !== ""
+                originRect: contentArea.originRect
                 title: contentArea.detailTile ? contentArea.detailTile.title : ""
                 contentComponent: contentArea.detailTile ? contentArea.detailTile.component : null
 
-                // 0.0 = collapsed onto the originating tile, 1.0 = filling
-                // the content area. Drives geometry + content fade together.
-                property real openProgress: contentArea.detailCardId === "" ? 0.0 : 1.0
-
-                // Geometry interpolates between the tile rect and the full pane.
-                x: contentArea.originRect.x * (1.0 - openProgress)
-                y: contentArea.originRect.y * (1.0 - openProgress)
-                width: contentArea.originRect.width
-                    + (parent.width - contentArea.originRect.width) * openProgress
-                height: contentArea.originRect.height
-                    + (parent.height - contentArea.originRect.height) * openProgress
-
-                // Header + body fade in during the second half of the morph,
-                // so we see the card grow first and the page contents resolve
-                // once there's enough room for them.
-                contentOpacity: Math.max(0.0, (openProgress - 0.45) / 0.55)
-
-                // Suppress animation on initial mount so the popup doesn't
-                // visibly animate at startup.
-                property bool _animEnabled: false
-                Component.onCompleted: Qt.callLater(function() { _animEnabled = true })
-
                 onBackRequested: contentArea.closeTile()
-
-                Behavior on openProgress {
-                    enabled: detailPopup._animEnabled
-                    NumberAnimation { duration: 320; easing.type: Easing.OutCubic }
-                }
             }
         }
     }

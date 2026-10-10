@@ -114,29 +114,43 @@ Item {
         }
     }
 
-    Connections {
-        target: clock
-        function onTimeChanged(time) {
-            // Update digital clock
-            digitalClock.text = time
+    // Ticks on its own while shown rather than following clock.timeChanged:
+    // that signal only fires when the text changes (once a minute without
+    // seconds), so a freshly opened page stayed blank and the second hand
+    // never moved. The digital text uses the same settings as the Clock
+    // manager (24 h / seconds).
+    function refresh() {
+        var now = new Date()
+        var showSeconds = settingsManager ? settingsManager.clockShowSeconds : false
+        var use24h = settingsManager ? settingsManager.clockFormat24Hour : true
+        // "hh" is 12-hour only when the format also has "AP"
+        var fmt = (use24h ? "HH" : "hh") + ":mm" + (showSeconds ? ":ss" : "") + (use24h ? "" : " AP")
+        digitalClock.text = Qt.formatTime(now, fmt)
+        dateDisplay.text = Qt.formatDate(now, "dddd, MMMM d, yyyy")
 
-            // Update date
-            var date = new Date()
-            dateDisplay.text = Qt.formatDate(date, "dddd, MMMM d, yyyy")
+        var hours = now.getHours()
+        var minutes = now.getMinutes()
+        var seconds = now.getSeconds()
+        hourHand.rotation = (hours % 12) * 30 + (minutes / 60) * 30
+        minuteHand.rotation = minutes * 6 + (seconds / 60) * 6
+        secondHand.rotation = seconds * 6
+    }
 
-            // Update analog clock hands. The string is "HH:mm[:ss][ AM|PM]" —
-            // the seconds field is absent when clockShowSeconds is off (and
-            // the whole string is empty when showClock is off), so treat a
-            // missing field as 0 rather than letting NaN reach the rotations.
-            var parts = time.split(":")
-            var hours = parseInt(parts[0]) || 0
-            var minutes = parseInt(parts[1]) || 0
-            var seconds = parseInt(parts[2]) || 0
-
-            // Calculate rotations
-            hourHand.rotation = (hours % 12) * 30 + (minutes / 60) * 30
-            minuteHand.rotation = minutes * 6 + (seconds / 60) * 6
-            secondHand.rotation = seconds * 6
+    // Re-aimed at the next whole second on every tick (+15 ms so it lands just
+    // past the boundary). A plain 1000 ms repeat runs at whatever phase the
+    // page opened with, so the hand trailed the real second by up to a second
+    // and drift made it skip or repeat a tick.
+    Timer {
+        // Assigning interval restarts a running Timer with the new value, so
+        // no restart() call (that would break the running: visible binding).
+        id: tickTimer
+        interval: 1000
+        repeat: true
+        running: clockMenu.visible
+        triggeredOnStart: true
+        onTriggered: {
+            clockMenu.refresh()
+            interval = 1015 - new Date().getMilliseconds()
         }
     }
 }

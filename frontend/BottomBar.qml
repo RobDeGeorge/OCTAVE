@@ -226,9 +226,9 @@ Rectangle {
         stackView.openPage("PhoneMirrorView.qml")
     }
 
-    // Tapping the clock opens Sensor Home.
+    // Tapping the clock opens the Clock menu.
     function openClockSection() {
-        stackView.openPage("SensorHome.qml")
+        stackView.openPage("ClockMenu.qml")
     }
 
     function updateLayout() {

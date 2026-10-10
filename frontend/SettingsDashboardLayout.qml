@@ -289,12 +289,7 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     height: 1
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: App.Style.accent }
-                        GradientStop { position: 0.6; color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.2) }
-                        GradientStop { position: 1.0; color: "transparent" }
-                    }
+                    color: App.Style.accent
                 }
             }
 
@@ -384,7 +379,9 @@ Item {
                     right: parent.right
                     bottom: parent.bottom
                     rightMargin: App.Spacing.settingsContentMargin
-                    bottomMargin: App.Spacing.settingsContentMargin
+                    // Same gap under the header and above the bottom bar as the music library
+                    topMargin: App.Spacing.overallMargin
+                    bottomMargin: App.Spacing.overallMargin
                 }
                 source: viewState === "detail" && settingsMenu ? sourceForSection(settingsMenu.currentSection) : ""
 

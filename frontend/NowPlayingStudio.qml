@@ -274,12 +274,7 @@ Item {
                 anchors.leftMargin: headerBox.radius
                 anchors.rightMargin: headerBox.radius
                 height: 1
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: App.Style.accent }
-                    GradientStop { position: 0.6; color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.2) }
-                    GradientStop { position: 1.0; color: "transparent" }
-                }
+                color: App.Style.accent
             }
 
             MouseArea {
