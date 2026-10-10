@@ -34,7 +34,7 @@ I daily-drive it in a 2003 Jeep TJ. That is where most of the design decisions c
 
 ## What it looks like
 
-Every clip below was recorded on the Jeep's head unit with music playing. Each has a different song behind it, and with the **Album Art Capture** theme on, the whole interface takes its colours from the current track.
+Every clip below is the real app, driven by a script with music playing (see [Dev tooling](#dev-tooling)). Engine and motion data in the clips come from OCTAVE's built-in simulator, so they can be reproduced without a car. Each clip has a different song behind it, and with the **Album Art Capture** theme on, the whole interface takes its colours from the current track.
 
 ### Music that colours the whole interface
 
@@ -47,6 +47,19 @@ Skip a track and the UI recolours. Local MP3, M4A and FLAC with a live waveform,
 <p align="center">
   <img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room with waveform, controls and album art" width="49%">
   <img src="frontend/assets/readme/media_media_player_playing.png" alt="Full-screen media player" width="49%">
+</p>
+
+### Your library, and finding more
+
+<p align="center">
+  <img src="frontend/assets/readme/library.webp" alt="Music library: long-press a song for its action sheet, sort by artist, open the playlist picker, then search for David Bowie and get results with album art" width="900">
+</p>
+
+Sort by title, artist or album, switch between playlist folders, and long-press any song to move it to another playlist or delete it. Search finds tracks with Spotify metadata and album art and downloads them into the playlist you pick. Downloads are left out of app-store builds.
+
+<p align="center">
+  <img src="frontend/assets/readme/library_song_sheet.png" alt="Song action sheet: album art, artist and album, the folder it lives in, move to playlist, delete" width="49%">
+  <img src="frontend/assets/readme/library_search.png" alt="Music search results for David Bowie, each with album art and a download button" width="49%">
 </p>
 
 ### Gauges and dashboards you build yourself
@@ -66,6 +79,19 @@ Fifty-plus OBD-II parameters, seven gauge primitives (circular, arc, bar, linear
   <img src="frontend/assets/readme/dashboards_chooser.png" alt="Dashboard chooser with live miniatures of every dashboard" width="49%">
 </p>
 
+### Build a dashboard on the screen itself
+
+<p align="center">
+  <img src="frontend/assets/readme/editor.webp" alt="In the dashboard editor: name it Trail Rig, tap empty cells to add an RPM arc, G-force, compass, speed, coolant warning light, fuel trim and engine load, preview with demo data, save, then drive on it" width="900">
+</p>
+
+No code and no JSON. Tap an empty cell, pick a widget, pick the parameter, and nudge its size and position from the side panel. "Demo data" shows the gauges moving before you save, and the saved dashboard joins the chooser and the swipe order. Dashboards can be shared as a file or through the clipboard.
+
+<p align="center">
+  <img src="frontend/assets/readme/editor_built.png" alt="The editor with seven widgets placed on the grid" width="49%">
+  <img src="frontend/assets/readme/editor_live.png" alt="The saved Trail Rig dashboard live under load" width="49%">
+</p>
+
 ### The shift light
 
 <p align="center">
@@ -76,6 +102,19 @@ Set an RPM threshold and the whole screen strobes red when the engine crosses it
 
 <p align="center">
   <img src="frontend/assets/readme/shiftlight_strobe.png" alt="Mid-flash: the Sport dashboard washed red at 6300 RPM" width="700">
+</p>
+
+### Warnings and trouble codes
+
+<p align="center">
+  <img src="frontend/assets/readme/diagnostics.webp" alt="The Performance dashboard's TEMP light turns red as coolant hits 115 °C and FUEL turns yellow, then the diagnostics page reads two stored codes, takes a freeze frame and clears them" width="900">
+</p>
+
+Warning lights are ordinary dashboard widgets with a threshold, so any parameter can have one. When something does light up, the diagnostics page reads stored and pending trouble codes with plain-English descriptions, pulls the freeze frame, and clears the codes and the check-engine light after a confirmation.
+
+<p align="center">
+  <img src="frontend/assets/readme/diagnostics_warnings.png" alt="Performance dashboard with the TEMP light red at 115 °C and the FUEL light yellow" width="49%">
+  <img src="frontend/assets/readme/diagnostics_codes.png" alt="Diagnostics page listing P0300 random misfire and P0420 catalyst efficiency" width="49%">
 </p>
 
 ### Your phone on the dash
@@ -97,6 +136,19 @@ A rigged model of the Jeep with working doors, hood, tailgate, lights, steering 
 <p align="center">
   <img src="frontend/assets/readme/jeep_open.png" alt="Jeep with doors and hood open" width="49%">
   <img src="frontend/assets/readme/jeep_lights.png" alt="Jeep with headlights, fog, brake and reverse lights on" width="49%">
+</p>
+
+### Sensors
+
+<p align="center">
+  <img src="frontend/assets/readme/sensors.webp" alt="The sensors page while driving: pitch, roll and heading change, the G-force dot swings with a trail through bends and braking, altitude climbs; then the 3D Jeep tilting with it" width="900">
+</p>
+
+Pitch, roll, heading, a G-force plot with a trail, altitude and temperature from the BerryIMU, sampled at 200 Hz. Zero it on level ground and every reading is relative to how the unit is mounted.
+
+<p align="center">
+  <img src="frontend/assets/readme/sensors_live.png" alt="Sensors page with live pitch, roll, heading, G-force, altitude and temperature" width="49%">
+  <img src="frontend/assets/readme/sensors_clock.png" alt="Clock page with digital time, date and an analogue face" width="49%">
 </p>
 
 ### The whole thing, page by page
@@ -219,7 +271,7 @@ Both are kept in sync on desktop. A feature or fix in one lands in the other in 
 
 ## Dev tooling
 
-The clips and screenshots above are scripted. `python -m dev.main_dev --profile` runs OCTAVE with a simulated engine and a local command server, and `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, switch dashboards), captures the window from inside Qt, and writes WebP, GIF and PNG. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. Everything is under `dev/` and documented in the wiki.
+The clips and screenshots above are scripted. `python -m dev.main_dev --profile` runs OCTAVE with a simulated engine (warm-up, overheat and low-fuel scenarios included), simulated IMU motion and a local command server. `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt in real time, and writes WebP, GIF and PNG. `--list` shows every scene. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. Everything is under `dev/` and documented in the wiki.
 
 ## System requirements
 
