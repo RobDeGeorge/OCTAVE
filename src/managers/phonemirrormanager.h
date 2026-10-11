@@ -342,6 +342,7 @@ private:
     bool m_bitRateAuto = true;
     int m_currentBitRate = 0;
     bool m_tcpipChecked = false;    // the auto-Wi-Fi step ran for the session being started
+    bool m_staleRetried = false;    // a failed Wi-Fi start already dropped its stale ip:port and retried
     int m_startGeneration = 0;      // bumped by stopScrcpy; a pending start checks it
 
     ScrcpyClient *m_client = nullptr;

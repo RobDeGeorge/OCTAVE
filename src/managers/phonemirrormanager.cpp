@@ -33,6 +33,8 @@ static const QString kAutoDisplaySize = QStringLiteral("auto");
 // A view resize restarts an "auto" session once the size has settled
 static constexpr int kResizeRestartMs = 1500;
 
+static QString hostOf(const QString &address);
+
 // ─── Construction ─────────────────────────────────────────────────────
 
 PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
@@ -729,6 +731,7 @@ void PhoneMirrorManager::startScrcpy()
 void PhoneMirrorManager::onConnected(int w, int h)
 {
     m_ready = true;
+    m_staleRetried = false;
     m_isStarting = false;
     m_attaching = false;
     m_persistScid.clear();
@@ -773,6 +776,34 @@ void PhoneMirrorManager::onDisconnected(const QString &reason)
         m_currentBitRate = 0;
         emit currentBitRateChanged();
     }
+    if (!wasReady && !reason.isEmpty() && !m_staleRetried && m_serial.contains(QLatin1Char(':'))) {
+        // Wireless debugging takes a new port on every Wi-Fi rejoin, but adb
+        // keeps listing the old ip:port as a device until it notices it is
+        // dead, so the start can pick a stale entry. Drop it, look up the
+        // current port over mDNS and start once more.
+        m_staleRetried = true;
+        m_isStarting = true;
+        const QString stale = m_serial;
+        const int gen = ++m_startGeneration;
+        qCInfo(lcPhoneMirror) << "Start over Wi-Fi failed (" << reason << "); dropping" << stale << "and retrying";
+        runWirelessJob([this, stale, gen]() {
+            runAdbFull({QStringLiteral("disconnect"), stale}, 5000);
+            const QString fresh = mdnsConnectAddressFor(hostOf(stale));
+            const QString reached = !fresh.isEmpty() && adbConnect(fresh, nullptr) ? fresh : QString();
+            QMetaObject::invokeMethod(this, [this, stale, reached, gen]() {
+                if (gen != m_startGeneration)
+                    return;   // stopped meanwhile
+                m_isStarting = false;
+                if (!reached.isEmpty() && reached != stale && m_wirelessAddress == stale) {
+                    m_wirelessAddress = reached;
+                    emit wirelessAddressChanged(reached);
+                }
+                startScrcpy();
+            }, Qt::QueuedConnection);
+        }, false);
+        return;
+    }
+    m_staleRetried = false;
     emit isRunningChanged();
     if (reason.isEmpty())
         emit scrcpyStopped();
@@ -788,6 +819,7 @@ void PhoneMirrorManager::stopScrcpy()
     m_isStarting = false;
     m_ready = false;
     m_attaching = false;
+    m_staleRetried = false;
     m_persistScid.clear();
     m_activeDisplaySize.clear();
     m_startedAutoSize.clear();

@@ -540,7 +540,7 @@
               saves to <code>scrcpyWirelessAddress</code>. At startup and whenever <code>getDeviceState()</code> finds no usable phone (the
               view polls it), the manager tries that address in the background at most every 5 s. Wireless debugging picks a new port each
               time it is switched on, so when the saved address fails it looks for an <code>_adb-tls-connect</code> service on the same host
-              and, if that connects, remembers the new port; adb itself also auto-connects paired phones it sees over mDNS. Forget
+              and, if that connects, remembers the new port; adb itself also auto-connects paired phones it sees over mDNS. adb can keep listing the old <code>ip:port</code> as a device for a while after the phone rejoins Wi-Fi on a new port, so a session that fails to start on an <code>ip:port</code> serial runs <code>adb disconnect</code> on it, re-resolves the port over mDNS, connects and starts once more (<code>m_staleRetried</code> / <code>_stale_retried</code>, one retry per start). Forget
               (<code>forgetWireless()</code>) stops a Wi-Fi session, runs <code>adb disconnect</code> and clears the address; adb may still
               auto-connect a paired phone until OCTAVE is removed from the phone's paired devices.</li>
             <li><strong>USB first</strong>: <code>getDeviceSerial()</code> prefers a USB serial when the phone is on both, and every probe

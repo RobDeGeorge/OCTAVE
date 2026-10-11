@@ -299,6 +299,7 @@ class PhoneMirrorManager(QObject):
         self._media_reported: bool = False      # the session's first media report arrived
         self._muted: bool = False
         self._tcpip_checked: bool = False        # the auto-Wi-Fi step ran for the session being started
+        self._stale_retried: bool = False        # a failed Wi-Fi start already dropped its stale ip:port and retried
         self._start_generation: int = 0          # bumped by stopScrcpy; a pending start checks it
 
         self._client: Optional[ScrcpyClient] = None
@@ -1167,6 +1168,7 @@ class PhoneMirrorManager(QObject):
 
     def _on_connected(self, w: int, h: int):
         self._ready = True
+        self._stale_retried = False
         self._is_starting = False
         self._attaching = False
         self._persist_scid = ""
@@ -1209,6 +1211,36 @@ class PhoneMirrorManager(QObject):
             self._persist_until = time.monotonic() + PERSIST_MS / 1000.0 - 5.0
         self._set_connection_type("")
         self._set_current_bit_rate(0)
+        if not was_ready and reason and not self._stale_retried and ":" in (self._serial or ""):
+            # Wireless debugging takes a new port on every Wi-Fi rejoin, but adb
+            # keeps listing the old ip:port as a device until it notices it is
+            # dead, so the start can pick a stale entry. Drop it, look up the
+            # current port over mDNS and start once more.
+            self._stale_retried = True
+            self._is_starting = True
+            stale = self._serial
+            self._start_generation += 1
+            gen = self._start_generation
+            logger.info(f"Phone mirror: start over Wi-Fi failed ({reason}); dropping {stale} and retrying")
+
+            def job():
+                self._run_adb_full(["disconnect", stale], timeout=5)
+                fresh = self._mdns_connect_address_for(host_of(stale))
+                reached = fresh if fresh and self._adb_connect(fresh)[0] else ""
+
+                def done():
+                    if gen != self._start_generation:
+                        return   # stopped meanwhile
+                    self._is_starting = False
+                    if reached and reached != stale and self._wireless_address == stale:
+                        self._wireless_address = reached
+                        self.wirelessAddressChanged.emit(reached)
+                    self.startScrcpy()
+                self._post.emit(done)
+
+            self._run_wireless_job(job, False)
+            return
+        self._stale_retried = False
         self.isRunningChanged.emit()
         if reason:
             self.scrcpyError.emit(reason)
@@ -1223,6 +1255,7 @@ class PhoneMirrorManager(QObject):
         self._is_starting = False
         self._ready = False
         self._attaching = False
+        self._stale_retried = False
         self._persist_scid = ""
         self._active_display_size = ""
         self._started_auto_size = ""
