@@ -11,6 +11,7 @@ on PATH otherwise.
 Mirrors src/managers/phonemirrormanager.{h,cpp}.
 """
 
+import hashlib
 import os
 import platform
 import queue
@@ -32,6 +33,7 @@ from backend.phone_mirror.scrcpy_client import (
     ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION, SERVER_PROCESS_PATTERN, PERSIST_MS,
     is_network_serial, KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH, KEYCODE_WAKEUP,
     MEDIA_WATCH, MEDIA_PLAY, MEDIA_PAUSE, MEDIA_PLAY_PAUSE, MEDIA_NEXT, MEDIA_PREVIOUS, MEDIA_SEEK,
+    MEDIA_SKIP_TO_QUEUE_ITEM,
 )
 from backend.settings_manager import get_app_data_dir
 
@@ -216,6 +218,7 @@ class PhoneMirrorManager(QObject):
     currentBitRateChanged = Signal()
     mediaChanged = Signal()
     mediaArtChanged = Signal()
+    mediaQueueChanged = Signal()
     mediaActiveChanged = Signal(bool)   # main.py pauses OCTAVE's own sources when the phone takes over
     _post = Signal(object)                      # worker thread -> GUI thread callable
 
@@ -241,6 +244,16 @@ class PhoneMirrorManager(QObject):
         self._media: dict = dict(_NO_MEDIA)
         self._media_position_at: float = 0.0    # monotonic time of the last position report
         self._media_art_url: str = ""
+        self._media_queue: list = []        # as published: items with "art" filled in
+        self._media_queue_raw: list = []    # as reported: items with "art_uri"
+        self._media_queue_active_id = -1
+        self._media_queue_title = ""
+        self._queue_art: dict = {}          # art_uri -> file:// URL ("" = unreadable)
+        # Art arrives one image at a time right after a queue: publish once per batch
+        self._queue_art_timer = QTimer(self)
+        self._queue_art_timer.setSingleShot(True)
+        self._queue_art_timer.setInterval(150)
+        self._queue_art_timer.timeout.connect(self._publish_media_queue)
         self._media_art_seq: int = 0            # alternates the art file so QML reloads it
         self._media_active: bool = False
         self._media_reported: bool = False      # the session's first media report arrived
@@ -667,6 +680,55 @@ class PhoneMirrorManager(QObject):
         again, and the session ending clears it."""
         return self._media_active
 
+    # The phone session's play queue (Spotify: the current track and the
+    # next 49): [{id, title, artist, art}] (art: file:// URL of a JPEG in the
+    # app data temp dir, "" until it arrives); mediaQueueActiveId is the
+    # playing item's id (-1 none). mediaSkipToQueueItem(id) jumps to an item.
+    @Property("QVariantList", notify=mediaQueueChanged)
+    def mediaQueue(self) -> list:
+        return self._media_queue
+
+    @Property("qint64", notify=mediaQueueChanged)
+    def mediaQueueActiveId(self) -> int:
+        return self._media_queue_active_id
+
+    @Property(str, notify=mediaQueueChanged)
+    def mediaQueueTitle(self) -> str:
+        return self._media_queue_title
+
+    def _on_media_queue(self, items: list, active_id: int, title: str):
+        if (items, active_id, title) == (self._media_queue_raw, self._media_queue_active_id, self._media_queue_title):
+            return
+        self._media_queue_raw = items
+        self._media_queue_active_id = active_id
+        self._media_queue_title = title
+        self._publish_media_queue()
+
+    @staticmethod
+    def _queue_art_dir() -> str:
+        return os.path.join(get_app_data_dir(), "temp", "phone_queue_art")
+
+    def _on_media_queue_art(self, key: str, jpeg: bytes):
+        url = ""
+        if jpeg:
+            art_dir = self._queue_art_dir()
+            path = os.path.join(art_dir, hashlib.sha1(key.encode("utf-8")).hexdigest() + ".jpg")
+            try:
+                os.makedirs(art_dir, exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(jpeg)
+                url = QUrl.fromLocalFile(path).toString()
+            except OSError as e:
+                logger.warning(f"Phone mirror: could not write phone queue art to {path}: {e}")
+        self._queue_art[key] = url
+        self._queue_art_timer.start()
+
+    def _publish_media_queue(self):
+        self._queue_art_timer.stop()
+        self._media_queue = [dict(item, art=self._queue_art.get(item.get("art_uri", ""), ""))
+                             for item in self._media_queue_raw]
+        self.mediaQueueChanged.emit()
+
     def _on_media_state(self, state: dict):
         was_playing = self._media["has_session"] and self._media["playing"]
         self._media = dict(state)
@@ -709,6 +771,10 @@ class PhoneMirrorManager(QObject):
         if self._media_art_url:
             self._media_art_url = ""
             self.mediaArtChanged.emit()
+        self._on_media_queue([], -1, "")
+        if self._queue_art:
+            self._queue_art.clear()
+            shutil.rmtree(self._queue_art_dir(), ignore_errors=True)
 
     def _set_media_active(self, active: bool):
         if active == self._media_active:
@@ -759,6 +825,10 @@ class PhoneMirrorManager(QObject):
         # Show the new position before the phone confirms it
         self._media["position_ms"] = position_ms
         self._media_position_at = time.monotonic()
+
+    @Slot("qint64")
+    def mediaSkipToQueueItem(self, queue_id: int):
+        self._media_command(MEDIA_SKIP_TO_QUEUE_ITEM, int(queue_id))
 
     @Slot(bool)
     def releaseMedia(self, pause_phone: bool):
@@ -1018,6 +1088,8 @@ class PhoneMirrorManager(QObject):
         client.phoneStateChanged.connect(self._on_phone_state)
         client.mediaStateChanged.connect(self._on_media_state)
         client.mediaArtChanged.connect(self._on_media_art)
+        client.mediaQueueChanged.connect(self._on_media_queue)
+        client.mediaQueueArt.connect(self._on_media_queue_art)
         client.bitRateChanged.connect(self._set_current_bit_rate)
         client.set_audio_gain(self._audio_gain)
         client.set_volume(0.0 if self._muted else self._volume)

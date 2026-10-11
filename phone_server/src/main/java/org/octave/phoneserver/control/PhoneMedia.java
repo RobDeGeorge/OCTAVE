@@ -7,6 +7,8 @@ import org.octave.phoneserver.util.Ln;
 import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSession;
@@ -18,8 +20,12 @@ import android.os.SystemClock;
 import android.view.KeyEvent;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Objects;
 
 /**
@@ -32,7 +38,12 @@ import java.util.Objects;
  * else the most recently active; it is re-picked every second, and its
  * MediaController callbacks report changes as they happen. Every change is
  * sent as a TYPE_OCTAVE_MEDIA_STATE device message, album art (a scaled
- * JPEG) as TYPE_OCTAVE_MEDIA_ART when it changes.
+ * JPEG) as TYPE_OCTAVE_MEDIA_ART when it changes, and the session's play
+ * queue (Spotify: the current track and the next 49) as
+ * TYPE_OCTAVE_MEDIA_QUEUE when it or its playing item changes. Queue items
+ * carry their art URI; each distinct one is read from the app's provider
+ * (Spotify: content://com.spotify.mobile.android.mediaapi/...) on a
+ * separate thread and sent once per session as TYPE_OCTAVE_MEDIA_QUEUE_ART.
  */
 public final class PhoneMedia {
 
@@ -40,6 +51,9 @@ public final class PhoneMedia {
     private static final int ART_MAX_PX = 400;
     private static final int ART_QUALITY = 85;
     private static final long PAUSE_WAIT_MS = 500;
+    public static final int QUEUE_MAX_ITEMS = 500;
+    private static final int QUEUE_ART_PX = 160;
+    private static final int QUEUE_ART_QUALITY = 80;
 
     /** What the client is told; immutable once sent. */
     public static final class State {
@@ -60,9 +74,34 @@ public final class PhoneMedia {
         }
     }
 
+    public static final class QueueEntry {
+        public final long id;
+        public final String title;
+        public final String subtitle;
+        public final String artUri;   // content:// art of the item, "" for none
+
+        QueueEntry(long id, String title, String subtitle, String artUri) {
+            this.id = id;
+            this.title = title;
+            this.subtitle = subtitle;
+            this.artUri = artUri;
+        }
+    }
+
+    /** The followed session's play queue; immutable once sent. */
+    public static final class Queue {
+        public long activeId = MediaSession.QueueItem.UNKNOWN_ID;
+        public String title = "";
+        public List<QueueEntry> items = new ArrayList<>();
+    }
+
     private final DeviceMessageSender sender;
     private final HandlerThread thread;
     private final Handler handler;
+    // Queue art is read here so a slow provider never holds up state reports
+    private final HandlerThread artThread;
+    private final Handler artHandler;
+    private final Set<String> artRequested = new HashSet<>();   // art URIs read or queued this session (handler thread)
 
     private boolean watching;
     private MediaController controller;
@@ -70,6 +109,10 @@ public final class PhoneMedia {
     private long lastSentAt;           // uptime ms
     private String artKey;             // identity of the art last sent, null = none sent yet
     private boolean artClearPending;   // a "no art" is held back (apps send art after the title)
+    private List<QueueEntry> queueItems = new ArrayList<>();   // of the followed session
+    private String queueTitle = "";
+    private String queueKeySent;       // identity of the queue last sent, null = none sent yet
+    private long queueActiveSent;
     private static final long ART_CLEAR_DELAY_MS = 1000;
 
     private final MediaController.Callback callback = new MediaController.Callback() {
@@ -81,6 +124,18 @@ public final class PhoneMedia {
         @Override
         public void onMetadataChanged(MediaMetadata metadata) {
             report(false);
+        }
+
+        @Override
+        public void onQueueChanged(List<MediaSession.QueueItem> queue) {
+            readQueue(queue, controller);
+            reportQueue(false);
+        }
+
+        @Override
+        public void onQueueTitleChanged(CharSequence title) {
+            queueTitle = title == null ? "" : title.toString();
+            reportQueue(false);
         }
 
         @Override
@@ -102,6 +157,9 @@ public final class PhoneMedia {
         thread = new HandlerThread("phone-media");
         thread.start();
         handler = new Handler(thread.getLooper());
+        artThread = new HandlerThread("phone-media-art");
+        artThread.start();
+        artHandler = new Handler(artThread.getLooper());
     }
 
     public void handle(int action, long arg) {
@@ -121,6 +179,7 @@ public final class PhoneMedia {
             setController(null);
         });
         thread.quitSafely();
+        artThread.quit();
     }
 
     // ── handler thread ────────────────────────────────────────────────
@@ -135,6 +194,8 @@ public final class PhoneMedia {
             if (on) {
                 lastSent = null;
                 artKey = null;
+                queueKeySent = null;
+                artRequested.clear();   // a new client has none of it
                 Ln.i("Phone media: watching the media session");
                 pick();
                 if (lastSent == null) {
@@ -181,6 +242,9 @@ public final class PhoneMedia {
             case ControlMessage.MEDIA_SEEK:
                 tc.seekTo(Math.max(0, arg));
                 break;
+            case ControlMessage.MEDIA_SKIP_TO_QUEUE_ITEM:
+                tc.skipToQueueItem(arg);
+                break;
             default:
                 break;
         }
@@ -226,6 +290,18 @@ public final class PhoneMedia {
             }
         }
         controller = c;
+        List<MediaSession.QueueItem> queue = null;
+        CharSequence title = null;
+        if (c != null) {
+            try {
+                queue = c.getQueue();
+                title = c.getQueueTitle();
+            } catch (RuntimeException e) {
+                // the session is gone; the next pick drops it
+            }
+        }
+        readQueue(queue, c);
+        queueTitle = title == null ? "" : title.toString();
         if (c != null) {
             Ln.i("Phone media: following " + c.getPackageName());
             try {
@@ -361,6 +437,7 @@ public final class PhoneMedia {
         }
 
         sendArt(md);
+        reportQueue(false);   // the playing item moves with the playback state
 
         long now = SystemClock.uptimeMillis();
         // Position is extrapolated by the client while playing; resync it
@@ -371,6 +448,93 @@ public final class PhoneMedia {
             lastSent = st;
             lastSentAt = now;
             sender.send(DeviceMessage.createOctaveMediaState(st));
+        }
+    }
+
+    private void readQueue(List<MediaSession.QueueItem> queue, MediaController from) {
+        if (from != controller) {
+            return;   // a callback from a session no longer followed
+        }
+        List<QueueEntry> items = new ArrayList<>();
+        if (queue != null) {
+            for (MediaSession.QueueItem item : queue) {
+                if (items.size() >= QUEUE_MAX_ITEMS) {
+                    break;
+                }
+                CharSequence t = item.getDescription().getTitle();
+                CharSequence s = item.getDescription().getSubtitle();
+                Uri icon = item.getDescription().getIconUri();
+                String art = icon != null && "content".equals(icon.getScheme()) ? icon.toString() : "";
+                items.add(new QueueEntry(item.getQueueId(), t == null ? "" : t.toString(), s == null ? "" : s.toString(), art));
+            }
+        }
+        queueItems = items;
+    }
+
+    /** Send the queue if it or its playing item changed (or force). */
+    private void reportQueue(boolean force) {
+        if (!watching) {
+            return;
+        }
+        long activeId = MediaSession.QueueItem.UNKNOWN_ID;
+        MediaController c = controller;
+        if (c != null) {
+            try {
+                PlaybackState ps = c.getPlaybackState();
+                if (ps != null) {
+                    activeId = ps.getActiveQueueItemId();
+                }
+            } catch (RuntimeException e) {
+                // the session is gone
+            }
+        }
+        StringBuilder key = new StringBuilder(queueTitle);
+        for (QueueEntry e : queueItems) {
+            key.append('\n').append(e.id).append('\t').append(e.title).append('\t').append(e.subtitle);
+        }
+        String k = key.toString();
+        if (!force && k.equals(queueKeySent) && activeId == queueActiveSent) {
+            return;
+        }
+        queueKeySent = k;
+        queueActiveSent = activeId;
+        Queue q = new Queue();
+        q.activeId = activeId;
+        q.title = queueTitle;
+        q.items = queueItems;
+        sender.send(DeviceMessage.createOctaveMediaQueue(q));
+        requestQueueArt(queueItems);
+    }
+
+    /** Queue the art of items the client has not been sent yet, in queue order. */
+    private void requestQueueArt(List<QueueEntry> items) {
+        for (QueueEntry e : items) {
+            if (e.artUri.isEmpty() || !artRequested.add(e.artUri)) {
+                continue;
+            }
+            final String uri = e.artUri;
+            artHandler.post(() -> sender.sendBulk(DeviceMessage.createOctaveMediaQueueArt(uri, readArt(uri))));
+        }
+    }
+
+    /** The art at a content URI as a small JPEG; empty if it cannot be read. */
+    private static byte[] readArt(String uri) {
+        try (InputStream in = FakeContext.get().getContentResolver().openInputStream(Uri.parse(uri))) {
+            Bitmap bmp = in == null ? null : BitmapFactory.decodeStream(in);
+            if (bmp == null) {
+                return new byte[0];
+            }
+            int w = bmp.getWidth(), h = bmp.getHeight();
+            if (Math.max(w, h) > QUEUE_ART_PX) {
+                float f = (float) QUEUE_ART_PX / Math.max(w, h);
+                bmp = Bitmap.createScaledBitmap(bmp, Math.max(1, Math.round(w * f)), Math.max(1, Math.round(h * f)), true);
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            bmp.compress(Bitmap.CompressFormat.JPEG, QUEUE_ART_QUALITY, out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            Ln.w("Phone media: could not read queue art " + uri + ": " + e.getMessage());
+            return new byte[0];
         }
     }
 

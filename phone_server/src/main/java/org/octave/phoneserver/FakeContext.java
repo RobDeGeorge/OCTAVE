@@ -13,6 +13,8 @@ import android.os.Binder;
 import android.os.Process;
 
 import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class FakeContext extends ContextWrapper {
 
@@ -24,6 +26,12 @@ public final class FakeContext extends ContextWrapper {
     public static FakeContext get() {
         return INSTANCE;
     }
+
+    // OCTAVE: providers acquired for unstable use (ContentResolver.openInputStream,
+    // e.g. a media app's album art URIs), kept per authority so repeated
+    // reads do not pile up external provider references in the system
+    private final Map<String, IContentProvider> unstableProviders = new HashMap<>();
+    private final Binder unstableToken = new Binder();
 
     private final ContentResolver contentResolver = new ContentResolver(this) {
         @SuppressWarnings({"unused", "ProtectedMemberInFinalClass"})
@@ -41,7 +49,16 @@ public final class FakeContext extends ContextWrapper {
         @SuppressWarnings({"unused", "ProtectedMemberInFinalClass"})
         // @Override (but super-class method not visible)
         protected IContentProvider acquireUnstableProvider(Context c, String name) {
-            return null;
+            synchronized (unstableProviders) {
+                IContentProvider provider = unstableProviders.get(name);
+                if (provider == null) {
+                    provider = ServiceManager.getActivityManager().getContentProviderExternal(name, unstableToken);
+                    if (provider != null) {
+                        unstableProviders.put(name, provider);
+                    }
+                }
+                return provider;
+            }
         }
 
         @SuppressWarnings("unused")
@@ -53,7 +70,10 @@ public final class FakeContext extends ContextWrapper {
         @SuppressWarnings("unused")
         // @Override (but super-class method not visible)
         public void unstableProviderDied(IContentProvider icp) {
-            // ignore
+            // The provider's process died: acquire it afresh next time
+            synchronized (unstableProviders) {
+                unstableProviders.values().remove(icp);
+            }
         }
     };
 

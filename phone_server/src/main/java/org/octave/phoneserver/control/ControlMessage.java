@@ -39,6 +39,7 @@ public final class ControlMessage {
     public static final int MEDIA_NEXT = 4;
     public static final int MEDIA_PREVIOUS = 5;
     public static final int MEDIA_SEEK = 6;        // arg = position in ms
+    public static final int MEDIA_SKIP_TO_QUEUE_ITEM = 7;   // arg = queue item id (TYPE_OCTAVE_MEDIA_QUEUE)
 
     public static final long SEQUENCE_INVALID = 0;
 

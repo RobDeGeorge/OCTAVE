@@ -211,6 +211,19 @@ Item {
     property var playlistNames: []
     property string currentPlaylistName: ""
 
+    // Phone mirror: the phone's play queue (Spotify: the current track and
+    // the next 49) as a pseudo-playlist at the top of the dropdown. Picked
+    // on every visit while the phone is the media source; tapping a track
+    // jumps there on the phone. Falls back to the local list once the queue
+    // goes away (mirroring ended).
+    readonly property string phoneQueueName: "Phone Queue"
+    readonly property bool hasPhoneMirror: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null
+    readonly property var phoneQueue: hasPhoneMirror ? phoneMirrorManager.mediaQueue : []
+    readonly property bool phoneQueueAvailable: phoneQueue.length > 0
+    property bool showingPhoneQueue: false
+    readonly property bool phoneQueueShown: showingPhoneQueue && phoneQueueAvailable
+    readonly property var dropdownEntries: (phoneQueueAvailable ? [phoneQueueName] : []).concat(playlistNames)
+
     property int playlistRefreshCounter: 0  // Incremented to force delegate rebindings
 
     // Initial scroll position (calculated before render)
@@ -255,6 +268,9 @@ Item {
     // work (playlists, current track, scroll position, album art) lives here
     // rather than in Component.onCompleted, which would only ever run once.
     StackView.onActivated: {
+        showingPhoneQueue = phoneQueueAvailable && phoneMirrorManager.mediaActive
+        if (showingPhoneQueue)
+            phoneQueueView.positionViewAtBeginning()
         if (mediaManager) {
             // Load playlist names
             playlistNames = mediaManager.get_playlist_names()
@@ -379,6 +395,7 @@ Item {
             // Stats (left side, vertically centered)
             Row {
                 id: statsRow
+                visible: !mediaPlayer.phoneQueueShown
                 anchors {
                     left: parent.left
                     leftMargin: App.Spacing.overallMargin * 4
@@ -444,6 +461,22 @@ Item {
                     font.family: mediaPlayer.globalFont
                     anchors.verticalCenter: parent.verticalCenter
                 }
+            }
+
+            // Phone queue stats, in place of the local library's
+            Text {
+                visible: mediaPlayer.phoneQueueShown
+                anchors {
+                    left: parent.left
+                    leftMargin: App.Spacing.overallMargin * 4
+                    verticalCenter: parent.verticalCenter
+                }
+                text: (mediaPlayer.hasPhoneMirror && phoneMirrorManager.mediaQueueTitle
+                       ? phoneMirrorManager.mediaQueueTitle : "Phone queue")
+                      + "  \u00B7  " + mediaPlayer.phoneQueue.length + " tracks"
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.2
+                font.family: mediaPlayer.globalFont
             }
 
             // New playlist button (left of dropdown)
@@ -537,7 +570,8 @@ Item {
                         anchors.bottom: parent.bottom
                         anchors.leftMargin: App.Spacing.overallMargin * 2
                         verticalAlignment: Text.AlignVCenter
-                        text: currentPlaylistName || "Select Playlist"
+                        text: mediaPlayer.phoneQueueShown ? mediaPlayer.phoneQueueName
+                                                          : (currentPlaylistName || "Select Playlist")
                         color: App.Style.primaryTextColor
                         font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.4
                         font.bold: true
@@ -605,11 +639,13 @@ Item {
                             spacing: dp(4)
 
                             Repeater {
-                                model: playlistNames
+                                model: mediaPlayer.dropdownEntries
 
                                 Rectangle {
                                     id: playlistItem
-                                    readonly property bool isActive: modelData === currentPlaylistName
+                                    readonly property bool isPhoneQueue: mediaPlayer.phoneQueueAvailable && index === 0
+                                    readonly property bool isActive: isPhoneQueue ? mediaPlayer.phoneQueueShown
+                                                                   : (!mediaPlayer.phoneQueueShown && modelData === currentPlaylistName)
                                     width: playlistColumn.width
                                     height: App.Spacing.bottomBarNavButtonHeight
                                     color: {
@@ -645,14 +681,19 @@ Item {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            if (mediaManager && modelData) {
-                                                mediaManager.select_playlist(modelData)
+                                            if (playlistItem.isPhoneQueue) {
+                                                mediaPlayer.showingPhoneQueue = true
+                                                phoneQueueView.positionViewAtBeginning()
+                                            } else {
+                                                mediaPlayer.showingPhoneQueue = false
+                                                if (mediaManager && modelData)
+                                                    mediaManager.select_playlist(modelData)
                                             }
                                             playlistPopup.close()
                                         }
                                         onPressAndHold: {
                                             // Only allow deleting non-special playlists
-                                            if (modelData !== "All Music" && modelData !== "Unsorted") {
+                                            if (!playlistItem.isPhoneQueue && modelData !== "All Music" && modelData !== "Unsorted") {
                                                 deletePlaylistDialog.playlistToDelete = modelData
                                                 playlistPopup.close()
                                                 deletePlaylistDialog.open()
@@ -676,7 +717,7 @@ Item {
         // Hidden when the playlist is empty, since there is nothing to add to yet
         Control {
             id: downloadButton
-            visible: mediaFiles.length > 0
+            visible: mediaFiles.length > 0 && !mediaPlayer.phoneQueueShown
             width: App.Spacing.bottomBarNavButtonWidth
             height: App.Spacing.bottomBarNavButtonHeight
             z: 3
@@ -791,6 +832,7 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
+                                enabled: !mediaPlayer.phoneQueueShown   // the phone's order is the queue
                                 onClicked: {
                                     if (currentSortColumn === "title") {
                                         sortByTitleAscending = !sortByTitleAscending
@@ -804,7 +846,7 @@ Item {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "TITLE " + (currentSortColumn === "title" ?
+                                text: mediaPlayer.phoneQueueShown ? "TITLE" : "TITLE " + (currentSortColumn === "title" ?
                                     (sortByTitleAscending ? "↑" : "↓") : "")
                                 color: App.Style.headerTextColor
                                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
@@ -820,6 +862,7 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
+                                enabled: !mediaPlayer.phoneQueueShown   // the phone's order is the queue
                                 onClicked: {
                                     if (currentSortColumn === "artist") {
                                         sortByArtistAscending = !sortByArtistAscending
@@ -833,7 +876,7 @@ Item {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "ARTIST " + (currentSortColumn === "artist" ?
+                                text: mediaPlayer.phoneQueueShown ? "ARTIST" : "ARTIST " + (currentSortColumn === "artist" ?
                                     (sortByArtistAscending ? "↑" : "↓") : "")
                                 color: App.Style.headerTextColor
                                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
@@ -849,6 +892,7 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
+                                enabled: !mediaPlayer.phoneQueueShown   // the phone's order is the queue
                                 onClicked: {
                                     if (currentSortColumn === "album") {
                                         sortByAlbumAscending = !sortByAlbumAscending
@@ -862,7 +906,7 @@ Item {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "ALBUM " + (currentSortColumn === "album" ?
+                                text: mediaPlayer.phoneQueueShown ? "" : "ALBUM " + (currentSortColumn === "album" ?
                                     (sortByAlbumAscending ? "↑" : "↓") : "")
                                 color: App.Style.headerTextColor
                                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
@@ -876,6 +920,7 @@ Item {
                 // Media list
                 ListView {
                     id: mediaListView
+                    visible: !mediaPlayer.phoneQueueShown
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     // Same gap under the column header as the page leaves above the bottom bar
@@ -1220,6 +1265,150 @@ Item {
                         palette.mid: App.Style.accent
                     }
                 }
+
+                // Phone queue (phoneMirrorManager.mediaQueue): same card look as
+                // a song row, each with its album art as the phone sends it
+                // (numbered from the playing track until it arrives)
+                ListView {
+                    id: phoneQueueView
+                    visible: mediaPlayer.phoneQueueShown
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.topMargin: App.Spacing.overallMargin
+                    clip: true
+                    model: mediaPlayer.phoneQueue
+                    boundsBehavior: Flickable.StopAtBounds
+                    spacing: dp(6)
+
+                    readonly property int activeIndex: {
+                        if (!mediaPlayer.hasPhoneMirror)
+                            return -1
+                        var id = phoneMirrorManager.mediaQueueActiveId
+                        for (var i = 0; i < mediaPlayer.phoneQueue.length; ++i)
+                            if (mediaPlayer.phoneQueue[i].id === id)
+                                return i
+                        return -1
+                    }
+
+                    delegate: Item {
+                        id: queueRow
+                        width: ListView.view.width
+                        height: App.Spacing.mediaPlayerRowHeight * 1.4
+
+                        readonly property bool isCurrent: index === phoneQueueView.activeIndex
+                        readonly property real lineTextSize: App.Spacing.mediaPlayerTextSize * 1.2
+                        readonly property real columnGutter: App.Spacing.overallMargin * 3
+
+                        Rectangle {
+                            id: queueCard
+                            anchors.fill: parent
+                            anchors.margins: dp(2)
+                            radius: dpMin(10, 2)
+                            color: queueRow.isCurrent
+                                   ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.35)
+                                   : (queueMouse.pressed ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.12)
+                                                         : "transparent")
+                            border.width: queueRow.isCurrent ? 2 : 0
+                            border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.8)
+
+                            // Square lead-in: the track's album art, else its
+                            // position after the playing track
+                            Item {
+                                id: queueLead
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.margins: queueCard.border.width
+                                width: height
+
+                                Image {
+                                    id: queueArt
+                                    anchors.fill: parent
+                                    visible: status === Image.Ready
+                                    source: modelData.art
+                                            || (queueRow.isCurrent && mediaPlayer.hasPhoneMirror ? phoneMirrorManager.mediaArtUrl : "")
+                                    sourceSize.width: width * 1.5
+                                    sourceSize.height: height * 1.5
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    layer.enabled: true
+                                    layer.effect: OpacityMask {
+                                        maskSource: Rectangle {
+                                            width: queueArt.width
+                                            height: queueArt.height
+                                            radius: Math.max(0, queueCard.radius - queueCard.border.width)
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: !queueArt.visible
+                                    text: queueRow.isCurrent ? "\u25B6"
+                                          : (phoneQueueView.activeIndex >= 0 && index > phoneQueueView.activeIndex
+                                             ? "+" + (index - phoneQueueView.activeIndex) : String(index + 1))
+                                    color: queueRow.isCurrent ? App.Style.accent : App.Style.secondaryTextColor
+                                    font.pixelSize: queueRow.lineTextSize
+                                    font.family: mediaPlayer.globalFont
+                                    font.bold: queueRow.isCurrent
+                                }
+                            }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: queueLead.width + App.Spacing.overallMargin * 2
+                                anchors.rightMargin: App.Spacing.overallMargin * 2
+                                spacing: 0
+
+                                Text {
+                                    Layout.preferredWidth: queueCard.width * mediaPlayer.titleColumnRatio - queueLead.width
+                                    Layout.rightMargin: queueRow.columnGutter
+                                    text: modelData.title
+                                    color: queueRow.isCurrent ? App.Style.accent : App.Style.primaryTextColor
+                                    font.pixelSize: queueRow.lineTextSize
+                                    font.family: mediaPlayer.globalFont
+                                    font.bold: true
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    Layout.rightMargin: queueRow.columnGutter
+                                    text: modelData.artist
+                                    color: App.Style.secondaryTextColor
+                                    font.pixelSize: queueRow.lineTextSize
+                                    font.family: mediaPlayer.globalFont
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            MouseArea {
+                                id: queueMouse
+                                anchors.fill: parent
+                                onClicked: {
+                                    if (!queueRow.isCurrent)
+                                        phoneMirrorManager.mediaSkipToQueueItem(modelData.id)
+                                    var returnToLibrary = settingsManager ? settingsManager.returnToLibraryAfterSelection : false
+                                    if (!returnToLibrary)
+                                        stackView.openPage("MediaRoom.qml")
+                                }
+                            }
+                        }
+                    }
+
+                    ScrollBar.vertical: ScrollBar {
+                        active: true
+                        policy: ScrollBar.AsNeeded
+                        Component.onCompleted: {
+                            if (background) background.implicitWidth = dp(12)
+                        }
+                        palette.mid: App.Style.accent
+                    }
+                }
             }
 
             // Empty state message
@@ -1229,7 +1418,7 @@ Item {
                 color: App.Style.primaryTextColor
                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.3
                 font.family: mediaPlayer.globalFont
-                visible: mediaListView.count === 0
+                visible: mediaListView.count === 0 && !mediaPlayer.phoneQueueShown
             }
         }
     }

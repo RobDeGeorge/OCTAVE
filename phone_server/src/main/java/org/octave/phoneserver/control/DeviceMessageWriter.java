@@ -54,6 +54,26 @@ public class DeviceMessageWriter {
                 writeShortString(st.artist);
                 writeShortString(st.album);
                 break;
+            case DeviceMessage.TYPE_OCTAVE_MEDIA_QUEUE:
+                PhoneMedia.Queue q = msg.getMediaQueue();
+                dos.writeLong(q.activeId);
+                writeShortString(q.title);
+                int count = Math.min(q.items.size(), PhoneMedia.QUEUE_MAX_ITEMS);
+                dos.writeShort(count);
+                for (int i = 0; i < count; i++) {
+                    PhoneMedia.QueueEntry e = q.items.get(i);
+                    dos.writeLong(e.id);
+                    writeShortString(e.title);
+                    writeShortString(e.subtitle);
+                    writeShortString(e.artUri);
+                }
+                break;
+            case DeviceMessage.TYPE_OCTAVE_MEDIA_QUEUE_ART:
+                writeShortString(msg.getText());
+                byte[] queueArt = msg.getData();
+                dos.writeInt(queueArt.length);
+                dos.write(queueArt);
+                break;
             case DeviceMessage.TYPE_OCTAVE_MEDIA_ART:
                 byte[] art = msg.getData();
                 dos.writeInt(art.length);

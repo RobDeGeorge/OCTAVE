@@ -15,6 +15,7 @@
 #include <QVariantMap>
 #include <QPair>
 #include <QList>
+#include <QHash>
 #include <QLoggingCategory>
 #include <QTimer>
 #include <QThreadPool>
@@ -84,6 +85,13 @@ class PhoneMirrorManager : public QObject
     // track starting clears it (releaseMedia) until the phone plays
     // again, and the session ending clears it
     Q_PROPERTY(bool mediaActive READ mediaActive NOTIFY mediaActiveChanged)
+    // The phone session's play queue (Spotify: the current track and the
+    // next 49): [{id, title, artist, art}] (art: file:// URL of a JPEG in
+    // the app data temp dir, "" until it arrives); mediaQueueActiveId is the playing
+    // item's id (-1 none). mediaSkipToQueueItem(id) jumps to an item.
+    Q_PROPERTY(QVariantList mediaQueue READ mediaQueue NOTIFY mediaQueueChanged)
+    Q_PROPERTY(qint64 mediaQueueActiveId READ mediaQueueActiveId NOTIFY mediaQueueChanged)
+    Q_PROPERTY(QString mediaQueueTitle READ mediaQueueTitle NOTIFY mediaQueueChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -119,6 +127,9 @@ public:
     bool mediaCanSeek() const { return m_mediaCanSeek; }
     QString mediaArtUrl() const { return m_mediaArtUrl; }
     bool mediaActive() const { return m_mediaActive; }
+    QVariantList mediaQueue() const { return m_mediaQueue; }
+    qint64 mediaQueueActiveId() const { return m_mediaQueueActiveId; }
+    QString mediaQueueTitle() const { return m_mediaQueueTitle; }
     // "WIFI:T:ADB;S:<service>;P:<password>;;" -- the payload Android's
     // "Pair device with QR code" scanner expects (Android Studio's format)
     static QString qrPairingPayload(const QString &service, const QString &password);
@@ -181,6 +192,7 @@ signals:
     void currentBitRateChanged();
     void mediaChanged();
     void mediaArtChanged();
+    void mediaQueueChanged();
     // main.cpp pauses OCTAVE's own sources when the phone takes over
     void mediaActiveChanged(bool active);
 
@@ -260,6 +272,7 @@ public slots:
     void mediaNext();
     void mediaPrevious();
     void mediaSeek(int positionMs);
+    void mediaSkipToQueueItem(qint64 id);
     // OCTAVE's local playback took over: the controls leave the
     // phone; pausePhone also pauses what the phone is playing
     void releaseMedia(bool pausePhone);
@@ -302,6 +315,9 @@ private:
     void onServerLog(const QString &line);
     void onMediaState(const QVariantMap &state);
     void onMediaArt(const QByteArray &jpeg);
+    void onMediaQueue(const QVariantList &items, qint64 activeId, const QString &title);
+    void onMediaQueueArt(const QString &key, const QByteArray &jpeg);
+    void publishMediaQueue();
     void resetMedia();
     void setMediaActive(bool active);
 
@@ -371,6 +387,12 @@ private:
     int m_mediaArtSeq = 0;             // alternates the art file so QML reloads it
     bool m_mediaActive = false;
     bool m_mediaReported = false;      // the session's first media report arrived
+    QVariantList m_mediaQueue;          // as published: items with "art" filled in
+    QVariantList m_mediaQueueRaw;       // as reported: items with "art_uri"
+    qint64 m_mediaQueueActiveId = -1;
+    QString m_mediaQueueTitle;
+    QHash<QString, QString> m_queueArt; // art_uri -> file:// URL ("" = unreadable)
+    QTimer m_queueArtTimer;             // batches art arrivals into one queue update
 };
 
 #else // Q_OS_MOBILE — mobile stub
@@ -378,6 +400,7 @@ private:
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 
 class PhoneMirrorManager : public QObject
 {
@@ -411,6 +434,9 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool mediaCanSeek READ mediaCanSeek CONSTANT)
     Q_PROPERTY(QString mediaArtUrl READ mediaArtUrl CONSTANT)
     Q_PROPERTY(bool mediaActive READ mediaActive CONSTANT)
+    Q_PROPERTY(QVariantList mediaQueue READ mediaQueue CONSTANT)
+    Q_PROPERTY(qint64 mediaQueueActiveId READ mediaQueueActiveId CONSTANT)
+    Q_PROPERTY(QString mediaQueueTitle READ mediaQueueTitle CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
     bool mediaAvailable() const { return false; }
@@ -423,6 +449,9 @@ public:
     bool mediaCanSeek() const { return false; }
     QString mediaArtUrl() const { return {}; }
     bool mediaActive() const { return false; }
+    QVariantList mediaQueue() const { return {}; }
+    qint64 mediaQueueActiveId() const { return -1; }
+    QString mediaQueueTitle() const { return {}; }
     bool audioActive() const { return false; }
     bool audioPlaying() const { return false; }
     bool phoneAsleep() const { return false; }
@@ -484,6 +513,7 @@ public slots:
     void mediaNext() {}
     void mediaPrevious() {}
     void mediaSeek(int) {}
+    void mediaSkipToQueueItem(qint64) {}
     void releaseMedia(bool) {}
 
 signals:

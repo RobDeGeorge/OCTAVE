@@ -78,6 +78,8 @@ constexpr quint8 kDevMsgUhidOutput = 2;
 constexpr quint8 kDevMsgOctavePhoneState = 100;
 constexpr quint8 kDevMsgOctaveMediaState = 101;   // the phone's media session (PhoneMedia)
 constexpr quint8 kDevMsgOctaveMediaArt = 102;     // u32 length + JPEG (0 = no art)
+constexpr quint8 kDevMsgOctaveMediaQueue = 103;   // i64 active id, title, u16 count, [i64 id, title, subtitle, art uri]
+constexpr quint8 kDevMsgOctaveMediaQueueArt = 104; // art uri, u32 length + JPEG (0 = unreadable)
 // A dozing phone streams pure black frames until it is woken. Rather than
 // flash the dash black, a run of all-black frames is held back (the last good
 // frame stays on screen) for this long, or for as long as the manager says
@@ -951,6 +953,48 @@ void ScrcpyClient::deviceMessageLoop(qintptr fd)
             QByteArray jpeg(int(n), 0);
             if (n && !recvExactFd(fd, jpeg.data(), jpeg.size(), m_stopping)) return;
             emit mediaArtChanged(jpeg);
+        } else if (type == kDevMsgOctaveMediaQueue) {
+            auto readString = [&](QString &out) {
+                if (!recvExactFd(fd, hdr, 2, m_stopping)) return false;
+                QByteArray raw(qFromBigEndian<quint16>(hdr), 0);
+                if (!recvExactFd(fd, raw.data(), raw.size(), m_stopping)) return false;
+                out = QString::fromUtf8(raw);
+                return true;
+            };
+            if (!recvExactFd(fd, hdr, 8, m_stopping)) return;
+            const qint64 activeId = qFromBigEndian<qint64>(hdr);
+            QString title;
+            if (!readString(title)) return;
+            if (!recvExactFd(fd, hdr, 2, m_stopping)) return;
+            const int count = qFromBigEndian<quint16>(hdr);
+            QVariantList items;
+            items.reserve(count);
+            for (int i = 0; i < count; ++i) {
+                if (!recvExactFd(fd, hdr, 8, m_stopping)) return;
+                const qint64 id = qFromBigEndian<qint64>(hdr);
+                QString itemTitle, subtitle, artUri;
+                if (!readString(itemTitle) || !readString(subtitle) || !readString(artUri)) return;
+                QVariantMap item;
+                item.insert(QStringLiteral("id"), id);
+                item.insert(QStringLiteral("title"), itemTitle);
+                item.insert(QStringLiteral("artist"), subtitle);
+                item.insert(QStringLiteral("art_uri"), artUri);
+                items.append(item);
+            }
+            emit mediaQueueChanged(items, activeId, title);
+        } else if (type == kDevMsgOctaveMediaQueueArt) {
+            if (!recvExactFd(fd, hdr, 2, m_stopping)) return;
+            QByteArray key(qFromBigEndian<quint16>(hdr), 0);
+            if (!recvExactFd(fd, key.data(), key.size(), m_stopping)) return;
+            if (!recvExactFd(fd, hdr, 4, m_stopping)) return;
+            const quint32 n = qFromBigEndian<quint32>(hdr);
+            if (n > (8u << 20)) {
+                qCWarning(lcScrcpyClient) << "queue art message too large:" << n << "; stopping the reader";
+                return;
+            }
+            QByteArray jpeg(int(n), 0);
+            if (n && !recvExactFd(fd, jpeg.data(), jpeg.size(), m_stopping)) return;
+            emit mediaQueueArt(QString::fromUtf8(key), jpeg);
         } else {
             qCWarning(lcScrcpyClient) << "unknown device message type" << type << "; stopping the reader";
             return;

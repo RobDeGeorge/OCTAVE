@@ -7,6 +7,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -40,6 +41,9 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     m_wirelessPool.setMaxThreadCount(1);
     m_resizeTimer.setSingleShot(true);
     m_resizeTimer.setInterval(kResizeRestartMs);
+    m_queueArtTimer.setSingleShot(true);
+    m_queueArtTimer.setInterval(150);
+    connect(&m_queueArtTimer, &QTimer::timeout, this, &PhoneMirrorManager::publishMediaQueue);
     connect(&m_resizeTimer, &QTimer::timeout, this, [this]() {
         if (isRunning() && m_displaySize == kAutoDisplaySize && !m_startedAutoSize.isEmpty()
             && autoDisplaySize(m_viewWidth, m_viewHeight) != m_startedAutoSize) {
@@ -623,6 +627,8 @@ void PhoneMirrorManager::startScrcpy()
     connect(m_client, &ScrcpyClient::phoneStateChanged, this, &PhoneMirrorManager::onPhoneState, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::mediaStateChanged, this, &PhoneMirrorManager::onMediaState, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::mediaArtChanged, this, &PhoneMirrorManager::onMediaArt, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::mediaQueueChanged, this, &PhoneMirrorManager::onMediaQueue, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::mediaQueueArt, this, &PhoneMirrorManager::onMediaQueueArt, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::bitRateChanged, this, [this](int bps) {
         if (bps != m_currentBitRate) {
             m_currentBitRate = bps;
@@ -979,6 +985,55 @@ void PhoneMirrorManager::onMediaArt(const QByteArray &jpeg)
     }
 }
 
+void PhoneMirrorManager::onMediaQueue(const QVariantList &items, qint64 activeId, const QString &title)
+{
+    if (items == m_mediaQueueRaw && activeId == m_mediaQueueActiveId && title == m_mediaQueueTitle)
+        return;
+    m_mediaQueueRaw = items;
+    m_mediaQueueActiveId = activeId;
+    m_mediaQueueTitle = title;
+    publishMediaQueue();
+}
+
+static QString queueArtDir()
+{
+    return SettingsManager::getAppDataDir() + QStringLiteral("/temp/phone_queue_art");
+}
+
+void PhoneMirrorManager::onMediaQueueArt(const QString &key, const QByteArray &jpeg)
+{
+    QString url;
+    if (!jpeg.isEmpty()) {
+        const QString dir = queueArtDir();
+        QDir().mkpath(dir);
+        const QString path = dir + QLatin1Char('/')
+            + QString::fromLatin1(QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha1).toHex())
+            + QStringLiteral(".jpg");
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly) && f.write(jpeg) == jpeg.size())
+            url = QUrl::fromLocalFile(path).toString();
+        else
+            qCWarning(lcPhoneMirror) << "Could not write phone queue art to" << path;
+    }
+    m_queueArt.insert(key, url);
+    // Art arrives one image at a time right after a queue: publish once per batch
+    m_queueArtTimer.start();
+}
+
+void PhoneMirrorManager::publishMediaQueue()
+{
+    m_queueArtTimer.stop();
+    QVariantList items;
+    items.reserve(m_mediaQueueRaw.size());
+    for (const QVariant &v : std::as_const(m_mediaQueueRaw)) {
+        QVariantMap item = v.toMap();
+        item.insert(QStringLiteral("art"), m_queueArt.value(item.value(QStringLiteral("art_uri")).toString()));
+        items.append(item);
+    }
+    m_mediaQueue = items;
+    emit mediaQueueChanged();
+}
+
 void PhoneMirrorManager::resetMedia()
 {
     m_mediaReported = false;
@@ -996,6 +1051,11 @@ void PhoneMirrorManager::resetMedia()
     if (!m_mediaArtUrl.isEmpty()) {
         m_mediaArtUrl.clear();
         emit mediaArtChanged();
+    }
+    onMediaQueue({}, -1, {});
+    if (!m_queueArt.isEmpty()) {
+        m_queueArt.clear();
+        QDir(queueArtDir()).removeRecursively();
     }
 }
 
@@ -1055,6 +1115,12 @@ void PhoneMirrorManager::mediaSeek(int positionMs)
     // Show the new position before the phone confirms it
     m_mediaPositionMs = qMax(0, positionMs);
     m_mediaPositionAtMs = QDateTime::currentMSecsSinceEpoch();
+}
+
+void PhoneMirrorManager::mediaSkipToQueueItem(qint64 id)
+{
+    if (m_client && m_ready)
+        m_client->mediaCommand(ScrcpyClient::MediaSkipToQueueItem, id);
 }
 
 void PhoneMirrorManager::releaseMedia(bool pausePhone)

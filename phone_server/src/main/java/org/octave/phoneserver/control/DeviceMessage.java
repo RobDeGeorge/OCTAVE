@@ -10,6 +10,8 @@ public final class DeviceMessage {
     // OCTAVE extension: the phone's active media session (PhoneMedia)
     public static final int TYPE_OCTAVE_MEDIA_STATE = 101;
     public static final int TYPE_OCTAVE_MEDIA_ART = 102;
+    public static final int TYPE_OCTAVE_MEDIA_QUEUE = 103;
+    public static final int TYPE_OCTAVE_MEDIA_QUEUE_ART = 104;
 
     private int type;
     private String text;
@@ -20,6 +22,7 @@ public final class DeviceMessage {
     private boolean inUse;
     private boolean panelDark;
     private PhoneMedia.State mediaState;
+    private PhoneMedia.Queue mediaQueue;
 
     private DeviceMessage() {
     }
@@ -68,6 +71,26 @@ public final class DeviceMessage {
         event.type = TYPE_OCTAVE_MEDIA_ART;
         event.data = jpeg;
         return event;
+    }
+
+    public static DeviceMessage createOctaveMediaQueue(PhoneMedia.Queue queue) {
+        DeviceMessage event = new DeviceMessage();
+        event.type = TYPE_OCTAVE_MEDIA_QUEUE;
+        event.mediaQueue = queue;
+        return event;
+    }
+
+    /** Album art of queue items whose art URI is key: JPEG bytes, empty if it could not be read. */
+    public static DeviceMessage createOctaveMediaQueueArt(String key, byte[] jpeg) {
+        DeviceMessage event = new DeviceMessage();
+        event.type = TYPE_OCTAVE_MEDIA_QUEUE_ART;
+        event.text = key;
+        event.data = jpeg;
+        return event;
+    }
+
+    public PhoneMedia.Queue getMediaQueue() {
+        return mediaQueue;
     }
 
     public PhoneMedia.State getMediaState() {

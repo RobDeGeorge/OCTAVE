@@ -74,6 +74,7 @@ MEDIA_PLAY_PAUSE = 3
 MEDIA_NEXT = 4
 MEDIA_PREVIOUS = 5
 MEDIA_SEEK = 6                  # argument = position in ms
+MEDIA_SKIP_TO_QUEUE_ITEM = 7    # argument = queue item id (DEVMSG_OCTAVE_MEDIA_QUEUE)
 # Device messages (server -> client, control socket)
 DEVMSG_CLIPBOARD = 0
 DEVMSG_ACK_CLIPBOARD = 1
@@ -81,6 +82,8 @@ DEVMSG_UHID_OUTPUT = 2
 DEVMSG_OCTAVE_PHONE_STATE = 100   # asleep, in_use, panel_dark
 DEVMSG_OCTAVE_MEDIA_STATE = 101   # the phone's media session (PhoneMedia)
 DEVMSG_OCTAVE_MEDIA_ART = 102     # u32 length + JPEG (0 = no art)
+DEVMSG_OCTAVE_MEDIA_QUEUE = 103   # i64 active id, title, u16 count, [i64 id, title, subtitle, art uri]
+DEVMSG_OCTAVE_MEDIA_QUEUE_ART = 104  # art uri, u32 length + JPEG (0 = unreadable)
 
 # Android MotionEvent / KeyEvent actions
 ACTION_DOWN = 0
@@ -207,6 +210,10 @@ class ScrcpyClient(QObject):
     # playing, can_seek, position_ms, duration_ms, package, title, artist, album
     mediaStateChanged = Signal(dict)
     mediaArtChanged = Signal(bytes)                # JPEG, b"" for no art
+    # The session's play queue: [{id, title, artist, art_uri}], the playing item's id (-1 none), title
+    mediaQueueChanged = Signal(list, object, str)   # object: queue ids are 64-bit
+    # Art for the queue items whose art_uri is key: JPEG, b"" if the phone could not read it
+    mediaQueueArt = Signal(str, bytes)
     # Video bit rate in force (bps): once when the stream starts, then on every adaptive change
     bitRateChanged = Signal(int)
 
@@ -856,6 +863,24 @@ class ScrcpyClient(QObject):
                 elif t == DEVMSG_OCTAVE_MEDIA_ART:
                     (n,) = struct.unpack(">I", _recv_exact(control, 4))
                     self.mediaArtChanged.emit(_recv_exact(control, n) if n else b"")
+                elif t == DEVMSG_OCTAVE_MEDIA_QUEUE:
+                    def short_string():
+                        (n,) = struct.unpack(">H", _recv_exact(control, 2))
+                        return _recv_exact(control, n).decode("utf-8", "replace")
+                    (active_id,) = struct.unpack(">q", _recv_exact(control, 8))
+                    title = short_string()
+                    (count,) = struct.unpack(">H", _recv_exact(control, 2))
+                    items = []
+                    for _ in range(count):
+                        (item_id,) = struct.unpack(">q", _recv_exact(control, 8))
+                        items.append({"id": item_id, "title": short_string(), "artist": short_string(),
+                                      "art_uri": short_string()})
+                    self.mediaQueueChanged.emit(items, active_id, title)
+                elif t == DEVMSG_OCTAVE_MEDIA_QUEUE_ART:
+                    (n,) = struct.unpack(">H", _recv_exact(control, 2))
+                    key = _recv_exact(control, n).decode("utf-8", "replace")
+                    (n,) = struct.unpack(">I", _recv_exact(control, 4))
+                    self.mediaQueueArt.emit(key, _recv_exact(control, n) if n else b"")
                 else:
                     logger.warning(f"scrcpy client: unknown device message type {t}; stopping the reader")
                     break

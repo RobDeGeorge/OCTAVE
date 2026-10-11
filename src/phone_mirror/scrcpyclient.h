@@ -103,7 +103,8 @@ public:
     void takeBack();
     // OCTAVE extension (phone_server PhoneMedia): watch / drive the phone's media session
     enum MediaAction { MediaWatch = 0, MediaPlay = 1, MediaPause = 2, MediaPlayPause = 3,
-                       MediaNext = 4, MediaPrevious = 5, MediaSeek = 6 /* argument: ms */ };
+                       MediaNext = 4, MediaPrevious = 5, MediaSeek = 6 /* argument: ms */,
+                       MediaSkipToQueueItem = 7 /* argument: queue item id */ };
     void mediaCommand(int action, qint64 argument = 0);
     // While true, all-black frames are never shown (the phone is asleep and
     // the last good frame stays up); otherwise only for kBlackHoldMs.
@@ -129,6 +130,10 @@ signals:
     // position_ms, duration_ms, package, title, artist, album
     void mediaStateChanged(const QVariantMap &state);
     void mediaArtChanged(const QByteArray &jpeg);   // empty for no art
+    // The session's play queue: [{id, title, artist, art_uri}], the playing item's id (-1 none)
+    void mediaQueueChanged(const QVariantList &items, qint64 activeId, const QString &title);
+    // Art for the queue items whose art_uri is key: JPEG, empty if the phone could not read it
+    void mediaQueueArt(const QString &key, const QByteArray &jpeg);
     // Video bit rate in force (bps): once when the stream starts, then on every adaptive change
     void bitRateChanged(int bps);
 
