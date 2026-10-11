@@ -1,0 +1,43 @@
+name: Wiki to GitHub Pages
+
+# Publishes wiki/ as the OCTAVE project site. Once the RobDeGeorge.github.io
+# user site has its custom domain, GitHub serves this at robdegeorge.com/OCTAVE/
+# (until then, robdegeorge.github.io/OCTAVE/). The wiki uses relative links only,
+# so it works under that subpath unchanged. No CNAME here: a project site
+# inherits the user site's domain. Pages must be switched on once with source
+# "GitHub Actions" (Settings -> Pages, or POST repos/RobDeGeorge/OCTAVE/pages build_type=workflow).
+
+on:
+  push:
+    branches: [main]
+    paths: ['wiki/**', '.github/workflows/wiki-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage wiki (minus the index builder script)
+        run: |
+          mkdir _site
+          rsync -a --exclude '*.py' --exclude '__pycache__' wiki/ _site/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
