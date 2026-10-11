@@ -503,7 +503,11 @@ Item {
                         color: App.Style.hoverColor
                         
                         Rectangle {
-                            width: volumeSlider.visualPosition * parent.width
+                            // Ends at the handle's center, which travels the width
+                            // less one handle, so the fill's rounded end stays
+                            // tucked under the handle (no sliver of pill at 0%)
+                            width: volumeSlider.visualPosition * (parent.width - App.Spacing.mediaRoomSliderButtonWidth)
+                                   + App.Spacing.mediaRoomSliderButtonWidth / 2
                             height: parent.height
                             radius: height / 2
                             color: App.Style.volumeSliderColor
@@ -1465,7 +1469,11 @@ Item {
                         color: Qt.rgba(App.Style.mediaRoomSeekColor.r, App.Style.mediaRoomSeekColor.g, App.Style.mediaRoomSeekColor.b, 0.15)
 
                         Rectangle {
-                            width: progressSlider.visualPosition * parent.width
+                            // Ends at the handle's center, which travels the width
+                            // less one handle, so the fill's rounded end stays
+                            // tucked under the handle (no sliver of pill at 0%)
+                            width: progressSlider.visualPosition * (parent.width - App.Spacing.mediaRoomSliderButtonWidth)
+                                   + App.Spacing.mediaRoomSliderButtonWidth / 2
                             height: parent.height
                             radius: height / 2
                             color: App.Style.mediaRoomSeekColor

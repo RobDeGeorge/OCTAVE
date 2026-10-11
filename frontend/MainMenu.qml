@@ -384,7 +384,8 @@ Item {
                             color: App.Style.secondaryTextColor
 
                             Rectangle {
-                                width: progressSlider.visualPosition * parent.width
+                                // Ends at the handle's center so the rounded end stays under it
+                                width: progressSlider.visualPosition * (parent.width - progressSlider.handle.width) + progressSlider.handle.width / 2
                                 height: parent.height
                                 radius: height / 2
                                 color: App.Style.accent

@@ -59,7 +59,8 @@ Slider {
 
             // Active track fill
             Rectangle {
-                width: control.visualPosition * parent.width
+                // Ends at the handle's center so the rounded end stays under it
+                width: control.visualPosition * (parent.width - control.handle.width) + control.handle.width / 2
                 height: parent.height
                 color: control.activeColor
                 radius: parent.radius

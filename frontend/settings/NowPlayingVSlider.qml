@@ -78,7 +78,8 @@ Item {
             Rectangle {
                 anchors.bottom: parent.bottom
                 width: parent.width
-                height: (1 - slider.visualPosition) * parent.height
+                // Ends at the handle's center so the rounded end stays under it
+                height: (1 - slider.visualPosition) * (parent.height - slider.handle.height) + slider.handle.height / 2
                 radius: width / 2
                 color: App.Style.accent
             }

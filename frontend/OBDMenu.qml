@@ -2333,7 +2333,8 @@ Item {
                                 color: Qt.darker(App.Style.contentColor, 1.2)
 
                                 Rectangle {
-                                    width: maxRpmSlider.visualPosition * parent.width
+                                    // Ends at the handle's center so the rounded end stays under it
+                                    width: maxRpmSlider.visualPosition * (parent.width - maxRpmSlider.handle.width) + maxRpmSlider.handle.width / 2
                                     height: parent.height
                                     color: "#FF0000"
                                     radius: height / 2
@@ -2611,7 +2612,8 @@ Item {
                                     color: Qt.darker(App.Style.contentColor, 1.2)
 
                                     Rectangle {
-                                        width: flagRpmLowSlider.visualPosition * parent.width
+                                        // Ends at the handle's center so the rounded end stays under it
+                                        width: flagRpmLowSlider.visualPosition * (parent.width - flagRpmLowSlider.handle.width) + flagRpmLowSlider.handle.width / 2
                                         height: parent.height
                                         color: flagSettingsColumn.currentFlag ? flagSettingsColumn.currentFlag.color : App.Style.accent
                                         radius: height / 2
@@ -2680,7 +2682,8 @@ Item {
                                     color: Qt.darker(App.Style.contentColor, 1.2)
 
                                     Rectangle {
-                                        width: flagRpmHighSlider.visualPosition * parent.width
+                                        // Ends at the handle's center so the rounded end stays under it
+                                        width: flagRpmHighSlider.visualPosition * (parent.width - flagRpmHighSlider.handle.width) + flagRpmHighSlider.handle.width / 2
                                         height: parent.height
                                         color: flagSettingsColumn.currentFlag ? flagSettingsColumn.currentFlag.color : App.Style.accent
                                         radius: height / 2
@@ -2963,7 +2966,8 @@ Item {
                                     color: Qt.darker(App.Style.contentColor, 1.2)
 
                                     Rectangle {
-                                        width: flagFlashSpeedSlider.visualPosition * parent.width
+                                        // Ends at the handle's center so the rounded end stays under it
+                                        width: flagFlashSpeedSlider.visualPosition * (parent.width - flagFlashSpeedSlider.handle.width) + flagFlashSpeedSlider.handle.width / 2
                                         height: parent.height
                                         color: App.Style.accent
                                         radius: height / 2
@@ -3227,7 +3231,8 @@ Item {
 
                                     // Filled portion shows actual opacity preview
                                     Rectangle {
-                                        width: flagOpacitySlider.visualPosition * parent.width
+                                        // Ends at the handle's center so the rounded end stays under it
+                                        width: flagOpacitySlider.visualPosition * (parent.width - flagOpacitySlider.handle.width) + flagOpacitySlider.handle.width / 2
                                         height: parent.height
                                         radius: height / 2
                                         color: {
@@ -3468,7 +3473,8 @@ Item {
                                     color: Qt.darker(App.Style.contentColor, 1.2)
 
                                     Rectangle {
-                                        width: flagAuraOpacitySlider.visualPosition * parent.width
+                                        // Ends at the handle's center so the rounded end stays under it
+                                        width: flagAuraOpacitySlider.visualPosition * (parent.width - flagAuraOpacitySlider.handle.width) + flagAuraOpacitySlider.handle.width / 2
                                         height: parent.height
                                         radius: height / 2
                                         color: {
@@ -3542,7 +3548,8 @@ Item {
                                     color: Qt.darker(App.Style.contentColor, 1.2)
 
                                     Rectangle {
-                                        width: flagAuraSpreadSlider.visualPosition * parent.width
+                                        // Ends at the handle's center so the rounded end stays under it
+                                        width: flagAuraSpreadSlider.visualPosition * (parent.width - flagAuraSpreadSlider.handle.width) + flagAuraSpreadSlider.handle.width / 2
                                         height: parent.height
                                         radius: height / 2
                                         color: flagSettingsColumn.currentFlag ? flagSettingsColumn.currentFlag.color : App.Style.accent

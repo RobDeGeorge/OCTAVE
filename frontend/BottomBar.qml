@@ -906,7 +906,8 @@ Rectangle {
 
                                                 // Filled portion
                                                 Rectangle {
-                                                    width: volumeSlider.visualPosition * parent.width
+                                                    // Ends at the handle's center so the rounded end stays under it
+                                                    width: volumeSlider.visualPosition * (parent.width - volumeSlider.handle.width) + volumeSlider.handle.width / 2
                                                     height: parent.height
                                                     color: App.Style.volumeSliderColor
                                                     radius: dpMin(8, 2)
@@ -1950,7 +1951,8 @@ Rectangle {
                                                 
                                                 // Filled portion
                                                 Rectangle {
-                                                    width: volumeSliderVertical.visualPosition * parent.width
+                                                    // Ends at the handle's center so the rounded end stays under it
+                                                    width: volumeSliderVertical.visualPosition * (parent.width - volumeSliderVertical.handle.width) + volumeSliderVertical.handle.width / 2
                                                     height: parent.height
                                                     color: App.Style.volumeSliderColor
                                                     radius: dpMin(8, 2)

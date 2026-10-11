@@ -1221,7 +1221,8 @@ Flickable {
                             color: App.Style.hoverColor
 
                             Rectangle {
-                                width: gsVolumeStepSlider.visualPosition * parent.width
+                                // Ends at the handle's center so the rounded end stays under it
+                                width: gsVolumeStepSlider.visualPosition * (parent.width - gsVolumeStepSlider.handle.width) + gsVolumeStepSlider.handle.width / 2
                                 height: parent.height
                                 color: App.Style.accent
                                 radius: 3
@@ -1328,7 +1329,8 @@ Flickable {
                             color: App.Style.hoverColor
 
                             Rectangle {
-                                width: cooldownSlider.visualPosition * parent.width
+                                // Ends at the handle's center so the rounded end stays under it
+                                width: cooldownSlider.visualPosition * (parent.width - cooldownSlider.handle.width) + cooldownSlider.handle.width / 2
                                 height: parent.height
                                 color: App.Style.accent
                                 radius: 3
