@@ -15,13 +15,14 @@ Item {
     property url homeUrl: ""
     property string loadError: ""
     signal closeRequested()
-    property real readerScale: 1.0
     readonly property bool compactToolbar: width < dp(900)
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
     function buildReaderConfig() {
         return {
+            // Smallest comfortable size for this screen; embedded.css grows it
+            // with the reader width so lines stay at a readable length.
             size: Math.max(14, Math.round(22 * (App.Spacing.effectiveScale || 1.0)
-                                       * App.Spacing.textScale * readerScale)) + "px",
+                                       * App.Spacing.textScale)) + "px",
             font: JSON.stringify(App.Style.fontFamily || "sans-serif") + ", sans-serif",
             bg: String(App.Style.backgroundColor), surface: String(App.Style.contentColor),
             text: String(App.Style.primaryTextColor), muted: String(App.Style.secondaryTextColor),
@@ -40,7 +41,6 @@ Item {
     function configureReader() {
         if (String(homeUrl) !== "") browser.runJavaScript(buildReaderBootstrap())
     }
-    onReaderScaleChanged: configureReader()
     onHomeUrlChanged: browser.url = homeUrl
 
     component ReaderButton: ToolButton {
@@ -114,20 +114,6 @@ Item {
                 font.family: App.Style.fontFamily
                 font.pixelSize: App.Spacing.overallText * 0.85
                 elide: Text.ElideRight
-            }
-            ReaderButton {
-                objectName: "wikiSmallerTextButton"
-                text: "A−"
-                Accessible.name: "Smaller text"
-                enabled: viewer.readerScale > 0.61
-                onClicked: viewer.readerScale = Math.max(0.6, viewer.readerScale - 0.1)
-            }
-            ReaderButton {
-                objectName: "wikiLargerTextButton"
-                text: "A+"
-                Accessible.name: "Larger text"
-                enabled: viewer.readerScale < 1.39
-                onClicked: viewer.readerScale = Math.min(1.4, viewer.readerScale + 0.1)
             }
             SettingsButton {
                 objectName: "closeWikiButton"

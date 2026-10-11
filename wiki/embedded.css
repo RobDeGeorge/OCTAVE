@@ -15,14 +15,16 @@ html.octave-reader {
   --text-tertiary: var(--text-secondary);
   --text-link: var(--reader-accent, #58a6ff);
   --accent-cyan: var(--text-link);
-  font-size: var(--reader-size, 22px);
+  /* Fit the text to the reader: about 70 characters per line, never below the
+     size OCTAVE passes for this screen and text scale, never above 1.4x it. */
+  font-size: clamp(var(--reader-size, 22px), 2.5vw, calc(var(--reader-size, 22px) * 1.4));
   scroll-behavior: auto;
   scroll-padding-top: 20px;
   touch-action: pan-x pan-y pinch-zoom;
 }
 .octave-reader body { font-size: 1rem; line-height: 1.65; letter-spacing: 0; overflow-wrap: anywhere; }
 .octave-reader .content { margin-left: 0; width: 100%; }
-.octave-reader .content-inner { max-width: 52rem; padding: 24px clamp(20px, 5vw, 64px) 64px; }
+.octave-reader .content-inner { max-width: 40rem; padding: 24px clamp(20px, 5vw, 64px) 64px; }
 .octave-reader .page-header { margin-bottom: 24px; padding-bottom: 20px; }
 .octave-reader .page-title { font-size: 1.6rem; font-weight: 600; }
 .octave-reader .page-subtitle { font-size: 1rem; line-height: 1.55; }
