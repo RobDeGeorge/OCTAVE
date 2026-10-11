@@ -1268,7 +1268,6 @@ Item {
 
                 // Phone queue (phoneMirrorManager.mediaQueue): same card look as
                 // a song row, each with its album art as the phone sends it
-                // (numbered from the playing track until it arrives)
                 ListView {
                     id: phoneQueueView
                     visible: mediaPlayer.phoneQueueShown
@@ -1290,12 +1289,20 @@ Item {
                         return -1
                     }
 
+                    // Mirrors the local song row (mediaListView's delegate) so the
+                    // art looks identical: placeholder, texture, shadow, rim. The
+                    // queue carries no album or duration, so those stay blank.
                     delegate: Item {
                         id: queueRow
                         width: ListView.view.width
                         height: App.Spacing.mediaPlayerRowHeight * 1.4
 
                         readonly property bool isCurrent: index === phoneQueueView.activeIndex
+                        // The phone sends each item's art shortly after the queue;
+                        // the playing item can borrow the now-playing art meanwhile
+                        readonly property string albumArtSource: modelData.art
+                            || (isCurrent && mediaPlayer.hasPhoneMirror ? phoneMirrorManager.mediaArtUrl : "")
+                            || "./assets/missing_art.png"
                         readonly property real lineTextSize: App.Spacing.mediaPlayerTextSize * 1.2
                         readonly property real columnGutter: App.Spacing.overallMargin * 3
 
@@ -1304,85 +1311,166 @@ Item {
                             anchors.fill: parent
                             anchors.margins: dp(2)
                             radius: dpMin(10, 2)
-                            color: queueRow.isCurrent
-                                   ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.35)
-                                   : (queueMouse.pressed ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.12)
-                                                         : "transparent")
+                            color: {
+                                var accent = App.Style.accent
+                                if (queueRow.isCurrent)
+                                    return Qt.rgba(accent.r, accent.g, accent.b, 0.35)
+                                return queueMouse.pressed ? Qt.rgba(accent.r, accent.g, accent.b, 0.12) : "transparent"
+                            }
                             border.width: queueRow.isCurrent ? 2 : 0
                             border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.8)
 
-                            // Square lead-in: the track's album art, else its
-                            // position after the playing track
-                            Item {
-                                id: queueLead
+                            // Art-based accent layer, as on a song row
+                            Rectangle {
+                                width: parent.width
+                                height: parent.height
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: parent.radius
+                                clip: true
+
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop {
+                                        position: 0.0
+                                        color: queueRow.isCurrent
+                                               ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.2)
+                                               : "transparent"
+                                    }
+                                    GradientStop { position: 1.0; color: "transparent" }
+                                }
+
+                                Image {
+                                    id: queueCardArt
+                                    anchors.fill: parent
+                                    source: queueRow.albumArtSource
+                                    fillMode: Image.PreserveAspectCrop
+                                    opacity: queueRow.isCurrent ? 0.10 : 0.03
+                                    layer.enabled: true
+                                    layer.effect: OpacityMask {
+                                        maskSource: Rectangle {
+                                            width: queueCardArt.width
+                                            height: queueCardArt.height
+                                            radius: queueCard.radius
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Soft shadow the art casts onto the card to its right
+                            Rectangle {
+                                anchors.top: queueArt.top
+                                anchors.bottom: queueArt.bottom
+                                x: queueArt.x + queueArt.width - queueArtRim.radius
+                                width: queueArtRim.radius + dp(16)
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.45) }
+                                    GradientStop { position: 0.35; color: Qt.rgba(0, 0, 0, 0.18) }
+                                    GradientStop { position: 1.0; color: "transparent" }
+                                }
+                            }
+
+                            // Album art: full card height, flush with the card's left edge
+                            Image {
+                                id: queueArt
                                 anchors.left: parent.left
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
                                 anchors.margins: queueCard.border.width
                                 width: height
-
-                                Image {
-                                    id: queueArt
-                                    anchors.fill: parent
-                                    visible: status === Image.Ready
-                                    source: modelData.art
-                                            || (queueRow.isCurrent && mediaPlayer.hasPhoneMirror ? phoneMirrorManager.mediaArtUrl : "")
-                                    sourceSize.width: width * 1.5
-                                    sourceSize.height: height * 1.5
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
-                                    layer.enabled: true
-                                    layer.effect: OpacityMask {
-                                        maskSource: Rectangle {
-                                            width: queueArt.width
-                                            height: queueArt.height
-                                            radius: Math.max(0, queueCard.radius - queueCard.border.width)
-                                        }
+                                source: queueRow.albumArtSource
+                                sourceSize.width: width * 1.5
+                                sourceSize.height: height * 1.5
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                                smooth: true
+                                layer.enabled: true
+                                layer.effect: OpacityMask {
+                                    maskSource: Rectangle {
+                                        width: queueArt.width
+                                        height: queueArt.height
+                                        radius: queueArtRim.radius
                                     }
                                 }
+                            }
 
-                                Text {
-                                    anchors.centerIn: parent
-                                    visible: !queueArt.visible
-                                    text: queueRow.isCurrent ? "\u25B6"
-                                          : (phoneQueueView.activeIndex >= 0 && index > phoneQueueView.activeIndex
-                                             ? "+" + (index - phoneQueueView.activeIndex) : String(index + 1))
-                                    color: queueRow.isCurrent ? App.Style.accent : App.Style.secondaryTextColor
-                                    font.pixelSize: queueRow.lineTextSize
-                                    font.family: mediaPlayer.globalFont
-                                    font.bold: queueRow.isCurrent
-                                }
+                            // Light rim around the art
+                            Rectangle {
+                                id: queueArtRim
+                                anchors.fill: queueArt
+                                radius: Math.max(0, queueCard.radius - queueCard.border.width)
+                                color: "transparent"
+                                border.width: 1
+                                border.color: Qt.rgba(1, 1, 1, 0.22)
                             }
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: queueLead.width + App.Spacing.overallMargin * 2
+                                anchors.leftMargin: App.Spacing.overallMargin * 2
                                 anchors.rightMargin: App.Spacing.overallMargin * 2
                                 spacing: 0
 
-                                Text {
-                                    Layout.preferredWidth: queueCard.width * mediaPlayer.titleColumnRatio - queueLead.width
-                                    Layout.rightMargin: queueRow.columnGutter
-                                    text: modelData.title
-                                    color: queueRow.isCurrent ? App.Style.accent : App.Style.primaryTextColor
-                                    font.pixelSize: queueRow.lineTextSize
-                                    font.family: mediaPlayer.globalFont
-                                    font.bold: true
-                                    wrapMode: Text.Wrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
+                                // Title section (with album art)
+                                RowLayout {
+                                    Layout.preferredWidth: parent.width * mediaPlayer.titleColumnRatio
+                                    Layout.fillHeight: true
+                                    spacing: App.Spacing.overallMargin * 2
+
+                                    // Room for the album art anchored to the card edge
+                                    Item {
+                                        Layout.preferredWidth: queueArt.width - App.Spacing.overallMargin * 2
+                                        Layout.fillHeight: true
+                                    }
+
+                                    Item {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        clip: true
+
+                                        Text {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: queueRow.columnGutter
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: modelData.title
+                                            color: queueRow.isCurrent ? App.Style.accent : App.Style.primaryTextColor
+                                            font.pixelSize: queueRow.lineTextSize
+                                            font.family: mediaPlayer.globalFont
+                                            font.bold: true
+                                            wrapMode: Text.Wrap
+                                            maximumLineCount: 2
+                                            elide: Text.ElideRight
+                                        }
+                                    }
                                 }
 
-                                Text {
-                                    Layout.fillWidth: true
-                                    Layout.rightMargin: queueRow.columnGutter
-                                    text: modelData.artist
-                                    color: App.Style.secondaryTextColor
-                                    font.pixelSize: queueRow.lineTextSize
-                                    font.family: mediaPlayer.globalFont
-                                    wrapMode: Text.Wrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
+                                // Artist column
+                                Item {
+                                    Layout.preferredWidth: parent.width * mediaPlayer.artistColumnRatio
+                                    Layout.fillHeight: true
+                                    clip: true
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: queueRow.columnGutter
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: modelData.artist
+                                        color: App.Style.secondaryTextColor
+                                        font.pixelSize: queueRow.lineTextSize
+                                        font.family: mediaPlayer.globalFont
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                // Album column: kept so the columns line up with the header
+                                Item {
+                                    Layout.preferredWidth: parent.width * mediaPlayer.albumColumnRatio
+                                    Layout.fillHeight: true
                                 }
                             }
 
@@ -1396,6 +1484,16 @@ Item {
                                     if (!returnToLibrary)
                                         stackView.openPage("MediaRoom.qml")
                                 }
+                            }
+
+                            // Shadow for depth
+                            Rectangle {
+                                z: -1
+                                anchors.fill: parent
+                                anchors.margins: -dp(2)
+                                radius: parent.radius + dp(2)
+                                color: "black"
+                                opacity: 0.08
                             }
                         }
                     }
