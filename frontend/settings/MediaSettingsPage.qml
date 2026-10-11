@@ -24,11 +24,38 @@ Flickable {
     // page (the Sidebar layout); the stacked cards are then never built.
     property bool renderCards: true
 
+    // Live state behind the tiles. Album count arrives by signal only so
+    // opening settings never forces a library stats scan.
+    property int _albumCount: -1
+    property bool _spotifyConnected: spotifyManager ? spotifyManager.is_connected() : false
+
     property var tileModel: [
-        { cardId: "media_library",     title: "Library",     iconSource: App.Style.assetBase + "tile_library.svg",     component: libraryContent },
-        { cardId: "media_playback",    title: "Playback",    iconSource: App.Style.assetBase + "tile_playback.svg",    component: playbackContent },
-        { cardId: "media_now_playing", title: "Now Playing", iconSource: App.Style.assetBase + "tile_now_playing.svg", component: nowPlayingContent },
-        { cardId: "media_spotify",     title: "Spotify",     iconSource: App.Style.assetBase + "tile_spotify.svg",     component: spotifyContent }
+        { cardId: "media_library", title: "Library", component: libraryContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              var path = String(settingsManager.mediaFolder || "").replace(/[\\/]+$/, "")
+              var name = path.substring(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1)
+              if (!name) return { state: "No folder" }
+              return { state: pageRoot._albumCount >= 0 ? pageRoot._albumCount + " albums" : name }
+          } },
+        { cardId: "media_playback", title: "Playback", component: playbackContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              return { state: (settingsManager.autoPlayOnStartup ? "Autoplay" : "Manual")
+                              + " · " + Math.round(settingsManager.startUpVolume * 100) + "%" }
+          } },
+        { cardId: "media_now_playing", title: "Now Playing", component: nowPlayingContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              return { state: settingsManager.vinylRecordMode ? "Vinyl record" : settingsManager.albumArtTransition }
+          } },
+        { cardId: "media_spotify", title: "Spotify", component: spotifyContent,
+          summary: function() {
+              var on = pageRoot._spotifyConnected
+              var n = pageRoot.spotifyDevicesList ? pageRoot.spotifyDevicesList.length : 0
+              return { state: !on ? "Not linked" : n > 0 ? n + (n === 1 ? " device" : " devices") : "Linked",
+                       active: on }
+          } }
     ]
 
     // Refresh Spotify devices when navigating to media settings
@@ -48,11 +75,17 @@ Flickable {
     }
 
     Connections {
+        target: typeof mediaManager !== "undefined" ? mediaManager : null
+        function onAlbumCountChanged(count) { pageRoot._albumCount = count }
+    }
+
+    Connections {
         target: spotifyManager
         function onDevicesChanged(devices) {
             pageRoot.spotifyDevicesList = devices
         }
         function onConnectionStateChanged(connected) {
+            pageRoot._spotifyConnected = connected
             if (connected) {
                 spotifyManager.refresh_devices()
             } else {

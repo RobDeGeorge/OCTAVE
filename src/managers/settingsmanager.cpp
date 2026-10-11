@@ -220,11 +220,16 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("androidAutoEnabled")]      = false;
     d[QStringLiteral("phoneMirrorEnabled")]      = false;
     d[QStringLiteral("scrcpyAudioEnabled")]      = false;
-    d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("1280x800");     // --new-display WxH, "" = phone screen
+    d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("auto");  // --new-display WxH, "auto" = fit the view, "" = phone screen
     d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)
     d[QStringLiteral("scrcpyAudioDuckEnabled")]  = true;  // duck local media while the phone produces sound
     d[QStringLiteral("scrcpyAudioDuckLevel")]    = 0.1;   // linear factor applied to local media while ducked (-20 dB)
     d[QStringLiteral("scrcpyPhoneScreenOff")]    = true;  // keep the phone's own panel dark while mirroring
+    d[QStringLiteral("scrcpyDisplayDpi")]        = 0;     // virtual display density, 0 = scaled from the phone's own
+    d[QStringLiteral("scrcpyBitRateUsb")]        = 16;    // video bit rate over USB, Mbps
+    d[QStringLiteral("scrcpyBitRateWifi")]       = 8;     // video bit rate over Wi-Fi, Mbps
+    d[QStringLiteral("scrcpyAutoWifi")]          = true;  // switch a USB phone to adb over TCP for later Wi-Fi use
+    d[QStringLiteral("scrcpyBitRateAuto")]       = true;  // adapt the bit rate to the link, rates above are the ceiling
     d[QStringLiteral("scrcpyWirelessAddress")]   = QString();  // last phone connected over Wi-Fi ("ip:port"), "" = none
 
     // Settings menu visibility
@@ -495,6 +500,11 @@ void SettingsManager::populateMembers()
     m_scrcpyAudioDuckEnabled = s(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
     m_scrcpyAudioDuckLevel   = s(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
     m_scrcpyPhoneScreenOff   = s(QStringLiteral("scrcpyPhoneScreenOff")).toBool();
+    m_scrcpyDisplayDpi       = s(QStringLiteral("scrcpyDisplayDpi")).toInt();
+    m_scrcpyBitRateUsb       = s(QStringLiteral("scrcpyBitRateUsb")).toInt();
+    m_scrcpyBitRateWifi      = s(QStringLiteral("scrcpyBitRateWifi")).toInt();
+    m_scrcpyAutoWifi         = s(QStringLiteral("scrcpyAutoWifi")).toBool();
+    m_scrcpyBitRateAuto      = s(QStringLiteral("scrcpyBitRateAuto")).toBool();
     m_scrcpyWirelessAddress  = s(QStringLiteral("scrcpyWirelessAddress")).toString();
 
     // Settings menu visibility
@@ -946,6 +956,11 @@ double  SettingsManager::scrcpyAudioGain() const     { return m_scrcpyAudioGain;
 bool    SettingsManager::scrcpyAudioDuckEnabled() const { return m_scrcpyAudioDuckEnabled; }
 double  SettingsManager::scrcpyAudioDuckLevel() const { return m_scrcpyAudioDuckLevel; }
 bool    SettingsManager::scrcpyPhoneScreenOff() const { return m_scrcpyPhoneScreenOff; }
+int     SettingsManager::scrcpyDisplayDpi() const { return m_scrcpyDisplayDpi; }
+int     SettingsManager::scrcpyBitRateUsb() const { return m_scrcpyBitRateUsb; }
+int     SettingsManager::scrcpyBitRateWifi() const { return m_scrcpyBitRateWifi; }
+bool    SettingsManager::scrcpyAutoWifi() const   { return m_scrcpyAutoWifi; }
+bool    SettingsManager::scrcpyBitRateAuto() const { return m_scrcpyBitRateAuto; }
 QString SettingsManager::scrcpyWirelessAddress() const { return m_scrcpyWirelessAddress; }
 
 // --- ESP32 ---
@@ -1799,6 +1814,49 @@ void SettingsManager::save_scrcpy_phone_screen_off(bool off)
     emit scrcpyPhoneScreenOffChanged(off);
 }
 
+void SettingsManager::save_scrcpy_display_dpi(int dpi)
+{
+    dpi = dpi <= 0 ? 0 : qBound(80, dpi, 640);
+    qCDebug(lcSettings) << "Saving scrcpy display dpi:" << dpi;
+    m_scrcpyDisplayDpi = dpi;
+    updateSetting(QStringLiteral("scrcpyDisplayDpi"), dpi);
+    emit scrcpyDisplayDpiChanged(dpi);
+}
+
+void SettingsManager::save_scrcpy_bit_rate_usb(int mbps)
+{
+    mbps = qBound(2, mbps, 40);
+    qCDebug(lcSettings) << "Saving scrcpy USB bit rate:" << mbps << "Mbps";
+    m_scrcpyBitRateUsb = mbps;
+    updateSetting(QStringLiteral("scrcpyBitRateUsb"), mbps);
+    emit scrcpyBitRateUsbChanged(mbps);
+}
+
+void SettingsManager::save_scrcpy_bit_rate_wifi(int mbps)
+{
+    mbps = qBound(2, mbps, 40);
+    qCDebug(lcSettings) << "Saving scrcpy Wi-Fi bit rate:" << mbps << "Mbps";
+    m_scrcpyBitRateWifi = mbps;
+    updateSetting(QStringLiteral("scrcpyBitRateWifi"), mbps);
+    emit scrcpyBitRateWifiChanged(mbps);
+}
+
+void SettingsManager::save_scrcpy_auto_wifi(bool enabled)
+{
+    qCDebug(lcSettings) << "Saving scrcpy auto Wi-Fi:" << enabled;
+    m_scrcpyAutoWifi = enabled;
+    updateSetting(QStringLiteral("scrcpyAutoWifi"), enabled);
+    emit scrcpyAutoWifiChanged(enabled);
+}
+
+void SettingsManager::save_scrcpy_bit_rate_auto(bool enabled)
+{
+    qCDebug(lcSettings) << "Saving scrcpy adaptive bit rate:" << enabled;
+    m_scrcpyBitRateAuto = enabled;
+    updateSetting(QStringLiteral("scrcpyBitRateAuto"), enabled);
+    emit scrcpyBitRateAutoChanged(enabled);
+}
+
 void SettingsManager::save_scrcpy_wireless_address(const QString &address)
 {
     const QString value = address.trimmed();
@@ -2043,6 +2101,11 @@ double  SettingsManager::get_scrcpy_audio_gain()       { return m_scrcpyAudioGai
 bool    SettingsManager::get_scrcpy_audio_duck_enabled() { return m_scrcpyAudioDuckEnabled; }
 double  SettingsManager::get_scrcpy_audio_duck_level() { return m_scrcpyAudioDuckLevel; }
 bool    SettingsManager::get_scrcpy_phone_screen_off() { return m_scrcpyPhoneScreenOff; }
+int     SettingsManager::get_scrcpy_display_dpi()      { return m_scrcpyDisplayDpi; }
+int     SettingsManager::get_scrcpy_bit_rate_usb()     { return m_scrcpyBitRateUsb; }
+int     SettingsManager::get_scrcpy_bit_rate_wifi()    { return m_scrcpyBitRateWifi; }
+bool    SettingsManager::get_scrcpy_auto_wifi()        { return m_scrcpyAutoWifi; }
+bool    SettingsManager::get_scrcpy_bit_rate_auto()    { return m_scrcpyBitRateAuto; }
 QString SettingsManager::get_scrcpy_wireless_address() { return m_scrcpyWirelessAddress; }
 bool    SettingsManager::get_esp32_volume_enabled()    { return m_esp32VolumeEnabled; }
 QString SettingsManager::get_esp32_volume_port()       { return m_esp32VolumePort; }
@@ -2209,6 +2272,11 @@ void SettingsManager::reset_to_defaults()
     emit scrcpyAudioDuckEnabledChanged(m_scrcpyAudioDuckEnabled);
     emit scrcpyAudioDuckLevelChanged(m_scrcpyAudioDuckLevel);
     emit scrcpyPhoneScreenOffChanged(m_scrcpyPhoneScreenOff);
+    emit scrcpyDisplayDpiChanged(m_scrcpyDisplayDpi);
+    emit scrcpyBitRateUsbChanged(m_scrcpyBitRateUsb);
+    emit scrcpyBitRateWifiChanged(m_scrcpyBitRateWifi);
+    emit scrcpyAutoWifiChanged(m_scrcpyAutoWifi);
+    emit scrcpyBitRateAutoChanged(m_scrcpyBitRateAuto);
     emit scrcpyWirelessAddressChanged(m_scrcpyWirelessAddress);
     emit settingsMenuVisibilityChanged();
     emit esp32VolumeEnabledChanged(m_esp32VolumeEnabled);

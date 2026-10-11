@@ -208,6 +208,11 @@ class SettingsManager(QObject):
     scrcpyAudioDuckEnabledChanged = Signal(bool)
     scrcpyAudioDuckLevelChanged = Signal(float)
     scrcpyPhoneScreenOffChanged = Signal(bool)
+    scrcpyDisplayDpiChanged = Signal(int)
+    scrcpyBitRateUsbChanged = Signal(int)
+    scrcpyBitRateWifiChanged = Signal(int)
+    scrcpyAutoWifiChanged = Signal(bool)
+    scrcpyBitRateAutoChanged = Signal(bool)
     scrcpyWirelessAddressChanged = Signal(str)
     albumArtColorsChanged = Signal(str)  # JSON string with album art theme colors
 
@@ -447,11 +452,16 @@ class SettingsManager(QObject):
             "androidAutoEnabled": False,  # If True, show Android Auto button in bottom bar
             "phoneMirrorEnabled": False,  # If True, show Phone Mirror button in bottom bar
             "scrcpyAudioEnabled": False,  # If True, forward audio from phone
-            "scrcpyDisplaySize": "1280x800",  # Virtual display WxH (--new-display); "" = phone screen
+            "scrcpyDisplaySize": "auto",  # Virtual display WxH (--new-display); "auto" = fit the view, "" = phone screen
             "scrcpyAudioGain": 2.0,  # Linear gain on phone audio before OCTAVE's volume (+6 dB)
             "scrcpyAudioDuckEnabled": True,  # Duck local media while the phone produces sound
             "scrcpyAudioDuckLevel": 0.1,  # Linear factor applied to local media while ducked (-20 dB)
             "scrcpyPhoneScreenOff": True,  # Keep the phone's own panel dark while mirroring
+            "scrcpyDisplayDpi": 0,  # Virtual display density, 0 = scaled from the phone's own
+            "scrcpyBitRateUsb": 16,  # Video bit rate over USB, Mbps
+            "scrcpyBitRateWifi": 8,  # Video bit rate over Wi-Fi, Mbps
+            "scrcpyAutoWifi": True,  # Switch a USB phone to adb over TCP for later Wi-Fi use
+            "scrcpyBitRateAuto": True,  # Adapt the bit rate to the link; the rates above are the ceiling
             "scrcpyWirelessAddress": "",  # Last phone connected over Wi-Fi ("ip:port"), "" = none
             # Settings menu section visibility (all visible by default, except advanced features)
             "settingsMenuVisibility": {
@@ -630,11 +640,16 @@ class SettingsManager(QObject):
         # Phone Mirror settings
         self._phone_mirror_enabled = self._settings.get("phoneMirrorEnabled", False)
         self._scrcpy_audio_enabled = self._settings.get("scrcpyAudioEnabled", False)
-        self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "1280x800")
+        self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "auto")
         self._scrcpy_audio_gain = float(self._settings.get("scrcpyAudioGain", 2.0))
         self._scrcpy_audio_duck_enabled = bool(self._settings.get("scrcpyAudioDuckEnabled", True))
         self._scrcpy_audio_duck_level = float(self._settings.get("scrcpyAudioDuckLevel", 0.1))
         self._scrcpy_phone_screen_off = bool(self._settings.get("scrcpyPhoneScreenOff", True))
+        self._scrcpy_display_dpi = int(self._settings.get("scrcpyDisplayDpi", 0))
+        self._scrcpy_bit_rate_usb = int(self._settings.get("scrcpyBitRateUsb", 16))
+        self._scrcpy_bit_rate_wifi = int(self._settings.get("scrcpyBitRateWifi", 8))
+        self._scrcpy_auto_wifi = bool(self._settings.get("scrcpyAutoWifi", True))
+        self._scrcpy_bit_rate_auto = bool(self._settings.get("scrcpyBitRateAuto", True))
         self._scrcpy_wireless_address = str(self._settings.get("scrcpyWirelessAddress", "") or "")
 
         # Settings menu visibility
@@ -1886,6 +1901,87 @@ class SettingsManager(QObject):
         self._scrcpy_phone_screen_off = off
         self.update_setting("scrcpyPhoneScreenOff", off, self.scrcpyPhoneScreenOffChanged)
 
+    @Property(int, notify=scrcpyDisplayDpiChanged)
+    def scrcpyDisplayDpi(self):
+        """Virtual display density override, 0 = scale the phone's own density"""
+        return self._scrcpy_display_dpi
+
+    @Slot(result=int)
+    def get_scrcpy_display_dpi(self):
+        return self._scrcpy_display_dpi
+
+    @Slot(int)
+    def save_scrcpy_display_dpi(self, dpi):
+        dpi = int(dpi)
+        dpi = 0 if dpi <= 0 else max(80, min(640, dpi))
+        logger.debug(f"Saving scrcpy display dpi: {dpi}")
+        self._scrcpy_display_dpi = dpi
+        self.update_setting("scrcpyDisplayDpi", dpi, self.scrcpyDisplayDpiChanged)
+
+    @Property(int, notify=scrcpyBitRateUsbChanged)
+    def scrcpyBitRateUsb(self):
+        """Video bit rate over USB, Mbps"""
+        return self._scrcpy_bit_rate_usb
+
+    @Slot(result=int)
+    def get_scrcpy_bit_rate_usb(self):
+        return self._scrcpy_bit_rate_usb
+
+    @Slot(int)
+    def save_scrcpy_bit_rate_usb(self, mbps):
+        mbps = max(2, min(40, int(mbps)))
+        logger.debug(f"Saving scrcpy USB bit rate: {mbps} Mbps")
+        self._scrcpy_bit_rate_usb = mbps
+        self.update_setting("scrcpyBitRateUsb", mbps, self.scrcpyBitRateUsbChanged)
+
+    @Property(int, notify=scrcpyBitRateWifiChanged)
+    def scrcpyBitRateWifi(self):
+        """Video bit rate over Wi-Fi, Mbps"""
+        return self._scrcpy_bit_rate_wifi
+
+    @Slot(result=int)
+    def get_scrcpy_bit_rate_wifi(self):
+        return self._scrcpy_bit_rate_wifi
+
+    @Slot(int)
+    def save_scrcpy_bit_rate_wifi(self, mbps):
+        mbps = max(2, min(40, int(mbps)))
+        logger.debug(f"Saving scrcpy Wi-Fi bit rate: {mbps} Mbps")
+        self._scrcpy_bit_rate_wifi = mbps
+        self.update_setting("scrcpyBitRateWifi", mbps, self.scrcpyBitRateWifiChanged)
+
+    @Property(bool, notify=scrcpyAutoWifiChanged)
+    def scrcpyAutoWifi(self):
+        """Switch a USB phone to adb over TCP (port 5555) so it can be reached over Wi-Fi later"""
+        return self._scrcpy_auto_wifi
+
+    @Slot(result=bool)
+    def get_scrcpy_auto_wifi(self):
+        return self._scrcpy_auto_wifi
+
+    @Slot(bool)
+    def save_scrcpy_auto_wifi(self, enabled):
+        enabled = bool(enabled)
+        logger.debug(f"Saving scrcpy auto Wi-Fi: {enabled}")
+        self._scrcpy_auto_wifi = enabled
+        self.update_setting("scrcpyAutoWifi", enabled, self.scrcpyAutoWifiChanged)
+
+    @Property(bool, notify=scrcpyBitRateAutoChanged)
+    def scrcpyBitRateAuto(self):
+        """Adapt the mirror bit rate to the link; the per-link rates become the ceiling"""
+        return self._scrcpy_bit_rate_auto
+
+    @Slot(result=bool)
+    def get_scrcpy_bit_rate_auto(self):
+        return self._scrcpy_bit_rate_auto
+
+    @Slot(bool)
+    def save_scrcpy_bit_rate_auto(self, enabled):
+        enabled = bool(enabled)
+        logger.debug(f"Saving scrcpy adaptive bit rate: {enabled}")
+        self._scrcpy_bit_rate_auto = enabled
+        self.update_setting("scrcpyBitRateAuto", enabled, self.scrcpyBitRateAutoChanged)
+
     @Property(str, notify=scrcpyWirelessAddressChanged)
     def scrcpyWirelessAddress(self):
         """Last phone connected over Wi-Fi ("ip:port"); reconnected automatically, "" = none"""
@@ -2450,6 +2546,11 @@ class SettingsManager(QObject):
         self.scrcpyAudioDuckEnabledChanged.emit(self._scrcpy_audio_duck_enabled)
         self.scrcpyAudioDuckLevelChanged.emit(self._scrcpy_audio_duck_level)
         self.scrcpyPhoneScreenOffChanged.emit(self._scrcpy_phone_screen_off)
+        self.scrcpyDisplayDpiChanged.emit(self._scrcpy_display_dpi)
+        self.scrcpyBitRateUsbChanged.emit(self._scrcpy_bit_rate_usb)
+        self.scrcpyBitRateWifiChanged.emit(self._scrcpy_bit_rate_wifi)
+        self.scrcpyAutoWifiChanged.emit(self._scrcpy_auto_wifi)
+        self.scrcpyBitRateAutoChanged.emit(self._scrcpy_bit_rate_auto)
         self.scrcpyWirelessAddressChanged.emit(self._scrcpy_wireless_address)
         self.settingsMenuVisibilityChanged.emit()
         self.esp32VolumeEnabledChanged.emit(self._esp32_volume_enabled)

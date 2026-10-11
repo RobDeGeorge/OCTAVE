@@ -19,14 +19,30 @@ Node {
     property real wheelSpeedKph: 0
     property real wheelSpinAngle: 0
     readonly property real wheelDegreesPerSecond: Math.max(-30, Math.min(30, wheelSpeedKph)) / 3.6 / 0.3937 * 180 / Math.PI
+    // Driveshafts turn at wheel speed times the axle ratio (3.73 is the common
+    // 4.0 / NV3550 TJ ratio). Both shafts turn clockwise seen from the front
+    // when driving forward, which is negative about their forward rig axis.
+    property real axleRatio: 3.73
+    property real driveshaftAngle: 0
+    // The crank and fan turn at engine speed slowed 60x (idle is about one
+    // turn every five seconds) so the motion stays readable instead of
+    // strobing at the display frame rate. Clockwise seen from the front.
+    property real engineRpm: 0
+    readonly property real engineMotionScale: 1 / 60
+    property real crankAngle: 0
+    readonly property real crankDegreesPerSecond: -Math.max(0, Math.min(7000, engineRpm)) * 6 * engineMotionScale
     Timer {
         interval: 16; repeat: true
-        running: vehicle.ready && vehicle.visible && vehicle.wheelSpeedKph !== 0
+        running: vehicle.ready && vehicle.visible && (vehicle.wheelSpeedKph !== 0 || vehicle.engineRpm > 0)
         property double lastTick: 0
         onRunningChanged: lastTick = Date.now()
         onTriggered: {
             var now = Date.now()
-            vehicle.wheelSpinAngle = ((vehicle.wheelSpinAngle + vehicle.wheelDegreesPerSecond * (now - lastTick) / 1000) % 360 + 360) % 360
+            var dt = (now - lastTick) / 1000
+            var wrap = function(a) { return (a % 360 + 360) % 360 }
+            vehicle.wheelSpinAngle = wrap(vehicle.wheelSpinAngle + vehicle.wheelDegreesPerSecond * dt)
+            vehicle.driveshaftAngle = wrap(vehicle.driveshaftAngle - vehicle.wheelDegreesPerSecond * vehicle.axleRatio * dt)
+            vehicle.crankAngle = wrap(vehicle.crankAngle + vehicle.crankDegreesPerSecond * dt)
             lastTick = now
         }
     }
@@ -42,7 +58,9 @@ Node {
     readonly property var steeringPose: Steering.solve(animatedSteering, Rig.steering)
     readonly property var tiePoints: Steering.tiePoints(steeringPose, Rig.steering)
     readonly property bool ready: body.ready && driver.ready && passenger.ready && glass.ready && gate.ready && hood.ready && driverWheel.ready && passengerWheel.ready && driverFrontSpin.ready && passengerFrontSpin.ready && driverRearSpin.ready && passengerRearSpin.ready
+        && crankPulley.ready && engineFan.ready && frontDriveshaft.ready && rearDriveshaft.ready
     readonly property string error: body.error || driver.error || passenger.error || glass.error || gate.error || hood.error || driverWheel.error || passengerWheel.error || driverFrontSpin.error || passengerFrontSpin.error || driverRearSpin.error || passengerRearSpin.error
+        || crankPulley.error || engineFan.error || frontDriveshaft.error || rearDriveshaft.error
     readonly property real radius: (driverDoorOpen || passengerDoorOpen || rearGlassOpen || tailgateOpen || hoodOpen
         || !driver.closed || !passenger.closed || !glass.closed || !gate.closed || !hood.closed)
         ? Rig.bounds.sweptRadius : Rig.bounds.closedRadius
@@ -113,6 +131,23 @@ Node {
         id: passengerRearSpin; objectName: "passengerRearSpin"
         part: Rig.parts.passenger_rear_spin
         animate: false; animatedAngle: vehicle.wheelSpinAngle
+    }
+    // Engine and driveline spinners, each about its own (tilted) shaft axis.
+    JeepHinge {
+        id: crankPulley; objectName: "crankPulley"
+        part: Rig.parts.crank_pulley; animate: false; animatedAngle: vehicle.crankAngle
+    }
+    JeepHinge {
+        id: engineFan; objectName: "engineFan"
+        part: Rig.parts.engine_fan; animate: false; animatedAngle: vehicle.crankAngle
+    }
+    JeepHinge {
+        id: frontDriveshaft; objectName: "frontDriveshaft"
+        part: Rig.parts.front_driveshaft; animate: false; animatedAngle: vehicle.driveshaftAngle
+    }
+    JeepHinge {
+        id: rearDriveshaft; objectName: "rearDriveshaft"
+        part: Rig.parts.rear_driveshaft; animate: false; animatedAngle: vehicle.driveshaftAngle
     }
     Node {
         visible: vehicle.ready

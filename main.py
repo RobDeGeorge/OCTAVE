@@ -165,6 +165,19 @@ engine.rootContext().setContextProperty("phoneMirrorManager", phone_mirror_manag
 # Phone mirror settings
 phone_mirror_manager.setAudioEnabled(settings_manager.get_scrcpy_audio_enabled())
 phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
+# Picture quality: virtual display density and per-link video bit rate
+phone_mirror_manager.setDisplayDpi(settings_manager.get_scrcpy_display_dpi())
+phone_mirror_manager.setBitRateUsb(settings_manager.get_scrcpy_bit_rate_usb())
+phone_mirror_manager.setBitRateWifi(settings_manager.get_scrcpy_bit_rate_wifi())
+settings_manager.scrcpyDisplayDpiChanged.connect(phone_mirror_manager.setDisplayDpi)
+settings_manager.scrcpyBitRateUsbChanged.connect(phone_mirror_manager.setBitRateUsb)
+settings_manager.scrcpyBitRateWifiChanged.connect(phone_mirror_manager.setBitRateWifi)
+# Adaptive quality: the per-link rates above become the ceiling
+phone_mirror_manager.setBitRateAuto(settings_manager.get_scrcpy_bit_rate_auto())
+settings_manager.scrcpyBitRateAutoChanged.connect(phone_mirror_manager.setBitRateAuto)
+# A USB phone is switched to adb over TCP so it can be reached over Wi-Fi later
+phone_mirror_manager.setAutoWifi(settings_manager.get_scrcpy_auto_wifi())
+settings_manager.scrcpyAutoWifiChanged.connect(phone_mirror_manager.setAutoWifi)
 phone_mirror_manager.setAudioGain(settings_manager.get_scrcpy_audio_gain())
 settings_manager.scrcpyAudioGainChanged.connect(phone_mirror_manager.setAudioGain)
 # Duck local media while the phone produces sound (nav prompts, video, calls)

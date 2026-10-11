@@ -805,6 +805,11 @@ esp32VolumeManager.connectionStatusChanged ─► initial volume / mute / colour
 settingsManager.scrcpyAudioGainChanged ─────► phoneMirrorManager.setAudioGain()
 settingsManager.scrcpyAudioDuck*Changed ────► phoneMirrorManager.setAudioDuck*()
 settingsManager.scrcpyPhoneScreenOffChanged ► phoneMirrorManager.setPhoneScreenOff()
+settingsManager.scrcpyDisplayDpiChanged ► phoneMirrorManager.setDisplayDpi()
+settingsManager.scrcpyBitRateUsbChanged ► phoneMirrorManager.setBitRateUsb()
+settingsManager.scrcpyBitRateWifiChanged ► phoneMirrorManager.setBitRateWifi()
+settingsManager.scrcpyAutoWifiChanged ► phoneMirrorManager.setAutoWifi()
+settingsManager.scrcpyBitRateAutoChanged ► phoneMirrorManager.setBitRateAuto()
 phoneMirrorManager.wirelessAddressChanged ► settingsManager.save_scrcpy_wireless_address()
 phoneMirrorManager.duckingChanged ──────────► mediaManager.setDucking()
 

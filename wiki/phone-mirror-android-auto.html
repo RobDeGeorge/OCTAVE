@@ -85,7 +85,7 @@
 |                               |                |                                      |
 |  octave-phone-server (jar)    |  video socket  |  ScrcpyClient                        |
 |   org.octave.phoneserver      | -------------&gt; |   demux -&gt; libavcodec / PyAV         |
-|   virtual display 1280x800    |  audio socket  |   -&gt; QVideoFrame -&gt; QVideoSink       |
+|   virtual display = view size |  audio socket  |   -&gt; QVideoFrame -&gt; QVideoSink       |
 |   MediaCodec H.264 encoder    | -------------&gt; |   PCM -&gt; gain -&gt; QAudioSink          |
 |   MirrorKeeper (sleep/panel)  | control socket |   touch / keys / keeper policy       |
 |                               | &lt;------------&gt; |   PHONE_STATE device messages        |
@@ -146,7 +146,7 @@
               <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>Decoder present (C++: built with <code>OCTAVE_HAVE_FFMPEG</code>; Python: <code>import av</code> succeeded), server jar found (C++: Qt resource <code>:/phone-server/octave-phone-server</code>; Python: <code>tools/phone-server/</code> or <code>phone-server/</code> next to a deployed tree), adb found</td></tr>
               <tr><td><code>serverVersion</code></td><td><code>str</code></td><td><code>"3.3.4-octave"</code> -- the string the client sends on launch; the server refuses anything else</td></tr>
               <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>A client thread is up (true from <code>start()</code>, not only after the handshake)</td></tr>
-              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> (setting <code>scrcpyDisplaySize</code>, default 1280x800, each dimension snapped down to a multiple of 8, minimum 8, because scrcpy rounds a <code>--new-display</code> size the same way); <code>""</code> mirrors the phone's own screen</td></tr>
+              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> (setting <code>scrcpyDisplaySize</code>, default <code>"auto"</code>, each dimension snapped down to a multiple of 8, minimum 8, because scrcpy rounds a <code>--new-display</code> size the same way); <code>"auto"</code> uses the view's pixel size reported through <code>setViewSize()</code> (longest side capped at 1920, <code>kAutoMaxSide</code> / <code>AUTO_MAX_SIDE</code>; 1280x800 until the view has reported); <code>""</code> mirrors the phone's own screen</td></tr>
               <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td>Size actually in use once connected; <code>""</code> when mirroring the phone screen (also when the phone's SDK is below 30 / Android 11, in which case the virtual display is skipped with a warning)</td></tr>
               <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>QML assigns <code>VideoOutput.videoSink</code> in <code>Component.onCompleted</code>; decoded frames go straight to it</td></tr>
               <tr><td><code>frameWidth</code>, <code>frameHeight</code></td><td><code>int</code></td><td>Decoded frame size (from the codec meta, updated if the decoder reports a different size)</td></tr>
@@ -158,6 +158,7 @@
               <tr><td><code>connectionType</code></td><td><code>str</code></td><td><code>"usb"</code> / <code>"wifi"</code> for the running session, <code>""</code> when idle</td></tr>
               <tr><td><code>wirelessBusy</code></td><td><code>bool</code></td><td>A QR pairing started from the UI is in progress</td></tr>
               <tr><td><code>qrPairingRows</code>, <code>qrPairingActive</code></td><td><code>list</code>, <code>bool</code></td><td>The QR code being shown (one <code>'0'</code>/<code>'1'</code> string per row) and whether one is waiting</td></tr>
+              <tr><td><code>currentBitRate</code></td><td><code>int</code></td><td>Video bit rate of the running session in bps, following adaptive changes; 0 when idle</td></tr>
             </tbody>
           </table>
           <h4>Signals</h4>
@@ -186,7 +187,10 @@
               <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>various</td><td>adb probes (<code>getprop ro.product.model</code>, <code>wm size</code>, <code>getprop ro.build.version.sdk</code>)</td></tr>
               <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Same as <code>nativeAvailable</code>; the view shows setup text only when false</td></tr>
               <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing (decoder / jar / adb), or the USB-debugging steps</td></tr>
-              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code></td><td>--</td><td>Restart a running session (stop, then start 300 ms later)</td></tr>
+              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code>, <code>setDisplayDpi(int)</code>, <code>setBitRateUsb(int)</code>, <code>setBitRateWifi(int)</code></td><td>--</td><td>Restart a running session (stop, then start 300 ms later); a bit-rate change only restarts a session on that link</td></tr>
+              <tr><td><code>setViewSize(int, int)</code></td><td>--</td><td>The mirror view's size in device pixels (<code>PhoneMirrorView</code> reports it on activation and on every resize). With <code>"auto"</code> a running session whose size no longer matches is restarted once the size has been stable for 1.5 s</td></tr>
+              <tr><td><code>setAutoWifi(bool)</code></td><td>--</td><td>Setting <code>scrcpyAutoWifi</code>; read at the next USB start</td></tr>
+              <tr><td><code>setBitRateAuto(bool)</code></td><td>--</td><td>Setting <code>scrcpyBitRateAuto</code>; restarts a running session</td></tr>
               <tr><td><code>setAudioGain(float)</code>, <code>setAudioDuckEnabled(bool)</code>, <code>setAudioDuckLevel(float)</code>, <code>setPhoneScreenOff(bool)</code></td><td>--</td><td>Applied live. Gain is clamped 0.25..8 (−12..+18 dB), duck level 0..1</td></tr>
               <tr><td><code>setVolume(float)</code></td><td>--</td><td>Called by <code>VolumeController</code> on every volume change with the 0..1 linear value; the phone-audio <code>QAudioSink</code> follows it. Must exist even with audio off</td></tr>
               <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>--</td><td>Touch on the mirrored display: action 0 down / 1 up / 2 move, coordinates 0..1 of the frame (scaled to frame pixels here)</td></tr>
@@ -289,6 +293,7 @@
               <tr><td>10</td><td><code>SET_DISPLAY_POWER</code></td><td><code>[u8 on]</code></td><td>2 B</td><td>no longer sent: the <code>setDisplayPower()</code> / <code>set_display_power()</code> client methods were removed (the keeper owns the panel)</td></tr>
               <tr><td>100</td><td><code>OCTAVE_SET_KEEPER</code></td><td><code>[u8 enabled][u8 panelDark][i32 graceMs]</code></td><td>7 B</td><td>yes, 500 ms after connect and on every setting change</td></tr>
               <tr><td>101</td><td><code>OCTAVE_TAKE_BACK</code></td><td>none</td><td>1 B</td><td><code>resumeMirroring()</code></td></tr>
+              <tr><td>102</td><td><code>OCTAVE_SET_BIT_RATE</code></td><td><code>[i32 bps]</code></td><td>5 B</td><td>Adaptive quality, from the video thread (<code>VideoBitRate.java</code>: <code>MediaCodec.setParameters</code> on the running encoder, and the rate for every encoder created later)</td></tr>
               <tr><td>1, 3, 4, 5..9, 11..</td><td>upstream text / scroll / back-or-screen-on / clipboard / panels / UHID / start-app / reset-video</td><td>as in scrcpy 3.3.4</td><td></td><td>parsed by the server, never sent</td></tr>
             </tbody>
           </table>
@@ -400,6 +405,12 @@
             The panel is blanked or lit with <code>Device.setDisplayPower(0, on)</code> (SurfaceControl power mode -- the phone stays awake,
             stream and touch keep working) and <code>CleanUp</code> is told to restore it when the server process ends. Waking uses
             <code>KEYCODE_WAKEUP</code> (224, wakes and never toggles off), rate-limited to one per 500 ms.</p>
+          <p><strong>Idle timeout</strong>: a woken lock screen overrides the phone's screen timeout with a few seconds
+            (<code>mUserActivityTimeoutOverrideFromWindowManager=5000</code> on a Galaxy S-series), and <code>stay_awake</code> only holds
+            while the phone is charging. Left alone, a cradled locked phone therefore dozed every ~5 s; each doze blanked the mirror for
+            a moment and looked like a power press, so the panel was relit. While enabled, awake and not in use, the keeper calls
+            <code>IPowerManager.userActivity()</code> every 1.5 s (the shell holds <code>DEVICE_POWER</code>), so the only dozes left
+            are real power presses.</p>
           <p><strong>Decisions</strong> (what a power press meant):</p>
           <ul>
             <li><strong>Start</strong>: an awake, unlocked phone is in the user's hand (in use); an awake, locked one is in the cradle and
@@ -498,8 +509,18 @@
               (<code>getDeviceName/Resolution/Sdk</code>, the stale-server pkill) passes <code>-s</code>, since a bare <code>adb shell</code>
               fails with "more than one device". Unplugging the cable mid-session drops into the normal quiet reconnect, which then finds the
               Wi-Fi serial and carries on (attaching to the persisted virtual display).</li>
-            <li><strong>Bit rate</strong>: Wi-Fi sessions use <code>video_bit_rate=4000000</code> (<code>kWirelessBitRate</code> /
-              <code>WIRELESS_BIT_RATE</code>), USB keeps 8 Mbps.</li>
+            <li><strong>Bit rate</strong>: per link from the settings, <code>scrcpyBitRateUsb</code> (default 16 Mbps) and
+              <code>scrcpyBitRateWifi</code> (default 8 Mbps). With <code>scrcpyBitRateAuto</code> (default on) those are the ceiling and
+              the rate adapts; see <a href="#pm-adaptive">Adaptive quality</a>.</li>
+            <li><strong>Wi-Fi without re-pairing</strong> (<code>scrcpyAutoWifi</code>, on by default): before a USB session the manager
+              reads the phone's Wi-Fi IPv4 from <code>ip -4 -o addr show</code> (a <code>wlan*</code> interface first, then a phone-run hotspot
+              <code>swlan*</code> / <code>ap*</code>; mobile data and VPNs are skipped). If <code>service.adb.tcp.port</code> is not already 5555
+              it runs <code>adb tcpip 5555</code>, which restarts the phone's adbd, and waits up to 9 s for the USB device to return. It then
+              remembers <code>ip:5555</code> as <code>wirelessAddress</code>. This runs on the wireless worker; the session starts when it
+              finishes, and a <code>stopScrcpy()</code> in between cancels that start (a generation counter). The legacy TCP mode needs no
+              Wireless debugging toggle, works when the phone runs the hotspot, and survives network changes, but ends when the phone
+              reboots. Its connections still need the phone's RSA authorization, like USB. When the saved <code>ip:5555</code> fails the
+              existing mDNS fallback still finds a Wireless-debugging port on the same host.</li>
             <li><strong>Messages</strong>: a dropped Wi-Fi link reports "Phone disconnected. Check that it is on the same Wi-Fi network and
               Wireless debugging is on." instead of the USB-cable text; offline / unauthorized network devices and "no device while a Wi-Fi
               phone is remembered" get Wi-Fi wording. All keep the phrases the view's retry regex matches.</li>
@@ -507,9 +528,43 @@
           <p><strong>Threading</strong>: QR waits and reconnects block on adb, so they run on one worker (C++: a <code>QThreadPool</code> with
             one thread; Python: one daemon thread fed by a queue) and post results back to the GUI thread. One worker serialises them, so a
             background reconnect never races a pairing; the C++ destructor cancels a QR wait and waits for the worker.</p>
-          <p><strong>Networking</strong>: OCTAVE does not create the network. The phone and the OCTAVE machine just have to share one -- a home
-            router, or in a car the head unit's own access point (e.g. a 5 GHz <code>hostapd</code> / NetworkManager hotspot) that the phone
-            joins. A phone-hosted hotspot does not work, because Android only enables Wireless debugging while the phone is a Wi-Fi client.</p>
+          <p><strong>Networking</strong>: no internet is involved; adb, the video, audio and touch all stay on the local link. OCTAVE does not
+            create the network. The phone and the OCTAVE machine just have to share one: a home router, or in a car the head unit's own
+            access point (e.g. a 5 GHz <code>hostapd</code> / NetworkManager hotspot) that the phone joins. Android reports that network as
+            "no internet" and keeps using mobile data for its apps, which is what you want. A phone-hosted hotspot does not work with
+            Wireless debugging (Android only enables it while the phone is a Wi-Fi client), but it does work with the legacy TCP mode that
+            <code>scrcpyAutoWifi</code> turns on over USB.</p>
+          <p><strong>What survives what</strong>: USB authorization is kept across plug-ins (Android revokes it after 7 days without a
+            connection unless Developer options &rarr; "Disable adb authorization timeout" is on). Wireless debugging is switched off by
+            Android when the phone reboots and, on most phones, when it leaves the network it was enabled on. The legacy TCP mode lasts
+            until the phone reboots; one USB session turns it back on.</p>
+        </section>
+
+        <section id="pm-adaptive">
+          <h3>Adaptive quality</h3>
+          <p>With <code>scrcpyBitRateAuto</code> on, the client keeps the video bit rate as high as the link carries. The logic is one small
+            pure class per backend, <span class="file-path">src/phone_mirror/adaptivebitrate.h</span> and
+            <span class="file-path">backend/phone_mirror/adaptive_bitrate.py</span> (identical behaviour, covered by
+            <span class="file-path">tests/test_adaptive_bitrate.py</span>), fed from the video thread for every media packet.</p>
+          <ul>
+            <li><strong>Signal</strong>: each packet's phone presentation time against its arrival on our steady clock. The difference is
+              the one-way delay plus an unknown clock offset; the smallest delay over the last 10 one-second windows stands in for an idle
+              link, so the excess is queueing. It is measured on arrival, before decoding, so a decoder that cannot keep up (large
+              frames on a small board) backs the rate off just like weak Wi-Fi. A jump over 3 s is taken as a clock step and restarts the baseline.</li>
+            <li><strong>Decisions</strong> (per one-second window, after a 2 s warm-up; the window's single worst packet is left out so a key
+              frame is not congestion): mean queueing over 150 ms cuts the rate to 70 % (at most every 2 s); under 40 ms for two windows in
+              a row, 5 s after the last cut, and with the stream actually using at least half the rate (a still screen proves nothing)
+              raises it by 10 %, at least 1 Mbps. The rate stays between 2 Mbps (<code>kAdaptiveMinBps</code> / <code>ADAPTIVE_MIN_BPS</code>)
+              and the link's setting. Changes under 5 % are not sent.</li>
+            <li><strong>Start</strong>: USB at the ceiling, Wi-Fi at 60 % of it (<code>kAdaptiveWifiStart</code> /
+              <code>ADAPTIVE_WIFI_START</code>). The starting rate is sent with the first packet too, since a reattached server may still
+              run an earlier session's rate.</li>
+            <li><strong>Phone side</strong>: <code>OCTAVE_SET_BIT_RATE</code> &rarr; <code>VideoBitRate.set()</code> &rarr;
+              <code>MediaCodec.setParameters(PARAMETER_KEY_VIDEO_BITRATE)</code> on the running encoder, no restart and no key frame.
+              Encoders that ignore live changes keep their rate; the cut still helps once the encoder is recreated.</li>
+            <li><strong>Visible</strong>: <code>currentBitRate</code> (bps, 0 when idle) follows every change; the Phone Dock card shows
+              "Now: … Mbps over USB / Wi-Fi", and each change is logged with its queueing delay.</li>
+          </ul>
         </section>
 
         <section id="pm-input">
@@ -581,7 +636,11 @@
             <thead><tr><th>Setting</th><th>Default</th><th>Effect</th><th>Applied</th></tr></thead>
             <tbody>
               <tr><td><code>phoneMirrorEnabled</code></td><td>false</td><td>Shows the Phone Mirror button in the bottom bar (hidden on Android regardless)</td><td>live</td></tr>
-              <tr><td><code>scrcpyDisplaySize</code></td><td><code>"1280x800"</code></td><td>Virtual display size (<code>new_display=</code>); <code>""</code> = phone screen. The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
+              <tr><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code></td><td>Virtual display size (<code>new_display=</code>); <code>"auto"</code> = the view's pixel size, <code>""</code> = phone screen. The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
+              <tr><td><code>scrcpyDisplayDpi</code></td><td>0</td><td>Appended as <code>new_display=WxH/dpi</code>; 0 = the server scales the phone's own density</td><td>restarts the session</td></tr>
+              <tr><td><code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code></td><td>16 / 8</td><td><code>video_bit_rate</code> in Mbps for that link</td><td>restarts a session on that link</td></tr>
+              <tr><td><code>scrcpyAutoWifi</code></td><td>true</td><td><code>adb tcpip 5555</code> before a USB session; remembers <code>ip:5555</code></td><td>next USB start</td></tr>
+              <tr><td><code>scrcpyBitRateAuto</code></td><td>true</td><td>Adaptive quality; the per-link rates become the ceiling</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyPhoneScreenOff</code></td><td>true</td><td>Keeper <code>panelDark</code></td><td>live (<code>OCTAVE_SET_KEEPER</code>)</td></tr>
               <tr><td><code>scrcpyWirelessAddress</code></td><td><code>""</code></td><td>Phone last connected over Wi-Fi; written by the manager (<code>wirelessAddressChanged</code> &rarr; <code>save_scrcpy_wireless_address</code>)</td><td>startup + live</td></tr>
               <tr><td><code>scrcpyAudioEnabled</code></td><td>false</td><td><code>audio=true audio_codec=raw</code></td><td>restarts the session</td></tr>
@@ -639,7 +698,7 @@
             <code>3.3.4-octave</code> keeps the mismatch check loud. Upstream changes are pulled deliberately and the byte layouts
             re-verified.</p>
           <h4>Why a virtual display</h4>
-          <p><code>new_display=1280x800</code> gives a landscape surface sized for the dash instead of a portrait phone screen, keeps the
+          <p><code>new_display=&lt;view size&gt;</code> gives a landscape surface sized for the dash instead of a portrait phone screen, keeps the
             phone's own screen free (and dark) for the passenger, and on Samsung draws DeX with a taskbar that replaces the nav row.
             Coordinates are relative to the mirrored display so touch needs no display-id routing. The costs are documented rather
             than hidden: HOME/APP_SWITCH do nothing there (hence <code>am start --display</code>), the display shares the phone's power

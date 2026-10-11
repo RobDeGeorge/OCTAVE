@@ -35,7 +35,13 @@ if [[ ! -f "$OCTAVE_BUILD/CMakeCache.txt" ]]; then
 fi
 # CMake automatically regenerates the existing build when its inputs change.
 # Bound parallelism so launching from the desktop does not exhaust memory.
-cmake --build "$OCTAVE_BUILD" --target octave --parallel 4
+if ! cmake --build "$OCTAVE_BUILD" --target octave --parallel 4; then
+    # A regenerate that raced a Dropbox sync can leave makefiles with no sources
+    # ("undefined reference to main"); regenerate from scratch and retry once.
+    printf 'Build failed; regenerating build files and retrying\n'
+    cmake -S "$OCTAVE_CHECKOUT" -B "$OCTAVE_BUILD"
+    cmake --build "$OCTAVE_BUILD" --target octave --parallel 4
+fi
 
 flock -u 9
 exec 9>&-

@@ -677,7 +677,8 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
           <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list removes the consumer). The QML
           consumers are <code>"dashboard"</code> (the active dashboard's PIDs), <code>"cards"</code> (every supported PID
           while Parameter Cards is open), <code>"home"</code> (the Home screen OBD tiles), <code>"editor"</code> (the
-          dashboard editor canvas) and <code>"settings"</code> (the OBD settings parameter list while it is shown).
+          dashboard editor canvas), <code>"settings"</code> (the OBD settings parameter list while it is shown) and
+          <code>"carMenu"</code> (RPM and SPEED for the 3D Jeep's engine and driveline while CarMenu is on screen).
         </p>
         <p>The poll set is built the same way in both backends (Python <code>compute_poll_params()</code>, C++
           <code>buildPidsToWatch()</code>):</p>

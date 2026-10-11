@@ -59,6 +59,13 @@ red = material("Tail lamp red", (0.55, 0.012, 0.015), 0.15, 0.24)
 amber = material("Amber marker", (0.95, 0.27, 0.015), 0.15, 0.28)
 interior = material("Black upholstery", (0.024, 0.027, 0.031), 0, 0.85)
 fabric = material("Seat fabric inserts", (0.038, 0.041, 0.046), 0, 0.95)
+cast_iron = material("Painted cast iron", (0.045, 0.048, 0.052), 0.35, 0.62)
+engine_black = material("Engine black plastic", (0.020, 0.022, 0.025), 0, 0.55)
+exhaust_iron = material("Exhaust cast iron", (0.17, 0.12, 0.09), 0.45, 0.72)
+service_yellow = material("Service cap yellow", (0.92, 0.70, 0.02), 0, 0.45)
+reservoir_plastic = material("Reservoir plastic", (0.78, 0.77, 0.70), 0, 0.50)
+oil_filter_blue = material("Oil filter blue", (0.03, 0.10, 0.42), 0.2, 0.40)
+driveshaft_paint = material("Driveshaft paint", (0.11, 0.115, 0.12), 0.4, 0.5)
 
 
 ACTIVE_PART = "body"
@@ -102,20 +109,20 @@ def box(name, loc, size, mat, bevel=0.015):
     return tag(o)
 
 
-def cylinder(name, loc, radius, depth, mat, axis=(0, 0, 1), vertices=48):
+def cylinder(name, loc, radius, depth, mat, axis=(0, 0, 1), vertices=48, bevel=0.003):
     bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=depth, location=loc)
     o = bpy.context.object
     o.rotation_mode = "QUATERNION"
     o.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(Vector(axis))
-    finish(o, name, mat, 0.003)
+    finish(o, name, mat, bevel)
     for p in o.data.polygons:
         p.use_smooth = len(p.vertices) == 4
     return tag(o)
 
 
-def bar(name, start, end, radius, mat):
+def bar(name, start, end, radius, mat, bevel=0.003):
     a, b = Vector(start), Vector(end)
-    return cylinder(name, (a + b) / 2, radius, (b - a).length, mat, b - a, 16)
+    return cylinder(name, (a + b) / 2, radius, (b - a).length, mat, b - a, 16, bevel)
 
 
 def panel(name, verts, mat, thickness=0.018):
@@ -325,7 +332,6 @@ for y in (-1.186, 1.186):
         ]
         path("Coil spring", coil, 0.009, steel)
         bar("Trailing arm", (x, y, 0.35), (x, y + (0.51 if y < 0 else -0.51), 0.47), 0.024, steel)
-    bar("Driveshaft", (diff_x, y - direction * 0.20, 0.375), (0, 0, 0.43), 0.032, steel)
 
 
 # Public rig geometry uses glTF/Qt coordinates; convert for the Blender source.
@@ -386,13 +392,17 @@ panel(
     black,
     0.009,
 )
-tunnel_sections = []
-for y, height in [(-0.56, 0.77), (0.45, 0.75), (0.70, 0.606)]:
-    tunnel_sections.append([(-0.145, y, 0.606), (-0.105, y, height), (0.105, y, height), (0.145, y, 0.606)])
+# The tunnel clears the bellhousing at the firewall, the shifter tower and the
+# NP231 chain case, then fades into the rear floor (see the drivetrain section).
+TUNNEL = [(-0.632, 0.22, 0.88, 0.13), (-0.45, 0.19, 0.83, 0.115), (-0.05, 0.18, 0.80, 0.105),
+          (0.30, 0.18, 0.77, 0.105), (0.55, 0.15, 0.70, 0.10), (0.70, 0.145, 0.606, 0.10)]
+tunnel_sections = [[(-wide, y, 0.606), (-top, y, height), (top, y, height), (wide, y, 0.606)]
+                   for y, wide, height, top in TUNNEL]
 mesh_object(
     "Raised transmission tunnel",
     [v for row in tunnel_sections for v in row],
-    [(j * 4 + i, j * 4 + i + 1, (j + 1) * 4 + i + 1, (j + 1) * 4 + i) for j in range(2) for i in range(3)],
+    [(j * 4 + i, j * 4 + i + 1, (j + 1) * 4 + i + 1, (j + 1) * 4 + i)
+     for j in range(len(TUNNEL) - 1) for i in range(3)],
     black,
 )
 for side in (-1, 1):
@@ -467,13 +477,11 @@ ACTIVE_PART = "tailgate"
 box("Tailgate shell", (0, 1.755, 0.925), (0.897, 0.058, 0.568), paint, 0.012)
 ACTIVE_PART = "body"
 
-# Boxed crossmembers, drivetrain casings, fasteners and an exhaust silencer.
+# Boxed crossmembers, exhaust casings and skid fasteners. The engine and
+# driveline are modeled in their own section below.
 for y in (-1.53, -0.58, 0.48, 1.60):
     box("Frame crossmember", (0, y, 0.425), (0.99, 0.082, 0.09), steel, 0.009)
 for name, loc, size in [
-    ("Engine oil pan", (0, -1.05, 0.53), (0.35, 0.54, 0.18)),
-    ("Transmission casing", (0, -0.38, 0.50), (0.29, 0.62, 0.22)),
-    ("Transfer case", (0.09, 0.07, 0.49), (0.43, 0.30, 0.22)),
     ("Exhaust catalytic converter", (0.35, -0.39, 0.39), (0.15, 0.28, 0.12)),
     ("Exhaust muffler", (0.40, 0.64, 0.40), (0.23, 0.37, 0.14)),
 ]:
@@ -483,12 +491,6 @@ for x in (-0.38, 0, 0.38):
 for x in (-0.405, 0.405):
     for y in (-0.20, 0.07, 0.34):
         cylinder("Skid mounting bolt", (x, y, 0.264), 0.012, 0.012, alloy, vertices=12)
-for y in (-1.186, 1.186):
-    dx = 0.23 if y < 0 else 0
-    direction = -1 if y < 0 else 1
-    for t in (0.08, 0.90):
-        point = Vector((dx, y - direction * 0.20, 0.375)).lerp(Vector((0, 0, 0.43)), t)
-        cylinder("Driveshaft universal joint", point, 0.050, 0.08, steel, (1, 0, 0), 16)
 
 
 # Broad shallow deck with a small rolled shoulder and a straight vertical skirt.
@@ -545,10 +547,13 @@ mesh_object(
     paint,
     True,
 )
-# A real firewall closes the cabin when the hood is lifted.
+# A real firewall closes the cabin when the hood is lifted; its lower edge is
+# notched to the tunnel profile so the bellhousing passes into the tunnel.
+_, wide, height, top = TUNNEL[0]
 panel(
     "Cowl firewall",
-    [(-0.735, -0.632, 0.56), (0.735, -0.632, 0.56), (0.735, -0.632, 1.250), (-0.735, -0.632, 1.250)],
+    [(x, -0.632, z) for x, z in [(-0.735, 0.56), (-wide, 0.56), (-wide, 0.606), (-top, height), (top, height),
+                                 (wide, 0.606), (wide, 0.56), (0.735, 0.56), (0.735, 1.250), (-0.735, 1.250)]],
     paint,
     0.012,
 )
@@ -566,7 +571,6 @@ for x in [i * 0.022 for i in range(-11, 12)]:
     box("Cowl intake louver", (x, -0.523, 1.309), (0.007, 0.105, 0.009), black, 0.003)
 
 # Inner engine-bay sides close the gap behind the front fender shoulders.
-box("Engine block silhouette", (0, -1.10, 0.865), (0.86, 0.96, 0.40), black, 0.035)
 for s in (-1, 1):
     sheet(
         "Engine bay side panel",
@@ -605,6 +609,411 @@ for side in (-1, 1):
 box("Radiator behind open grille", (0, -1.655, 0.995), (0.63, 0.027, 0.455), black, 0.01)
 for x in [i * 0.013 for i in range(-23, 24)]:
     box("Radiator core fin", (x, -1.677, 0.997), (0.003, 0.005, 0.385), black, 0)
+
+# ---------------------------------------------------------------------------
+# 4.0 L AMC inline six, NV3550 five-speed and NP231 transfer case.
+# Published sizes anchor the layout (4.40 in bore spacing, 9.13 in deck
+# height); placement follows the engine-bay photographs (114-126, 218-258):
+# air box and alternator on the passenger side; intake and exhaust manifolds
+# both on the driver side (non-crossflow head); intake tube arching over the
+# valve cover; brake booster, coolant and washer bottles on the driver side.
+# Everything rigid to the block is drawn level and then tilted 3 degrees
+# tail-down about the crank nose, as the engine sits in the chassis.
+# ---------------------------------------------------------------------------
+print("Building engine and driveline", flush=True)
+CRANK_Z = 0.72
+ENGINE_NOSE = Vector((0, -1.50, CRANK_Z))
+ENGINE_TILT = (
+    Matrix.Translation(ENGINE_NOSE) @ Matrix.Rotation(math.radians(-3), 4, "X") @ Matrix.Translation(-ENGINE_NOSE)
+)
+BORES = [-1.05 + (i - 2.5) * 0.1118 for i in range(6)]
+BELT_Y = -1.505
+
+
+def eng(p):
+    """Engine-frame point (level crank) to chassis coordinates."""
+    return ENGINE_TILT @ Vector(p)
+
+
+def eng_dir(d):
+    return (ENGINE_TILT.to_3x3() @ Vector(d)).normalized()
+
+
+def hull(points):
+    """Counter-clockwise convex hull of 2D points (monotone chain)."""
+    pts = sorted(set(points))
+
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) > 1 and (
+                (out[-1][0] - out[-2][0]) * (p[1] - out[-2][1]) - (out[-1][1] - out[-2][1]) * (p[0] - out[-2][0])
+            ) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+
+    lower, upper = half(pts), half(reversed(pts))
+    return lower[:-1] + upper[:-1]
+
+
+def circle_points(cx, cz, r, n=40):
+    return [(cx + r * math.cos(i * math.tau / n), cz + r * math.sin(i * math.tau / n)) for i in range(n)]
+
+
+def resample(loop, n):
+    """Evenly spaced points around a closed 2D outline."""
+    lengths = [math.dist(loop[i], loop[(i + 1) % len(loop)]) for i in range(len(loop))]
+    total, out, i, walked = sum(lengths), [], 0, 0.0
+    for k in range(n):
+        target = total * k / n
+        while walked + lengths[i] < target:
+            walked += lengths[i]
+            i += 1
+        t = (target - walked) / lengths[i]
+        a, b = loop[i], loop[(i + 1) % len(loop)]
+        out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+    return out
+
+
+def curve(points, n=24):
+    """Smooth Bezier through control points, for hoses and tubes."""
+    out = []
+    for k in range(n + 1):
+        pts = [Vector(p) for p in points]
+        t = k / n
+        while len(pts) > 1:
+            pts = [a.lerp(b, t) for a, b in zip(pts, pts[1:], strict=False)]
+        out.append(tuple(pts[0]))
+    return out
+
+
+def frame(axis):
+    """Two unit vectors perpendicular to axis."""
+    axis = Vector(axis).normalized()
+    p = axis.cross(Vector((1, 0, 0)) if abs(axis.x) < 0.9 else Vector((0, 0, 1))).normalized()
+    return p, axis.cross(p)
+
+
+def u_joint(center, axis, mat_cross, mat_yoke):
+    """Cross-and-yoke universal joint centered on a shaft axis."""
+    center, axis = Vector(center), Vector(axis).normalized()
+    p, q = frame(axis)
+    for v in (p, q):
+        bar("Universal joint cross", center - v * 0.036, center + v * 0.036, 0.010, mat_cross, bevel=0)
+        for s in (-1, 1):
+            cylinder("Universal joint bearing cap", center + v * s * 0.036, 0.013, 0.016, mat_cross, v, 16, bevel=0)
+    for v, d in ((p, -1), (q, 1)):
+        for s in (-1, 1):
+            base = center + v * s * 0.040
+            bar("Driveshaft yoke ear", base, base + axis * d * 0.050, 0.012, mat_yoke, bevel=0)
+
+
+ENGINE_PARTS_START = set(bpy.context.scene.objects)
+
+# Block: flat-sided cast iron with pan rails, a front timing cover and the
+# freeze plugs and ribs visible on the passenger side.
+block_profile = [(-0.165, -0.12), (0.165, -0.12), (0.182, -0.02), (0.188, 0.232), (-0.188, 0.232), (-0.182, -0.02)]
+loft(
+    "4.0 inline six cylinder block",
+    [[(x, y, CRANK_Z + z) for x, z in block_profile] for y in (-1.43, -0.69)],
+    cast_iron,
+    smooth=False,
+)
+for y in BORES[::2]:
+    cylinder("Block freeze plug", (-0.19, y + 0.056, CRANK_Z + 0.10), 0.022, 0.008, alloy, (1, 0, 0), 20, bevel=0)
+for y in BORES:
+    box("Block cylinder rib", (-0.189, y, CRANK_Z + 0.10), (0.008, 0.016, 0.20), cast_iron, 0)
+    box("Block cylinder rib", (0.189, y, CRANK_Z + 0.05), (0.008, 0.016, 0.12), cast_iron, 0)
+box("Rear main seal housing", (0, -0.70, CRANK_Z - 0.02), (0.30, 0.025, 0.20), cast_iron, 0.01)
+loft(
+    "Stamped timing cover",
+    [[(x, y, CRANK_Z + z) for x, z in rounded([(-0.12, -0.10), (0.12, -0.10), (0.15, 0.20), (-0.15, 0.20)], 0.05, 5)]
+     for y in (-1.475, -1.43)],
+    engine_black,
+    smooth=False,
+)
+# Head, valve cover, coil rail and oil filler cap.
+box("Cylinder head", (0, -1.05, CRANK_Z + 0.29), (0.35, 0.72, 0.115), cast_iron, 0.012)
+cover = rounded([(-0.152, 0.345), (0.152, 0.345), (0.14, 0.418), (-0.14, 0.418)], 0.03, 5)
+loft(
+    "Valve cover",
+    [[(x * k, y, CRANK_Z + 0.345 + (z - 0.345) * k) for x, z in cover] for y, k in [(-1.39, 0.9), (-1.375, 1), (-0.725, 1), (-0.71, 0.9)]],
+    engine_black,
+)
+for y in (-1.25, -1.10, -0.95, -0.80):
+    box("Valve cover rib", (-0.04, y, CRANK_Z + 0.421), (0.16, 0.012, 0.010), engine_black, 0)
+for x in (-0.14, 0.14):
+    for y in (-1.36, -1.05, -0.74):
+        cylinder("Valve cover bolt", (x, y, CRANK_Z + 0.36), 0.007, 0.03, alloy, vertices=10, bevel=0)
+box("Coil rail", (0.085, -1.05, CRANK_Z + 0.433), (0.045, 0.64, 0.032), engine_black, 0.008)
+for x in (0.071, 0.085, 0.099):
+    box("Coil rail rib", (x, -1.05, CRANK_Z + 0.452), (0.006, 0.60, 0.008), engine_black, 0)
+for y in BORES[::2]:
+    box("Coil pack connector", (0.112, y, CRANK_Z + 0.44), (0.02, 0.03, 0.018), red, 0.003)
+cylinder("Oil filler cap", (-0.06, -1.25, CRANK_Z + 0.43), 0.032, 0.022, engine_black, vertices=24)
+cylinder("Oil filler cap label", (-0.06, -1.25, CRANK_Z + 0.442), 0.026, 0.004, service_yellow, vertices=24)
+
+# Driver-side intake: plenum, six runners and an upward-facing throttle body.
+cylinder("Intake plenum", (0.255, -1.08, CRANK_Z + 0.31), 0.058, 0.54, engine_black, (0, 1, 0), 24)
+for y in BORES:
+    path(
+        "Intake runner",
+        curve([(0.17, y, CRANK_Z + 0.30), (0.215, y, CRANK_Z + 0.36), (0.255, y, CRANK_Z + 0.33)], 8),
+        0.022,
+        engine_black,
+    )
+cylinder("Throttle body", (0.25, -1.36, CRANK_Z + 0.36), 0.045, 0.07, alloy, (0, -0.6, 0.8), 24)
+THROTTLE_INLET = eng((0.25, -1.40, CRANK_Z + 0.39))
+for y in (-1.25, -0.95):
+    box("Fuel injector connector", (0.205, y, CRANK_Z + 0.36), (0.02, 0.03, 0.03), red, 0.004)
+path("Fuel rail", [(0.205, -1.37, CRANK_Z + 0.375), (0.205, -0.74, CRANK_Z + 0.375)], 0.009, alloy)
+
+# Exhaust manifold: two cast three-into-one sections under the intake, a
+# bright heat shield and the downpipe flange.
+collectors = [(-1.18, CRANK_Z + 0.06), (-0.91, CRANK_Z + 0.06)]
+for i, y in enumerate(BORES):
+    cy, cz = collectors[i // 3]
+    path(
+        "Exhaust manifold primary",
+        curve([(0.17, y, CRANK_Z + 0.23), (0.25, y, CRANK_Z + 0.21), (0.26, cy, cz + 0.05), (0.27, cy, cz)], 10),
+        0.021,
+        exhaust_iron,
+    )
+for cy, cz in collectors:
+    cylinder("Exhaust manifold collector", (0.27, cy, cz), 0.034, 0.08, exhaust_iron, (0, 0, 1), 20)
+path("Exhaust manifold merge", curve([(0.27, -1.18, CRANK_Z + 0.02), (0.28, -1.05, CRANK_Z - 0.06), (0.27, -0.91, CRANK_Z + 0.02)], 10), 0.03, exhaust_iron)
+box("Exhaust manifold heat shield", (0.295, -1.05, CRANK_Z + 0.20), (0.012, 0.62, 0.12), alloy, 0.006)
+DOWNPIPE_START = eng((0.28, -1.05, CRANK_Z - 0.09))
+cylinder("Downpipe flange", (0.28, -1.05, CRANK_Z - 0.08), 0.045, 0.012, alloy, (0, 0, 1), 20)
+cylinder("Oil filter", (0.225, -1.22, CRANK_Z - 0.07), 0.046, 0.10, oil_filter_blue, (1, 0, -0.6), 28)
+
+# Oil pan: shallow front over the axle, deep rear sump, pressed flange.
+pan_profile = rounded([(-0.15, 0), (0.15, 0), (0.15, -1), (-0.15, -1)], 0.025, 4)
+for name, y0, y1, depth in [("Oil pan front section", -1.42, -1.04, 0.04), ("Oil pan rear sump", -1.04, -0.72, 0.20)]:
+    loft(
+        name,
+        [[(x, y, CRANK_Z - 0.12 + min(z, -0.0) * depth) for x, z in pan_profile] for y in (y0, y1)],
+        engine_black,
+        smooth=False,
+    )
+box("Oil pan flange", (0, -1.07, CRANK_Z - 0.125), (0.35, 0.72, 0.012), engine_black, 0.004)
+cylinder("Oil drain plug", (0, -0.85, CRANK_Z - 0.325), 0.014, 0.012, alloy, vertices=6, bevel=0)
+
+# Front accessory drive. Pulley centers sit in the belt plane.
+pulleys = {
+    "crank": (0.0, CRANK_Z, 0.085),
+    "water pump": (0.0, CRANK_Z + 0.24, 0.075),
+    "alternator": (-0.25, CRANK_Z + 0.14, 0.032),
+    "power steering": (0.17, CRANK_Z + 0.29, 0.064),
+    "air conditioning": (0.205, CRANK_Z + 0.0, 0.060),
+    "tensioner": (-0.13, CRANK_Z + 0.31, 0.035),
+}
+belt = resample(hull([p for cx, cz, r in pulleys.values() for p in circle_points(cx, cz, r + 0.004, 48)]), 160)
+shell_thickness(
+    mesh_object(
+        "Serpentine belt",
+        [(x, y, z) for y in (BELT_Y - 0.011, BELT_Y + 0.011) for x, z in belt],
+        [(i, (i + 1) % 160, 160 + (i + 1) % 160, 160 + i) for i in range(160)],
+        rubber,
+        True,
+    ),
+    0.004,
+)
+for name in ("alternator", "power steering", "air conditioning", "tensioner"):
+    cx, cz, r = pulleys[name]
+    cylinder(name.capitalize() + " pulley", (cx, BELT_Y, cz), r, 0.026, alloy, (0, 1, 0), 32)
+    cylinder(name.capitalize() + " pulley nut", (cx, BELT_Y - 0.016, cz), r * 0.35, 0.01, steel, (0, 1, 0), 6, bevel=0)
+cylinder("Belt idler", (-0.075, BELT_Y, CRANK_Z + 0.10), 0.034, 0.026, alloy, (0, 1, 0), 32)
+cylinder("Alternator housing", (-0.25, -1.44, CRANK_Z + 0.14), 0.08, 0.12, alloy, (0, 1, 0), 32)
+for i in range(16):
+    a = i * math.tau / 16
+    box("Alternator cooling slot", (-0.25 + 0.055 * math.cos(a), -1.501, CRANK_Z + 0.14 + 0.055 * math.sin(a)),
+        (0.012, 0.004, 0.012), engine_black, 0)
+bar("Alternator bracket", (-0.25, -1.42, CRANK_Z + 0.14), (-0.17, -1.42, CRANK_Z + 0.06), 0.02, alloy)
+cylinder("Power steering pump", (0.17, -1.42, CRANK_Z + 0.29), 0.055, 0.11, engine_black, (0, 1, 0), 28)
+cylinder("Power steering reservoir", (0.17, -1.36, CRANK_Z + 0.37), 0.04, 0.06, engine_black, vertices=24)
+cylinder("Power steering cap", (0.17, -1.36, CRANK_Z + 0.405), 0.026, 0.012, service_yellow, vertices=24)
+cylinder("Air conditioning compressor", (0.205, -1.38, CRANK_Z), 0.072, 0.17, alloy, (0, 1, 0), 32)
+cylinder("Compressor clutch face", (0.205, BELT_Y - 0.018, CRANK_Z), 0.05, 0.008, steel, (0, 1, 0), 32)
+cylinder("Water pump body", (0, -1.455, CRANK_Z + 0.24), 0.06, 0.05, cast_iron, (0, 1, 0), 28)
+box("Thermostat housing", (-0.05, -1.37, CRANK_Z + 0.33), (0.07, 0.07, 0.05), alloy, 0.01)
+
+# Spinning crank damper: its own rig part so it turns with engine RPM.
+ACTIVE_PART = "crank_pulley"
+cylinder("Crank damper ring", (0, BELT_Y, CRANK_Z), 0.085, 0.034, alloy, (0, 1, 0), 48)
+cylinder("Crank damper hub", (0, BELT_Y - 0.019, CRANK_Z), 0.045, 0.008, steel, (0, 1, 0), 32)
+cylinder("Crank bolt", (0, BELT_Y - 0.028, CRANK_Z), 0.016, 0.012, alloy, (0, 1, 0), 6, bevel=0)
+for i in range(3):
+    a = i * math.tau / 3 + 0.3
+    cylinder("Crank damper puller hole", (0.03 * math.cos(a), BELT_Y - 0.024, CRANK_Z + 0.03 * math.sin(a)), 0.006, 0.004, engine_black, (0, 1, 0), 12, bevel=0)
+box("Crank damper timing mark", (0, BELT_Y - 0.0175, CRANK_Z + 0.072), (0.006, 0.003, 0.024), lens, 0)
+
+# Fan clutch, seven-blade fan and water pump pulley turn with the water pump.
+ACTIVE_PART = "engine_fan"
+FAN_Z, FAN_Y, FAN_RADIUS = CRANK_Z + 0.24, -1.578, 0.165
+cylinder("Water pump pulley", (0, BELT_Y, FAN_Z), 0.075, 0.026, alloy, (0, 1, 0), 40)
+cylinder("Viscous fan clutch", (0, -1.543, FAN_Z), 0.066, 0.042, alloy, (0, 1, 0), 40)
+for i in range(12):
+    a = i * math.tau / 12
+    bar("Fan clutch cooling fin", (0.03 * math.cos(a), -1.565, FAN_Z + 0.03 * math.sin(a)),
+        (0.062 * math.cos(a), -1.565, FAN_Z + 0.062 * math.sin(a)), 0.004, alloy, bevel=0)
+cylinder("Fan hub", (0, FAN_Y, FAN_Z), 0.058, 0.012, engine_black, (0, 1, 0), 32)
+for i in range(7):
+    a = i * math.tau / 7
+
+    def blade(r, t, axial, a=a):
+        return (r * math.cos(a) - t * math.sin(a), FAN_Y + axial, FAN_Z + r * math.sin(a) + t * math.cos(a))
+
+    panel(
+        "Engine fan blade",
+        [blade(0.05, -0.024, -0.012), blade(0.05, 0.024, 0.012), blade(FAN_RADIUS, 0.05, 0.018), blade(FAN_RADIUS, -0.04, -0.018)],
+        engine_black,
+        0.004,
+    )
+ACTIVE_PART = "body"
+
+# Bellhousing, NV3550 case with shifter tower, and NP231 chain case.
+loft(
+    "Clutch bellhousing",
+    [[(r * math.cos(i * math.tau / 40), y, CRANK_Z + r * math.sin(i * math.tau / 40)) for i in range(40)]
+     for y, r in [(-0.69, 0.195), (-0.62, 0.19), (-0.48, 0.13), (-0.46, 0.125)]],
+    alloy,
+)
+for i in range(8):
+    a = i * math.tau / 8 + 0.2
+    cylinder("Bellhousing bolt", (0.20 * math.cos(a), -0.684, CRANK_Z + 0.20 * math.sin(a)), 0.009, 0.02, steel, (0, 1, 0), 6, bevel=0)
+loft(
+    "NV3550 five speed case",
+    [[(r * math.cos(i * math.tau / 32), y, CRANK_Z - 0.01 + r * 1.1 * math.sin(i * math.tau / 32)) for i in range(32)]
+     for y, r in [(-0.46, 0.115), (-0.30, 0.112), (-0.14, 0.098), (-0.10, 0.09)]],
+    alloy,
+)
+for y in (-0.40, -0.32, -0.24, -0.16):
+    box("Transmission case rib", (0, y, CRANK_Z - 0.01), (0.235, 0.012, 0.20), alloy, 0)
+box("Shifter tower", (0, -0.16, CRANK_Z + 0.12), (0.10, 0.11, 0.14), alloy, 0.015)
+starter = cylinder("Starter motor", (-0.17, -0.60, CRANK_Z - 0.09), 0.048, 0.17, engine_black, (0, 1, 0), 28)
+cylinder("Starter solenoid", (-0.17, -0.62, CRANK_Z - 0.02), 0.026, 0.11, engine_black, (0, 1, 0), 20)
+NP231_FRONT = (0.17, -0.19)  # front output, relative to the crank axis
+case = hull(circle_points(0, 0, 0.115, 40) + circle_points(*NP231_FRONT, 0.085, 40))
+case = resample(case, 64)
+loft(
+    "NP231 chain case",
+    [[(x * k, y, CRANK_Z + z * k) for x, z in case] for y, k in [(-0.10, 0.93), (-0.085, 1), (0.20, 1), (0.22, 0.92)]],
+    alloy,
+)
+for i in range(10):
+    x, z = case[i * 6]
+    cylinder("Transfer case bolt", (x * 0.97, 0.06, CRANK_Z + z * 0.97), 0.007, 0.32, steel, (0, 1, 0), 6, bevel=0)
+cylinder("NP231 tag", (0.0, -0.088, CRANK_Z - 0.05), 0.03, 0.004, red, (0, 1, 0), 24)
+cylinder("Rear output housing", (0, 0.27, CRANK_Z), 0.052, 0.10, alloy, (0, 1, 0), 28)
+cylinder("Front output seal", (NP231_FRONT[0], -0.115, CRANK_Z + NP231_FRONT[1]), 0.045, 0.04, alloy, (0, 1, 0), 28)
+REAR_OUTPUT = eng((0, 0.33, CRANK_Z))
+FRONT_OUTPUT = eng((NP231_FRONT[0], -0.14, CRANK_Z + NP231_FRONT[1]))
+
+engine_objects = set(bpy.context.scene.objects) - ENGINE_PARTS_START
+for obj in engine_objects:
+    obj.matrix_world = ENGINE_TILT @ obj.matrix_world
+FAN_PIVOT, FAN_AXIS = eng((0, FAN_Y, FAN_Z)), eng_dir((0, -1, 0))
+CRANK_PIVOT = eng((0, BELT_Y, CRANK_Z))
+
+# Chassis-mounted pieces: engine mounts, transfer case mount, downpipe.
+for s in (-1, 1):
+    top = eng((s * 0.19, -0.80, CRANK_Z - 0.04))
+    bar("Engine mount bracket", top, (s * 0.40, -0.80, 0.50), 0.022, steel)
+    cylinder("Engine mount isolator", (s * 0.40, -0.80, 0.485), 0.042, 0.05, rubber, vertices=24)
+    box("Engine mount frame bracket", (s * 0.425, -0.80, 0.47), (0.07, 0.12, 0.03), steel, 0.006)
+box("Transfer case mount", (0, 0.10, 0.42), (0.16, 0.12, 0.22), rubber, 0.012)
+path(
+    "Exhaust downpipe",
+    curve([DOWNPIPE_START, (0.31, -0.98, 0.52), (0.33, -0.80, 0.40), (0.35, -0.62, 0.40), (0.35, -0.50, 0.40)], 16),
+    0.026,
+    exhaust_iron,
+)
+
+# Fan shroud, hoses and radiator details mount to the radiator, not the engine.
+shroud_angles = sorted(set([i * math.tau / 64 for i in range(64)]))
+outer, inner = [], []
+for a in shroud_angles:
+    c, t = math.cos(a), math.sin(a)
+    r = min(0.315 / max(abs(c), 1e-9), (0.235 if t > 0 else 0.19) / max(abs(t), 1e-9))
+    outer.append((r * c, FAN_PIVOT.z + r * t))
+    inner.append(((FAN_RADIUS + 0.013) * c, FAN_PIVOT.z + (FAN_RADIUS + 0.013) * t))
+ring("Fan shroud face", outer, inner, lambda x, z: (x, -1.632, z), engine_black)
+loft(
+    "Fan shroud ring",
+    [[(x, y, z) for x, z in inner] for y in (-1.632, -1.555)],
+    engine_black,
+    capped=False,
+    smooth=True,
+)
+box("Fan shroud top lip", (0, -1.60, FAN_PIVOT.z + 0.235), (0.63, 0.065, 0.008), engine_black, 0.003)
+# Reads left to right for someone standing at the grille looking in.
+text_mesh("Fan shroud warning", "CAUTION FAN", (0, -1.60, FAN_PIVOT.z + 0.2395), 0.03, engine_black, (0, 0, 0))
+cylinder("Radiator cap", (0.22, -1.655, 1.236), 0.03, 0.02, alloy, vertices=32)
+cylinder("Radiator filler neck", (0.22, -1.655, 1.222), 0.022, 0.02, alloy, vertices=24)
+path(
+    "Upper radiator hose",
+    curve([eng((-0.05, -1.40, CRANK_Z + 0.35)), (-0.10, -1.52, 1.18), (-0.20, -1.60, 1.235), (-0.25, -1.655, 1.236)], 18),
+    0.024,
+    rubber,
+)
+path(
+    "Lower radiator hose",
+    curve([eng((-0.05, -1.47, CRANK_Z + 0.20)), (-0.16, -1.55, 0.74), (-0.26, -1.60, 0.72), (-0.26, -1.655, 0.745)], 18),
+    0.026,
+    rubber,
+)
+
+# Passenger side: air box, intake tube over the valve cover, battery, PCM.
+box("Air cleaner box", (-0.44, -1.27, 1.02), (0.22, 0.40, 0.19), engine_black, 0.025)
+box("Air cleaner lid", (-0.44, -1.27, 1.122), (0.235, 0.415, 0.02), engine_black, 0.01)
+for y in (-1.40, -1.30, -1.20, -1.10):
+    box("Air box lid rib", (-0.44, y, 1.137), (0.20, 0.012, 0.012), engine_black, 0)
+for y in (-1.43, -1.11):
+    box("Air box clip", (-0.33, y, 1.09), (0.012, 0.03, 0.06), alloy, 0.003)
+intake = curve([(-0.33, -1.30, 1.08), (-0.18, -1.30, 1.20), (0.10, -1.44, 1.22), THROTTLE_INLET + Vector((0, -0.06, 0.08)), THROTTLE_INLET], 28)
+path("Air intake tube", intake, 0.042, engine_black)
+for t in range(1, 8):
+    cylinder("Intake tube bellows", intake[t], 0.047, 0.012, engine_black, Vector(intake[t + 1]) - Vector(intake[t - 1]), 24, bevel=0)
+box("Battery", (-0.45, -0.86, 0.98), (0.17, 0.26, 0.18), engine_black, 0.012)
+box("Battery tray", (-0.45, -0.86, 0.885), (0.20, 0.29, 0.012), steel, 0.004)
+for y, mat in ((-0.95, red), (-0.77, engine_black)):
+    cylinder("Battery terminal", (-0.40, y, 1.08), 0.014, 0.025, mat, vertices=16, bevel=0)
+box("Powertrain control module", (-0.43, -0.648, 1.10), (0.20, 0.025, 0.13), alloy, 0.008)
+
+# Driver side: brake booster, master cylinder, coolant and washer bottles.
+cylinder("Brake booster", (0.40, -0.715, 1.01), 0.13, 0.14, engine_black, (0, 1, 0), 48)
+cylinder("Brake master cylinder", (0.40, -0.86, 1.01), 0.038, 0.16, alloy, (0, 1, 0), 24)
+box("Brake fluid reservoir", (0.40, -0.86, 1.07), (0.07, 0.12, 0.06), reservoir_plastic, 0.012)
+cylinder("Brake fluid cap", (0.40, -0.86, 1.106), 0.024, 0.014, service_yellow, vertices=20)
+box("Coolant and washer bottle", (0.44, -1.38, 0.96), (0.17, 0.24, 0.22), reservoir_plastic, 0.03)
+for y in (-1.45, -1.31):
+    cylinder("Reservoir cap", (0.45, y, 1.08), 0.03, 0.02, service_yellow, vertices=24)
+
+# Driveshafts. Each is its own rig part spinning about its own axis.
+DRIVESHAFTS = {}
+for part, start, end in [
+    ("front_driveshaft", FRONT_OUTPUT, Vector((0.23, -0.971, 0.375))),
+    ("rear_driveshaft", REAR_OUTPUT, Vector((0, 0.971, 0.375))),
+]:
+    ACTIVE_PART = part
+    axis = (end - start).normalized()
+    a, b = start + axis * 0.10, end - axis * 0.08
+    cylinder("Driveshaft slip yoke", start + axis * 0.03, 0.03, 0.08, steel, axis, 24)
+    bar("Driveshaft tube", a + axis * 0.05, b - axis * 0.05, 0.034 if part.startswith("rear") else 0.030, driveshaft_paint)
+    for joint in (a, b):
+        u_joint(joint, axis, steel, steel)
+    cylinder("Driveshaft balance weight", a.lerp(b, 0.45) + frame(axis)[0] * 0.034, 0.008, 0.02, steel, axis, 6, bevel=0)
+    cylinder("Pinion yoke", end + axis * 0.02, 0.032, 0.05, steel, axis, 24)
+    # Rig axes all point forward so one sign convention spins every part.
+    DRIVESHAFTS[part] = (start.lerp(end, 0.5), axis if axis.y < 0 else -axis)
+ACTIVE_PART = "body"
+SPINNERS = {
+    "crank_pulley": (CRANK_PIVOT, FAN_AXIS),
+    "engine_fan": (FAN_PIVOT, FAN_AXIS),
+    **DRIVESHAFTS,
+}
 
 # Flat-top front fenders roll down around the tire; rear flares have a trapezoid opening.
 for s in (-1, 1):
@@ -1019,7 +1428,7 @@ box("Pedal hanger bracket", (0.365, -0.402, 0.957), (0.37, 0.045, 0.055), steel,
 for name, x, y, z, width, height in [
     ("Clutch", 0.52, -0.475, 0.765, 0.075, 0.075),
     ("Brake", 0.37, -0.475, 0.765, 0.075, 0.075),
-    ("Accelerator", 0.20, -0.53, 0.705, 0.043, 0.12),
+    ("Accelerator", 0.215, -0.53, 0.705, 0.043, 0.12),
 ]:
     bar(name + " pedal arm", (x, -0.402, 0.965), (x, y - 0.014, z), 0.010, steel)
     box(name + " pedal pad", (x, y, z), (width, 0.025, height), rubber, 0.008)
@@ -1244,7 +1653,7 @@ ACTIVE_PART = "body"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from rig_export import export_vehicle
 
-joints = export_vehicle(opts.output, opts.blend)
+joints = export_vehicle(opts.output, opts.blend, SPINNERS)
 triangles = sum(len(p.vertices) - 2 for o in bpy.context.scene.objects if o.type == "MESH" for p in o.data.polygons)
 print(f"Exported {opts.output}: {triangles:,} triangles, {opts.output.stat().st_size:,} bytes")
 if opts.preview:

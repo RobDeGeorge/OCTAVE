@@ -36,7 +36,8 @@ Item {
     }
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
-    // Each entry: { cardId, title, iconSource, component }. Other layouts ignore
+    // Each entry: { cardId, title, summary, component } — see DisplaySettingsPage
+    // for what summary() returns. Other layouts ignore
     // this and use the Repeater rendering below.
     //
     // The old single "Connection" card bundled four unrelated concerns in ~650
@@ -46,11 +47,48 @@ Item {
     // page (the Sidebar layout); the stacked cards are then never built.
     property bool renderCards: true
 
+    // Collapses the manager's status text to one word for the tile.
+    function _shortStatus(status) {
+        status = String(status || "")
+        if (status.indexOf("Connecting") !== -1) return "Connecting"
+        if (status.indexOf("Connected") !== -1 && status.indexOf("Not") === -1
+                && status.indexOf("Dis") === -1) return "Connected"
+        return "Offline"
+    }
+
     property var tileModel: [
-        { cardId: "obd_connection", title: "Connection", iconSource: App.Style.assetBase + "tile_connection.svg", component: connectionContent },
-        { cardId: "obd_adapters",   title: "Adapters",   iconSource: App.Style.assetBase + "tile_adapters.svg",   component: adaptersContent },
-        { cardId: "obd_tuning",     title: "Tuning",     iconSource: App.Style.assetBase + "tile_tuning.svg",     component: tuningContent },
-        { cardId: "obd_parameters", title: "Parameters", iconSource: App.Style.assetBase + "tile_parameters.svg", component: parametersContent }
+        { cardId: "obd_connection", title: "Connection", component: connectionContent,
+          summary: function() {
+              if (!obdManager) return {}
+              var short = pageRoot._shortStatus(obdManager.connectionStatus)
+              var vehicle = obdManager.vehicleModelYear > 0
+                  ? obdManager.vehicleModelYear + " " + obdManager.vehicleMake : obdManager.vehicleMake
+              return { state: short === "Connected" && vehicle ? vehicle : short,
+                       active: short === "Connected",
+                       status: short === "Connected" ? App.Style.statusConnected
+                             : short === "Connecting" ? App.Style.statusWarning : App.Style.statusDisconnected }
+          } },
+        { cardId: "obd_adapters", title: "Adapters", component: adaptersContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              var saved = []
+              try { saved = JSON.parse(settingsManager.obdSavedAdapters || "[]") } catch (e) {}
+              if (!Array.isArray(saved) || saved.length === 0) return {}
+              return { state: saved.length === 1 ? (saved[0].name || "1 saved") : saved.length + " saved" }
+          } },
+        { cardId: "obd_tuning", title: "Tuning", component: tuningContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              var retries = settingsManager.obdAutoReconnectAttempts
+              return { state: (settingsManager.obdFastMode ? "Fast" : "Standard")
+                              + (retries > 0 ? " · " + retries + "×" : "") }
+          } },
+        { cardId: "obd_parameters", title: "Parameters", component: parametersContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              var n = (settingsManager.homeOBDParameters || []).length
+              return { state: n + (n === 1 ? " gauge" : " gauges") }
+          } }
     ]
 
     // ── Card body components — shared between the Flickable rendering (below)

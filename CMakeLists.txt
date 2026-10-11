@@ -152,6 +152,7 @@ qt_add_executable(octave
     src/managers/dashboardmanager.h
     src/managers/dashboardmanager.cpp
     src/phone_mirror/scrcpyclient.h
+    src/phone_mirror/adaptivebitrate.h
     src/phone_mirror/scrcpyclient.cpp
     src/phone_mirror/qrcodegen.hpp
     src/phone_mirror/qrcodegen.cpp

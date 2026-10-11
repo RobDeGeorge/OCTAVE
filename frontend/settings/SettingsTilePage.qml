@@ -51,11 +51,16 @@ Item {
                 Layout.minimumHeight: tilePage.dp(100)
                 cardId: modelData && modelData.cardId !== undefined ? modelData.cardId : ""
                 title: modelData && modelData.title !== undefined ? modelData.title : ""
-                icon: modelData && modelData.icon !== undefined ? modelData.icon : ""
-                iconSource: modelData && modelData.iconSource !== undefined ? modelData.iconSource : ""
-                statusColor: modelData && modelData.statusColor !== undefined
-                    ? modelData.statusColor : "transparent"
-                statusVisible: modelData && modelData.statusVisible === true
+                // `summary` is a function on the page's tileModel entry, so
+                // calling it here makes this binding track whatever manager
+                // properties it reads — the tile stays live without the page
+                // rebuilding its tileModel.
+                readonly property var info: modelData && typeof modelData.summary === "function"
+                    ? (modelData.summary() || {}) : {}
+                stateText: info.state !== undefined ? String(info.state) : ""
+                active: info.active === true
+                statusColor: info.status !== undefined ? info.status : "transparent"
+                statusVisible: info.status !== undefined
                 onTileClicked: function(id) {
                     // Map this tile's geometry into the parent of tilePage
                     // (the contentArea), so the popup can zoom from this rect.

@@ -2,6 +2,11 @@
 
 Qt uses separate hinge-local GLBs; the assembled GLB retains named pivot nodes
 and opening animation clips. No private RuntimeLoader scene APIs are required.
+
+Spinners (crank pulley, fan, driveshafts) turn about an arbitrary axis. Their
+meshes are baked in a local frame whose +Z (Qt) / -Y (Blender) is that axis;
+the manifest gives axis "Z" plus an "orient" quaternion [w, x, y, z] in Qt
+coordinates that places the local frame in the vehicle.
 """
 
 import json
@@ -10,7 +15,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 # Blender: -Y forward, Z up, +X VEHICLE LEFT (right-handed coordinates).
 # After glTF conversion: +Z forward, +Y up, +X vehicle left.
@@ -33,19 +38,27 @@ HINGES = {
 }
 
 
-def export_vehicle(output: Path, blend: Path | None = None):
+def export_vehicle(output: Path, blend: Path | None = None, spinners: dict | None = None):
+    """spinners: {part: (pivot_ground, axis_vector)} in Blender coordinates."""
     bpy.context.view_layer.update()
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     joints = {}
     manifest = {"parts": {}, "bounds": {}, "units": "metres", "forward": "+Z", "left": "+X"}
     closed_radius = swept_radius = 0.0
-    for name, (pivot_ground, axis, limit) in HINGES.items():
+    rigs = dict(HINGES)
+    for name, (pivot_ground, direction) in (spinners or {}).items():
+        rigs[name] = (tuple(pivot_ground), Vector(direction).normalized(), 0)
+    for name, (pivot_ground, axis, limit) in rigs.items():
         pivot = Vector(pivot_ground) - Vector((0, 0, 0.9))
         joint = bpy.data.objects.new(name, None)
         bpy.context.collection.objects.link(joint)
         joint.location = pivot
         joint.empty_display_type = "ARROWS"
         joint.empty_display_size = 0.12
+        # A spinner's local -Y (Qt +Z, forward) is its spin axis.
+        orient = Vector((0, -1, 0)).rotation_difference(axis) if isinstance(axis, Vector) else Quaternion()
+        joint.rotation_mode = "QUATERNION"
+        joint.rotation_quaternion = orient
         joints[name] = joint
         group = [o for o in meshes if o.get("rig_part", "body") == name]
         if not group:
@@ -54,7 +67,7 @@ def export_vehicle(output: Path, blend: Path | None = None):
             world = obj.matrix_world.copy()
             # Copy shared tread/primitive meshes before baking the local pivot.
             obj.data = obj.data.copy()
-            obj.data.transform(Matrix.Translation(-Vector(pivot_ground)) @ world)
+            obj.data.transform(orient.inverted().to_matrix().to_4x4() @ Matrix.Translation(-Vector(pivot_ground)) @ world)
             obj.parent = joint
             obj.matrix_parent_inverse = Matrix.Identity(4)
             obj.matrix_basis = Matrix.Identity(4)
@@ -71,9 +84,9 @@ def export_vehicle(output: Path, blend: Path | None = None):
         # Any simultaneous pose is a union of these independent rigid parts.
         for obj in group:
             for vertex in obj.data.vertices:
-                closed_radius = max(closed_radius, (vertex.co + pivot).length)
+                closed_radius = max(closed_radius, (orient @ vertex.co + pivot).length)
         for step in range(19 if limit else 1):
-            rotation = Matrix.Rotation(math.radians(limit * step / 18), 3, axis)
+            rotation = orient.to_matrix() @ Matrix.Rotation(math.radians(limit * step / 18), 3, axis)
             for obj in group:
                 # Bounding-box corners bound the full mesh and keep export quick.
                 corners = [Vector(corner) for corner in obj.bound_box]
@@ -81,10 +94,14 @@ def export_vehicle(output: Path, blend: Path | None = None):
         manifest["parts"][name] = {
             "file": name + ".glb",
             "pivot": [pivot.x, pivot.z, -pivot.y],
-            "axis": "Y" if axis == "Z" else axis,
+            "axis": "Z" if isinstance(axis, Vector) else "Y" if axis == "Z" else axis,
             "openAngle": limit,
             "components": [o.name for o in group],
         }
+        if isinstance(axis, Vector):
+            # Blender (x, y, z) -> Qt (x, z, -y) is a proper rotation, so the
+            # quaternion's vector part converts like any vector.
+            manifest["parts"][name]["orient"] = [orient.w, orient.x, orient.z, -orient.y]
         if limit:
             joint.rotation_mode = "XYZ"
             component = "XYZ".index(axis)
@@ -130,8 +147,9 @@ def export_vehicle(output: Path, blend: Path | None = None):
     folder = output.parent / "jeep_tj"
     folder.mkdir(exist_ok=True)
     for name, joint in joints.items():
-        position = joint.location.copy()
+        position, rotation = joint.location.copy(), joint.rotation_quaternion.copy()
         joint.location = (0, 0, 0)
+        joint.rotation_quaternion = Quaternion()
         bpy.ops.object.select_all(action="DESELECT")
         joint.select_set(True)
         for o in joint.children:
@@ -148,6 +166,7 @@ def export_vehicle(output: Path, blend: Path | None = None):
             export_animations=False,
         )
         joint.location = position
+        joint.rotation_quaternion = rotation
     manifest["steering"] = STEERING
     manifest["bounds"] = {"closedRadius": closed_radius, "sweptRadius": swept_radius + 0.03}
     (folder / "rig.json").write_text(json.dumps(manifest, indent=2) + "\n")

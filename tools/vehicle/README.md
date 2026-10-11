@@ -21,7 +21,7 @@ working cache, separate from the app's assets.
 
 ## Rebuild / edit
 
-Use Blender 4.2 (the app itself does not require Blender):
+Use Blender 4.2 or later; 5.2 also builds it (the app itself does not require Blender):
 
 ```sh
 blender --background --python tools/vehicle/build_jeep_tj.py
@@ -41,7 +41,7 @@ interior geometry. Windshield and rear glass use glTF alpha blending. This is
 supported in the tested desktop Qt runtime; inspect transparency on target GPUs.
 
 The full GLB includes five opening hinges/clips, two steering-knuckle pivots, four axle-spin pivots,
-and a neutral steering-link assembly.
+four engine/driveline spinners, and a neutral steering-link assembly.
 Geometry is batched by material within each part. `assets/jeep_tj/` contains separate
 part-local GLBs, plus generated `Rig.js` and `rig.json` pivot/bounds metadata.
 `JeepVehicle.qml` assembles these parts using public Qt APIs, avoiding imported
@@ -103,6 +103,41 @@ photo-interpreted tread at the requested dimensions, not a retail tire SKU.
 The shocks are detailed static geometry, including bodies, chrome pistons, boots,
 bushings and mounts; suspension travel is not animated.
 
+## Engine and driveline
+
+The drivetrain matches the owner's TJ: a 4.0 L AMC inline six, an NV3550
+five-speed manual, and an NP231 transfer case. Sizes come from published
+figures (4.40 in bore spacing, 9.13 in deck height). Placement follows the
+engine-bay photographs (114-126, 218-258): the air box, battery, alternator and
+PCM are on the passenger side; the intake and exhaust manifolds are both on the
+driver side (the head is not crossflow), with the throttle body, brake booster,
+master cylinder and coolant/washer bottles; and the intake tube arches over the
+valve cover. The engine has a block with freeze plugs, head, valve cover, coil
+rail, oil pan with rear sump, timing cover, an accessory drive with a convex-hull
+serpentine belt, fan clutch, seven-blade fan and shroud, and radiator hoses.
+Everything rigid to the block is built level and then tilted 3 degrees tail-down
+about the crank nose. The bellhousing passes through a notch in the firewall
+into a taller transmission tunnel, and the NV3550 shifter tower sits under the
+console. The NP231's front output is offset low on the driver side, feeding the
+driver-side front differential. The reference vehicle is an automatic, so the
+transmission follows the owner's manual rather than the photos.
+
+Four parts spin: `crank_pulley`, `engine_fan` (fan, clutch and water pump
+pulley), `front_driveshaft` and `rear_driveshaft` (tube, slip and pinion yokes,
+two U-joints). Their axes are tilted, so the exporter bakes each mesh in a local
+frame whose Qt +Z is the shaft axis (all pointing forward). `rig.json` / `Rig.js`
+give `axis: "Z"` plus an `orient` quaternion `[w, x, y, z]` (Qt coordinates), and
+`JeepHinge` composes `orient × spin`. `JeepVehicle` turns the driveshafts at
+wheel speed × `axleRatio` (3.73) and the crank and fan at `engineRpm`, slowed 60×
+so a 7-blade fan does not strobe at display frame rates. Both rotate clockwise
+seen from the front. CarMenu's Engine slider sets `engineRpm`; with OBD
+connected, live RPM and SPEED drive it instead. Belt and accessory pulleys other
+than the crank and water pump are static.
+
+Small fasteners, fins and ribs pass `bevel=0` to `cylinder()` / `bar()` /
+`box()`. The rounded edges are invisible at that size and roughly double the
+triangle count (the drivetrain adds about 35k triangles; the full GLB is 17.9 MB).
+
 The exported GLBs embed their data. The separate
 128 KiB `vehicle_studio.hdr` provides environment reflections so the enamel,
 glass and metal remain readable as the vehicle rotates. It is generated with
@@ -131,12 +166,17 @@ QT_QPA_PLATFORM=xcb xvfb-run -a venv/bin/python tools/vehicle/check_jeep_view.py
   and saved `.blend` to check closed return edges and moving-panel clearance.
 - Steering checks: 201 input positions, constant rod lengths, monotonic angles,
   inside-wheel ordering and bounded input. Inspected 21 poses for tire/body contact.
-- Asset checks: finite vertices, valid indices, matching full/assembled geometry,
-  five animation clips, attached door components, four shocks, and swept bounds.
+- Asset checks: finite vertices, valid indices, matching full/assembled geometry
+  (including spinner orientations), five animation clips, attached door
+  components, four shocks, the engine/driveline parts and forward spin axes,
+  and swept bounds. `check_jeep_asset.py <assets dir>` checks a scratch build.
 - Camera fitting uses the generated closed/swept radius, including moving panels.
 - Real `CarMenu.qml` tested with Qt 6.11.1 / Xvfb: five animated hinges, rear-opening
   interlock in both directions, all four light circuits, moving third brake lamp,
-  and sensor quaternion mapping.
+  sensor quaternion mapping, driveshafts at the axle ratio, crank/fan from the
+  Engine slider, fixed spin axes, and live OBD (a fake `obdManager`) taking over
+  RPM/speed and the `"carMenu"` poll demand. The view check loads parts through
+  the real `backend.asset_store.AssetStore`, as the app does.
 - Closed, open, underside, and narrow views captured; studio views regenerated.
 - Physical IMU and Android/Raspberry Pi performance have not been tested.
 
@@ -151,6 +191,9 @@ QT_QPA_PLATFORM=xcb xvfb-run -a venv/bin/python tools/vehicle/check_jeep_view.py
 [Wheel rotation](../../docs/vehicle/jeep-tj-wheel-spin.png) ·
 [Brake and reverse lights](../../docs/vehicle/jeep-tj-lights.png) ·
 [Console detail — roof and doors hidden for inspection](../../docs/vehicle/jeep-tj-console.png)
+
+[Engine bay, hood hidden](../../docs/vehicle/jeep-tj-engine.png) ·
+[Driveline, skids hidden](../../docs/vehicle/jeep-tj-driveline.png)
 
 [Reference photo board](../../docs/vehicle/reference-board.html)
 

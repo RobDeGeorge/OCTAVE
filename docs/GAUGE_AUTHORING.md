@@ -387,7 +387,8 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   wiring: `DashboardRenderer.paramIds` lists its distinct PIDs and
   `OBDMenu` registers them as the `"dashboard"` consumer while the page is
   active. Other consumers: `"cards"` (Parameter Cards), `"editor"`
-  (`DashboardEditor` canvas), `"home"` (`HomeOBDView`), `"settings"`
+  (`DashboardEditor` canvas), `"home"` (`HomeOBDView`), `"carMenu"` (RPM/SPEED
+  for the 3D Jeep while `CarMenu` is visible), `"settings"`
   (`OBDSettingsPage`). Backend side: `wiki/obd-manager.html`.
 
 ### Legacy recipe (pure-QML dashboard)

@@ -156,6 +156,10 @@
             <tr><td><code>scrcpyAudioDuckEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyAudioDuckEnabledChanged</code></td><td>Duck local media while the phone produces sound &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyAudioDuckLevel</code></td><td><code>double</code></td><td>read-only</td><td><code>scrcpyAudioDuckLevelChanged</code></td><td>Duck factor (linear, e.g. 0.1 = -20 dB) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyPhoneScreenOff</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyPhoneScreenOffChanged</code></td><td>Keep the handset panel dark while mirroring &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>scrcpyDisplayDpi</code></td><td><code>int</code></td><td>read-only</td><td><code>scrcpyDisplayDpiChanged</code></td><td>Virtual display density, 0 = auto &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>scrcpyBitRateUsb</code>, <code>scrcpyBitRateWifi</code></td><td><code>int</code></td><td>read-only</td><td><code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code></td><td>Mirror video bit rate per link, Mbps &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>scrcpyAutoWifi</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyAutoWifiChanged</code></td><td>Enable adb over Wi-Fi on a USB phone &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>scrcpyBitRateAuto</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyBitRateAutoChanged</code></td><td>Adaptive mirror bit rate &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyWirelessAddress</code></td><td><code>QString</code></td><td>read-only</td><td><code>scrcpyWirelessAddressChanged</code></td><td>Phone last connected over Wi-Fi &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32VolumeEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>esp32VolumeEnabledChanged</code></td><td>Enable the ESP32 rotary knob &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32VolumePort</code></td><td><code>QString</code></td><td>read-only</td><td><code>esp32VolumePortChanged</code></td><td>Serial port of the ESP32 (default <code>""</code> = auto-select the ESP32-S3 at startup) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -248,6 +252,7 @@
             <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioDuckEnabled</code>, then emit <code>scrcpyAudioDuckEnabledChanged</code></td></tr>
             <tr><td><code>save_scrcpy_audio_duck_level(double level)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioDuckLevel</code>, then emit <code>scrcpyAudioDuckLevelChanged</code></td></tr>
             <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyPhoneScreenOff</code>, then emit <code>scrcpyPhoneScreenOffChanged</code></td></tr>
+            <tr><td><code>save_scrcpy_display_dpi(int dpi)</code>, <code>save_scrcpy_bit_rate_usb(int mbps)</code>, <code>save_scrcpy_bit_rate_wifi(int mbps)</code>, <code>save_scrcpy_auto_wifi(bool enabled)</code>, <code>save_scrcpy_bit_rate_auto(bool enabled)</code></td><td><code>void</code></td><td>Clamp and persist <code>scrcpyDisplayDpi</code> / <code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code> / <code>scrcpyAutoWifi</code>, then emit the matching changed signal</td></tr>
             <tr><td><code>save_scrcpy_wireless_address(QString address)</code></td><td><code>void</code></td><td>Persist <code>scrcpyWirelessAddress</code> (trimmed; no-op when unchanged), then emit <code>scrcpyWirelessAddressChanged</code></td></tr>
             <tr><td><code>save_esp32_volume_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumeEnabled</code>, then emit <code>esp32VolumeEnabledChanged</code></td></tr>
             <tr><td><code>save_esp32_volume_port(QString port)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumePort</code>, then emit <code>esp32VolumePortChanged</code></td></tr>
@@ -296,6 +301,7 @@
             <tr><td><code>get_scrcpy_audio_duck_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>scrcpyAudioDuckEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_audio_duck_level()</code></td><td><code>double</code></td><td>Returns the current <code>scrcpyAudioDuckLevel</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_phone_screen_off()</code></td><td><code>bool</code></td><td>Returns the current <code>scrcpyPhoneScreenOff</code> value (same as the property)</td></tr>
+            <tr><td><code>get_scrcpy_display_dpi()</code>, <code>get_scrcpy_bit_rate_usb()</code>, <code>get_scrcpy_bit_rate_wifi()</code>, <code>get_scrcpy_auto_wifi()</code>, <code>get_scrcpy_bit_rate_auto()</code></td><td><code>int</code> / <code>bool</code></td><td>Return the current values (same as the properties)</td></tr>
             <tr><td><code>get_scrcpy_wireless_address()</code></td><td><code>QString</code></td><td>Returns the current <code>scrcpyWirelessAddress</code> value (same as the property)</td></tr>
             <tr><td><code>get_esp32_volume_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>esp32VolumeEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_esp32_volume_port()</code></td><td><code>QString</code></td><td>Returns the current <code>esp32VolumePort</code> value (same as the property)</td></tr>
@@ -390,6 +396,7 @@
             <tr><td><code>scrcpyAudioDuckEnabledChanged(bool value)</code></td><td>Emitted after <code>scrcpyAudioDuckEnabled</code> is saved</td></tr>
             <tr><td><code>scrcpyAudioDuckLevelChanged(double value)</code></td><td>Emitted after <code>scrcpyAudioDuckLevel</code> is saved</td></tr>
             <tr><td><code>scrcpyPhoneScreenOffChanged(bool value)</code></td><td>Emitted after <code>scrcpyPhoneScreenOff</code> is saved</td></tr>
+            <tr><td><code>scrcpyDisplayDpiChanged(int)</code>, <code>scrcpyBitRateUsbChanged(int)</code>, <code>scrcpyBitRateWifiChanged(int)</code>, <code>scrcpyAutoWifiChanged(bool)</code>, <code>scrcpyBitRateAutoChanged(bool)</code></td><td>Emitted after the matching setting is saved</td></tr>
             <tr><td><code>scrcpyWirelessAddressChanged(QString value)</code></td><td>Emitted after <code>scrcpyWirelessAddress</code> is saved</td></tr>
             <tr><td><code>esp32VolumeEnabledChanged(bool value)</code></td><td>Emitted after <code>esp32VolumeEnabled</code> is saved</td></tr>
             <tr><td><code>esp32VolumePortChanged(QString value)</code></td><td>Emitted after <code>esp32VolumePort</code> is saved</td></tr>
@@ -1193,6 +1200,7 @@
             <tr><td><code>wirelessBusy</code></td><td><code>bool</code></td><td>read-only</td><td><code>wirelessBusyChanged</code></td><td>A QR pairing started from the UI is in progress</td></tr>
             <tr><td><code>qrPairingRows</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>qrPairingChanged</code></td><td>Modules of the QR code shown by <code>startQrPairing()</code>, one <code>'0'</code>/<code>'1'</code> string per row; empty when no pairing is waiting</td></tr>
             <tr><td><code>qrPairingActive</code></td><td><code>bool</code></td><td>read-only</td><td><code>qrPairingChanged</code></td><td>A QR pairing is waiting for the phone</td></tr>
+            <tr><td><code>currentBitRate</code></td><td><code>int</code></td><td>read-only</td><td><code>currentBitRateChanged</code></td><td>Video bit rate of the running session in bps (follows adaptive changes), 0 when idle</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1204,7 +1212,12 @@
             <tr><td><code>setAudioEnabled(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioEnabled</code></td></tr>
             <tr><td><code>setAudioDuckEnabled(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckEnabled</code></td></tr>
             <tr><td><code>setAudioDuckLevel(float level)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckLevel</code> (linear factor)</td></tr>
-            <tr><td><code>setDisplaySize(QString size)</code></td><td><code>void</code></td><td>Virtual display size (snapped to multiples of 8); restarts a running session</td></tr>
+            <tr><td><code>setDisplaySize(QString size)</code></td><td><code>void</code></td><td>Virtual display size (snapped to multiples of 8, or <code>"auto"</code>); restarts a running session</td></tr>
+            <tr><td><code>setViewSize(int width, int height)</code></td><td><code>void</code></td><td>Mirror view size in device pixels; drives <code>"auto"</code> and restarts a running auto session when it changes (debounced 1.5 s)</td></tr>
+            <tr><td><code>setDisplayDpi(int dpi)</code></td><td><code>void</code></td><td>Setting <code>scrcpyDisplayDpi</code> (0 = phone's scaled density); restarts a running session</td></tr>
+            <tr><td><code>setBitRateUsb(int mbps)</code>, <code>setBitRateWifi(int mbps)</code></td><td><code>void</code></td><td>Settings <code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code>; restart a running session on that link</td></tr>
+            <tr><td><code>setBitRateAuto(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyBitRateAuto</code>: adaptive bit rate with the per-link rates as ceiling; restarts a running session</td></tr>
+            <tr><td><code>setAutoWifi(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAutoWifi</code>: <code>adb tcpip 5555</code> before USB sessions and remember the phone's Wi-Fi address</td></tr>
             <tr><td><code>setPhoneScreenOff(bool off)</code></td><td><code>void</code></td><td>Setting <code>scrcpyPhoneScreenOff</code>: keep the handset panel dark while mirroring (applied live)</td></tr>
             <tr><td><code>wakePhone()</code></td><td><code>void</code></td><td>Wake a sleeping phone (<code>KEYCODE_WAKEUP</code>); the overlay tap-to-retry</td></tr>
             <tr><td><code>resumeMirroring()</code></td><td><code>void</code></td><td>Leave the in-use state: wake the phone if needed and re-apply screen-off</td></tr>
@@ -1252,6 +1265,7 @@
             <tr><td><code>connectionTypeChanged()</code> / <code>wirelessBusyChanged()</code></td><td>Property notifications</td></tr>
             <tr><td><code>wirelessResult(bool ok, QString message)</code></td><td>Outcome of QR pairing, message ready to show</td></tr>
             <tr><td><code>qrPairingChanged()</code></td><td>Notify for <code>qrPairingRows</code> / <code>qrPairingActive</code></td></tr>
+            <tr><td><code>currentBitRateChanged()</code></td><td>Notify for <code>currentBitRate</code></td></tr>
           </tbody>
         </table>
 

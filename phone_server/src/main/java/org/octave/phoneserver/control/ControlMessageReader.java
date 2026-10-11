@@ -60,6 +60,8 @@ public class ControlMessageReader {
                 return ControlMessage.createOctaveSetKeeper(dis.readBoolean(), dis.readBoolean(), dis.readInt());
             case ControlMessage.TYPE_OCTAVE_TAKE_BACK:
                 return ControlMessage.createEmpty(type);
+            case ControlMessage.TYPE_OCTAVE_SET_BIT_RATE:
+                return ControlMessage.createOctaveSetBitRate(dis.readInt());
             default:
                 throw new ControlProtocolException("Unknown event type: " + type);
         }

@@ -41,6 +41,12 @@ import android.view.KeyEvent;
 public final class MirrorKeeper {
 
     private static final long POLL_MS = 250;
+    // The lock screen overrides the idle timeout with a few seconds (5 s on a
+    // Galaxy S-series), and stay_awake does nothing off the charger, so a
+    // cradled locked phone dozes on its own every few seconds. Each doze
+    // drops the mirror's frames and looks to the keeper like a power press
+    // (it relights the panel). Reset the idle timer well inside that window.
+    private static final long USER_ACTIVITY_MS = 1500;
 
     private static MirrorKeeper instance;
 
@@ -67,6 +73,7 @@ public final class MirrorKeeper {
     private long lastWakeMs;
     private long lastDozeMs = -1;   // uptime ms of the last observed doze
     private boolean relightOnWake;  // force the panel on once interactive again
+    private long lastUserActivityMs;
 
     private final Runnable pollRunnable = this::poll;
 
@@ -256,6 +263,15 @@ public final class MirrorKeeper {
                 if (!inUse && panelDark && enabled) {
                     graceDeadline = android.os.SystemClock.uptimeMillis() + graceMs;
                 }
+            }
+        }
+
+        if (!asleep && enabled && !inUse) {
+            // Mirrored and not in the user's hand: never let it time out
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now - lastUserActivityMs >= USER_ACTIVITY_MS) {
+                lastUserActivityMs = now;
+                ServiceManager.getPowerManager().userActivity(0);
             }
         }
 

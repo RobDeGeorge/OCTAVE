@@ -10,21 +10,22 @@ Rectangle {
 
     property string cardId: ""
     property string title: ""
-    // Unicode glyph fallback. Kept so a tile that has no SVG yet still renders
-    // something rather than a blank square.
-    property string icon: ""
-    // Preferred: a theme-tinted SVG from frontend/assets/, e.g.
-    // App.Style.assetBase + "tile_layout.svg".
-    property url iconSource: ""
+    // One short line of current state under the title ("Connected",
+    // "7:57 AM · 12-hour"). Empty: the tile shows its title alone.
+    property string stateText: ""
+    // On / connected. Tints the tile with the accent, the way Quick
+    // Settings and Home tiles show an active accessory; display options
+    // that are not on or off leave this false.
+    property bool active: false
     property color statusColor: "transparent"
     property bool statusVisible: false
-
-    readonly property bool _hasSvg: String(iconSource) !== ""
 
     signal tileClicked(string cardId)
 
     color: tileMouse.pressed
-        ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
+        ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, tile.active ? 0.30 : 0.18)
+        : tile.active
+            ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, tileMouse.containsMouse ? 0.24 : 0.16)
         : tileMouse.containsMouse
             ? Qt.rgba(App.Style.primaryTextColor.r, App.Style.primaryTextColor.g, App.Style.primaryTextColor.b, 0.10)
             : Qt.rgba(App.Style.primaryTextColor.r, App.Style.primaryTextColor.g, App.Style.primaryTextColor.b, 0.05)
@@ -45,81 +46,60 @@ Rectangle {
         visible: App.EnvironmentTheme.active.cornerBrackets
     }
 
+    readonly property int _pad: dpMin(16, 8)
+
+    // Name first, state second (Android Quick Settings label /
+    // secondaryLabel, Apple Home name / status), grouped and vertically
+    // centred so a tall tile has no empty middle. Sizes follow the tile
+    // width, not the text, so every tile in a grid matches.
     ColumnLayout {
-        anchors.centerIn: parent
-        width: Math.max(0, parent.width - tile.dp(24))
-        spacing: tile.dp(12)
-
-        Item {
-            id: iconHolder
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.max(tile.dp(24),
-                Math.min(tile.dp(64), tile.height - tileLabel.implicitHeight - tile.dp(40)))
-
-            // Keep the icon balanced on wide and tall tiles alike. Rounded
-            // SVG strokes stay clean without an offset shadow doubling them.
-            App.ThemedIcon {
-                anchors.centerIn: parent
-                visible: tile._hasSvg
-                width: Math.min(parent.width * 0.6, parent.height)
-                height: width
-                source: tile.iconSource
-                color: App.Style.accent
-                shadow: false
-            }
-
-            // Static drop-shadow glyph behind the main icon — gives the
-            // symbol weight without any animation or graphical effect.
-            Text {
-                anchors.centerIn: parent
-                anchors.horizontalCenterOffset: tile.dp(1)
-                anchors.verticalCenterOffset: tile.dp(2)
-                visible: !tile._hasSvg
-                text: tile.icon
-                color: Qt.rgba(0, 0, 0, 0.40)
-                font.pixelSize: Math.max(tile.dp(20), parent.height * 0.55)
-                font.family: App.Style.fontFamily
-            }
-
-            Text {
-                anchors.centerIn: parent
-                visible: !tile._hasSvg
-                text: tile.icon
-                color: App.Style.accent
-                font.pixelSize: Math.max(tile.dp(20), parent.height * 0.55)
-                font.family: App.Style.fontFamily
-            }
+        anchors {
+            left: parent.left; right: parent.right
+            verticalCenter: parent.verticalCenter
+            leftMargin: tile._pad; rightMargin: tile._pad
         }
+        spacing: tile.dp(4)
 
         Text {
-            id: tileLabel
             Layout.fillWidth: true
             text: tile.title
             color: App.Style.primaryTextColor
-            font.pixelSize: App.Spacing.overallText * 1.1
+            // About fourteen characters ("Gesture Sensor") fit.
+            font.pixelSize: Math.max(App.Spacing.overallText * 0.8,
+                Math.min(App.Spacing.overallText * 1.5, (tile.width - 2 * tile._pad) / 9))
             font.family: App.Style.fontFamily
             font.weight: Font.Medium
-            horizontalAlignment: Text.AlignHCenter
-            // Shrink to fit rather than truncate so titles always show the whole word.
-            fontSizeMode: Text.HorizontalFit
-            minimumPixelSize: dp(8)
-            elide: Text.ElideNone
             font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
             font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
+            elide: Text.ElideRight
+            maximumLineCount: 1
         }
-    }
 
-    // Status dot
-    Rectangle {
-        visible: tile.statusVisible
-        width: tile.dp(10)
-        height: tile.dp(10)
-        radius: width / 2
-        color: tile.statusColor
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.topMargin: tile.dp(8)
-        anchors.rightMargin: tile.dp(8)
+        RowLayout {
+            Layout.fillWidth: true
+            visible: tile.stateText !== ""
+            spacing: tile.dp(8)
+
+            Rectangle {
+                visible: tile.statusVisible
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: tile.dpMin(10, 6)
+                Layout.preferredHeight: Layout.preferredWidth
+                radius: width / 2
+                color: tile.statusColor
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: tile.stateText
+                color: tile.active ? App.Style.primaryTextColor : App.Style.secondaryTextColor
+                font.pixelSize: Math.max(App.Spacing.overallText * 0.85,
+                    Math.min(App.Spacing.overallText * 1.05, (tile.width - 2 * tile._pad) / 11))
+                font.family: App.Style.fontFamily
+                elide: Text.ElideRight
+                maximumLineCount: 1
+            }
+        }
     }
 
     MouseArea {

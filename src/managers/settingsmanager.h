@@ -98,6 +98,15 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool scrcpyAudioDuckEnabled READ scrcpyAudioDuckEnabled NOTIFY scrcpyAudioDuckEnabledChanged)
     Q_PROPERTY(double scrcpyAudioDuckLevel READ scrcpyAudioDuckLevel NOTIFY scrcpyAudioDuckLevelChanged)
     Q_PROPERTY(bool scrcpyPhoneScreenOff READ scrcpyPhoneScreenOff NOTIFY scrcpyPhoneScreenOffChanged)
+    // Virtual display density override, 0 = scale the phone's own density
+    Q_PROPERTY(int scrcpyDisplayDpi READ scrcpyDisplayDpi NOTIFY scrcpyDisplayDpiChanged)
+    // Video bit rate in Mbps, per link
+    Q_PROPERTY(int scrcpyBitRateUsb READ scrcpyBitRateUsb NOTIFY scrcpyBitRateUsbChanged)
+    Q_PROPERTY(int scrcpyBitRateWifi READ scrcpyBitRateWifi NOTIFY scrcpyBitRateWifiChanged)
+    // Switch a USB phone to adb over TCP (port 5555) so it can be reached over Wi-Fi later
+    Q_PROPERTY(bool scrcpyAutoWifi READ scrcpyAutoWifi NOTIFY scrcpyAutoWifiChanged)
+    // Adapt the mirror bit rate to the link; the per-link rates become the ceiling
+    Q_PROPERTY(bool scrcpyBitRateAuto READ scrcpyBitRateAuto NOTIFY scrcpyBitRateAutoChanged)
     // Last phone connected over Wi-Fi ("ip:port"); reconnected automatically, "" = none
     Q_PROPERTY(QString scrcpyWirelessAddress READ scrcpyWirelessAddress NOTIFY scrcpyWirelessAddressChanged)
 
@@ -207,6 +216,11 @@ public:
     bool scrcpyAudioDuckEnabled() const;
     double scrcpyAudioDuckLevel() const;
     bool scrcpyPhoneScreenOff() const;
+    int scrcpyDisplayDpi() const;
+    int scrcpyBitRateUsb() const;
+    int scrcpyBitRateWifi() const;
+    bool scrcpyAutoWifi() const;
+    bool scrcpyBitRateAuto() const;
     QString scrcpyWirelessAddress() const;
 
     // ESP32
@@ -319,6 +333,11 @@ signals:
     void scrcpyAudioDuckEnabledChanged(bool value);
     void scrcpyAudioDuckLevelChanged(double value);
     void scrcpyPhoneScreenOffChanged(bool value);
+    void scrcpyDisplayDpiChanged(int value);
+    void scrcpyBitRateUsbChanged(int value);
+    void scrcpyBitRateWifiChanged(int value);
+    void scrcpyAutoWifiChanged(bool value);
+    void scrcpyBitRateAutoChanged(bool value);
     void scrcpyWirelessAddressChanged(const QString &value);
 
     // ESP32
@@ -444,6 +463,11 @@ public slots:
     void save_scrcpy_audio_duck_enabled(bool enabled);
     void save_scrcpy_audio_duck_level(double level);
     void save_scrcpy_phone_screen_off(bool off);
+    void save_scrcpy_display_dpi(int dpi);
+    void save_scrcpy_bit_rate_usb(int mbps);
+    void save_scrcpy_bit_rate_wifi(int mbps);
+    void save_scrcpy_auto_wifi(bool enabled);
+    void save_scrcpy_bit_rate_auto(bool enabled);
     void save_scrcpy_wireless_address(const QString &address);
 
     // ESP32
@@ -510,6 +534,11 @@ public slots:
     Q_INVOKABLE bool get_scrcpy_audio_duck_enabled();
     Q_INVOKABLE double get_scrcpy_audio_duck_level();
     Q_INVOKABLE bool get_scrcpy_phone_screen_off();
+    Q_INVOKABLE int get_scrcpy_display_dpi();
+    Q_INVOKABLE int get_scrcpy_bit_rate_usb();
+    Q_INVOKABLE int get_scrcpy_bit_rate_wifi();
+    Q_INVOKABLE bool get_scrcpy_auto_wifi();
+    Q_INVOKABLE bool get_scrcpy_bit_rate_auto();
     Q_INVOKABLE QString get_scrcpy_wireless_address();
     Q_INVOKABLE bool get_esp32_volume_enabled();
     Q_INVOKABLE QString get_esp32_volume_port();
@@ -644,6 +673,11 @@ private:
     bool m_scrcpyAudioDuckEnabled = true;
     double m_scrcpyAudioDuckLevel = 0.1;
     bool m_scrcpyPhoneScreenOff = true;
+    int m_scrcpyDisplayDpi = 0;
+    int m_scrcpyBitRateUsb = 16;
+    int m_scrcpyBitRateWifi = 8;
+    bool m_scrcpyAutoWifi = true;
+    bool m_scrcpyBitRateAuto = true;
     QString m_scrcpyWirelessAddress;
 
     // Settings menu visibility

@@ -65,7 +65,7 @@ public class SurfaceEncoder implements AsyncProcessor {
     private void streamCapture() throws IOException, ConfigurationException {
         Codec codec = streamer.getCodec();
         MediaCodec mediaCodec = createMediaCodec(codec, encoderName);
-        MediaFormat format = createFormat(codec.getMimeType(), videoBitRate, maxFps, codecOptions);
+        MediaFormat format = createFormat(codec.getMimeType(), VideoBitRate.current(videoBitRate), maxFps, codecOptions);
 
         capture.init(reset);
 
@@ -82,6 +82,8 @@ public class SurfaceEncoder implements AsyncProcessor {
                     headerWritten = true;
                 }
 
+                // OCTAVE: a rate requested by the client meanwhile carries over to the new encoder
+                format.setInteger(MediaFormat.KEY_BIT_RATE, VideoBitRate.current(videoBitRate));
                 format.setInteger(MediaFormat.KEY_WIDTH, size.getWidth());
                 format.setInteger(MediaFormat.KEY_HEIGHT, size.getHeight());
 
@@ -100,6 +102,7 @@ public class SurfaceEncoder implements AsyncProcessor {
 
                     // Set the MediaCodec instance to "interrupt" (by signaling an EOS) on reset
                     reset.setRunningMediaCodec(mediaCodec);
+                    VideoBitRate.setRunningCodec(mediaCodec);
 
                     if (stopped.get()) {
                         alive = false;
@@ -124,6 +127,7 @@ public class SurfaceEncoder implements AsyncProcessor {
                     alive = true;
                 } finally {
                     reset.setRunningMediaCodec(null);
+                    VideoBitRate.setRunningCodec(null);
                     if (captureStarted) {
                         capture.stop();
                     }

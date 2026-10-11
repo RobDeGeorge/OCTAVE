@@ -276,6 +276,24 @@ int main(int argc, char *argv[])
     // Phone mirror settings from saved config (desktop-only accessors)
     phoneMirrorManager.setAudioEnabled(settingsManager.get_scrcpy_audio_enabled());
     phoneMirrorManager.setDisplaySize(settingsManager.get_scrcpy_display_size());
+    // Picture quality: virtual display density and per-link video bit rate
+    phoneMirrorManager.setDisplayDpi(settingsManager.get_scrcpy_display_dpi());
+    phoneMirrorManager.setBitRateUsb(settingsManager.get_scrcpy_bit_rate_usb());
+    phoneMirrorManager.setBitRateWifi(settingsManager.get_scrcpy_bit_rate_wifi());
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyDisplayDpiChanged,
+                     &phoneMirrorManager, &PhoneMirrorManager::setDisplayDpi);
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyBitRateUsbChanged,
+                     &phoneMirrorManager, &PhoneMirrorManager::setBitRateUsb);
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyBitRateWifiChanged,
+                     &phoneMirrorManager, &PhoneMirrorManager::setBitRateWifi);
+    // Adaptive quality: the per-link rates above become the ceiling
+    phoneMirrorManager.setBitRateAuto(settingsManager.get_scrcpy_bit_rate_auto());
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyBitRateAutoChanged,
+                     &phoneMirrorManager, &PhoneMirrorManager::setBitRateAuto);
+    // A USB phone is switched to adb over TCP so it can be reached over Wi-Fi later
+    phoneMirrorManager.setAutoWifi(settingsManager.get_scrcpy_auto_wifi());
+    QObject::connect(&settingsManager, &SettingsManager::scrcpyAutoWifiChanged,
+                     &phoneMirrorManager, &PhoneMirrorManager::setAutoWifi);
     phoneMirrorManager.setAudioGain(float(settingsManager.get_scrcpy_audio_gain()));
     QObject::connect(&settingsManager, &SettingsManager::scrcpyAudioGainChanged,
                      &phoneMirrorManager, [&phoneMirrorManager](double g) { phoneMirrorManager.setAudioGain(float(g)); });

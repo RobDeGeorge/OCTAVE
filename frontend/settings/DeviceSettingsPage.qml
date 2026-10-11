@@ -22,17 +22,33 @@ Flickable {
     property var mainWindow: null
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
-    // Each entry: { cardId, title, iconSource, component }. Other layouts ignore
+    // Each entry: { cardId, title, summary, component } — see DisplaySettingsPage
+    // for what summary() returns. Other layouts ignore
     // this and use the Repeater rendering below.
     // False when the host shows tileModel as a tile grid instead of this
     // page (the Sidebar layout); the stacked cards are then never built.
     property bool renderCards: true
 
+    readonly property var _diag: typeof diagnosticsManager !== "undefined" ? diagnosticsManager : null
+
     property var tileModel: [
-        { cardId: "device_name",    title: "Device Name", iconSource: App.Style.assetBase + "tile_device_name.svg", component: deviceNameContent },
-        { cardId: "device_network", title: "Network",     iconSource: App.Style.assetBase + "tile_network.svg",     component: networkContent },
-        { cardId: "device_power",   title: "Power",       iconSource: App.Style.assetBase + "tile_power.svg",       component: powerContent },
-        { cardId: "device_diagnostics", title: "Diagnostics", iconSource: App.Style.assetBase + "tile_diagnostics.svg", component: diagnosticsContent }
+        { cardId: "device_name", title: "Device Name", component: deviceNameContent,
+          summary: function() {
+              return { state: settingsManager ? (settingsManager.deviceName || "OCTAVE") : "OCTAVE" }
+          } },
+        { cardId: "device_network", title: "Network", component: networkContent,
+          summary: function() {
+              var on = !!(networkManager && networkManager.isConnected)
+              return { state: on ? (networkManager.networkName || "Connected") : "Offline", active: on,
+                       status: on ? App.Style.statusConnected : App.Style.statusDisconnected }
+          } },
+        // No state to report: the title stands alone.
+        { cardId: "device_power", title: "Power", component: powerContent },
+        { cardId: "device_diagnostics", title: "Diagnostics", component: diagnosticsContent,
+          summary: function() {
+              var d = pageRoot._diag
+              return d && d.lastExportPath ? { state: "Logs exported" } : {}
+          } }
     ]
 
     // ── Card body components — shared between the Flickable rendering (below)

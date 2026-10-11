@@ -17,11 +17,14 @@
 
 Q_LOGGING_CATEGORY(lcPhoneMirror, "octave.phonemirror")
 
-// Default size of the virtual display scrcpy creates on the phone
-// (--new-display, Android 11+). Landscape suits a dash screen. scrcpy rounds
-// each dimension down to a multiple of 8, so the setting is snapped the same
-// way to keep the UI honest.
+// Size of the virtual display scrcpy creates on the phone (--new-display,
+// Android 11+) when the setting is "auto" but the view has not reported its
+// size yet. Landscape suits a dash screen. scrcpy rounds each dimension down
+// to a multiple of 8, so sizes are snapped the same way to keep the UI honest.
 static const QString kDefaultDisplaySize = QStringLiteral("1280x800");
+static const QString kAutoDisplaySize = QStringLiteral("auto");
+// A view resize restarts an "auto" session once the size has settled
+static constexpr int kResizeRestartMs = 1500;
 
 // ─── Construction ─────────────────────────────────────────────────────
 
@@ -31,6 +34,16 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     m_adbPath = findAdb();
     // Wireless jobs run one at a time, so a reconnect never races a pairing
     m_wirelessPool.setMaxThreadCount(1);
+    m_resizeTimer.setSingleShot(true);
+    m_resizeTimer.setInterval(kResizeRestartMs);
+    connect(&m_resizeTimer, &QTimer::timeout, this, [this]() {
+        if (isRunning() && m_displaySize == kAutoDisplaySize && !m_startedAutoSize.isEmpty()
+            && autoDisplaySize(m_viewWidth, m_viewHeight) != m_startedAutoSize) {
+            qCInfo(lcPhoneMirror) << "View resized: restarting the mirror at"
+                                  << autoDisplaySize(m_viewWidth, m_viewHeight);
+            restartSession();
+        }
+    });
 }
 
 PhoneMirrorManager::~PhoneMirrorManager()
@@ -367,6 +380,11 @@ void PhoneMirrorManager::setAudioEnabled(bool enabled)
     if (enabled == m_audioEnabled)
         return;
     m_audioEnabled = enabled;
+    restartSession();
+}
+
+void PhoneMirrorManager::restartSession()
+{
     if (isRunning()) {
         stopScrcpy();
         QTimer::singleShot(300, this, &PhoneMirrorManager::startScrcpy);
@@ -375,6 +393,8 @@ void PhoneMirrorManager::setAudioEnabled(bool enabled)
 
 QString PhoneMirrorManager::normalizeDisplaySize(const QString &value)
 {
+    if (value.trimmed().compare(kAutoDisplaySize, Qt::CaseInsensitive) == 0)
+        return kAutoDisplaySize;
     static const QRegularExpression re(QStringLiteral("^\\s*(\\d+)\\s*[xX]\\s*(\\d+)\\s*$"));
     const auto m = re.match(value);
     if (!m.hasMatch())
@@ -396,10 +416,76 @@ void PhoneMirrorManager::setDisplaySize(const QString &size)
         return;
     m_displaySize = norm;
     emit displaySizeChanged();
-    if (isRunning()) {
-        stopScrcpy();
-        QTimer::singleShot(300, this, &PhoneMirrorManager::startScrcpy);
-    }
+    restartSession();
+}
+
+QString PhoneMirrorManager::autoDisplaySize(int viewWidth, int viewHeight)
+{
+    if (viewWidth < 64 || viewHeight < 64)
+        return kDefaultDisplaySize;
+    const double scale = qMin(1.0, double(kAutoMaxSide) / qMax(viewWidth, viewHeight));
+    return normalizeDisplaySize(QStringLiteral("%1x%2").arg(qRound(viewWidth * scale)).arg(qRound(viewHeight * scale)));
+}
+
+QString PhoneMirrorManager::requestedDisplay() const
+{
+    QString size = m_displaySize == kAutoDisplaySize ? autoDisplaySize(m_viewWidth, m_viewHeight) : m_displaySize;
+    if (!size.isEmpty() && m_displayDpi > 0)
+        size += QLatin1Char('/') + QString::number(m_displayDpi);
+    return size;
+}
+
+void PhoneMirrorManager::setViewSize(int width, int height)
+{
+    if (width == m_viewWidth && height == m_viewHeight)
+        return;
+    m_viewWidth = width;
+    m_viewHeight = height;
+    if (isRunning() && m_displaySize == kAutoDisplaySize)
+        m_resizeTimer.start();
+}
+
+void PhoneMirrorManager::setDisplayDpi(int dpi)
+{
+    dpi = qMax(0, dpi);
+    if (dpi == m_displayDpi)
+        return;
+    m_displayDpi = dpi;
+    if (!m_displaySize.isEmpty())
+        restartSession();
+}
+
+void PhoneMirrorManager::setBitRateUsb(int mbps)
+{
+    mbps = qBound(2, mbps, 40);
+    if (mbps == m_bitRateUsbMbps)
+        return;
+    m_bitRateUsbMbps = mbps;
+    if (m_connectionType == QLatin1String("usb"))
+        restartSession();
+}
+
+void PhoneMirrorManager::setBitRateWifi(int mbps)
+{
+    mbps = qBound(2, mbps, 40);
+    if (mbps == m_bitRateWifiMbps)
+        return;
+    m_bitRateWifiMbps = mbps;
+    if (m_connectionType == QLatin1String("wifi"))
+        restartSession();
+}
+
+void PhoneMirrorManager::setBitRateAuto(bool enabled)
+{
+    if (enabled == m_bitRateAuto)
+        return;
+    m_bitRateAuto = enabled;
+    restartSession();
+}
+
+void PhoneMirrorManager::setAutoWifi(bool enabled)
+{
+    m_autoWifi = enabled;
 }
 
 void PhoneMirrorManager::setVideoSink(QObject *sink)
@@ -472,6 +558,29 @@ void PhoneMirrorManager::startScrcpy()
     }
     const QString serial = getDeviceSerial();
     const bool wireless = ScrcpyClient::isNetworkSerial(serial);
+    if (!wireless && m_autoWifi && !m_tcpipChecked) {
+        // Off the GUI thread: `adb tcpip` restarts the phone's adbd, which takes
+        // a couple of seconds. The session starts once it is back.
+        m_isStarting = true;
+        const int gen = ++m_startGeneration;
+        runWirelessJob([this, serial, gen]() {
+            const QString address = enableTcpip(serial);
+            QMetaObject::invokeMethod(this, [this, address, gen]() {
+                if (!address.isEmpty() && address != m_wirelessAddress) {
+                    qCInfo(lcPhoneMirror) << "Remembering the phone for Wi-Fi at" << address;
+                    m_wirelessAddress = address;
+                    emit wirelessAddressChanged(address);
+                }
+                if (gen != m_startGeneration)
+                    return;   // stopped meanwhile
+                m_isStarting = false;
+                m_tcpipChecked = true;
+                startScrcpy();
+            }, Qt::QueuedConnection);
+        }, false);
+        return;
+    }
+    m_tcpipChecked = false;
     const QString jar = ScrcpyClient::bundledServerJar();
     if (jar.isEmpty()) {
         emit scrcpyError(QStringLiteral("Bundled scrcpy server could not be extracted"));
@@ -481,7 +590,9 @@ void PhoneMirrorManager::startScrcpy()
     m_isStarting = true;
     m_isStopping = false;
     m_ready = false;
-    m_activeDisplaySize = m_displaySize;
+    const QString requested = requestedDisplay();
+    m_activeDisplaySize = requested.section(QLatin1Char('/'), 0, 0);
+    m_startedAutoSize = m_displaySize == kAutoDisplaySize ? m_activeDisplaySize : QString();
     QString attachScid;
     if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
         attachScid = m_persistScid;
@@ -509,6 +620,12 @@ void PhoneMirrorManager::startScrcpy()
     connect(m_client, &ScrcpyClient::frameReady, this, &PhoneMirrorManager::frameReady, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::serverLog, this, &PhoneMirrorManager::onServerLog, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::phoneStateChanged, this, &PhoneMirrorManager::onPhoneState, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::bitRateChanged, this, [this](int bps) {
+        if (bps != m_currentBitRate) {
+            m_currentBitRate = bps;
+            emit currentBitRateChanged();
+        }
+    }, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::audioStateChanged, this, &PhoneMirrorManager::audioActiveChanged, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::audioPlayingChanged, this, [this](bool playing) {
         if (playing == m_audioPlaying)
@@ -520,7 +637,7 @@ void PhoneMirrorManager::startScrcpy()
     m_client->setAudioGain(m_audioGain);
     m_client->setVolume(m_volume);
 
-    QString displaySize = m_displaySize;
+    QString displaySize = requested;
     if (!displaySize.isEmpty()) {
         const int sdk = getDeviceSdk();
         if (sdk > 0 && sdk < kNewDisplayMinSdk) {
@@ -528,10 +645,21 @@ void PhoneMirrorManager::startScrcpy()
                                      << ": virtual display unavailable, mirroring phone screen";
             displaySize.clear();
             m_activeDisplaySize.clear();
+            m_startedAutoSize.clear();
         }
+    }
+    const int bitRateMbps = wireless ? m_bitRateWifiMbps : m_bitRateUsbMbps;
+    int startBps = bitRateMbps * 1000000;
+    if (m_bitRateAuto) {
+        // The setting is the ceiling; Wi-Fi starts below it and climbs while the link keeps up
+        m_client->setAdaptiveBitRate(kAdaptiveMinBps, startBps);
+        if (wireless)
+            startBps = qMax(kAdaptiveMinBps, int(startBps * kAdaptiveWifiStart));
     }
     qCInfo(lcPhoneMirror) << "Starting phone mirror (server" << serverVersion() << ") for" << serial
                           << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize)
+                          << "," << startBps / 1000000.0 << "Mbps" << (m_bitRateAuto ? "adaptive, max" : "fixed")
+                          << bitRateMbps
                           << ", audio" << (m_audioEnabled ? "on" : "off")
                           << "," << (wireless ? "Wi-Fi" : "USB") << ")";
     m_serial = serial;
@@ -540,7 +668,7 @@ void PhoneMirrorManager::startScrcpy()
         m_vdisplayId = -1;
     else
         qCInfo(lcPhoneMirror) << "Reattaching to the phone's running mirror session (scid" << attachScid << ")";
-    m_client->start(serial, displaySize, 60, wireless ? kWirelessBitRate : 8000000, m_audioEnabled, true, attachScid);
+    m_client->start(serial, displaySize, 60, startBps, m_audioEnabled, true, attachScid);
     emit isRunningChanged();
 }
 
@@ -584,6 +712,10 @@ void PhoneMirrorManager::onDisconnected(const QString &reason)
         m_persistUntilMs = QDateTime::currentMSecsSinceEpoch() + ScrcpyClient::kPersistMs - 5000;
     }
     setConnectionType(QString());
+    if (m_currentBitRate != 0) {
+        m_currentBitRate = 0;
+        emit currentBitRateChanged();
+    }
     emit isRunningChanged();
     if (reason.isEmpty())
         emit scrcpyStopped();
@@ -594,12 +726,19 @@ void PhoneMirrorManager::onDisconnected(const QString &reason)
 void PhoneMirrorManager::stopScrcpy()
 {
     qCDebug(lcPhoneMirror) << "Stopping phone mirror";
+    ++m_startGeneration;   // a pending auto-Wi-Fi step does not start a session
     m_isStopping = true;
     m_isStarting = false;
     m_ready = false;
     m_attaching = false;
     m_persistScid.clear();
     m_activeDisplaySize.clear();
+    m_startedAutoSize.clear();
+    m_resizeTimer.stop();
+    if (m_currentBitRate != 0) {
+        m_currentBitRate = 0;
+        emit currentBitRateChanged();
+    }
     resetPhoneState();
     if (m_client) {
         ScrcpyClient *client = m_client;
@@ -829,6 +968,64 @@ void PhoneMirrorManager::maybeReconnectWireless()
             }
         }, Qt::QueuedConnection);
     }, false);
+}
+
+QString PhoneMirrorManager::phoneWifiAddress(const QString &serial) const
+{
+    // "30: wlan0    inet 192.168.4.23/24 brd ... scope global wlan0". Wi-Fi
+    // client interfaces first, then a hotspot the phone itself runs; mobile
+    // data (rmnet*, ccmni*), VPNs and loopback never reach OCTAVE.
+    static const QRegularExpression re(QStringLiteral("^\\d+:\\s+(\\S+)\\s+inet\\s+([0-9.]+)/"));
+    const QStringList lines = runAdbFull({QStringLiteral("-s"), serial, QStringLiteral("shell"), QStringLiteral("ip"),
+                                          QStringLiteral("-4"), QStringLiteral("-o"), QStringLiteral("addr"),
+                                          QStringLiteral("show")}, 5000)
+                                  .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    QString hotspot;
+    for (const QString &line : lines) {
+        const auto m = re.match(line.trimmed());
+        if (!m.hasMatch())
+            continue;
+        const QString iface = m.captured(1);
+        if (iface.startsWith(QLatin1String("wlan")))
+            return m.captured(2);
+        if (hotspot.isEmpty() && (iface.startsWith(QLatin1String("swlan")) || iface.startsWith(QLatin1String("ap"))
+                                  || iface.startsWith(QLatin1String("softap"))))
+            hotspot = m.captured(2);
+    }
+    return hotspot;
+}
+
+QString PhoneMirrorManager::enableTcpip(const QString &serial) const
+{
+    const QString ip = phoneWifiAddress(serial);
+    if (ip.isEmpty()) {
+        qCInfo(lcPhoneMirror) << "Phone has no Wi-Fi address; not enabling adb over Wi-Fi";
+        return {};
+    }
+    const QString port = QString::number(kTcpipPort);
+    const QString current = runAdbFull({QStringLiteral("-s"), serial, QStringLiteral("shell"), QStringLiteral("getprop"),
+                                        QStringLiteral("service.adb.tcp.port")}, 5000).trimmed();
+    if (current != port) {
+        // Restarts adbd on the phone: USB drops for a moment and comes back
+        qCInfo(lcPhoneMirror) << "Enabling adb over Wi-Fi on the phone (port" << port << ")";
+        int code = -1;
+        const QString out = runAdbFull({QStringLiteral("-s"), serial, QStringLiteral("tcpip"), port}, 10000, &code);
+        if (code != 0) {
+            qCWarning(lcPhoneMirror) << "adb tcpip failed:" << out;
+            return {};
+        }
+        QThread::msleep(1000);
+        bool back = false;
+        for (int i = 0; i < 16 && !back; ++i) {
+            back = runAdbFull({QStringLiteral("-s"), serial, QStringLiteral("get-state")}, 2000).trimmed()
+                   == QLatin1String("device");
+            if (!back)
+                QThread::msleep(500);
+        }
+        if (!back)
+            qCWarning(lcPhoneMirror) << "Phone did not come back on USB after adb tcpip";
+    }
+    return ip + QLatin1Char(':') + port;
 }
 
 QString PhoneMirrorManager::connectPairedHost(const QString &host) const

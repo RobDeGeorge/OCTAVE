@@ -1,6 +1,7 @@
 #ifndef Q_OS_MOBILE
 
 #include "scrcpyclient.h"
+#include "adaptivebitrate.h"
 
 #include <QElapsedTimer>
 
@@ -50,6 +51,8 @@ extern "C" {
 #endif
 
 #include <algorithm>
+#include <chrono>
+#include <optional>
 #include <cstring>
 #include <cmath>
 
@@ -64,6 +67,7 @@ constexpr quint8 kMsgSetDisplayPower = 10;
 // OCTAVE extensions (phone_server MirrorKeeper)
 constexpr quint8 kMsgOctaveSetKeeper = 100;
 constexpr quint8 kMsgOctaveTakeBack = 101;
+constexpr quint8 kMsgOctaveSetBitRate = 102;   // int32 bps (adaptive quality)
 // Device messages (server -> client on the control socket)
 constexpr quint8 kDevMsgClipboard = 0;
 constexpr quint8 kDevMsgAckClipboard = 1;
@@ -113,6 +117,7 @@ static bool isBlackFrame(const AVFrame *f, bool lenient)
 
 // Frame header flags (app/src/demuxer.c)
 constexpr quint64 kFlagConfig = quint64(1) << 63;
+constexpr quint64 kPtsMask = (quint64(1) << 62) - 1;   // below the config / key-frame flags
 
 // Audio stream (phone_server/.../audio/AudioConfig.java, device/Streamer.java)
 constexpr int kAudioSampleRate = 48000;
@@ -263,6 +268,7 @@ bool ScrcpyClient::start(const QString &serial, const QString &displaySize,
     m_serial = serial;
     m_stopping = false;
     m_frameCount = 0;
+    m_startBitRate = bitRate;
     m_thread = std::thread([this, displaySize, maxFps, bitRate, audio, stayAwake, attachScid]() {
 #ifdef Q_OS_LINUX
         pthread_setname_np(pthread_self(), "scrcpy-client");
@@ -397,6 +403,14 @@ void ScrcpyClient::setKeeper(bool enabled, bool panelDark, int graceMs)
 void ScrcpyClient::takeBack()
 {
     sendControl(QByteArray(1, char(kMsgOctaveTakeBack)));
+}
+
+void ScrcpyClient::sendBitRate(int bps)
+{
+    QByteArray msg(5, 0);
+    msg[0] = char(kMsgOctaveSetBitRate);
+    qToBigEndian<qint32>(bps, msg.data() + 1);
+    sendControl(msg);
 }
 
 // ─── worker thread ────────────────────────────────────────────────────
@@ -713,6 +727,12 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
     QByteArray pendingConfig;
     QByteArray data;
     bool first = true;
+    // Adaptive quality: judged on packet arrival, before decoding, so a
+    // decoder falling behind shows up as queueing just like a slow link
+    std::optional<AdaptiveBitRate> abr;
+    if (m_adaptiveMaxBps > 0)
+        abr.emplace(m_adaptiveMinBps, m_adaptiveMaxBps, m_startBitRate);
+    bool rateAnnounced = false;
 
     while (!m_stopping.load()) {
         char header[12];
@@ -730,6 +750,23 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
         if (ptsFlags & kFlagConfig) {
             pendingConfig = data;          // SPS/PPS: prepend to the next packet
             continue;
+        }
+        if (!rateAnnounced) {
+            rateAnnounced = true;
+            const int bps = abr ? abr->takeInitial() : m_startBitRate;
+            if (abr)
+                sendBitRate(bps);   // the phone may still run a rate from an earlier session
+            emit bitRateChanged(bps);
+        }
+        if (abr) {
+            const qint64 arrivalUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            if (const int bps = abr->onPacket(qint64(ptsFlags & kPtsMask), arrivalUs, int(size))) {
+                qCInfo(lcScrcpyClient) << "adaptive bit rate:" << bps / 1000000.0 << "Mbps (queueing"
+                                       << abr->lastQueueUs() / 1000 << "ms)";
+                sendBitRate(bps);
+                emit bitRateChanged(bps);
+            }
         }
         if (!pendingConfig.isEmpty()) {
             data.prepend(pendingConfig);

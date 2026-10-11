@@ -103,6 +103,9 @@ public:
     // While true, all-black frames are never shown (the phone is asleep and
     // the last good frame stays up); otherwise only for kBlackHoldMs.
     void setHoldBlack(bool hold) { m_holdBlack = hold; }
+    // Adaptive quality (AdaptiveBitRate): set before start(). maxBps 0 = off,
+    // the stream keeps start()'s bitRate; otherwise that is the starting rate.
+    void setAdaptiveBitRate(int minBps, int maxBps) { m_adaptiveMinBps = minBps; m_adaptiveMaxBps = maxBps; }
 
 signals:
     void connected(int width, int height);
@@ -114,6 +117,8 @@ signals:
     void audioPlayingChanged(bool playing);     // the phone is (not) producing sound (GUI thread)
     void serverLog(const QString &line);
     void phoneStateChanged(bool asleep, bool inUse, bool panelDark);   // from the keeper
+    // Video bit rate in force (bps): once when the stream starts, then on every adaptive change
+    void bitRateChanged(int bps);
 
 private slots:
     void deliverFrame();
@@ -133,6 +138,7 @@ private:
     void pushFrame(const QVideoFrame &frame);
     void fail(const QString &reason);
     void sendControl(const QByteArray &msg);
+    void sendBitRate(int bps);
     static int freePort();
 
     QString m_adb;
@@ -162,6 +168,9 @@ private:
     std::mutex m_audioFdMutex;
     QTcpSocket *m_control = nullptr;
     std::atomic<qintptr> m_controlFd{-1};
+    int m_startBitRate = 0;
+    int m_adaptiveMinBps = 0;
+    int m_adaptiveMaxBps = 0;
     std::mutex m_sendMutex;
 
     QVideoSink *m_sink = nullptr;

@@ -16,17 +16,54 @@ Flickable {
     property string currentSection: ""
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
-    // Each entry: { cardId, title, iconSource, component }. Other layouts ignore
-    // this and use the Repeater rendering below.
+    // Each entry: { cardId, title, summary, component }. `summary()` returns
+    // the tile's one line of state — { state, active, status }, all optional.
+    // Keep state short (it elides past ~14 characters in the all-settings
+    // grid), set active only for things that are on / connected, and leave
+    // state out rather than fill it with an instruction — and is re-evaluated whenever a property it
+    // reads changes. Other layouts ignore this and use the Repeater below.
     // False when the host shows tileModel as a tile grid instead of this
     // page (the Sidebar layout); the stacked cards are then never built.
     property bool renderCards: true
 
+    function _cap(s) { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1) }
+
+    // Drives the Clock tile's time.
+    property date _now: new Date()
+    Timer {
+        interval: 1000
+        repeat: true
+        running: true
+        onTriggered: pageRoot._now = new Date()
+    }
+
     property var tileModel: [
-        { cardId: "display_layout",     title: "Layout",     iconSource: App.Style.assetBase + "tile_layout.svg",     component: layoutContent },
-        { cardId: "display_window",     title: "Window",     iconSource: App.Style.assetBase + "tile_window.svg",     component: windowContent },
-        { cardId: "display_appearance", title: "Appearance", iconSource: App.Style.assetBase + "tile_appearance.svg", component: appearanceContent },
-        { cardId: "display_clock",      title: "Clock",      iconSource: App.Style.assetBase + "tile_clock.svg",      component: clockContent }
+        { cardId: "display_layout", title: "Layout", component: layoutContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              return { state: settingsManager.settingsLayoutStyle }
+          } },
+        { cardId: "display_window", title: "Window", component: windowContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              return { state: settingsManager.windowState === "windowed"
+                              ? settingsManager.screenWidth + "×" + settingsManager.screenHeight
+                              : pageRoot._cap(settingsManager.windowState) }
+          } },
+        { cardId: "display_appearance", title: "Appearance", component: appearanceContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              var theme = settingsManager.themeSetting
+              return { state: theme === "Album Art Capture" ? "Album art" : theme }
+          } },
+        { cardId: "display_clock", title: "Clock", component: clockContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              if (!settingsManager.showClock) return { state: "Hidden" }
+              var use24h = settingsManager.clockFormat24Hour
+              var fmt = (use24h ? "HH" : "h") + ":mm" + (settingsManager.clockShowSeconds ? ":ss" : "") + (use24h ? "" : " AP")
+              return { state: Qt.formatTime(pageRoot._now, fmt) }
+          } }
     ]
 
     function buildThemeChipColors() {

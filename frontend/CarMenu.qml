@@ -54,6 +54,24 @@ Item {
         console.log("CarMenu: IMU connected =", imuConnected)
     }
 
+    // Live OBD drives the 3D Jeep's fan/crank (RPM) and wheels/driveshafts
+    // (SPEED, reported in MPH) while connected or while the OBD simulator
+    // runs; otherwise the manual test sliders below do. RPM and SPEED are
+    // requested only while this page is on screen (demand-driven polling).
+    readonly property bool liveDrive: (typeof obdManager !== "undefined" && obdManager !== null && obdManager.connected === true)
+        || App.OBDParameterModel.simulationActive
+    readonly property real liveRpm: Number(App.OBDParameterModel.paramValues["RPM"]) || 0
+    readonly property real liveSpeedKph: (Number(App.OBDParameterModel.paramValues["SPEED"]) || 0) * 1.609344
+    Binding { target: jeep; property: "engineRpm"; value: carMenu.liveRpm; when: carMenu.liveDrive }
+    Binding { target: jeep; property: "wheelSpeedKph"; value: carMenu.liveSpeedKph; when: carMenu.liveDrive }
+    readonly property var _obdDemandIds: visible ? ["RPM", "SPEED"] : []
+    function _pushObdDemand(ids) {
+        if (typeof obdManager !== "undefined" && obdManager && obdManager.setParameterDemand)
+            obdManager.setParameterDemand("carMenu", ids)
+    }
+    on_ObdDemandIdsChanged: _pushObdDemand(_obdDemandIds)
+    Component.onDestruction: _pushObdDemand([])
+
     // Connections to live BerryIMU data. Only while this page is visible:
     // it stays alive hidden (StackView cache, pre-built at startup), and the
     // IMU streams at 60 Hz while OBD or a sensor page is open, so updating
@@ -214,16 +232,32 @@ Item {
                     spacing: 6
                     Button {
                         objectName: "jeepSpinWheels"; text: "Spin wheels"
+                        enabled: !carMenu.liveDrive
                         checkable: true; checked: jeep.wheelSpeedKph !== 0
                         onClicked: jeep.wheelSpeedKph = jeep.wheelSpeedKph !== 0 ? 0 : 10
                     }
                     Slider {
                         objectName: "jeepWheelSpeed"; width: carMenu.dp(130)
+                        enabled: !carMenu.liveDrive
                         from: -30; to: 30; value: jeep.wheelSpeedKph
                         onMoved: jeep.wheelSpeedKph = value
                     }
                     Label {
                         text: jeep.wheelSpeedKph.toFixed(0) + " km/h"
+                        color: "white"; anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+                Row {
+                    spacing: 6
+                    Label { text: "Engine"; color: "white"; anchors.verticalCenter: parent.verticalCenter }
+                    Slider {
+                        objectName: "jeepEngineRpm"; width: carMenu.dp(130)
+                        enabled: !carMenu.liveDrive
+                        from: 0; to: 6000; stepSize: 50; value: jeep.engineRpm
+                        onMoved: jeep.engineRpm = value
+                    }
+                    Label {
+                        text: jeep.engineRpm.toFixed(0) + " rpm" + (carMenu.liveDrive ? " · live OBD" : "")
                         color: "white"; anchors.verticalCenter: parent.verticalCenter
                     }
                 }

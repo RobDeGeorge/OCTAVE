@@ -33,7 +33,8 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool nativeAvailable READ nativeAvailable CONSTANT)
     Q_PROPERTY(QString serverVersion READ serverVersion CONSTANT)
     Q_PROPERTY(bool isRunning READ isRunning NOTIFY isRunningChanged)
-    // Requested virtual display "WxH" (--new-display, Android 11+); "" = phone screen
+    // Requested virtual display "WxH" (--new-display, Android 11+); "auto" = the
+    // view's own pixel size (setViewSize), "" = phone screen
     Q_PROPERTY(QString displaySize READ displaySize NOTIFY displaySizeChanged)
     // "WxH" of the virtual display in use, "" when mirroring the phone screen
     Q_PROPERTY(QString activeDisplaySize READ activeDisplaySize NOTIFY frameSizeChanged)
@@ -63,6 +64,8 @@ class PhoneMirrorManager : public QObject
     // per row (empty when no pairing is waiting), for QML to draw
     Q_PROPERTY(QStringList qrPairingRows READ qrPairingRows NOTIFY qrPairingChanged)
     Q_PROPERTY(bool qrPairingActive READ qrPairingActive NOTIFY qrPairingChanged)
+    // Video bit rate of the running session in bps (follows adaptive changes), 0 when idle
+    Q_PROPERTY(int currentBitRate READ currentBitRate NOTIFY currentBitRateChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -87,6 +90,7 @@ public:
     bool wirelessBusy() const { return m_wirelessJobs > 0; }
     QStringList qrPairingRows() const { return m_qrRows; }
     bool qrPairingActive() const { return !m_qrRows.isEmpty(); }
+    int currentBitRate() const { return m_currentBitRate; }
     // "WIFI:T:ADB;S:<service>;P:<password>;;" -- the payload Android's
     // "Pair device with QR code" scanner expects (Android Studio's format)
     static QString qrPairingPayload(const QString &service, const QString &password);
@@ -97,14 +101,26 @@ public:
     float duckingFactor() const;
 
     // Validate "WxH": dimensions snapped down to multiples of 8 (scrcpy does the
-    // same to a --new-display size), "" for invalid input.
+    // same to a --new-display size), "auto" kept as is, "" for invalid input.
     static QString normalizeDisplaySize(const QString &value);
+    // "auto": the view's pixel size, scaled down to fit kAutoMaxSide (phone
+    // encoders reject very large frames) and snapped to multiples of 8.
+    // Falls back to kDefaultDisplaySize before the view has reported a size.
+    static QString autoDisplaySize(int viewWidth, int viewHeight);
+    static constexpr int kAutoMaxSide = 1920;
+    // Port a USB phone's adbd is switched to for adb over TCP (setting scrcpyAutoWifi)
+    static constexpr int kTcpipPort = 5555;
     static constexpr int kNewDisplayMinSdk = 30;  // Android 11
     // adb discovery: bundled platform-tools, then PATH, then common SDK
     // locations. Shared with AndroidAutoManager so both find the same binary.
     static QString findAdb();
-    // Video bit rate over Wi-Fi; USB keeps the client default (8 Mbps)
-    static constexpr int kWirelessBitRate = 4000000;
+    // Video bit rate defaults, Mbps (settings scrcpyBitRateUsb / scrcpyBitRateWifi)
+    static constexpr int kDefaultUsbBitRateMbps = 16;
+    static constexpr int kDefaultWifiBitRateMbps = 8;
+    // Adaptive quality: floor, and where a Wi-Fi session starts (fraction of
+    // the setting, which is the ceiling). USB starts at the ceiling.
+    static constexpr int kAdaptiveMinBps = 2000000;
+    static constexpr double kAdaptiveWifiStart = 0.6;
 
 signals:
     // Session state (names kept from the original scrcpy-binary design;
@@ -131,6 +147,7 @@ signals:
     // Outcome of QR pairing, message ready to show
     void wirelessResult(bool ok, const QString &message);
     void qrPairingChanged();
+    void currentBitRateChanged();
 
 public slots:
     // Called by VolumeController on every volume change (0..1 linear);
@@ -144,6 +161,21 @@ public slots:
     void setAudioDuckEnabled(bool enabled);
     void setAudioDuckLevel(float level);
     void setDisplaySize(const QString &size);
+    // The mirror view's size in device pixels; drives the "auto" display size.
+    // A running auto session is restarted (debounced) when it changes.
+    void setViewSize(int width, int height);
+    // Virtual display density (setting scrcpyDisplayDpi), 0 = scaled from the phone's
+    void setDisplayDpi(int dpi);
+    // Video bit rate per link in Mbps (settings scrcpyBitRateUsb / scrcpyBitRateWifi)
+    void setBitRateUsb(int mbps);
+    void setBitRateWifi(int mbps);
+    // Setting scrcpyBitRateAuto: adapt the rate to the link, with the
+    // per-link settings as the ceiling (AdaptiveBitRate)
+    void setBitRateAuto(bool enabled);
+    // Setting scrcpyAutoWifi: before a USB session, switch the phone's adbd to
+    // TCP port kTcpipPort and remember its Wi-Fi address, so it can be reached
+    // without a cable (and without the Wireless debugging toggle) until it reboots.
+    void setAutoWifi(bool enabled);
     // Setting scrcpyPhoneScreenOff: keep the phone's own panel dark while
     // mirroring. Stream and touch keep working (SurfaceControl power mode,
     // not sleep); the server restores the panel when the session ends.
@@ -202,6 +234,13 @@ private:
     // Runs on m_wirelessPool (one job at a time); ui jobs drive wirelessBusy
     void runWirelessJob(std::function<void()> job, bool ui);
     void maybeReconnectWireless();
+    // Worker thread: the phone's Wi-Fi IPv4 address ("" when it has none)
+    QString phoneWifiAddress(const QString &serial) const;
+    // Worker thread: switch a USB phone to adb over TCP; returns "ip:port", "" if not possible
+    QString enableTcpip(const QString &serial) const;
+    // Size actually requested from the server: "WxH[/dpi]", "" = phone screen
+    QString requestedDisplay() const;
+    void restartSession();
     void setConnectionType(const QString &type);
     QList<QPair<QString, QString>> devices() const;  // (serial, state)
     void killStaleServer();
@@ -218,6 +257,18 @@ private:
     float m_volume = 1.0f;
     QString m_displaySize;
     QString m_activeDisplaySize;
+    int m_viewWidth = 0;
+    int m_viewHeight = 0;
+    QString m_startedAutoSize;      // "auto" size the running session was started with
+    QTimer m_resizeTimer;           // debounces restarts on view resize
+    int m_displayDpi = 0;
+    int m_bitRateUsbMbps = kDefaultUsbBitRateMbps;
+    int m_bitRateWifiMbps = kDefaultWifiBitRateMbps;
+    bool m_autoWifi = true;
+    bool m_bitRateAuto = true;
+    int m_currentBitRate = 0;
+    bool m_tcpipChecked = false;    // the auto-Wi-Fi step ran for the session being started
+    int m_startGeneration = 0;      // bumped by stopScrcpy; a pending start checks it
 
     ScrcpyClient *m_client = nullptr;
     QObject *m_videoSink = nullptr;
@@ -281,6 +332,7 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool wirelessBusy READ wirelessBusy CONSTANT)
     Q_PROPERTY(QStringList qrPairingRows READ qrPairingRows CONSTANT)
     Q_PROPERTY(bool qrPairingActive READ qrPairingActive CONSTANT)
+    Q_PROPERTY(int currentBitRate READ currentBitRate CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
     bool audioActive() const { return false; }
@@ -304,6 +356,7 @@ public:
     bool wirelessBusy() const { return false; }
     QStringList qrPairingRows() const { return {}; }
     bool qrPairingActive() const { return false; }
+    int currentBitRate() const { return 0; }
 
 public slots:
     void setVolume(float) {}
@@ -312,6 +365,12 @@ public slots:
     void setAudioDuckEnabled(bool) {}
     void setAudioDuckLevel(float) {}
     void setDisplaySize(const QString &) {}
+    void setViewSize(int, int) {}
+    void setDisplayDpi(int) {}
+    void setBitRateUsb(int) {}
+    void setBitRateWifi(int) {}
+    void setBitRateAuto(bool) {}
+    void setAutoWifi(bool) {}
     void setPhoneScreenOff(bool) {}
     void wakePhone() {}
     void resumeMirroring() {}

@@ -15,7 +15,7 @@ Item {
     property string gestureStatus: typeof gestureSensor !== "undefined" && gestureSensor
         ? gestureSensor.connectionStatus : "Disabled"
     property bool phoneDockOn: settingsManager
-        && (settingsManager.androidAutoEnabled || settingsManager.phoneMirrorEnabled)
+        && settingsManager.phoneMirrorEnabled
 
     Connections {
         target: typeof esp32VolumeManager !== "undefined" && esp32VolumeManager ? esp32VolumeManager : null

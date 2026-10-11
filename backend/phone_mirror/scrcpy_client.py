@@ -33,6 +33,7 @@ from PySide6.QtCore import QObject, Signal, Slot, QSize, QTimer
 from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat, QAudioFormat, QAudioSink, QMediaDevices
 
 from backend.logging_config import get_logger
+from backend.phone_mirror.adaptive_bitrate import AdaptiveBitRate
 
 try:
     import av  # PyAV — already in requirements.txt
@@ -62,6 +63,7 @@ MSG_SET_DISPLAY_POWER = 10
 # OCTAVE extensions (phone_server MirrorKeeper)
 MSG_OCTAVE_SET_KEEPER = 100     # enabled, panel_dark, grace_ms
 MSG_OCTAVE_TAKE_BACK = 101
+MSG_OCTAVE_SET_BIT_RATE = 102   # int32 bps (adaptive quality)
 # Device messages (server -> client, control socket)
 DEVMSG_CLIPBOARD = 0
 DEVMSG_ACK_CLIPBOARD = 1
@@ -186,6 +188,8 @@ class ScrcpyClient(QObject):
     audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound (GUI thread)
     serverLog = Signal(str)
     phoneStateChanged = Signal(bool, bool, bool)   # asleep, in_use, panel_dark (from the server's MirrorKeeper)
+    # Video bit rate in force (bps): once when the stream starts, then on every adaptive change
+    bitRateChanged = Signal(int)
 
     def __init__(self, adb_path: str, server_jar: str, parent=None):
         super().__init__(parent)
@@ -195,6 +199,9 @@ class ScrcpyClient(QObject):
         self._port = 0
         self._scid = ""
         self._attach_scid = ""
+        self._start_bit_rate = 0
+        self._adaptive_min_bps = 0
+        self._adaptive_max_bps = 0
         self._proc: Optional[subprocess.Popen] = None
         # Guards handing _proc/_port/sockets from the session thread to
         # whoever releases them (stop() or the session's own exit)
@@ -301,6 +308,7 @@ class ScrcpyClient(QObject):
         self._stopping = False
         self._frame_count = 0
         self._attach_scid = attach_scid
+        self._start_bit_rate = int(bit_rate)
         self._thread = threading.Thread(
             target=self._run, args=(display_size, max_fps, bit_rate, audio, stay_awake),
             daemon=True, name="scrcpy-client")
@@ -397,6 +405,15 @@ class ScrcpyClient(QObject):
                 if buf[base + c * (w - 1) // 23] > BLACK_LUMA_MAX:
                     return False
         return True
+
+    def set_adaptive_bit_rate(self, min_bps: int, max_bps: int):
+        """Adaptive quality (AdaptiveBitRate): set before start(). max_bps 0 =
+        off, the stream keeps start()'s bit_rate; otherwise that is the starting rate."""
+        self._adaptive_min_bps = int(min_bps)
+        self._adaptive_max_bps = int(max_bps)
+
+    def _send_bit_rate(self, bps: int):
+        self._send(struct.pack(">Bi", MSG_OCTAVE_SET_BIT_RATE, int(bps)))
 
     def set_keeper(self, enabled: bool, panel_dark: bool, grace_ms: int):
         """Configure the server's MirrorKeeper: wake the phone on doze, keep
@@ -813,6 +830,11 @@ class ScrcpyClient(QObject):
             pass
         pending_config = b""
         first = True
+        # Adaptive quality: judged on packet arrival, before decoding, so a
+        # decoder falling behind shows up as queueing just like a slow link
+        abr = (AdaptiveBitRate(self._adaptive_min_bps, self._adaptive_max_bps, self._start_bit_rate)
+               if self._adaptive_max_bps > 0 else None)
+        rate_announced = False
         try:
             while not self._stopping:
                 header = _recv_exact(video, 12)
@@ -825,6 +847,19 @@ class ScrcpyClient(QObject):
                     # SPS/PPS: prepend to the next packet, as the scrcpy client does
                     pending_config = data
                     continue
+                if not rate_announced:
+                    rate_announced = True
+                    bps = abr.take_initial() if abr else self._start_bit_rate
+                    if abr:
+                        self._send_bit_rate(bps)   # the phone may still run a rate from an earlier session
+                    self.bitRateChanged.emit(bps)
+                if abr:
+                    bps = abr.on_packet(pts_flags & PTS_MASK, time.monotonic_ns() // 1000, size)
+                    if bps:
+                        logger.info(f"scrcpy client: adaptive bit rate {bps / 1e6:.1f} Mbps "
+                                    f"(queueing {abr.last_queue_us // 1000} ms)")
+                        self._send_bit_rate(bps)
+                        self.bitRateChanged.emit(bps)
                 if pending_config:
                     data = pending_config + data
                     pending_config = b""

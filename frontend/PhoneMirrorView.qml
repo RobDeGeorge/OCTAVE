@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Basic 2.15
+import QtQuick.Window
 import QtMultimedia
 import "." as App
 
@@ -56,6 +57,15 @@ Item {
             qrPanel.cancel()
     }
     StackView.onDeactivated: wantQr = false
+    // The "auto" virtual display is created at exactly this size (device
+    // pixels), so the phone draws the whole view: no letterbox, no scaling.
+    function reportViewSize() {
+        if (phoneMirrorManager && width > 0 && height > 0)
+            phoneMirrorManager.setViewSize(Math.round(width * Screen.devicePixelRatio),
+                                           Math.round(height * Screen.devicePixelRatio))
+    }
+    onWidthChanged: reportViewSize()
+    onHeightChanged: reportViewSize()
     function refreshSetupOk() {
         setupOk = (phoneMirrorManager && phoneMirrorManager.environmentOk) ? phoneMirrorManager.environmentOk() : false
     }
@@ -67,6 +77,7 @@ Item {
     // starts it otherwise, so a revisit behaves like a fresh view used to.
     StackView.onActivated: {
         console.log("PhoneMirrorView activated")
+        reportViewSize()
         startMirror()
     }
 

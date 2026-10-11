@@ -28,6 +28,7 @@ public final class ControlMessage {
     // OCTAVE extensions (MirrorKeeper)
     public static final int TYPE_OCTAVE_SET_KEEPER = 100;   // enabled, panelDark, graceMs
     public static final int TYPE_OCTAVE_TAKE_BACK = 101;    // leave the in-use state
+    public static final int TYPE_OCTAVE_SET_BIT_RATE = 102; // video bit rate in bps (adaptive quality)
 
     public static final long SEQUENCE_INVALID = 0;
 
@@ -132,6 +133,17 @@ public final class ControlMessage {
         msg.panelDark = panelDark;
         msg.graceMs = graceMs;
         return msg;
+    }
+
+    public static ControlMessage createOctaveSetBitRate(int bitRate) {
+        ControlMessage msg = new ControlMessage();
+        msg.type = TYPE_OCTAVE_SET_BIT_RATE;
+        msg.id = bitRate;
+        return msg;
+    }
+
+    public int getBitRate() {
+        return id;
     }
 
     public boolean getPanelDark() {

@@ -13,6 +13,7 @@ import org.octave.phoneserver.device.Size;
 import org.octave.phoneserver.util.Ln;
 import org.octave.phoneserver.util.LogUtils;
 import org.octave.phoneserver.video.SurfaceCapture;
+import org.octave.phoneserver.video.VideoBitRate;
 import org.octave.phoneserver.video.VirtualDisplayListener;
 import org.octave.phoneserver.wrappers.ClipboardManager;
 import org.octave.phoneserver.wrappers.InputManager;
@@ -343,6 +344,9 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
                 if (mirrorKeeper != null) {
                     mirrorKeeper.takeBack();
                 }
+                break;
+            case ControlMessage.TYPE_OCTAVE_SET_BIT_RATE:
+                VideoBitRate.set(msg.getBitRate());
                 break;
             default:
                 // do nothing

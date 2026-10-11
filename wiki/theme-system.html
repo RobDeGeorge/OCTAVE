@@ -467,7 +467,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
 
         <p>The image is rendered at <code>sourceSize = 2&times;</code> its display size with <code>mipmap: true</code>, which keeps SVG edges crisp when the tile scales up. Both overlays are hidden until <code>Image.Ready</code>.</p>
 
-        <p>The assets it draws were added in commit <code>93d0fc9</code> as 22 flat white SVGs (<code>&lt;g fill="#FFFFFF"&gt;</code>) in <span class="file-path">frontend/assets/</span>: category icons <code>cat_display.svg</code>, <code>cat_about.svg</code> and the tile set <code>tile_layout</code>, <code>tile_window</code>, <code>tile_appearance</code>, <code>tile_clock</code>, <code>tile_library</code>, <code>tile_playback</code>, <code>tile_now_playing</code>, <code>tile_spotify</code>, <code>tile_connection</code>, <code>tile_adapters</code>, <code>tile_tuning</code>, <code>tile_parameters</code>, <code>tile_volume_knob</code>, <code>tile_imu</code>, <code>tile_gesture</code>, <code>tile_phone_dock</code>, <code>tile_device_name</code>, <code>tile_network</code>, <code>tile_power</code>. The bottom-bar icons (<code>home_button</code>, <code>obd_button</code>, <code>media_button</code>, <code>sensor_button</code>, <code>settings_button</code>, <code>android_auto_button</code>, <code>phone_mirror_button</code>, transport and mute icons) follow the same single-fill rule; a second colour in an asset would collapse into the tint.</p>
+        <p>The assets it draws were added in commit <code>93d0fc9</code> as 22 flat white SVGs (<code>&lt;g fill="#FFFFFF"&gt;</code>) in <span class="file-path">frontend/assets/</span>: category icons <code>cat_display.svg</code>, <code>cat_about.svg</code> and a <code>tile_*.svg</code> set for the settings tiles. The tile set has since been removed: settings tiles show each setting's live state instead of an icon (see <a href="settings-ui.html#tile-system">Settings UI</a>). The bottom-bar icons (<code>home_button</code>, <code>obd_button</code>, <code>media_button</code>, <code>sensor_button</code>, <code>settings_button</code>, <code>android_auto_button</code>, <code>phone_mirror_button</code>, transport and mute icons) follow the same single-fill rule; a second colour in an asset would collapse into the tint.</p>
 
         <!-- How Components Consume Themes -->
         <h2 id="consuming-themes">How Components Consume the Theme</h2>
@@ -485,7 +485,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
 <span class="prop">font.pixelSize</span>: App.Spacing.overallText * <span class="num">1.5</span>
 
 <span class="cmt">// Icons</span>
-App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span class="str">"tile_layout.svg"</span>; <span class="prop">color</span>: App.Style.accent }</code></pre>
+App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span class="str">"cat_display.svg"</span>; <span class="prop">color</span>: App.Style.accent }</code></pre>
 
         <p>Translucent surfaces are built from tokens at runtime (<code>primaryTextColor</code> at 5&ndash;7&nbsp;% for cards, <code>accent</code> at 18&ndash;25&nbsp;% for selection) rather than being separate theme keys, which keeps the theme object small and lets Album Art Capture palettes work without extra fields.</p>
 

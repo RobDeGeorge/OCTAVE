@@ -79,7 +79,7 @@ Item {
                 return [
                     { label: "Knob", value: espConnected ? "Connected" : "Disconnected" },
                     { label: "Gestures", value: settingsManager.gestureSensorEnabled ? "Enabled" : "Disabled" },
-                    { label: "Phone Dock", value: (settingsManager.androidAutoEnabled || settingsManager.phoneMirrorEnabled) ? "On" : "Off" }
+                    { label: "Phone Dock", value: settingsManager.phoneMirrorEnabled ? "On" : "Off" }
                 ]
             case "deviceSettings":
                 return [

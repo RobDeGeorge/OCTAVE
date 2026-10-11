@@ -1267,7 +1267,7 @@ Rectangle {
                             id: androidAutoButton
                             implicitWidth: App.Spacing.bottomBarNavButtonWidth
                             implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: (typeof isAndroid === "undefined" || !isAndroid) && (settingsManager ? settingsManager.androidAutoEnabled : false)
+                            visible: false  // Android Auto shelved in favour of phone mirroring
 
                             background: Rectangle {
                                 color: "transparent"
@@ -2325,7 +2325,7 @@ Rectangle {
                             id: androidAutoButtonVertical
                             implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
                             implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: (typeof isAndroid === "undefined" || !isAndroid) && (settingsManager ? settingsManager.androidAutoEnabled : false)
+                            visible: false  // Android Auto shelved in favour of phone mirroring
                             Layout.alignment: Qt.AlignHCenter
 
                             background: Rectangle {

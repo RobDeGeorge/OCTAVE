@@ -35,19 +35,31 @@ from backend.phone_mirror.scrcpy_client import (
 
 logger = get_logger(__name__)
 
-# Default size of the virtual display scrcpy creates on the phone
-# (--new-display, Android 11+). Landscape suits a dash screen. scrcpy rounds
-# each dimension down to a multiple of 8, so the setting is snapped the same
-# way to keep the UI honest.
+# Size of the virtual display scrcpy creates on the phone (--new-display,
+# Android 11+) when the setting is "auto" but the view has not reported its
+# size yet. Landscape suits a dash screen. scrcpy rounds each dimension down
+# to a multiple of 8, so sizes are snapped the same way to keep the UI honest.
 DEFAULT_DISPLAY_SIZE = "1280x800"
+AUTO_DISPLAY_SIZE = "auto"
+# "auto" sizes are scaled down to fit this (phone encoders reject very large frames)
+AUTO_MAX_SIDE = 1920
+# A view resize restarts an "auto" session once the size has settled
+RESIZE_RESTART_MS = 1500
 NEW_DISPLAY_MIN_SDK = 30  # Android 11
 # After a power press from the locked state the phone-side keeper wakes the
 # phone but leaves its panel lit for this long. If the keyguard is dismissed
 # in that window the user wants their phone, not the mirror's screen-off;
 # otherwise the panel is blanked again.
 WAKE_GRACE_MS = 8000
-# Video bit rate over Wi-Fi; USB keeps the client default (8 Mbps)
-WIRELESS_BIT_RATE = 4_000_000
+# Video bit rate defaults, Mbps (settings scrcpyBitRateUsb / scrcpyBitRateWifi)
+DEFAULT_USB_BIT_RATE_MBPS = 16
+DEFAULT_WIFI_BIT_RATE_MBPS = 8
+# Port a USB phone's adbd is switched to for adb over TCP (setting scrcpyAutoWifi)
+TCPIP_PORT = 5555
+# Adaptive quality: floor, and where a Wi-Fi session starts (fraction of the
+# setting, which is the ceiling). USB starts at the ceiling.
+ADAPTIVE_MIN_BPS = 2_000_000
+ADAPTIVE_WIFI_START = 0.6
 # Minimum gap between background attempts to reach the remembered Wi-Fi phone
 AUTO_CONNECT_INTERVAL_S = 5.0
 # How long a shown QR code waits for the phone to scan it
@@ -67,7 +79,10 @@ def _random_token(length: int) -> str:
 
 def normalize_display_size(value: str) -> str:
     """Validate "WxH"; snap both dimensions down to multiples of 8 (min 8).
-    Returns "" for empty/invalid input (= mirror the phone's own screen)."""
+    "auto" is kept as is. Returns "" for empty/invalid input (= mirror the
+    phone's own screen)."""
+    if (value or "").strip().lower() == AUTO_DISPLAY_SIZE:
+        return AUTO_DISPLAY_SIZE
     m = re.fullmatch(r"\s*(\d+)\s*[xX]\s*(\d+)\s*", value or "")
     if not m:
         return ""
@@ -75,6 +90,35 @@ def normalize_display_size(value: str) -> str:
     w = max(8, (w // 8) * 8)
     h = max(8, (h // 8) * 8)
     return f"{w}x{h}"
+
+
+def auto_display_size(view_width: int, view_height: int) -> str:
+    """The view's pixel size scaled down to fit AUTO_MAX_SIDE and snapped to
+    multiples of 8; DEFAULT_DISPLAY_SIZE before the view has reported a size."""
+    if view_width < 64 or view_height < 64:
+        return DEFAULT_DISPLAY_SIZE
+    scale = min(1.0, AUTO_MAX_SIDE / max(view_width, view_height))
+    return normalize_display_size(f"{round(view_width * scale)}x{round(view_height * scale)}")
+
+
+_IP_ADDR_RE = re.compile(r"^\d+:\s+(\S+)\s+inet\s+([0-9.]+)/")
+
+
+def wifi_address_from_ip_addr(output: str) -> str:
+    """Phone's Wi-Fi IPv4 from `ip -4 -o addr show`. Wi-Fi client interfaces
+    first, then a hotspot the phone itself runs; mobile data (rmnet*, ccmni*),
+    VPNs and loopback never reach OCTAVE."""
+    hotspot = ""
+    for line in (output or "").split("\n"):
+        m = _IP_ADDR_RE.match(line.strip())
+        if not m:
+            continue
+        iface, ip = m.group(1), m.group(2)
+        if iface.startswith("wlan"):
+            return ip
+        if not hotspot and iface.startswith(("swlan", "ap", "softap")):
+            hotspot = ip
+    return hotspot
 
 
 def host_of(address: str) -> str:
@@ -160,6 +204,7 @@ class PhoneMirrorManager(QObject):
     wirelessBusyChanged = Signal()
     wirelessResult = Signal(bool, str)          # outcome of QR pairing
     qrPairingChanged = Signal()
+    currentBitRateChanged = Signal()
     _post = Signal(object)                      # worker thread -> GUI thread callable
 
     def __init__(self, parent=None):
@@ -167,8 +212,23 @@ class PhoneMirrorManager(QObject):
         self._adb_path: Optional[str] = _find_adb()
         self._audio_enabled: bool = False
         self._volume: float = 1.0
-        self._display_size: str = DEFAULT_DISPLAY_SIZE
+        self._display_size: str = AUTO_DISPLAY_SIZE
         self._active_display_size: str = ""
+        self._view_width: int = 0
+        self._view_height: int = 0
+        self._started_auto_size: str = ""        # "auto" size the running session was started with
+        self._resize_timer = QTimer(self)        # debounces restarts on view resize
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.setInterval(RESIZE_RESTART_MS)
+        self._resize_timer.timeout.connect(self._on_resize_settled)
+        self._display_dpi: int = 0
+        self._bit_rate_usb_mbps: int = DEFAULT_USB_BIT_RATE_MBPS
+        self._bit_rate_wifi_mbps: int = DEFAULT_WIFI_BIT_RATE_MBPS
+        self._auto_wifi: bool = True
+        self._bit_rate_auto: bool = True
+        self._current_bit_rate: int = 0
+        self._tcpip_checked: bool = False        # the auto-Wi-Fi step ran for the session being started
+        self._start_generation: int = 0          # bumped by stopScrcpy; a pending start checks it
 
         self._client: Optional[ScrcpyClient] = None
         self._video_sink = None
@@ -393,6 +453,9 @@ class PhoneMirrorManager(QObject):
         if enabled == self._audio_enabled:
             return
         self._audio_enabled = enabled
+        self._restart_session()
+
+    def _restart_session(self):
         if self.isRunning:
             self.stopScrcpy()
             QTimer.singleShot(300, self.startScrcpy)
@@ -537,7 +600,8 @@ class PhoneMirrorManager(QObject):
 
     @Property(str, notify=displaySizeChanged)
     def displaySize(self) -> str:
-        """Requested virtual display size "WxH" (--new-display), "" = phone screen."""
+        """Requested virtual display size "WxH" (--new-display), "auto" = the
+        view's own pixel size (setViewSize), "" = phone screen."""
         return self._display_size
 
     @Slot(str)
@@ -549,9 +613,88 @@ class PhoneMirrorManager(QObject):
             return
         self._display_size = norm
         self.displaySizeChanged.emit()
-        if self.isRunning:
-            self.stopScrcpy()
-            QTimer.singleShot(300, self.startScrcpy)
+        self._restart_session()
+
+    def _requested_display(self) -> str:
+        """Size actually requested from the server: "WxH[/dpi]", "" = phone screen."""
+        size = (auto_display_size(self._view_width, self._view_height)
+                if self._display_size == AUTO_DISPLAY_SIZE else self._display_size)
+        if size and self._display_dpi > 0:
+            size += f"/{self._display_dpi}"
+        return size
+
+    @Slot(int, int)
+    def setViewSize(self, width: int, height: int):
+        """The mirror view's size in device pixels; drives the "auto" display
+        size. A running auto session is restarted (debounced) when it changes."""
+        if (width, height) == (self._view_width, self._view_height):
+            return
+        self._view_width, self._view_height = int(width), int(height)
+        if self.isRunning and self._display_size == AUTO_DISPLAY_SIZE:
+            self._resize_timer.start()
+
+    def _on_resize_settled(self):
+        size = auto_display_size(self._view_width, self._view_height)
+        if (self.isRunning and self._display_size == AUTO_DISPLAY_SIZE and self._started_auto_size
+                and size != self._started_auto_size):
+            logger.info(f"View resized: restarting the mirror at {size}")
+            self._restart_session()
+
+    @Slot(int)
+    def setDisplayDpi(self, dpi: int):
+        """Virtual display density (setting scrcpyDisplayDpi), 0 = scaled from the phone's."""
+        dpi = max(0, int(dpi))
+        if dpi == self._display_dpi:
+            return
+        self._display_dpi = dpi
+        if self._display_size:
+            self._restart_session()
+
+    @Slot(int)
+    def setBitRateUsb(self, mbps: int):
+        mbps = max(2, min(40, int(mbps)))
+        if mbps == self._bit_rate_usb_mbps:
+            return
+        self._bit_rate_usb_mbps = mbps
+        if self._connection_type == "usb":
+            self._restart_session()
+
+    @Slot(int)
+    def setBitRateWifi(self, mbps: int):
+        mbps = max(2, min(40, int(mbps)))
+        if mbps == self._bit_rate_wifi_mbps:
+            return
+        self._bit_rate_wifi_mbps = mbps
+        if self._connection_type == "wifi":
+            self._restart_session()
+
+    @Slot(bool)
+    def setBitRateAuto(self, enabled: bool):
+        """Setting scrcpyBitRateAuto: adapt the rate to the link, with the
+        per-link settings as the ceiling (AdaptiveBitRate)."""
+        enabled = bool(enabled)
+        if enabled == self._bit_rate_auto:
+            return
+        self._bit_rate_auto = enabled
+        self._restart_session()
+
+    @Property(int, notify=currentBitRateChanged)
+    def currentBitRate(self) -> int:
+        """Video bit rate of the running session in bps (follows adaptive changes), 0 when idle."""
+        return self._current_bit_rate
+
+    def _set_current_bit_rate(self, bps: int):
+        if bps != self._current_bit_rate:
+            self._current_bit_rate = bps
+            self.currentBitRateChanged.emit()
+
+    @Slot(bool)
+    def setAutoWifi(self, enabled: bool):
+        """Setting scrcpyAutoWifi: before a USB session, switch the phone's adbd
+        to TCP port TCPIP_PORT and remember its Wi-Fi address, so it can be
+        reached without a cable (and without the Wireless debugging toggle)
+        until it reboots."""
+        self._auto_wifi = bool(enabled)
 
     @Property(str, notify=frameSizeChanged)
     def activeDisplaySize(self) -> str:
@@ -646,11 +789,38 @@ class PhoneMirrorManager(QObject):
             return
         serial = self.getDeviceSerial()
         wireless = is_network_serial(serial)
+        if not wireless and self._auto_wifi and not self._tcpip_checked:
+            # Off the GUI thread: `adb tcpip` restarts the phone's adbd, which
+            # takes a couple of seconds. The session starts once it is back.
+            self._is_starting = True
+            self._start_generation += 1
+            gen = self._start_generation
+
+            def job():
+                address = self._enable_tcpip(serial)
+
+                def done():
+                    if address and address != self._wireless_address:
+                        logger.info(f"Phone mirror: remembering the phone for Wi-Fi at {address}")
+                        self._wireless_address = address
+                        self.wirelessAddressChanged.emit(address)
+                    if gen != self._start_generation:
+                        return   # stopped meanwhile
+                    self._is_starting = False
+                    self._tcpip_checked = True
+                    self.startScrcpy()
+                self._post.emit(done)
+
+            self._run_wireless_job(job, False)
+            return
+        self._tcpip_checked = False
 
         self._is_starting = True
         self._is_stopping = False
         self._ready = False
-        self._active_display_size = self._display_size
+        requested = self._requested_display()
+        self._active_display_size = requested.split("/", 1)[0]
+        self._started_auto_size = self._active_display_size if self._display_size == AUTO_DISPLAY_SIZE else ""
         attach_scid = ""
         if self._persist_scid and time.monotonic() < self._persist_until:
             attach_scid = self._persist_scid
@@ -672,19 +842,29 @@ class PhoneMirrorManager(QObject):
         client.audioPlayingChanged.connect(self._on_audio_playing)
         client.serverLog.connect(self._on_server_log)
         client.phoneStateChanged.connect(self._on_phone_state)
+        client.bitRateChanged.connect(self._set_current_bit_rate)
         client.set_audio_gain(self._audio_gain)
         client.set_volume(self._volume)
         self._client = client
 
-        display_size = self._display_size
+        display_size = requested
         if display_size:
             sdk = self.getDeviceSdk()
             if 0 < sdk < NEW_DISPLAY_MIN_SDK:
                 logger.warning(f"Device SDK {sdk} < {NEW_DISPLAY_MIN_SDK}: virtual display unavailable, mirroring phone screen")
                 display_size = ""
                 self._active_display_size = ""
+                self._started_auto_size = ""
+        bit_rate_mbps = self._bit_rate_wifi_mbps if wireless else self._bit_rate_usb_mbps
+        start_bps = bit_rate_mbps * 1_000_000
+        if self._bit_rate_auto:
+            # The setting is the ceiling; Wi-Fi starts below it and climbs while the link keeps up
+            client.set_adaptive_bit_rate(ADAPTIVE_MIN_BPS, start_bps)
+            if wireless:
+                start_bps = max(ADAPTIVE_MIN_BPS, int(start_bps * ADAPTIVE_WIFI_START))
         logger.info(f"Starting phone mirror (server {SERVER_VERSION}) for {serial} "
-                    f"(display {display_size or 'phone screen'}, audio {'on' if self._audio_enabled else 'off'}, "
+                    f"(display {display_size or 'phone screen'}, {start_bps / 1e6:g} Mbps "
+                    f"{'adaptive, max ' + str(bit_rate_mbps) if self._bit_rate_auto else 'fixed'}, audio {'on' if self._audio_enabled else 'off'}, "
                     f"{'Wi-Fi' if wireless else 'USB'})")
         self._serial = serial
         self._set_connection_type("wifi" if wireless else "usb")
@@ -693,7 +873,7 @@ class PhoneMirrorManager(QObject):
         if attach_scid:
             logger.info(f"Reattaching to the phone's running mirror session (scid {attach_scid})")
         client.start(serial, display_size=display_size, audio=self._audio_enabled, attach_scid=attach_scid,
-                     bit_rate=WIRELESS_BIT_RATE if wireless else 8_000_000)
+                     bit_rate=start_bps)
         self.isRunningChanged.emit()
 
     def _on_connected(self, w: int, h: int):
@@ -736,6 +916,7 @@ class PhoneMirrorManager(QObject):
             self._persist_scid = self._client.scid
             self._persist_until = time.monotonic() + PERSIST_MS / 1000.0 - 5.0
         self._set_connection_type("")
+        self._set_current_bit_rate(0)
         self.isRunningChanged.emit()
         if reason:
             self.scrcpyError.emit(reason)
@@ -745,12 +926,16 @@ class PhoneMirrorManager(QObject):
     @Slot()
     def stopScrcpy(self):
         logger.debug("Stopping phone mirror")
+        self._start_generation += 1   # a pending auto-Wi-Fi step does not start a session
         self._is_stopping = True
         self._is_starting = False
         self._ready = False
         self._attaching = False
         self._persist_scid = ""
         self._active_display_size = ""
+        self._started_auto_size = ""
+        self._resize_timer.stop()
+        self._set_current_bit_rate(0)
         self._reset_phone_state()
         if self._client is not None:
             client, self._client = self._client, None
@@ -853,6 +1038,32 @@ class PhoneMirrorManager(QObject):
         ok = "connected to" in out and "failed" not in out and "cannot" not in out
         message = out.split("\n")[-1] if out else f"No answer from {address}"
         return ok, message
+
+    def _enable_tcpip(self, serial: str) -> str:
+        """Worker thread: switch a USB phone to adb over TCP. Returns "ip:port",
+        "" when the phone has no Wi-Fi address or adb refuses."""
+        ip = wifi_address_from_ip_addr(
+            self._run_adb_full(["-s", serial, "shell", "ip", "-4", "-o", "addr", "show"], timeout=5))
+        if not ip:
+            logger.info("Phone mirror: phone has no Wi-Fi address; not enabling adb over Wi-Fi")
+            return ""
+        port = str(TCPIP_PORT)
+        current = self._run_adb_full(["-s", serial, "shell", "getprop", "service.adb.tcp.port"], timeout=5)
+        if current.strip() != port:
+            # Restarts adbd on the phone: USB drops for a moment and comes back
+            logger.info(f"Phone mirror: enabling adb over Wi-Fi on the phone (port {port})")
+            out = self._run_adb(["-s", serial, "tcpip", port], timeout=10)
+            if not out:
+                logger.warning("Phone mirror: adb tcpip failed")
+                return ""
+            time.sleep(1.0)
+            for _ in range(16):
+                if self._run_adb_full(["-s", serial, "get-state"], timeout=2).strip() == "device":
+                    break
+                time.sleep(0.5)
+            else:
+                logger.warning("Phone mirror: phone did not come back on USB after adb tcpip")
+        return f"{ip}:{port}"
 
     @Slot(str)
     def setWirelessAddress(self, address: str):

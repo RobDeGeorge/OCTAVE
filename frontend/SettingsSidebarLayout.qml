@@ -61,6 +61,15 @@ Item {
     // without tiles (About) get a single tile that jumps to the section.
     // Bumped as hidden pages load — Repeater.itemAt() is not a binding dependency.
     property int _allPagesLoaded: 0
+
+    // Tile text for a section that has no tiles of its own (About).
+    function _sectionSummary(section) {
+        if (section !== "about") return undefined
+        return function() {
+            var d = typeof diagnosticsManager !== "undefined" ? diagnosticsManager : null
+            return d ? { state: "v" + d.appVersion + " · " + d.backendName } : {}
+        }
+    }
     readonly property var allTiles: {
         var _ = _allPagesLoaded
         var tiles = []
@@ -71,13 +80,12 @@ Item {
             if (page && typeof page.tileModel !== "undefined") {
                 for (var j = 0; j < page.tileModel.length; j++) {
                     var t = page.tileModel[j]
-                    tiles.push({ cardId: t.cardId, title: t.title, icon: t.icon || "",
-                                 iconSource: t.iconSource || "", component: t.component,
-                                 section: entry.section })
+                    tiles.push({ cardId: t.cardId, title: t.title, summary: t.summary,
+                                 component: t.component, section: entry.section })
                 }
             } else if (loader && !loader.active) {
                 tiles.push({ cardId: "section:" + entry.section, title: entry.name,
-                             icon: entry.icon || "", iconSource: entry.iconSource || "",
+                             summary: sidebarLayout._sectionSummary(entry.section),
                              section: entry.section })
             }
         }

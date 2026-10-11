@@ -50,11 +50,39 @@ Flickable {
     // page (the Sidebar layout); the stacked cards are then never built.
     property bool renderCards: true
 
+    // Shared state line for the three serial / I²C accessories.
+    function _device(enabled, connected) {
+        if (!enabled) return { state: "Off" }
+        return { state: connected ? "Connected" : "Not found", active: connected,
+                 status: connected ? App.Style.statusConnected : App.Style.statusDisconnected }
+    }
+
     property var tileModel: [
-        { cardId: "accessories_volume_knob", title: "Volume Knob",    iconSource: App.Style.assetBase + "tile_volume_knob.svg", component: volumeKnobContent },
-        { cardId: "accessories_imu",         title: "IMU Sensor",     iconSource: App.Style.assetBase + "tile_imu.svg",         component: imuContent },
-        { cardId: "accessories_gesture",     title: "Gesture Sensor", iconSource: App.Style.assetBase + "tile_gesture.svg",     component: gestureContent },
-        { cardId: "accessories_phone_dock",  title: "Phone Dock",     iconSource: App.Style.assetBase + "tile_phone_dock.svg",  component: phoneDockContent }
+        { cardId: "accessories_volume_knob", title: "Volume Knob", component: volumeKnobContent,
+          summary: function() {
+              return pageRoot._device(settingsManager && settingsManager.esp32VolumeEnabled,
+                  typeof esp32VolumeManager !== "undefined" && esp32VolumeManager ? esp32VolumeManager.connected : false)
+          } },
+        { cardId: "accessories_imu", title: "IMU Sensor", component: imuContent,
+          summary: function() {
+              return pageRoot._device(settingsManager && settingsManager.imuEnabled,
+                  typeof berryIMU !== "undefined" && berryIMU ? berryIMU.connected : false)
+          } },
+        { cardId: "accessories_gesture", title: "Gesture Sensor", component: gestureContent,
+          summary: function() {
+              return pageRoot._device(settingsManager && settingsManager.gestureSensorEnabled,
+                  typeof gestureSensor !== "undefined" && gestureSensor ? gestureSensor.connectionStatus === "Connected" : false)
+          } },
+        { cardId: "accessories_phone_dock", title: "Phone Dock", component: phoneDockContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              if (!settingsManager.phoneMirrorEnabled) return { state: "Off" }
+              var pm = typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
+              var running = !!(pm && pm.isRunning)
+              return { state: running ? "Mirror · " + (pm.connectionType === "wifi" ? "Wi-Fi" : "USB") : "Mirror · waiting",
+                       active: running,
+                       status: running ? App.Style.statusConnected : App.Style.statusWarning }
+          } }
     ]
 
     contentWidth: width
@@ -1531,36 +1559,6 @@ Flickable {
             width: parent ? parent.width : 0
             spacing: App.Spacing.sectionSpacing
 
-            // ── Android Auto ──
-            SettingCategory {
-                title: "Android Auto"
-                description: "Requires Android Auto app and Developer Mode on your phone."
-
-                SettingsToggle {
-                    id: androidAutoEnabledToggle
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Show in nav bar"
-                    checked: settingsManager ? settingsManager.androidAutoEnabled : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        if (settingsManager) {
-                            settingsManager.save_android_auto_enabled(checked)
-                        }
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onAndroidAutoEnabledChanged() {
-                            androidAutoEnabledToggle.checked = settingsManager.androidAutoEnabled
-                        }
-                    }
-                }
-            }
-
             // ── Phone Mirror ──
             SettingCategory {
                 title: "Phone Mirror"
@@ -1700,15 +1698,42 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "scrcpy creates a separate landscape display on the phone (Android 11+). "
-                              + "Leave empty to mirror the phone's own screen."
+                        text: "The phone draws its apps on a separate display made for OCTAVE (Android 11+). "
+                              + "Fit to screen sizes it to the mirror view, so the picture fills the screen pixel for pixel. "
+                              + "Turn it off to pick a size, or leave the size empty to mirror the phone's own screen."
+                    }
+
+                    SettingsToggle {
+                        id: scrcpyFitToggle
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
+                        text: "Fit to screen"
+                        checked: settingsManager ? settingsManager.scrcpyDisplaySize === "auto" : true
+                        activeColor: App.Style.accent
+                        inactiveColor: App.Style.hoverColor
+
+                        onToggled: function(checked) {
+                            if (!settingsManager) return
+                            var size = checked ? "auto" : "1280x800"
+                            settingsManager.save_scrcpy_display_size(size)
+                            if (phoneMirrorManager) phoneMirrorManager.setDisplaySize(size)
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onScrcpyDisplaySizeChanged() {
+                                scrcpyFitToggle.checked = settingsManager.scrcpyDisplaySize === "auto"
+                            }
+                        }
                     }
 
                     SettingsTextField {
                         id: scrcpyDisplaySizeField
                         Layout.fillWidth: true
-                        text: settingsManager ? settingsManager.scrcpyDisplaySize : "1280x800"
-                        placeholderText: "1280x800"
+                        visible: !scrcpyFitToggle.checked
+                        text: settingsManager && settingsManager.scrcpyDisplaySize !== "auto" ? settingsManager.scrcpyDisplaySize : ""
+                        placeholderText: "Empty = phone screen, e.g. 1280x800"
 
                         onEditingFinished: {
                             if (settingsManager) {
@@ -1726,7 +1751,203 @@ Flickable {
                         Connections {
                             target: settingsManager
                             function onScrcpyDisplaySizeChanged() {
-                                scrcpyDisplaySizeField.text = settingsManager.scrcpyDisplaySize
+                                if (settingsManager.scrcpyDisplaySize !== "auto")
+                                    scrcpyDisplaySizeField.text = settingsManager.scrcpyDisplaySize
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingLabel {
+                        text: "Text Size"
+                    }
+
+                    SettingDescription {
+                        text: "Density of the phone's display for OCTAVE: higher makes text and buttons bigger, lower fits more on screen. Auto scales the phone's own density."
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing
+
+                        // 0 = Auto, otherwise dpi in steps of 20
+                        SettingsSlider {
+                            id: scrcpyDpiSlider
+                            from: 100
+                            to: 400
+                            stepSize: 20
+                            value: settingsManager && settingsManager.scrcpyDisplayDpi > 0 ? settingsManager.scrcpyDisplayDpi : 100
+                            Layout.fillWidth: true
+                            onPressedChanged: {
+                                if (!pressed && settingsManager)
+                                    settingsManager.save_scrcpy_display_dpi(value <= 100 ? 0 : value)
+                            }
+                            Connections {
+                                target: settingsManager
+                                function onScrcpyDisplayDpiChanged() {
+                                    scrcpyDpiSlider.value = settingsManager.scrcpyDisplayDpi > 0 ? settingsManager.scrcpyDisplayDpi : 100
+                                }
+                            }
+                        }
+
+                        ValueDisplay {
+                            text: scrcpyDpiSlider.value <= 100 ? "Auto" : scrcpyDpiSlider.value.toFixed(0) + " dpi"
+                            Layout.fillWidth: false
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingLabel {
+                        text: "Picture Quality"
+                    }
+
+                    SettingDescription {
+                        text: scrcpyBitRateAutoToggle.checked
+                              ? "OCTAVE adjusts the video bit rate as it goes: as sharp as the link allows, backing off the moment frames start arriving late (weak Wi-Fi, a busy decoder). The sliders set the most it will use."
+                              : "Video bit rate. Higher is sharper in motion (maps, scrolling) but needs a steadier link. Wi-Fi is usually happiest around 8 Mbps."
+                    }
+
+                    SettingsToggle {
+                        id: scrcpyBitRateAutoToggle
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
+                        text: "Automatic"
+                        checked: settingsManager ? settingsManager.scrcpyBitRateAuto : true
+                        activeColor: App.Style.accent
+                        inactiveColor: App.Style.hoverColor
+
+                        onToggled: function(checked) {
+                            if (settingsManager)
+                                settingsManager.save_scrcpy_bit_rate_auto(checked)
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onScrcpyBitRateAutoChanged() {
+                                scrcpyBitRateAutoToggle.checked = settingsManager.scrcpyBitRateAuto
+                            }
+                        }
+                    }
+
+                    SettingDescription {
+                        readonly property int bps: phoneMirrorManager ? phoneMirrorManager.currentBitRate : 0
+                        visible: bps > 0
+                        text: "Now: " + (bps / 1000000).toFixed(1) + " Mbps over "
+                              + (phoneMirrorManager && phoneMirrorManager.connectionType === "wifi" ? "Wi-Fi" : "USB")
+                        color: App.Style.accent
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing
+
+                        SettingDescription {
+                            text: scrcpyBitRateAutoToggle.checked ? "USB max" : "USB"
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: pageRoot.dp(96)
+                        }
+
+                        SettingsSlider {
+                            id: scrcpyBitRateUsbSlider
+                            from: 4
+                            to: 32
+                            stepSize: 2
+                            value: settingsManager ? settingsManager.scrcpyBitRateUsb : 16
+                            Layout.fillWidth: true
+                            onPressedChanged: {
+                                if (!pressed && settingsManager)
+                                    settingsManager.save_scrcpy_bit_rate_usb(value)
+                            }
+                            Connections {
+                                target: settingsManager
+                                function onScrcpyBitRateUsbChanged() {
+                                    scrcpyBitRateUsbSlider.value = settingsManager.scrcpyBitRateUsb
+                                }
+                            }
+                        }
+
+                        ValueDisplay {
+                            text: scrcpyBitRateUsbSlider.value.toFixed(0) + " Mbps"
+                            Layout.fillWidth: false
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing
+
+                        SettingDescription {
+                            text: scrcpyBitRateAutoToggle.checked ? "Wi-Fi max" : "Wi-Fi"
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: pageRoot.dp(96)
+                        }
+
+                        SettingsSlider {
+                            id: scrcpyBitRateWifiSlider
+                            from: 2
+                            to: 20
+                            stepSize: 1
+                            value: settingsManager ? settingsManager.scrcpyBitRateWifi : 8
+                            Layout.fillWidth: true
+                            onPressedChanged: {
+                                if (!pressed && settingsManager)
+                                    settingsManager.save_scrcpy_bit_rate_wifi(value)
+                            }
+                            Connections {
+                                target: settingsManager
+                                function onScrcpyBitRateWifiChanged() {
+                                    scrcpyBitRateWifiSlider.value = settingsManager.scrcpyBitRateWifi
+                                }
+                            }
+                        }
+
+                        ValueDisplay {
+                            text: scrcpyBitRateWifiSlider.value.toFixed(0) + " Mbps"
+                            Layout.fillWidth: false
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingLabel {
+                        text: "Wi-Fi Without Re-pairing"
+                    }
+
+                    SettingDescription {
+                        text: "Each time the phone is mirrored over USB, OCTAVE turns on adb over Wi-Fi on it and remembers its address. Later it connects without a cable and without the Wireless debugging toggle, until the phone restarts. The phone and OCTAVE must be on the same Wi-Fi network; no internet is needed."
+                    }
+
+                    SettingsToggle {
+                        id: scrcpyAutoWifiToggle
+                        compact: true
+                        Layout.fillWidth: false
+                        Layout.alignment: Qt.AlignLeft
+                        text: "Enable Wi-Fi when plugged in"
+                        checked: settingsManager ? settingsManager.scrcpyAutoWifi : true
+                        activeColor: App.Style.accent
+                        inactiveColor: App.Style.hoverColor
+
+                        onToggled: function(checked) {
+                            if (settingsManager)
+                                settingsManager.save_scrcpy_auto_wifi(checked)
+                        }
+
+                        Connections {
+                            target: settingsManager
+                            function onScrcpyAutoWifiChanged() {
+                                scrcpyAutoWifiToggle.checked = settingsManager.scrcpyAutoWifi
                             }
                         }
                     }
