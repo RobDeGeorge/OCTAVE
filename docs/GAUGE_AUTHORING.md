@@ -207,9 +207,8 @@ CompassGauge the dashboards roadmap deferred until heading data existed.
 ### 3.10 `NowPlayingWidget` *(self-binding, lives in `frontend/dashboards/widgets/`)*
 
 Album art + title + artist + progress bar for the active media source. Follows
-the app-wide source rule (`settingsManager.mediaSource == "spotify"` AND
-Spotify connected → Spotify, else local media) and re-resolves on source /
-connection / track changes. Display-only.
+the app-wide source rule (the phone while `phoneMirrorManager.mediaActive`,
+else local media) and re-resolves on source / track changes. Display-only.
 
 | Property       | Type | Default | Notes                  |
 | -------------- | ---- | ------- | ---------------------- |
@@ -612,7 +611,7 @@ frontend/
 │   └── CompassGauge.qml       rotating compass card (self-binding: HEADING)
 ├── dashboards/
 │   ├── widgets/               self-binding non-gauge dashboard widgets
-│   │   ├── NowPlayingWidget.qml    art + title + artist + progress (media/Spotify)
+│   │   ├── NowPlayingWidget.qml    art + title + artist + progress (local/phone)
 │   │   └── MediaControlsWidget.qml prev / play-pause / next transport
 │   ├── DashboardRenderer.qml  JSON spec → grid of widget instances
 │   ├── WidgetCatalog.qml      singleton: type → url + palette metadata +

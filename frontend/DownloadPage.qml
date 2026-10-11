@@ -843,12 +843,6 @@ Item {
                             var knownPath = downloadPage.downloadedPaths[modelData.song_id || ""] || ""
                             downloadPage.statusText = "Playing: " + artist + " - " + name
                             if (!mediaManager) return
-                            if (spotifyManager && spotifyManager.is_connected() && spotifyManager.is_playing()) {
-                                spotifyManager.pause()
-                            }
-                            if (settingsManager && settingsManager.mediaSource !== "local") {
-                                settingsManager.set_media_source("local")
-                            }
                             var ok = false
                             if (knownPath) {
                                 ok = mediaManager.play_file_at_path(knownPath)
@@ -1280,12 +1274,6 @@ Item {
                                                 song = results[i]
                                                 break
                                             }
-                                        }
-                                        if (spotifyManager && spotifyManager.is_connected() && spotifyManager.is_playing()) {
-                                            spotifyManager.pause()
-                                        }
-                                        if (settingsManager && settingsManager.mediaSource !== "local") {
-                                            settingsManager.set_media_source("local")
                                         }
                                         var ok = false
                                         if (knownPath) {

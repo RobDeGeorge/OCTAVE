@@ -61,10 +61,9 @@
           </ul>
 
           <div class="info-box tip">
-            <div class="info-box-title">No Spotify Credentials Required</div>
-            Search goes to YouTube Music (<code>ytmusicapi</code>) on both backends, so Spotify credentials are optional.
-            When they are present, the Python engine additionally resolves pasted Spotify track/album/playlist URLs to
-            songs with full Spotify metadata (ISRC-aware matching). The C++ backend has no Spotify path at all.
+            <div class="info-box-title">YouTube Only, No Credentials</div>
+            Both backends search YouTube Music (<code>ytmusicapi</code>) and download with <code>yt-dlp</code>. No account
+            or API key is needed.
           </div>
         </section>
 
@@ -76,14 +75,13 @@
 DownloadManager (backend/download_manager.py)
   |
   |-- MusicDL engine (lazy init on first search/download)
-  |     |-- SpotifyClient (optional, spotipy client-credentials)
   |     |-- Downloader
   |     |     |-- providers/audio/ytmusic.py  YouTubeMusic (ytmusicapi search)
   |     |     |-- providers/audio/base.py     yt-dlp YoutubeDL (library call)
   |     |     |-- utils/ffmpeg.py             conversion
   |     |     |-- utils/metadata.py           mutagen tag + cover embedding
   |     |     |-- download/progress_handler.py  callback -> _on_download_progress()
-  |     |-- utils/search.py                   get_ytm_client(), Spotify URL parsing
+  |     |-- utils/search.py                   get_ytm_client(), local-library scan
   |
   |-- ThreadPoolExecutor (2 workers)   search + downloads
   |-- QTimer _poll_timer (200 ms)      drains progress queue, resolves futures
@@ -130,18 +128,13 @@ DownloadManager
 
           <h3>Entry Point: MusicDL Class</h3>
           <pre><code><span class="kw">class</span> <span class="cls">MusicDL</span>:
-    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="prop">self</span>, client_id, client_secret, user_auth=<span class="num">False</span>, cache_path=<span class="num">None</span>,
-                 no_cache=<span class="num">False</span>, headless=<span class="num">False</span>, downloader_settings=<span class="num">None</span>):
-        <span class="cmt"># Initialize spotify client only if credentials are provided</span>
-        <span class="prop">self</span>.has_spotify = <span class="fn">bool</span>(client_id <span class="kw">and</span> client_secret)
-        <span class="kw">if</span> <span class="prop">self</span>.has_spotify:
-            <span class="cls">SpotifyClient</span>.init(client_id=client_id, client_secret=client_secret, ...)
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="prop">self</span>, downloader_settings=<span class="num">None</span>):
         <span class="prop">self</span>.downloader = <span class="cls">Downloader</span>(settings=downloader_settings)
 
-    <span class="kw">def</span> <span class="fn">search</span>(<span class="prop">self</span>, query):          <span class="cmt"># List[str] -&gt; List[Song]   (parse_query)</span>
+    <span class="kw">def</span> <span class="fn">get_download_urls</span>(<span class="prop">self</span>, songs):  <span class="cmt"># YouTube Music URL per song (multi-threaded)</span>
     <span class="kw">def</span> <span class="fn">download</span>(<span class="prop">self</span>, song):         <span class="cmt"># -&gt; Tuple[Song, Optional[Path]]</span>
     <span class="kw">def</span> <span class="fn">download_songs</span>(<span class="prop">self</span>, songs):  <span class="cmt"># -&gt; List[Tuple[Song, Optional[Path]]]</span>
-    <span class="kw">def</span> <span class="fn">cleanup</span>(<span class="prop">self</span>):                <span class="cmt"># SpotifyClient.reset() when used</span></code></pre>
+    <span class="kw">def</span> <span class="fn">cleanup</span>(<span class="prop">self</span>):                <span class="cmt"># nothing to release; kept for the shutdown path</span></code></pre>
 
           <h3>Settings passed by DownloadManager</h3>
           <p><code>_ensure_music_dl()</code> builds the engine on first use with these <code>downloader_settings</code>
@@ -169,14 +162,13 @@ DownloadManager
               <tr><td><span class="file-path">download/progress_handler.py</span></td><td><code>ProgressHandler</code> / <code>SongTracker</code>: 0-50 during download, 50 at "Converting", 95 at "Embedding metadata", 100 at "Done" or "Skipped"; every update invokes the callback</td></tr>
               <tr><td><span class="file-path">providers/audio/base.py</span></td><td>Wraps <code>yt_dlp.YoutubeDL</code>: format <code>bestaudio[ext=m4a]/bestaudio/best</code> for m4a, <code>bestaudio[ext=webm]/bestaudio/best</code> for opus, else <code>bestaudio</code>; <code>cookiefile</code>, <code>retries: 5</code>, temp <code>outtmpl</code>; fuzzy result scoring</td></tr>
               <tr><td><span class="file-path">providers/audio/ytmusic.py</span></td><td><code>YouTubeMusic</code> provider: <code>YTMusic.search()</code> with the songs and videos filters, ISRC-aware</td></tr>
-              <tr><td><span class="file-path">types/song.py</span>, <span class="file-path">album.py</span>, <span class="file-path">playlist.py</span>, <span class="file-path">artist.py</span>, <span class="file-path">saved.py</span>, <span class="file-path">result.py</span></td><td>Data classes; <code>Song.from_url()</code> (Spotify) and <code>Song.from_missing_data()</code> (from a search-result dict)</td></tr>
+              <tr><td><span class="file-path">types/song.py</span>, <span class="file-path">result.py</span></td><td>Data classes; <code>Song.from_missing_data()</code> builds a song from a search-result dict</td></tr>
               <tr><td><span class="file-path">types/options.py</span></td><td>TypedDicts for downloader settings (<code>cookie_file</code>, <code>threads</code>, <code>bitrate</code>, <code>yt_dlp_args</code>, &hellip;)</td></tr>
-              <tr><td><span class="file-path">utils/search.py</span></td><td><code>get_ytm_client()</code> singleton, <code>parse_query()</code> / <code>get_simple_songs()</code> for Spotify URL routing</td></tr>
+              <tr><td><span class="file-path">utils/search.py</span></td><td><code>get_ytm_client()</code> singleton, <code>gather_known_songs()</code> / <code>get_song_from_file_metadata()</code> for scanning existing files</td></tr>
               <tr><td><span class="file-path">utils/matching.py</span></td><td>Best-match scoring between a Song and YouTube results (artist, title, album, duration, ISRC)</td></tr>
               <tr><td><span class="file-path">utils/metadata.py</span></td><td>Tag + cover + lyrics embedding via <code>mutagen</code> (ID3, MP4, FLAC, Ogg, WAV)</td></tr>
               <tr><td><span class="file-path">utils/formatter.py</span></td><td><code>sanitize_string()</code> and output-template expansion</td></tr>
               <tr><td><span class="file-path">utils/ffmpeg.py</span></td><td><code>FFMPEG_FORMATS</code> for mp3 / flac / ogg / opus / m4a / wav and the <code>convert()</code> wrapper</td></tr>
-              <tr><td><span class="file-path">utils/spotify.py</span></td><td><code>SpotifyClient</code> singleton (spotipy, client-credentials)</td></tr>
               <tr><td><span class="file-path">utils/config.py</span>, <span class="file-path">utils/static.py</span>, <span class="file-path">utils/downloader.py</span></td><td>Defaults, constants, helpers</td></tr>
             </tbody>
           </table>
@@ -221,7 +213,7 @@ DownloadManager
           <ol class="steps">
             <li>
               <strong>Prepare the engine</strong> -- Python lazily builds <code>MusicDL</code> (<code>_ensure_music_dl()</code>)
-              on the first call, reading Spotify credentials and the cookies file at that moment; C++ resolves the yt-dlp path
+              on the first call, reading the download settings and the cookies file at that moment; C++ resolves the yt-dlp path
               and kills any search still running.
             </li>
             <li>
@@ -254,14 +246,6 @@ DownloadManager
             </li>
           </ol>
 
-          <h3>Spotify URL Queries (Python only)</h3>
-          <p>
-            If the query contains <code>open.spotify.com</code> or <code>spotify.link</code> and the engine has Spotify
-            credentials, <code>_do_search()</code> calls <code>MusicDL.search([url])</code>, which resolves the track, album or
-            playlist into <code>Song</code> objects (ISRC included) and converts them with <code>_song_dict_to_result()</code>.
-            Without credentials the URL is sent to YouTube Music as plain text.
-          </p>
-
           <div class="info-box info">
             <div class="info-box-title">Pagination</div>
             <code>ytmusicapi</code> has no offset parameter, so everything arrives in one batch and search is single-page on
@@ -287,8 +271,7 @@ DownloadManager
               <code>error_message</code> patch is cleared so the row shows the retry immediately.</li>
             <li><strong>Announce</strong> -- <code>statusMessage("Queuing download: …")</code>,
               <code>downloadStarted(song_id, "Artist - Title")</code>, <code>activeDownloads += 1</code>.</li>
-            <li><strong>Build the Song</strong> on the executor -- <code>Song.from_url()</code> for a Spotify URL (needs
-              credentials), otherwise <code>Song.from_missing_data(**song_data)</code> with the YouTube Music URL set as
+            <li><strong>Build the Song</strong> on the executor -- <code>Song.from_missing_data(**song_data)</code> with the YouTube Music URL set as
               <code>download_url</code> so the downloader skips its own search.</li>
             <li><strong>Download, convert, tag</strong> -- <code>MusicDL.download(song)</code>: yt-dlp fetches to a temp
               directory, ffmpeg converts to the target format (skipped when the source already matches, e.g. m4a→m4a)
@@ -301,10 +284,6 @@ DownloadManager
               <code>is_failed</code> / <code>error_message</code> patches. Exceptions raised by the job surface as
               <code>downloadError</code> with the exception text.</li>
           </ol>
-          <p><code>download_from_url(url)</code> (Python only) resolves an album or playlist URL with
-            <code>MusicDL.search()</code> and batch-downloads with <code>download_songs()</code>, reporting
-            "Downloaded N/M song(s)".</p>
-
           <h3>C++</h3>
           <ol class="steps">
             <li><strong>Parse and de-duplicate</strong> -- a <code>DownloadTask</code> already in
@@ -467,9 +446,9 @@ C++ desktop                       C++ Android
               <code>--cookies &lt;path&gt;</code>; when absent it logs where to drop the file.</li>
             <li><strong>Python</strong> passes <code>cookie_file</code> (yt-dlp's <code>cookiefile</code>) when
               <code>_ensure_music_dl()</code> builds the engine, and <code>_refresh_cookies_file()</code> re-checks the path
-              before every <code>download_song()</code> / <code>download_from_url()</code>, pushing it into the live
+              before every <code>download_song()</code>, pushing it into the live
               downloader's settings and audio providers -- a file added mid-session is used by the next download, no
-              <code>reset_engine()</code> or restart needed. It logs "Using YouTube cookies from ..." or where to drop the
+              restart needed. It logs "Using YouTube cookies from ..." or where to drop the
               file, like C++.</li>
           </ul>
           <p>
@@ -648,19 +627,17 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
               <tr><th>Slot</th><th>Parameters</th><th>Backend</th><th>Description</th></tr>
             </thead>
             <tbody>
-              <tr><td><code>search(query)</code></td><td><code>str</code></td><td>both</td><td>Search by text (Python: or Spotify URL)</td></tr>
+              <tr><td><code>search(query)</code></td><td><code>str</code></td><td>both</td><td>Search YouTube Music by text</td></tr>
               <tr><td><code>search_more()</code></td><td>--</td><td>both</td><td>Emits "All results shown" (no QML caller since the "Load More Results" footer was removed)</td></tr>
               <tr><td><code>next_search_page()</code></td><td>--</td><td>C++</td><td>Same as <code>search_more()</code></td></tr>
               <tr><td><code>download_song(song_json)</code></td><td><code>str</code></td><td>both</td><td>Download a single song from its result JSON</td></tr>
               <tr><td><code>download(song_id, name)</code></td><td><code>str, str</code></td><td>C++</td><td>Convenience wrapper that builds minimal JSON and calls <code>download_song()</code></td></tr>
-              <tr><td><code>download_from_url(url)</code></td><td><code>str</code></td><td>Python</td><td>Batch download from a Spotify track/album/playlist URL</td></tr>
               <tr><td><code>cancel_download(id)</code>, <code>pause_download(id)</code>, <code>resume_download(id)</code></td><td><code>str</code></td><td>C++</td><td>Queue control (not used by QML)</td></tr>
               <tr><td><code>get_download_queue()</code>, <code>clear_download_queue()</code></td><td>-- / --</td><td>C++</td><td>Snapshot of <code>DownloadTask</code>s as maps; cancel everything</td></tr>
               <tr><td><code>set_download_playlist(name)</code></td><td><code>str</code></td><td>both</td><td>Set (or clear, with an empty string) the target subfolder</td></tr>
               <tr><td><code>get_download_playlist()</code></td><td>-- (returns <code>str</code>)</td><td>both</td><td>Effective target playlist name</td></tr>
               <tr><td><code>connect_settings_manager(sm)</code></td><td><code>QObject</code></td><td>both</td><td>Wire the settings manager (called from the entry point)</td></tr>
               <tr><td><code>hasStorageAccess()</code>, <code>requestStorageAccess()</code></td><td>-- (return <code>bool</code>)</td><td>C++</td><td>Android All-files-access query / settings intent; always true / no-op elsewhere</td></tr>
-              <tr><td><code>reset_engine()</code></td><td>--</td><td>Python</td><td>Drop the <code>MusicDL</code> instance (re-reads credentials, cookies and paths on next use)</td></tr>
               <tr><td><code>get_song_data_for_download(url)</code></td><td><code>str</code> (returns <code>str</code>)</td><td>Python</td><td>Full result JSON for a URL from the last search</td></tr>
               <tr><td><code>cleanup()</code></td><td>--</td><td>both</td><td>Stop timers / kill processes at exit</td></tr>
             </tbody>
@@ -678,7 +655,6 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             <tbody>
               <tr><td><code>yt-dlp</code></td><td>YouTube audio downloading (library)</td><td><span class="file-path">music_dl/providers/audio/base.py</span></td></tr>
               <tr><td><code>ytmusicapi</code></td><td>YouTube Music search API</td><td><span class="file-path">music_dl/utils/search.py</span>, <span class="file-path">providers/audio/ytmusic.py</span></td></tr>
-              <tr><td><code>spotipy</code></td><td>Spotify Web API (optional)</td><td><span class="file-path">music_dl/utils/spotify.py</span></td></tr>
               <tr><td><code>ffmpeg</code></td><td>Audio format conversion (system binary; <code>DownloaderError("ffmpeg is not installed")</code> if missing)</td><td><span class="file-path">music_dl/utils/ffmpeg.py</span></td></tr>
               <tr><td><code>mutagen</code></td><td>Tag, cover and lyrics writing</td><td><span class="file-path">music_dl/utils/metadata.py</span></td></tr>
               <tr><td><code>requests</code></td><td>Cover-art download for embedding</td><td><span class="file-path">music_dl/utils/metadata.py</span></td></tr>
@@ -709,7 +685,7 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             </thead>
             <tbody>
               <tr><td>Engine</td><td>External <code>yt-dlp</code> process (JNI on Android)</td><td>Vendored <code>music_dl</code> using yt-dlp as a library</td></tr>
-              <tr><td>Search</td><td>Helper script, limit 25; yt-dlp <code>ytsearch25:</code> fallback</td><td><code>ytmusicapi</code> in-process, limit 20; Spotify URL resolution</td></tr>
+              <tr><td>Search</td><td>Helper script, limit 25; yt-dlp <code>ytsearch25:</code> fallback</td><td><code>ytmusicapi</code> in-process, limit 20</td></tr>
               <tr><td>Threading</td><td>Async <code>QProcess</code> signals (a <code>QThread</code> per JNI call on Android)</td><td>Two-worker executor + 200&nbsp;ms poll timer</td></tr>
               <tr><td>Progress source</td><td>yt-dlp stdout percentage (download phase only); AAR progress poll on Android</td><td>Tracker covering download, conversion and tagging</td></tr>
               <tr><td>Tagging</td><td>TagLib + QNetworkAccessManager cover; mutagen script on Android</td><td>mutagen inside music_dl</td></tr>
@@ -718,7 +694,7 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
               <tr><td>Library extensions</td><td>Includes <code>.mp4</code></td><td>Does not</td></tr>
               <tr><td>Android storage handling</td><td>All-files-access aware, scoped fallback</td><td>n/a (desktop only)</td></tr>
               <tr><td>App-store stub</td><td><code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td><td>n/a</td></tr>
-              <tr><td>Extra slots</td><td><code>download</code>, <code>next_search_page</code>, queue control, storage access</td><td><code>download_from_url</code>, <code>reset_engine</code>, <code>get_song_data_for_download</code></td></tr>
+              <tr><td>Extra slots</td><td><code>download</code>, <code>next_search_page</code>, queue control, storage access</td><td><code>get_song_data_for_download</code></td></tr>
             </tbody>
           </table>
         </section>
@@ -744,9 +720,9 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             the constructor comment calls this "Windows-safe signal emission". The timer is only running while work is
             pending.</p>
           <h3>Lazy engine initialisation</h3>
-          <p><code>MusicDL</code> is built on the first search or download, not at startup, because it may initialise a Spotify
-            client and reads settings that can still change; <code>reset_engine()</code> exists so a credential change can
-            force a rebuild without restarting (the cookies file alone no longer needs it -- it is re-read per download).</p>
+          <p><code>MusicDL</code> is built on the first search or download, not at startup, because it reads download settings
+            that can still change (<code>backend.music_dl</code> is also imported only then); the cookies file is re-read
+            per download, so it needs no rebuild.</p>
           <h3>A shared filename contract</h3>
           <p>The Python engine's <code>{artists} - {title}.{output-ext}</code> template and the C++
             <code>%(artist,uploader)s - %(title)s.%(ext)s</code> template are kept equivalent on purpose (comment in
@@ -775,7 +751,6 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a class="related-link" href="media-manager.html">Media Manager</a>
-          <a class="related-link" href="spotify-manager.html">Spotify Manager</a>
           <a class="related-link" href="settings-reference.html">Settings Reference</a>
           <a class="related-link" href="building.html">Building</a>
           <a class="related-link" href="architecture.html">Architecture Overview</a>

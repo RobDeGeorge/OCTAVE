@@ -17,7 +17,6 @@
       links: [
         { href: "settings-manager.html", label: "Settings Manager" },
         { href: "media-manager.html", label: "Media Manager" },
-        { href: "spotify-manager.html", label: "Spotify Manager" },
         { href: "obd-manager.html", label: "OBD Manager" },
         { href: "network-manager.html", label: "Network Manager" },
         { href: "download-manager.html", label: "Download Manager" },

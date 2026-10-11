@@ -27,9 +27,8 @@ build-android-configure.log
 # Regenerate via scripts/build-android-pylib-bundle.sh
 android/assets/python-packages/ytmusic-bundle.zip
 
-# Spotify credentials and cache
+# Local settings (old Python location)
 backend/settingsConfigure.json
-backend/.spotify_token_cache
 
 # Old bundled scrcpy binaries (no longer used; the phone server jar in tools/phone-server/ is tracked)
 tools/scrcpy/

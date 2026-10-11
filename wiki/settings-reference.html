@@ -24,7 +24,6 @@
             <li><a href="#display">Display</a></li>
             <li><a href="#media">Media and Now Playing</a></li>
             <li><a href="#playback-resume">Playback Resume</a></li>
-            <li><a href="#spotify">Spotify</a></li>
             <li><a href="#obd">OBD</a></li>
             <li><a href="#obd-parameters">OBD Parameter PIDs</a></li>
             <li><a href="#esp32">ESP32 Volume Knob</a></li>
@@ -54,7 +53,7 @@
           <li><strong>Android / iOS (C++ only):</strong> the Linux rule applied to <code>QDir::homePath()</code></li>
         </ul>
         <p>
-          Both backends define the same <strong>92 top-level default keys</strong> with identical literal defaults
+          Both backends define the same <strong>96 top-level default keys</strong> with identical literal defaults
           (verified key by key against both sources on 2026-09-10). Settings are read once at startup, validated against
           the defaults, served from memory, and written back atomically 500&nbsp;ms after the last change. The mechanics
           are on the <a href="settings-manager.html">Settings Manager</a> page; this page is the key catalogue.
@@ -111,14 +110,14 @@
             <tr><td><code>bottomBarOrientation</code></td><td>bottomBarOrientation</td><td>str</td><td>"bottom"</td><td>"bottom", "side" (UI chips; slot does not validate)</td><td>Display page (Layout)</td><td>Navigation bar along the bottom edge or the side</td></tr>
             <tr><td><code>showBottomBarMediaControls</code></td><td>showBottomBarMediaControls</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Layout)</td><td>Play/skip controls inside the navigation bar. Pinnable</td></tr>
             <tr><td><code>settingsLayoutStyle</code></td><td>settingsLayoutStyle</td><td>str</td><td>"Sidebar"</td><td>"Carousel", "Sidebar", "Hub", "Dashboard" (others ignored)</td><td>Display page (Layout)</td><td>Which <code>Settings*Layout.qml</code> renders the settings menu</td></tr>
-            <tr><td><code>albumArtColors</code></td><td>albumArtColors</td><td>str (JSON)</td><td>""</td><td>Palette JSON produced by the extractor</td><td>Not user-editable: written by MediaManager / SpotifyManager via <code>set_album_art_colors()</code></td><td>Last extracted Album Art Capture palette, restored at startup so the placeholder theme does not flash</td></tr>
+            <tr><td><code>albumArtColors</code></td><td>albumArtColors</td><td>str (JSON)</td><td>""</td><td>Palette JSON produced by the extractor</td><td>Not user-editable: written by MediaManager via <code>set_album_art_colors()</code></td><td>Last extracted Album Art Capture palette, restored at startup so the placeholder theme does not flash</td></tr>
           </tbody>
         </table>
 
         <!-- Media -->
         <h2 id="media">Media and Now Playing</h2>
         <p>
-          These keys are owned by the <strong>Media</strong> page (Library, Playback, Now Playing and Spotify sub-sections).
+          These keys are owned by the <strong>Media</strong> page (Library, Playback and Now Playing sub-sections).
           The Now Playing visual keys are additionally editable from <span class="file-path">frontend/NowPlayingStudio.qml</span>
           with a live preview, and the three most common toggles appear on the Media widget.
         </p>
@@ -129,7 +128,6 @@
           <tbody>
             <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float (C++ <code>float</code>)</td><td>0.1</td><td>– (registry 0 – 1, step 0.01, logarithmic)</td><td>Media page; <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default. Pinnable</td></tr>
             <tr><td><code>mediaFolder</code></td><td>mediaFolder</td><td>str</td><td>"" (resolved at load to <code>QStandardPaths::MusicLocation</code> in C++, <code>~/Music</code> in Python)</td><td>Any directory; saving the current value is a no-op</td><td>Media page (Library)</td><td>Root of the local music library; MediaManager connects <code>mediaFolderChanged</code> to <code>set_library_root</code></td></tr>
-            <tr><td><code>mediaSource</code></td><td>mediaSource</td><td>str</td><td>"local"</td><td>"local", "spotify" (others ignored)</td><td>MediaRoom / MediaPlayer / Download page source toggles (<code>set_media_source</code>, <code>toggle_media_source</code>)</td><td>Which backend the transport controls drive</td></tr>
             <tr><td><code>autoPlayOnStartup</code></td><td>autoPlayOnStartup</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback); Media widget</td><td>Resume the last song at launch. Pinnable</td></tr>
             <tr><td><code>persistShuffleState</code></td><td>persistShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback)</td><td>Restore <code>lastShuffleState</code> at launch. Pinnable</td></tr>
             <tr><td><code>musicButtonDefaultPage</code></td><td>musicButtonDefaultPage</td><td>str</td><td>"mediaRoom"</td><td>"mediaRoom", "mediaPlayer" (others ignored)</td><td>Media page (Playback)</td><td>Which view the music nav button opens</td></tr>
@@ -165,18 +163,6 @@
             <tr><td><code>lastPlayedSong</code></td><td>lastPlayedSong</td><td>str</td><td>""</td><td>Filename</td><td>Track to resume</td></tr>
             <tr><td><code>lastPlayedPosition</code></td><td>lastPlayedPosition</td><td>int</td><td>0</td><td>Milliseconds</td><td>Position to resume from</td></tr>
             <tr><td><code>lastPlayedPlaylist</code></td><td>lastPlayedPlaylist</td><td>str</td><td>""</td><td>Playlist name</td><td>Playlist active at last save</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Spotify -->
-        <h2 id="spotify">Spotify</h2>
-        <table>
-          <thead>
-            <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>UI</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>get_spotify_client_id()</code></td><td>spotifyClientId</td><td>str</td><td>""</td><td>Media page (Spotify), <code>save_spotify_credentials()</code></td><td>Spotify app client ID. No property on purpose</td></tr>
-            <tr><td><code>get_spotify_client_secret()</code></td><td>spotifyClientSecret</td><td>str</td><td>""</td><td>Media page (Spotify)</td><td>Spotify app client secret, stored in plain text in the 0600 file. <code>has_spotify_credentials()</code> is true when both are set; <code>clear_spotify_credentials()</code> blanks both</td></tr>
           </tbody>
         </table>
 
@@ -321,7 +307,7 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td><code>androidAutoEnabled</code></td><td>androidAutoEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Show the Android Auto button in the navigation bar</td></tr>
             <tr><td><code>phoneMirrorEnabled</code></td><td>phoneMirrorEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Show the Phone Mirror button in the navigation bar</td></tr>
             <tr><td><code>scrcpyAudioGain</code></td><td>scrcpyAudioGain</td><td>float (C++ <code>double</code>)</td><td>2.0 (+6 dB)</td><td>clamped 0.25 – 8.0 (UI slider −12 … +18 dB, stored as 10^(dB/20))</td><td>Linear gain applied to phone audio before OCTAVE's volume; the phone's own volume is never changed</td></tr>
-            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>scrcpyAudioDuckEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Duck local music while the phone is producing sound (navigation prompts, calls). The manager's <code>duckingChanged</code> is routed to <code>MediaManager::setDucking</code> only, so Spotify playback is unaffected</td></tr>
+            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>scrcpyAudioDuckEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Duck local music while the phone is producing sound (navigation prompts, calls). The manager's <code>duckingChanged</code> is routed to <code>MediaManager::setDucking</code></td></tr>
             <tr><td><code>scrcpyAudioDuckLevel</code></td><td>scrcpyAudioDuckLevel</td><td>float (C++ <code>double</code>)</td><td>0.1 (−20 dB)</td><td>clamped 0.0 – 1.0 (UI slider −40 … −6 dB)</td><td>Linear factor applied to local music while ducked</td></tr>
             <tr><td><code>scrcpyPhoneScreenOff</code></td><td>scrcpyPhoneScreenOff</td><td>bool</td><td>true</td><td>true/false</td><td>Keep the phone's own panel dark while mirroring; stream and touch keep working and the panel is restored when the session ends. A power-button press wakes the panel for an 8 s grace window (<code>kWakeGraceMs</code> / <code>WAKE_GRACE_MS</code>); a second press inside it hands the phone back to the user, and the MirrorKeeper forces a relight after a wake from the lock screen</td></tr>
             <tr><td><code>scrcpyWirelessAddress</code></td><td>scrcpyWirelessAddress</td><td>string</td><td>""</td><td>"ip:port" or ""</td><td>Phone last connected over Wi-Fi (QR pairing from Phone Mirror or the Phone Dock card). Written by <code>PhoneMirrorManager</code> through <code>wirelessAddressChanged</code>: when the phone is paired, when Wireless debugging comes back on a new port (found over mDNS), and cleared by Forget. While no phone is usable OCTAVE retries it in the background at most every 5 s</td></tr>
@@ -401,13 +387,13 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><th>Property</th><th>Type</th><th>Initial value</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, Spotify, phone mirror and the ESP32 LEDs. Only <code>VolumeController.applyVolume()</code> sets it; it is never written to the file</td></tr>
+            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. Only <code>VolumeController.applyVolume()</code> sets it; it is never written to the file</td></tr>
           </tbody>
         </table>
 
         <!-- Persistence -->
         <h2 id="persistence">Persistence and File Format</h2>
-        <p>One JSON object, 4-space indented, containing the 92 default keys (nested dicts for <code>obdParameters</code>, <code>gestureMapping</code>, <code>customThemes</code>, <code>settingsMenuVisibility</code>, <code>expandedCards</code>) plus any QML-only keys. Writes are:</p>
+        <p>One JSON object, 4-space indented, containing the 96 default keys (nested dicts for <code>obdParameters</code>, <code>gestureMapping</code>, <code>customThemes</code>, <code>settingsMenuVisibility</code>, <code>expandedCards</code>) plus any QML-only keys. Writes are:</p>
         <ol class="steps">
           <li>Validated once into the in-memory copy (types checked against the defaults; unknown keys kept)</li>
           <li>Coalesced behind a 500&nbsp;ms single-shot timer, flushed at quit</li>
@@ -415,13 +401,13 @@ EV_BATTERY_HEALTH</code></pre>
           <li><code>chmod 600</code> on Unix</li>
           <li>Replaced over the real file in one step (<code>os.replace</code> / <code>QSaveFile::commit()</code>); on failure the existing file is left untouched</li>
         </ol>
-        <p>On load, a missing file is created from the defaults, a corrupt file is moved to <code>settingsConfigure.json.corrupt</code> and restored from the last known-good <code>settingsConfigure.json.bak</code> (defaults only if that fails too), and wrong-typed values are replaced individually. Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
+        <p>On load, a missing file is created from the defaults, a corrupt file is moved to <code>settingsConfigure.json.corrupt</code> and restored from the last known-good <code>settingsConfigure.json.bak</code> (defaults only if that fails too), and wrong-typed values are replaced individually. Keys of removed features (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are deleted from the file at startup, together with the old Spotify login token. Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
 
         <!-- Parity -->
         <h2 id="parity">C++ / Python Parity Check</h2>
         <p>Result of comparing <code>buildDefaultSettings()</code> with <code>_default_settings</code> and both slot sets on 2026-09-10:</p>
         <ul>
-          <li><strong>Keys:</strong> 92 in both; no key exists in only one backend.</li>
+          <li><strong>Keys:</strong> 96 in both; no key exists in only one backend.</li>
           <li><strong>Default values:</strong> identical for every key, including all 86 PID flags and the nine gesture bindings.</li>
           <li><strong>Properties / signals / slots:</strong> identical names. The shutdown flush is <code>flushPendingSave()</code> on both sides; Python keeps a <code>flush_pending_save()</code> alias for older callers.</li>
         </ul>

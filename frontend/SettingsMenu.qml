@@ -34,7 +34,7 @@ Item {
           subSections: ["Layout", "Window", "Appearance", "Clock"] },
         { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml",       widget: "widgets/MediaWidget.qml",       icon: "\u266B", iconSource: Style.assetBase + "cat_media.svg",
           group: "Appearance",
-          subSections: ["Library", "Playback", "Now Playing", "Spotify"] },
+          subSections: ["Library", "Playback", "Now Playing"] },
         { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml",         widget: "widgets/OBDWidget.qml",         icon: "\u26A1", iconSource: Style.assetBase + "cat_obd.svg",
           group: "Connectivity",
           subSections: ["Connection", "Adapters", "Tuning", "Parameters"] },

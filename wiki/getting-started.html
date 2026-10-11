@@ -83,7 +83,7 @@
             <tr>
               <td><strong>C++ toolchain</strong> (source builds only)</td>
               <td>CMake 3.21+, Qt 6.7.3, a C++17 compiler</td>
-              <td>GCC 11+ / Clang 14+ / MSVC 2022. Qt modules: Multimedia, NetworkAuth, SerialPort, Bluetooth/Connectivity, Qt5Compat, ShaderTools, optionally Quick3D. See <a href="building.html">Building</a>.</td>
+              <td>GCC 11+ / Clang 14+ / MSVC 2022. Qt modules: Multimedia, SerialPort, Bluetooth/Connectivity, Qt5Compat, ShaderTools, optionally Quick3D. See <a href="building.html">Building</a>.</td>
             </tr>
             <tr>
               <td><strong>Display</strong></td>
@@ -98,7 +98,7 @@
             <tr>
               <td><strong>Network</strong></td>
               <td>Optional</td>
-              <td>Needed for Spotify, music download and update checks. Local playback, OBD and phone mirroring work offline.</td>
+              <td>Needed for music download and update checks. Local playback, OBD and phone mirroring work offline.</td>
             </tr>
           </tbody>
         </table>
@@ -305,7 +305,7 @@ python3 setup.py</code></pre>
         <h2 id="cpp-build">Building the C++ Backend</h2>
         <p>
           The C++ tree is what ships. A desktop build needs CMake 3.21+, Qt 6.7.3 (the CI-pinned version; other
-          6.7.x / 6.8.x will likely work but are untested) with the Multimedia, NetworkAuth, SerialPort,
+          6.7.x / 6.8.x will likely work but are untested) with the Multimedia, SerialPort,
           Connectivity, Qt5Compat and ShaderTools modules, TagLib, and optionally FFmpeg (libavcodec/libavutil, for
           the built-in phone-mirror decoder) and Qt Quick 3D (for the 3D vehicle view).
         </p>
@@ -399,11 +399,6 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
               <td>OBD-II</td>
               <td>USB or Bluetooth-SPP ELM327 through a serial port (<code>/dev/ttyUSB*</code>, <code>/dev/rfcomm0</code>, <code>COMn</code>)</td>
               <td>BLE ELM327 through a native <code>BluetoothGatt</code> JNI bridge (<code>android/src/org/octave/app/OctaveOBDBridge.java</code>)</td>
-            </tr>
-            <tr>
-              <td>Spotify</td>
-              <td>Full Web API integration</td>
-              <td>Excluded (stub) &mdash; simpler OAuth, smaller footprint for store review</td>
             </tr>
             <tr>
               <td>IMU</td>
@@ -501,15 +496,13 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
             <tr><td><code>mutagen</code></td><td>1.47.0</td><td>Audio file metadata (ID3 tags, album art)</td></tr>
             <tr><td><code>numpy</code></td><td>&ge;1.26.0</td><td>FFT for the waveform visualiser; phone-mirror audio buffers (imported lazily)</td></tr>
             <tr><td><code>obd</code></td><td>&ge;0.7.3</td><td>python-obd: ELM327 communication (imported lazily)</td></tr>
-            <tr><td><code>spotipy</code></td><td>&ge;2.25.2</td><td>Spotify Web API wrapper (imported lazily)</td></tr>
-            <tr><td><code>keyring</code></td><td>25.7.0</td><td>OS keychain for the Spotify token (imported lazily)</td></tr>
             <tr><td><code>av</code></td><td>&ge;12.0.0</td><td>PyAV: audio decoding for FFT and H.264 decoding for phone mirroring</td></tr>
             <tr><td><code>requests</code></td><td>&ge;2.25.0</td><td>HTTP client for API calls and update checking</td></tr>
             <tr><td><code>pyserial</code></td><td>&ge;3.5</td><td>USB serial for the ESP32 volume knob; port discovery for OBD</td></tr>
             <tr><td><code>smbus2</code></td><td>&ge;0.4.3</td><td>I²C for BerryIMU and gesture sensor (<code>sys_platform == "linux"</code> only)</td></tr>
             <tr><td><code>yt-dlp</code></td><td>2026.8.19</td><td>YouTube audio extraction for music download</td></tr>
             <tr><td><code>ytmusicapi</code></td><td>1.11.5</td><td>YouTube Music search</td></tr>
-            <tr><td><code>rapidfuzz</code></td><td>&ge;3.0.0</td><td>Fuzzy matching of download results to Spotify metadata</td></tr>
+            <tr><td><code>rapidfuzz</code></td><td>&ge;3.0.0</td><td>Fuzzy matching of YouTube Music search results in the downloader</td></tr>
           </tbody>
         </table>
 
@@ -530,7 +523,7 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
 │   ├── items/embeddeddhuitem.*        <span class="cmt"># QQuickItem for Android Auto frames</span>
 │   └── platform/                      <span class="cmt"># Android JNI bridges (media, process)</span>
 ├── <span class="prop">backend/</span>             <span class="cmt"># Python backend (developer peer)</span>
-│   ├── settings_manager.py  media_manager.py  spotify_manager.py  obd_manager.py
+│   ├── settings_manager.py  media_manager.py  obd_manager.py
 │   ├── network_manager.py  download_manager.py  dashboard_manager.py
 │   ├── esp32_volume_manager.py  berryimu_manager.py  gesture_manager.py
 │   ├── audio_analyzer.py  clock.py  diagnostics_manager.py  volume_utils.py
@@ -577,12 +570,6 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
             <strong>Set your music directory</strong> &mdash; Open Settings and point the media library at a folder of
             MP3 / M4A / FLAC / OGG / Opus / WAV files. OCTAVE scans it, extracts album art and caches tags in
             <code>metadata_cache.json</code> so later launches are instant.
-          </li>
-          <li>
-            <strong>Configure Spotify</strong> (optional, desktop) &mdash; Settings &gt; Spotify, enter a Client ID and
-            Client Secret from the <a href="https://developer.spotify.com/dashboard">Spotify Developer Dashboard</a>
-            with <code>http://127.0.0.1:8888/callback</code> as the redirect URI. The token is cached in your OS keychain
-            (Python) or in the OCTAVE config directory (C++).
           </li>
           <li>
             <strong>Connect OBD-II</strong> (optional) &mdash; Plug in an ELM327 adapter (USB, or pair a Bluetooth one

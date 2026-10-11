@@ -136,6 +136,23 @@ else:
     import fcntl
 
 
+def _forget_spotify_login():
+    """Delete the login token the removed Spotify integration kept: the C++
+    build's file in the config dir, the Python build's file next to the old
+    module, and its OS keychain entry."""
+    for path in (os.path.join(get_app_data_dir(), ".spotify_token_cache"),
+                 os.path.join(os.path.dirname(os.path.abspath(__file__)), ".spotify_token_cache")):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    try:
+        import keyring
+        keyring.delete_password("OCTAVE_Spotify", "spotify_token")
+    except Exception:  # keyring missing, no backend, or no entry
+        pass
+
+
 def get_app_data_dir():
     """Get the appropriate directory for storing app data based on platform."""
     app_name = "OCTAVE"
@@ -187,10 +204,8 @@ class SettingsManager(QObject):
     customThemesChanged = Signal()
     bottomBarOrientationChanged = Signal(str)
     showBottomBarMediaControlsChanged = Signal(bool)
-    spotifyCredentialsChanged = Signal()
-    mediaSourceChanged = Signal(str)  # "local" or "spotify"
     lastSettingsSectionChanged = Signal(str)
-    currentVolumeChanged = Signal(int)  # Unified volume (0-100) for both local and Spotify
+    currentVolumeChanged = Signal(int)  # Unified volume (0-100) for every audio output
     autoPlayOnStartupChanged = Signal(bool)
     persistShuffleStateChanged = Signal(bool)
     lastShuffleStateChanged = Signal(bool)
@@ -434,9 +449,6 @@ class SettingsManager(QObject):
             "homeOBDParameters": ["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"],
             "supportedOBDParameters": [],
             "lastSettingsSection": "deviceSettings",
-            "spotifyClientId": "",
-            "spotifyClientSecret": "",
-            "mediaSource": "local",
             "mediaFolder": "",
             "customThemes": {},
             "autoPlayOnStartup": False,
@@ -554,6 +566,17 @@ class SettingsManager(QObject):
             self._settings["fontSetting"] = "GoogleSans Regular"
             self.save_settings(self._settings)
 
+        # Drop keys of removed features (the Spotify integration, the phone
+        # audio toggle); the Spotify client secret and login should not linger
+        retired = [k for k in ("spotifyClientId", "spotifyClientSecret", "mediaSource", "scrcpyAudioEnabled")
+                   if k in self._settings]
+        if retired:
+            for k in retired:
+                del self._settings[k]
+            logger.info("Removed settings of retired features (Spotify, phone audio toggle)")
+            self.save_settings(self._settings)
+            _forget_spotify_login()
+
         self._load_members_from_settings()
 
         # Debounced disk write for every other setter (see save_settings)
@@ -609,13 +632,6 @@ class SettingsManager(QObject):
         self._home_obd_parameters = self._settings.get("homeOBDParameters", self._default_settings["homeOBDParameters"])
         self._bottom_bar_orientation = self._settings.get("bottomBarOrientation", self._default_settings["bottomBarOrientation"])
         self._show_bottom_bar_media_controls = self._settings.get("showBottomBarMediaControls", self._default_settings["showBottomBarMediaControls"])
-
-        # Spotify credentials (stored separately for security)
-        self._spotify_client_id = self._settings.get("spotifyClientId", "")
-        self._spotify_client_secret = self._settings.get("spotifyClientSecret", "")
-
-        # Media source preference: "local" or "spotify"
-        self._media_source = self._settings.get("mediaSource", "local")
 
         # Auto-play and resume settings
         self._auto_play_on_startup = self._settings.get("autoPlayOnStartup", False)
@@ -1485,81 +1501,6 @@ class SettingsManager(QObject):
             del settings["customThemes"][name]
             self.save_settings(settings)
             self.customThemesChanged.emit()
-
-    # ==================== Spotify Credentials ====================
-
-    @Slot(result=str)
-    def get_spotify_client_id(self):
-        """Get Spotify client ID"""
-        return self._spotify_client_id
-
-    @Slot(result=str)
-    def get_spotify_client_secret(self):
-        """Get Spotify client secret"""
-        return self._spotify_client_secret
-
-    @Slot(result=bool)
-    def has_spotify_credentials(self):
-        """Check if Spotify credentials are configured"""
-        return bool(self._spotify_client_id and self._spotify_client_secret)
-
-    @Slot(str, str)
-    def save_spotify_credentials(self, client_id, client_secret):
-        """Save Spotify API credentials"""
-        logger.debug(f"Saving Spotify credentials")
-        self._spotify_client_id = client_id
-        self._spotify_client_secret = client_secret
-
-        settings = self.load_settings()
-        settings["spotifyClientId"] = client_id
-        settings["spotifyClientSecret"] = client_secret
-        self.save_settings(settings)
-
-        self.spotifyCredentialsChanged.emit()
-
-    @Slot()
-    def clear_spotify_credentials(self):
-        """Clear saved Spotify credentials"""
-        self._spotify_client_id = ""
-        self._spotify_client_secret = ""
-
-        settings = self.load_settings()
-        settings["spotifyClientId"] = ""
-        settings["spotifyClientSecret"] = ""
-        self.save_settings(settings)
-
-        self.spotifyCredentialsChanged.emit()
-
-    # ==================== Media Source ====================
-
-    @Property(str, notify=mediaSourceChanged)
-    def mediaSource(self):
-        """Get current media source preference: 'local' or 'spotify'"""
-        return self._media_source
-
-    @Slot(result=str)
-    def get_media_source(self):
-        """Get current media source preference"""
-        return self._media_source
-
-    @Slot(str)
-    def set_media_source(self, source):
-        """Set media source preference: 'local' or 'spotify'"""
-        if source not in ("local", "spotify"):
-            return
-
-        if source != self._media_source:
-            self._media_source = source
-            settings = self.load_settings()
-            settings["mediaSource"] = source
-            self.save_settings(settings)
-            self.mediaSourceChanged.emit(source)
-
-    @Slot()
-    def toggle_media_source(self):
-        """Toggle between local and spotify"""
-        new_source = "spotify" if self._media_source == "local" else "local"
-        self.set_media_source(new_source)
 
     # ==================== Auto Play & Resume Settings ====================
 
@@ -2507,8 +2448,6 @@ class SettingsManager(QObject):
         self.fuelTankCapacityChanged.emit(self._fuel_tank_capacity)
         self.bottomBarOrientationChanged.emit(self._bottom_bar_orientation)
         self.showBottomBarMediaControlsChanged.emit(self._show_bottom_bar_media_controls)
-        self.spotifyCredentialsChanged.emit()
-        self.mediaSourceChanged.emit(self._media_source)
         self.autoPlayOnStartupChanged.emit(self._auto_play_on_startup)
         self.persistShuffleStateChanged.emit(self._persist_shuffle_state)
         self.lastShuffleStateChanged.emit(self._last_shuffle_state)

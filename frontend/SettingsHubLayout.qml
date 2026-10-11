@@ -64,7 +64,6 @@ Item {
                 ]
             case "mediaSettings":
                 return [
-                    { label: "Source", value: settingsManager.mediaSource === "spotify" ? "Spotify" : "Local" },
                     { label: "Autoplay", value: settingsManager.autoPlayOnStartup ? "On" : "Off" },
                     { label: "Visualizer", value: settingsManager.showWaveformVisualizer ? "On" : "Off" }
                 ]

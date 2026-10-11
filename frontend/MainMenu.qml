@@ -24,10 +24,6 @@ Item {
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
 
-    // Media source property - determines if Spotify is active
-    property bool useSpotify: settingsManager && settingsManager.mediaSource === "spotify" &&
-                              spotifyManager && spotifyManager.is_connected()
-
     // Phone mirror media: while the phone is playing (or played last), show
     // and drive the phone's media session (any app on the phone)
     property bool usePhone: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null &&
@@ -56,13 +52,12 @@ Item {
                 return
             }
             // Back to OCTAVE's own source
-            mainMenu.updateMedia()
-            var manager = mainMenu.useSpotify ? spotifyManager : mediaManager
-            if (manager) {
-                var duration = manager.get_duration()
+            mainMenu.updateLocalMedia()
+            if (mediaManager) {
+                var duration = mediaManager.get_duration()
                 progressSlider.to = duration > 0 ? duration : 1
                 durationText.text = formatTime(duration)
-                progressSlider.value = manager.get_position()
+                progressSlider.value = mediaManager.get_position()
                 positionText.text = formatTime(progressSlider.value)
             }
         }
@@ -76,20 +71,11 @@ Item {
         onTriggered: mainMenu.syncPhoneProgress()
     }
 
-    // Spotify track info cache (updated from signals)
-    property string spotifyTrackName: ""
-    property string spotifyArtist: ""
-    property string spotifyAlbum: ""
-    property string spotifyAlbumArt: ""
-
-    // Media content properties - unified for both local and Spotify
+    // Media content properties - the phone while it has the controls, else local
     property string currentFile: ""
     property string currentArt: {
         if (usePhone) {
             return phoneMirrorManager.mediaArtUrl || "./assets/missing_art.png"
-        }
-        if (useSpotify && spotifyAlbumArt) {
-            return spotifyAlbumArt
         }
         return _localArt || "./assets/missing_art.png"
     }
@@ -97,26 +83,17 @@ Item {
         if (usePhone) {
             return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaTitle : "Phone"
         }
-        if (useSpotify && spotifyTrackName) {
-            return spotifyTrackName
-        }
         return _localTitle || ""
     }
     property string currentArtist: {
         if (usePhone) {
             return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaArtist : "Nothing playing"
         }
-        if (useSpotify && spotifyArtist) {
-            return spotifyArtist
-        }
         return _localArtist || ""
     }
     property string currentAlbum: {
         if (usePhone) {
             return phoneMirrorManager.mediaAlbum
-        }
-        if (useSpotify && spotifyAlbum) {
-            return spotifyAlbum
         }
         return _localAlbum || ""
     }
@@ -431,8 +408,6 @@ Item {
                                 userSeeking = false
                                 if (mainMenu.phoneActive()) {
                                     phoneMirrorManager.mediaSeek(value)
-                                } else if (useSpotify && spotifyManager) {
-                                    spotifyManager.set_position(value)
                                 } else if (mediaManager) {
                                     mediaManager.set_position(value)
                                 }
@@ -499,7 +474,7 @@ Item {
         repeat: false
         running: false
         onTriggered: {
-            updateMedia()
+            updateLocalMedia()
         }
     }
 
@@ -517,25 +492,6 @@ Item {
         }
     }
 
-    // Function to update media information from Spotify
-    function updateSpotifyMedia() {
-        if (spotifyManager) {
-            mainMenu.spotifyTrackName = spotifyManager.get_current_track_name() || ""
-            mainMenu.spotifyArtist = spotifyManager.get_current_artist() || ""
-            mainMenu.spotifyAlbum = spotifyManager.get_current_album() || ""
-            mainMenu.spotifyAlbumArt = spotifyManager.get_current_album_art() || ""
-        }
-    }
-
-    // Function to update media based on current source
-    function updateMedia() {
-        if (useSpotify) {
-            updateSpotifyMedia()
-        } else {
-            updateLocalMedia()
-        }
-    }
-
     Component.onCompleted: {
         initialLoadTimer.start()
         if (obdManager && obdManager.refresh_values) {
@@ -543,35 +499,34 @@ Item {
         }
     }
 
-    // Local Media Connections (only apply when not using Spotify)
+    // Local Media Connections (metadata is cached even while the phone plays)
     Connections {
         target: mediaManager
 
         function onMetadataChanged(title, artist, album) {
-            if (!useSpotify) {   // cached even while the phone plays: shown again when it stops
-                mainMenu._localTitle = title
-                mainMenu._localArtist = artist
-                mainMenu._localAlbum = album
-                updateLocalMedia()
-            }
+            // Cached even while the phone plays: shown again when it stops
+            mainMenu._localTitle = title
+            mainMenu._localArtist = artist
+            mainMenu._localAlbum = album
+            updateLocalMedia()
         }
 
         function onPositionChanged(position) {
-            if (!useSpotify && !mainMenu.phoneActive() && !progressSlider.userSeeking) {
+            if (!mainMenu.phoneActive() && !progressSlider.userSeeking) {
                 progressSlider.value = position
                 positionText.text = formatTime(position)
             }
         }
 
         function onDurationChanged(duration) {
-            if (!useSpotify && !mainMenu.phoneActive()) {
+            if (!mainMenu.phoneActive()) {
                 progressSlider.to = duration > 0 ? duration : 1
                 durationText.text = formatTime(duration)
             }
         }
 
         function onCurrentMediaChanged(filename) {
-            if (!useSpotify && !mainMenu.phoneActive() && mediaManager) {
+            if (!mainMenu.phoneActive() && mediaManager) {
                 var duration = mediaManager.get_duration()
                 durationText.text = formatTime(duration)
                 positionText.text = "0:00"
@@ -580,51 +535,8 @@ Item {
         }
     }
 
-    // Spotify Connections
-    Connections {
-        target: spotifyManager
-
-        function onCurrentTrackChanged(title, artist, album, artUrl) {
-            // Always update the cached Spotify track info
-            mainMenu.spotifyTrackName = title
-            mainMenu.spotifyArtist = artist
-            mainMenu.spotifyAlbum = album
-            mainMenu.spotifyAlbumArt = artUrl
-
-            // Only update progress UI if we're in Spotify mode
-            if (useSpotify && !mainMenu.phoneActive()) {
-                progressSlider.value = 0
-                positionText.text = "0:00"
-                if (spotifyManager) {
-                    var duration = spotifyManager.get_duration()
-                    progressSlider.to = duration > 0 ? duration : 1
-                    durationText.text = formatTime(duration)
-                }
-            }
-        }
-
-        function onPositionChanged(position) {
-            if (useSpotify && !mainMenu.phoneActive() && !progressSlider.userSeeking) {
-                progressSlider.value = position
-                positionText.text = formatTime(position)
-            }
-        }
-
-        function onDurationChanged(duration) {
-            if (useSpotify && !mainMenu.phoneActive()) {
-                progressSlider.to = duration > 0 ? duration : 1
-                durationText.text = formatTime(duration)
-            }
-        }
-    }
-
-    // Handle media source changes
     Connections {
         target: settingsManager
-        function onMediaSourceChanged(source) {
-            // When source changes, update media display accordingly
-            updateMedia()
-        }
         function onHomeOBDParametersChanged() {
             if (obdManager && obdManager.refresh_values) {
                 obdManager.refresh_values()

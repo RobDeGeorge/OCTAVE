@@ -80,8 +80,8 @@ class PhoneMirrorManager : public QObject
     // file:// URL of the album art (a JPEG in the app data temp dir), "" for none
     Q_PROPERTY(QString mediaArtUrl READ mediaArtUrl NOTIFY mediaArtChanged)
     // The phone is the media source OCTAVE's controls drive: set for the
-    // whole mirroring session (from the first media report); a local /
-    // Spotify track starting clears it (releaseMedia) until the phone plays
+    // whole mirroring session (from the first media report); a local
+    // track starting clears it (releaseMedia) until the phone plays
     // again, and the session ending clears it
     Q_PROPERTY(bool mediaActive READ mediaActive NOTIFY mediaActiveChanged)
 
@@ -257,7 +257,7 @@ public slots:
     void mediaNext();
     void mediaPrevious();
     void mediaSeek(int positionMs);
-    // An OCTAVE source (local, Spotify) took over: the controls leave the
+    // OCTAVE's local playback took over: the controls leave the
     // phone; pausePhone also pauses what the phone is playing
     void releaseMedia(bool pausePhone);
 

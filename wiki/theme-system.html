@@ -65,7 +65,7 @@
                  (themeSetting, fontSetting, uiScale, colorTransitionMs, ...)
         </pre>
 
-        <p>The backends own persistence only. <code>SettingsManager</code> (both C++ and Python) stores <code>themeSetting</code>, <code>fontSetting</code>, <code>uiScale</code>, <code>colorTransitionMs</code>, <code>songLengthTransition</code>, <code>customThemes</code> and <code>albumArtColors</code>; <code>MediaManager</code> and <code>SpotifyManager</code> produce Album Art Capture palettes. Everything else is QML.</p>
+        <p>The backends own persistence only. <code>SettingsManager</code> (both C++ and Python) stores <code>themeSetting</code>, <code>fontSetting</code>, <code>uiScale</code>, <code>colorTransitionMs</code>, <code>songLengthTransition</code>, <code>customThemes</code> and <code>albumArtColors</code>; <code>MediaManager</code> produces Album Art Capture palettes. Everything else is QML.</p>
 
         <!-- Style.qml -->
         <h2 id="style-qml">Style.qml &mdash; Theme Resolution</h2>
@@ -198,7 +198,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
         <h3>Triggers</h3>
         <ul>
           <li>Selecting the mode: <code>Main.qml onThemeSettingChanged</code> and the Display-page toggle both call <code>mediaManager.extract_colors_from_album_art(mediaManager.get_current_file())</code>. Inside the backend, <code>_on_theme_changed()</code> also sets <code>m_albumArtCaptureActive</code> / <code>_album_art_capture_active</code>.</li>
-          <li>Track change while active: <code>_on_media_changed_for_theme(filename)</code> (local files) or the Spotify manager's track-changed path, which calls <code>extractColorsFromUrl()</code> / <code>_extract_colors_from_url()</code> and skips an image URL it has already processed.</li>
+          <li>Track change while active: <code>_on_media_changed_for_theme(filename)</code> re-extracts for the new local file.</li>
           <li>Startup: a one-second timer (<code>_extract_colors_on_startup</code>) re-extracts for the restored track if the mode is active.</li>
         </ul>
 
@@ -214,7 +214,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
         <h3>Threading and Delivery</h3>
         <p>The C++ manager runs the extraction with <code>QtConcurrent::run</code> and a <code>QFutureWatcher</code>; Python uses a daemon <code>threading.Thread</code> and a queued <code>_colorsReady</code> signal. Both keep a job counter so that a fast skip through several tracks applies only the last palette, and both ignore a repeat request for the same file within 2&nbsp;s (the restore-playback path and the startup timer ask for the same track). The comment in the Python code gives the cost: about 0.3&nbsp;s on a desktop, closer to a second on a Raspberry Pi &mdash; hence the worker thread.</p>
 
-        <p>When the manager has a settings manager attached (always, in both entry points) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as <code>albumArtColors</code> and emits <code>albumArtColorsChanged</code>. Main.qml's handler reads the <code>albumArtColors</code> property (the comment notes PySide6 signal arguments did not reliably pass through <code>Connections</code>) and calls <code>App.Style.updateAlbumArtTheme(json)</code>. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> / <code>spotifyManager</code> is the fallback when no settings manager is connected; Main.qml handles it too.</p>
+        <p>When the manager has a settings manager attached (always, in both entry points) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as <code>albumArtColors</code> and emits <code>albumArtColorsChanged</code>. Main.qml's handler reads the <code>albumArtColors</code> property (the comment notes PySide6 signal arguments did not reliably pass through <code>Connections</code>) and calls <code>App.Style.updateAlbumArtTheme(json)</code>. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> is the fallback when no settings manager is connected; Main.qml handles it too.</p>
 
         <h3>Applying in Style.qml</h3>
         <pre><code><span class="kw">function</span> <span class="fn">updateAlbumArtTheme</span>(themeJson) {
@@ -319,7 +319,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
 
         <ul>
           <li><strong>Transition Speed</strong> slider (Display &rarr; Appearance &rarr; Album Art Capture): 0&ndash;2000&nbsp;ms in steps of 50, "0 = instant". Moves are debounced 100&nbsp;ms before <code>save_color_transition_ms()</code> and <code>App.Style.colorTransitionMs</code> are updated.</li>
-          <li><strong>Match Song Length</strong> toggle (<code>songLengthTransition</code>): Main.qml's <code>Connections</code> on <code>mediaManager.durationChanged</code> / <code>spotifyManager.durationChanged</code> set <code>colorTransitionMs = durationMs</code>, so the palette drifts across the whole track. Turning it off restores the saved value from <code>settingsManager.colorTransitionMs</code>.</li>
+          <li><strong>Match Song Length</strong> toggle (<code>songLengthTransition</code>): Main.qml's <code>Connections</code> on <code>mediaManager.durationChanged</code> sets <code>colorTransitionMs = durationMs</code>, so the palette drifts across the whole track. Turning it off restores the saved value from <code>settingsManager.colorTransitionMs</code>.</li>
         </ul>
 
         <div class="info-box warning">

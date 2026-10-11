@@ -2,7 +2,7 @@
 
 **Status:** Not committed to. This is a menu of things we could add to the test suite over time, organized by effort and value. Pick from it when you have the headspace for testing work.
 
-**Last updated:** 2026-04-11
+**Last updated:** 2026-10-10
 
 ---
 
@@ -71,18 +71,15 @@ from backend.volume_utils import VolumeController
 
 def test_apply_volume_dispatches_to_all_outputs():
     media = MagicMock()
-    spotify = MagicMock()
-    spotify.is_connected.return_value = True
     phone_mirror = MagicMock()
     esp32 = MagicMock()
     settings = MagicMock()
 
-    vc = VolumeController(settings, media, spotify, phone_mirror, esp32)
+    vc = VolumeController(settings, media, phone_mirror, esp32)
     vc.applyVolume(75)
 
     settings.setCurrentVolume.assert_called_once_with(75)
     media.setVolume.assert_called_once_with(0.5625)  # (75/100)^2
-    spotify.set_volume.assert_called_once_with(75)
     phone_mirror.setVolume.assert_called_once_with(0.5625)
     esp32.send_volume_update.assert_called_once_with(75)
 ```
@@ -90,7 +87,6 @@ def test_apply_volume_dispatches_to_all_outputs():
 Would have caught every volume-sync bug we fixed in Phase 3. Tiny test, huge coverage on a fragile subsystem. Also cover edge cases:
 
 - Clamping: `applyVolume(-5)` → 0, `applyVolume(150)` → 100
-- Spotify disconnected: `spotify.is_connected.return_value = False` — should NOT call `spotify.set_volume`
 - Android mode: `phone_mirror=None` — should not crash, should still dispatch to the others
 - Per-output None: any single output being None should not crash the dispatch
 
@@ -117,48 +113,7 @@ Catches: QML syntax errors, missing imports, unresolved property references, typ
 
 ## Tier 2: Medium effort, good payoff
 
-### 5. Spotify error rate-limiter test
-
-**File:** `tests/test_spotify_rate_limiter.py`
-**Effort:** ~2 hours
-**Value:** Medium — guards load-bearing Phase 2 logic
-
-The rate limiter we built in Phase 2 (`POLL_ERROR_THRESHOLD=5`, `POLL_ERROR_EMIT_INTERVAL=30s`) is the kind of code that silently rots — nobody notices if the threshold gets bumped accidentally or if the timer logic breaks. Test it:
-
-```python
-def test_poll_error_rate_limiting(qapp, monkeypatch):
-    from backend.spotify_manager import SpotifyManager
-    from unittest.mock import MagicMock
-
-    sm = SpotifyManager()
-    fake_time = [0.0]
-    monkeypatch.setattr("time.time", lambda: fake_time[0])
-
-    # Mock _sp to always raise
-    sm._sp = MagicMock()
-    sm._sp.current_playback.side_effect = Exception("network down")
-
-    errors_emitted = []
-    sm.errorOccurred.connect(lambda msg: errors_emitted.append(msg))
-
-    # Force synchronous execution of the thread pool for testing
-    # ... (monkeypatch _executor.submit to run synchronously) ...
-
-    # Fire the fetch 10 times — should emit once at the threshold (5)
-    for _ in range(10):
-        sm._poll_playback_state()
-
-    assert len(errors_emitted) == 1  # not 10
-
-    # Advance time past the interval, should emit again
-    fake_time[0] += 31.0
-    sm._poll_playback_state()
-    assert len(errors_emitted) == 2
-```
-
-Fiddly because of the thread pool — may need to monkeypatch `_executor.submit` to run synchronously. Worth it, because this logic is exactly the kind of thing that breaks silently and costs a day of debugging.
-
-### 6. Music metadata sanitization tests
+### 5. Music metadata sanitization tests
 
 **File:** `tests/test_media_metadata.py`
 **Effort:** ~1 hour
@@ -175,7 +130,7 @@ Fiddly because of the thread pool — may need to monkeypatch `_executor.submit`
 
 Assert the cleaned output. Prevents regressions in how OCTAVE displays song titles from badly-tagged MP3s — which is a surprisingly large fraction of real-world music libraries.
 
-### 7. pytest-qt signal assertion tests
+### 6. pytest-qt signal assertion tests
 
 **File:** `tests/test_signals.py`
 **Effort:** ~3 hours
@@ -186,12 +141,11 @@ Add `pytest-qt` as a dev dependency. It provides `qtbot.waitSignal(signal, timeo
 Write one test per critical signal path:
 
 - "Calling `media_manager.next_track()` emits `currentTrackChanged` within 100ms"
-- "Calling `spotify_manager.set_volume(50)` emits `volumeChanged(50)`"
 - "Calling `volume_controller.applyVolume(75)` emits `currentVolumeChanged(75)` on `settings_manager`"
 
 Catches signal/slot wiring regressions — the kind of thing that silently breaks when someone renames a signal and forgets to update all the `.connect()` callers.
 
-### 8. Android stub interface test
+### 7. Android stub interface test
 
 **File:** extend `tests/test_smoke.py`
 **Effort:** ~1 hour
@@ -224,7 +178,7 @@ Would catch: "QML calls `obd_manager.new_feature()`, Android build crashes at ru
 
 ## Tier 3: High effort, worth it eventually
 
-### 9. Headless QML integration test
+### 8. Headless QML integration test
 
 **File:** `tests/test_qml_integration.py`
 **Effort:** ~1 day initial, ongoing maintenance
@@ -234,12 +188,11 @@ Build a minimal `tests/fixtures/TestMain.qml` that loads a single view, inject m
 
 Catches bugs only a full integration test can see:
 - "The volume slider doesn't update when the gesture sensor changes volume"
-- "Clicking 'Connect Spotify' doesn't open the OAuth browser"
 - "The settings page doesn't reflect changes made via the ESP32 knob"
 
 **Warning:** these tests are notoriously flaky on headless runners if you're not careful — timing issues, missing platform plugins, subpixel rendering differences. Start with ONE test that you can get reliably green in CI, then expand slowly. Don't try to build a whole integration suite on day one.
 
-### 10. OBD protocol replay suite
+### 9. OBD protocol replay suite
 
 **File:** `tests/test_obd_replay.py`
 **Effort:** ~2 days initial, ongoing as new cars are added
@@ -261,7 +214,7 @@ Flaky on headless runners (subpixel AA differences, driver-specific color variat
 
 ### Mocking every manager in every test
 
-Brittle — every time you add a method or rename a signal, dozens of mocks need updating. Mock ONLY at the seam you're testing. Testing `VolumeController.applyVolume()`? Mock the five managers it calls. Testing `SpotifyManager.refresh_devices()`? Mock `self._sp` (the spotipy client). Don't reach for a universal mock framework.
+Brittle — every time you add a method or rename a signal, dozens of mocks need updating. Mock ONLY at the seam you're testing. Testing `VolumeController.applyVolume()`? Mock the four managers it calls. Don't reach for a universal mock framework.
 
 ### 100% coverage as a goal
 

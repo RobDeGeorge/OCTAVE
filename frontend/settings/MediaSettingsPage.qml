@@ -2,7 +2,6 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Dialogs
-import Qt5Compat.GraphicalEffects
 import ".." as App
 
 Flickable {
@@ -16,9 +15,6 @@ Flickable {
     property var mainWindow: null
     property string currentSection: ""
 
-    // Reactive property for Spotify devices
-    property var spotifyDevicesList: []
-
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
     // False when the host shows tileModel as a tile grid instead of this
     // page (the Sidebar layout); the stacked cards are then never built.
@@ -27,7 +23,6 @@ Flickable {
     // Live state behind the tiles. Album count arrives by signal only so
     // opening settings never forces a library stats scan.
     property int _albumCount: -1
-    property bool _spotifyConnected: spotifyManager ? spotifyManager.is_connected() : false
 
     property var tileModel: [
         { cardId: "media_library", title: "Library", component: libraryContent,
@@ -48,50 +43,12 @@ Flickable {
           summary: function() {
               if (!settingsManager) return {}
               return { state: settingsManager.vinylRecordMode ? "Vinyl record" : settingsManager.albumArtTransition }
-          } },
-        { cardId: "media_spotify", title: "Spotify", component: spotifyContent,
-          summary: function() {
-              var on = pageRoot._spotifyConnected
-              var n = pageRoot.spotifyDevicesList ? pageRoot.spotifyDevicesList.length : 0
-              return { state: !on ? "Not linked" : n > 0 ? n + (n === 1 ? " device" : " devices") : "Linked",
-                       active: on }
           } }
     ]
-
-    // Refresh Spotify devices when navigating to media settings
-    onCurrentSectionChanged: {
-        if (currentSection === "mediaSettings" && spotifyManager && spotifyManager.is_connected()) {
-            spotifyManager.refresh_devices()
-        }
-    }
-
-    Component.onCompleted: {
-        if (currentSection === "mediaSettings" && spotifyManager && spotifyManager.is_connected()) {
-            spotifyManager.refresh_devices()
-        }
-        if (spotifyManager && spotifyManager.is_connected()) {
-            spotifyDevicesList = spotifyManager.get_devices()
-        }
-    }
 
     Connections {
         target: typeof mediaManager !== "undefined" ? mediaManager : null
         function onAlbumCountChanged(count) { pageRoot._albumCount = count }
-    }
-
-    Connections {
-        target: spotifyManager
-        function onDevicesChanged(devices) {
-            pageRoot.spotifyDevicesList = devices
-        }
-        function onConnectionStateChanged(connected) {
-            pageRoot._spotifyConnected = connected
-            if (connected) {
-                spotifyManager.refresh_devices()
-            } else {
-                pageRoot.spotifyDevicesList = []
-            }
-        }
     }
 
     // Folder dialog for selecting music library folder.
@@ -945,264 +902,6 @@ Flickable {
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
-    }
-
-
-    // ─────────────────────────────────────────── Spotify
-    Component {
-        id: spotifyContent
-        ColumnLayout {
-            width: parent ? parent.width : 0
-            spacing: App.Spacing.sectionSpacing
-
-            SettingCategory {
-                title: "Spotify Connect"
-                description: "Get credentials from developer.spotify.com"
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: pageRoot.dp(4)
-
-                            Text {
-                                text: "Client ID"
-                                color: App.Style.secondaryTextColor
-                                font.pixelSize: App.Spacing.overallText - 2
-                                font.family: App.Style.fontFamily
-                            }
-
-                            SettingsTextField {
-                                id: spotifyClientIdField
-                                Layout.fillWidth: true
-                                text: settingsManager ? settingsManager.get_spotify_client_id() : ""
-
-                                onEditingFinished: {
-                                    if (settingsManager && text.trim() !== "") {
-                                        settingsManager.save_spotify_credentials(
-                                            text.trim(),
-                                            spotifyClientSecretField.text.trim()
-                                        )
-                                    }
-                                }
-
-                                Connections {
-                                    target: settingsManager
-                                    function onSpotifyCredentialsChanged() {
-                                        spotifyClientIdField.text = settingsManager.get_spotify_client_id()
-                                    }
-                                }
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: pageRoot.dp(4)
-
-                            Text {
-                                text: "Client Secret"
-                                color: App.Style.secondaryTextColor
-                                font.pixelSize: App.Spacing.overallText - 2
-                                font.family: App.Style.fontFamily
-                            }
-
-                            SettingsTextField {
-                                id: spotifyClientSecretField
-                                Layout.fillWidth: true
-                                text: settingsManager ? settingsManager.get_spotify_client_secret() : ""
-                                echoMode: TextInput.Password
-
-                                onEditingFinished: {
-                                    if (settingsManager && text.trim() !== "") {
-                                        settingsManager.save_spotify_credentials(
-                                            spotifyClientIdField.text.trim(),
-                                            text.trim()
-                                        )
-                                    }
-                                }
-
-                                Connections {
-                                    target: settingsManager
-                                    function onSpotifyCredentialsChanged() {
-                                        spotifyClientSecretField.text = settingsManager.get_spotify_client_secret()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        SettingsButton {
-                            text: "Connect"
-                            Layout.preferredHeight: spotifyClientIdField.height
-                            visible: spotifyManager && !spotifyManager.is_connected()
-                            tooltipText: "Connect to Spotify"
-                            onClicked: {
-                                if (spotifyManager) spotifyManager.authenticate()
-                            }
-                        }
-
-                        SettingsButton {
-                            text: "Disconnect"
-                            Layout.preferredHeight: spotifyClientIdField.height
-                            Layout.minimumWidth: pageRoot.dp(90)
-                            visible: spotifyManager && spotifyManager.is_connected()
-                            buttonColor: App.Style.statusDanger
-                            tooltipText: "Disconnect from Spotify"
-                            onClicked: {
-                                if (spotifyManager) spotifyManager.disconnect()
-                            }
-                        }
-
-                        SettingsButton {
-                            text: "Refresh"
-                            Layout.preferredHeight: spotifyClientIdField.height
-                            visible: spotifyManager && spotifyManager.is_connected()
-                            tooltipText: "Refresh available devices"
-                            onClicked: {
-                                if (spotifyManager) spotifyManager.refresh_devices()
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    App.TerminalFeedback {
-                        id: spotifyTerminal
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: pageRoot.dp(300)
-                        title: "Spotify Connection Terminal Output"
-
-                        Connections {
-                            target: spotifyManager
-                            function onStatusProgress(message) {
-                                spotifyTerminal.appendLine(message)
-                            }
-                            function onAuthUrlReady(url) {
-                                spotifyTerminal.appendLine("[INFO] Auth URL ready - opening browser...")
-                                spotifyAuthUrlText.text = url
-                                spotifyAuthUrlText.visible = true
-                            }
-                            function onConnectionStateChanged(connected) {
-                                spotifyAuthUrlText.visible = false
-                                if (connected && spotifyManager) {
-                                    spotifyManager.refresh_devices()
-                                }
-                            }
-                        }
-                    }
-
-                    Text {
-                        id: spotifyAuthUrlText
-                        Layout.fillWidth: true
-                        visible: false
-                        color: App.Style.accent
-                        font.pixelSize: App.Spacing.overallText - 2
-                        font.underline: true
-                        font.family: App.Style.fontFamily
-                        wrapMode: Text.WrapAnywhere
-                        elide: Text.ElideMiddle
-                        maximumLineCount: 2
-
-                        ToolTip.visible: authUrlMouseArea.containsMouse
-                        ToolTip.text: "Click to open in browser"
-                        ToolTip.delay: 300
-
-                        MouseArea {
-                            id: authUrlMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Qt.openUrlExternally(spotifyAuthUrlText.text)
-                        }
-                    }
-                }
-            }
-
-            SettingCategory {
-                title: "Available Devices"
-                description: "Tap a device to make it the active Spotify Connect target."
-                visible: spotifyManager && spotifyManager.is_connected()
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing
-
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        Repeater {
-                            id: spotifyDevicesRepeater
-                            model: pageRoot.spotifyDevicesList
-
-                            Rectangle {
-                                id: deviceChip
-                                width: deviceChipText.width + App.Spacing.overallSpacing * 3
-                                height: App.Spacing.formElementHeight * 0.8
-                                radius: height / 2
-                                color: modelData.is_active ? App.Style.accent : App.Style.hoverColor
-                                border.width: modelData.is_active ? 0 : 1
-                                border.color: Qt.rgba(App.Style.primaryTextColor.r,
-                                                    App.Style.primaryTextColor.g,
-                                                    App.Style.primaryTextColor.b, 0.1)
-
-                                Text {
-                                    id: deviceChipText
-                                    anchors.centerIn: parent
-                                    text: modelData.name
-                                    color: modelData.is_active ? "white" : App.Style.primaryTextColor
-                                    font.pixelSize: App.Spacing.overallText
-                                    font.family: App.Style.fontFamily
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (spotifyManager && !modelData.is_active) {
-                                            spotifyManager.set_active_device(modelData.id)
-                                        }
-                                    }
-                                    onEntered: deviceChip.scale = 1.05
-                                    onExited: deviceChip.scale = 1.0
-                                }
-
-                                Behavior on scale { NumberAnimation { duration: 100 } }
-
-                                layer.enabled: modelData.is_active
-                                layer.effect: DropShadow {
-                                    horizontalOffset: 0
-                                    verticalOffset: 2
-                                    radius: 4.0
-                                    samples: 9
-                                    color: Qt.rgba(0, 0, 0, 0.2)
-                                }
-                            }
-                        }
-                    }
-
-                    Text {
-                        visible: spotifyDevicesRepeater.count === 0
-                        text: "No devices found. Open Spotify on a device first."
-                        color: App.Style.secondaryTextColor
-                        font.pixelSize: App.Spacing.overallText
-                        font.family: App.Style.fontFamily
-                        font.italic: true
                     }
                 }
             }

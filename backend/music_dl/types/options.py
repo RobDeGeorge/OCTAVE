@@ -7,27 +7,9 @@ Settings types have all the fields marked as optional.
 from typing import List, Optional, TypedDict, Union
 
 __all__ = [
-    "SpotifyOptions",
     "DownloaderOptions",
-    "MusicDLOptions",
-    "SpotifyOptionalOptions",
     "DownloaderOptionalOptions",
-    "MusicDLOptionalOptions",
 ]
-
-
-class SpotifyOptions(TypedDict):
-    """Options used for initializing the Spotify client."""
-
-    client_id: str
-    client_secret: str
-    auth_token: Optional[str]
-    user_auth: bool
-    headless: bool
-    cache_path: str
-    no_cache: bool
-    max_retries: int
-    use_cache_file: bool
 
 
 class DownloaderOptions(TypedDict):
@@ -36,8 +18,6 @@ class DownloaderOptions(TypedDict):
     audio_providers: List[str]
     lyrics_providers: List[str]
     genius_token: str
-    playlist_numbering: bool
-    playlist_retain_track_cover: bool
     scan_for_songs: bool
     m3u: Optional[str]
     output: str
@@ -49,7 +29,6 @@ class DownloaderOptions(TypedDict):
     format: str
     save_file: Optional[str]
     filter_results: bool
-    album_type: Optional[str]
     threads: int
     cookie_file: Optional[str]
     restrict: Optional[str]
@@ -60,9 +39,7 @@ class DownloaderOptions(TypedDict):
     load_config: bool
     log_level: str
     simple_tui: bool
-    fetch_albums: bool
     id3_separator: str
-    ytm_data: bool
     add_unavailable: bool
     generate_lrc: bool
     force_update_metadata: bool
@@ -83,32 +60,12 @@ class DownloaderOptions(TypedDict):
     sync_remove_lrc: Optional[bool]
 
 
-class MusicDLOptions(SpotifyOptions, DownloaderOptions):
-    """Combined options for the MusicDL client."""
-
-
-class SpotifyOptionalOptions(TypedDict, total=False):
-    """Optional version of SpotifyOptions."""
-
-    client_id: str
-    client_secret: str
-    auth_token: Optional[str]
-    user_auth: bool
-    headless: bool
-    cache_path: str
-    no_cache: bool
-    max_retries: int
-    use_cache_file: bool
-
-
 class DownloaderOptionalOptions(TypedDict, total=False):
     """Optional version of DownloaderOptions."""
 
     audio_providers: List[str]
     lyrics_providers: List[str]
     genius_token: str
-    playlist_numbering: bool
-    playlist_retain_track_cover: bool
     scan_for_songs: bool
     m3u: Optional[str]
     output: str
@@ -120,7 +77,6 @@ class DownloaderOptionalOptions(TypedDict, total=False):
     format: str
     save_file: Optional[str]
     filter_results: bool
-    album_type: Optional[str]
     threads: int
     cookie_file: Optional[str]
     restrict: Optional[str]
@@ -131,9 +87,7 @@ class DownloaderOptionalOptions(TypedDict, total=False):
     load_config: bool
     log_level: str
     simple_tui: bool
-    fetch_albums: bool
     id3_separator: str
-    ytm_data: bool
     add_unavailable: bool
     generate_lrc: bool
     force_update_metadata: bool
@@ -151,7 +105,3 @@ class DownloaderOptionalOptions(TypedDict, total=False):
     create_skip_file: Optional[bool]
     respect_skip_file: Optional[bool]
     sync_remove_lrc: Optional[bool]
-
-
-class MusicDLOptionalOptions(SpotifyOptionalOptions, DownloaderOptionalOptions):
-    """Combined optional options for the MusicDL client."""

@@ -18,10 +18,6 @@ Rectangle {
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
 
-    // Spotify integration - use Spotify when user chooses it AND it's connected
-    property bool useSpotify: settingsManager && settingsManager.mediaSource === "spotify" &&
-                              spotifyManager && spotifyManager.is_connected()
-
     // Phone mirror media: while the phone is playing (or played last), the
     // media controls drive the phone's media session instead
     property bool usePhone: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null &&
@@ -35,31 +31,27 @@ Rectangle {
     function mediaIsPlaying() {
         if (phoneActive())
             return phoneMirrorManager.mediaPlaying
-        return useSpotify ? (spotifyManager && spotifyManager.is_playing()) : (mediaManager && mediaManager.is_playing())
+        return mediaManager && mediaManager.is_playing()
     }
     function playIconSource() {
         return mediaIsPlaying() ? "./assets/pause_button.svg" : "./assets/play_button.svg"
     }
     function mediaPrevious() {
         if (phoneActive()) phoneMirrorManager.mediaPrevious()
-        else if (useSpotify) spotifyManager.previous_track()
         else mediaManager.previous_track()
     }
     function mediaTogglePlay() {
         if (phoneActive()) phoneMirrorManager.mediaPlayPause()
-        else if (useSpotify) spotifyManager.toggle_play()
         else mediaManager.toggle_play()
     }
     function mediaNext() {
         if (phoneActive()) phoneMirrorManager.mediaNext()
-        else if (useSpotify) spotifyManager.next_track()
         else mediaManager.next_track()
     }
     // The phone's shuffle belongs to its app; the button is dimmed meanwhile
     function mediaToggleShuffle() {
         if (phoneActive()) return
-        if (useSpotify) spotifyManager.toggle_shuffle()
-        else mediaManager.toggle_shuffle()
+        mediaManager.toggle_shuffle()
     }
 
     // Shared shuffle state - single source of truth for all shuffle buttons
@@ -104,12 +96,8 @@ Rectangle {
 
     Component.onCompleted: {
         updateLayout()
-        // Initialize shuffle state from the appropriate source
-        if (useSpotify && spotifyManager) {
-            isShuffleEnabled = spotifyManager.is_shuffled()
-        } else if (mediaManager) {
+        if (mediaManager)
             isShuffleEnabled = mediaManager.is_shuffled()
-        }
     }
     
     // Show a sensor page, returning true on success. openPage() logs every
@@ -1443,8 +1431,8 @@ Rectangle {
                 Connections {
                     target: mediaManager
                     function onPlayStateChanged(playing) {
-                        // Only update play button if not using Spotify or the phone
-                        if (!useSpotify && !bottomBar.phoneActive()) {
+                        // The phone owns the play button while it has the controls
+                        if (!bottomBar.phoneActive()) {
                             var src = playing ? "./assets/pause_button.svg" : "./assets/play_button.svg"
                             playButtonImage.source = src
                             if (typeof playButtonImageVertical !== "undefined" && playButtonImageVertical) {
@@ -1467,33 +1455,7 @@ Rectangle {
                         updateMuteButtonImage()
                     }
                     function onShuffleStateChanged(enabled) {
-                        if (!useSpotify) {
-                            bottomBar.isShuffleEnabled = enabled
-                        }
-                    }
-                }
-
-                // Spotify connection, play state, and shuffle state
-                Connections {
-                    target: spotifyManager
-                    function onConnectionStateChanged(connected) {
-                        // When Spotify connects, apply Octave's current volume to it
-                        if (connected && settingsManager) {
-                            spotifyManager.set_volume(settingsManager.currentVolume)
-                        }
-                    }
-                    function onPlayStateChanged(playing) {
-                        // Only update play button if using Spotify (and not the phone)
-                        if (useSpotify && !bottomBar.phoneActive()) {
-                            var src = playing ? "./assets/pause_button.svg" : "./assets/play_button.svg"
-                            playButtonImage.source = src
-                            playButtonImageVertical.source = src
-                        }
-                    }
-                    function onShuffleStateChanged(enabled) {
-                        if (useSpotify) {
-                            bottomBar.isShuffleEnabled = enabled
-                        }
+                        bottomBar.isShuffleEnabled = enabled
                     }
                 }
 
@@ -1509,18 +1471,6 @@ Rectangle {
                     }
                 }
 
-                // Update shuffle state when media source changes
-                Connections {
-                    target: settingsManager
-                    function onMediaSourceChanged(source) {
-                        var nowUseSpotify = (source === "spotify" && spotifyManager && spotifyManager.is_connected())
-                        if (nowUseSpotify) {
-                            bottomBar.isShuffleEnabled = spotifyManager.is_shuffled()
-                        } else if (mediaManager) {
-                            bottomBar.isShuffleEnabled = mediaManager.is_shuffled()
-                        }
-                    }
-                }
 
                 // Helper functions
                 function getUpdatedMuteSource() {
@@ -2523,7 +2473,7 @@ Rectangle {
                 Connections {
                     target: mediaManager
                     function onPlayStateChanged(playing) {
-                        if (!useSpotify && !bottomBar.phoneActive())
+                        if (!bottomBar.phoneActive())
                             playButtonImageVertical.source = playing ?
                                 "./assets/pause_button.svg" : "./assets/play_button.svg"
                     }
@@ -2542,25 +2492,7 @@ Rectangle {
                         updateMuteButtonImageVertical()
                     }
                     function onShuffleStateChanged(enabled) {
-                        if (!useSpotify) {
-                            bottomBar.isShuffleEnabled = enabled
-                        }
-                    }
-                }
-
-                // Spotify connection and shuffle state for vertical layout
-                Connections {
-                    target: spotifyManager
-                    function onConnectionStateChanged(connected) {
-                        // When Spotify connects, apply Octave's current volume to it
-                        if (connected && settingsManager) {
-                            spotifyManager.set_volume(settingsManager.currentVolume)
-                        }
-                    }
-                    function onShuffleStateChanged(enabled) {
-                        if (useSpotify) {
-                            bottomBar.isShuffleEnabled = enabled
-                        }
+                        bottomBar.isShuffleEnabled = enabled
                     }
                 }
 
@@ -2576,18 +2508,6 @@ Rectangle {
                     }
                 }
 
-                // Update shuffle state when media source changes (vertical)
-                Connections {
-                    target: settingsManager
-                    function onMediaSourceChanged(source) {
-                        var nowUseSpotify = (source === "spotify" && spotifyManager && spotifyManager.is_connected())
-                        if (nowUseSpotify) {
-                            bottomBar.isShuffleEnabled = spotifyManager.is_shuffled()
-                        } else if (mediaManager) {
-                            bottomBar.isShuffleEnabled = mediaManager.is_shuffled()
-                        }
-                    }
-                }
 
             }
         }

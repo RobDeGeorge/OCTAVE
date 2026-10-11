@@ -26,7 +26,6 @@
             <li><a href="#audio">Audio Issues</a></li>
             <li><a href="#obd">OBD Connection Issues</a></li>
             <li><a href="#android-obd">Android OBD (Bluetooth / BLE)</a></li>
-            <li><a href="#spotify">Spotify Authentication Issues</a></li>
             <li><a href="#downloads">Music Download (yt-dlp) Issues</a></li>
             <li><a href="#phone-mirror">Phone Mirror Issues</a></li>
             <li><a href="#hardware-sensors">Hardware Sensor Issues</a></li>
@@ -83,7 +82,7 @@ YYYY-MM-DD HH:MM:SS | LEVEL   | octave.module | file.py:line | function() | mess
 
 <span class="cmt"># C++ file and stderr (same shape, millisecond timestamps, Qt category in the module column):</span>
 YYYY-MM-DD HH:MM:SS.zzz | LEVEL   | octave.elm327 | obdmanager.cpp:1772 | message</code></pre>
-        <p>Python logger names come from <code>get_logger(__name__)</code>: <code>octave.obd</code>, <code>octave.media</code>, <code>octave.spotify</code>, <code>octave.settings</code>, <code>octave.clock</code>, <code>octave.android_auto[.capture|.embedded]</code>, <code>octave.phone_mirror[.host|.capture|.container|.embedded]</code>, <code>octave.app</code> for <code>main.py</code>, and <code>octave.&lt;module&gt;</code> for everything else (e.g. <code>octave.ui_watchdog</code>, <code>octave.elm327_protocol</code>). python-obd's own <code>obd</code> logger tree is attached to the same handlers so an ELM327 session leaves its <code>write:</code>/<code>read:</code> transcript in <code>octave-debug.log</code>. The C++ side uses one <code>QLoggingCategory</code> per manager: <code>octave.settings</code>, <code>octave.media</code>, <code>octave.spotify</code>, <code>octave.download</code>, <code>octave.network</code>, <code>octave.phonemirror</code> (+ <code>octave.phonemirror.client</code> for the scrcpy-protocol client), <code>octave.androidauto</code>, <code>octave.embeddeddhu</code>, <code>octave.audioanalyzer</code>, <code>octave.berryimu</code>, <code>octave.gesture</code>, <code>octave.esp32volume</code>, <code>octave.dashboards</code>, <code>octave.diagnostics</code>, <code>octave.ui_watchdog</code> and <code>octave.elm327</code> (protocol transcript and the Android BLE bridge lines). The exceptions are <code>obdmanager.cpp</code>, <code>clock.cpp</code> and <code>volumecontroller.cpp</code>, which log through plain <code>qDebug()</code>/<code>qWarning()</code> and therefore appear under the category <code>default</code> &mdash; so there is no <code>octave.obd</code> category to filter on in the C++ logs; look for the <code>[OBD Worker]</code> message prefix instead. With <code>--debug</code> the C++ build sets the filter rules <code>*.debug=true</code>, <code>qt.*.debug=false</code>; without it <code>*.debug=false</code>, so category-debug output costs nothing.</p>
+        <p>Python logger names come from <code>get_logger(__name__)</code>: <code>octave.obd</code>, <code>octave.media</code>, <code>octave.settings</code>, <code>octave.clock</code>, <code>octave.android_auto[.capture|.embedded]</code>, <code>octave.phone_mirror[.host|.capture|.container|.embedded]</code>, <code>octave.app</code> for <code>main.py</code>, and <code>octave.&lt;module&gt;</code> for everything else (e.g. <code>octave.ui_watchdog</code>, <code>octave.elm327_protocol</code>). python-obd's own <code>obd</code> logger tree is attached to the same handlers so an ELM327 session leaves its <code>write:</code>/<code>read:</code> transcript in <code>octave-debug.log</code>. The C++ side uses one <code>QLoggingCategory</code> per manager: <code>octave.settings</code>, <code>octave.media</code>, <code>octave.download</code>, <code>octave.network</code>, <code>octave.phonemirror</code> (+ <code>octave.phonemirror.client</code> for the scrcpy-protocol client), <code>octave.androidauto</code>, <code>octave.embeddeddhu</code>, <code>octave.audioanalyzer</code>, <code>octave.berryimu</code>, <code>octave.gesture</code>, <code>octave.esp32volume</code>, <code>octave.dashboards</code>, <code>octave.diagnostics</code>, <code>octave.ui_watchdog</code> and <code>octave.elm327</code> (protocol transcript and the Android BLE bridge lines). The exceptions are <code>obdmanager.cpp</code>, <code>clock.cpp</code> and <code>volumecontroller.cpp</code>, which log through plain <code>qDebug()</code>/<code>qWarning()</code> and therefore appear under the category <code>default</code> &mdash; so there is no <code>octave.obd</code> category to filter on in the C++ logs; look for the <code>[OBD Worker]</code> message prefix instead. With <code>--debug</code> the C++ build sets the filter rules <code>*.debug=true</code>, <code>qt.*.debug=false</code>; without it <code>*.debug=false</code>, so category-debug output costs nothing.</p>
 
         <h3>Crash traces</h3>
         <ul>
@@ -98,7 +97,7 @@ YYYY-MM-DD HH:MM:SS.zzz | LEVEL   | octave.elm327 | obdmanager.cpp:1772 | messag
         <h3>Enabling debug mode</h3>
         <pre><code><span class="fn">python</span> main.py --debug      <span class="cmt"># Python backend</span>
 ./build/octave --debug      <span class="cmt"># C++ backend (its only command-line flag)</span></code></pre>
-        <p>Creates the <code>-debug.log</code> file with DEBUG-level output. Useful for: the ELM327 TX/RX transcript (C++ logs <code>[OBD Worker]</code> TX/RX lines with round-trip times at debug level under <code>octave.elm327</code>; Python attaches python-obd's transcript), serial data from the ESP32 knob, settings load/save, media library scanning and tag extraction, Spotify API calls and token refresh, and the phone-mirror adb / server launch sequence.</p>
+        <p>Creates the <code>-debug.log</code> file with DEBUG-level output. Useful for: the ELM327 TX/RX transcript (C++ logs <code>[OBD Worker]</code> TX/RX lines with round-trip times at debug level under <code>octave.elm327</code>; Python attaches python-obd's transcript), serial data from the ESP32 knob, settings load/save, media library scanning and tag extraction, and the phone-mirror adb / server launch sequence.</p>
 
         <!-- Installation -->
         <h2 id="installation">Installation Issues</h2>
@@ -122,7 +121,6 @@ YYYY-MM-DD HH:MM:SS.zzz | LEVEL   | octave.elm327 | obdmanager.cpp:1772 | messag
           <tbody>
             <tr><td>"App is damaged" Gatekeeper error on the <code>.dmg</code> build</td><td>The bundle is unsigned: <code>xattr -cr /Applications/OCTAVE.app</code>.</td></tr>
             <tr><td>PySide6 import errors on Apple Silicon</td><td>Use a native arm64 Python, not Rosetta x86. Check with <code>python -c "import platform; print(platform.machine())"</code>.</td></tr>
-            <tr><td>Spotify: <code>keyring</code> cannot store the token</td><td>Python only. Grant the terminal Keychain access when prompted; otherwise spotipy falls back to the file cache (see <a href="#spotify">Spotify</a>).</td></tr>
           </tbody>
         </table>
 
@@ -247,34 +245,6 @@ ls -la /dev/rfcomm0</code></pre>
             <tr><td>Nothing happens with an empty port field</td><td>Android requires the adapter's MAC address; there is no default and no serial scan. Once Bluetooth permission has been granted (first Connect tap), the adapter list on the OBD settings page fills with the phone's paired devices as "&lt;name&gt; &middot; &lt;MAC&gt;" (<code>OctaveOBDBridge.bondedDevices()</code>) &mdash; pick the ELM327 there instead of typing the address. An empty list means the permission is still missing or Bluetooth is off.</td></tr>
             <tr><td>Where are the BLE logs?</td><td>The Java side queues <code>I|</code>/<code>W|</code> lines; the OBD manager drains up to 50 per 50 ms poll and re-emits them as <code>[BLE] ...</code> under <code>octave.elm327</code>, so they land in <code>octave-cpp.log</code>, the Connection Log and the Diagnostics export. No <code>adb logcat</code> needed.</td></tr>
             <tr><td>Update refuses to install</td><td>Signing key mismatch (<code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>). Releases up to 0.9.3 each used a throwaway key, and a local build uses your own key. Uninstall <code>org.octave.app</code> once, then install; from 0.9.4 on, releases update in place (<a href="building.html#android">Building &rarr; Android</a>).</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Spotify -->
-        <h2 id="spotify">Spotify Authentication Issues</h2>
-        <p>Spotify is desktop-only; the Android build compiles a stub so the QML bindings stay valid but nothing connects.</p>
-
-        <h3>OAuth flow (both backends)</h3>
-        <ol class="steps">
-          <li>Enter the Client ID and Client Secret in Spotify settings.</li>
-          <li>Click Connect &mdash; OCTAVE starts a local HTTP listener on <code>127.0.0.1:8888</code> (Python: stdlib <code>HTTPServer</code> on a thread; C++: a hand-rolled <code>QTcpServer</code> that parses the GET line).</li>
-          <li>The browser opens Spotify's authorization page.</li>
-          <li>Spotify redirects to <code>http://127.0.0.1:8888/callback</code>.</li>
-          <li>OCTAVE exchanges the code for tokens (spotipy / <code>QNetworkAccessManager</code>).</li>
-        </ol>
-
-        <h3>Common issues</h3>
-        <table>
-          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
-          <tbody>
-            <tr><td>Redirect URI mismatch</td><td>Add exactly <code>http://127.0.0.1:8888/callback</code> to the app's redirect URIs in the Spotify Developer Dashboard.</td></tr>
-            <tr><td>Connect does nothing right after entering the credentials</td><td>Should not happen any more: both managers subscribe to <code>settingsManager.spotifyCredentialsChanged</code> and reload the Client ID / Secret immediately, so no restart is needed. Check the log for a <code>spotify</code> error instead.</td></tr>
-            <tr><td>Token expired</td><td>Python refreshes through <code>spotipy.SpotifyOAuth</code>; C++ refreshes itself with <code>grant_type=refresh_token</code>, pre-emptively 60 s before expiry, and forces re-auth if the refresh fails. If playback control stops working, disconnect and re-authenticate.</td></tr>
-            <tr><td>Keyring errors (Python)</td><td>The Python backend stores the token in the OS keychain via <code>keyring</code> (service <code>OCTAVE_Spotify</code>, username <code>spotify_token</code>) and falls back to the file <span class="file-path">backend/.spotify_token_cache</span> (gitignored).</td></tr>
-            <tr><td>Logged in under Python, logged out under C++ (or vice versa)</td><td>Expected: the C++ backend keeps its token as plain JSON in <code>&lt;app data dir&gt;/.spotify_token_cache</code> &mdash; same file name, different directory, no keychain &mdash; so the two backends do not share a login.</td></tr>
-            <tr><td>No devices found</td><td>OCTAVE controls playback remotely; Spotify must be running on at least one device.</td></tr>
-            <tr><td>Rate limiting</td><td>Polling is adaptive in both backends: 3 s while playing, 5 s paused, 10 s idle, plus a 250 ms local position interpolation timer. The Python backend caps API work at a 2-worker thread pool; the C++ backend issues asynchronous requests from the GUI thread.</td></tr>
-            <tr><td>Playlists show no tracks after February 2026</td><td>Spotify moved <code>/playlists/{id}/tracks</code> to <code>/items</code> with a 50-item page cap; both backends page <code>/items</code> up to 1000 entries (commit <code>a37f3ff</code>). Update if you are on an older build.</td></tr>
           </tbody>
         </table>
 

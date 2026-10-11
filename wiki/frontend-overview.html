@@ -180,7 +180,7 @@
 
         <div class="info-box info">
           <div class="info-box-title">Cleanup on Close</div>
-          The <code>onClosing</code> handler calls <code>mediaManager._save_playback_state()</code> and <code>spotifyManager.cleanup()</code>, then accepts the close. Nothing else is torn down from QML; managers clean up from their backend destructors / <code>aboutToQuit</code>.
+          The <code>onClosing</code> handler calls <code>mediaManager._save_playback_state()</code>, then accepts the close. Nothing else is torn down from QML; managers clean up from their backend destructors / <code>aboutToQuit</code>.
         </div>
 
         <!-- Page Routing -->
@@ -319,7 +319,6 @@ singleton WidgetCatalog 1.0 dashboards/WidgetCatalog.qml</code></pre>
 
         <pre><code><span class="cmt">// Call slots / invokables</span>
 mediaManager.<span class="fn">next_track</span>()
-spotifyManager.<span class="fn">toggle_play</span>()
 settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 
 <span class="cmt">// Read properties</span>
@@ -343,7 +342,6 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
             <tr><td><code>volumeController</code></td><td>VolumeController</td><td>Quadratic volume curve + dispatch to every output</td></tr>
             <tr><td><code>mediaManager</code></td><td>MediaManager</td><td>Local playback, library, playlists, metadata, album art</td></tr>
             <tr><td><code>audioAnalyzer</code></td><td>AudioAnalyzer</td><td>FFT waveform visualization</td></tr>
-            <tr><td><code>spotifyManager</code></td><td>SpotifyManager</td><td>Spotify Web API (no-op stub on mobile)</td></tr>
             <tr><td><code>obdManager</code></td><td>OBDManager</td><td>OBD-II live data and DTCs (Python installs it via <code>install_obd_manager()</code> so <code>dev/</code> can inject a mock)</td></tr>
             <tr><td><code>esp32VolumeManager</code></td><td>ESP32VolumeManager</td><td>Wireless rotary encoder</td></tr>
             <tr><td><code>berryIMU</code></td><td>BerryIMUManager</td><td>Accelerometer / gyro / magnetometer / barometer</td></tr>
@@ -370,7 +368,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <li><code>screenAutoScale</code> &mdash; Main.qml only applies it if defined.</li>
           <li><code>berryIMU</code> &mdash; Main.qml's gating, <code>OBDParameterModel</code>'s IMU <code>Connections</code>, the Accessories settings page.</li>
           <li><code>dashboardManager</code> &mdash; OBDMenu builds its registry with the built-in "grid" sentinel alone when the manager is absent; <span class="file-path">dashboards/editor/DashboardEditor.qml</span> guards its save/load and draft-rescue paths the same way.</li>
-          <li><code>esp32VolumeManager</code>, <code>gestureSensor</code>, <code>diagnosticsManager</code>, <code>spotifyManager</code>, <code>mediaManager</code>, <code>settingsManager</code> &mdash; settings pages, hub widgets, and the two dashboard media widgets.</li>
+          <li><code>esp32VolumeManager</code>, <code>gestureSensor</code>, <code>diagnosticsManager</code>, <code>phoneMirrorManager</code>, <code>mediaManager</code>, <code>settingsManager</code> &mdash; settings pages, hub widgets, the media views, the two dashboard media widgets and Main.qml's album-art handlers.</li>
           <li><code>typeof obj.method === "function"</code> &mdash; feature probes on items and managers: <code>currentItem.navigateToHub</code>, <code>mainWindow.openNowPlayingStudio</code>, <code>roomLoader.item.previewTrackTransition</code>, and in the OBD settings page <code>obdManager.connect_to_adapter</code> / <code>set_target_address</code> / <code>platform_hint</code>.</li>
         </ul>
 
@@ -411,13 +409,16 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
     <span class="kw">var</span> colors = settingsManager.albumArtColors
     <span class="kw">if</span> (colors &amp;&amp; colors.length &gt; <span class="num">0</span>) App.Style.<span class="fn">updateAlbumArtTheme</span>(colors)
 }
-<span class="cmt">// mediaManager.albumColorsExtracted (local) and spotifyManager.albumColorsExtracted</span>
+<span class="cmt">// mediaManager.albumColorsExtracted</span>
 <span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) { App.Style.<span class="fn">updateAlbumArtTheme</span>(themeJson) }
-<span class="cmt">// Duration-based transition speed on both media managers</span>
+<span class="cmt">// Duration-based transition speed</span>
 <span class="kw">function</span> <span class="fn">onDurationChanged</span>(durationMs) {
     <span class="kw">if</span> (settingsManager.songLengthTransition &amp;&amp; durationMs &gt; <span class="num">0</span>)
         App.Style.colorTransitionMs = durationMs
-}</code></pre>
+}
+<span class="cmt">// phoneMirrorManager: while the phone has the media controls, its art goes
+// through mediaManager.extract_colors_from_image(mediaArtUrl) (onMediaArtChanged /
+// onMediaActiveChanged) and its mediaDuration drives the transition speed</span></code></pre>
 
         <p>At startup, if the saved theme is Album Art Capture and <code>settingsManager.albumArtColors</code> is non-empty, Main.qml primes <code>Style.updateAlbumArtTheme()</code> <em>before</em> <code>setThemeInstant()</code> so the placeholder palette never paints. Manual theme switches are always instant (<code>Style.setThemeInstant</code>); the transition duration only applies to album-art-driven shifts. The comment on the settings handler records why it reads the property instead of the signal argument: signal arguments were observed not to pass reliably through <code>Connections</code> under PySide6.</p>
 

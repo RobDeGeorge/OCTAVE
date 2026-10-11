@@ -1,7 +1,7 @@
 # Android C++ Port
 
 **Status:** active — Phases 0–3 complete. OBD-over-BLE and YT Music search/download both shipped. Remaining work is Phase 4 (sideload polish).
-**Last updated:** 2026-09-11
+**Last updated:** 2026-10-10
 
 ## Why this is parked here
 
@@ -27,7 +27,6 @@ Single ABI (`arm64-v8a`) for now. Add `armeabi-v7a` only if a real target emerge
 
 - **Distribution:** LGPL Qt, dynamically linked, open-source-licenses screen required in-app before Play Store submission.
 - **Play Store:** deferred to a dedicated later milestone after sideload is proven. Paid app (Qt for Small Business or ongoing LGPL compliance — decide closer to submission).
-- **Spotify:** **excluded from Android entirely**. Spotify is desktop-only.
 - **Downloads (`yt-dlp`):** kept for sideload (`OCTAVE_ENABLE_DOWNLOADS=ON` default), stripped for Play Store (`OFF`) — YouTube downloads violate Play policy.
 - **OBD transport on Android:** **BLE-first** (`QBluetoothDeviceDiscoveryAgent` restricted to `LowEnergyDiscoveryMethod` for scan; `QLowEnergyController` for connect). Manual MAC entry as a fallback for when the adapter is already known. Classic RFCOMM (`QBluetoothSocket`) only as a last-ditch fallback if a discovered device is explicitly tagged Classic. The QML UI in `frontend/settings/OBDSettingsPage.qml` (Android branch) is already wired for this — backend just needs the C++ implementation; the now-deleted `backend/android_obd_manager.py` is the reference for the API surface QML expects.
 - **CAMERA + RECORD_AUDIO permissions:** declared aspirationally in manifest (future reverse-camera / voice-command features). Review before Play Store submission — unused permissions trigger review friction.
@@ -41,7 +40,6 @@ Every manager is always instantiated so QML context properties exist; hardware-a
 | `settingsmanager` | Full | Storage path via `QStandardPaths::AppDataLocation` |
 | `clock` | Full | No change |
 | `mediamanager` | Full | Local audio playback via QMediaPlayer — already portable |
-| `spotifymanager` | **Stub** | Excluded from Android per scope decision |
 | `audioanalyzer` | Full (file FFT only) | Mic input deferred — `RECORD_AUDIO` aspirational |
 | `obdmanager` + `elm327protocol` | Full (new BT transport) | Refactor to `IOBDTransport` with serial + BT impls |
 | `volumecontroller` | Full (phone mirror + ESP32 nulled) | Match Python: pass nullptr to those deps on Android |
@@ -69,7 +67,6 @@ Follow `ANDROID_BUILD_SETUP.md` at repo root. Installs Qt for Android 6.11.0, An
    - Link `Qt6::Bluetooth`, `Qt6::Sensors`, `Qt6::CorePrivate` (for `QtAndroidPrivate` permissions API)
 3. Write stub managers (`src/managers/stubs/`): same public API as real ones, no-op implementations, emit "unavailable" signals where QML expects them.
 4. `src/main.cpp`: conditional `#ifdef Q_OS_ANDROID` to instantiate stubs in place of hardware managers.
-5. Spotify exclusion is C++-only: gate it with `#ifdef Q_OS_ANDROID` in `src/main.cpp`. No Python mirror — Python is desktop-only, so its `SpotifyManager` stays unconditional.
 
 **Done when:** `cmake --build build-android --target apk && adb install` puts an app on both test devices that launches to the main menu. OBD/media/dashboards visible in UI, OBD disconnected.
 

@@ -659,8 +659,8 @@ class PhoneMirrorManager(QObject):
     @Property(bool, notify=mediaActiveChanged)
     def mediaActive(self) -> bool:
         """The phone is the media source OCTAVE's controls drive: set for the
-        whole mirroring session (from the first media report); a local /
-        Spotify track starting clears it (releaseMedia) until the phone plays
+        whole mirroring session (from the first media report); a local
+        track starting clears it (releaseMedia) until the phone plays
         again, and the session ending clears it."""
         return self._media_active
 
@@ -671,7 +671,7 @@ class PhoneMirrorManager(QObject):
         self.mediaChanged.emit()
         # The phone is the media source while mirroring: it takes the controls
         # with its first report, and again whenever it starts playing after a
-        # local / Spotify track took them (releaseMedia)
+        # local track took them (releaseMedia)
         playing = state["has_session"] and state["playing"]
         first_report = not self._media_reported
         self._media_reported = True
@@ -759,7 +759,7 @@ class PhoneMirrorManager(QObject):
 
     @Slot(bool)
     def releaseMedia(self, pause_phone: bool):
-        """An OCTAVE source (local, Spotify) took over: the controls leave the
+        """OCTAVE's local playback took over: the controls leave the
         phone; pause_phone also pauses what the phone is playing."""
         if not self._media_active:
             return

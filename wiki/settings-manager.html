@@ -47,7 +47,7 @@
           <span class="file-path">backend/settings_manager.py</span> in Python) is the central configuration store for
           all of OCTAVE. It inherits from <code>QObject</code> and exposes every user-configurable option to QML through
           <code>Q_PROPERTY</code> / <code>@Property</code> getters, change signals, and <code>save_*</code> slots. Both
-          backends define the same 92 default keys, the same 75 properties, the same 79 signals and the same slot names, and
+          backends define the same 96 default keys, the same 79 properties, the same 83 signals and the same slot names, and
           they read and write the same file: <code>settingsConfigure.json</code> in the OS-specific app data directory.
           The QML frontend never knows which backend is behind <code>settingsManager</code>.
         </p>
@@ -111,16 +111,16 @@
             <tr><td><code>logs/</code></td><td><span class="file-path">src/util/logger.cpp</span>, <span class="file-path">backend/diagnostics_manager.py</span> / <span class="file-path">src/managers/diagnosticsmanager.cpp</span> (see <a href="development.html">Development</a>)</td></tr>
             <tr><td><code>dashboards/</code></td><td>DashboardManager user dashboards (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>
             <tr><td><code>metadata_cache.json</code>, <code>display_names.json</code></td><td><a href="media-manager.html">MediaManager</a></td></tr>
-            <tr><td><code>.spotify_token_cache</code></td><td><a href="spotify-manager.html">SpotifyManager</a> (C++ token cache; the Python backend prefers the OS keyring)</td></tr>
           </tbody>
         </table>
 
         <div class="info-box info">
-          <div class="info-box-title">Spotify credentials are stored in this file</div>
-          <code>spotifyClientId</code> and <code>spotifyClientSecret</code> are plain strings inside
-          <code>settingsConfigure.json</code>. That is why the file is written with <code>chmod 600</code> on Unix. Only the
-          OAuth <em>token</em> goes to the keyring (Python) or <code>.spotify_token_cache</code> (C++), never the client
-          credentials. SettingsManager itself never touches the keyring.
+          <div class="info-box-title">Retired keys are deleted at startup</div>
+          Files from older builds may carry <code>spotifyClientId</code>, <code>spotifyClientSecret</code>,
+          <code>mediaSource</code> (the removed Spotify integration) and <code>scrcpyAudioEnabled</code> (the removed phone
+          audio toggle). Both constructors delete them, save, and log "Removed settings of retired features"; they then
+          delete the old Spotify login token: <code>.spotify_token_cache</code> in the app data dir (both backends), plus
+          <code>backend/.spotify_token_cache</code> and the <code>OCTAVE_Spotify</code> OS keychain entry (Python only).
         </div>
 
         <!-- Property / Signal / Slot System -->
@@ -186,12 +186,12 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         signal.emit(value)</code></pre>
 
         <p>
-          Setters that touch several keys at once (<code>save_playback_state</code>, <code>save_spotify_credentials</code>,
+          Setters that touch several keys at once (<code>save_playback_state</code>,
           the gesture-mapping and section-visibility slots) call <code>load_settings()</code> / <code>save_settings()</code>
           directly so the burst becomes one write, and setters with an enumerated or bounded domain validate before
           saving: <code>save_settings_layout_style</code>, <code>save_window_state</code>,
           <code>save_music_button_default_page</code>, <code>save_album_art_transition</code>,
-          <code>save_esp32_led_color_mode</code>, <code>set_media_source</code> and
+          <code>save_esp32_led_color_mode</code> and
           <code>set_last_settings_section</code> silently ignore unknown values, while the numeric sliders clamp
           (<code>qBound</code> / <code>max(min())</code>) to the ranges listed in the
           <a href="settings-reference.html">Settings Reference</a>.
@@ -215,9 +215,9 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <h2 id="lifecycle">Startup, In-Memory Cache and Coalesced Writes</h2>
         <p>The constructor performs the only unconditional disk read of the manager's lifetime:</p>
         <ol class="steps">
-          <li>Build <code>_default_settings</code> / <code>buildDefaultSettings()</code> (92 keys) and the registry.</li>
+          <li>Build <code>_default_settings</code> / <code>buildDefaultSettings()</code> (96 keys) and the registry.</li>
           <li><code>load_settings()</code>: the file is opened with a <em>shared</em> lock, parsed and passed through <code>_validate_settings()</code>. A missing file is created from the defaults immediately; a corrupt file (JSON parse error) is moved aside to <code>.corrupt</code> and restored from <code>.bak</code> (see <a href="#json-persistence">Backup and Corruption Recovery</a>).</li>
-          <li><strong>Migrations</strong>, applied in memory (only the first two write back):
+          <li><strong>Migrations</strong>, applied in memory (the first two and the retired-key removal write back):
             <ul>
               <li><code>uiScale == 0.6</code> (an old default) becomes <code>1.0</code> and is saved straight away.</li>
               <li><code>fontSetting == "Google Sans"</code> (the pre-0.9 default, which <code>Style.setFont()</code> rejects because <code>Main.qml</code> derives the display name <code>"GoogleSans Regular"</code> from the bundled <code>GoogleSans-Regular.ttf</code>, silently leaving the app in the system font) becomes <code>"GoogleSans Regular"</code> and is saved straight away.</li>
@@ -225,6 +225,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
               <li><code>lastSettingsSection == "clockSettings"</code> (a removed page) becomes <code>"displaySettings"</code>.</li>
               <li><code>obdParameters</code>: every PID present in the defaults but missing from the file is added, so new PIDs appear after an upgrade without discarding the user's toggles.</li>
               <li><code>settingsMenuVisibility</code>: sections missing from the stored dict are filled in as <code>true</code> (visible) in both backends, matching <code>is_settings_section_visible()</code>.</li>
+              <li>Retired keys (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are removed and saved straight away, and the old Spotify login token is deleted (see the "Retired keys" note above).</li>
             </ul>
           </li>
           <li>Every backing member is populated from the loaded dict with the default as fallback (<code>_load_members_from_settings()</code> / <code>populateMembers()</code>, which <code>reset_to_defaults()</code> reuses).</li>
@@ -423,7 +424,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           All defaults live in <code>self._default_settings</code> (Python <code>__init__</code>) and
           <code>buildDefaultSettings()</code> (C++). The dict is the schema: any key absent from the loaded JSON gets
           its default, and any stored value of the wrong type is replaced by it. Both backends define the same
-          <strong>92 top-level keys</strong> with identical literal values (verified key by key in the 2026-09 audit).
+          <strong>96 top-level keys</strong> with identical literal values (verified key by key in the 2026-09 audit).
           The nested <code>obdParameters</code> dict holds <strong>86 PIDs, 20 enabled by default</strong>. The exhaustive
           per-key table, including ranges and the UI page that owns each key, is the
           <a href="settings-reference.html">Settings Reference</a>; the summary:
@@ -435,9 +436,8 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           <tbody>
             <tr><td>Device / window</td><td><code>deviceName</code>, <code>fontSetting</code>, <code>windowState</code>, <code>screenWidth</code>, <code>screenHeight</code></td></tr>
             <tr><td>Display</td><td><code>themeSetting</code>, <code>uiScale</code>, <code>colorTransitionMs</code>, <code>songLengthTransition</code>, <code>showClock</code>, <code>clockFormat24Hour</code>, <code>clockShowSeconds</code>, <code>clockSize</code>, <code>clockSizeAuto</code>, <code>bottomBarOrientation</code>, <code>showBottomBarMediaControls</code>, <code>settingsLayoutStyle</code>, <code>customThemes</code>, <code>albumArtColors</code></td></tr>
-            <tr><td>Media &amp; Now Playing</td><td><code>startUpVolume</code>, <code>mediaFolder</code>, <code>mediaSource</code>, <code>autoPlayOnStartup</code>, <code>persistShuffleState</code>, <code>musicButtonDefaultPage</code>, <code>returnToLibraryAfterSelection</code>, <code>showWaveformVisualizer</code>, <code>show3DButtonTilt</code>, <code>show3DAlbumPreview</code>, <code>roundedAlbumArt</code>, <code>albumArtCornerRadius</code>, <code>showAlbumArtShadow</code>, <code>vinylRecordMode</code>, <code>albumArtTransition</code>, <code>backgroundOverlayOpacity</code>, <code>backgroundBlurRadius</code>, <code>backgroundGrid</code>, <code>sideCardOpacity</code>, <code>sideCardAngle</code>, <code>buttonTiltDuration</code>, <code>textScrollSpeed</code>, <code>directoryHistory</code></td></tr>
+            <tr><td>Media &amp; Now Playing</td><td><code>startUpVolume</code>, <code>mediaFolder</code>, <code>autoPlayOnStartup</code>, <code>persistShuffleState</code>, <code>musicButtonDefaultPage</code>, <code>returnToLibraryAfterSelection</code>, <code>showWaveformVisualizer</code>, <code>show3DButtonTilt</code>, <code>show3DAlbumPreview</code>, <code>roundedAlbumArt</code>, <code>albumArtCornerRadius</code>, <code>showAlbumArtShadow</code>, <code>vinylRecordMode</code>, <code>albumArtTransition</code>, <code>backgroundOverlayOpacity</code>, <code>backgroundBlurRadius</code>, <code>backgroundGrid</code>, <code>sideCardOpacity</code>, <code>sideCardAngle</code>, <code>buttonTiltDuration</code>, <code>textScrollSpeed</code>, <code>directoryHistory</code></td></tr>
             <tr><td>Playback resume</td><td><code>lastShuffleState</code>, <code>lastPlayedSong</code>, <code>lastPlayedPosition</code>, <code>lastPlayedPlaylist</code></td></tr>
-            <tr><td>Spotify</td><td><code>spotifyClientId</code>, <code>spotifyClientSecret</code></td></tr>
             <tr><td>OBD</td><td><code>obdBluetoothPort</code>, <code>obdSavedAdapters</code>, <code>obdFastMode</code>, <code>obdAutoReconnectAttempts</code>, <code>fuelTankCapacity</code>, <code>obdParameters</code>, <code>homeOBDParameters</code>, <code>supportedOBDParameters</code></td></tr>
             <tr><td>Android Auto / Phone Mirror</td><td><code>androidAutoEnabled</code>, <code>phoneMirrorEnabled</code>, <code>scrcpyDisplaySize</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckEnabled</code>, <code>scrcpyAudioDuckLevel</code>, <code>scrcpyPhoneScreenOff</code>, <code>scrcpyDisplayDpi</code>, <code>scrcpyBitRateUsb</code>, <code>scrcpyBitRateWifi</code>, <code>scrcpyAutoWifi</code>, <code>scrcpyBitRateAuto</code>, <code>scrcpyWirelessAddress</code></td></tr>
             <tr><td>ESP32 knob</td><td><code>esp32VolumeEnabled</code>, <code>esp32VolumePort</code>, <code>esp32VolumeStepSize</code>, <code>esp32AutoReconnect</code>, <code>esp32LedSleepEnabled</code>, <code>esp32LedColorMode</code>, <code>esp32LedStaticColor</code></td></tr>
@@ -497,25 +497,13 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           </tbody>
         </table>
 
-        <h3>Spotify Credentials</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>save_spotify_credentials(client_id, client_secret)</code></td><td>Slot. Saves both keys in one write and emits <code>spotifyCredentialsChanged</code>.</td></tr>
-            <tr><td><code>clear_spotify_credentials()</code></td><td>Slot. Blanks both keys, same signal.</td></tr>
-            <tr><td><code>get_spotify_client_id()</code>, <code>get_spotify_client_secret()</code>, <code>has_spotify_credentials()</code></td><td>Invokables; <code>has_</code> is true only when both strings are non-empty. There is deliberately no property for the credentials so they are never bound into a QML text field by accident.</td></tr>
-          </tbody>
-        </table>
-
         <h3>Custom Themes</h3>
         <table>
           <thead>
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>save_custom_theme(name, theme_json, album_art_source="")</code></td><td>Slot. Parses the theme JSON, stores it under <code>customThemes[name]</code> and emits <code>customThemesChanged</code> immediately. A local <code>album_art_source</code> (path or <code>file://</code> URL) is copied synchronously to <code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code> and recorded as <code>theme["albumArt"]</code>; an <code>http(s)://</code> source (Spotify art) is downloaded on a background thread and patched in afterwards. The safe name replaces every character outside <code>[\w-]</code> with <code>_</code>.</td></tr>
+            <tr><td><code>save_custom_theme(name, theme_json, album_art_source="")</code></td><td>Slot. Parses the theme JSON, stores it under <code>customThemes[name]</code> and emits <code>customThemesChanged</code> immediately. A local <code>album_art_source</code> (path or <code>file://</code> URL) is copied synchronously to <code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code> and recorded as <code>theme["albumArt"]</code>; an <code>http(s)://</code> source is downloaded on a background thread and patched in afterwards. The safe name replaces every character outside <code>[\w-]</code> with <code>_</code>.</td></tr>
             <tr><td><code>_download_theme_art_async()</code> / <code>downloadThemeArtAsync()</code></td><td>Python uses <code>urllib.request.urlretrieve</code> in a daemon thread; C++ runs <code>curl -sL -o</code> in a <code>QThread</code>. Both hand the result back through a 100&nbsp;ms <code>QTimer</code> poll on the GUI thread rather than a cross-thread signal, then save and emit <code>customThemesChanged</code> again.</td></tr>
             <tr><td><code>delete_custom_theme(name)</code></td><td>Slot. Removes the entry and deletes its art file if the stored URL resolves to a local file.</td></tr>
             <tr><td><code>get_custom_theme(name)</code></td><td>Invokable returning the theme as a JSON string (<code>"{}"</code> if unknown). The <code>customThemes</code> property only lists names.</td></tr>
@@ -667,7 +655,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <p>
           When the <code>"Album Art Capture"</code> theme is active, the palette extracted from the current cover is
           pushed to SettingsManager as a JSON string. This is the single distribution point: <code>MediaManager</code>
-          and <code>SpotifyManager</code> both call <code>set_album_art_colors()</code>, QML binds
+          calls <code>set_album_art_colors()</code>, QML binds
           <code>settingsManager.albumArtColors</code> (see <a href="theme-system.html">Theme System</a>), and
           <span class="file-path">main.py</span> forwards the same signal to the ESP32 knob's LEDs when
           <code>esp32LedColorMode</code> is <code>"theme"</code>.
@@ -697,7 +685,7 @@ engine.rootContext().setContextProperty(<span class="str">"settingsManager"</spa
         <pre><code>SettingsManager settingsManager;
 ctx-&gt;setContextProperty(<span class="str">"settingsManager"</span>, &amp;settingsManager);</code></pre>
 
-        <p>It is then handed to nearly every other manager, either through the constructor (<code>Clock</code>, <code>VolumeController</code>, <code>OBDManager</code>) or a <code>connect_settings_manager()</code> / <code>setSettingsManager()</code> call (<code>MediaManager</code>, <code>SpotifyManager</code>, <code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>, <code>DownloadManager</code>). <code>PhoneMirrorManager</code> is primed from the <code>get_scrcpy_*</code> getters and its <code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code> and <code>scrcpyAutoWifiChanged</code> signals are wired straight into the manager's setters, so those Accessories-page sliders apply live. <code>scrcpyWirelessAddress</code> runs the other way: the manager owns the remembered Wi-Fi phone and its <code>wirelessAddressChanged</code> signal is wired to <code>save_scrcpy_wireless_address</code>.</p>
+        <p>It is then handed to nearly every other manager, either through the constructor (<code>Clock</code>, <code>VolumeController</code>, <code>OBDManager</code>) or a <code>connect_settings_manager()</code> / <code>setSettingsManager()</code> call (<code>MediaManager</code>, <code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>, <code>DownloadManager</code>). <code>PhoneMirrorManager</code> is primed from the <code>get_scrcpy_*</code> getters and its <code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code> and <code>scrcpyAutoWifiChanged</code> signals are wired straight into the manager's setters, so those Accessories-page sliders apply live. <code>scrcpyWirelessAddress</code> runs the other way: the manager owns the remembered Wi-Fi phone and its <code>wirelessAddressChanged</code> signal is wired to <code>save_scrcpy_wireless_address</code>.</p>
 
         <p>QML accesses settings directly:</p>
         <pre><code><span class="cmt">// Read a property (binding updates on the notify signal)</span>
@@ -761,7 +749,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
           (<code>2605d93</code> in Python, <code>037f753</code> for C++ parity). Validating once at the boundary where
           data enters the cache means the cache can never hold an ill-typed value, every getter and every
           <code>get_setting()</code> call is guaranteed clean without re-checking, and the deferred write does not pay
-          for a second pass over 92 keys plus 86 PIDs. Per-setter domain checks (enumerated strings, clamped sliders)
+          for a second pass over 96 keys plus 86 PIDs. Per-setter domain checks (enumerated strings, clamped sliders)
           sit even earlier, in the slot, because the type check cannot express "one of four layout names" or
           "2 to 32 pixels".
         </p>
@@ -872,9 +860,9 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <tr><td><code>obdParametersChanged</code></td><td>none</td><td>After the 800&nbsp;ms OBD debounce flush, or on reset</td></tr>
             <tr><td><code>homeOBDParametersChanged</code>, <code>supportedOBDParametersChanged</code></td><td>none</td><td>Home-card list / scan result saved</td></tr>
             <tr><td><code>obdSavedAdaptersChanged</code></td><td>str (JSON)</td><td>Adapter list changed</td></tr>
-            <tr><td><code>directoryHistoryChanged</code>, <code>customThemesChanged</code>, <code>gestureMappingChanged</code>, <code>pinnedSettingsChanged</code>, <code>settingsMenuVisibilityChanged</code>, <code>spotifyCredentialsChanged</code></td><td>none</td><td>Their dict/list changed; QML re-queries the getter</td></tr>
+            <tr><td><code>directoryHistoryChanged</code>, <code>customThemesChanged</code>, <code>gestureMappingChanged</code>, <code>pinnedSettingsChanged</code>, <code>settingsMenuVisibilityChanged</code></td><td>none</td><td>Their dict/list changed; QML re-queries the getter</td></tr>
             <tr><td><code>genericSettingChanged</code></td><td>str (key)</td><td><code>save_setting()</code> called</td></tr>
-            <tr><td><code>albumArtColorsChanged</code></td><td>str (JSON)</td><td>New palette pushed by MediaManager / SpotifyManager</td></tr>
+            <tr><td><code>albumArtColorsChanged</code></td><td>str (JSON)</td><td>New palette pushed by MediaManager</td></tr>
             <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyAutoWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code></td><td>double / bool / double / bool / int / int / int / bool / bool</td><td>Connected directly to <code>PhoneMirrorManager</code> setters at startup</td></tr>
             <tr><td><code>esp32LedColorModeChanged</code>, <code>esp32LedStaticColorChanged</code></td><td>str</td><td>Python <span class="file-path">main.py</span> connects these to the ESP32 LED sync helpers</td></tr>
           </tbody>
@@ -907,7 +895,6 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
           <a href="settings-ui.html" class="related-link">Settings UI</a>
           <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
           <a href="media-manager.html" class="related-link">Media Manager</a>
-          <a href="spotify-manager.html" class="related-link">Spotify Manager</a>
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
           <a href="network-manager.html" class="related-link">Network Manager</a>
           <a href="theme-system.html" class="related-link">Theme System</a>

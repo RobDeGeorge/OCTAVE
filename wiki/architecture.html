@@ -80,17 +80,16 @@
 │  │  DiagnosticsManager        │                     │  MainMenu     │  │
 │  │  VolumeController          │                     │  MediaRoom    │  │
 │  │  MediaManager AudioAnalyzer│                     │  MediaPlayer  │  │
-│  │  SpotifyManager            │                     │  OBDMenu      │  │
-│  │  OBDManager (+ELM327)      │                     │  dashboards/  │  │
-│  │  NetworkManager            │                     │  gauges/      │  │
-│  │  DownloadManager           │                     │  CarMenu +    │  │
-│  │  ESP32VolumeManager        │                     │   JeepVehicle │  │
-│  │  BerryIMUManager           │                     │  SensorMenu   │  │
-│  │  GestureManager            │                     │  Settings/*   │  │
-│  │  AndroidAutoManager        │                     │  BottomBar    │  │
-│  │  PhoneMirrorManager        │                     │  ...          │  │
-│  │  DashboardManager          │                     └───────────────┘  │
-│  │  UiWatchdog (no QML API)   │                                        │
+│  │  OBDManager (+ELM327)      │                     │  OBDMenu      │  │
+│  │  NetworkManager            │                     │  dashboards/  │  │
+│  │  DownloadManager           │                     │  gauges/      │  │
+│  │  ESP32VolumeManager        │                     │  CarMenu +    │  │
+│  │  BerryIMUManager           │                     │   JeepVehicle │  │
+│  │  GestureManager            │                     │  SensorMenu   │  │
+│  │  AndroidAutoManager        │                     │  Settings/*   │  │
+│  │  PhoneMirrorManager        │                     │  BottomBar    │  │
+│  │  DashboardManager          │                     │  ...          │  │
+│  │  UiWatchdog (no QML API)   │                     └───────────────┘  │
 │  └────────────────────────────┘   ┌──────────────────────────────────┐ │
 │                                   │  Video paths into the scene graph│ │
 │                                   │  image://dhuframe  (Android Auto)│ │
@@ -220,7 +219,6 @@
             <tr><td>VolumeController</td><td><code>volumecontroller.{h,cpp}</code></td><td><code>volume_utils.py</code></td><td><code>volumeController</code></td><td>Single entry point for the quadratic volume curve</td></tr>
             <tr><td>MediaManager</td><td><code>mediamanager.{h,cpp}</code></td><td><code>media_manager.py</code></td><td><code>mediaManager</code></td><td>Local playback (QMediaPlayer), library scan, album art + colours, persistent metadata store</td></tr>
             <tr><td>AudioAnalyzer</td><td><code>audioanalyzer.{h,cpp}</code></td><td><code>audio_analyzer.py</code></td><td><code>audioAnalyzer</code></td><td>96-bar FFT waveform (QAudioDecoder + radix-2 FFT / PyAV + numpy)</td></tr>
-            <tr><td>SpotifyManager</td><td><code>spotifymanager.{h,cpp}</code></td><td><code>spotify_manager.py</code></td><td><code>spotifyManager</code></td><td>Spotify Web API + OAuth2; stub on mobile</td></tr>
             <tr><td>OBDManager (+ ELM327)</td><td><code>obdmanager.{h,cpp}</code>, <code>elm327protocol.{h,cpp}</code></td><td><code>obd_manager.py</code> (python-obd)</td><td><code>obdManager</code></td><td>Vehicle diagnostics, 93 PIDs, DTCs; Android BLE via a JNI bridge</td></tr>
             <tr><td>OBDAdapterFinder</td><td><code>obdadapterfinder.{h,cpp}</code> (+ <code>platform/bluezpairer.{h,cpp}</code>)</td><td><code>obd_adapter_finder.py</code></td><td><code>obdAdapterFinder</code></td><td>Bluetooth scan, PIN pairing via BlueZ, trust, hand-off to <code>connect_direct()</code> (desktop Linux)</td></tr>
             <tr><td>ESP32VolumeManager</td><td><code>esp32volumemanager.{h,cpp}</code></td><td><code>esp32_volume_manager.py</code></td><td><code>esp32VolumeManager</code></td><td>Wireless rotary knob over USB serial (ESP-NOW pair); stub on mobile</td></tr>
@@ -345,10 +343,10 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           <li><strong><code>assetStore</code></strong> (<span class="file-path">src/util/assetstore.{h,cpp}</span> / <span class="file-path">backend/asset_store.py</span>) &mdash; <code>localUrl(relativePath)</code> returns a <code>file://</code> URL for a file under <span class="file-path">frontend/assets/</span>. Needed because Quick3D's <code>RuntimeLoader</code> hands the path to Assimp, which cannot read <code>assets:/</code> files inside an Android APK ("IO Error: File not found" in v0.9.2); on Android the file is extracted once into the app data directory (<code>asset-cache/</code>, re-extracted when its size changes after an update), on desktop the path is simply resolved. <code>MusicDeviceScene.qml</code> (<code>modelUrl()</code>) and <code>JeepHinge.qml</code> load every <code>.glb</code> through it; Qt's own loaders (images, HDR light probes, fonts) keep using <code>assets:/</code> directly.</li>
           <li><strong>Phase 1</strong> &mdash; <code>SettingsManager</code> (everything depends on it), <code>UiWatchdog</code> started, <code>DiagnosticsManager</code>, <code>Clock</code>, <code>NetworkManager</code>, <code>VolumeController</code>.</li>
           <li><strong>Phase 2</strong> &mdash; <code>MediaManager</code>, <code>AudioAnalyzer</code>. On Android the youtubedl-android bridge is initialised off-thread with <code>QtConcurrent::run</code> (first launch extracts Python + yt-dlp + ffmpeg, 10&ndash;20&nbsp;s) and runtime permissions (<code>READ_MEDIA_AUDIO</code>, <code>BLUETOOTH_CONNECT</code>, <code>BLUETOOTH_SCAN</code>, &hellip;) are requested; a granted audio permission triggers a library scan.</li>
-          <li><strong>Phase 3</strong> &mdash; <code>SpotifyManager</code> (no-op stub class on mobile).</li>
+          <li><strong>Phase 3</strong> &mdash; empty (the "Online Features" header is left over; <code>DownloadManager</code> is created in Phase 5).</li>
           <li><strong>Phase 4</strong> &mdash; <code>OBDManager</code>, <code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>.</li>
           <li><strong>Phase 5</strong> &mdash; <code>AndroidAutoManager</code> + the <code>dhuframe</code> image provider, <code>PhoneMirrorManager</code> with its settings wiring (audio enable/gain, ducking &rarr; <code>MediaManager::setDucking</code>, phone-screen-off), <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;</code>, <code>DownloadManager</code> (+ <code>downloadComplete</code> &rarr; <code>scan_library(false)</code>).</li>
-          <li><strong>Volume fan-out</strong> &mdash; <code>VolumeController::volumeApplied</code> &rarr; <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop only; the ESP32 manager rate-limits itself) and a 300&nbsp;ms single-shot debounce before <code>spotifyManager.set_volume(percent)</code> (avoids HTTP 429 from the Web API) &mdash; the same four outputs as <code>backend/volume_utils.py</code>. Then <code>applyVolume(settingsManager.currentVolume())</code> restores the saved volume.</li>
+          <li><strong>Volume fan-out</strong> &mdash; <code>VolumeController::volumeApplied</code> &rarr; <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop only; the ESP32 manager rate-limits itself) &mdash; the same three outputs as <code>backend/volume_utils.py</code>. Then <code>applyVolume(settingsManager.currentVolume())</code> restores the saved volume.</li>
           <li><strong>QML import path</strong> &mdash; <code>assets:/frontend</code> on Android; on desktop <code>frontend/</code> next to the binary, or one directory up (so <code>build/octave</code> finds the checkout's <code>frontend/</code>).</li>
           <li><strong>Phase 6</strong> &mdash; <code>DashboardManager</code> with <code>setPresetsDir(frontend/dashboards/presets)</code> and <code>setUserDir(&lt;appdata&gt;/dashboards)</code>.</li>
           <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created. Then <code>setQuitOnLastWindowClosed(true)</code>.</li>
@@ -365,7 +363,7 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           <li><strong>Imports</strong> &mdash; all managers are imported unconditionally; the Python backend is desktop-only, so there is no platform branching here. Heavy optional libraries are deferred via <code>backend/lazy_import.py</code> (see <a href="#design-decisions">why</a>).</li>
           <li><strong><code>QApplication</code></strong> (from <code>QtWidgets</code>) &mdash; auto-scale is <code>min(width, height) / 720</code> of <code>availableSize()</code>, clamped 0.4&ndash;3.0, the same shorter-edge rule as <code>src/main.cpp</code> (it used to divide the height alone).</li>
           <li><strong>Engine</strong> &mdash; <code>QQmlApplicationEngine</code>, <code>screenAutoScale</code>, <code>qmlRegisterType(EmbeddedDhuItem, ...)</code>, <code>frontend/</code> import path, <code>isAndroid = False</code>.</li>
-          <li><strong>Managers in dependency order</strong> &mdash; <code>SettingsManager</code>; <code>UiWatchdog.start()</code>; <code>DiagnosticsManager</code>; <code>Clock</code>; <code>MediaManager</code>; <code>AudioAnalyzer</code>; (<code>obdManager</code> is registered later through <code>install_obd_manager()</code>); <code>SpotifyManager</code>; <code>AndroidAutoManager</code> + <code>engine.addImageProvider("dhuframe", ...)</code>; <code>PhoneMirrorManager</code> + settings wiring; <code>ESP32VolumeManager</code>; <code>VolumeController</code> (constructed with references to settings, media, Spotify, phone mirror and ESP32) and <code>applyVolume(currentVolume)</code>; <code>BerryIMUManager</code>; <code>GestureManager</code>; <code>NetworkManager</code>; <code>DownloadManager</code> (+ rescan on <code>downloadComplete</code>); <code>DashboardManager</code>.</li>
+          <li><strong>Managers in dependency order</strong> &mdash; <code>SettingsManager</code>; <code>UiWatchdog.start()</code>; <code>DiagnosticsManager</code>; <code>Clock</code>; <code>MediaManager</code>; <code>AudioAnalyzer</code>; (<code>obdManager</code> is registered later through <code>install_obd_manager()</code>); <code>AndroidAutoManager</code> + <code>engine.addImageProvider("dhuframe", ...)</code>; <code>PhoneMirrorManager</code> + settings wiring; <code>ESP32VolumeManager</code>; <code>VolumeController</code> (constructed with references to settings, media, phone mirror and ESP32) and <code>applyVolume(currentVolume)</code>; <code>BerryIMUManager</code>; <code>GestureManager</code>; <code>NetworkManager</code>; <code>DownloadManager</code> (+ rescan on <code>downloadComplete</code>); <code>DashboardManager</code>.</li>
           <li><strong>Signal wiring</strong> &mdash; gesture actions, ESP32 accumulator + mute, ESP32 LED colour sync (album-art accent or static colour), initial ESP32 state 500&nbsp;ms after it connects.</li>
           <li><strong>Shutdown hooks</strong> &mdash; <code>cleanup_on_quit()</code> on <code>aboutToQuit</code>; <code>SIGTERM</code>/<code>SIGINT</code> call <code>app.quit()</code>, with a 500&nbsp;ms no-op <code>QTimer</code> so the interpreter gets a chance to run the signal handler while blocked in <code>app.exec()</code>.</li>
           <li><strong><code>__main__</code></strong> &mdash; <code>install_obd_manager(OBDManager(settings_manager))</code>, <code>load_main_qml()</code> (exits <code>-1</code> without root objects), <code>setup_perf_profiling()</code> if <code>--profile</code>, <code>app.exec()</code>.</li>
@@ -394,7 +392,6 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           </thead>
           <tbody>
             <tr><td>OBD</td><td><code>OBDConnectionWorker</code> on a dedicated <code>QThread</code> owns the <code>QSerialPort</code> and a poll <code>QTimer</code> (interval 0 in fast mode, 50&nbsp;ms otherwise). Android: the main thread owns the BLE link through the <code>OctaveOBDBridge</code> JNI class; no worker thread.</td><td><code>OBDConnectionWorker</code> moved to a <code>QThread</code> for the blocking connect; python-obd's <code>obd.Async</code> (<code>delay_cmds=0</code>) runs its own polling thread; DTC reads, vehicle scan and the connection monitor use daemon <code>threading.Thread</code>s.</td></tr>
-            <tr><td>Spotify</td><td>Asynchronous <code>QNetworkAccessManager</code> replies on the main thread; <code>QTcpServer</code> on <code>127.0.0.1:8888</code> for the OAuth redirect; poll + interpolation <code>QTimer</code>s.</td><td><code>ThreadPoolExecutor(max_workers=2)</code> for API calls; a one-shot <code>HTTPServer</code> thread on port 8888 for the OAuth callback; poll + interpolation <code>QTimer</code>s.</td></tr>
             <tr><td>Network</td><td><code>QNetworkAccessManager</code> + <code>QProcess</code> (<code>git</code>) with <code>QTimer</code>s.</td><td><code>ThreadPoolExecutor(max_workers=1)</code> + a result-poll <code>QTimer</code>.</td></tr>
             <tr><td>Download</td><td><code>QtConcurrent::run</code> for search; yt-dlp as a <code>QProcess</code>; on Android a <code>QTimer</code> polls the JNI bridge for progress.</td><td><code>ThreadPoolExecutor(max_workers=2)</code> + poll <code>QTimer</code>; yt-dlp / ytmusicapi through the vendored <code>music_dl</code> package.</td></tr>
             <tr><td>Media</td><td><code>QtConcurrent::run</code> for album-colour extraction and for the library scan's art and tag jobs; several <code>QTimer</code>s (position, state save, pre-cache, metadata-store save).</td><td>A daemon thread for album colours; timers as in C++.</td></tr>
@@ -451,7 +448,7 @@ watcher-&gt;setFuture(QtConcurrent::run([<span class="kw">this</span>, imagePath
     <span class="kw">return</span> _extract_album_colors(imagePath);
 }));
 
-<span class="cmt"># Python — SpotifyManager</span>
+<span class="cmt"># Python — DownloadManager</span>
 self._executor = ThreadPoolExecutor(max_workers=<span class="num">2</span>)
 future = self._executor.submit(func, *args)</code></pre>
 
@@ -498,16 +495,14 @@ future = self._executor.submit(func, *args)</code></pre>
           </thead>
           <tbody>
             <tr><td>Local media</td><td><code>media_manager.setVolume(linear)</code></td><td><code>mediaManager.setVolume(linear)</code></td></tr>
-            <tr><td>Spotify</td><td>300&nbsp;ms trailing debounce (<code>QTimer</code> on the controller), then <code>spotify_manager.set_volume(percent)</code> when connected (the Web API applies its own scale)</td><td>300&nbsp;ms debounce in <code>main.cpp</code>, then <code>set_volume(percent)</code> when connected</td></tr>
             <tr><td>Phone mirror audio</td><td><code>phone_mirror_manager.setVolume(linear)</code></td><td><code>phoneMirrorManager.setVolume(linear)</code></td></tr>
             <tr><td>ESP32 LED ring</td><td><code>esp32_manager.send_volume_update(percent)</code></td><td><code>esp32VolumeManager.send_volume_update(percent)</code> (compiled out under <code>Q_OS_MOBILE</code>)</td></tr>
           </tbody>
         </table>
 
         <p>
-          Both backends therefore drive the same four outputs from one call, and both debounce the Spotify leg so a
-          slider drag does not fire a Web API call per pixel (HTTP 429). The ESP32 manager adds its own 50&nbsp;ms
-          debounce on top, so the ring never sees more than 20 updates a second.
+          Both backends therefore drive the same three outputs from one call. The ESP32 manager adds its own 50&nbsp;ms
+          debounce, so the ring never sees more than 20 updates a second.
         </p>
 
         <p>Every source of a volume change routes through the same entry point:</p>
@@ -533,7 +528,7 @@ _volume_accumulator += delta
     volume_controller.applyVolume(settings_manager.currentVolume + change)</code></pre>
 
         <div class="info-box">
-          <strong>Rule:</strong> never call <code>mediaManager.setVolume()</code>, <code>spotifyManager.set_volume()</code>,
+          <strong>Rule:</strong> never call <code>mediaManager.setVolume()</code>,
           <code>phoneMirrorManager.setVolume()</code> or <code>esp32VolumeManager.send_volume_update()</code> directly for a
           user-driven change, and never re-implement the curve. Go through <code>volumeController.applyVolume()</code>
           (or <code>toLinear()</code> for pure math in QML). <code>tests/test_smoke.py::test_volume_curve_math</code>
@@ -602,7 +597,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           All user settings live in one JSON file, <code>settingsConfigure.json</code>, under the directory returned by
           <code>get_app_data_dir()</code> / <code>SettingsManager::getAppDataDir()</code>. The same directory holds
           <code>logs/</code>, <code>dashboards/</code> (user dashboards), <code>metadata_cache.json</code> (the media
-          manager's persistent tag/cover store) and, on C++, <code>.spotify_token_cache</code>.
+          manager's persistent tag/cover store).
         </p>
 
         <table>
@@ -715,7 +710,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           where stderr goes nowhere, the line is handed to Qt's default handler instead so it reaches logcat /
           <code>os_log</code>). Managers use
           <code>Q_LOGGING_CATEGORY</code> names that mirror the Python loggers (<code>octave.media</code>,
-          <code>octave.spotify</code>, <code>octave.elm327</code>, <code>octave.dashboards</code>,
+          <code>octave.download</code>, <code>octave.elm327</code>, <code>octave.dashboards</code>,
           <code>octave.ui_watchdog</code>, &hellip;). Without <code>--debug</code> the filter rule
           <code>*.debug=false</code> discards debug messages at the source, so they cost nothing.
         </p>
@@ -791,8 +786,8 @@ handle_gesture_action()          handle_esp32_volume_change() / handle_esp32_mut
     ├── previous_track ► mediaManager     └── volumeController.applyVolume()
     ├── play_pause ──► mediaManager                 ├── settingsManager.setCurrentVolume()
     ├── mute_toggle ─► mediaManager                 ├── mediaManager.setVolume(linear)
-    ├── volume_up ───► volumeController              ├── spotifyManager.set_volume(percent)
-    └── volume_down ─► volumeController              ├── phoneMirrorManager.setVolume(linear)
+    ├── volume_up ───► volumeController              ├── phoneMirrorManager.setVolume(linear)
+    └── volume_down ─► volumeController              │
                                                     └── esp32VolumeManager.send_volume_update(percent)
 
                    ESP32 LED sync (main.py; same connections in main.cpp)
@@ -829,7 +824,6 @@ downloadManager.downloadComplete ───────────► mediaManag
     ui_watchdog.stop()
     media_manager._save_playback_state_now()
     media_manager.flush_metadata_store()      <span class="cmt"># persistent tag/cover store</span>
-    spotify_manager.cleanup()
     android_auto_manager.cleanup()            <span class="cmt"># DHU, adb, head unit server</span>
     phone_mirror_manager.cleanup()
     settings_manager.flushPendingSave()       <span class="cmt"># coalesced settings write (flush_pending_save() is a legacy alias)</span>
@@ -844,7 +838,7 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
     uiWatchdog.stop();
     androidAutoManager.cleanup();  phoneMirrorManager.cleanup();
     esp32VolumeManager.cleanup();  berryIMU.cleanup();  gestureSensor.cleanup();
-    spotifyManager.cleanup();      obdManager.close();
+    obdManager.close();
     downloadManager.cleanup();     networkManager.cleanup();
     mediaManager._save_playback_state();   <span class="cmt">// before the settings flush</span>
     mediaManager.flush_metadata_store();
@@ -888,7 +882,7 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
 
         <h3>Mobile stubs in the headers instead of <code>typeof</code> checks everywhere</h3>
         <p>
-          On Android the desktop-only managers (Spotify, ESP32, IMU I²C, gesture, phone mirror, Android Auto) are
+          On Android the desktop-only managers (ESP32, IMU I²C, gesture, phone mirror, Android Auto) are
           replaced by <code>#else // Q_OS_MOBILE</code> stub classes with the same properties and slots. The stubs
           never emit, so the wiring in <code>main.cpp</code> is unconditional and QML bindings stay valid without a
           platform check at every use site. <code>Q_OS_MOBILE</code> is defined by CMake for Android (and later iOS).
@@ -924,12 +918,12 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
 
         <h3>Lazy imports in the Python backend</h3>
         <p>
-          <code>obd</code> pulls in pint, <code>spotipy</code> pulls in redis, <code>numpy</code>/<code>av</code> load
-          large native extensions, and none are needed until the user connects an adapter, logs in or plays a track.
+          <code>obd</code> pulls in pint, <code>numpy</code>/<code>av</code> load
+          large native extensions, and none are needed until the user connects an adapter or plays a track.
           Importing them eagerly "cost about a second before the first frame on the Orange Pi", so
           <code>backend/lazy_import.py</code> returns a proxy that imports on first attribute access
           (<code>obd = lazy_module("obd")</code>) and <code>available(name)</code> answers "is it installed" without
-          importing. Used by <code>obd_manager</code>, <code>spotify_manager</code>, <code>audio_analyzer</code> and the
+          importing. Used by <code>obd_manager</code>, <code>audio_analyzer</code> and the
           phone-mirror client.
         </p>
 

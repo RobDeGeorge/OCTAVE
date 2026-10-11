@@ -50,7 +50,7 @@
             <tr><td><code>AlbumArtCarousel</code></td><td><code>Item</code></td><td><span class="file-path">MediaRoom.qml</span> (and, through it, the Now Playing Studio preview)</td></tr>
             <tr><td><code>CoverflowCard</code></td><td><code>Item</code></td><td><code>AlbumArtCarousel</code> (three instances)</td></tr>
             <tr><td><code>ThemedIcon</code></td><td><code>Item</code></td><td>settings tiles and cards, hub widgets</td></tr>
-            <tr><td><code>TerminalFeedback</code></td><td><code>Rectangle</code></td><td><span class="file-path">settings/MediaSettingsPage.qml</span> (library-scan and Spotify-connection output); <span class="file-path">OBDDiagnostics.qml</span> has its own inline terminal instead</td></tr>
+            <tr><td><code>TerminalFeedback</code></td><td><code>Rectangle</code></td><td><span class="file-path">settings/MediaSettingsPage.qml</span> (library-scan output); <span class="file-path">OBDDiagnostics.qml</span> has its own inline terminal instead</td></tr>
             <tr><td><code>CornerBrackets</code></td><td><code>Item</code></td><td><code>TerminalFeedback</code>, <code>SettingsCard</code>, <code>SettingsTile</code>, <code>SettingsDashboardCard</code>, <code>SettingsHubCard</code>, <code>SettingsHubGridCard</code> (always hidden, see below)</td></tr>
             <tr><td><code>GalleryTile</code></td><td><code>Rectangle</code></td><td>the Primitives Gallery popup in <span class="file-path">OBDMenu.qml</span></td></tr>
             <tr><td><code>SensorCard</code>, <code>GForceDisplay</code></td><td><code>Rectangle</code></td><td><span class="file-path">SensorMenu.qml</span></td></tr>
@@ -204,7 +204,7 @@
         <!-- TerminalFeedback -->
         <h2 id="terminal-feedback">TerminalFeedback</h2>
 
-        <p><span class="file-path">frontend/TerminalFeedback.qml</span> (331 lines) is a "reusable terminal-style feedback component for displaying backend progress" &mdash; a dark <code>Rectangle</code> with a header bar, a touch-friendly <code>Flickable</code> log and a custom scroll indicator. Its two consumers are both in <span class="file-path">settings/MediaSettingsPage.qml</span>: "Library Scan Terminal Output" and "Spotify Connection Terminal Output". <a href="pages.html#obddiagnostics">OBDDiagnostics</a> does <em>not</em> use it &mdash; that page carries an older inline <code>QtObject</code> terminal with the same <code>appendLine()</code> / <code>clear()</code> API and prefix colouring, plus a blinking cursor and a scanline canvas.</p>
+        <p><span class="file-path">frontend/TerminalFeedback.qml</span> (331 lines) is a "reusable terminal-style feedback component for displaying backend progress" &mdash; a dark <code>Rectangle</code> with a header bar, a touch-friendly <code>Flickable</code> log and a custom scroll indicator. Its one consumer is "Library Scan Terminal Output" in <span class="file-path">settings/MediaSettingsPage.qml</span>, fed by <code>mediaManager.scanProgress</code>. <a href="pages.html#obddiagnostics">OBDDiagnostics</a> does <em>not</em> use it &mdash; that page carries an older inline <code>QtObject</code> terminal with the same <code>appendLine()</code> / <code>clear()</code> API and prefix colouring, plus a blinking cursor and a scanline canvas.</p>
 
         <pre><code><span class="prop">property int</span> maxLines: <span class="num">50</span>
 <span class="prop">property bool</span> autoScroll: <span class="kw">true</span>

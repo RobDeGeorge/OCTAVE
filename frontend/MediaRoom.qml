@@ -99,17 +99,11 @@ Item {
             devicePlaying = phoneMirrorManager.mediaPlaying
             return
         }
-        var manager = useSpotify ? spotifyManager : mediaManager
-        devicePlaying = manager ? manager.is_playing() : false
+        devicePlaying = mediaManager ? mediaManager.is_playing() : false
     }
-    onUseSpotifyChanged: refreshDevicePlaying()
     Connections {
         target: mediaManager
-        function onPlayStateChanged(playing) { if (!mediaRoom.useSpotify && !mediaRoom.phoneActive()) mediaRoom.devicePlaying = playing }
-    }
-    Connections {
-        target: spotifyManager
-        function onPlayStateChanged(playing) { if (mediaRoom.useSpotify && !mediaRoom.phoneActive()) mediaRoom.devicePlaying = playing }
+        function onPlayStateChanged(playing) { if (!mediaRoom.phoneActive()) mediaRoom.devicePlaying = playing }
     }
 
     // Phone mirror media: while the phone is playing (or played last), this
@@ -123,7 +117,6 @@ Item {
     }
     function playIconSource() {
         var isPlaying = phoneActive() ? phoneMirrorManager.mediaPlaying
-                      : useSpotify ? (spotifyManager && spotifyManager.is_playing())
                       : (mediaManager && mediaManager.is_playing())
         return isPlaying ? "./assets/pause_button.svg" : "./assets/play_button.svg"
     }
@@ -183,28 +176,12 @@ Item {
 
     // Empty playlist detection — drives download button vs controls swap
     property int localSongCount: 0
-    property bool playlistEmpty: !useSpotify && !usePhone && localSongCount === 0
+    property bool playlistEmpty: !usePhone && localSongCount === 0
 
-    // Spotify integration - use Spotify when user chooses it AND it's connected
-    property bool useSpotify: settingsManager && settingsManager.mediaSource === "spotify" &&
-                              spotifyManager && spotifyManager.is_connected()
-
-    // Check if Spotify is available (connected) for showing toggle
-    property bool spotifyAvailable: spotifyManager && spotifyManager.is_connected()
-
-    // Spotify track info (updated directly from signals)
-    property string spotifyTrackName: ""
-    property string spotifyArtist: ""
-    property string spotifyAlbum: ""
-    property string spotifyAlbumArt: ""
-
-    // Track info that works for both local and Spotify
+    // Track info: the phone while it has the controls, else local media
     property string currentTrackName: {
         if (usePhone) {
             return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaTitle : "Phone"
-        }
-        if (useSpotify && spotifyTrackName) {
-            return spotifyTrackName
         }
         return currentSongText.text ? (mediaManager ? mediaManager.get_display_name(currentSongText.text) : currentSongText.text.replace('.mp3', '')) : ""
     }
@@ -213,9 +190,6 @@ Item {
         if (usePhone) {
             return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaArtist : "Nothing playing"
         }
-        if (useSpotify && spotifyArtist) {
-            return spotifyArtist
-        }
         return currentSongText.text ? (mediaManager ? mediaManager.get_band(currentSongText.text) : "Unknown Artist") : "Unknown Artist"
     }
 
@@ -223,18 +197,12 @@ Item {
         if (usePhone) {
             return phoneMirrorManager.mediaAlbum
         }
-        if (useSpotify && spotifyAlbum) {
-            return spotifyAlbum
-        }
         return currentSongText.text ? (mediaManager ? mediaManager.get_album(currentSongText.text) : "Unknown Album") : "Unknown Album"
     }
 
     property string currentAlbumArt: {
         if (usePhone) {
             return phoneMirrorManager.mediaArtUrl || "./assets/missing_art.png"
-        }
-        if (useSpotify && spotifyAlbumArt) {
-            return spotifyAlbumArt
         }
         return currentSongText.text ? (mediaManager ? mediaManager.get_album_art(currentSongText.text) || "./assets/missing_art.png" : "./assets/missing_art.png") : "./assets/missing_art.png"
     }
@@ -260,11 +228,6 @@ Item {
             var prevUrl = "", nextUrl = ""
             if (mediaRoom.phoneActive()) {
                 // The phone reports only what is playing now: no side cards
-            } else if (useSpotify && spotifyManager) {
-                var prevInfo = spotifyManager.get_previous_track_info()
-                try { prevUrl = prevInfo ? JSON.parse(prevInfo).image || "" : "" } catch(e) {}
-                var nextInfo = spotifyManager.get_next_track_info()
-                try { nextUrl = nextInfo ? JSON.parse(nextInfo).image || "" : "" } catch(e) {}
             } else if (mediaManager) {
                 var arts = mediaManager.get_neighbor_album_arts()
                 prevUrl = arts[0] || ""
@@ -310,7 +273,7 @@ Item {
     // Heavy work deferred until after animation settles — FFT analysis
     // doesn't compete with animation frames.  Called by carousel's settled signal.
     function _doTrackChangeWork() {
-        if (audioAnalyzer && mediaManager && !useSpotify && !usePhone) {
+        if (audioAnalyzer && mediaManager && !usePhone) {
             var currentFile = mediaManager.get_current_file()
             if (currentFile) {
                 var fullPath = mediaManager.get_full_file_path(currentFile)
@@ -431,15 +394,6 @@ Item {
                 mediaRoom.duration = phoneMirrorManager.mediaDuration
                 mediaRoom.position = phoneMirrorManager.mediaPosition()
                 isShuffleEnabled = false   // the phone's shuffle belongs to its app
-            } else if (useSpotify && spotifyManager) {
-                mediaRoom.duration = spotifyManager.get_duration()
-                mediaRoom.position = spotifyManager.get_position()
-                isShuffleEnabled = spotifyManager.is_shuffled()
-                // Initialize Spotify track info
-                mediaRoom.spotifyTrackName = spotifyManager.get_current_track_name()
-                mediaRoom.spotifyArtist = spotifyManager.get_current_artist()
-                mediaRoom.spotifyAlbum = spotifyManager.get_current_album()
-                mediaRoom.spotifyAlbumArt = spotifyManager.get_current_album_art()
             } else if (mediaManager) {
                 mediaRoom.duration = mediaManager.get_duration()
                 mediaRoom.position = mediaManager.get_position()
@@ -840,11 +794,6 @@ Item {
                                     mediaRoom.animateTrackChange()
                                     if (mediaRoom.phoneActive()) {
                                         phoneMirrorManager.mediaPrevious()
-                                    } else if (useSpotify) {
-                                        // Optimistically swap art to the previous track's image
-                                        if (albumArtStack.prevArtSource != "")
-                                            mediaRoom._displayAlbumArt = albumArtStack.prevArtSource.toString()
-                                        spotifyManager.previous_track()
                                     } else {
                                         mediaManager.previous_track()
                                     }
@@ -909,8 +858,6 @@ Item {
                                 onClicked: {
                                     if (mediaRoom.phoneActive()) {
                                         phoneMirrorManager.mediaPlayPause()
-                                    } else if (useSpotify) {
-                                        spotifyManager.toggle_play()
                                     } else {
                                         mediaManager.toggle_play()
                                     }
@@ -978,12 +925,6 @@ Item {
                                     mediaRoom.animateTrackChange()
                                     if (mediaRoom.phoneActive()) {
                                         phoneMirrorManager.mediaNext()
-                                    } else if (useSpotify) {
-                                        // Optimistically swap art to the next track's image
-                                        // so it's ready when the coverflow animation lands
-                                        if (albumArtStack.nextArtSource != "")
-                                            mediaRoom._displayAlbumArt = albumArtStack.nextArtSource.toString()
-                                        spotifyManager.next_track()
                                     } else {
                                         mediaManager.next_track()
                                     }
@@ -1250,7 +1191,7 @@ Item {
                 horizontalCenter: parent.horizontalCenter
                 bottomMargin: dp(10)
             }
-            visible: settingsManager && settingsManager.showWaveformVisualizer && !mediaRoom.useSpotify && !mediaRoom.usePhone && !playlistEmpty
+            visible: settingsManager && settingsManager.showWaveformVisualizer && !mediaRoom.usePhone && !playlistEmpty
             // Kept for back-compat with animateTrackChange() / onAnalysisComplete
             // handler below. No longer hides the visualizer — bars just drop
             // to zero on track change (via dropBars()) and animate back up
@@ -1418,7 +1359,7 @@ Item {
 
             // Initialize waveform when needed
             function initializeWaveform() {
-                if (audioAnalyzer && mediaManager && !mediaRoom.useSpotify && !mediaRoom.usePhone) {
+                if (audioAnalyzer && mediaManager && !mediaRoom.usePhone) {
                     var currentFile = mediaManager.get_current_file()
                     if (currentFile) {
                         var fullPath = mediaManager.get_full_file_path(currentFile)
@@ -1560,8 +1501,6 @@ Item {
                             userSeeking = false
                             if (mediaRoom.phoneActive()) {
                                 phoneMirrorManager.mediaSeek(progressSlider.value)
-                            } else if (useSpotify) {
-                                spotifyManager.set_position(progressSlider.value)
                             } else {
                                 mediaManager.set_position(progressSlider.value)
                             }
@@ -1577,8 +1516,6 @@ Item {
                             userSeeking = false
                             if (mediaRoom.phoneActive()) {
                                 phoneMirrorManager.mediaSeek(value)
-                            } else if (useSpotify) {
-                                spotifyManager.set_position(value)
                             } else {
                                 mediaManager.set_position(value)
                             }
@@ -1602,22 +1539,22 @@ Item {
                     Layout.minimumWidth: dp(40)  // Added minimum width for consistent layout
                 }
 
-                // Source toggle button (Local/Spotify)
+                // Source pill: shown while the phone has the controls; tapping
+                // it hands them back to OCTAVE's local media (the phone pauses)
                 Control {
                     id: sourceToggleButton
-                    // Shown when Spotify is connected, or while the phone has the controls
-                    visible: spotifyAvailable || usePhone
+                    visible: usePhone
                     implicitWidth: App.Spacing.mediaRoomShuffleButtonWidth * 1.8
                     implicitHeight: App.Spacing.mediaRoomShuffleButtonHeight
                     background: Rectangle {
-                        color: usePhone ? App.Style.accent : useSpotify ? "#1DB954" : App.Style.mediaRoomToggleShade
+                        color: App.Style.accent
                         radius: height / 2
-                        border.color: usePhone ? App.Style.accent : useSpotify ? "#1DB954" : App.Style.secondaryTextColor
+                        border.color: App.Style.accent
                         border.width: 1
                     }
                     contentItem: Text {
-                        text: usePhone ? "Phone" : useSpotify ? "Spotify" : "Local"
-                        color: usePhone || useSpotify ? "white" : App.Style.primaryTextColor
+                        text: "Phone"
+                        color: "white"
                         font.pixelSize: App.Spacing.mediaRoomSliderDurationText * 0.9
                         font.bold: true
                         font.family: mediaRoom.globalFont
@@ -1629,69 +1566,12 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: {
-                            if (mediaRoom.phoneActive()) {
-                                // Back to OCTAVE's own source; the phone pauses
+                            if (mediaRoom.phoneActive())
                                 phoneMirrorManager.releaseMedia(true)
-                                return
-                            }
-                            // Pause current source before switching
-                            if (useSpotify) {
-                                // Currently on Spotify, pause it before switching to local
-                                if (spotifyManager && spotifyManager.is_playing()) {
-                                    spotifyManager.pause()
-                                }
-                            } else {
-                                // Currently on local, pause it before switching to Spotify
-                                if (mediaManager && mediaManager.is_playing()) {
-                                    mediaManager.pause()
-                                }
-                            }
-
-                            // Toggle the source
-                            if (settingsManager) {
-                                settingsManager.toggle_media_source()
-                            }
                         }
                     }
                     ToolTip.visible: sourceToggleMouseArea.containsMouse
-                    ToolTip.text: usePhone ? (useSpotify ? "Back to Spotify" : "Back to local files")
-                                           : useSpotify ? "Switch to local files" : "Switch to Spotify"
-                    ToolTip.delay: 500
-                }
-
-                // Spotify connect button (show when credentials exist but not connected)
-                Control {
-                    id: spotifyConnectButton
-                    visible: !spotifyAvailable && spotifyManager && spotifyManager.has_credentials()
-                    implicitWidth: App.Spacing.mediaRoomShuffleButtonWidth * 1.8
-                    implicitHeight: App.Spacing.mediaRoomShuffleButtonHeight
-                    background: Rectangle {
-                        color: spotifyConnectMouseArea.containsMouse ? "#1DB954" : "#1a1a1a"
-                        radius: height / 2
-                        border.color: "#1DB954"
-                        border.width: 1
-                    }
-                    contentItem: Text {
-                        text: "Connect"
-                        color: spotifyConnectMouseArea.containsMouse ? "white" : "#1DB954"
-                        font.pixelSize: App.Spacing.mediaRoomSliderDurationText * 0.9
-                        font.bold: true
-                        font.family: mediaRoom.globalFont
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    MouseArea {
-                        id: spotifyConnectMouseArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            if (spotifyManager) {
-                                spotifyManager.authenticate()
-                            }
-                        }
-                    }
-                    ToolTip.visible: spotifyConnectMouseArea.containsMouse
-                    ToolTip.text: "Connect to Spotify (opens browser)"
+                    ToolTip.text: "Back to local files"
                     ToolTip.delay: 500
                 }
             }
@@ -1737,13 +1617,8 @@ Item {
                 id: shuffleMouseArea
                 anchors.fill: parent
                 onClicked: {
-                    if (mediaRoom.phoneActive()) {
-                        return
-                    } else if (useSpotify) {
-                        spotifyManager.toggle_shuffle()
-                    } else {
+                    if (!mediaRoom.phoneActive())
                         mediaManager.toggle_shuffle()
-                    }
                 }
             }
         }
@@ -1757,16 +1632,16 @@ Item {
         function onMediaListChanged(files) {
             var wasEmpty = mediaRoom.localSongCount === 0
             mediaRoom.localSongCount = files.length
-            if (wasEmpty && files.length > 0 && !mediaRoom.useSpotify && !mediaRoom.usePhone) {
+            if (wasEmpty && files.length > 0 && !mediaRoom.usePhone) {
                 mediaManager.play_file(files[0])
             }
         }
     }
 
-    // Local media manager connections (only apply when not using Spotify or the phone)
+    // Local media manager connections (only apply when the phone does not have the controls)
     Connections {
         target: mediaManager
-        enabled: !useSpotify && !usePhone
+        enabled: !usePhone
 
         function onPlayStateChanged(playing) {
             playButtonImage.source = playing ?
@@ -1812,11 +1687,9 @@ Item {
             }
         }
         function onShuffleStateChanged(enabled) {
-            if (!useSpotify) {
-                isShuffleEnabled = enabled
-                // Shuffle reorders the playlist — neighbors changed
-                sideCardRefreshTimer.restart()
-            }
+            isShuffleEnabled = enabled
+            // Shuffle reorders the playlist — neighbors changed
+            sideCardRefreshTimer.restart()
         }
     }
 
@@ -1833,144 +1706,6 @@ Item {
                 volumeControl.currentValue = volumePercent
                 volumeSlider.value = volumePercent
             }
-            topVolumeControl.updateVolumeIcon()
-        }
-    }
-
-    // Spotify playback connections (always active to receive updates)
-    Connections {
-        target: spotifyManager
-
-        function onPlayStateChanged(playing) {
-            // Only update UI if we're in Spotify mode
-            if (useSpotify && !mediaRoom.phoneActive()) {
-                playButtonImage.source = playing ?
-                    "./assets/pause_button.svg" : "./assets/play_button.svg"
-            }
-        }
-
-        function onDurationChanged(duration) {
-            if (useSpotify && !mediaRoom.phoneActive()) {
-                mediaRoom.duration = duration
-            }
-        }
-
-        function onPositionChanged(position) {
-            if (!mediaRoom.visible)
-                return  // see the local-media handler above
-            if (useSpotify && !mediaRoom.phoneActive() && !userSeeking) {
-                mediaRoom.position = position
-                progressSlider.value = position
-            }
-        }
-
-        function onCurrentTrackChanged(title, artist, album, artUrl) {
-            // Always update the cached Spotify track info
-            mediaRoom.spotifyTrackName = title
-            mediaRoom.spotifyArtist = artist
-            mediaRoom.spotifyAlbum = album
-            mediaRoom.spotifyAlbumArt = artUrl
-
-            // Only update UI elements if we're in Spotify mode
-            if (useSpotify && !mediaRoom.phoneActive()) {
-                // Reset position for new track
-                mediaRoom.position = 0
-                progressSlider.value = 0
-                sideCardRefreshTimer.restart()
-
-                // Update duration
-                if (spotifyManager) {
-                    mediaRoom.duration = spotifyManager.get_duration()
-                }
-
-                if (mediaRoom._userInitiatedChange) {
-                    // Animation already started by click handler — carousel handles cleanup.
-                    mediaRoom._userInitiatedChange = false
-                } else {
-                    // External Spotify change (phone, another device) — animate
-                    mediaRoom.animateTrackChange()
-                }
-            }
-        }
-
-        function onVolumeChanged(volume) {
-            if (useSpotify && !volumeSlider.pressed) {
-                volumeControl.currentValue = volume
-                volumeSlider.value = volume
-                topVolumeControl.updateVolumeIcon()
-            }
-        }
-    }
-
-    // Spotify connection state (always active to track availability)
-    Connections {
-        target: spotifyManager
-
-        function onConnectionStateChanged(connected) {
-            // Update spotifyAvailable when connection state changes
-            mediaRoom.spotifyAvailable = connected
-
-            // If Spotify disconnects while in Spotify mode, switch to local
-            if (!connected && settingsManager && settingsManager.mediaSource === "spotify") {
-                settingsManager.set_media_source("local")
-            }
-        }
-
-        function onShuffleStateChanged(enabled) {
-            if (useSpotify) {
-                isShuffleEnabled = enabled
-                // Shuffle reorders the playlist — neighbors changed
-                sideCardRefreshTimer.restart()
-            }
-        }
-
-        function onQueueUpdated() {
-            // Queue-based neighbor art is ready — refresh side cards
-            if (useSpotify) {
-                sideCardRefreshTimer.restart()
-            }
-        }
-    }
-
-    // Settings manager connection for media source changes
-    Connections {
-        target: settingsManager
-        function onMediaSourceChanged(source) {
-            var nowUseSpotify = (source === "spotify" && spotifyManager && spotifyManager.is_connected())
-
-            // Update play button to show paused state (since we paused before switching)
-            playButtonImage.source = "./assets/play_button.svg"
-
-            // Update duration, position, and shuffle from the new source
-            if (nowUseSpotify) {
-                mediaRoom.duration = spotifyManager.get_duration()
-                mediaRoom.position = spotifyManager.get_position()
-                progressSlider.value = mediaRoom.position
-                isShuffleEnabled = spotifyManager.is_shuffled()
-
-                // Initialize Spotify track info when switching to Spotify
-                mediaRoom.spotifyTrackName = spotifyManager.get_current_track_name()
-                mediaRoom.spotifyArtist = spotifyManager.get_current_artist()
-                mediaRoom.spotifyAlbum = spotifyManager.get_current_album()
-                mediaRoom.spotifyAlbumArt = spotifyManager.get_current_album_art()
-            } else if (mediaManager) {
-                mediaRoom.duration = mediaManager.get_duration()
-                mediaRoom.position = mediaManager.get_position()
-                progressSlider.value = mediaRoom.position
-                isShuffleEnabled = mediaManager.is_shuffled()
-
-                // Also update the local song text if we have a current file
-                var currentFile = mediaManager.get_current_file()
-                if (currentFile) {
-                    currentSongText.text = currentFile
-                }
-            }
-
-            // Refresh side cards for the new source's neighbors
-            sideCardRefreshTimer.restart()
-
-            // Volume stays unified from Octave settings - no need to change it when switching sources
-            // The unified volume is already applied to both sources
             topVolumeControl.updateVolumeIcon()
         }
     }

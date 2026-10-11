@@ -1,9 +1,8 @@
 """Deferred module imports for the Python backend.
 
 Several optional libraries are expensive to import (``obd`` pulls in pint,
-``spotipy`` pulls in redis, ``numpy``/``av`` load large native extensions) and
-none of them are needed until the user connects an adapter, logs in, or plays a
-track. Importing them at startup cost about a second before the first frame on
+``numpy``/``av`` load large native extensions) and
+none of them are needed until the user connects an adapter or plays a track. Importing them at startup cost about a second before the first frame on
 the Orange Pi. ``lazy_module`` returns a proxy that imports on first attribute
 access, so module code can keep writing ``obd.commands.RPM``; ``available``
 answers "is it installed" without importing it.

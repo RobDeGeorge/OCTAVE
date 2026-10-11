@@ -19,7 +19,7 @@ class SettingsManager;
  *
  * The volumeApplied signal is emitted after every applyVolume() call with both
  * the raw percent and the computed linear value.  Other managers (MediaManager,
- * SpotifyManager, PhoneMirrorManager, ESP32VolumeManager) should connect to
+ * PhoneMirrorManager, ESP32VolumeManager) should connect to
  * this signal to update their own audio outputs.  This avoids tight coupling —
  * VolumeController doesn't need pointers to managers that may not exist yet.
  */

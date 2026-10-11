@@ -203,9 +203,6 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     });
     d[QStringLiteral("supportedOBDParameters")] = QJsonArray();
     d[QStringLiteral("lastSettingsSection")]     = QStringLiteral("deviceSettings");
-    d[QStringLiteral("spotifyClientId")]         = QString();
-    d[QStringLiteral("spotifyClientSecret")]     = QString();
-    d[QStringLiteral("mediaSource")]             = QStringLiteral("local");
     d[QStringLiteral("mediaFolder")]             = QString();
     d[QStringLiteral("customThemes")]            = QJsonObject();
     d[QStringLiteral("autoPlayOnStartup")]       = false;
@@ -379,6 +376,22 @@ SettingsManager::SettingsManager(QObject *parent)
         saveSettings(m_settings);
     }
 
+    // Drop keys of removed features (the Spotify integration, the phone
+    // audio toggle); the Spotify client secret should not linger on disk
+    bool dropped = false;
+    for (const QString &key : {QStringLiteral("spotifyClientId"), QStringLiteral("spotifyClientSecret"),
+                               QStringLiteral("mediaSource"), QStringLiteral("scrcpyAudioEnabled")}) {
+        if (m_settings.contains(key)) {
+            m_settings.remove(key);
+            dropped = true;
+        }
+    }
+    if (dropped) {
+        qCInfo(lcSettings) << "Removed settings of retired features (Spotify, phone audio toggle)";
+        saveSettings(m_settings);
+        QFile::remove(getAppDataDir() + QStringLiteral("/.spotify_token_cache"));   // its login token
+    }
+
     m_settingsLoaded = true;
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(500);
@@ -469,13 +482,6 @@ void SettingsManager::populateMembers()
         for (const auto &v : arr)
             m_homeObdParameters.append(v.toString());
     }
-
-    // Spotify
-    m_spotifyClientId     = s(QStringLiteral("spotifyClientId")).toString();
-    m_spotifyClientSecret = s(QStringLiteral("spotifyClientSecret")).toString();
-
-    // Media source
-    m_mediaSource = s(QStringLiteral("mediaSource")).toString();
 
     // Auto-play / resume
     m_autoPlayOnStartup   = s(QStringLiteral("autoPlayOnStartup")).toBool();
@@ -894,7 +900,6 @@ QString SettingsManager::settingsMenuVisibility() const
 float   SettingsManager::startUpVolume() const     { return m_startVolume; }
 int     SettingsManager::currentVolume() const     { return m_currentVolume; }
 QString SettingsManager::mediaFolder() const       { return m_mediaFolder; }
-QString SettingsManager::mediaSource() const       { return m_mediaSource; }
 bool    SettingsManager::autoPlayOnStartup() const { return m_autoPlayOnStartup; }
 bool    SettingsManager::persistShuffleState() const { return m_persistShuffleState; }
 bool    SettingsManager::lastShuffleState() const  { return m_lastShuffleState; }
@@ -1169,26 +1174,6 @@ void SettingsManager::save_media_folder(const QString &folderPath)
     m_mediaFolder = folderPath;
     updateSetting(QStringLiteral("mediaFolder"), folderPath);
     emit mediaFolderChanged(folderPath);
-}
-
-void SettingsManager::set_media_source(const QString &source)
-{
-    if (source != QStringLiteral("local") && source != QStringLiteral("spotify"))
-        return;
-    if (source != m_mediaSource) {
-        m_mediaSource = source;
-        QJsonObject settings = loadSettings();
-        settings[QStringLiteral("mediaSource")] = source;
-        saveSettings(settings);
-        emit mediaSourceChanged(source);
-    }
-}
-
-void SettingsManager::toggle_media_source()
-{
-    QString newSource = (m_mediaSource == QStringLiteral("local"))
-        ? QStringLiteral("spotify") : QStringLiteral("local");
-    set_media_source(newSource);
 }
 
 void SettingsManager::save_auto_play_on_startup(bool enabled)
@@ -1669,32 +1654,6 @@ void SettingsManager::delete_custom_theme(const QString &name)
     emit customThemesChanged();
 }
 
-// --- Spotify credentials ---
-void SettingsManager::save_spotify_credentials(const QString &clientId, const QString &clientSecret)
-{
-    qCDebug(lcSettings) << "Saving Spotify credentials";
-    m_spotifyClientId     = clientId;
-    m_spotifyClientSecret = clientSecret;
-
-    QJsonObject settings = loadSettings();
-    settings[QStringLiteral("spotifyClientId")]     = clientId;
-    settings[QStringLiteral("spotifyClientSecret")] = clientSecret;
-    saveSettings(settings);
-    emit spotifyCredentialsChanged();
-}
-
-void SettingsManager::clear_spotify_credentials()
-{
-    m_spotifyClientId.clear();
-    m_spotifyClientSecret.clear();
-
-    QJsonObject settings = loadSettings();
-    settings[QStringLiteral("spotifyClientId")]     = QString();
-    settings[QStringLiteral("spotifyClientSecret")] = QString();
-    saveSettings(settings);
-    emit spotifyCredentialsChanged();
-}
-
 // --- Window / Settings navigation ---
 void SettingsManager::save_window_state(const QString &state)
 {
@@ -2068,10 +2027,6 @@ QString SettingsManager::get_custom_theme(const QString &name)
     return QStringLiteral("{}");
 }
 
-QString SettingsManager::get_spotify_client_id()       { return m_spotifyClientId; }
-QString SettingsManager::get_spotify_client_secret()   { return m_spotifyClientSecret; }
-bool    SettingsManager::has_spotify_credentials()     { return !m_spotifyClientId.isEmpty() && !m_spotifyClientSecret.isEmpty(); }
-QString SettingsManager::get_media_source()            { return m_mediaSource; }
 bool    SettingsManager::get_auto_play_on_startup()    { return m_autoPlayOnStartup; }
 bool    SettingsManager::get_persist_shuffle_state()   { return m_persistShuffleState; }
 bool    SettingsManager::get_last_shuffle_state()      { return m_lastShuffleState; }
@@ -2241,8 +2196,6 @@ void SettingsManager::reset_to_defaults()
     emit fuelTankCapacityChanged(m_fuelTankCapacity);
     emit bottomBarOrientationChanged(m_bottomBarOrientation);
     emit showBottomBarMediaControlsChanged(m_showBottomBarMediaControls);
-    emit spotifyCredentialsChanged();
-    emit mediaSourceChanged(m_mediaSource);
     emit autoPlayOnStartupChanged(m_autoPlayOnStartup);
     emit persistShuffleStateChanged(m_persistShuffleState);
     emit lastShuffleStateChanged(m_lastShuffleState);

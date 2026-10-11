@@ -67,7 +67,7 @@ sudo apt install -y build-essential cmake ninja-build pkg-config \
 # Qt 6.7.3 — install via the Qt online installer or aqtinstall:
 pipx install aqtinstall
 aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
+    -m qtmultimedia qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 
 export PATH="$HOME/Qt/6.7.3/gcc_64/bin:$PATH"
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -108,7 +108,7 @@ xcode-select --install
 # Qt 6.7.3 (Apple Silicon and Intel both supported)
 pipx install aqtinstall
 aqt install-qt mac desktop 6.7.3 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
+    -m qtmultimedia qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 
 export PATH="$HOME/Qt/6.7.3/macos/bin:$PATH"
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -173,8 +173,6 @@ Produces an installable `.apk` for arm64-v8a (Android 11+). Tested on Samsung Ga
 
 **Distribution model:** LGPL Qt, dynamically linked, shared `.so`s bundled in APK. No commercial Qt license required at this stage.
 
-**Scope note:** Spotify is **excluded from the Android build**. The Spotify experience is desktop-only — simplifies OAuth (no custom URI scheme gymnastics) and shrinks dependency surface for store review.
-
 ### Toolchain prerequisites
 
 ```bash
@@ -194,11 +192,11 @@ pipx install aqtinstall
 
 # Android target build (~1 GB)
 aqt install-qt linux android 6.7.3 android_arm64_v8a -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
+    -m qtmultimedia qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 
 # Desktop host tools Qt (needed for cross-compile, ~1 GB)
 aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
-    -m qtmultimedia qtnetworkauth qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
+    -m qtmultimedia qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
 ```
 
 Verify:

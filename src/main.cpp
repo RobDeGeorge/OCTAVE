@@ -43,7 +43,6 @@
 #include "managers/audioanalyzer.h"
 
 // Phase 3 managers
-#include "managers/spotifymanager.h"   // desktop-only; empty on Q_OS_MOBILE
 #include "managers/downloadmanager.h"
 
 // Phase 4 managers
@@ -133,7 +132,7 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_ANDROID
     ctx->setContextProperty("isAndroid", true);
     // OpenSSL is bundled from android/openssl (QT_ANDROID_EXTRA_LIBS). If this
-    // says no TLS backend, every Qt-side HTTPS request (Spotify, self-update)
+    // says no TLS backend, every Qt-side HTTPS request (self-update, album search)
     // fails on the device — v0.9.2 shipped that way without noticing.
     qInfo() << "Android TLS:" << (QSslSocket::supportsSsl() ? "OpenSSL available," : "NO TLS BACKEND,")
             << QSslSocket::sslLibraryVersionString();
@@ -165,9 +164,8 @@ int main(int argc, char *argv[])
     NetworkManager networkManager;
     ctx->setContextProperty("networkManager", &networkManager);
 
-    // Volume Controller — quadratic curve + dispatch to all audio outputs.
-    // Other manager pointers (media, spotify, etc.) will be wired in when
-    // those managers are ported in Phase 2/3.
+    // Volume Controller — quadratic curve + dispatch to all audio outputs
+    // (wired to the managers further down, once they exist).
     VolumeController volumeController(&settingsManager);
     ctx->setContextProperty("volumeController", &volumeController);
 
@@ -227,12 +225,6 @@ int main(int argc, char *argv[])
     // ==================================================================
     // Phase 3: Online Features
     // ==================================================================
-
-    // Spotify Manager — Spotify Web API integration.
-    // On mobile: header swaps in a no-op stub so QML bindings stay valid.
-    SpotifyManager spotifyManager;
-    spotifyManager.setSettingsManager(&settingsManager);
-    ctx->setContextProperty("spotifyManager", &spotifyManager);
 
     // ==================================================================
     // Phase 4: Vehicle & Hardware
@@ -308,27 +300,17 @@ int main(int argc, char *argv[])
     // OCTAVE's mute silences phone audio too (volume arrives via VolumeController)
     phoneMirrorManager.setMuted(mediaManager.is_muted());
     QObject::connect(&mediaManager, &MediaManager::muteChanged, &phoneMirrorManager, &PhoneMirrorManager::setMuted);
-    // Phone media follows what plays: when the phone starts playing, OCTAVE's
-    // controls drive it and local playback pauses; starting a local or
-    // Spotify track hands the controls back. Spotify playing on the phone is
-    // the same playback, so the two never pause each other.
-    static const QString kSpotifyPackage = QStringLiteral("com.spotify.music");
+    // While mirroring the phone is the media source: when it takes OCTAVE's
+    // media controls local playback pauses; starting a local track hands
+    // the controls back (and pauses the phone).
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::mediaActiveChanged,
                      &mediaManager, [&](bool active) {
-        if (!active)
-            return;
-        if (mediaManager.is_playing())
+        if (active && mediaManager.is_playing())
             mediaManager.pause();
-        if (phoneMirrorManager.mediaApp() != kSpotifyPackage && spotifyManager.is_playing())
-            spotifyManager.pause();
     });
     QObject::connect(&mediaManager, &MediaManager::playStateChanged, &phoneMirrorManager, [&](bool playing) {
         if (playing)
             phoneMirrorManager.releaseMedia(true);
-    });
-    QObject::connect(&spotifyManager, &SpotifyManager::playStateChanged, &phoneMirrorManager, [&](bool playing) {
-        if (playing)
-            phoneMirrorManager.releaseMedia(phoneMirrorManager.mediaApp() != kSpotifyPackage);
     });
     // Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
     phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
@@ -355,29 +337,13 @@ int main(int argc, char *argv[])
         mediaManager.scan_library(false);
     });
 
-    // Wire volume controller -> all audio outputs.
-    // Spotify volume is debounced (300ms) to avoid 429 rate limiting on desktop.
-    // On mobile, SpotifyManager is a stub, so `is_connected()` always returns false
-    // and the debounce harmlessly fires into the stub's no-op set_volume.
-    static QTimer spotifyVolumeDebounce;
-    spotifyVolumeDebounce.setSingleShot(true);
-    spotifyVolumeDebounce.setInterval(300);
-    static int pendingSpotifyVolume = 0;
-
-    QObject::connect(&spotifyVolumeDebounce, &QTimer::timeout,
-                     [&spotifyManager]() {
-        if (spotifyManager.is_connected())
-            spotifyManager.set_volume(pendingSpotifyVolume);
-    });
-
-    // Same fan-out as backend/volume_utils.py VolumeController.applyVolume():
-    // media + phone mirror take the curved linear value, Spotify + the ESP32
-    // LED ring take the raw percent (the ESP32 manager rate-limits itself).
+    // Wire volume controller -> all audio outputs. Same fan-out as
+    // backend/volume_utils.py VolumeController.applyVolume(): media + phone
+    // mirror take the curved linear value, the ESP32 LED ring the raw
+    // percent (the ESP32 manager rate-limits itself).
     QObject::connect(&volumeController, &VolumeController::volumeApplied,
                      [&mediaManager, &phoneMirrorManager, &esp32VolumeManager](int percent, float linear) {
         mediaManager.setVolume(linear);
-        pendingSpotifyVolume = percent;
-        spotifyVolumeDebounce.start();
         phoneMirrorManager.setVolume(linear);
 #ifndef Q_OS_MOBILE
         esp32VolumeManager.send_volume_update(percent);
@@ -591,7 +557,6 @@ int main(int argc, char *argv[])
         esp32VolumeManager.cleanup();
         berryIMU.cleanup();
         gestureSensor.cleanup();
-        spotifyManager.cleanup();
         obdManager.close();
         downloadManager.cleanup();
         networkManager.cleanup();

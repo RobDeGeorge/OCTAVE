@@ -44,7 +44,7 @@ void VolumeController::applyVolume(int percent)
         m_settings->setCurrentVolume(percent);
     }
 
-    // Notify all connected managers (MediaManager, SpotifyManager, etc.)
+    // Notify all connected managers (MediaManager, PhoneMirrorManager, ESP32)
     // The wiring is done in main.cpp via connect().
     emit volumeApplied(percent, linear);
 }

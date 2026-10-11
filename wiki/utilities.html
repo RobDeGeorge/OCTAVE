@@ -38,7 +38,7 @@
 
         <!-- Overview -->
         <h2 id="overview">Overview &amp; file map</h2>
-        <p>The feature managers (media, Spotify, OBD, sensors, phone mirror, downloads, dashboards) each have their own wiki page. This page covers everything else that supports them. The table shows where each piece lives in each backend, whether it is a QObject that QML can reach, and the context-property name registered in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>.</p>
+        <p>The feature managers (media, OBD, sensors, phone mirror, downloads, dashboards) each have their own wiki page. This page covers everything else that supports them. The table shows where each piece lives in each backend, whether it is a QObject that QML can reach, and the context-property name registered in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>.</p>
 
         <table>
           <thead><tr><th>Module</th><th>C++</th><th>Python</th><th>QML context property</th><th>Notes</th></tr></thead>
@@ -161,7 +161,6 @@ YYYY-MM-DD HH:MM:SS | LEVEL   | name | file.py:line | func() | message</code></p
           <tbody>
             <tr><td><code>backend.obd_manager</code></td><td><code>octave.obd</code></td></tr>
             <tr><td><code>backend.media_manager</code></td><td><code>octave.media</code></td></tr>
-            <tr><td><code>backend.spotify_manager</code></td><td><code>octave.spotify</code></td></tr>
             <tr><td><code>backend.settings_manager</code></td><td><code>octave.settings</code></td></tr>
             <tr><td><code>backend.clock</code></td><td><code>octave.clock</code> (mapped, but the Clock never logs)</td></tr>
             <tr><td><code>backend.android_auto.manager</code> / <code>.dhu_capture</code> / <code>.embedded_dhu</code></td><td><code>octave.android_auto</code> / <code>.capture</code> / <code>.embedded</code></td></tr>
@@ -200,7 +199,6 @@ QString <span class="fn">logDir</span>();          <span class="cmt">// &lt;app 
             <tr><td><code>octave.network</code></td><td><span class="file-path">src/managers/networkmanager.cpp</span></td></tr>
             <tr><td><code>octave.phonemirror</code>, <code>octave.phonemirror.client</code></td><td><span class="file-path">src/managers/phonemirrormanager.cpp</span>, <span class="file-path">src/phone_mirror/scrcpyclient.cpp</span></td></tr>
             <tr><td><code>octave.settings</code></td><td><span class="file-path">src/managers/settingsmanager.cpp</span></td></tr>
-            <tr><td><code>octave.spotify</code></td><td><span class="file-path">src/managers/spotifymanager.cpp</span></td></tr>
             <tr><td><code>octave.ui_watchdog</code></td><td><span class="file-path">src/util/uiwatchdog.cpp</span></td></tr>
           </tbody>
         </table>
@@ -231,7 +229,7 @@ QString <span class="fn">logDir</span>();          <span class="cmt">// &lt;app 
           <li><strong>C++</strong> (<span class="file-path">src/main.cpp</span>, <code>#if !defined(Q_OS_WIN) &amp;&amp; !defined(Q_OS_MOBILE)</code>): the self-pipe trick. A <code>socketpair()</code> is created; the <code>std::signal</code> handler only writes one byte into it, and a <code>QSocketNotifier</code> on the other end reads the byte on the event loop, logs <code>Signal received, shutting down</code> and calls <code>QCoreApplication::quit()</code>. Nothing Qt-side runs in signal context.</li>
           <li><strong>Python</strong> (<span class="file-path">main.py</span>): <code>signal.signal(SIGTERM|SIGINT, lambda *_: app.quit())</code>. CPython only services signal handlers while running bytecode, and inside <code>app.exec()</code> it is not, so a 500 ms no-op <code>QTimer</code> (<code>_signal_pump</code>) gives the interpreter a chance to see the signal.</li>
         </ul>
-        <p>The <code>aboutToQuit</code> cleanup itself (same order of concerns in both backends): stop the UI watchdog first (commit <code>95dfb49</code> &mdash; otherwise its worker could ping a QObject that Qt had already destroyed, which the new threading excepthook then logged as CRITICAL), save playback state and flush the metadata store, clean up Spotify / Android Auto / phone mirror / ESP32 / IMU / gesture / network / downloads, close OBD (C++), and flush the coalesced settings write so the last slider change reaches disk (<code>flushPendingSave()</code> in both backends; Python keeps <code>flush_pending_save()</code> as an alias). C++ ends with <code>OctaveLog::flush()</code> so the cleanup&rsquo;s own log lines are on disk before the process exits. In Python, <code>setup_perf_profiling()</code> additionally connects <code>cmd_server.stop()</code> and <code>perf_monitor.stop()</code> to <code>aboutToQuit</code> when <code>--profile</code> is on.</p>
+        <p>The <code>aboutToQuit</code> cleanup itself (same order of concerns in both backends): stop the UI watchdog first (commit <code>95dfb49</code> &mdash; otherwise its worker could ping a QObject that Qt had already destroyed, which the new threading excepthook then logged as CRITICAL), save playback state and flush the metadata store, clean up Android Auto / phone mirror / ESP32 / IMU / gesture / network / downloads, close OBD (C++), and flush the coalesced settings write so the last slider change reaches disk (<code>flushPendingSave()</code> in both backends; Python keeps <code>flush_pending_save()</code> as an alias). C++ ends with <code>OctaveLog::flush()</code> so the cleanup&rsquo;s own log lines are on disk before the process exits. In Python, <code>setup_perf_profiling()</code> additionally connects <code>cmd_server.stop()</code> and <code>perf_monitor.stop()</code> to <code>aboutToQuit</code> when <code>--profile</code> is on.</p>
 
         <!-- UI watchdog -->
         <h2 id="ui-watchdog">UI watchdog</h2>
@@ -317,14 +315,14 @@ worker thread ("ui-watchdog")                     GUI thread
           <tbody>
             <tr><td><code>applyVolume(percent)</code></td><td><code>public slot void (int)</code></td><td><code>@Slot(int)</code></td><td>Clamps to 0&ndash;100, persists the raw percent via <code>SettingsManager.setCurrentVolume()</code>, computes the linear value and dispatches to every output</td></tr>
             <tr><td><code>toLinear(percent)</code></td><td><code>public slot float (float)</code></td><td><code>@Slot(float, result=float)</code></td><td>Pure curve math for QML; no dispatch</td></tr>
-            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>signal</td><td>&ndash;</td><td>C++-only: emitted after every <code>applyVolume()</code>; <span class="file-path">main.cpp</span> connects the outputs (media, phone mirror, ESP32, debounced Spotify) to it</td></tr>
+            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>signal</td><td>&ndash;</td><td>C++-only: emitted after every <code>applyVolume()</code>; <span class="file-path">main.cpp</span> connects the outputs (media, phone mirror, ESP32) to it</td></tr>
             <tr><td><code>toLinearStatic(float)</code></td><td><code>static float</code></td><td>module function <code>to_linear(percent)</code></td><td>Curve without an instance (tests, one-off math)</td></tr>
-            <tr><td>constructor</td><td><code>VolumeController(SettingsManager *, QObject *parent = nullptr)</code></td><td><code>VolumeController(settings_manager, media_manager, spotify_manager=None, phone_mirror_manager=None, esp32_manager=None, parent=None)</code></td><td>Python holds the output managers directly; C++ is decoupled through the signal</td></tr>
+            <tr><td>constructor</td><td><code>VolumeController(SettingsManager *, QObject *parent = nullptr)</code></td><td><code>VolumeController(settings_manager, media_manager, phone_mirror_manager=None, esp32_manager=None, parent=None)</code></td><td>Python holds the output managers directly; C++ is decoupled through the signal</td></tr>
           </tbody>
         </table>
 
         <h3>Dispatch: who gets what</h3>
-        <p>The two backends deliberately differ in <em>how</em> they fan out, but the contract is the same: settings store the percent, local media and the phone mirror take the linear gain, Spotify and the ESP32 LED take the raw percent, and the Spotify leg is debounced 300 ms (trailing) so a slider drag does not fire a Web API call per pixel and trip its 429 rate limit.</p>
+        <p>The two backends deliberately differ in <em>how</em> they fan out, but the contract is the same: settings store the percent, local media and the phone mirror take the linear gain, and the ESP32 LED takes the raw percent.</p>
         <pre><code><span class="cmt"># Python — backend/volume_utils.py</span>
 <span class="kw">@Slot</span>(int)
 <span class="kw">def</span> <span class="fn">applyVolume</span>(self, percent: int) -&gt; None:
@@ -335,9 +333,6 @@ worker thread ("ui-watchdog")                     GUI thread
         self._settings.setCurrentVolume(percent)
     <span class="kw">if</span> self._media <span class="kw">is not</span> None:
         self._media.setVolume(linear)
-    <span class="kw">if</span> self._spotify <span class="kw">is not</span> None:
-        self._pending_spotify_volume = percent
-        self._spotify_debounce.start()   <span class="cmt"># 300 ms single-shot QTimer → set_volume() if connected</span>
     <span class="kw">if</span> self._phone_mirror <span class="kw">is not</span> None:
         self._phone_mirror.setVolume(linear)
     <span class="kw">if</span> self._esp32 <span class="kw">is not</span> None:
@@ -346,15 +341,13 @@ worker thread ("ui-watchdog")                     GUI thread
 QObject::connect(&amp;volumeController, &amp;VolumeController::volumeApplied,
                  [&amp;mediaManager, &amp;phoneMirrorManager, &amp;esp32VolumeManager](<span class="kw">int</span> percent, <span class="kw">float</span> linear) {
     mediaManager.setVolume(linear);
-    pendingSpotifyVolume = percent;
-    spotifyVolumeDebounce.start();   <span class="cmt">// 300 ms single-shot → spotifyManager.set_volume() if connected</span>
     phoneMirrorManager.setVolume(linear);
 <span class="kw">#ifndef</span> Q_OS_MOBILE
     esp32VolumeManager.send_volume_update(percent);   <span class="cmt">// the ESP32 manager rate-limits itself (50 ms)</span>
 <span class="kw">#endif</span>
 });
 volumeController.applyVolume(settingsManager.currentVolume());   <span class="cmt">// startup volume</span></code></pre>
-        <p>Both wirings therefore reach the same four outputs; the only structural difference is that Python holds the manager references in the controller while C++ keeps the controller decoupled and does the fan-out in <span class="file-path">main.cpp</span> (the ESP32 leg is compiled out on mobile, where the manager is a stub).</p>
+        <p>Both wirings therefore reach the same three outputs; the only structural difference is that Python holds the manager references in the controller while C++ keeps the controller decoupled and does the fan-out in <span class="file-path">main.cpp</span> (the ESP32 leg is compiled out on mobile, where the manager is a stub).</p>
 
         <h3>Callers</h3>
         <ul>
@@ -383,7 +376,7 @@ __version__ = <span class="str">"0.9.4"</span></code></pre>
         <!-- Lazy imports -->
         <h2 id="lazy-import">Lazy imports (Python)</h2>
         <p><span class="file-path">backend/lazy_import.py</span> &mdash; Python-only; introduced in commit <code>ee5a23e</code> (startup optimisations).</p>
-        <p>Several optional libraries are expensive to import &mdash; <code>obd</code> pulls in pint, <code>spotipy</code> pulls in redis, <code>numpy</code> and <code>av</code> load large native extensions &mdash; and none of them are needed until the user connects an adapter, logs in, or plays a track. Importing them eagerly cost about a second before the first frame on the Orange Pi. The module offers two helpers:</p>
+        <p>Several optional libraries are expensive to import &mdash; <code>obd</code> pulls in pint, <code>numpy</code> and <code>av</code> load large native extensions &mdash; and none of them are needed until the user connects an adapter or plays a track. Importing them eagerly cost about a second before the first frame on the Orange Pi. The module offers two helpers:</p>
         <pre><code><span class="kw">def</span> <span class="fn">available</span>(name: str) -&gt; bool:
     <span class="cmt">"""True when the top-level package is installed (no import performed)."""</span>
     <span class="kw">try</span>:
@@ -405,7 +398,6 @@ __version__ = <span class="str">"0.9.4"</span></code></pre>
           <thead><tr><th>Module</th><th>Lazy</th><th>Availability flag</th></tr></thead>
           <tbody>
             <tr><td><span class="file-path">backend/obd_manager.py</span></td><td><code>obd = lazy_module("obd")</code></td><td>&ndash;</td></tr>
-            <tr><td><span class="file-path">backend/spotify_manager.py</span></td><td><code>spotipy</code>, <code>keyring</code></td><td><code>SPOTIPY_AVAILABLE</code>, <code>KEYRING_AVAILABLE</code></td></tr>
             <tr><td><span class="file-path">backend/audio_analyzer.py</span></td><td><code>np</code> (numpy), <code>av</code> (PyAV)</td><td><code>NUMPY_AVAILABLE</code>, <code>AV_AVAILABLE</code></td></tr>
             <tr><td><span class="file-path">backend/phone_mirror/scrcpy_client.py</span></td><td><code>np = lazy_module("numpy") if available("numpy") else None</code></td><td>&ndash;</td></tr>
           </tbody>
@@ -451,7 +443,7 @@ __version__ = <span class="str">"0.9.4"</span></code></pre>
 t = PerfMonitor.begin()           <span class="cmt"># manual section</span>
 <span class="cmt"># ... expensive operation ...</span>
 PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
-        <p><span class="file-path">backend/perf_patches.py</span> keeps timing decorators out of production code: <code>apply_patches(...)</code> monkey-patches instance methods on the live managers with a <code>functools.wraps</code> timer that feeds <code>_slot_timings</code>. Currently wrapped: <code>media._extract_colors</code>, <code>media._kmeans_colors</code>, <code>media._update_position</code>, <code>media.next_track</code>, <code>media.previous_track</code>, <code>audio._analyze_audio (FFT)</code>, <code>spotify._poll_playback</code>, <code>spotify._fetch_playback_state</code>, <code>obd._monitor_connection</code>, <code>esp32._read_serial</code>, <code>settings.save_settings</code>. Missing methods are skipped silently; the <code>berryimu_manager</code> and <code>gesture_manager</code> arguments are accepted but nothing is wrapped for them.</p>
+        <p><span class="file-path">backend/perf_patches.py</span> keeps timing decorators out of production code: <code>apply_patches(...)</code> monkey-patches instance methods on the live managers with a <code>functools.wraps</code> timer that feeds <code>_slot_timings</code>. Currently wrapped: <code>media._extract_colors</code>, <code>media._kmeans_colors</code>, <code>media._update_position</code>, <code>media.next_track</code>, <code>media.previous_track</code>, <code>audio._analyze_audio (FFT)</code>, <code>obd._monitor_connection</code>, <code>esp32._read_serial</code>, <code>settings.save_settings</code>. Missing methods are skipped silently; the <code>berryimu_manager</code> and <code>gesture_manager</code> arguments are accepted but nothing is wrapped for them.</p>
 
         <h3>dev/perf and the MCP servers</h3>
         <p>The whole <code>dev/</code> tree is gitignored, so these exist only on developer machines:</p>
@@ -462,7 +454,7 @@ PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
             <tr><td><span class="file-path">dev/perf/run_perf_loop.py</span></td><td>Drives the command socket (127.0.0.1:9876) through the full gamut of pages and settings in a loop and diffs the metrics between iterations.</td></tr>
             <tr><td><span class="file-path">dev/perf/brutalize.py</span></td><td>Cranks every visual setting to maximum and hammers actions faster and faster until the loop latency degrades, then reports where it broke.</td></tr>
             <tr><td><span class="file-path">dev/perf/logs/</span></td><td>Output: <code>perf_*.csv</code> / <code>.log</code> from PerfMonitor, <code>benchmark_*.json</code> and <code>baseline.json</code> from the benchmark server.</td></tr>
-            <tr><td><span class="file-path">dev/mcp_server.py</span> (<code>octave-perf</code>)</td><td>MCP server wrapping the command socket as tools an AI agent can call: <code>ping</code>, <code>list_actions</code>, <code>navigate</code>, <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code>, <code>list_pages</code>, the settings tools (<code>get_all_settings</code>, <code>list_*_settings</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>), media tools (<code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code>, <code>skip_tracks</code>, <code>get_media_status</code>, <code>get_track_info</code>), <code>spotify_status</code>, <code>obd_status</code>, <code>get_metrics</code>, <code>get_detailed_report</code>.</td></tr>
+            <tr><td><span class="file-path">dev/mcp_server.py</span> (<code>octave-perf</code>)</td><td>MCP server wrapping the command socket as tools an AI agent can call: <code>ping</code>, <code>list_actions</code>, <code>navigate</code>, <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code>, <code>list_pages</code>, the settings tools (<code>get_all_settings</code>, <code>list_*_settings</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>), media tools (<code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code>, <code>skip_tracks</code>, <code>get_media_status</code>, <code>get_track_info</code>), <code>obd_status</code>, <code>get_metrics</code>, <code>get_detailed_report</code>.</td></tr>
             <tr><td><span class="file-path">dev/mcp_benchmark.py</span> (<code>octave-benchmark</code>)</td><td>Systematic benchmarking and regression tracking (serves MCP only with <code>--mcp</code>; otherwise a CLI): <code>benchmark_page</code>, <code>benchmark_setting</code>, <code>benchmark_transition</code>, <code>benchmark_media_ops</code>, <code>get_bottlenecks</code>, <code>run_benchmark_suite</code> (five phases: baseline, settings matrix, stress, combined, bottlenecks), <code>save_baseline</code>, <code>compare_to_baseline</code>.</td></tr>
             <tr><td><span class="file-path">.mcp.json</span></td><td>Registers both servers for Claude Code, once per developer machine (<code>octave-perf</code> / <code>octave-benchmark</code> plus <code>-rob</code> and <code>-zion</code> variants pointing at that machine&rsquo;s venv), each launched as <code>&lt;venv&gt;/bin/python dev/mcp_server.py</code>. Gitignored because the paths are absolute.</td></tr>
           </tbody>
@@ -509,9 +501,8 @@ PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
             <tr><td>Screenshots / recording</td><td><code>screenshot</code> (<code>path</code>; <code>grabWindow()</code> &rarr; PNG, so it works on Wayland, X11 and offscreen without any external tool), <code>set_window_size</code> (<code>width</code>, <code>height</code>; sets the root window&rsquo;s properties so Main.qml reflows Spacing), <code>set_dev_chrome</code> (<code>visible</code>; toggles the <code>devOverlay</code> item, no-op in production), <code>record_start</code> (<code>path</code>, <code>fps</code> &le; 60, default 30: a GUI-thread QTimer pipes raw RGBA <code>grabWindow()</code> frames into <code>ffmpeg -c:v libx264 -crf 18 -pix_fmt yuv420p</code>), <code>record_stop</code>, <code>record_status</code> (frames, dropped, repeated, seconds, error; frames are paced by wall clock, repeating the last grab when rendering falls behind, and scaled to the logical window size)</td></tr>
             <tr><td>UI driving</td><td><code>find_item</code> (<code>name</code>: objectName search through the window&rsquo;s contentItem, popups included, preferring the visible match; returns scene geometry, centre, effective visibility and <code>hiddenBy</code>), <code>list_items</code> (<code>prefix</code>), <code>get_prop</code> / <code>set_prop</code> (<code>name</code>, <code>prop</code>[, <code>value</code>]; <code>"root"</code> addresses the ApplicationWindow), <code>call</code> (<code>name</code>, <code>method</code>: no-arg invoke), <code>find_text</code> (<code>text</code>[, <code>prop</code> default <code>text</code>]: first visible item whose label matches, case-insensitive), <code>click</code> (<code>x</code>, <code>y</code>: synthetic press + release through <code>QCoreApplication.sendEvent</code>), <code>long_press</code> (<code>x</code>, <code>y</code>, <code>ms</code> default 1000: press, hold with the event loop running, release), <code>type_text</code> (<code>text</code>[, <code>field</code>: objectName or placeholderText, focused first][, <code>enter</code>]: key events sent to the item directly, since headless windows and dev mode&rsquo;s keyboard simulator keep window-level keys from reaching fields), <code>drag</code> (<code>x1</code>, <code>y1</code>, <code>x2</code>, <code>y2</code>, <code>steps</code> default 12: press, interpolated synchronous moves, release)</td></tr>
             <tr><td>Media</td><td><code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code> (<code>volume</code> 0.0&ndash;1.0 &mdash; calls <code>MediaManager.setVolume</code> directly, bypassing the curve), <code>get_media_status</code>, <code>get_track_info</code>, <code>skip_tracks</code> (<code>count</code>)</td></tr>
-            <tr><td>Spotify</td><td><code>spotify_toggle_play</code>, <code>spotify_next</code>, <code>spotify_previous</code>, <code>spotify_status</code></td></tr>
             <tr><td>OBD</td><td><code>obd_status</code> (connected, status string), <code>obd_reconnect</code></td></tr>
-            <tr><td>Settings</td><td><code>get_settings</code> (legacy: media_source, volume, theme), <code>get_all_settings</code>, <code>set_media_source</code>, <code>toggle_setting</code> / <code>set_bool_setting</code> / <code>list_toggle_settings</code>, <code>set_numeric_setting</code> / <code>list_numeric_settings</code>, <code>set_string_setting</code> / <code>list_string_settings</code></td></tr>
+            <tr><td>Settings</td><td><code>get_settings</code> (legacy: volume, theme), <code>get_all_settings</code>, <code>toggle_setting</code> / <code>set_bool_setting</code> / <code>list_toggle_settings</code>, <code>set_numeric_setting</code> / <code>list_numeric_settings</code>, <code>set_string_setting</code> / <code>list_string_settings</code></td></tr>
             <tr><td>Extensions (dev mode)</td><td><code>sim_throttle</code>, <code>sim_brake</code>, <code>sim_rev</code>, <code>sim_engine</code>, <code>sim_gear</code>, <code>sim_upshift</code>, <code>sim_downshift</code>, <code>sim_speed</code>, <code>sim_rpm</code>, <code>sim_scenario</code>, <code>sim_realistic</code>, <code>sim_imu</code> (simulated IMU motion, <span class="file-path">dev/mock_imu.py</span>), <code>sim_status</code> &mdash; registered by <code>dev/dev_runtime.install_sim_commands()</code> on the mock OBD manager</td></tr>
           </tbody>
         </table>
@@ -520,7 +511,7 @@ PerfMonitor.end(t, <span class="str">"operation_name"</span>)</code></pre>
         <ul>
           <li><strong>Boolean toggles (12):</strong> <code>show_clock</code>, <code>clock_24h</code>, <code>show_waveform</code>, <code>show_3d_tilt</code>, <code>show_3d_album</code>, <code>rounded_album_art</code>, <code>album_art_shadow</code>, <code>vinyl_mode</code>, <code>obd_fast_mode</code>, <code>auto_play</code>, <code>show_bottom_bar_controls</code>, <code>song_length_transition</code> &mdash; each mapped to the <code>save_*</code> slot and the property to read back (<code>toggle_setting</code> returns <code>old</code> / <code>new</code>).</li>
           <li><strong>Numeric (10), clamped to a range:</strong> <code>ui_scale</code> (0.5&ndash;2.0), <code>blur_radius</code> (0&ndash;100), <code>color_transition_ms</code> (the server&rsquo;s own clamp is 0&ndash;5000; the settings UI slider now stops at 2000), <code>album_art_corner_radius</code> (2&ndash;32), <code>bg_overlay_opacity</code> (0&ndash;100), <code>side_card_opacity</code> (0.1&ndash;1.0), <code>side_card_angle</code> (5&ndash;60), <code>button_tilt_duration</code> (50&ndash;500), <code>text_scroll_speed</code> (1000&ndash;10000), <code>clock_size</code> (8&ndash;72).</li>
-          <li><strong>String / enum (6):</strong> <code>theme</code>, <code>font</code>, <code>mediaFolder</code> (free), <code>album_art_transition</code> (Crossfade, Slide, Vinyl Lift, Dissolve, Flip), <code>bottom_bar_orientation</code> (bottom, side), <code>media_source</code> (local, spotify).</li>
+          <li><strong>String / enum (5):</strong> <code>theme</code>, <code>font</code>, <code>mediaFolder</code> (free), <code>album_art_transition</code> (Crossfade, Slide, Vinyl Lift, Dissolve, Flip), <code>bottom_bar_orientation</code> (bottom, side).</li>
         </ul>
 
         <h3>Lifecycle</h3>
@@ -529,7 +520,6 @@ cmd_server = CommandServer()
 cmd_server.start(
     managers={
         <span class="str">"media"</span>: media_manager,
-        <span class="str">"spotify"</span>: spotify_manager,
         <span class="str">"obd"</span>: obd_manager,
         <span class="str">"settings"</span>: settings_manager,
     },
@@ -594,7 +584,7 @@ app.aboutToQuit.connect(stop_cmd_server)   <span class="cmt"># server.shutdown()
             </tr>
             <tr>
               <td><span class="file-path">backend/temp/</span></td>
-              <td>Per-checkout scratch cache: <code>cover_&lt;hash&gt;.&lt;ext&gt;</code> album covers extracted from tags by <code>MediaManager</code> (content-addressed, kept across runs so a boot does not re-read every tag; pruned at startup to the 500 least-recently-accessed files by <code>_prune_cover_dir()</code>), <code>spotify_album_art.jpg</code> downloaded by <code>SpotifyManager</code> for colour extraction, and <code>music_dl/</code> used by the download engine (<span class="file-path">backend/music_dl/utils/config.py</span>). C++ desktop uses <code>applicationDirPath()/temp</code>; Android uses <code>AppDataLocation/temp</code>.</td>
+              <td>Per-checkout scratch cache: <code>cover_&lt;hash&gt;.&lt;ext&gt;</code> album covers extracted from tags by <code>MediaManager</code> (content-addressed, kept across runs so a boot does not re-read every tag; pruned at startup to the 500 least-recently-accessed files by <code>_prune_cover_dir()</code>), and <code>music_dl/</code> used by the download engine (<span class="file-path">backend/music_dl/utils/config.py</span>). C++ desktop uses <code>applicationDirPath()/temp</code>; Android uses <code>AppDataLocation/temp</code>.</td>
               <td>Gitignored (<code>backend/temp/</code>, line 4 of <span class="file-path">.gitignore</span>).</td>
             </tr>
           </tbody>

@@ -2100,10 +2100,6 @@ Flickable {
                             Layout.fillWidth: false
                         }
                     }
-
-                    SettingDescription {
-                        text: "Spotify is not ducked: it plays on its own Spotify Connect device, usually the phone itself, so its sound already arrives through the mirror."
-                    }
                 }
 
                 ColumnLayout {

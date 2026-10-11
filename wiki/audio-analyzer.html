@@ -349,12 +349,12 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
         <!-- QML Integration -->
         <h2 id="qml-integration">QML Integration</h2>
 
-        <p>The only consumer is the waveform container in <span class="file-path">frontend/MediaRoom.qml</span>, visible when <code>settingsManager.showWaveformVisualizer</code> is on, the local player (not Spotify) is the source, and the playlist is not empty. The pieces, quoted from the QML:</p>
+        <p>The only consumer is the waveform container in <span class="file-path">frontend/MediaRoom.qml</span>, visible when <code>settingsManager.showWaveformVisualizer</code> is on, the local player (not the phone while mirroring) is the source, and the playlist is not empty. The pieces, quoted from the QML:</p>
 
         <pre><code><span class="cmt">// Analysis is deferred until the album-art carousel has settled, so decoding</span>
 <span class="cmt">// does not compete with animation frames (called from the carousel's settled signal)</span>
 <span class="kw">function</span> <span class="fn">_doTrackChangeWork</span>() {
-    <span class="kw">if</span> (audioAnalyzer &amp;&amp; mediaManager &amp;&amp; !useSpotify) {
+    <span class="kw">if</span> (audioAnalyzer &amp;&amp; mediaManager &amp;&amp; !usePhone) {
         <span class="kw">var</span> fullPath = mediaManager.<span class="fn">get_full_file_path</span>(mediaManager.<span class="fn">get_current_file</span>())
         <span class="kw">if</span> (fullPath) audioAnalyzer.<span class="fn">analyze_file</span>(fullPath)
     }

@@ -9,25 +9,11 @@ Item {
 
     signal navigateToSubSection(string subSection)
 
-    property bool isSpotify: settingsManager ? settingsManager.mediaSource === "spotify" : false
-    property color sourceStatusColor: {
-        if (!isSpotify) return "transparent"
-        if (typeof spotifyManager !== "undefined" && spotifyManager && spotifyManager.is_connected())
-            return App.Style.statusConnected
-        return App.Style.statusDisconnected
-    }
-
     GridLayout {
         anchors.fill: parent
         columns: widgetRoot.cardSpan >= 2 ? 2 : 1
         columnSpacing: App.Spacing.overallSpacing * 0.4
         rowSpacing: App.Spacing.overallSpacing * 0.25
-
-        WidgetPill {
-            label: "Source"
-            value: widgetRoot.isSpotify ? "Spotify" : "Local"
-            statusColor: widgetRoot.sourceStatusColor
-        }
 
         SettingsToggle {
             compact: true
@@ -83,11 +69,6 @@ Item {
             WidgetChip {
                 text: "Now Playing"
                 onClicked: widgetRoot.navigateToSubSection("Now Playing")
-            }
-
-            WidgetChip {
-                text: "Spotify"
-                onClicked: widgetRoot.navigateToSubSection("Spotify")
             }
         }
     }

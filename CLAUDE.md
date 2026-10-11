@@ -82,7 +82,6 @@ Every feature is a C++ **manager class** inheriting from `QObject`. Managers exp
 Key managers (`src/managers/*.{h,cpp}`):
 - `settingsmanager` — Central settings store, persists JSON to OS-specific config dirs
 - `mediamanager` — Local audio playback via QMediaPlayer
-- `spotifymanager` — Spotify Web API integration
 - `obdmanager` + `elm327protocol` — OBD-II diagnostics
 - `obdadapterfinder` (+ `src/platform/bluezpairer`) — Bluetooth OBD adapter scan / PIN pairing / trust / connect (desktop Linux so far; see `TODO/obd-adapter-discovery.md`)
 - `esp32volumemanager` — Wireless rotary encoder (serial)
@@ -102,7 +101,6 @@ Each feature is a Python **manager class** inheriting from `QObject`. Managers e
 Key managers:
 - `settings_manager.py` — Central settings store, persists to `settingsConfigure.json` in OS-specific config dirs
 - `media_manager.py` — Local MP3 playback via QMediaPlayer
-- `spotify_manager.py` — Spotify API integration (spotipy), credentials stored in OS keychain
 - `obd_manager.py` — OBD-II vehicle diagnostics with threaded connection worker
 - `obd_adapter_finder.py` — Bluetooth OBD adapter scan / PIN pairing (BlueZ agent over QtDBus) / trust / connect
 - `esp32_volume_manager.py` — Wireless rotary encoder volume control over serial
@@ -164,13 +162,12 @@ Custom QML types (for embedded video frames) are registered with `qmlRegisterTyp
 
 ### Volume System
 
-Volume uses a **quadratic curve** (`(volume/100)^2.0`) for the UI percent → linear audio mapping. `src/managers/volumecontroller.{h,cpp}` (C++, primary) / `backend/volume_utils.py` (Python, legacy) owns the curve math and the `VolumeController` QObject, which is the single entry point for routing a 0–100 percent to every output (local media, Spotify, phone mirror, ESP32 LED). All handlers (gesture sensor, ESP32 knob) and QML slider widgets call `volume_controller.applyVolume(percent)` — never touch the individual manager `setVolume` methods or hardcode the curve. Changing the curve only requires editing `to_linear()` / `toLinear()` in one place.
+Volume uses a **quadratic curve** (`(volume/100)^2.0`) for the UI percent → linear audio mapping. `src/managers/volumecontroller.{h,cpp}` (C++, primary) / `backend/volume_utils.py` (Python, legacy) owns the curve math and the `VolumeController` QObject, which is the single entry point for routing a 0–100 percent to every output (local media, phone mirror, ESP32 LED). All handlers (gesture sensor, ESP32 knob) and QML slider widgets call `volume_controller.applyVolume(percent)` — never touch the individual manager `setVolume` methods or hardcode the curve. Changing the curve only requires editing `to_linear()` / `toLinear()` in one place.
 
 ### Threading
 
 Heavy I/O runs on worker threads to avoid blocking the UI:
 - OBD connection uses a dedicated `QThread` worker with progress signals
-- Spotify API calls use a thread pool (`ThreadPoolExecutor` in Python, `QThreadPool` + `QtConcurrent` in C++)
 - I²C sensors (BerryIMU, gesture) are read in a loop on their own thread (`QThread` worker in C++, daemon thread in Python; the IMU loop is paced at 200 Hz) and deliver values to the GUI thread by signal; `QTimer`s only drive lifecycle (delayed start, retry back-off). The ESP32 knob uses `QSerialPort::readyRead` in C++ and a blocking-read thread in Python
 
 ### Image Providers
@@ -208,7 +205,7 @@ GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff, Python only �
 
 ## Wiki Maintenance
 
-The project wiki lives in `wiki/` (static HTML pages — `architecture.html`, `development.html`, `media-manager.html`, `spotify-manager.html`, `obd-manager.html`, etc., plus `index.html` as the entry point and `search-index.js` for full-text search).
+The project wiki lives in `wiki/` (static HTML pages — `architecture.html`, `development.html`, `media-manager.html`, `obd-manager.html`, etc., plus `index.html` as the entry point and `search-index.js` for full-text search).
 
 **Whenever a code change affects documented behavior, update the corresponding wiki page in the same commit.** This includes:
 

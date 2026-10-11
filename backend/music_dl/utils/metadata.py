@@ -23,7 +23,6 @@ from mutagen.id3 import ID3
 from mutagen.id3._frames import (
     APIC,
     COMM,
-    POPM,
     SYLT,
     TALB,
     TCOM,
@@ -304,13 +303,6 @@ def embed_metadata(
 
         if song.download_url:
             audio_file.add(COMM(encoding=3, text=song.download_url))
-
-        if song.popularity:
-            audio_file.add(
-                POPM(
-                    rating=int(song.popularity * 255 / 100),
-                )
-            )
 
         if song.year:
             audio_file.add(TYER(encoding=3, text=str(song.year)))
@@ -667,15 +659,6 @@ def embed_wav_file(output_file: Path, song: Song):
 
     if song.copyright_text:
         audio.tags.add(TCOP(encoding=3, text=song.copyright_text))  # type: ignore
-
-    if song.popularity:
-        audio.tags.add(  # type: ignore
-            COMM(
-                encoding=3,
-                lang="eng",
-                text="Spotify Popularity: " + str(song.popularity),
-            )
-        )
 
     if song.cover_url:
         try:

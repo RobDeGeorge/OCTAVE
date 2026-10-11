@@ -16,13 +16,13 @@
   <description>
     <p>
       OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi
-      behind the dash, a laptop in a project car, or a tablet. It plays local music
-      and Spotify, reads live data from the car over OBD-II, mirrors an Android phone
-      over USB, and recolours its interface to match the album art.
+      behind the dash, a laptop in a project car, or a tablet. It plays local music,
+      reads live data from the car over OBD-II, mirrors an Android phone over USB,
+      and recolours its interface to match the album art.
     </p>
     <p>Features:</p>
     <ul>
-      <li>Local music player and Spotify control, with themes that follow the album art</li>
+      <li>Local music player, with themes that follow the album art</li>
       <li>Live OBD-II data through ELM327 adapters, with customisable gauge dashboards and a shift light</li>
       <li>Android phone mirroring over USB, with nothing to install on the phone</li>
       <li>3D vehicle view driven by an IMU, plus support for gesture sensors and a wireless volume knob</li>

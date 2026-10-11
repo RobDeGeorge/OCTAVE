@@ -12,11 +12,11 @@
 #
 # Required system packages (Ubuntu 22.04): build-essential cmake ninja-build
 #   pkg-config qt6-base-dev qt6-declarative-dev qt6-multimedia-dev
-#   qt6-serialport-dev qt6-networkauth-dev qt6-connectivity-dev
+#   qt6-serialport-dev qt6-connectivity-dev
 #   qml6-module-qtquick-controls2 libtag1-dev fuse libfuse2 wget file
 #
 # Required system packages (Arch, local-test fallback): qt6-base qt6-declarative
-#   qt6-multimedia qt6-serialport qt6-networkauth qt6-connectivity taglib
+#   qt6-multimedia qt6-serialport qt6-connectivity taglib
 #   fuse2 cmake ninja wget
 set -euo pipefail
 

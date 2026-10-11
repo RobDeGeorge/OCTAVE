@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 # ---- Qt 6 ----
-set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Concurrent NetworkAuth SerialPort Bluetooth)
+set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Concurrent SerialPort Bluetooth)
 if(ANDROID)
     list(APPEND OCTAVE_QT_COMPONENTS Sensors)
 endif()
@@ -127,8 +127,6 @@ qt_add_executable(octave
     src/managers/mediamanager.cpp
     src/managers/audioanalyzer.h
     src/managers/audioanalyzer.cpp
-    src/managers/spotifymanager.h
-    src/managers/spotifymanager.cpp
     src/managers/downloadmanager.h
     src/managers/downloadmanager.cpp
     src/managers/elm327protocol.h
@@ -209,7 +207,6 @@ target_link_libraries(octave PRIVATE
     Qt6::Multimedia
     Qt6::Network
     Qt6::Concurrent
-    Qt6::NetworkAuth
     Qt6::SerialPort
     Qt6::Bluetooth
 )
@@ -332,7 +329,7 @@ if(ANDROID)
     )
     # Qt for Android ships the OpenSSL TLS *plugin* but not OpenSSL itself;
     # without libcrypto_3/libssl_3 in the APK every QSslSocket fails with "No
-    # functional TLS backend was found" (Spotify, self-update, any Qt-side
+    # functional TLS backend was found" (self-update, any Qt-side
     # HTTPS). Prebuilt from KDAB/android_openssl — see android/openssl/README.md.
     foreach(abi IN LISTS QT_ANDROID_ABIS)
         set(_ssl_dir "${CMAKE_SOURCE_DIR}/android/openssl/${abi}")

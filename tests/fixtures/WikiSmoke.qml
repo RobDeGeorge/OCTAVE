@@ -124,7 +124,7 @@ ApplicationWindow {
                 browser.runJavaScript("window.scrollTo(0,0); var p=document.querySelector('.content p'); p.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerType:'mouse',button:0,pointerId:7,clientX:500,clientY:350})); document.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:7,clientX:500,clientY:200})); document.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerType:'mouse',pointerId:7})); window.scrollY > 0", function(ok) {
                     if (!check(ok, "mouse-emulated touchscreen drag scrolls the article")) return
                     find(viewer, "wikiSearchButton").clicked()
-                    browser.runJavaScript("var input=document.querySelector('#search-input'); input.value='Spotify'; input.dispatchEvent(new Event('input'))")
+                    browser.runJavaScript("var input=document.querySelector('#search-input'); input.value='Volume'; input.dispatchEvent(new Event('input'))")
                     stage = 2
                 })
             } else if (stage === 2) {

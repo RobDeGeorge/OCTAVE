@@ -30,9 +30,6 @@ ApplicationWindow {
     property string lastSettingsSection: settingsManager ? settingsManager.lastSettingsSection : "deviceSettings"
     property string fontSetting: settingsManager ? settingsManager.fontSetting : "System Default"
 
-    // Album Art Colors - used by signal handlers to track changes
-    property string lastAppliedAlbumArtColors: ""
-
     // Font loading properties
     property var loadedFonts: ({})
     property var fontLoaders: []
@@ -110,9 +107,6 @@ ApplicationWindow {
         console.log("Window closing - running cleanup...")
         if (mediaManager) {
             mediaManager._save_playback_state()
-        }
-        if (spotifyManager) {
-            spotifyManager.cleanup()
         }
         close.accepted = true
     }
@@ -379,24 +373,6 @@ ApplicationWindow {
             if (phoneMirrorManager.mediaActive && settingsManager && settingsManager.songLengthTransition
                     && phoneMirrorManager.mediaDuration > 0)
                 App.Style.colorTransitionMs = phoneMirrorManager.mediaDuration
-        }
-    }
-
-    // Spotify manager connections for Album Art Capture
-    Connections {
-        target: spotifyManager
-
-        function onAlbumColorsExtracted(themeJson) {
-            console.log("[AlbumArtCapture Spotify] Received albumColorsExtracted!")
-            console.log("[AlbumArtCapture Spotify] themeJson:", themeJson ? themeJson.substring(0, 100) : "null")
-            lastAppliedAlbumArtColors = themeJson
-            App.Style.updateAlbumArtTheme(themeJson)
-        }
-
-        function onDurationChanged(durationMs) {
-            if (settingsManager && settingsManager.songLengthTransition && durationMs > 0) {
-                App.Style.colorTransitionMs = durationMs
-            }
         }
     }
 

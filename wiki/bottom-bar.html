@@ -42,7 +42,7 @@
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
 
-        <p><span class="file-path">frontend/BottomBar.qml</span> (about 3100 lines) is the persistent control surface that is visible on every page. It is a <code>Rectangle</code> with a themed gradient background whose contents are provided by a <code>Loader</code> that swaps between two complete layout components: a horizontal bar docked at the bottom of the window and a vertical bar docked at the left. Both layouts carry the same three logical sections &mdash; media transport controls, navigation buttons, and the clock.</p>
+        <p><span class="file-path">frontend/BottomBar.qml</span> (about 2700 lines) is the persistent control surface that is visible on every page. It is a <code>Rectangle</code> with a themed gradient background whose contents are provided by a <code>Loader</code> that swaps between two complete layout components: a horizontal bar docked at the bottom of the window and a vertical bar docked at the left. Both layouts carry the same three logical sections &mdash; media transport controls, navigation buttons, and the clock.</p>
 
         <p>It is instantiated once in <span class="file-path">frontend/Main.qml</span> with <code>z: 0</code>; the page <code>StackView</code> sits above it (<code>z: 1</code>) and anchors to <code>bottomBar.top</code> (horizontal) or <code>bottomBar.right</code> (vertical). A 12&nbsp;px gradient <code>Rectangle</code> (<code>bottomBarShadow</code> / <code>sideBarShadow</code>) in Main.qml draws a soft shadow along the bar's inner edge.</p>
 
@@ -176,7 +176,7 @@
         <span class="cls">MouseArea</span> {
             <span class="prop">id</span>: mouseAreaPrev
             <span class="prop">anchors.fill</span>: parent
-            <span class="prop">onClicked</span>: useSpotify ? spotifyManager.<span class="fn">previous_track</span>() : mediaManager.<span class="fn">previous_track</span>()
+            <span class="prop">onClicked</span>: bottomBar.<span class="fn">mediaPrevious</span>()
         }
     }
 }</code></pre>
@@ -196,13 +196,15 @@
         </table>
 
         <h3>Play/Pause Button</h3>
-        <p>The play/pause image picks its source from the active backend's <code>is_playing()</code>. Because that is a method call and not a property, the binding does not re-evaluate on its own; two <code>Connections</code> blocks (one on <code>mediaManager</code>, one on <code>spotifyManager</code>) listen for <code>playStateChanged(playing)</code> and assign the source of both the horizontal and the vertical image explicitly. The <code>mediaManager</code> handler only acts when <code>!useSpotify</code>, the Spotify handler only when <code>useSpotify</code>:</p>
+        <p>The play/pause image picks its source from <code>playIconSource()</code>, which reads <code>phoneMirrorManager.mediaPlaying</code> while the phone has the controls and <code>mediaManager.is_playing()</code> otherwise. Because that is a method call and not a property, the binding does not re-evaluate on its own; a <code>Connections</code> on <code>mediaManager</code> listens for <code>playStateChanged(playing)</code> (acting only when the phone does not have the controls) and one on <code>phoneMirrorManager</code> for <code>mediaChanged</code> / <code>mediaActiveChanged</code>, and they assign the source of both the horizontal and the vertical image explicitly:</p>
 
-        <pre><code><span class="prop">source</span>: {
-    <span class="kw">var</span> isPlaying = useSpotify ?
-        (spotifyManager &amp;&amp; spotifyManager.<span class="fn">is_playing</span>()) :
-        (mediaManager &amp;&amp; mediaManager.<span class="fn">is_playing</span>())
-    <span class="kw">return</span> isPlaying ? <span class="str">"./assets/pause_button.svg"</span> : <span class="str">"./assets/play_button.svg"</span>
+        <pre><code><span class="kw">function</span> <span class="fn">mediaIsPlaying</span>() {
+    <span class="kw">if</span> (<span class="fn">phoneActive</span>())
+        <span class="kw">return</span> phoneMirrorManager.mediaPlaying
+    <span class="kw">return</span> mediaManager &amp;&amp; mediaManager.<span class="fn">is_playing</span>()
+}
+<span class="kw">function</span> <span class="fn">playIconSource</span>() {
+    <span class="kw">return</span> <span class="fn">mediaIsPlaying</span>() ? <span class="str">"./assets/pause_button.svg"</span> : <span class="str">"./assets/play_button.svg"</span>
 }</code></pre>
 
         <!-- Volume -->
@@ -247,12 +249,12 @@
             <tr>
               <td>C++</td>
               <td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td>
-              <td>Clamps to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code>, a 300&nbsp;ms trailing-debounced <code>spotifyManager.set_volume(percent)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out as the Python controller.</td>
+              <td>Clamps to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out as the Python controller.</td>
             </tr>
             <tr>
               <td>Python</td>
               <td><span class="file-path">backend/volume_utils.py</span></td>
-              <td>Clamps, calls <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>spotify_manager.set_volume(percent)</code> (if connected, through the same 300&nbsp;ms trailing debounce as C++), <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>.</td>
+              <td>Clamps, calls <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>.</td>
             </tr>
           </tbody>
         </table>
@@ -397,7 +399,7 @@
         <!-- Shuffle -->
         <h2 id="shuffle">Shuffle State</h2>
 
-        <p><code>isShuffleEnabled</code> on the bar root is the single source of truth for both layouts' shuffle buttons. It is initialised from <code>spotifyManager.is_shuffled()</code> or <code>mediaManager.is_shuffled()</code> depending on <code>useSpotify</code>, and kept current by <code>shuffleStateChanged(enabled)</code> from whichever manager is active, plus a <code>Connections</code> on <code>settingsManager.mediaSourceChanged</code> that re-reads the correct source when the user switches between local and Spotify playback.</p>
+        <p><code>isShuffleEnabled</code> on the bar root is the single source of truth for both layouts' shuffle buttons. It is initialised from <code>mediaManager.is_shuffled()</code> and kept current by <code>mediaManager.shuffleStateChanged(enabled)</code>. While the phone has the controls the shuffle button does nothing (the phone's shuffle belongs to its app).</p>
 
         <p>When active, the button background becomes <code>bottomBarToggleShade</code> (radius 4) and the icon is tinted <code>bottomBarActiveToggleButton</code> (the accent). When inactive the icon uses <code>bottomBarShuffleButton</code>, the per-theme <code>bottombar.shuffle</code> colour.</p>
 
@@ -412,27 +414,22 @@
             <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>). The knob's mute button toggles <code>mediaManager</code> mute and the bar's icon follows via <code>muteChanged</code>.</td></tr>
             <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
             <tr><td>Startup</td><td>Persisted <code>currentVolume</code> is applied by the entry point and again by the bar's <code>Component.onCompleted</code>.</td></tr>
-            <tr><td>Spotify connect</td><td><code>spotifyManager.connectionStateChanged(true)</code> &rarr; the bar calls <code>spotifyManager.set_volume(settingsManager.currentVolume)</code> so a freshly connected device matches OCTAVE's level.</td></tr>
           </tbody>
         </table>
 
         <!-- Manager Communication -->
         <h2 id="managers">Manager Communication</h2>
 
-        <p>Every media action is dispatched by the <code>useSpotify</code> flag:</p>
-
-        <pre><code><span class="prop">property bool</span> useSpotify: settingsManager &amp;&amp;
-    settingsManager.mediaSource === <span class="str">"spotify"</span> &amp;&amp;
-    spotifyManager &amp;&amp; spotifyManager.<span class="fn">is_connected</span>()</code></pre>
+        <p>Every media action goes to the local player unless the phone has the controls (<code>phoneMirrorManager.mediaActive</code>, see <a href="phone-mirror-android-auto.html#pm-media">phone media</a>). <code>phoneActive()</code> reads the manager directly rather than the <code>usePhone</code> binding, because it runs from signal handlers that can fire before the binding has caught up:</p>
 
         <ul>
-          <li><code>useSpotify ? spotifyManager.previous_track() : mediaManager.previous_track()</code></li>
-          <li><code>useSpotify ? spotifyManager.toggle_play() : mediaManager.toggle_play()</code></li>
-          <li><code>useSpotify ? spotifyManager.next_track() : mediaManager.next_track()</code></li>
-          <li><code>useSpotify ? spotifyManager.toggle_shuffle() : mediaManager.toggle_shuffle()</code></li>
+          <li><code>mediaPrevious()</code> &rarr; <code>phoneMirrorManager.mediaPrevious()</code> or <code>mediaManager.previous_track()</code></li>
+          <li><code>mediaTogglePlay()</code> &rarr; <code>phoneMirrorManager.mediaPlayPause()</code> or <code>mediaManager.toggle_play()</code></li>
+          <li><code>mediaNext()</code> &rarr; <code>phoneMirrorManager.mediaNext()</code> or <code>mediaManager.next_track()</code></li>
+          <li><code>mediaToggleShuffle()</code> &rarr; nothing while the phone has the controls, else <code>mediaManager.toggle_shuffle()</code></li>
         </ul>
 
-        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>spotifyManager</code>, <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered under the same names by <span class="file-path">src/main.cpp</span> and <span class="file-path">main.py</span>.</p>
+        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>), <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered under the same names by <span class="file-path">src/main.cpp</span> and <span class="file-path">main.py</span>.</p>
 
         <!-- Visibility popup -->
         <h2 id="visibility-popup">Toggle View Popup</h2>

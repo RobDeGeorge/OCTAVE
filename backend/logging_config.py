@@ -200,7 +200,6 @@ def get_logger(name: str) -> logging.Logger:
     name_map = {
         'backend.obd_manager': 'octave.obd',
         'backend.media_manager': 'octave.media',
-        'backend.spotify_manager': 'octave.spotify',
         'backend.settings_manager': 'octave.settings',
         'backend.clock': 'octave.clock',
         'backend.android_auto.manager': 'octave.android_auto',

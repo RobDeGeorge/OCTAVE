@@ -492,8 +492,8 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
 }</code></pre>
         <p>The fan-out differs between the backends:</p>
         <ul>
-          <li><strong>C++:</strong> <code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <span class="file-path">main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop builds) and a 300&nbsp;ms debounced <code>spotifyManager.set_volume(percent)</code>.</li>
-          <li><strong>Python:</strong> the <code>VolumeController</code> holds references and calls <code>media_manager.setVolume(linear)</code>, <code>phone_mirror_manager.setVolume(linear)</code> and <code>esp32_manager.send_volume_update(percent)</code> directly; the Spotify leg goes through the same 300&nbsp;ms trailing debounce (<code>_flush_spotify_volume()</code>, only when connected).</li>
+          <li><strong>C++:</strong> <code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <span class="file-path">main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop builds).</li>
+          <li><strong>Python:</strong> the <code>VolumeController</code> holds references and calls <code>media_manager.setVolume(linear)</code>, <code>phone_mirror_manager.setVolume(linear)</code> and <code>esp32_manager.send_volume_update(percent)</code> directly.</li>
         </ul>
         <p>
           Both mains call <code>applyVolume(settingsManager.currentVolume)</code> once at startup after every manager
@@ -534,8 +534,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <code>scrcpyAudioDuckEnabled</code> is off); both mains connect that signal to <code>mediaManager.setDucking</code>.
           The factor is ramped with a <code>QVariantAnimation</code> (<code>OutCubic</code>): 80&nbsp;ms attack so a
           prompt is not stepped on, 500&nbsp;ms release so music does not jump back up between sentences. Volume changes
-          and mute keep working while ducked. Spotify is deliberately not ducked: it plays on its own Spotify Connect
-          device, usually the mirrored phone, so its sound already arrives through the mirror stream.
+          and mute keep working while ducked.
         </p>
 
         <h3>Mute Toggle with Guard</h3>
@@ -831,7 +830,6 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           <a href="audio-analyzer.html" class="related-link">Audio Analyzer</a>
           <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="settings-reference.html" class="related-link">Settings Reference</a>
-          <a href="spotify-manager.html" class="related-link">Spotify Manager</a>
           <a href="download-manager.html" class="related-link">Download Manager</a>
           <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror</a>
           <a href="theme-system.html" class="related-link">Theme System</a>

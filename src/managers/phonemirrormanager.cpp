@@ -948,7 +948,7 @@ void PhoneMirrorManager::onMediaState(const QVariantMap &state)
     emit mediaChanged();
     // The phone is the media source while mirroring: it takes the controls
     // with its first report, and again whenever it starts playing after a
-    // local / Spotify track took them (releaseMedia)
+    // local track took them (releaseMedia)
     const bool firstReport = !m_mediaReported;
     m_mediaReported = true;
     if (!m_mediaActive && (firstReport || (m_mediaPlaying && !wasPlaying))) {

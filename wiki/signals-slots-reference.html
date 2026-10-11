@@ -28,7 +28,6 @@
             <li><a href="#volumeController">VolumeController</a></li>
             <li><a href="#mediaManager">MediaManager</a></li>
             <li><a href="#audioAnalyzer">AudioAnalyzer</a></li>
-            <li><a href="#spotifyManager">SpotifyManager</a></li>
             <li><a href="#obdManager">OBDManager</a></li>
             <li><a href="#obdAdapterFinder">OBDAdapterFinder</a></li>
             <li><a href="#esp32VolumeManager">ESP32VolumeManager</a></li>
@@ -50,7 +49,7 @@
         </div>
 
         <h2 id="registry">Context property registry</h2>
-        <p>17 context properties (plus one sub-object and one profiler) &mdash; 863 public members in total.</p>
+        <p>16 context properties (plus one sub-object and one profiler) &mdash; about 780 public members in total.</p>
         <table>
           <thead><tr><th>QML name</th><th>C++ class &amp; file</th><th>Python class &amp; file</th><th>Notes</th></tr></thead>
           <tbody>
@@ -61,7 +60,6 @@
             <tr><td><a href="#volumeController"><code>volumeController</code></a></td><td><code>VolumeController</code> &mdash; <span class="file-path">src/managers/volumecontroller.h</span></td><td><code>VolumeController</code> &mdash; <span class="file-path">backend/volume_utils.py</span></td><td></td></tr>
             <tr><td><a href="#mediaManager"><code>mediaManager</code></a></td><td><code>MediaManager</code> &mdash; <span class="file-path">src/managers/mediamanager.h</span></td><td><code>MediaManager</code> &mdash; <span class="file-path">backend/media_manager.py</span></td><td></td></tr>
             <tr><td><a href="#audioAnalyzer"><code>audioAnalyzer</code></a></td><td><code>AudioAnalyzer</code> &mdash; <span class="file-path">src/managers/audioanalyzer.h</span></td><td><code>AudioAnalyzer</code> &mdash; <span class="file-path">backend/audio_analyzer.py</span></td><td></td></tr>
-            <tr><td><a href="#spotifyManager"><code>spotifyManager</code></a></td><td><code>SpotifyManager</code> &mdash; <span class="file-path">src/managers/spotifymanager.h</span></td><td><code>SpotifyManager</code> &mdash; <span class="file-path">backend/spotify_manager.py</span></td><td>C++ mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td><code>OBDManager</code> &mdash; <span class="file-path">backend/obd_manager.py</span></td><td>Python: registered through <code>install_obd_manager()</code> so <code>dev/</code> can swap in a <code>MockOBDManager</code></td></tr>
             <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">backend/obd_adapter_finder.py</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
             <tr><td><a href="#esp32VolumeManager"><code>esp32VolumeManager</code></a></td><td><code>ESP32VolumeManager</code> &mdash; <span class="file-path">src/managers/esp32volumemanager.h</span></td><td><code>ESP32VolumeManager</code> &mdash; <span class="file-path">backend/esp32_volume_manager.py</span></td><td>C++ mobile builds register a stub (see the section)</td></tr>
@@ -116,7 +114,6 @@
             <tr><td><code>startUpVolume</code></td><td><code>float</code></td><td>read-only</td><td><code>startUpVolumeChanged</code></td><td>Volume percent applied at launch &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>currentVolume</code></td><td><code>int</code></td><td>read-only</td><td><code>currentVolumeChanged</code></td><td>Live volume percent (0&ndash;100); set only through <code>volumeController.applyVolume()</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>mediaFolder</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaFolderChanged</code></td><td>Root folder of the local music library &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>mediaSource</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaSourceChanged</code></td><td><code>"local"</code> or <code>"spotify"</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>autoPlayOnStartup</code></td><td><code>bool</code></td><td>read-only</td><td><code>autoPlayOnStartupChanged</code></td><td>Resume playback automatically at launch &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>persistShuffleState</code></td><td><code>bool</code></td><td>read-only</td><td><code>persistShuffleStateChanged</code></td><td>Remember shuffle across restarts &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>lastShuffleState</code></td><td><code>bool</code></td><td>read-only</td><td><code>lastShuffleStateChanged</code></td><td>Shuffle state saved at exit &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -200,8 +197,6 @@
             <tr><td><code>save_start_volume(float volume)</code></td><td><code>void</code></td><td>Validate and persist <code>startUpVolume</code>, then emit <code>startUpVolumeChanged</code></td></tr>
             <tr><td><code>setCurrentVolume(int volume)</code></td><td><code>void</code></td><td>Store the live volume percent and emit <code>currentVolumeChanged</code> (not written to disk). Call <code>volumeController.applyVolume()</code> instead of this from QML</td></tr>
             <tr><td><code>save_media_folder(QString folderPath)</code></td><td><code>void</code></td><td>Validate and persist <code>mediaFolder</code>, then emit <code>mediaFolderChanged</code></td></tr>
-            <tr><td><code>set_media_source(QString source)</code></td><td><code>void</code></td><td>Switch between <code>"local"</code> and <code>"spotify"</code></td></tr>
-            <tr><td><code>toggle_media_source()</code></td><td><code>void</code></td><td>Flip <code>mediaSource</code> between local and Spotify</td></tr>
             <tr><td><code>save_auto_play_on_startup(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>autoPlayOnStartup</code>, then emit <code>autoPlayOnStartupChanged</code></td></tr>
             <tr><td><code>save_persist_shuffle_state(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>persistShuffleState</code>, then emit <code>persistShuffleStateChanged</code></td></tr>
             <tr><td><code>save_last_shuffle_state(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>lastShuffleState</code>, then emit <code>lastShuffleStateChanged</code></td></tr>
@@ -238,8 +233,6 @@
             <tr><td><code>remove_from_directory_history(QString folderPath)</code></td><td><code>void</code></td><td>Remove a folder from <code>directoryHistory</code></td></tr>
             <tr><td><code>save_custom_theme(QString name, QString themeJson, QString albumArtSource)</code></td><td><code>void</code></td><td>Store a theme JSON under <code>name</code>; optional <code>albumArtSource</code> records the art the palette came from. Emits <code>customThemesChanged</code></td></tr>
             <tr><td><code>delete_custom_theme(QString name)</code></td><td><code>void</code></td><td>Delete a custom theme by name</td></tr>
-            <tr><td><code>save_spotify_credentials(QString clientId, QString clientSecret)</code></td><td><code>void</code></td><td>Store client id + secret (OS keychain on Python, settings file on C++); emits <code>spotifyCredentialsChanged</code></td></tr>
-            <tr><td><code>clear_spotify_credentials()</code></td><td><code>void</code></td><td>Forget the Spotify client credentials</td></tr>
             <tr><td><code>save_window_state(QString state)</code></td><td><code>void</code></td><td>Persist the window mode; ignores values other than windowed / fullscreen / maximized</td></tr>
             <tr><td><code>set_last_settings_section(QString section)</code></td><td><code>void</code></td><td>Persist which settings section was open; accepts the six current section ids (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the legacy <code>androidAutoSettings</code> / <code>phoneMirrorSettings</code> / <code>volumeKnobSettings</code> / <code>gestureSensorSettings</code>; anything else is ignored</td></tr>
             <tr><td><code>save_settings_section_visibility(QString section, bool visible)</code></td><td><code>void</code></td><td>Show/hide one settings section in the hub; emits <code>settingsMenuVisibilityChanged</code></td></tr>
@@ -276,10 +269,6 @@
             <tr><td><code>get_directory_history()</code></td><td><code>QVariantList</code></td><td>Same list as the <code>directoryHistory</code> property</td></tr>
             <tr><td><code>get_home_obd_parameters()</code></td><td><code>QVariantList</code></td><td>Same list as the <code>homeOBDParameters</code> property</td></tr>
             <tr><td><code>get_custom_theme(QString name)</code></td><td><code>QString</code></td><td>Theme JSON string for a saved custom theme (<code>""</code> if unknown)</td></tr>
-            <tr><td><code>get_spotify_client_id()</code></td><td><code>QString</code></td><td>Stored Spotify client id</td></tr>
-            <tr><td><code>get_spotify_client_secret()</code></td><td><code>QString</code></td><td>Stored Spotify client secret</td></tr>
-            <tr><td><code>has_spotify_credentials()</code></td><td><code>bool</code></td><td>True when both client id and secret are set</td></tr>
-            <tr><td><code>get_media_source()</code></td><td><code>QString</code></td><td>Returns the current <code>mediaSource</code> value (same as the property)</td></tr>
             <tr><td><code>get_auto_play_on_startup()</code></td><td><code>bool</code></td><td>Returns the current <code>autoPlayOnStartup</code> value (same as the property)</td></tr>
             <tr><td><code>get_persist_shuffle_state()</code></td><td><code>bool</code></td><td>Returns the current <code>persistShuffleState</code> value (same as the property)</td></tr>
             <tr><td><code>get_last_shuffle_state()</code></td><td><code>bool</code></td><td>Returns the current <code>lastShuffleState</code> value (same as the property)</td></tr>
@@ -350,7 +339,6 @@
             <tr><td><code>startUpVolumeChanged(QString value)</code></td><td>Notify for <code>startUpVolume</code>; carries the value as a string in both backends</td></tr>
             <tr><td><code>currentVolumeChanged(int value)</code></td><td>Emitted after <code>currentVolume</code> is saved</td></tr>
             <tr><td><code>mediaFolderChanged(QString value)</code></td><td>Emitted after <code>mediaFolder</code> is saved</td></tr>
-            <tr><td><code>mediaSourceChanged(QString value)</code></td><td>Emitted after <code>mediaSource</code> is saved</td></tr>
             <tr><td><code>autoPlayOnStartupChanged(bool value)</code></td><td>Emitted after <code>autoPlayOnStartup</code> is saved</td></tr>
             <tr><td><code>persistShuffleStateChanged(bool value)</code></td><td>Emitted after <code>persistShuffleState</code> is saved</td></tr>
             <tr><td><code>lastShuffleStateChanged(bool value)</code></td><td>Emitted after <code>lastShuffleState</code> is saved</td></tr>
@@ -382,7 +370,6 @@
             <tr><td><code>supportedOBDParametersChanged()</code></td><td>Vehicle-scan PID list changed</td></tr>
             <tr><td><code>directoryHistoryChanged()</code></td><td>Recent folders list changed</td></tr>
             <tr><td><code>customThemesChanged()</code></td><td>A custom theme was saved or deleted</td></tr>
-            <tr><td><code>spotifyCredentialsChanged()</code></td><td>Spotify client credentials saved or cleared</td></tr>
             <tr><td><code>windowStateChanged(QString value)</code></td><td>Emitted after <code>windowState</code> is saved</td></tr>
             <tr><td><code>lastSettingsSectionChanged(QString value)</code></td><td>Emitted after <code>lastSettingsSection</code> is saved</td></tr>
             <tr><td><code>androidAutoEnabledChanged(bool value)</code></td><td>Emitted after <code>androidAutoEnabled</code> is saved</td></tr>
@@ -521,7 +508,7 @@
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>applyVolume(int percent)</code></td><td><code>void</code></td><td>Clamp to 0&ndash;100, store in <code>settingsManager.currentVolume</code>, compute the quadratic-curve linear value and fan it out to every output: media and phone mirror take the linear value, Spotify (debounced 300 ms trailing on both backends) and the ESP32 LED ring take the percent. C++ dispatches via <code>volumeApplied</code>; Python calls the managers directly</td></tr>
+            <tr><td><code>applyVolume(int percent)</code></td><td><code>void</code></td><td>Clamp to 0&ndash;100, store in <code>settingsManager.currentVolume</code>, compute the quadratic-curve linear value and fan it out to every output: media and phone mirror take the linear value, the ESP32 LED ring takes the percent. C++ dispatches via <code>volumeApplied</code>; Python calls the managers directly</td></tr>
             <tr><td><code>toLinear(float percent)</code></td><td><code>float</code></td><td>Pure curve math (<code>(percent/100)^2</code>) for QML previews; does not dispatch</td></tr>
           </tbody>
         </table>
@@ -529,7 +516,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>volumeApplied(int percent, float linear)</code> <span class="platform-badge desktop">C++ only</span></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>main.cpp</code> connects it to <code>mediaManager.setVolume(linear)</code>, a 300 ms-debounced <code>spotifyManager.set_volume(percent)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out Python performs inside <code>applyVolume()</code></td></tr>
+            <tr><td><code>volumeApplied(int percent, float linear)</code> <span class="platform-badge desktop">C++ only</span></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>main.cpp</code> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out Python performs inside <code>applyVolume()</code></td></tr>
           </tbody>
         </table>
 
@@ -651,88 +638,6 @@
             <tr><td><code>fftDataChanged(QVariantList levels)</code></td><td>96 bar levels (ints 0&ndash;8) for the current playback position</td></tr>
             <tr><td><code>analysisComplete()</code></td><td>FFT pre-computation of the requested file finished</td></tr>
             <tr><td><code>analysisStarted()</code></td><td>FFT pre-computation started</td></tr>
-          </tbody>
-        </table>
-
-        <!-- SpotifyManager -->
-        <h2 id="spotifyManager">SpotifyManager <span class="cmt">&mdash; <code>spotifyManager</code></span></h2>
-        <p><span class="file-path">src/managers/spotifymanager.h</span> / <span class="file-path">backend/spotify_manager.py</span> &mdash; QML context property <code>spotifyManager</code></p>
-        <p>Spotify Web API client (OAuth2 with a local redirect server on port 8888; spotipy on Python, QNetworkAccessManager on C++). Controls Spotify Connect devices and browses the user's playlists. Both managers subscribe to <code>settingsManager.spotifyCredentialsChanged</code>, so credentials saved in Settings take effect without a restart.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile (Android/iOS) C++ builds compile a no-op stub instead: every signal and QML-called method exists, but <code>is_connected()</code> is always <code>false</code>. Stub-only differences: a <code>connected</code> property, <code>get_spotify_playlist_names()</code> returns <code>QVariantList</code>, <code>get_next_track_info()</code>/<code>get_previous_track_info()</code> return <code>QVariantMap</code>, and <code>logout()</code>, <code>play()</code>, <code>get_volume()</code>, <code>get_playlists()</code>, <code>get_spotify_tracks()</code>, <code>is_available()</code>, <code>cleanup()</code>, <code>connect_settings_manager()</code> are absent.</div>
-        <h3>Invokables &amp; Slots</h3>
-        <table>
-          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>connect_settings_manager(QObject *)</code></td><td><code>void</code></td><td>No-op alias kept for parity (C++ wires the SettingsManager in <code>main.cpp</code>)</td></tr>
-            <tr><td><code>authenticate()</code></td><td><code>void</code></td><td>Start the OAuth flow: reuse the cached token (refreshing it if expired) or open the browser</td></tr>
-            <tr><td><code>logout()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>Stop polling, clear tokens and the token cache, emit <code>connectionStateChanged(false)</code></td></tr>
-            <tr><td><code>disconnect()</code></td><td><code>void</code></td><td>Disconnect and forget tokens (C++: alias of <code>logout()</code>)</td></tr>
-            <tr><td><code>play()</code></td><td><code>void</code></td><td>Resume playback on the active device</td></tr>
-            <tr><td><code>pause()</code></td><td><code>void</code></td><td>Pause</td></tr>
-            <tr><td><code>toggle_play()</code></td><td><code>void</code></td><td>Play/pause</td></tr>
-            <tr><td><code>next_track()</code></td><td><code>void</code></td><td>Skip forward</td></tr>
-            <tr><td><code>previous_track()</code></td><td><code>void</code></td><td>Skip back</td></tr>
-            <tr><td><code>set_position(int positionMs)</code></td><td><code>void</code></td><td>Seek to a position in ms</td></tr>
-            <tr><td><code>set_volume(int volumePercent)</code></td><td><code>void</code></td><td>Set the device volume percent (VolumeController debounces this 300 ms to dodge 429s)</td></tr>
-            <tr><td><code>toggle_shuffle()</code></td><td><code>void</code></td><td>Toggle shuffle</td></tr>
-            <tr><td><code>play_uri(QString uri)</code></td><td><code>void</code></td><td>Start a track URI within the selected playlist context</td></tr>
-            <tr><td><code>refresh_devices()</code></td><td><code>void</code></td><td>Re-fetch Spotify Connect devices; emits <code>devicesChanged</code></td></tr>
-            <tr><td><code>set_active_device(QString deviceId)</code></td><td><code>void</code></td><td>Transfer playback to a device id; asynchronous on both backends (Python: executor + queued signal), result via <code>activeDeviceChanged</code></td></tr>
-            <tr><td><code>select_spotify_playlist(QString playlistId)</code></td><td><code>void</code></td><td>Load the tracks of a playlist id on the worker pool (asynchronous on both backends); emits <code>spotifyTracksChanged</code> and <code>currentSpotifyPlaylistChanged</code> when they arrive</td></tr>
-            <tr><td><code>is_available()</code></td><td><code>bool</code></td><td>C++: always <code>true</code>; Python: <code>true</code> when spotipy is importable</td></tr>
-            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Authenticated and polling</td></tr>
-            <tr><td><code>is_playing()</code></td><td><code>bool</code></td><td>Play state</td></tr>
-            <tr><td><code>is_shuffled()</code></td><td><code>bool</code></td><td>Shuffle state</td></tr>
-            <tr><td><code>has_credentials()</code></td><td><code>bool</code></td><td>Client id and secret configured</td></tr>
-            <tr><td><code>has_spotify_playlist_loaded()</code></td><td><code>bool</code></td><td>A playlist is selected and its tracks are loaded</td></tr>
-            <tr><td><code>get_current_track_name()</code></td><td><code>QString</code></td><td>Current track title</td></tr>
-            <tr><td><code>get_current_artist()</code></td><td><code>QString</code></td><td>Current artist</td></tr>
-            <tr><td><code>get_current_album()</code></td><td><code>QString</code></td><td>Current album</td></tr>
-            <tr><td><code>get_current_album_art()</code></td><td><code>QString</code></td><td>Current cover URL</td></tr>
-            <tr><td><code>get_current_file()</code></td><td><code>QString</code></td><td>Alias of <code>get_current_track_name()</code> (MediaManager-compatible name)</td></tr>
-            <tr><td><code>get_duration()</code></td><td><code>int</code></td><td>Duration in ms</td></tr>
-            <tr><td><code>get_position()</code></td><td><code>int</code></td><td>Position in ms</td></tr>
-            <tr><td><code>get_volume()</code></td><td><code>int</code></td><td>Device volume percent</td></tr>
-            <tr><td><code>get_devices()</code></td><td><code>QVariantList</code></td><td>Cached device list</td></tr>
-            <tr><td><code>get_playlists()</code></td><td><code>QVariantList</code></td><td>Cached playlist list</td></tr>
-            <tr><td><code>get_spotify_playlist_names()</code></td><td><code>QStringList</code></td><td>Playlist names in order</td></tr>
-            <tr><td><code>get_spotify_tracks()</code></td><td><code>QVariantList</code></td><td>Tracks of the selected playlist</td></tr>
-            <tr><td><code>get_current_spotify_playlist_name()</code></td><td><code>QString</code></td><td>Selected playlist name</td></tr>
-            <tr><td><code>get_current_spotify_playlist_id()</code></td><td><code>QString</code></td><td>Selected playlist id</td></tr>
-            <tr><td><code>get_spotify_playlist_id(QString playlistName)</code></td><td><code>QString</code></td><td>Playlist id for a playlist name</td></tr>
-            <tr><td><code>get_spotify_track_image(QVariant trackName)</code> <span class="cmt">(Python types: str)</span></td><td><code>QString</code></td><td>Cover URL of a track (looked up by name in the loaded playlist)</td></tr>
-            <tr><td><code>get_spotify_track_duration_formatted(QVariant trackName)</code> <span class="cmt">(Python types: str)</span></td><td><code>QString</code></td><td>Track length as <code>M:SS</code>, by name</td></tr>
-            <tr><td><code>get_spotify_track_artist(QVariant trackName)</code> <span class="cmt">(Python types: str)</span></td><td><code>QString</code></td><td>Artist of a track, by name</td></tr>
-            <tr><td><code>get_spotify_track_album(QVariant trackName)</code> <span class="cmt">(Python types: str)</span></td><td><code>QString</code></td><td>Album of a track, by name</td></tr>
-            <tr><td><code>get_spotify_track_uri(QVariant trackName)</code> <span class="cmt">(Python types: str)</span></td><td><code>QString</code></td><td>Spotify URI of a track, by name (for <code>play_uri</code>)</td></tr>
-            <tr><td><code>get_next_track_info()</code></td><td><code>QString</code></td><td>JSON <code>{name, artist, image}</code> of the track after the current one in the loaded playlist (<code>""</code> if none)</td></tr>
-            <tr><td><code>get_previous_track_info()</code></td><td><code>QString</code></td><td>JSON of the track before the current one</td></tr>
-            <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Stop timers and drop the session at exit</td></tr>
-            <tr><td><code>set_credentials(str client_id, str client_secret)</code> <span class="platform-badge linux">Python only</span></td><td><code>void</code></td><td>Store client id + secret via SettingsManager (QML uses <code>settingsManager.save_spotify_credentials</code> instead)</td></tr>
-            <tr><td><code>get_playlist_tracks(str playlist_id)</code> <span class="platform-badge linux">Python only</span></td><td><code>list</code></td><td>Fetch and return the tracks of a playlist id synchronously (blocks the caller; page size 50, February-2026 <code>/items</code> endpoint). QML uses <code>select_spotify_playlist()</code> instead</td></tr>
-          </tbody>
-        </table>
-        <h3>Signals</h3>
-        <table>
-          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>connectionStateChanged(bool connected)</code></td><td>Authenticated / disconnected</td></tr>
-            <tr><td><code>errorOccurred(QString message)</code></td><td>API or auth error message</td></tr>
-            <tr><td><code>playStateChanged(bool playing)</code></td><td>Play/pause state on the active Spotify device</td></tr>
-            <tr><td><code>currentTrackChanged(QString title, QString artist, QString album, QString artUrl)</code></td><td>Title, artist, album and cover URL of the new track</td></tr>
-            <tr><td><code>durationChanged(int durationMs)</code></td><td>Track length in ms</td></tr>
-            <tr><td><code>positionChanged(int positionMs)</code></td><td>Position in ms (interpolated locally every 250 ms between 3 s API polls)</td></tr>
-            <tr><td><code>shuffleStateChanged(bool shuffled)</code></td><td>Shuffle toggled on Spotify</td></tr>
-            <tr><td><code>volumeChanged(int volume)</code></td><td>Device volume percent 0&ndash;100</td></tr>
-            <tr><td><code>devicesChanged(QVariantList devices)</code></td><td>Spotify Connect device list (<code>[{id, name, type, is_active, volume_percent}, &hellip;]</code>)</td></tr>
-            <tr><td><code>activeDeviceChanged(QString deviceName)</code></td><td>Name of the active playback device</td></tr>
-            <tr><td><code>playlistsChanged(QVariantList playlists)</code></td><td>User playlists loaded (<code>[{id, name, image, track_count}, &hellip;]</code>)</td></tr>
-            <tr><td><code>spotifyTracksChanged(QVariantList tracks)</code></td><td>Tracks of the selected playlist loaded</td></tr>
-            <tr><td><code>currentSpotifyPlaylistChanged(QString playlistName)</code></td><td>Name of the newly selected playlist</td></tr>
-            <tr><td><code>authUrlReady(QString url)</code></td><td>OAuth URL for the browser (redirect server on port 8888)</td></tr>
-            <tr><td><code>statusProgress(QString message)</code></td><td>Terminal-style <code>[INFO]</code>/<code>[ERROR]</code> lines during auth and loading</td></tr>
-            <tr><td><code>albumColorsExtracted(QString jsonColors)</code></td><td>JSON palette extracted from the Spotify cover</td></tr>
-            <tr><td><code>queueUpdated()</code></td><td>Neighbour-track art for the side cards is ready</td></tr>
           </tbody>
         </table>
 
@@ -1266,7 +1171,7 @@
             <tr><td><code>phoneAsleepChanged(bool asleep)</code></td><td>Phone went to sleep / woke up while mirrored</td></tr>
             <tr><td><code>phoneInUseChanged(bool inUse)</code></td><td>Phone taken in hand / handed back</td></tr>
             <tr><td><code>mediaChanged()</code> / <code>mediaArtChanged()</code></td><td>Notify for the phone media properties / <code>mediaArtUrl</code></td></tr>
-            <tr><td><code>mediaActiveChanged(bool active)</code></td><td>The phone took / gave back the media controls; <code>main</code> pauses local media (and Spotify unless the phone app is Spotify) when it takes over</td></tr>
+            <tr><td><code>mediaActiveChanged(bool active)</code></td><td>The phone took / gave back the media controls; <code>main</code> pauses local media when it takes over</td></tr>
             <tr><td><code>duckingChanged(float factor)</code></td><td>Duck factor while the phone makes sound and ducking is on, 1.0 otherwise; <code>main</code> routes it to <code>mediaManager.setDucking</code></td></tr>
             <tr><td><code>wirelessAddressChanged(QString address)</code></td><td>Remembered Wi-Fi phone changed (paired, moved to a new port, forgotten); <code>main</code> saves it with <code>save_scrcpy_wireless_address</code></td></tr>
             <tr><td><code>connectionTypeChanged()</code> / <code>wirelessBusyChanged()</code></td><td>Property notifications</td></tr>
@@ -1279,7 +1184,7 @@
         <!-- DownloadManager -->
         <h2 id="downloadManager">DownloadManager <span class="cmt">&mdash; <code>downloadManager</code></span></h2>
         <p><span class="file-path">src/managers/downloadmanager.h</span> / <span class="file-path">backend/download_manager.py</span> &mdash; QML context property <code>downloadManager</code></p>
-        <p>Music search and download. The C++ backend drives <code>yt-dlp</code> (YouTube Music); the Python backend drives <code>music_dl</code> (ytmusicapi search, Spotify URL downloads). Compiled out with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> (app-store builds register a stub with the same members minus the two storage-access invokables).</p>
+        <p>Music search and download. The C++ backend drives <code>yt-dlp</code> (YouTube Music); the Python backend drives <code>music_dl</code> (ytmusicapi search, yt-dlp download). Compiled out with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> (app-store builds register a stub with the same members minus the two storage-access invokables).</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class runs yt-dlp through the bundled <code>OctaveMediaBridge</code> (JNI) and polls progress on a timer; <code>hasStorageAccess()</code> / <code>requestStorageAccess()</code> are meaningful only there.</div>
         <h3>Properties</h3>
         <table>
@@ -1296,7 +1201,7 @@
           <tbody>
             <tr><td><code>hasStorageAccess()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>bool</code></td><td>Android All-Files-Access granted; always <code>true</code> elsewhere</td></tr>
             <tr><td><code>requestStorageAccess()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>bool</code></td><td>Open the Android All-Files-Access prompt; no-op elsewhere</td></tr>
-            <tr><td><code>search(QString query)</code></td><td><code>void</code></td><td>Search YouTube Music (C++: yt-dlp; Python: ytmusicapi via music_dl, also accepts a Spotify URL); results via <code>searchResults</code></td></tr>
+            <tr><td><code>search(QString query)</code></td><td><code>void</code></td><td>Search YouTube Music (C++: yt-dlp; Python: ytmusicapi via music_dl); results via <code>searchResults</code></td></tr>
             <tr><td><code>next_search_page()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>No offset pagination in yt-dlp flat search &mdash; emits "All results shown"</td></tr>
             <tr><td><code>search_more()</code></td><td><code>void</code></td><td>Alias of <code>next_search_page()</code> (Python: same "All results shown" message)</td></tr>
             <tr><td><code>download(QString songId, QString songName)</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>Queue a YouTube Music video id with a display name (builds the JSON for <code>download_song</code>)</td></tr>
@@ -1310,8 +1215,6 @@
             <tr><td><code>set_download_playlist(QString name)</code></td><td><code>void</code></td><td>Target playlist sub-folder for new downloads (<code>""</code> resets to the default)</td></tr>
             <tr><td><code>get_download_playlist()</code></td><td><code>QString</code></td><td>Current target playlist name (default <code>"Downloads"</code>)</td></tr>
             <tr><td><code>cleanup()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>Kill running yt-dlp processes at exit</td></tr>
-            <tr><td><code>download_from_url(str url)</code> <span class="platform-badge linux">Python only</span></td><td><code>void</code></td><td>Download a Spotify track / album / playlist URL through music_dl</td></tr>
-            <tr><td><code>reset_engine()</code> <span class="platform-badge linux">Python only</span></td><td><code>void</code></td><td>Tear down the music_dl engine (e.g. after credentials change)</td></tr>
             <tr><td><code>get_song_data_for_download(str song_url)</code> <span class="platform-badge linux">Python only</span></td><td><code>str</code></td><td>Full JSON of a result (by URL) from the last search, to pass to <code>download_song()</code></td></tr>
           </tbody>
         </table>
@@ -1412,29 +1315,25 @@
             <tr><td><code>settingsManager</code></td><td><code>get_setting(key)</code></td><td>Python accepts an optional second <code>default_value</code>; C++ has the separate <code>get_setting_with_default()</code> (Python has that too).</td></tr>
             <tr><td><code>settingsManager</code></td><td><code>startUpVolumeChanged</code></td><td>Both emit a <em>string</em> although the property is <code>float</code>.</td></tr>
             <tr><td><code>networkManager</code></td><td><code>cleanup()</code></td><td>Public slot in C++; plain (non-Slot) method in Python. Not callable from QML on Python.</td></tr>
-            <tr><td><code>volumeController</code></td><td><code>volumeApplied(int, float)</code></td><td>C++ only. Python dispatches to the same four outputs directly inside <code>applyVolume()</code> instead of emitting a signal.</td></tr>
+            <tr><td><code>volumeController</code></td><td><code>volumeApplied(int, float)</code></td><td>C++ only. Python dispatches to the same three outputs directly inside <code>applyVolume()</code> instead of emitting a signal.</td></tr>
             <tr><td><code>mediaManager</code></td><td><code>_save_playback_state()</code>, <code>_clear_temp_files()</code></td><td>Python declares them <code>@Slot</code> too, but underscore-prefixed names are treated as private here; both backends expose them.</td></tr>
-            <tr><td><code>spotifyManager</code></td><td><code>logout()</code></td><td>C++ only (<code>disconnect()</code> is the shared name and is an alias of it).</td></tr>
-            <tr><td><code>spotifyManager</code></td><td><code>set_credentials(str, str)</code>, <code>get_playlist_tracks(str)</code></td><td>Python only. QML saves credentials through <code>settingsManager.save_spotify_credentials()</code>.</td></tr>
-            <tr><td><code>spotifyManager</code></td><td><code>get_spotify_track_*(name)</code></td><td>C++ takes <code>QVariant</code>, Python <code>str</code> &mdash; harmless from QML.</td></tr>
             <tr><td><code>obdManager</code></td><td><code>connected</code> property</td><td>C++ only. Python exposes the flag through <code>is_connected()</code> and the <code>connectionStatusChanged</code> signal (it does have the <code>connectionStatus</code> property).</td></tr>
             <tr><td><code>obdManager</code></td><td><code>isConnected()</code>, <code>getConnectionStatus()</code>, <code>availableAdapters()</code></td><td>C++ camelCase getters backing the properties; Python has only the snake_case forms / the properties.</td></tr>
             <tr><td><code>obdManager</code></td><td><code>connect_obd()</code>, <code>refresh_ports()</code>, <code>open_bluetooth_settings()</code></td><td>C++ only. Python has <code>scan()</code> (same as <code>refresh_ports</code>) and <code>reconnect()</code> / <code>force_connect()</code>.</td></tr>
             <tr><td><code>phoneMirrorManager</code></td><td><code>describeDeviceState(str)</code></td><td>Public slot in C++; static helper (not a Slot) in Python.</td></tr>
             <tr><td><code>dhuCapture</code></td><td><code>sendMouseEvent(int, int, bool)</code></td><td>Python only.</td></tr>
             <tr><td><code>downloadManager</code></td><td><code>next_search_page()</code>, <code>download()</code>, <code>cancel_download()</code>, <code>pause_download()</code>, <code>resume_download()</code>, <code>get_download_queue()</code>, <code>clear_download_queue()</code>, <code>connect_settings_manager()</code>, <code>cleanup()</code>, <code>hasStorageAccess()</code>, <code>requestStorageAccess()</code></td><td>C++ only (yt-dlp queue). The Python music_dl backend never grew queue control; <code>connect_settings_manager</code> / <code>cleanup</code> exist there as plain methods.</td></tr>
-            <tr><td><code>downloadManager</code></td><td><code>download_from_url(str)</code>, <code>reset_engine()</code>, <code>get_song_data_for_download(str)</code></td><td>Python only (Spotify-URL downloads via music_dl).</td></tr>
+            <tr><td><code>downloadManager</code></td><td><code>get_song_data_for_download(str)</code></td><td>Python only (looks up the full song data of a search result by URL).</td></tr>
             <tr><td><code>perfMonitor</code></td><td>whole object</td><td>Python only, <code>--profile</code> flag. No C++ equivalent.</td></tr>
           </tbody>
         </table>
-        <p>Members used by QML behind <code>typeof x !== "undefined"</code> guards: <code>esp32VolumeManager</code>, <code>obdManager</code>, <code>berryIMU</code>, <code>dashboardManager</code>, <code>diagnosticsManager</code>, <code>gestureSensor</code>, <code>mediaManager</code>, <code>spotifyManager</code> and <code>settingsManager</code> (the last three only inside dashboard widgets, which are also rendered in the editor preview). All of these are registered by both backends today; the guards exist for the mobile stubs and for widgets instantiated outside the app.</p>
+        <p>Members used by QML behind <code>typeof x !== "undefined"</code> guards: <code>esp32VolumeManager</code>, <code>obdManager</code>, <code>berryIMU</code>, <code>dashboardManager</code>, <code>diagnosticsManager</code>, <code>gestureSensor</code>, <code>mediaManager</code> and <code>settingsManager</code> (the last two only inside dashboard widgets, which are also rendered in the editor preview). All of these are registered by both backends today; the guards exist for the mobile stubs and for widgets instantiated outside the app.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="settings-reference.html" class="related-link">Settings Reference</a>
           <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="media-manager.html" class="related-link">Media Manager</a>
-          <a href="spotify-manager.html" class="related-link">Spotify Manager</a>
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
           <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
           <a href="network-manager.html" class="related-link">Network Manager</a>

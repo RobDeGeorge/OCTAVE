@@ -1,7 +1,8 @@
 """
 Downloader module for OCTAVE music_dl (forked from spotdl).
 Stripped of: SponsorBlock, lyrics providers, SoundCloud/BandCamp/Piped,
-archive, m3u, LRC generation, and web UI features.
+archive, m3u, LRC generation, web UI features, and all non-YouTube metadata
+sources (songs come from YouTube Music; audio from yt-dlp).
 Fixed for Python 3.14 asyncio compatibility.
 """
 
@@ -35,7 +36,7 @@ from backend.music_dl.utils.config import (
 from backend.music_dl.utils.ffmpeg import FFmpegError, convert, get_ffmpeg_path
 from backend.music_dl.utils.formatter import create_file_name
 from backend.music_dl.utils.metadata import MetadataError, embed_metadata
-from backend.music_dl.utils.search import gather_known_songs, reinit_song, songs_from_albums
+from backend.music_dl.utils.search import gather_known_songs
 
 __all__ = [
     "AUDIO_PROVIDERS",
@@ -188,14 +189,6 @@ class Downloader:
     ) -> List[Tuple[Song, Optional[Path]]]:
         """Download multiple songs."""
 
-        if self.settings["fetch_albums"]:
-            albums = set(song.album_id for song in songs if song.album_id is not None)
-            songs.extend(songs_from_albums(list(albums)))
-            return_obj = {}
-            for song in songs:
-                return_obj[song.url] = song
-            songs = list(return_obj.values())
-
         logger.debug("Downloading %d songs", len(songs))
 
         self.progress_handler.set_song_count(len(songs))
@@ -262,26 +255,6 @@ class Downloader:
             logger.error("Song is missing required fields: %s", song.display_name)
             self.errors.append(f"Song is missing required fields: {song.display_name}")
             return song, None
-
-        # Reinitialize the song if missing metadata (requires Spotify)
-        from backend.music_dl.utils.spotify import SpotifyClient
-        if SpotifyClient._initialized:
-            if (
-                (song.name is None and song.url)
-                or self.settings["fetch_albums"]
-                or any(
-                    x is None
-                    for x in [
-                        song.genres,
-                        song.disc_count,
-                        song.tracks_count,
-                        song.track_number,
-                        song.album_id,
-                        song.album_artist,
-                    ]
-                )
-            ):
-                song = reinit_song(song)
 
         # Create the output file path
         output_file = create_file_name(

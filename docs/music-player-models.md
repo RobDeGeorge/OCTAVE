@@ -49,7 +49,7 @@ The CD's LCD shows live elapsed playback time and PLAY/PAUSE/LOADING/READY state
 
 ## Integration and validation
 
-`MusicDevicePreference.qml` synchronizes the `musicDeviceModel` setting through the existing generic settings API, shared by C++ and Python. Both backends include the default and reset notification. Unknown values resolve to album art. The scene is loaded only when selected and visible, and unloaded when the menu hides. Playback signals from either local media or Spotify drive the animation timer. Pausing preserves the angle.
+`MusicDevicePreference.qml` synchronizes the `musicDeviceModel` setting through the existing generic settings API, shared by C++ and Python. Both backends include the default and reset notification. Unknown values resolve to album art. The scene is loaded only when selected and visible, and unloaded when the menu hides. Playback signals from either local media or the phone (while mirroring) drive the animation timer. Pausing preserves the angle.
 
 Qt Quick 3D remains optional. Its imports are isolated in the lazily loaded scene. The music menu displays the existing album carousel if the module or assets cannot load. The carousel's transition/settled lifecycle is retained because it also schedules track analysis and metadata updates.
 
@@ -57,7 +57,7 @@ Validated with a desktop C++ build, real Qt/OpenGL rendering of all five models,
 
 ## Loading animation behavior
 
-Selecting a player or returning to the visible music menu plays a short incoming-media sequence. Track changes from local playback or Spotify run an exchange of about two seconds (2.45 seconds for the CD player): the tonearm parks or the lid/door opens, old media lifts out, replacement media slides in, then the arm lowers or the lid/door closes. The record's spindle and rubber mat remain attached to the deck. MP3/iPod track changes use a brief screen fade inside the stationary housing.
+Selecting a player or returning to the visible music menu plays a short incoming-media sequence. Track changes from local playback or the phone (while mirroring) run an exchange of about two seconds (2.45 seconds for the CD player): the tonearm parks or the lid/door opens, old media lifts out, replacement media slides in, then the arm lowers or the lid/door closes. The record's spindle and rubber mat remain attached to the deck. MP3/iPod track changes use a brief screen fade inside the stationary housing.
 
 Audio playback and existing track controls are not delayed. Disc/reel rotation pauses during loading, resumes only if playback is active, and remains stopped if the user pauses during the exchange. Rapid skips share the current sequence and retain the latest track metadata. Hiding the view or switching model cancels the old animation and restores the seated pose. The Now Playing transition preview also triggers the device exchange.
 
@@ -83,7 +83,7 @@ The cassette has connected chamber sidewalls and hinge supports. Side-button rib
 
 ## Playback-detail audit
 
-All time readouts consume `MediaRoom.position` and `MediaRoom.duration` in milliseconds, shared by the local and Spotify backends. They use actual playback position rather than an independent animation clock, follow seeking and track resets, clamp invalid/out-of-range values, and support hour-long tracks. Unknown remaining time reads `--:--`.
+All time readouts consume `MediaRoom.position` and `MediaRoom.duration` in milliseconds, shared by local playback and the phone while mirroring. They use actual playback position rather than an independent animation clock, follow seeking and track resets, clamp invalid/out-of-range values, and support hour-long tracks. Unknown remaining time reads `--:--`.
 
 | Player | Live details |
 | --- | --- |

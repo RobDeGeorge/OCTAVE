@@ -50,7 +50,6 @@ class SettingsManager : public QObject
     Q_PROPERTY(float startUpVolume READ startUpVolume NOTIFY startUpVolumeChanged)
     Q_PROPERTY(int currentVolume READ currentVolume NOTIFY currentVolumeChanged)
     Q_PROPERTY(QString mediaFolder READ mediaFolder NOTIFY mediaFolderChanged)
-    Q_PROPERTY(QString mediaSource READ mediaSource NOTIFY mediaSourceChanged)
     Q_PROPERTY(bool autoPlayOnStartup READ autoPlayOnStartup NOTIFY autoPlayOnStartupChanged)
     Q_PROPERTY(bool persistShuffleState READ persistShuffleState NOTIFY persistShuffleStateChanged)
     Q_PROPERTY(bool lastShuffleState READ lastShuffleState NOTIFY lastShuffleStateChanged)
@@ -167,7 +166,6 @@ public:
     float startUpVolume() const;
     int currentVolume() const;
     QString mediaFolder() const;
-    QString mediaSource() const;
     bool autoPlayOnStartup() const;
     bool persistShuffleState() const;
     bool lastShuffleState() const;
@@ -274,7 +272,6 @@ signals:
     void startUpVolumeChanged(const QString &value);   // Python emits str
     void currentVolumeChanged(int value);
     void mediaFolderChanged(const QString &value);
-    void mediaSourceChanged(const QString &value);
     void autoPlayOnStartupChanged(bool value);
     void persistShuffleStateChanged(bool value);
     void lastShuffleStateChanged(bool value);
@@ -314,9 +311,6 @@ signals:
 
     // Custom themes
     void customThemesChanged();
-
-    // Spotify
-    void spotifyCredentialsChanged();
 
     // Window / Settings navigation
     void windowStateChanged(const QString &value);
@@ -393,8 +387,6 @@ public slots:
     void save_start_volume(float volume);
     void setCurrentVolume(int volume);
     void save_media_folder(const QString &folderPath);
-    void set_media_source(const QString &source);
-    void toggle_media_source();
     void save_auto_play_on_startup(bool enabled);
     void save_persist_shuffle_state(bool enabled);
     void save_last_shuffle_state(bool enabled);
@@ -439,10 +431,6 @@ public slots:
     // Custom themes
     void save_custom_theme(const QString &name, const QString &themeJson, const QString &albumArtSource = QString());
     void delete_custom_theme(const QString &name);
-
-    // Spotify credentials
-    void save_spotify_credentials(const QString &clientId, const QString &clientSecret);
-    void clear_spotify_credentials();
 
     // Window / Settings navigation
     void save_window_state(const QString &state);
@@ -506,10 +494,6 @@ public slots:
     Q_INVOKABLE QVariantList get_directory_history();
     Q_INVOKABLE QVariantList get_home_obd_parameters();
     Q_INVOKABLE QString get_custom_theme(const QString &name);
-    Q_INVOKABLE QString get_spotify_client_id();
-    Q_INVOKABLE QString get_spotify_client_secret();
-    Q_INVOKABLE bool has_spotify_credentials();
-    Q_INVOKABLE QString get_media_source();
     Q_INVOKABLE bool get_auto_play_on_startup();
     Q_INVOKABLE bool get_persist_shuffle_state();
     Q_INVOKABLE bool get_last_shuffle_state();
@@ -638,13 +622,6 @@ private:
     QVariantList m_homeObdParameters;
     QString m_bottomBarOrientation;
     bool m_showBottomBarMediaControls = true;
-
-    // Spotify
-    QString m_spotifyClientId;
-    QString m_spotifyClientSecret;
-
-    // Media source
-    QString m_mediaSource;
 
     // Auto-play / resume
     bool m_autoPlayOnStartup = false;

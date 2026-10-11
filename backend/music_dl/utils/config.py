@@ -9,28 +9,22 @@ import os
 import platform
 from argparse import Namespace
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict
 
-from backend.music_dl.types.options import (
-    DownloaderOptions,
-    SpotifyOptions,
-)
+from backend.music_dl.types.options import DownloaderOptions
 
 __all__ = [
     "ConfigError",
     "get_music_dl_path",
     "get_config_file",
-    "get_cache_path",
     "get_temp_path",
     "get_errors_path",
     "get_config",
     "create_settings_type",
-    "SPOTIFY_OPTIONS",
     "DOWNLOADER_OPTIONS",
     "DEFAULT_CONFIG",
     # Keep old name as alias for compatibility
     "get_spotdl_path",
-    "get_spotify_cache_path",
 ]
 
 logger = logging.getLogger(__name__)
@@ -67,14 +61,6 @@ def get_config_file() -> Path:
     return get_music_dl_path() / "config.json"
 
 
-def get_cache_path() -> Path:
-    return get_music_dl_path() / ".spotipy"
-
-
-def get_spotify_cache_path() -> Path:
-    return get_music_dl_path() / ".spotify_cache"
-
-
 def get_temp_path() -> Path:
     temp_path = get_music_dl_path() / "temp"
     if not temp_path.exists():
@@ -100,7 +86,7 @@ def get_config() -> Dict[str, Any]:
 def create_settings_type(
     arguments: Namespace,
     config: Dict[str, Any],
-    default: Union[SpotifyOptions, DownloaderOptions],
+    default: DownloaderOptions,
 ) -> Dict[str, Any]:
     """
     Create settings dict.
@@ -141,25 +127,10 @@ class GlobalConfig:
         return cls.parameters.get(key, None)
 
 
-# Empty credentials — OCTAVE will provide these from SettingsManager
-SPOTIFY_OPTIONS: SpotifyOptions = {
-    "client_id": "",
-    "client_secret": "",
-    "auth_token": None,
-    "user_auth": False,
-    "headless": False,
-    "cache_path": str(get_cache_path()),
-    "no_cache": False,
-    "max_retries": 3,
-    "use_cache_file": False,
-}
-
 DOWNLOADER_OPTIONS: DownloaderOptions = {
     "audio_providers": ["youtube-music"],
     "lyrics_providers": [],
     "genius_token": "",
-    "playlist_numbering": False,
-    "playlist_retain_track_cover": False,
     "scan_for_songs": False,
     "m3u": None,
     "output": "{artists} - {title}.{output-ext}",
@@ -171,7 +142,6 @@ DOWNLOADER_OPTIONS: DownloaderOptions = {
     "format": "mp3",
     "save_file": None,
     "filter_results": True,
-    "album_type": None,
     "threads": 2,
     "cookie_file": None,
     "restrict": None,
@@ -182,9 +152,7 @@ DOWNLOADER_OPTIONS: DownloaderOptions = {
     "load_config": False,
     "log_level": "INFO",
     "simple_tui": True,
-    "fetch_albums": False,
     "id3_separator": "/",
-    "ytm_data": False,
     "add_unavailable": False,
     "generate_lrc": False,
     "force_update_metadata": False,
@@ -206,6 +174,5 @@ DOWNLOADER_OPTIONS: DownloaderOptions = {
 }
 
 DEFAULT_CONFIG = {
-    **SPOTIFY_OPTIONS,  # type: ignore
     **DOWNLOADER_OPTIONS,  # type: ignore
 }

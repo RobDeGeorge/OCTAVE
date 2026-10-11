@@ -24,7 +24,7 @@
 
 ---
 
-OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi behind the dash, a laptop in a project car, or an Android tablet. It plays local music and Spotify, reads live data from the car over OBD-II, mirrors an Android phone over USB, and recolours its interface to match the album art.
+OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi behind the dash, a laptop in a project car, or an Android tablet. It plays local music, reads live data from the car over OBD-II, mirrors an Android phone over USB, and recolours its interface to match the album art.
 
 It sits in the same space as Crankshaft, OpenAuto Pro and AGL, but it runs on its own rather than projecting a phone, and it is built to be modified. Most of the customisation (themes, dashboards, layouts, hardware bindings) happens inside the app. Past that, the code is small enough to fork, and it ships in both C++/Qt and Python/PySide6 so you can work in whichever you already know.
 
@@ -42,7 +42,7 @@ Every clip below is the real app, driven by a script with music playing (see [De
   <img src="frontend/assets/readme/media.webp" alt="Media room and player: accent, glow and background follow each album's art as tracks change" width="900">
 </p>
 
-Skip a track and the UI recolours. Local MP3, M4A and FLAC with a live waveform, Spotify, and a downloader that pairs Spotify metadata with YouTube audio.
+Skip a track and the UI recolours. Local MP3, M4A and FLAC with a live waveform, and a downloader that finds tracks on YouTube Music.
 
 <p align="center">
   <img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room with waveform, controls and album art" width="49%">
@@ -55,7 +55,7 @@ Skip a track and the UI recolours. Local MP3, M4A and FLAC with a live waveform,
   <img src="frontend/assets/readme/library.webp" alt="Music library: long-press a song for its action sheet, sort by artist, open the playlist picker, then search for David Bowie and get results with album art" width="900">
 </p>
 
-Sort by title, artist or album, switch between playlist folders, and long-press any song to move it to another playlist or delete it. Search finds tracks with Spotify metadata and album art and downloads them into the playlist you pick. Downloads are left out of app-store builds.
+Sort by title, artist or album, switch between playlist folders, and long-press any song to move it to another playlist or delete it. Search finds tracks on YouTube Music, with album art, and downloads them into the playlist you pick. Downloads are left out of app-store builds.
 
 <p align="center">
   <img src="frontend/assets/readme/library_song_sheet.png" alt="Song action sheet: album art, artist and album, the folder it lives in, move to playlist, delete" width="49%">
@@ -176,15 +176,14 @@ Pitch, roll, heading, a G-force plot with a trail, altitude and temperature from
 | Built-in OBD-II + custom gauges | yes | no | limited | no |
 | Phone mirroring | yes (built-in, nothing to install) | AA only | AA only | n/a |
 | Themable / forkable UI | fully (QML) | limited | limited | no |
-| Local music + Spotify + downloads | yes | via phone | via phone | via phone |
+| Local music + downloads | yes | via phone | via phone | via phone |
 | Desktop dev loop | yes (Win/macOS/Linux) | Pi only | Pi only | n/a |
 
 ## Features
 
 ### Media & Audio
 - Local player for MP3, M4A, FLAC with album art carousel and live FFT visualizer
-- Spotify integration with OAuth2 and full device control
-- Music search and download (Spotify metadata + YouTube audio)
+- Music search and download (YouTube Music + yt-dlp)
 - Dynamic theming that pulls colors straight from album art
 
 ### Vehicle & Hardware
@@ -310,7 +309,7 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 
 | Library | Used for |
 |---|---|
-| [Qt 6](https://www.qt.io/) (Core, Gui, Qml, Quick, Quick Controls 2, Multimedia, Network, NetworkAuth, Concurrent, SerialPort, Bluetooth) | The whole application: UI, audio playback, networking, Spotify OAuth, serial and Bluetooth OBD |
+| [Qt 6](https://www.qt.io/) (Core, Gui, Qml, Quick, Quick Controls 2, Multimedia, Network, Concurrent, SerialPort, Bluetooth) | The whole application: UI, audio playback, networking, serial and Bluetooth OBD |
 | Qt Quick 3D, Quick 3D Asset Utils, Quick Timeline | The 3D Jeep and the music-device scenes |
 | Qt DBus | BlueZ pairing on Linux |
 | Qt WebEngine / Qt WebView | The offline wiki reader (desktop / Android) |
@@ -327,8 +326,6 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 | [PyAV](https://github.com/PyAV-Org/PyAV) | Phone mirror decoding, waveform audio |
 | [NumPy](https://numpy.org/) | Album-art colour analysis for theming |
 | [mutagen](https://github.com/quodlibet/mutagen) | Audio tags and album art |
-| [spotipy](https://github.com/spotipy-dev/spotipy) | Spotify Web API |
-| [keyring](https://github.com/jaraco/keyring) | Storing Spotify tokens in the OS keychain |
 | [requests](https://requests.readthedocs.io/) | HTTP |
 | [pySerial](https://github.com/pyserial/pyserial) | ELM327 OBD adapters and the ESP32 knob |
 | [smbus2](https://github.com/kplindegaard/smbus2) | I²C for the BerryIMU and gesture sensor |
@@ -359,7 +356,7 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 
 - **adb**: talks to the phone for mirroring and Android Auto.
 - **Android Auto Desktop Head Unit (DHU)** from Google: the Android Auto view.
-- **Spotify Web API** and **YouTube Music**: streaming control, search and downloads.
+- **YouTube Music**: search and downloads.
 
 ### Fonts, icons and 3D assets
 

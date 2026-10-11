@@ -2,7 +2,7 @@
 
 **Status:** Deferred. OCTAVE currently routes all errors to logs + terminal output only, by design. This document captures the plan for adding an in-app notification layer later, if and when that decision changes.
 
-**Last updated:** 2026-04-11
+**Last updated:** 2026-10-10
 
 ---
 
@@ -34,10 +34,9 @@ Instead, curate a short list of driver-actionable errors — things the driver c
 Target: ~4–6 errors total. Initial list:
 
 1. **OBD adapter disconnected mid-trip** — driver might want to know their vehicle diagnostics just went offline
-2. **Spotify auth expired** — needs re-login, user needs to know why music stopped
-3. **Phone mirror disconnected unexpectedly** — driver may want to reconnect
-4. **Download failed** (only if the user just initiated one — not background retries)
-5. **Update available** — informational, but driver-relevant
+2. **Phone mirror disconnected unexpectedly** — driver may want to reconnect
+3. **Download failed** (only if the user just initiated one — not background retries)
+4. **Update available** — informational, but driver-relevant
 
 Everything else — the ~100 `logger.error(...)` call sites we added in Phase 2 — stays logs-only.
 
@@ -59,12 +58,10 @@ Instantiate both components **once** in `Main.qml` as the last children of the r
 
 ```qml
 Connections {
-    target: spotifyManager
-    function onErrorOccurred(msg) {
-        // Filter to auth-expired case only, skip the noisy ones
-        if (msg.includes("Spotify connection lost")) {
-            errorToast.show(msg, "error")
-        }
+    target: phoneMirrorManager
+    function onScrcpyError(msg) {
+        // Filter to unexpected disconnects only, skip the noisy ones
+        errorToast.show(msg, "error")
     }
 }
 ```
@@ -87,10 +84,9 @@ The backend side is already wired up. Every silent-failure fix from Phase 2 emit
 
 | Manager | Signal | Notes |
 |---|---|---|
-| `spotify_manager` | `errorOccurred(str)` | Rate-limited for background polls (5 consecutive failures / 30s interval). Fires on user-initiated failures (device refresh, playlist refresh, transfer) immediately. |
 | `obd_manager` | `connectionError(str)` | Already fires on connection failures. |
 | `download_manager` | `downloadError(song_id, name, msg)` | Per-download; needs the song name to be useful in a toast. |
-| `phone_mirror.manager` | `error(str)` | Fires on scrcpy start/stop failures. |
+| `phone_mirror.manager` | `scrcpyError(str)` | Fires on scrcpy start/stop failures. |
 | `android_auto.manager` | `error(str)` | Fires on DHU process errors. |
 | `network_manager` | `updateStatusChanged(str)` | Not strictly an error — but used for update notifications. |
 
@@ -100,7 +96,7 @@ To enable the full toast UI, no backend changes needed. Just build the two QML c
 
 ## Open decisions (for whenever this resumes)
 
-1. **Full curated list or smaller subset?** Start with 2–3 errors (OBD disconnect + Spotify auth + download failed) and expand based on user feedback?
+1. **Full curated list or smaller subset?** Start with 2–3 errors (OBD disconnect + phone mirror disconnect + download failed) and expand based on user feedback?
 2. **Toast position:** top-center vs top-right? Top-center is more noticeable but covers more screen real estate.
 3. **Persistent error indicator:** should there be a small badge somewhere (e.g. on `BottomBar`) that shows "there are recent errors in the log" so the driver can check later without interrupting driving?
 4. **Audible chime:** yes/no? If yes, how to avoid it conflicting with music playback?

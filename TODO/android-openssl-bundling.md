@@ -1,5 +1,5 @@
 **Status:** deferred
-**Last updated:** 2026-05-03
+**Last updated:** 2026-10-10
 
 # Android: bundle OpenSSL so Qt has a functional TLS backend
 
@@ -23,7 +23,6 @@ The APK only ships the **plugin shim** `libplugins_tls_qopensslbackend_arm64-v8a
 As of v0.9 ship date (2026-05-03):
 
 - **YT Music works** — `OctaveMediaBridge.java` runs ytmusicapi inside a bundled Python interpreter that uses Python's own `ssl` module backed by the Android system OpenSSL via the AAR-shipped Python build. Doesn't go through `QSslSocket`.
-- **Spotify on Android** — not yet wired into the C++ Android build; `spotifymanager.cpp` is desktop-only behind manager init guards. When Spotify mobile lands, this will block it (Spotipy → `requests` → CPython `ssl` would still work, but `QNetworkAccessManager` over HTTPS will not).
 - **OTA updates / network image fetch** — currently no in-app HTTPS calls from Qt code on Android. Album art on Android comes from local files / the Python YT Music bundle, not Qt's `QNetworkAccessManager`.
 - **Phone mirror / Android Auto / OBD** — all local protocols, no TLS.
 
@@ -70,7 +69,6 @@ Download the two `.so` files from the KDAB repo into `android/openssl/arm64-v8a/
 
 - `TODO/android-cpp-port.md` — TLS isn't blocking the C++ port itself, but blocks any in-app HTTPS feature on Android that lands after the port. If you're working through that file and adding a network call, do this first.
 - `TODO/android-search-ytmusicapi.md` — YT Music doesn't need this fix because Python ships its own SSL.
-- `TODO/spotify-api-feb-2026-migration.md` — Spotify mobile work will *require* this fix to ship.
 
 ## Where to start
 

@@ -24,7 +24,7 @@
           OCTAVE is an open-source (MIT) car head unit / infotainment system you run on your own hardware. It pairs a
           <strong>C++ / Qt 6 backend</strong> &mdash; the shipped binary on every platform &mdash; with a
           parallel <strong>Python / PySide6 backend</strong> for desktop development and tinkering, both
-          driving a single shared <strong>QML frontend</strong>. It plays local music and Spotify, reads live data
+          driving a single shared <strong>QML frontend</strong>. It plays local music, reads live data
           from the car over OBD-II, mirrors an Android phone over USB, shows a live 3D model of the vehicle from an
           IMU, and recolours its interface to match the album art. It runs on Windows, macOS, Linux, Raspberry Pi /
           Orange Pi class boards, and Android (iOS is planned but not built yet).
@@ -45,17 +45,6 @@
               <div class="feature-desc">
                 MP3, M4A, FLAC, OGG, Opus and WAV playback with album art carousel, shuffle/repeat,
                 playlists, a persistent metadata store, and album-art colour extraction.
-              </div>
-            </a>
-          </div>
-
-          <div class="feature-card">
-            <a href="spotify-manager.html">
-              <span class="feature-icon">&#9836;</span>
-              <div class="feature-title">Spotify Integration</div>
-              <div class="feature-desc">
-                Spotify Web API with OAuth2 (local callback on port 8888), device switching,
-                playback control and a cached token (OS keyring on Python, file on C++). Desktop only.
               </div>
             </a>
           </div>
@@ -98,8 +87,7 @@
               <span class="feature-icon">&#8615;</span>
               <div class="feature-title">Music Download</div>
               <div class="feature-desc">
-                Search and download music with Spotify metadata matching and YouTube audio extraction
-                (yt-dlp). Auto-adds to your library. Compiled out for app-store builds.
+                Search YouTube Music and download tracks with yt-dlp. Auto-adds to your library. Compiled out for app-store builds.
               </div>
             </a>
           </div>
@@ -211,7 +199,7 @@
               <td><strong>Android</strong> (arm64-v8a, Android 11+)</td>
               <td>Sideload</td>
               <td><code>OCTAVE-&lt;v&gt;-android-arm64-v8a.apk</code></td>
-              <td>C++ only. Local media, OBD over BLE, YouTube Music search and download, dashboards, IMU view from the device's own sensors. Spotify, phone mirror, Android Auto, ESP32 and I²C sensors are excluded. The release APK is signed with a per-build keystore, so updates require an uninstall.</td>
+              <td>C++ only. Local media, OBD over BLE, YouTube Music search and download, dashboards, IMU view from the device's own sensors. Phone mirror, Android Auto, ESP32 and I²C sensors are excluded. The release APK is signed with a per-build keystore, so updates require an uninstall.</td>
             </tr>
             <tr>
               <td><strong>iOS</strong></td>
@@ -234,7 +222,6 @@
         <ul>
           <li><a href="settings-manager.html">Settings Manager</a> &mdash; Central settings store, property system, coalesced JSON persistence</li>
           <li><a href="media-manager.html">Media Manager</a> &mdash; Local audio playback, library scanning, album art and colours</li>
-          <li><a href="spotify-manager.html">Spotify Manager</a> &mdash; OAuth2, Web API integration, device control</li>
           <li><a href="obd-manager.html">OBD Manager</a> &mdash; ELM327 protocol, 92 vehicle parameters, threaded worker, Android BLE</li>
           <li><a href="network-manager.html">Network Manager</a> &mdash; WiFi status, update checking, self-update</li>
           <li><a href="download-manager.html">Download Manager</a> &mdash; Music search and download pipeline</li>
@@ -293,11 +280,6 @@
               <td>Waveform FFT</td>
               <td>QAudioDecoder + in-house radix-2 FFT on QtConcurrent</td>
               <td>PyAV (<code>av</code>) decode + numpy FFT on a thread pool</td>
-            </tr>
-            <tr>
-              <td>Spotify</td>
-              <td>QNetworkAccessManager + QTcpServer OAuth callback; token file in the app data dir</td>
-              <td>spotipy + keyring (OS keychain)</td>
             </tr>
             <tr>
               <td>OBD-II</td>

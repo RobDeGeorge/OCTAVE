@@ -1,6 +1,7 @@
 """
 DownloadManager — QObject manager for music downloads in OCTAVE.
-Uses music_dl (forked spotdl) for Spotify metadata + YouTube audio downloading.
+YouTube-only: YouTube Music search (ytmusicapi) + yt-dlp download via music_dl
+(our fork of spotdl), matching the C++ DownloadManager.
 Follows the standard OCTAVE manager pattern with ThreadPoolExecutor + QTimer polling.
 """
 
@@ -80,7 +81,7 @@ class DownloadManager(QObject):
         self._poll_timer.timeout.connect(self._poll_futures)
 
     def connect_settings_manager(self, settings_manager):
-        """Wire up settings manager for credentials and paths."""
+        """Wire up settings manager for download paths and format settings."""
         self._settings_manager = settings_manager
         logger.info("DownloadManager connected to SettingsManager")
 
@@ -172,7 +173,6 @@ class DownloadManager(QObject):
         """
         Lazily initialize the music_dl engine.
         Returns True if ready, False if settings manager is missing.
-        Spotify credentials are optional — search uses YouTube Music.
         """
         if self._music_dl is not None:
             return True
@@ -181,9 +181,6 @@ class DownloadManager(QObject):
             logger.error("DownloadManager: no settings manager connected")
             self.statusMessage.emit("Download engine not configured")
             return False
-
-        client_id = self._settings_manager.get_spotify_client_id() or ""
-        client_secret = self._settings_manager.get_spotify_client_secret() or ""
 
         try:
             from backend.music_dl import MusicDL
@@ -216,14 +213,8 @@ class DownloadManager(QObject):
                     self._youtube_cookies_default_path(),
                 )
 
-            self._music_dl = MusicDL(
-                client_id=client_id,
-                client_secret=client_secret,
-                headless=True,
-                downloader_settings=downloader_settings,
-            )
-            has_spotify = "with" if self._music_dl.has_spotify else "without"
-            logger.info("MusicDL engine initialized %s Spotify (format=%s, path=%s)", has_spotify, dl_format, download_path)
+            self._music_dl = MusicDL(downloader_settings=downloader_settings)
+            logger.info("MusicDL engine initialized (format=%s, path=%s)", dl_format, download_path)
             self.statusMessage.emit("Download engine ready")
             return True
 
@@ -293,7 +284,7 @@ class DownloadManager(QObject):
     @Slot(str)
     def search(self, query: str):
         """
-        Search for songs by text query or Spotify URL.
+        Search YouTube Music for songs matching a text query.
         Results emitted via searchResults signal as JSON.
         """
         if not query.strip():
@@ -372,38 +363,6 @@ class DownloadManager(QObject):
         if not self._poll_timer.isActive():
             self._poll_timer.start()
 
-    @Slot(str)
-    def download_from_url(self, url: str):
-        """
-        Download from a Spotify URL (track, album, or playlist).
-        """
-        if not url.strip():
-            return
-
-        if not self._ensure_music_dl():
-            return
-        self._refresh_cookies_file()
-
-        self.statusMessage.emit(f"Fetching: {url}")
-        self.downloadQueueChanged.emit()
-
-        future = self._executor.submit(self._do_url_download, url.strip())
-        self._pending_futures[f"url_{url[:30]}"] = future
-
-        if not self._poll_timer.isActive():
-            self._poll_timer.start()
-
-    @Slot()
-    def reset_engine(self):
-        """Reset the download engine (e.g., after credential change)."""
-        if self._music_dl:
-            try:
-                self._music_dl.cleanup()
-            except Exception:
-                pass
-            self._music_dl = None
-        self.statusMessage.emit("Download engine reset")
-
     # ─── Background work (runs on ThreadPoolExecutor) ─────────────────
 
     _AUDIO_EXTENSIONS = ('.mp3', '.flac', '.ogg', '.opus', '.m4a')
@@ -466,25 +425,15 @@ class DownloadManager(QObject):
 
     def _do_search(self, query: str, offset: int = 0) -> List[Dict[str, Any]]:
         """Perform search in background thread using YouTube Music (no credentials needed)."""
-
-        # If it's a Spotify URL and we have Spotify, use the song pipeline
-        if ("open.spotify.com" in query or "spotify.link" in query) and self._music_dl.has_spotify:
-            songs = self._music_dl.search([query])
-            results = []
-            for song in songs:
-                song_dict = song.json
-                results.append(self._song_dict_to_result(song_dict))
-            return self._mark_downloaded(results)
-
-        # For text queries (or Spotify URLs without credentials), use YouTube Music
         from backend.music_dl.utils.search import get_ytm_client
 
         ytm = get_ytm_client()
         raw = ytm.search(query, filter="songs", limit=20)
+        return self._mark_downloaded(self._parse_ytm_results(raw or []))
 
-        if not raw:
-            return []
-
+    @staticmethod
+    def _parse_ytm_results(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convert ytmusicapi song search items into QML search-result dicts."""
         results = []
         for item in raw:
             if item.get("resultType") != "song":
@@ -535,25 +484,7 @@ class DownloadManager(QObject):
             }
             results.append(result)
 
-        return self._mark_downloaded(results)
-
-    @staticmethod
-    def _song_dict_to_result(song_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert a Song.json dict to a search result dict."""
-        return {
-            "name": song_dict.get("name", ""),
-            "artist": song_dict.get("artist", ""),
-            "artists": song_dict.get("artists", []),
-            "album_name": song_dict.get("album_name", ""),
-            "duration": song_dict.get("duration", 0),
-            "year": song_dict.get("year", 0),
-            "cover_url": song_dict.get("cover_url", ""),
-            "url": song_dict.get("url", ""),
-            "song_id": song_dict.get("song_id", ""),
-            "explicit": song_dict.get("explicit", False),
-            "track_number": song_dict.get("track_number", 0),
-            "disc_number": song_dict.get("disc_number", 0),
-        }
+        return results
 
     def _do_download(self, song_data: Dict[str, Any]) -> Dict[str, Any]:
         """Perform single song download in background thread."""
@@ -561,18 +492,13 @@ class DownloadManager(QObject):
 
         song_id = song_data.get("song_id", "")
 
-        # Build Song from Spotify URL (fetches full metadata) or from dict
         url = song_data.get("url", "")
-        if url and "open.spotify.com" in url and self._music_dl.has_spotify:
-            song = Song.from_url(url)
-        elif all(k in song_data for k in ["name", "artists", "artist"]):
-            song = Song.from_missing_data(**song_data)
-            # If the URL is a YouTube Music URL, set it as download_url
-            # so yt-dlp uses it directly instead of searching
-            if url and ("music.youtube.com" in url or "youtube.com" in url):
-                song.download_url = url
-        else:
+        if not all(k in song_data for k in ["name", "artists", "artist"]):
             raise ValueError(f"Cannot build song from data: {song_data}")
+        song = Song.from_missing_data(**song_data)
+        # A YouTube Music URL goes straight to yt-dlp instead of searching
+        if url and ("music.youtube.com" in url or "youtube.com" in url):
+            song.download_url = url
 
         result_song, path = self._music_dl.download(song)
         return {
@@ -581,22 +507,6 @@ class DownloadManager(QObject):
             "path": str(path) if path else None,
             "success": path is not None,
         }
-
-    def _do_url_download(self, url: str) -> Dict[str, Any]:
-        """Download from URL in background thread."""
-        songs = self._music_dl.search([url])
-        if not songs:
-            return {"error": f"No songs found at URL: {url}", "results": []}
-
-        results = self._music_dl.download_songs(songs)
-        downloaded = []
-        for song, path in results:
-            downloaded.append({
-                "song_name": song.display_name,
-                "path": str(path) if path else None,
-                "success": path is not None,
-            })
-        return {"results": downloaded, "total": len(songs)}
 
     # ─── QTimer polling (main thread, safe for Qt signals) ────────────
 
@@ -627,8 +537,6 @@ class DownloadManager(QObject):
                     self._handle_search_result(result)
                 elif key.startswith("dl_"):
                     self._handle_download_result(result)
-                elif key.startswith("url_"):
-                    self._handle_url_download_result(result)
 
             except Exception as exc:
                 logger.error("Future %s failed: %s", key, exc)
@@ -650,9 +558,6 @@ class DownloadManager(QObject):
                     self.statusMessage.emit(f"Download failed")
                     self._mark_result_status_by_id(song_id, "is_failed", True)
                     self._mark_result_status_by_id(song_id, "error_message", error_msg)
-                elif key.startswith("url_"):
-                    self.downloadError.emit("", "URL download", str(exc))
-                    self.statusMessage.emit(f"URL download failed: {exc}")
 
         for key in completed_keys:
             del self._pending_futures[key]
@@ -736,32 +641,6 @@ class DownloadManager(QObject):
             logger.warning("Download failed: %s", song_name)
             self._mark_result_status_by_id(song_id, "is_failed", True)
             self._mark_result_status_by_id(song_id, "error_message", error_msg)
-        self.downloadQueueChanged.emit()
-
-    def _handle_url_download_result(self, result: Dict[str, Any]):
-        """Handle completed URL download (possibly multiple songs)."""
-        if "error" in result:
-            self.downloadError.emit("", "URL download", result["error"])
-            self.statusMessage.emit(result["error"])
-            self.downloadQueueChanged.emit()
-            return
-
-        downloaded = result.get("results", [])
-        total = result.get("total", 0)
-        success_count = sum(1 for d in downloaded if d.get("success"))
-
-        for dl in downloaded:
-            song_name = dl.get("song_name", "Unknown")
-            song_id = dl.get("song_id", "")
-            path = dl.get("path")
-            if dl.get("success") and path:
-                self.downloadComplete.emit(song_id, path)
-            else:
-                self.downloadError.emit(song_id, song_name, "Download failed")
-
-        self.statusMessage.emit(
-            f"Downloaded {success_count}/{total} song(s)"
-        )
         self.downloadQueueChanged.emit()
 
     # ─── Utility Slots for QML ────────────────────────────────────────

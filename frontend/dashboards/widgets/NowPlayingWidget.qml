@@ -2,12 +2,11 @@
 //
 // Dashboard "Now Playing" card: album art + title + artist + progress bar.
 // Source-aware — mirrors the app-wide rule (the phone while
-// phoneMirrorManager.mediaActive, else settingsManager.mediaSource ==
-// "spotify" AND spotifyManager connected → Spotify, else local media), and
-// re-resolves whenever the source, connection, or track changes.
+// phoneMirrorManager.mediaActive, else local media), and re-resolves
+// whenever the source or track changes.
 //
 // Self-binding widget: no paramId (WidgetCatalog supportedKinds: []), it
-// reads mediaManager / spotifyManager directly. Display-only — transport
+// reads mediaManager / phoneMirrorManager directly. Display-only — transport
 // buttons live in MediaControlsWidget.
 
 import QtQuick 2.15
@@ -30,20 +29,12 @@ Item {
     property color progressColor: App.Style.obdBarColor
 
     // ── Now-playing state ───────────────────────────────────────────
-    property bool _useSpotify: false
     property bool _usePhone: false
     property string trackTitle: ""
     property string trackArtist: ""
     property string artSource: ""
     property real position: 0
     property real duration: 0
-
-    function _computeUseSpotify() {
-        return typeof settingsManager !== "undefined" && settingsManager
-            && settingsManager.mediaSource === "spotify"
-            && typeof spotifyManager !== "undefined" && spotifyManager
-            && spotifyManager.is_connected()
-    }
 
     function _computeUsePhone() {
         return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null
@@ -52,19 +43,12 @@ Item {
 
     function refresh() {
         _usePhone = _computeUsePhone()
-        _useSpotify = !_usePhone && _computeUseSpotify()
         if (_usePhone) {
             trackTitle = phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaTitle : "Phone"
             trackArtist = phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaArtist : "Nothing playing"
             artSource = phoneMirrorManager.mediaArtUrl
             position = phoneMirrorManager.mediaPosition()
             duration = phoneMirrorManager.mediaDuration
-        } else if (_useSpotify) {
-            trackTitle = spotifyManager.get_current_track_name() || ""
-            trackArtist = spotifyManager.get_current_artist() || ""
-            artSource = spotifyManager.get_current_album_art() || ""
-            position = spotifyManager.get_position()
-            duration = spotifyManager.get_duration()
         } else if (typeof mediaManager !== "undefined" && mediaManager) {
             var f = mediaManager.get_current_file()
             trackTitle = f ? mediaManager.get_display_name(f) : ""
@@ -83,23 +67,9 @@ Item {
     Connections {
         target: (typeof mediaManager !== "undefined" && mediaManager) ? mediaManager : null
         ignoreUnknownSignals: true
-        function onCurrentMediaChanged(filename) { if (!root._useSpotify && !root._usePhone) root.refresh() }
-        function onPositionChanged(position) { if (!root._useSpotify && !root._usePhone) root.position = position }
-        function onDurationChanged(duration) { if (!root._useSpotify && !root._usePhone) root.duration = duration }
-    }
-
-    Connections {
-        target: (typeof spotifyManager !== "undefined" && spotifyManager) ? spotifyManager : null
-        ignoreUnknownSignals: true
-        function onCurrentTrackChanged(title, artist, album, artUrl) {
-            if (!root._useSpotify) return
-            root.trackTitle = title || ""
-            root.trackArtist = artist || ""
-            root.artSource = artUrl || ""
-        }
-        function onPositionChanged(position) { if (root._useSpotify) root.position = position }
-        function onDurationChanged(duration) { if (root._useSpotify) root.duration = duration }
-        function onConnectionStateChanged(connected) { root.refresh() }
+        function onCurrentMediaChanged(filename) { if (!root._usePhone) root.refresh() }
+        function onPositionChanged(position) { if (!root._usePhone) root.position = position }
+        function onDurationChanged(duration) { if (!root._usePhone) root.duration = duration }
     }
 
     Connections {
@@ -116,12 +86,6 @@ Item {
         repeat: true
         running: root._usePhone && root.visible && root.showProgress && phoneMirrorManager.mediaPlaying
         onTriggered: root.position = phoneMirrorManager.mediaPosition()
-    }
-
-    Connections {
-        target: (typeof settingsManager !== "undefined" && settingsManager) ? settingsManager : null
-        ignoreUnknownSignals: true
-        function onMediaSourceChanged(source) { root.refresh() }
     }
 
     // ── Layout ──────────────────────────────────────────────────────

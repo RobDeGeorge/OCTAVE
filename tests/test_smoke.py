@@ -18,7 +18,6 @@ BACKEND_MODULES = [
     "backend.clock",
     "backend.settings_manager",
     "backend.media_manager",
-    "backend.spotify_manager",
     "backend.audio_analyzer",
     "backend.network_manager",
     "backend.download_manager",

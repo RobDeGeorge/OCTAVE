@@ -461,8 +461,8 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
             <tbody>
               <tr>
                 <td>Dispatch</td>
-                <td>Constructor takes the managers; <code>applyVolume</code> calls <code>media.setVolume(linear)</code>, <code>phone_mirror.setVolume(linear)</code>, <code>esp32.send_volume_update(percent)</code> directly and arms a 300 ms single-shot <code>QTimer</code> that calls <code>spotify.set_volume(percent)</code> (only if connected) with the last value. Any of them may be <code>None</code>.</td>
-                <td>Emits <code>volumeApplied(int percent, float linear)</code>; <span class="file-path">src/main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop only) and to a 300 ms single-shot Spotify debounce that calls <code>set_volume(percent)</code> when connected.</td>
+                <td>Constructor takes the managers; <code>applyVolume</code> calls <code>media.setVolume(linear)</code>, <code>phone_mirror.setVolume(linear)</code>, <code>esp32.send_volume_update(percent)</code> directly. Any of them may be <code>None</code>.</td>
+                <td>Emits <code>volumeApplied(int percent, float linear)</code>; <span class="file-path">src/main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop only).</td>
               </tr>
               <tr><td>Startup</td><td colspan="2">Both call <code>applyVolume(settingsManager.currentVolume)</code> once after every manager is constructed so all outputs start in sync.</td></tr>
               <tr><td>Static helper</td><td><code>to_linear(percent)</code> module function</td><td><code>VolumeController::toLinearStatic(float)</code></td></tr>
@@ -1154,7 +1154,7 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td>ESP32 reading</td><td>Blocking <code>readline()</code> on a daemon thread</td><td><code>QSerialPort::readyRead</code> on the main thread</td></tr>
               <tr><td>ESP32 disconnect detection</td><td>Any <code>SerialException</code> on read or keepalive</td><td><code>ResourceError</code> / <code>DeviceNotFoundError</code> / <code>PermissionError</code> / <code>ReadError</code> / <code>WriteError</code>, or a rejected keepalive write</td></tr>
               <tr><td>ESP32 port scan</td><td>Per-platform VID + glob lists</td><td><code>QSerialPortInfo</code> everywhere; effectively every port listed</td></tr>
-              <tr><td>VolumeController fan-out</td><td>Direct calls (media, phone mirror, ESP32) + 300 ms Spotify debounce</td><td><code>volumeApplied</code> &rarr; the same four outputs, wired in <span class="file-path">main.cpp</span></td></tr>
+              <tr><td>VolumeController fan-out</td><td>Direct calls (media, phone mirror, ESP32)</td><td><code>volumeApplied</code> &rarr; the same three outputs, wired in <span class="file-path">main.cpp</span></td></tr>
               <tr><td>I2C read error inside the loop</td><td>Loop exits on the first exception</td><td>Loop exits after 5 consecutive failed block reads</td></tr>
               <tr><td>IMU tare</td><td><code>threading.Event</code> serviced by the read loop</td><td>Atomic request serviced by the worker</td></tr>
               <tr><td>I2C library</td><td><code>smbus2</code> (gesture also accepts <code>smbus</code>)</td><td>Raw <code>ioctl(I2C_SLAVE)</code> + <code>read</code>/<code>write</code></td></tr>

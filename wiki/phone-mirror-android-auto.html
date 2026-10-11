@@ -391,8 +391,7 @@
             −20 dB): the manager computes <code>duckingFactor = duckLevel</code> while <code>audioPlaying &amp;&amp; duckEnabled</code>, else 1.0,
             and emits <code>duckingChanged</code> on change. <code>main.cpp</code> / <code>main.py</code> connect it to
             <code>MediaManager.setDucking()</code>, which ramps the local output (80 ms attack, 500 ms release) independently of the
-            user's volume and mute. Spotify is deliberately not ducked: it plays on its own Spotify Connect device, usually the
-            very phone being mirrored, so its sound already arrives through the mirror stream. Expect lip-sync to trail the picture
+            user's volume and mute. Expect lip-sync to trail the picture
             slightly. Validated on the Pi by measurement (+6 dB = x1.89 RMS, live slider, clean teardown with zero underruns);
             whether −20 dB is enough against a loudness-mastered MP3 in the car is still an open question in the plan doc.</p>
         </section>
@@ -472,12 +471,10 @@
             even with no media app), keeps them while paused or with no media app, and loses them when the session ends or
             <code>releaseMedia()</code> is called; after that it takes them back only when it starts playing again.
             Pressing play with no media app sends <code>KEYCODE_MEDIA_PLAY</code>, which restarts the last media app. <code>main.cpp</code> / <code>main.py</code> wire the hand-offs: when the phone takes over, local playback
-            pauses, and Spotify pauses unless the phone app <em>is</em> Spotify (the same playback); a local track starting calls
-            <code>releaseMedia(true)</code> (the phone pauses), a Spotify track starting calls <code>releaseMedia</code> pausing the
-            phone only if it is not Spotify. With no media app the views show "Phone" / "Nothing playing". The Media Room's source pill reads "Phone" meanwhile; tapping it hands the controls
-            back and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
-          <p><strong>QML</strong> picks the phone first in every source switch (<code>phoneMirrorManager.mediaActive</code>, then
-            Spotify, then local). Handlers that can fire while <code>mediaActive</code> is changing read the manager directly
+            pauses; a local track starting calls <code>releaseMedia(true)</code> (the phone pauses). With no media app the views show "Phone" / "Nothing playing". The Media Room shows a "Phone" source pill meanwhile; tapping it hands the controls
+            back to local media and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
+          <p><strong>QML</strong> picks the phone first in every source switch (<code>phoneMirrorManager.mediaActive</code>, else
+            local). Handlers that can fire while <code>mediaActive</code> is changing read the manager directly
             (<code>phoneActive()</code>) instead of the <code>usePhone</code> binding. Position is not streamed: views poll
             <code>mediaPosition()</code> every 500 ms while the phone plays and the view is visible.</p>
         </section>

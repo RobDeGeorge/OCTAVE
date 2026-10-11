@@ -44,7 +44,6 @@ from backend.settings_manager import get_app_data_dir
 
 from backend.obd_manager import OBDManager
 from backend.obd_adapter_finder import OBDAdapterFinder
-from backend.spotify_manager import SpotifyManager
 from backend.android_auto import AndroidAutoManager, EmbeddedDhuItem
 from backend.phone_mirror import PhoneMirrorManager
 from backend.esp32_volume_manager import ESP32VolumeManager
@@ -146,10 +145,6 @@ def install_obd_manager(manager):
     obd_adapter_finder.set_obd_manager(manager)
 
 
-# Spotify Manager
-spotify_manager = SpotifyManager()
-spotify_manager.connect_settings_manager(settings_manager)
-engine.rootContext().setContextProperty("spotifyManager", spotify_manager)
 
 # Android Auto Manager
 android_auto_manager = AndroidAutoManager()
@@ -189,26 +184,12 @@ phone_mirror_manager.duckingChanged.connect(media_manager.setDucking)
 phone_mirror_manager.setMuted(media_manager.is_muted())
 media_manager.muteChanged.connect(phone_mirror_manager.setMuted)
 
-# Phone media follows what plays: when the phone starts playing, OCTAVE's
-# controls drive it and local playback pauses; starting a local or Spotify
-# track hands the controls back. Spotify playing on the phone is the same
-# playback, so the two never pause each other.
-SPOTIFY_PACKAGE = "com.spotify.music"
-
-
-def _on_phone_media_active(active):
-    if not active:
-        return
-    if media_manager.is_playing():
-        media_manager.pause()
-    if phone_mirror_manager.mediaApp != SPOTIFY_PACKAGE and spotify_manager.is_playing():
-        spotify_manager.pause()
-
-
-phone_mirror_manager.mediaActiveChanged.connect(_on_phone_media_active)
+# While mirroring the phone is the media source: when it takes OCTAVE's media
+# controls local playback pauses; starting a local track hands the controls
+# back (and pauses the phone).
+phone_mirror_manager.mediaActiveChanged.connect(
+    lambda active: media_manager.pause() if active and media_manager.is_playing() else None)
 media_manager.playStateChanged.connect(lambda playing: phone_mirror_manager.releaseMedia(True) if playing else None)
-spotify_manager.playStateChanged.connect(
-    lambda playing: phone_mirror_manager.releaseMedia(phone_mirror_manager.mediaApp != SPOTIFY_PACKAGE) if playing else None)
 # Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
 phone_mirror_manager.setPhoneScreenOff(settings_manager.get_scrcpy_phone_screen_off())
 settings_manager.scrcpyPhoneScreenOffChanged.connect(phone_mirror_manager.setPhoneScreenOff)
@@ -225,13 +206,12 @@ esp32_volume_manager.connect_settings_manager(settings_manager)
 engine.rootContext().setContextProperty("esp32VolumeManager", esp32_volume_manager)
 
 # Volume Controller — single entry point for routing a 0–100 percent to
-# every audio output (local media, Spotify, phone mirror, ESP32). Both
+# every audio output (local media, phone mirror, ESP32). Both
 # Python handlers (gesture, knob) and QML sliders funnel through this to
 # keep outputs in sync and the quadratic curve in one place.
 volume_controller = VolumeController(
     settings_manager=settings_manager,
     media_manager=media_manager,
-    spotify_manager=spotify_manager,
     phone_mirror_manager=phone_mirror_manager,
     esp32_manager=esp32_volume_manager,
 )
@@ -393,7 +373,6 @@ def cleanup_on_quit():
         ("playback state", media_manager._save_playback_state_now),
         ("metadata store", media_manager.flush_metadata_store),  # persistent tag store; covers stay cached across runs
         ("settings", settings_manager.flush_pending_save),  # coalesced settings writes land before exit
-        ("spotify", spotify_manager.cleanup),
         ("android auto", android_auto_manager.cleanup),  # Full cleanup: stops DHU, ADB, and head unit server
         ("phone mirror", phone_mirror_manager.cleanup),  # Stop phone mirror if running
         ("obd", getattr(obd_manager, "close", None)),  # Stop monitor thread, close the adapter
@@ -473,7 +452,6 @@ def setup_perf_profiling():
         cmd_server.start(
             managers={
                 "media": media_manager,
-                "spotify": spotify_manager,
                 "obd": obd_manager,
                 "settings": settings_manager,
             },
@@ -496,7 +474,6 @@ def setup_perf_profiling():
     apply_patches(
         media_manager=media_manager,
         audio_analyzer=audio_analyzer,
-        spotify_manager=spotify_manager,
         obd_manager=obd_manager,
         berryimu_manager=berryimu_manager,
         gesture_manager=gesture_manager,
