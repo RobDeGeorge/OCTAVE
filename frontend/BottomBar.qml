@@ -22,6 +22,46 @@ Rectangle {
     property bool useSpotify: settingsManager && settingsManager.mediaSource === "spotify" &&
                               spotifyManager && spotifyManager.is_connected()
 
+    // Phone mirror media: while the phone is playing (or played last), the
+    // media controls drive the phone's media session instead
+    property bool usePhone: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null &&
+                            phoneMirrorManager.mediaActive
+
+    // Read the manager directly, not usePhone: these run from signal handlers
+    // that can fire before the usePhone binding has caught up
+    function phoneActive() {
+        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.mediaActive
+    }
+    function mediaIsPlaying() {
+        if (phoneActive())
+            return phoneMirrorManager.mediaPlaying
+        return useSpotify ? (spotifyManager && spotifyManager.is_playing()) : (mediaManager && mediaManager.is_playing())
+    }
+    function playIconSource() {
+        return mediaIsPlaying() ? "./assets/pause_button.svg" : "./assets/play_button.svg"
+    }
+    function mediaPrevious() {
+        if (phoneActive()) phoneMirrorManager.mediaPrevious()
+        else if (useSpotify) spotifyManager.previous_track()
+        else mediaManager.previous_track()
+    }
+    function mediaTogglePlay() {
+        if (phoneActive()) phoneMirrorManager.mediaPlayPause()
+        else if (useSpotify) spotifyManager.toggle_play()
+        else mediaManager.toggle_play()
+    }
+    function mediaNext() {
+        if (phoneActive()) phoneMirrorManager.mediaNext()
+        else if (useSpotify) spotifyManager.next_track()
+        else mediaManager.next_track()
+    }
+    // The phone's shuffle belongs to its app; the button is dimmed meanwhile
+    function mediaToggleShuffle() {
+        if (phoneActive()) return
+        if (useSpotify) spotifyManager.toggle_shuffle()
+        else mediaManager.toggle_shuffle()
+    }
+
     // Shared shuffle state - single source of truth for all shuffle buttons
     property bool isShuffleEnabled: false
 
@@ -504,7 +544,7 @@ Rectangle {
                                 MouseArea {
                                     id: mouseAreaPrev
                                     anchors.fill: parent
-                                    onClicked: useSpotify ? spotifyManager.previous_track() : mediaManager.previous_track()
+                                    onClicked: bottomBar.mediaPrevious()
                                 }
                             }
                         }
@@ -541,12 +581,7 @@ Rectangle {
                                     anchors.centerIn: parent
                                     width: App.Spacing.bottomBarPlayButtonWidth
                                     height: App.Spacing.bottomBarPlayButtonHeight
-                                    source: {
-                                        var isPlaying = useSpotify ?
-                                            (spotifyManager && spotifyManager.is_playing()) :
-                                            (mediaManager && mediaManager.is_playing())
-                                        return isPlaying ? "./assets/pause_button.svg" : "./assets/play_button.svg"
-                                    }
+                                    source: bottomBar.playIconSource()
                                     sourceSize: Qt.size(width * 2, height * 2)
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
@@ -570,7 +605,7 @@ Rectangle {
                                 MouseArea {
                                     id: mouseAreaPlay
                                     anchors.fill: parent
-                                    onClicked: useSpotify ? spotifyManager.toggle_play() : mediaManager.toggle_play()
+                                    onClicked: bottomBar.mediaTogglePlay()
                                 }
                             }
                         }
@@ -629,7 +664,7 @@ Rectangle {
                                 MouseArea {
                                     id: mouseAreaNext
                                     anchors.fill: parent
-                                    onClicked: useSpotify ? spotifyManager.next_track() : mediaManager.next_track()
+                                    onClicked: bottomBar.mediaNext()
                                 }
                             }
                         }
@@ -642,7 +677,7 @@ Rectangle {
                             Layout.alignment: Qt.AlignVCenter
 
                             scale: mouseAreaShuffle.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaShuffle.pressed ? 0.7 : 1.0
+                            opacity: mouseAreaShuffle.pressed ? 0.7 : (bottomBar.usePhone ? 0.35 : 1.0)
                             
                             Behavior on scale {
                                 NumberAnimation {
@@ -694,13 +729,7 @@ Rectangle {
                                 MouseArea {
                                     id: mouseAreaShuffle
                                     anchors.fill: parent
-                                    onClicked: {
-                                        if (useSpotify) {
-                                            spotifyManager.toggle_shuffle()
-                                        } else {
-                                            mediaManager.toggle_shuffle()
-                                        }
-                                    }
+                                    onClicked: bottomBar.mediaToggleShuffle()
                                 }
                             }
                         }
@@ -1414,8 +1443,8 @@ Rectangle {
                 Connections {
                     target: mediaManager
                     function onPlayStateChanged(playing) {
-                        // Only update play button if not using Spotify
-                        if (!useSpotify) {
+                        // Only update play button if not using Spotify or the phone
+                        if (!useSpotify && !bottomBar.phoneActive()) {
                             var src = playing ? "./assets/pause_button.svg" : "./assets/play_button.svg"
                             playButtonImage.source = src
                             if (typeof playButtonImageVertical !== "undefined" && playButtonImageVertical) {
@@ -1454,8 +1483,8 @@ Rectangle {
                         }
                     }
                     function onPlayStateChanged(playing) {
-                        // Only update play button if using Spotify
-                        if (useSpotify) {
+                        // Only update play button if using Spotify (and not the phone)
+                        if (useSpotify && !bottomBar.phoneActive()) {
                             var src = playing ? "./assets/pause_button.svg" : "./assets/play_button.svg"
                             playButtonImage.source = src
                             playButtonImageVertical.source = src
@@ -1465,6 +1494,18 @@ Rectangle {
                         if (useSpotify) {
                             bottomBar.isShuffleEnabled = enabled
                         }
+                    }
+                }
+
+                // Phone media: play state while the phone has the controls
+                Connections {
+                    target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
+                    function onMediaChanged() {
+                        if (bottomBar.phoneActive())
+                            playButtonImage.source = bottomBar.playIconSource()
+                    }
+                    function onMediaActiveChanged(active) {
+                        playButtonImage.source = bottomBar.playIconSource()
                     }
                 }
 
@@ -1586,7 +1627,7 @@ Rectangle {
                                     MouseArea {
                                         id: mouseAreaPrevVertical
                                         anchors.fill: parent
-                                        onClicked: useSpotify ? spotifyManager.previous_track() : mediaManager.previous_track()
+                                        onClicked: bottomBar.mediaPrevious()
                                     }
                                 }
                             }
@@ -1621,12 +1662,7 @@ Rectangle {
                                         anchors.centerIn: parent
                                         width: parent.height
                                         height: parent.height
-                                        source: {
-                                            var isPlaying = useSpotify ?
-                                                (spotifyManager && spotifyManager.is_playing()) :
-                                                (mediaManager && mediaManager.is_playing())
-                                            return isPlaying ? "./assets/pause_button.svg" : "./assets/play_button.svg"
-                                        }
+                                        source: bottomBar.playIconSource()
                                         sourceSize: Qt.size(width * 2, height * 2)
                                         fillMode: Image.PreserveAspectFit
                                         smooth: true
@@ -1650,7 +1686,7 @@ Rectangle {
                                     MouseArea {
                                         id: mouseAreaPlayVertical
                                         anchors.fill: parent
-                                        onClicked: useSpotify ? spotifyManager.toggle_play() : mediaManager.toggle_play()
+                                        onClicked: bottomBar.mediaTogglePlay()
                                     }
                                 }
                             }
@@ -1709,7 +1745,7 @@ Rectangle {
                                     MouseArea {
                                         id: mouseAreaNextVertical
                                         anchors.fill: parent
-                                        onClicked: useSpotify ? spotifyManager.next_track() : mediaManager.next_track()
+                                        onClicked: bottomBar.mediaNext()
                                     }
                                 }
                             }
@@ -1727,7 +1763,7 @@ Rectangle {
                             Layout.preferredHeight: App.Spacing.bottomBarShuffleButtonHeight
 
                             scale: mouseAreaShuffleVertical.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaShuffleVertical.pressed ? 0.7 : 1.0
+                            opacity: mouseAreaShuffleVertical.pressed ? 0.7 : (bottomBar.usePhone ? 0.35 : 1.0)
 
                             Behavior on scale {
                                 NumberAnimation {
@@ -1778,13 +1814,7 @@ Rectangle {
                                 MouseArea {
                                     id: mouseAreaShuffleVertical
                                     anchors.fill: parent
-                                    onClicked: {
-                                        if (useSpotify) {
-                                            spotifyManager.toggle_shuffle()
-                                        } else {
-                                            mediaManager.toggle_shuffle()
-                                        }
-                                    }
+                                    onClicked: bottomBar.mediaToggleShuffle()
                                 }
                             }
                         }
@@ -2493,8 +2523,9 @@ Rectangle {
                 Connections {
                     target: mediaManager
                     function onPlayStateChanged(playing) {
-                        playButtonImageVertical.source = playing ?
-                            "./assets/pause_button.svg" : "./assets/play_button.svg"
+                        if (!useSpotify && !bottomBar.phoneActive())
+                            playButtonImageVertical.source = playing ?
+                                "./assets/pause_button.svg" : "./assets/play_button.svg"
                     }
                     function onMuteChanged(muted) {
                         muteButtonVertical.isMuted = muted
@@ -2530,6 +2561,18 @@ Rectangle {
                         if (useSpotify) {
                             bottomBar.isShuffleEnabled = enabled
                         }
+                    }
+                }
+
+                // Phone media: play state while the phone has the controls (vertical)
+                Connections {
+                    target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
+                    function onMediaChanged() {
+                        if (bottomBar.phoneActive())
+                            playButtonImageVertical.source = bottomBar.playIconSource()
+                    }
+                    function onMediaActiveChanged(active) {
+                        playButtonImageVertical.source = bottomBar.playIconSource()
                     }
                 }
 

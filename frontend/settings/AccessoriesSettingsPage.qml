@@ -1995,52 +1995,11 @@ Flickable {
                     spacing: App.Spacing.rowSpacing
 
                     SettingLabel {
-                        text: "Audio Forwarding"
-                    }
-
-                    SettingDescription {
-                        text: "Play the phone's audio through OCTAVE's speakers while mirroring (Android 11+). It follows OCTAVE's volume and mute. Applies to the next session."
-                    }
-
-                    SettingsToggle {
-                        id: scrcpyAudioEnabledToggle
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Forward phone audio"
-                        checked: settingsManager ? settingsManager.scrcpyAudioEnabled : false
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-
-                        onToggled: function(checked) {
-                            if (settingsManager) {
-                                settingsManager.save_scrcpy_audio_enabled(checked)
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyAudioEnabledChanged() {
-                                scrcpyAudioEnabledToggle.checked = settingsManager.scrcpyAudioEnabled
-                            }
-                        }
-                    }
-
-                    SettingDescription {
-                        text: "Music, navigation prompts and calls from the phone"
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    SettingLabel {
                         text: "Phone Audio Level"
                     }
 
                     SettingDescription {
-                        text: "Boost or trim the phone's audio before OCTAVE's volume. Phones capture at their own media level, usually quieter than local music."
+                        text: "Phone audio plays through OCTAVE while mirroring (Android 11+) and follows its volume and mute. Boost or trim it before OCTAVE's volume: phones capture at their own media level, usually quieter than local music."
                     }
 
                     RowLayout {

@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QUrl
 
 from backend.logging_config import get_logger
 from backend.phone_mirror.qrcodegen import QrCode
@@ -31,9 +31,15 @@ from backend.phone_mirror.qrcodegen import QrCode
 from backend.phone_mirror.scrcpy_client import (
     ScrcpyClient, HAVE_AV, bundled_server_jar, SERVER_VERSION, SERVER_PROCESS_PATTERN, PERSIST_MS,
     is_network_serial, KEYCODE_HOME, KEYCODE_BACK, KEYCODE_APP_SWITCH, KEYCODE_WAKEUP,
+    MEDIA_WATCH, MEDIA_PLAY, MEDIA_PAUSE, MEDIA_PLAY_PAUSE, MEDIA_NEXT, MEDIA_PREVIOUS, MEDIA_SEEK,
 )
+from backend.settings_manager import get_app_data_dir
 
 logger = get_logger(__name__)
+
+# Phone media state before the server reports one (same keys as ScrcpyClient.mediaStateChanged)
+_NO_MEDIA = {"has_session": False, "playing": False, "can_seek": False, "position_ms": 0, "duration_ms": 0,
+             "package": "", "title": "", "artist": "", "album": ""}
 
 # Size of the virtual display scrcpy creates on the phone (--new-display,
 # Android 11+) when the setting is "auto" but the view has not reported its
@@ -205,12 +211,14 @@ class PhoneMirrorManager(QObject):
     wirelessResult = Signal(bool, str)          # outcome of QR pairing
     qrPairingChanged = Signal()
     currentBitRateChanged = Signal()
+    mediaChanged = Signal()
+    mediaArtChanged = Signal()
+    mediaActiveChanged = Signal(bool)   # main.py pauses OCTAVE's own sources when the phone takes over
     _post = Signal(object)                      # worker thread -> GUI thread callable
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._adb_path: Optional[str] = _find_adb()
-        self._audio_enabled: bool = False
         self._volume: float = 1.0
         self._display_size: str = AUTO_DISPLAY_SIZE
         self._active_display_size: str = ""
@@ -227,6 +235,13 @@ class PhoneMirrorManager(QObject):
         self._auto_wifi: bool = True
         self._bit_rate_auto: bool = True
         self._current_bit_rate: int = 0
+        self._media: dict = dict(_NO_MEDIA)
+        self._media_position_at: float = 0.0    # monotonic time of the last position report
+        self._media_art_url: str = ""
+        self._media_art_seq: int = 0            # alternates the art file so QML reloads it
+        self._media_active: bool = False
+        self._media_reported: bool = False      # the session's first media report arrived
+        self._muted: bool = False
         self._tcpip_checked: bool = False        # the auto-Wi-Fi step ran for the session being started
         self._start_generation: int = 0          # bumped by stopScrcpy; a pending start checks it
 
@@ -439,21 +454,19 @@ class PhoneMirrorManager(QObject):
     @Slot(float)
     def setVolume(self, volume: float):
         """Called by VolumeController.applyVolume() on every volume change
-        (0..1 linear). Phone audio played through OCTAVE follows it. Must
+        (0..1 linear). Phone audio, always played through OCTAVE while
+        mirroring, follows it. Must
         exist even when audio is off: VolumeController calls it unconditionally."""
         self._volume = volume
         if self._client is not None:
-            self._client.set_volume(volume)
+            self._client.set_volume(0.0 if self._muted else volume)
 
     @Slot(bool)
-    def setAudioEnabled(self, enabled: bool):
-        """Play the phone's audio through OCTAVE (setting scrcpyAudioEnabled).
-        Restarts the session if one is running, like the display size."""
-        enabled = bool(enabled)
-        if enabled == self._audio_enabled:
-            return
-        self._audio_enabled = enabled
-        self._restart_session()
+    def setMuted(self, muted: bool):
+        """OCTAVE's mute (MediaManager.muteChanged) silences phone audio too."""
+        self._muted = bool(muted)
+        if self._client is not None:
+            self._client.set_volume(0.0 if self._muted else self._volume)
 
     def _restart_session(self):
         if self.isRunning:
@@ -597,6 +610,163 @@ class PhoneMirrorManager(QObject):
             self._phone_asleep = False
             self.phoneAsleepChanged.emit(False)
         self._panel_dark = False
+
+    # ── phone media ─────────────────────────────────────────────────
+    # The server's PhoneMedia (phone_server/.../control/PhoneMedia.java)
+    # follows the phone's active media session and reports it; OCTAVE's media
+    # controls drive it through ScrcpyClient.media_command while mediaActive is set.
+
+    @Property(bool, notify=mediaChanged)
+    def mediaAvailable(self) -> bool:
+        """The phone reports a media session (whatever app plays it)."""
+        return self._media["has_session"]
+
+    @Property(bool, notify=mediaChanged)
+    def mediaPlaying(self) -> bool:
+        return self._media["has_session"] and self._media["playing"]
+
+    @Property(str, notify=mediaChanged)
+    def mediaTitle(self) -> str:
+        return self._media["title"]
+
+    @Property(str, notify=mediaChanged)
+    def mediaArtist(self) -> str:
+        return self._media["artist"]
+
+    @Property(str, notify=mediaChanged)
+    def mediaAlbum(self) -> str:
+        return self._media["album"]
+
+    @Property(str, notify=mediaChanged)
+    def mediaApp(self) -> str:
+        """Package name of the phone's media app."""
+        return self._media["package"]
+
+    @Property(int, notify=mediaChanged)
+    def mediaDuration(self) -> int:
+        """Track length in ms, 0 = unknown."""
+        return int(min(self._media["duration_ms"], 2**31 - 1))
+
+    @Property(bool, notify=mediaChanged)
+    def mediaCanSeek(self) -> bool:
+        return self._media["can_seek"]
+
+    @Property(str, notify=mediaArtChanged)
+    def mediaArtUrl(self) -> str:
+        """file:// URL of the album art (a JPEG in the app data temp dir), "" for none."""
+        return self._media_art_url
+
+    @Property(bool, notify=mediaActiveChanged)
+    def mediaActive(self) -> bool:
+        """The phone is the media source OCTAVE's controls drive: set for the
+        whole mirroring session (from the first media report); a local /
+        Spotify track starting clears it (releaseMedia) until the phone plays
+        again, and the session ending clears it."""
+        return self._media_active
+
+    def _on_media_state(self, state: dict):
+        was_playing = self._media["has_session"] and self._media["playing"]
+        self._media = dict(state)
+        self._media_position_at = time.monotonic()
+        self.mediaChanged.emit()
+        # The phone is the media source while mirroring: it takes the controls
+        # with its first report, and again whenever it starts playing after a
+        # local / Spotify track took them (releaseMedia)
+        playing = state["has_session"] and state["playing"]
+        first_report = not self._media_reported
+        self._media_reported = True
+        if not self._media_active and (first_report or (playing and not was_playing)):
+            logger.info(f"Phone mirror: OCTAVE's media controls drive the phone {state['package']}".rstrip())
+            self._set_media_active(True)
+
+    def _on_media_art(self, jpeg: bytes):
+        url = ""
+        if jpeg:
+            art_dir = os.path.join(get_app_data_dir(), "temp")
+            # Alternate between two files: a new URL makes QML reload the image
+            self._media_art_seq = (self._media_art_seq + 1) % 2
+            path = os.path.join(art_dir, f"phone_media_art_{self._media_art_seq}.jpg")
+            try:
+                os.makedirs(art_dir, exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(jpeg)
+                url = QUrl.fromLocalFile(path).toString()
+            except OSError as e:
+                logger.warning(f"Phone mirror: could not write phone album art to {path}: {e}")
+        if url != self._media_art_url:
+            self._media_art_url = url
+            self.mediaArtChanged.emit()
+
+    def _reset_media(self):
+        self._media_reported = False
+        self._set_media_active(False)
+        if self._media != _NO_MEDIA:
+            self._media = dict(_NO_MEDIA)
+            self.mediaChanged.emit()
+        if self._media_art_url:
+            self._media_art_url = ""
+            self.mediaArtChanged.emit()
+
+    def _set_media_active(self, active: bool):
+        if active == self._media_active:
+            return
+        self._media_active = active
+        self.mediaActiveChanged.emit(active)
+
+    @Slot(result=int)
+    def mediaPosition(self) -> int:
+        """Position now in ms, extrapolated from the last report while playing."""
+        pos = self._media["position_ms"]
+        if self._media["has_session"] and self._media["playing"]:
+            pos += int((time.monotonic() - self._media_position_at) * 1000)
+        if self._media["duration_ms"] > 0:
+            pos = min(pos, self._media["duration_ms"])
+        return int(max(0, min(pos, 2**31 - 1)))
+
+    def _media_command(self, action: int, argument: int = 0):
+        if self._client is not None and self._ready:
+            self._client.media_command(action, argument)
+
+    @Slot()
+    def mediaPlayPause(self):
+        self._media_command(MEDIA_PLAY_PAUSE)
+
+    @Slot()
+    def mediaPlay(self):
+        self._media_command(MEDIA_PLAY)
+
+    @Slot()
+    def mediaPause(self):
+        self._media_command(MEDIA_PAUSE)
+
+    @Slot()
+    def mediaNext(self):
+        self._media_command(MEDIA_NEXT)
+
+    @Slot()
+    def mediaPrevious(self):
+        self._media_command(MEDIA_PREVIOUS)
+
+    @Slot(int)
+    def mediaSeek(self, position_ms: int):
+        if self._client is None or not self._ready:
+            return
+        position_ms = max(0, int(position_ms))
+        self._media_command(MEDIA_SEEK, position_ms)
+        # Show the new position before the phone confirms it
+        self._media["position_ms"] = position_ms
+        self._media_position_at = time.monotonic()
+
+    @Slot(bool)
+    def releaseMedia(self, pause_phone: bool):
+        """An OCTAVE source (local, Spotify) took over: the controls leave the
+        phone; pause_phone also pauses what the phone is playing."""
+        if not self._media_active:
+            return
+        if pause_phone and self.mediaPlaying:
+            self.mediaPause()
+        logger.info("Phone mirror: OCTAVE's media controls leave the phone" + (" (phone paused)" if pause_phone else ""))
+        self._set_media_active(False)
 
     @Property(str, notify=displaySizeChanged)
     def displaySize(self) -> str:
@@ -842,9 +1012,11 @@ class PhoneMirrorManager(QObject):
         client.audioPlayingChanged.connect(self._on_audio_playing)
         client.serverLog.connect(self._on_server_log)
         client.phoneStateChanged.connect(self._on_phone_state)
+        client.mediaStateChanged.connect(self._on_media_state)
+        client.mediaArtChanged.connect(self._on_media_art)
         client.bitRateChanged.connect(self._set_current_bit_rate)
         client.set_audio_gain(self._audio_gain)
-        client.set_volume(self._volume)
+        client.set_volume(0.0 if self._muted else self._volume)
         self._client = client
 
         display_size = requested
@@ -864,7 +1036,7 @@ class PhoneMirrorManager(QObject):
                 start_bps = max(ADAPTIVE_MIN_BPS, int(start_bps * ADAPTIVE_WIFI_START))
         logger.info(f"Starting phone mirror (server {SERVER_VERSION}) for {serial} "
                     f"(display {display_size or 'phone screen'}, {start_bps / 1e6:g} Mbps "
-                    f"{'adaptive, max ' + str(bit_rate_mbps) if self._bit_rate_auto else 'fixed'}, audio {'on' if self._audio_enabled else 'off'}, "
+                    f"{'adaptive, max ' + str(bit_rate_mbps) if self._bit_rate_auto else 'fixed'}, "
                     f"{'Wi-Fi' if wireless else 'USB'})")
         self._serial = serial
         self._set_connection_type("wifi" if wireless else "usb")
@@ -872,7 +1044,8 @@ class PhoneMirrorManager(QObject):
             self._vdisplay_id = -1
         if attach_scid:
             logger.info(f"Reattaching to the phone's running mirror session (scid {attach_scid})")
-        client.start(serial, display_size=display_size, audio=self._audio_enabled, attach_scid=attach_scid,
+        # Phone audio always plays through OCTAVE while mirroring
+        client.start(serial, display_size=display_size, audio=True, attach_scid=attach_scid,
                      bit_rate=start_bps)
         self.isRunningChanged.emit()
 
@@ -890,6 +1063,8 @@ class PhoneMirrorManager(QObject):
         # Hand the sleep/panel policy to the phone-side keeper. The server
         # powers the device on asynchronously at start; give it a moment.
         QTimer.singleShot(500, self._send_keeper_policy)
+        # Follow the phone's media session so OCTAVE's media controls can drive it
+        self._client.media_command(MEDIA_WATCH, 1)
 
     def _on_frame_size(self, w: int, h: int):
         if (w, h) != (self._frame_width, self._frame_height):
@@ -900,6 +1075,7 @@ class PhoneMirrorManager(QObject):
         if self._is_stopping:
             return
         self._reset_phone_state()
+        self._reset_media()
         was_ready = self._ready
         self._ready = False
         self._is_starting = False
@@ -937,6 +1113,7 @@ class PhoneMirrorManager(QObject):
         self._resize_timer.stop()
         self._set_current_bit_rate(0)
         self._reset_phone_state()
+        self._reset_media()
         if self._client is not None:
             client, self._client = self._client, None
             client.stop()

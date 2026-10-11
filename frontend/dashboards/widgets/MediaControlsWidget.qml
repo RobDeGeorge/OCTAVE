@@ -1,7 +1,8 @@
 // MediaControlsWidget.qml
 //
 // Dashboard transport controls: previous / play-pause / next, driving
-// whichever media source is active (settingsManager.mediaSource ==
+// whichever media source is active (the phone while
+// phoneMirrorManager.mediaActive, else settingsManager.mediaSource ==
 // "spotify" AND spotifyManager connected → Spotify, else local media).
 //
 // Self-binding widget: no paramId (WidgetCatalog supportedKinds: []).
@@ -25,6 +26,7 @@ Item {
 
     // ── Playback state ──────────────────────────────────────────────
     property bool _useSpotify: false
+    property bool _usePhone: false
     property bool playing: false
 
     function _computeUseSpotify() {
@@ -39,8 +41,18 @@ Item {
         return (typeof mediaManager !== "undefined" && mediaManager) ? mediaManager : null
     }
 
+    function _computeUsePhone() {
+        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null
+            && phoneMirrorManager.mediaActive
+    }
+
     function refresh() {
-        _useSpotify = _computeUseSpotify()
+        _usePhone = _computeUsePhone()
+        _useSpotify = !_usePhone && _computeUseSpotify()
+        if (_usePhone) {
+            playing = phoneMirrorManager.mediaPlaying
+            return
+        }
         var m = _mgr()
         playing = m ? m.is_playing() : false
     }
@@ -50,12 +62,18 @@ Item {
     Connections {
         target: (typeof mediaManager !== "undefined" && mediaManager) ? mediaManager : null
         ignoreUnknownSignals: true
-        function onPlayStateChanged(playing) { if (!root._useSpotify) root.playing = playing }
+        function onPlayStateChanged(playing) { if (!root._useSpotify && !root._usePhone) root.playing = playing }
+    }
+    Connections {
+        target: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager) ? phoneMirrorManager : null
+        ignoreUnknownSignals: true
+        function onMediaActiveChanged(active) { root.refresh() }
+        function onMediaChanged() { if (root._usePhone) root.playing = phoneMirrorManager.mediaPlaying }
     }
     Connections {
         target: (typeof spotifyManager !== "undefined" && spotifyManager) ? spotifyManager : null
         ignoreUnknownSignals: true
-        function onPlayStateChanged(playing) { if (root._useSpotify) root.playing = playing }
+        function onPlayStateChanged(playing) { if (root._useSpotify && !root._usePhone) root.playing = playing }
         function onConnectionStateChanged(connected) { root.refresh() }
     }
     Connections {
@@ -102,6 +120,12 @@ Item {
                     id: btnMouse
                     anchors.fill: parent
                     onClicked: {
+                        if (root._computeUsePhone()) {
+                            if (modelData.action === "prev") phoneMirrorManager.mediaPrevious()
+                            else if (modelData.action === "next") phoneMirrorManager.mediaNext()
+                            else phoneMirrorManager.mediaPlayPause()
+                            return
+                        }
                         var m = root._mgr()
                         if (!m) return
                         if (modelData.action === "prev") m.previous_track()

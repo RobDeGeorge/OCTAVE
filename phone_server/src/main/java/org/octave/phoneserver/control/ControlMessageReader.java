@@ -62,6 +62,8 @@ public class ControlMessageReader {
                 return ControlMessage.createEmpty(type);
             case ControlMessage.TYPE_OCTAVE_SET_BIT_RATE:
                 return ControlMessage.createOctaveSetBitRate(dis.readInt());
+            case ControlMessage.TYPE_OCTAVE_MEDIA:
+                return ControlMessage.createOctaveMedia(dis.readUnsignedByte(), dis.readLong());
             default:
                 throw new ControlProtocolException("Unknown event type: " + type);
         }

@@ -44,9 +44,31 @@ public class DeviceMessageWriter {
                 dos.writeBoolean(msg.isInUse());
                 dos.writeBoolean(msg.isPanelDark());
                 break;
+            case DeviceMessage.TYPE_OCTAVE_MEDIA_STATE:
+                PhoneMedia.State st = msg.getMediaState();
+                dos.writeByte((st.hasSession ? 1 : 0) | (st.playing ? 2 : 0) | (st.canSeek ? 4 : 0));
+                dos.writeLong(st.positionMs);
+                dos.writeLong(st.durationMs);
+                writeShortString(st.packageName);
+                writeShortString(st.title);
+                writeShortString(st.artist);
+                writeShortString(st.album);
+                break;
+            case DeviceMessage.TYPE_OCTAVE_MEDIA_ART:
+                byte[] art = msg.getData();
+                dos.writeInt(art.length);
+                dos.write(art);
+                break;
             default:
                 throw new ControlProtocolException("Unknown event type: " + type);
         }
         dos.flush();
+    }
+
+    private void writeShortString(String s) throws IOException {
+        byte[] raw = (s == null ? "" : s).getBytes(StandardCharsets.UTF_8);
+        int len = StringUtils.getUtf8TruncationIndex(raw, 1024);
+        dos.writeShort(len);
+        dos.write(raw, 0, len);
     }
 }

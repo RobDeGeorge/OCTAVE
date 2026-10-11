@@ -3,11 +3,15 @@
 #include "phonemirrormanager.h"
 #include "../phone_mirror/scrcpyclient.h"
 #include "../phone_mirror/qrcodegen.hpp"
+#include "settingsmanager.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QUrl>
+#include <climits>
 #include <QProcess>
 #include <QRandomGenerator>
 #include <QRegularExpression>
@@ -324,7 +328,14 @@ void PhoneMirrorManager::setVolume(float volume)
 {
     m_volume = volume;
     if (m_client)
-        m_client->setVolume(volume);
+        m_client->setVolume(m_muted ? 0.0f : volume);
+}
+
+void PhoneMirrorManager::setMuted(bool muted)
+{
+    m_muted = muted;
+    if (m_client)
+        m_client->setVolume(muted ? 0.0f : m_volume);
 }
 
 void PhoneMirrorManager::setAudioGain(float gain)
@@ -371,16 +382,6 @@ void PhoneMirrorManager::updateDucking()
     m_duckFactor = factor;
     qCDebug(lcPhoneMirror) << "ducking factor" << factor;
     emit duckingChanged(factor);
-}
-
-void PhoneMirrorManager::setAudioEnabled(bool enabled)
-{
-    // Play the phone's audio through OCTAVE (setting scrcpyAudioEnabled).
-    // Restarts the session if one is running, like the display size.
-    if (enabled == m_audioEnabled)
-        return;
-    m_audioEnabled = enabled;
-    restartSession();
 }
 
 void PhoneMirrorManager::restartSession()
@@ -620,6 +621,8 @@ void PhoneMirrorManager::startScrcpy()
     connect(m_client, &ScrcpyClient::frameReady, this, &PhoneMirrorManager::frameReady, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::serverLog, this, &PhoneMirrorManager::onServerLog, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::phoneStateChanged, this, &PhoneMirrorManager::onPhoneState, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::mediaStateChanged, this, &PhoneMirrorManager::onMediaState, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::mediaArtChanged, this, &PhoneMirrorManager::onMediaArt, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::bitRateChanged, this, [this](int bps) {
         if (bps != m_currentBitRate) {
             m_currentBitRate = bps;
@@ -635,7 +638,7 @@ void PhoneMirrorManager::startScrcpy()
         updateDucking();
     });
     m_client->setAudioGain(m_audioGain);
-    m_client->setVolume(m_volume);
+    m_client->setVolume(m_muted ? 0.0f : m_volume);
 
     QString displaySize = requested;
     if (!displaySize.isEmpty()) {
@@ -660,7 +663,6 @@ void PhoneMirrorManager::startScrcpy()
                           << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize)
                           << "," << startBps / 1000000.0 << "Mbps" << (m_bitRateAuto ? "adaptive, max" : "fixed")
                           << bitRateMbps
-                          << ", audio" << (m_audioEnabled ? "on" : "off")
                           << "," << (wireless ? "Wi-Fi" : "USB") << ")";
     m_serial = serial;
     setConnectionType(wireless ? QStringLiteral("wifi") : QStringLiteral("usb"));
@@ -668,7 +670,8 @@ void PhoneMirrorManager::startScrcpy()
         m_vdisplayId = -1;
     else
         qCInfo(lcPhoneMirror) << "Reattaching to the phone's running mirror session (scid" << attachScid << ")";
-    m_client->start(serial, displaySize, 60, startBps, m_audioEnabled, true, attachScid);
+    // Phone audio always plays through OCTAVE while mirroring
+    m_client->start(serial, displaySize, 60, startBps, true, true, attachScid);
     emit isRunningChanged();
 }
 
@@ -687,6 +690,8 @@ void PhoneMirrorManager::onConnected(int w, int h)
     // Hand the sleep/panel policy to the phone-side keeper. The server
     // powers the device on asynchronously at start; give it a moment.
     QTimer::singleShot(500, this, &PhoneMirrorManager::sendKeeperPolicy);
+    // Follow the phone's media session so OCTAVE's media controls can drive it
+    m_client->mediaCommand(ScrcpyClient::MediaWatch, 1);
 }
 
 void PhoneMirrorManager::onDisconnected(const QString &reason)
@@ -694,6 +699,7 @@ void PhoneMirrorManager::onDisconnected(const QString &reason)
     if (m_isStopping)
         return;
     resetPhoneState();
+    resetMedia();
     const bool wasReady = m_ready;
     m_ready = false;
     m_isStarting = false;
@@ -740,6 +746,7 @@ void PhoneMirrorManager::stopScrcpy()
         emit currentBitRateChanged();
     }
     resetPhoneState();
+    resetMedia();
     if (m_client) {
         ScrcpyClient *client = m_client;
         m_client = nullptr;
@@ -918,6 +925,145 @@ void PhoneMirrorManager::runWirelessJob(std::function<void()> job, bool ui)
             }, Qt::QueuedConnection);
         }
     });
+}
+
+// ── phone media ───────────────────────────────────────────────────────
+// The server's PhoneMedia (phone_server/.../control/PhoneMedia.java) follows
+// the phone's active media session and reports it; OCTAVE's media controls
+// drive it through ScrcpyClient::mediaCommand while mediaActive is set.
+
+void PhoneMirrorManager::onMediaState(const QVariantMap &state)
+{
+    const bool wasPlaying = m_mediaPlaying;
+    m_mediaAvailable = state.value(QStringLiteral("has_session")).toBool();
+    m_mediaPlaying = m_mediaAvailable && state.value(QStringLiteral("playing")).toBool();
+    m_mediaCanSeek = state.value(QStringLiteral("can_seek")).toBool();
+    m_mediaPositionMs = state.value(QStringLiteral("position_ms")).toLongLong();
+    m_mediaPositionAtMs = QDateTime::currentMSecsSinceEpoch();
+    m_mediaDuration = int(qMin<qint64>(state.value(QStringLiteral("duration_ms")).toLongLong(), INT_MAX));
+    m_mediaApp = state.value(QStringLiteral("package")).toString();
+    m_mediaTitle = state.value(QStringLiteral("title")).toString();
+    m_mediaArtist = state.value(QStringLiteral("artist")).toString();
+    m_mediaAlbum = state.value(QStringLiteral("album")).toString();
+    emit mediaChanged();
+    // The phone is the media source while mirroring: it takes the controls
+    // with its first report, and again whenever it starts playing after a
+    // local / Spotify track took them (releaseMedia)
+    const bool firstReport = !m_mediaReported;
+    m_mediaReported = true;
+    if (!m_mediaActive && (firstReport || (m_mediaPlaying && !wasPlaying))) {
+        qCInfo(lcPhoneMirror) << "OCTAVE's media controls drive the phone" << (m_mediaApp.isEmpty() ? QString() : m_mediaApp);
+        setMediaActive(true);
+    }
+}
+
+void PhoneMirrorManager::onMediaArt(const QByteArray &jpeg)
+{
+    QString url;
+    if (!jpeg.isEmpty()) {
+        const QString dir = SettingsManager::getAppDataDir() + QStringLiteral("/temp");
+        QDir().mkpath(dir);
+        // Alternate between two files: a new URL makes QML reload the image
+        m_mediaArtSeq = (m_mediaArtSeq + 1) % 2;
+        const QString path = dir + QStringLiteral("/phone_media_art_%1.jpg").arg(m_mediaArtSeq);
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly) && f.write(jpeg) == jpeg.size())
+            url = QUrl::fromLocalFile(path).toString();
+        else
+            qCWarning(lcPhoneMirror) << "Could not write phone album art to" << path;
+    }
+    if (url != m_mediaArtUrl) {
+        m_mediaArtUrl = url;
+        emit mediaArtChanged();
+    }
+}
+
+void PhoneMirrorManager::resetMedia()
+{
+    m_mediaReported = false;
+    setMediaActive(false);
+    if (m_mediaAvailable || m_mediaPlaying || !m_mediaTitle.isEmpty()) {
+        m_mediaAvailable = m_mediaPlaying = m_mediaCanSeek = false;
+        m_mediaTitle.clear();
+        m_mediaArtist.clear();
+        m_mediaAlbum.clear();
+        m_mediaApp.clear();
+        m_mediaDuration = 0;
+        m_mediaPositionMs = 0;
+        emit mediaChanged();
+    }
+    if (!m_mediaArtUrl.isEmpty()) {
+        m_mediaArtUrl.clear();
+        emit mediaArtChanged();
+    }
+}
+
+void PhoneMirrorManager::setMediaActive(bool active)
+{
+    if (active == m_mediaActive)
+        return;
+    m_mediaActive = active;
+    emit mediaActiveChanged(active);
+}
+
+int PhoneMirrorManager::mediaPosition() const
+{
+    qint64 pos = m_mediaPositionMs;
+    if (m_mediaPlaying)
+        pos += QDateTime::currentMSecsSinceEpoch() - m_mediaPositionAtMs;
+    if (m_mediaDuration > 0)
+        pos = qMin<qint64>(pos, m_mediaDuration);
+    return int(qMax<qint64>(0, pos));
+}
+
+void PhoneMirrorManager::mediaPlayPause()
+{
+    if (m_client && m_ready)
+        m_client->mediaCommand(ScrcpyClient::MediaPlayPause);
+}
+
+void PhoneMirrorManager::mediaPlay()
+{
+    if (m_client && m_ready)
+        m_client->mediaCommand(ScrcpyClient::MediaPlay);
+}
+
+void PhoneMirrorManager::mediaPause()
+{
+    if (m_client && m_ready)
+        m_client->mediaCommand(ScrcpyClient::MediaPause);
+}
+
+void PhoneMirrorManager::mediaNext()
+{
+    if (m_client && m_ready)
+        m_client->mediaCommand(ScrcpyClient::MediaNext);
+}
+
+void PhoneMirrorManager::mediaPrevious()
+{
+    if (m_client && m_ready)
+        m_client->mediaCommand(ScrcpyClient::MediaPrevious);
+}
+
+void PhoneMirrorManager::mediaSeek(int positionMs)
+{
+    if (!m_client || !m_ready)
+        return;
+    m_client->mediaCommand(ScrcpyClient::MediaSeek, qMax(0, positionMs));
+    // Show the new position before the phone confirms it
+    m_mediaPositionMs = qMax(0, positionMs);
+    m_mediaPositionAtMs = QDateTime::currentMSecsSinceEpoch();
+}
+
+void PhoneMirrorManager::releaseMedia(bool pausePhone)
+{
+    if (!m_mediaActive)
+        return;
+    if (pausePhone && m_mediaPlaying)
+        mediaPause();
+    qCInfo(lcPhoneMirror) << "OCTAVE's media controls leave the phone" << (pausePhone ? "(phone paused)" : "");
+    setMediaActive(false);
 }
 
 void PhoneMirrorManager::setWirelessAddress(const QString &address)

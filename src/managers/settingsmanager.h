@@ -92,7 +92,6 @@ class SettingsManager : public QObject
     // --- Android Auto / Phone Mirror ---
     Q_PROPERTY(bool androidAutoEnabled READ androidAutoEnabled NOTIFY androidAutoEnabledChanged)
     Q_PROPERTY(bool phoneMirrorEnabled READ phoneMirrorEnabled NOTIFY phoneMirrorEnabledChanged)
-    Q_PROPERTY(bool scrcpyAudioEnabled READ scrcpyAudioEnabled NOTIFY scrcpyAudioEnabledChanged)
     Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize NOTIFY scrcpyDisplaySizeChanged)
     Q_PROPERTY(double scrcpyAudioGain READ scrcpyAudioGain NOTIFY scrcpyAudioGainChanged)
     Q_PROPERTY(bool scrcpyAudioDuckEnabled READ scrcpyAudioDuckEnabled NOTIFY scrcpyAudioDuckEnabledChanged)
@@ -210,7 +209,6 @@ public:
     // Android Auto / Phone Mirror
     bool androidAutoEnabled() const;
     bool phoneMirrorEnabled() const;
-    bool scrcpyAudioEnabled() const;
     QString scrcpyDisplaySize() const;
     double scrcpyAudioGain() const;
     bool scrcpyAudioDuckEnabled() const;
@@ -327,7 +325,6 @@ signals:
     // Android Auto / Phone Mirror
     void androidAutoEnabledChanged(bool value);
     void phoneMirrorEnabledChanged(bool value);
-    void scrcpyAudioEnabledChanged(bool value);
     void scrcpyDisplaySizeChanged(const QString &value);
     void scrcpyAudioGainChanged(double value);
     void scrcpyAudioDuckEnabledChanged(bool value);
@@ -457,7 +454,6 @@ public slots:
     // Android Auto / Phone Mirror
     void save_android_auto_enabled(bool enabled);
     void save_phone_mirror_enabled(bool enabled);
-    void save_scrcpy_audio_enabled(bool enabled);
     void save_scrcpy_display_size(const QString &size);
     void save_scrcpy_audio_gain(double gain);
     void save_scrcpy_audio_duck_enabled(bool enabled);
@@ -528,7 +524,6 @@ public slots:
     Q_INVOKABLE void flushPendingSave();
     Q_INVOKABLE bool get_android_auto_enabled();
     Q_INVOKABLE bool get_phone_mirror_enabled();
-    Q_INVOKABLE bool get_scrcpy_audio_enabled();
     Q_INVOKABLE QString get_scrcpy_display_size();
     Q_INVOKABLE double get_scrcpy_audio_gain();
     Q_INVOKABLE bool get_scrcpy_audio_duck_enabled();
@@ -667,7 +662,6 @@ private:
     // Android Auto / Phone Mirror
     bool m_androidAutoEnabled = false;
     bool m_phoneMirrorEnabled = false;
-    bool m_scrcpyAudioEnabled = false;
     QString m_scrcpyDisplaySize;
     double m_scrcpyAudioGain = 2.0;
     bool m_scrcpyAudioDuckEnabled = true;

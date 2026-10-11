@@ -278,7 +278,13 @@ ApplicationWindow {
                 theme = newTheme
 
                 // If Album Art Capture is selected, extract colors from current song
+                // (the phone's, while the phone has the media controls)
                 if (newTheme === "Album Art Capture" && mediaManager) {
+                    if (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager.mediaActive
+                            && phoneMirrorManager.mediaArtUrl) {
+                        mediaManager.extract_colors_from_image(phoneMirrorManager.mediaArtUrl)
+                        return
+                    }
                     var currentFile = mediaManager.get_current_file()
                     if (currentFile)
                         mediaManager.extract_colors_from_album_art(currentFile)
@@ -354,6 +360,25 @@ ApplicationWindow {
             if (settingsManager && settingsManager.songLengthTransition && durationMs > 0) {
                 App.Style.colorTransitionMs = durationMs
             }
+        }
+    }
+
+    // Phone media (phone mirror) for Album Art Capture: the phone's art drives
+    // the theme while the phone has the media controls
+    Connections {
+        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
+
+        function applyPhoneArt() {
+            if (settingsManager && settingsManager.themeSetting === "Album Art Capture" && mediaManager
+                    && phoneMirrorManager.mediaActive && phoneMirrorManager.mediaArtUrl)
+                mediaManager.extract_colors_from_image(phoneMirrorManager.mediaArtUrl)
+        }
+        function onMediaArtChanged() { applyPhoneArt() }
+        function onMediaActiveChanged(active) { if (active) applyPhoneArt() }
+        function onMediaChanged() {
+            if (phoneMirrorManager.mediaActive && settingsManager && settingsManager.songLengthTransition
+                    && phoneMirrorManager.mediaDuration > 0)
+                App.Style.colorTransitionMs = phoneMirrorManager.mediaDuration
         }
     }
 

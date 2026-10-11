@@ -7,6 +7,9 @@ public final class DeviceMessage {
     public static final int TYPE_UHID_OUTPUT = 2;
     // OCTAVE extension: phone asleep / in use / panel dark (MirrorKeeper)
     public static final int TYPE_OCTAVE_PHONE_STATE = 100;
+    // OCTAVE extension: the phone's active media session (PhoneMedia)
+    public static final int TYPE_OCTAVE_MEDIA_STATE = 101;
+    public static final int TYPE_OCTAVE_MEDIA_ART = 102;
 
     private int type;
     private String text;
@@ -16,6 +19,7 @@ public final class DeviceMessage {
     private boolean asleep;
     private boolean inUse;
     private boolean panelDark;
+    private PhoneMedia.State mediaState;
 
     private DeviceMessage() {
     }
@@ -49,6 +53,25 @@ public final class DeviceMessage {
         event.inUse = inUse;
         event.panelDark = panelDark;
         return event;
+    }
+
+    public static DeviceMessage createOctaveMediaState(PhoneMedia.State state) {
+        DeviceMessage event = new DeviceMessage();
+        event.type = TYPE_OCTAVE_MEDIA_STATE;
+        event.mediaState = state;
+        return event;
+    }
+
+    /** JPEG bytes, empty for "no art". */
+    public static DeviceMessage createOctaveMediaArt(byte[] jpeg) {
+        DeviceMessage event = new DeviceMessage();
+        event.type = TYPE_OCTAVE_MEDIA_ART;
+        event.data = jpeg;
+        return event;
+    }
+
+    public PhoneMedia.State getMediaState() {
+        return mediaState;
     }
 
     public boolean isAsleep() {

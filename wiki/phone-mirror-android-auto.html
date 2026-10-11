@@ -29,6 +29,7 @@
                 <li><a href="#pm-black">Black-frame holding</a></li>
                 <li><a href="#pm-audio">Audio and ducking</a></li>
                 <li><a href="#pm-keeper">Phone screen, sleep and the MirrorKeeper</a></li>
+                <li><a href="#pm-media">Phone media: OCTAVE's controls drive the phone</a></li>
                 <li><a href="#pm-persist">Persistent sessions and USB drops</a></li>
                 <li><a href="#pm-wifi">Mirroring over Wi-Fi</a></li>
                 <li><a href="#pm-input">Touch and navigation</a></li>
@@ -159,7 +160,10 @@
               <tr><td><code>wirelessBusy</code></td><td><code>bool</code></td><td>A QR pairing started from the UI is in progress</td></tr>
               <tr><td><code>qrPairingRows</code>, <code>qrPairingActive</code></td><td><code>list</code>, <code>bool</code></td><td>The QR code being shown (one <code>'0'</code>/<code>'1'</code> string per row) and whether one is waiting</td></tr>
               <tr><td><code>currentBitRate</code></td><td><code>int</code></td><td>Video bit rate of the running session in bps, following adaptive changes; 0 when idle</td></tr>
-            </tbody>
+              <tr><td><code>mediaAvailable</code>, <code>mediaPlaying</code>, <code>mediaTitle</code>, <code>mediaArtist</code>, <code>mediaAlbum</code>, <code>mediaApp</code>, <code>mediaDuration</code>, <code>mediaCanSeek</code></td><td>various</td><td>The phone's active media session as <code>PhoneMedia</code> reports it (<code>mediaApp</code> is the package name, <code>mediaDuration</code> ms); notify <code>mediaChanged</code>. See <a href="#pm-media">Phone media</a></td></tr>
+              <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<code>&lt;app data&gt;/temp/phone_media_art_{0,1}.jpg</code>, alternating so QML reloads), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
+              <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>The phone is the source OCTAVE's media controls drive; notify <code>mediaActiveChanged(bool)</code></td></tr>
+            </tbody
           </table>
           <h4>Signals</h4>
           <table>
@@ -187,7 +191,7 @@
               <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>various</td><td>adb probes (<code>getprop ro.product.model</code>, <code>wm size</code>, <code>getprop ro.build.version.sdk</code>)</td></tr>
               <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Same as <code>nativeAvailable</code>; the view shows setup text only when false</td></tr>
               <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing (decoder / jar / adb), or the USB-debugging steps</td></tr>
-              <tr><td><code>setDisplaySize(str)</code>, <code>setAudioEnabled(bool)</code>, <code>setDisplayDpi(int)</code>, <code>setBitRateUsb(int)</code>, <code>setBitRateWifi(int)</code></td><td>--</td><td>Restart a running session (stop, then start 300 ms later); a bit-rate change only restarts a session on that link</td></tr>
+              <tr><td><code>setDisplaySize(str)</code>, <code>setDisplayDpi(int)</code>, <code>setBitRateUsb(int)</code>, <code>setBitRateWifi(int)</code></td><td>--</td><td>Restart a running session (stop, then start 300 ms later); a bit-rate change only restarts a session on that link</td></tr>
               <tr><td><code>setViewSize(int, int)</code></td><td>--</td><td>The mirror view's size in device pixels (<code>PhoneMirrorView</code> reports it on activation and on every resize). With <code>"auto"</code> a running session whose size no longer matches is restarted once the size has been stable for 1.5 s</td></tr>
               <tr><td><code>setAutoWifi(bool)</code></td><td>--</td><td>Setting <code>scrcpyAutoWifi</code>; read at the next USB start</td></tr>
               <tr><td><code>setBitRateAuto(bool)</code></td><td>--</td><td>Setting <code>scrcpyBitRateAuto</code>; restarts a running session</td></tr>
@@ -198,6 +202,9 @@
               <tr><td><code>wakePhone()</code></td><td>--</td><td><code>adb shell input keyevent 224</code> (<code>KEYCODE_WAKEUP</code>) from OCTAVE's side; the keeper normally wakes the phone itself, this is the asleep overlay's tap-to-retry</td></tr>
               <tr><td><code>resumeMirroring()</code></td><td>--</td><td>Sends <code>OCTAVE_TAKE_BACK</code>: the keeper leaves the in-use state, wakes the phone if needed and re-applies the panel policy. Implemented in both backends, not exposed in the view</td></tr>
               <tr><td><code>forgetWireless()</code>, <code>setWirelessAddress(address)</code>, <code>startQrPairing()</code>, <code>cancelQrPairing()</code></td><td>--</td><td>Wi-Fi, see <a href="#pm-wifi">Mirroring over Wi-Fi</a></td></tr>
+              <tr><td><code>mediaPlayPause()</code>, <code>mediaPlay()</code>, <code>mediaPause()</code>, <code>mediaNext()</code>, <code>mediaPrevious()</code>, <code>mediaSeek(ms)</code></td><td>--</td><td>Drive the phone's media session (<code>OCTAVE_MEDIA</code>)</td></tr>
+              <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>Position in ms, extrapolated from the last report while playing (the phone reports only on changes)</td></tr>
+              <tr><td><code>releaseMedia(pausePhone)</code></td><td>--</td><td>An OCTAVE source took over: clear <code>mediaActive</code>, optionally pausing the phone</td></tr>
             </tbody>
           </table>
         </section>
@@ -294,6 +301,7 @@
               <tr><td>100</td><td><code>OCTAVE_SET_KEEPER</code></td><td><code>[u8 enabled][u8 panelDark][i32 graceMs]</code></td><td>7 B</td><td>yes, 500 ms after connect and on every setting change</td></tr>
               <tr><td>101</td><td><code>OCTAVE_TAKE_BACK</code></td><td>none</td><td>1 B</td><td><code>resumeMirroring()</code></td></tr>
               <tr><td>102</td><td><code>OCTAVE_SET_BIT_RATE</code></td><td><code>[i32 bps]</code></td><td>5 B</td><td>Adaptive quality, from the video thread (<code>VideoBitRate.java</code>: <code>MediaCodec.setParameters</code> on the running encoder, and the rate for every encoder created later)</td></tr>
+              <tr><td>103</td><td><code>OCTAVE_MEDIA</code></td><td><code>[u8 action][i64 arg]</code></td><td>10 B</td><td><code>PhoneMedia</code>: action 0 WATCH (arg 1 = on, sent on connect), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms)</td></tr>
               <tr><td>1, 3, 4, 5..9, 11..</td><td>upstream text / scroll / back-or-screen-on / clipboard / panels / UHID / start-app / reset-video</td><td>as in scrcpy 3.3.4</td><td></td><td>parsed by the server, never sent</td></tr>
             </tbody>
           </table>
@@ -305,6 +313,8 @@
               <tr><td>1</td><td><code>ACK_CLIPBOARD</code></td><td><code>[u64 sequence]</code></td><td>skipped</td></tr>
               <tr><td>2</td><td><code>UHID_OUTPUT</code></td><td><code>[u16 id][u16 len][data]</code></td><td>skipped</td></tr>
               <tr><td>100</td><td><code>OCTAVE_PHONE_STATE</code></td><td><code>[u8 asleep][u8 inUse][u8 panelDark]</code></td><td><code>phoneStateChanged</code> &rarr; <code>phoneAsleep</code> / <code>phoneInUse</code>, black-frame hold</td></tr>
+              <tr><td>101</td><td><code>OCTAVE_MEDIA_STATE</code></td><td><code>[u8 flags: 1 session, 2 playing, 4 canSeek][i64 positionMs][i64 durationMs]</code> then package, title, artist, album as <code>[u16 len][utf8]</code></td><td><code>mediaStateChanged</code> &rarr; the <code>media*</code> properties, <code>mediaActive</code></td></tr>
+              <tr><td>102</td><td><code>OCTAVE_MEDIA_ART</code></td><td><code>[u32 len][JPEG]</code>, len 0 = no art</td><td><code>mediaArtChanged</code> &rarr; file &rarr; <code>mediaArtUrl</code></td></tr>
               <tr><td>other</td><td></td><td></td><td>reader logs a warning and stops (the stream keeps running)</td></tr>
             </tbody>
           </table>
@@ -355,7 +365,7 @@
 
         <section id="pm-audio">
           <h3>Audio and ducking</h3>
-          <p>With setting <code>scrcpyAudioEnabled</code> the server is started with <code>audio=true audio_codec=raw</code>; the server's
+          <p>Phone audio always plays through OCTAVE while mirroring (the <code>scrcpyAudioEnabled</code> toggle was removed): the server is started with <code>audio=true audio_codec=raw</code>, and the stream follows OCTAVE's volume (<code>setVolume</code>) and mute (<code>setMuted</code>, wired from <code>MediaManager.muteChanged</code>); the server's
             default source is <code>AudioSource.OUTPUT</code>, i.e. <code>REMOTE_SUBMIX</code>, which captures every app and mutes playback
             on the handset. Raw PCM means no decoder on our side. The audio socket is read on its own thread
             (<code>scrcpy-audio</code>) so video never waits on it:</p>
@@ -439,6 +449,37 @@
             wake inside it shows no keyguard and no unlock edge; the keeper treats "woke to an unlocked phone" as in use. Setting
             lock-after to "Immediately" gives the crispest behaviour.
           </div>
+        </section>
+
+        <section id="pm-media">
+          <h3>Phone media: OCTAVE's controls drive the phone</h3>
+          <p>Music playing on the phone (any app with a media session: Spotify, YouTube Music, podcasts...) shows up in
+            OCTAVE's own now-playing UI and is driven by its normal controls: the bottom bar, the Media Room, the home
+            screen card, the dashboard <code>NowPlayingWidget</code> / <code>MediaControlsWidget</code>, gesture swipes and
+            Album Art Capture theming. Audio forwarding does not need to be on; this is control and metadata only.</p>
+          <p><strong>Phone side</strong>: <span class="file-path">phone_server/.../control/PhoneMedia.java</span>, created by
+            <code>Controller</code> on the first <code>OCTAVE_MEDIA</code> and stopped with the client session. It lists sessions
+            through the <code>media_session</code> binder (<code>ISessionManager.getSessions(null, 0[, null])</code>: the third
+            argument, a package filter, appeared in Android 17; the shell holds <code>MEDIA_CONTENT_CONTROL</code>), follows the
+            one that is playing or else the highest priority one (re-picked every second), and registers a
+            <code>MediaController.Callback</code> on it, so changes are reported as they happen. Transport goes through
+            <code>MediaController.TransportControls</code>; with no session, play falls back to <code>KEYCODE_MEDIA_PLAY</code>.
+            Art (album art, art or display icon) is scaled to 400 px and sent as JPEG only when it changes (identity: size and a
+            4&times;4 pixel sample); a "no art" after a track change is held back 1 s because apps send the title first and the art
+            a moment later.</p>
+          <p><strong>Who has the controls</strong> (<code>mediaActive</code>): the phone is the media source for the whole
+            mirroring session. It takes the controls with the session's first media report (sent right after <code>WATCH</code>,
+            even with no media app), keeps them while paused or with no media app, and loses them when the session ends or
+            <code>releaseMedia()</code> is called; after that it takes them back only when it starts playing again.
+            Pressing play with no media app sends <code>KEYCODE_MEDIA_PLAY</code>, which restarts the last media app. <code>main.cpp</code> / <code>main.py</code> wire the hand-offs: when the phone takes over, local playback
+            pauses, and Spotify pauses unless the phone app <em>is</em> Spotify (the same playback); a local track starting calls
+            <code>releaseMedia(true)</code> (the phone pauses), a Spotify track starting calls <code>releaseMedia</code> pausing the
+            phone only if it is not Spotify. With no media app the views show "Phone" / "Nothing playing". The Media Room's source pill reads "Phone" meanwhile; tapping it hands the controls
+            back and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
+          <p><strong>QML</strong> picks the phone first in every source switch (<code>phoneMirrorManager.mediaActive</code>, then
+            Spotify, then local). Handlers that can fire while <code>mediaActive</code> is changing read the manager directly
+            (<code>phoneActive()</code>) instead of the <code>usePhone</code> binding. Position is not streamed: views poll
+            <code>mediaPosition()</code> every 500 ms while the phone plays and the view is visible.</p>
         </section>
 
         <section id="pm-persist">
@@ -643,7 +684,6 @@
               <tr><td><code>scrcpyBitRateAuto</code></td><td>true</td><td>Adaptive quality; the per-link rates become the ceiling</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyPhoneScreenOff</code></td><td>true</td><td>Keeper <code>panelDark</code></td><td>live (<code>OCTAVE_SET_KEEPER</code>)</td></tr>
               <tr><td><code>scrcpyWirelessAddress</code></td><td><code>""</code></td><td>Phone last connected over Wi-Fi; written by the manager (<code>wirelessAddressChanged</code> &rarr; <code>save_scrcpy_wireless_address</code>)</td><td>startup + live</td></tr>
-              <tr><td><code>scrcpyAudioEnabled</code></td><td>false</td><td><code>audio=true audio_codec=raw</code></td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyAudioGain</code></td><td>2.0</td><td>Linear PCM gain before OCTAVE's volume (UI shows dB)</td><td>live</td></tr>
               <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>true</td><td>Duck local media while the phone makes sound</td><td>live</td></tr>
               <tr><td><code>scrcpyAudioDuckLevel</code></td><td>0.1</td><td>Linear factor applied to local media while ducked (UI shows dB)</td><td>live</td></tr>

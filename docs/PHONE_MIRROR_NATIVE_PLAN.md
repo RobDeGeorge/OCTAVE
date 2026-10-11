@@ -76,7 +76,7 @@ input. The scrcpy **desktop client** is what we replace, with code inside OCTAVE
 **Remove once the native path is validated:**
 - `PhoneMirrorManager`'s scrcpy binary discovery, version gate, `captureMode`, `videoDevice`, and the whole v4l2/ffmpeg reader in `ScrcpyCapture`.
 - The Windows window-grab path (`findWindowByPid`, GDI capture, off-screen window).
-- `scrcpyPath`, `scrcpyVideoDevice` settings. `scrcpyDisplaySize` and `scrcpyAudioEnabled` stay.
+- `scrcpyPath`, `scrcpyVideoDevice` settings. `scrcpyDisplaySize` stays. (`scrcpyAudioEnabled` was removed later: phone audio always plays through OCTAVE while mirroring.)
 - wiki text describing the v4l2 chain (keep the "why not QtMultimedia" knowledge; it still applies to camera enumeration).
 
 ## The scrcpy protocol (server 3.x)
@@ -112,11 +112,11 @@ at the pinned tag. Verify each detail against that tag before coding.
      pressure u16 fixed-point (0xFFFF = 1.0), action_button i32, buttons i32. 32 bytes total.
    - `0` INJECT_KEYCODE: action u8, keycode i32, repeat i32, metastate i32.
    - `1` INJECT_TEXT, `9` SET_CLIPBOARD, `10` SET_DISPLAY_POWER (screen off while mirroring), `4` BACK_OR_SCREEN_ON.
-   - OCTAVE extensions (our server fork only): `100` OCTAVE_SET_KEEPER `[u8 enabled][u8 panelDark][i32 graceMs]` and `101` OCTAVE_TAKE_BACK (no payload). They drive `control/MirrorKeeper.java`, which wakes the phone on doze, keeps its panel dark and tracks the keyguard from inside the device. `102` OCTAVE_SET_BIT_RATE `[i32 bps]` (adaptive quality) goes to `video/VideoBitRate.java`: applied live with `MediaCodec.setParameters(PARAMETER_KEY_VIDEO_BITRATE)` and used for every encoder created after it (capture reset, resize).
+   - OCTAVE extensions (our server fork only): `100` OCTAVE_SET_KEEPER `[u8 enabled][u8 panelDark][i32 graceMs]` and `101` OCTAVE_TAKE_BACK (no payload). They drive `control/MirrorKeeper.java`, which wakes the phone on doze, keeps its panel dark and tracks the keyguard from inside the device. `102` OCTAVE_SET_BIT_RATE `[i32 bps]` (adaptive quality) goes to `video/VideoBitRate.java`: applied live with `MediaCodec.setParameters(PARAMETER_KEY_VIDEO_BITRATE)` and used for every encoder created after it (capture reset, resize). `103` OCTAVE_MEDIA `[u8 action][i64 arg]` drives `control/PhoneMedia.java` (the phone's media session): action 0 WATCH (arg 1 = on), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms).
    - Server option `octave_persist_ms=N` (our fork): after the client's sockets close, the server keeps the virtual display (and the apps on it) and re-listens on the same `localabstract:scrcpy_<scid>` for up to N ms (`Server.runSession` loop, `NewDisplayCapture.setPersistent`). The clients launch the server with `nohup ... & wait` so it survives adbd killing the shell on a USB data dropout, and `start(attach_scid=...)` / `start(..., attachScid)` re-forwards and reconnects to the same scid (server log then followed via `logcat -s scrcpy:I`). A deliberate stop still `pkill`s the server.
    Coordinates are relative to the mirrored display, so the virtual display needs no
    `input -d`: the server routes injection to the display it mirrors.
-9. **Device messages** (control socket, server → client): `[u8 type]` then `0` CLIPBOARD `[u32 len][utf8]`, `1` ACK_CLIPBOARD `[u64 seq]`, `2` UHID_OUTPUT `[u16 id][u16 len][data]`, and OCTAVE's `100` PHONE_STATE `[u8 asleep][u8 inUse][u8 panelDark]`, sent by the MirrorKeeper on every change. Both clients run a reader thread on the control socket; `clipboard_autosync=false` keeps the clipboard traffic off.
+9. **Device messages** (control socket, server → client): `[u8 type]` then `0` CLIPBOARD `[u32 len][utf8]`, `1` ACK_CLIPBOARD `[u64 seq]`, `2` UHID_OUTPUT `[u16 id][u16 len][data]`, and OCTAVE's `100` PHONE_STATE `[u8 asleep][u8 inUse][u8 panelDark]`, sent by the MirrorKeeper on every change. PhoneMedia sends `101` MEDIA_STATE `[u8 flags: 1 session, 2 playing, 4 canSeek][i64 positionMs][i64 durationMs]` + package, title, artist, album each `[u16 len][utf8]`, and `102` MEDIA_ART `[u32 len][JPEG]` (0 = no art). Both clients run a reader thread on the control socket; `clipboard_autosync=false` keeps the clipboard traffic off.
 10. **Teardown:** close both sockets and kill the `app_process` child; the server exits and
     destroys the virtual display (`cleanup=true`). Keep the `adb shell pkill -f com.genymobile.scrcpy` safety net and `adb forward --remove`.
 

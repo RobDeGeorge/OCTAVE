@@ -35,7 +35,9 @@
 #else
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <poll.h>
 #include <unistd.h>
+#include <cerrno>
 #endif
 #ifdef Q_OS_LINUX
 #include <sys/prctl.h>
@@ -68,11 +70,14 @@ constexpr quint8 kMsgSetDisplayPower = 10;
 constexpr quint8 kMsgOctaveSetKeeper = 100;
 constexpr quint8 kMsgOctaveTakeBack = 101;
 constexpr quint8 kMsgOctaveSetBitRate = 102;   // int32 bps (adaptive quality)
+constexpr quint8 kMsgOctaveMedia = 103;        // u8 action, int64 argument (phone_server PhoneMedia)
 // Device messages (server -> client on the control socket)
 constexpr quint8 kDevMsgClipboard = 0;
 constexpr quint8 kDevMsgAckClipboard = 1;
 constexpr quint8 kDevMsgUhidOutput = 2;
 constexpr quint8 kDevMsgOctavePhoneState = 100;
+constexpr quint8 kDevMsgOctaveMediaState = 101;   // the phone's media session (PhoneMedia)
+constexpr quint8 kDevMsgOctaveMediaArt = 102;     // u32 length + JPEG (0 = no art)
 // A dozing phone streams pure black frames until it is woken. Rather than
 // flash the dash black, a run of all-black frames is held back (the last good
 // frame stays on screen) for this long, or for as long as the manager says
@@ -403,6 +408,15 @@ void ScrcpyClient::setKeeper(bool enabled, bool panelDark, int graceMs)
 void ScrcpyClient::takeBack()
 {
     sendControl(QByteArray(1, char(kMsgOctaveTakeBack)));
+}
+
+void ScrcpyClient::mediaCommand(int action, qint64 argument)
+{
+    QByteArray msg(10, 0);
+    msg[0] = char(kMsgOctaveMedia);
+    msg[1] = char(action);
+    qToBigEndian<qint64>(argument, msg.data() + 2);
+    sendControl(msg);
 }
 
 void ScrcpyClient::sendBitRate(int bps)
@@ -847,17 +861,34 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
 
 // ─── audio ────────────────────────────────────────────────────────────
 
-// Blocking read of exactly n bytes from a raw descriptor (the control socket
-// belongs to the worker thread's QTcpSocket; this thread only reads the fd).
+// Read exactly n bytes from a raw descriptor (the control socket belongs to
+// the worker thread's QTcpSocket; this thread only reads the fd). Qt keeps
+// its sockets non-blocking, so an empty socket answers "would block" at once:
+// wait for data then, rather than taking it for a closed connection (which
+// silently ended the reader before the first device message arrived).
 static bool recvExactFd(qintptr fd, char *buf, int n, const std::atomic<bool> &stopping)
 {
     int got = 0;
     while (got < n && !stopping.load()) {
 #ifdef Q_OS_WIN
         const int r = ::recv(static_cast<SOCKET>(fd), buf + got, n - got, 0);
+        const bool wouldBlock = r < 0 && WSAGetLastError() == WSAEWOULDBLOCK;
 #else
         const auto r = ::recv(static_cast<int>(fd), buf + got, size_t(n - got), 0);
+        const bool wouldBlock = r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR);
 #endif
+        if (wouldBlock) {
+            // Bounded wait so a stop request is noticed; stop() also shuts
+            // the descriptor down, which wakes this at once
+#ifdef Q_OS_WIN
+            WSAPOLLFD pfd{static_cast<SOCKET>(fd), POLLRDNORM, 0};
+            ::WSAPoll(&pfd, 1, 250);
+#else
+            struct pollfd pfd{static_cast<int>(fd), POLLIN, 0};
+            ::poll(&pfd, 1, 250);
+#endif
+            continue;
+        }
         if (r <= 0)
             return false;
         got += int(r);
@@ -888,6 +919,38 @@ void ScrcpyClient::deviceMessageLoop(qintptr fd)
         } else if (type == kDevMsgOctavePhoneState) {
             if (!recvExactFd(fd, hdr, 3, m_stopping)) return;
             emit phoneStateChanged(hdr[0] != 0, hdr[1] != 0, hdr[2] != 0);
+        } else if (type == kDevMsgOctaveMediaState) {
+            char head[17];
+            if (!recvExactFd(fd, head, 17, m_stopping)) return;
+            const quint8 flags = quint8(head[0]);
+            QString texts[4];
+            for (QString &text : texts) {
+                if (!recvExactFd(fd, hdr, 2, m_stopping)) return;
+                QByteArray raw(qFromBigEndian<quint16>(hdr), 0);
+                if (!recvExactFd(fd, raw.data(), raw.size(), m_stopping)) return;
+                text = QString::fromUtf8(raw);
+            }
+            QVariantMap state;
+            state.insert(QStringLiteral("has_session"), bool(flags & 1));
+            state.insert(QStringLiteral("playing"), bool(flags & 2));
+            state.insert(QStringLiteral("can_seek"), bool(flags & 4));
+            state.insert(QStringLiteral("position_ms"), qFromBigEndian<qint64>(head + 1));
+            state.insert(QStringLiteral("duration_ms"), qFromBigEndian<qint64>(head + 9));
+            state.insert(QStringLiteral("package"), texts[0]);
+            state.insert(QStringLiteral("title"), texts[1]);
+            state.insert(QStringLiteral("artist"), texts[2]);
+            state.insert(QStringLiteral("album"), texts[3]);
+            emit mediaStateChanged(state);
+        } else if (type == kDevMsgOctaveMediaArt) {
+            if (!recvExactFd(fd, hdr, 4, m_stopping)) return;
+            const quint32 n = qFromBigEndian<quint32>(hdr);
+            if (n > (8u << 20)) {
+                qCWarning(lcScrcpyClient) << "album art message too large:" << n << "; stopping the reader";
+                return;
+            }
+            QByteArray jpeg(int(n), 0);
+            if (n && !recvExactFd(fd, jpeg.data(), jpeg.size(), m_stopping)) return;
+            emit mediaArtChanged(jpeg);
         } else {
             qCWarning(lcScrcpyClient) << "unknown device message type" << type << "; stopping the reader";
             return;

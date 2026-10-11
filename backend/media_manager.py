@@ -1276,6 +1276,27 @@ class MediaManager(QObject):
             logger.debug(f"[AlbumArtCapture] Error extracting colors from album art: {e}")
             traceback.print_exc()
 
+    @Slot(str)
+    def extract_colors_from_image(self, image_path):
+        """Same as extract_colors_from_album_art, from an image file or
+        file:// URL (phone album art)."""
+        path = QUrl(image_path).toLocalFile() if image_path.startswith("file:") else image_path
+        if not path or not os.path.exists(path):
+            return
+        self._last_color_file = ""   # a local track asked for next is extracted again
+        self._color_job += 1
+        job = self._color_job
+
+        def work():
+            try:
+                theme_json = self._extract_album_colors(path)
+            except Exception as e:  # pragma: no cover
+                logger.debug(f"[AlbumArtCapture] colour extraction failed: {e}")
+                theme_json = None
+            self._colorsReady.emit(theme_json or "", path, job)
+
+        threading.Thread(target=work, name="album-colors", daemon=True).start()
+
     def _apply_album_colors(self, theme_json, filename, job):
         # GUI thread (queued from the worker)
         if job != self._color_job:

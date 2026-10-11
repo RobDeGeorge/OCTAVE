@@ -150,7 +150,6 @@
             <tr><td><code>lastSettingsSection</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastSettingsSectionChanged</code></td><td>Settings section to reopen (e.g. <code>"mediaSettings"</code>) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>androidAutoEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>androidAutoEnabledChanged</code></td><td>Show the Android Auto page &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>phoneMirrorEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>phoneMirrorEnabledChanged</code></td><td>Show the Phone Mirror page &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>scrcpyAudioEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyAudioEnabledChanged</code></td><td>Play phone audio through OCTAVE while mirroring &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyDisplaySize</code></td><td><code>QString</code></td><td>read-only</td><td><code>scrcpyDisplaySizeChanged</code></td><td>Virtual display <code>"WxH"</code> for mirroring; <code>""</code> mirrors the phone screen &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyAudioGain</code></td><td><code>double</code></td><td>read-only</td><td><code>scrcpyAudioGainChanged</code></td><td>Linear gain applied to phone audio before OCTAVE volume &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyAudioDuckEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyAudioDuckEnabledChanged</code></td><td>Duck local media while the phone produces sound &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -246,7 +245,6 @@
             <tr><td><code>save_settings_section_visibility(QString section, bool visible)</code></td><td><code>void</code></td><td>Show/hide one settings section in the hub; emits <code>settingsMenuVisibilityChanged</code></td></tr>
             <tr><td><code>save_android_auto_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>androidAutoEnabled</code>, then emit <code>androidAutoEnabledChanged</code></td></tr>
             <tr><td><code>save_phone_mirror_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>phoneMirrorEnabled</code>, then emit <code>phoneMirrorEnabledChanged</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioEnabled</code>, then emit <code>scrcpyAudioEnabledChanged</code></td></tr>
             <tr><td><code>save_scrcpy_display_size(QString size)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyDisplaySize</code>, then emit <code>scrcpyDisplaySizeChanged</code></td></tr>
             <tr><td><code>save_scrcpy_audio_gain(double gain)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioGain</code>, then emit <code>scrcpyAudioGainChanged</code></td></tr>
             <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioDuckEnabled</code>, then emit <code>scrcpyAudioDuckEnabledChanged</code></td></tr>
@@ -295,7 +293,6 @@
             <tr><td><code>flushPendingSave()</code></td><td><code>void</code></td><td>Write any coalesced (debounced) settings change to disk now; called at shutdown</td></tr>
             <tr><td><code>get_android_auto_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>androidAutoEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_phone_mirror_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>phoneMirrorEnabled</code> value (same as the property)</td></tr>
-            <tr><td><code>get_scrcpy_audio_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>scrcpyAudioEnabled</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_display_size()</code></td><td><code>QString</code></td><td>Returns the current <code>scrcpyDisplaySize</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_audio_gain()</code></td><td><code>double</code></td><td>Returns the current <code>scrcpyAudioGain</code> value (same as the property)</td></tr>
             <tr><td><code>get_scrcpy_audio_duck_enabled()</code></td><td><code>bool</code></td><td>Returns the current <code>scrcpyAudioDuckEnabled</code> value (same as the property)</td></tr>
@@ -390,7 +387,6 @@
             <tr><td><code>lastSettingsSectionChanged(QString value)</code></td><td>Emitted after <code>lastSettingsSection</code> is saved</td></tr>
             <tr><td><code>androidAutoEnabledChanged(bool value)</code></td><td>Emitted after <code>androidAutoEnabled</code> is saved</td></tr>
             <tr><td><code>phoneMirrorEnabledChanged(bool value)</code></td><td>Emitted after <code>phoneMirrorEnabled</code> is saved</td></tr>
-            <tr><td><code>scrcpyAudioEnabledChanged(bool value)</code></td><td>Emitted after <code>scrcpyAudioEnabled</code> is saved</td></tr>
             <tr><td><code>scrcpyDisplaySizeChanged(QString value)</code></td><td>Emitted after <code>scrcpyDisplaySize</code> is saved</td></tr>
             <tr><td><code>scrcpyAudioGainChanged(double value)</code></td><td>Emitted after <code>scrcpyAudioGain</code> is saved</td></tr>
             <tr><td><code>scrcpyAudioDuckEnabledChanged(bool value)</code></td><td>Emitted after <code>scrcpyAudioDuckEnabled</code> is saved</td></tr>
@@ -1201,6 +1197,11 @@
             <tr><td><code>qrPairingRows</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>qrPairingChanged</code></td><td>Modules of the QR code shown by <code>startQrPairing()</code>, one <code>'0'</code>/<code>'1'</code> string per row; empty when no pairing is waiting</td></tr>
             <tr><td><code>qrPairingActive</code></td><td><code>bool</code></td><td>read-only</td><td><code>qrPairingChanged</code></td><td>A QR pairing is waiting for the phone</td></tr>
             <tr><td><code>currentBitRate</code></td><td><code>int</code></td><td>read-only</td><td><code>currentBitRateChanged</code></td><td>Video bit rate of the running session in bps (follows adaptive changes), 0 when idle</td></tr>
+            <tr><td><code>mediaAvailable</code>, <code>mediaPlaying</code>, <code>mediaCanSeek</code></td><td><code>bool</code></td><td>read-only</td><td><code>mediaChanged</code></td><td>The phone reports a media session / it is playing / it can seek</td></tr>
+            <tr><td><code>mediaTitle</code>, <code>mediaArtist</code>, <code>mediaAlbum</code>, <code>mediaApp</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaChanged</code></td><td>What the phone is playing; <code>mediaApp</code> is the package name</td></tr>
+            <tr><td><code>mediaDuration</code></td><td><code>int</code></td><td>read-only</td><td><code>mediaChanged</code></td><td>Track length in ms, 0 = unknown</td></tr>
+            <tr><td><code>mediaArtUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaArtChanged</code></td><td><code>file://</code> URL of the phone's album art, <code>""</code> for none</td></tr>
+            <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>read-only</td><td><code>mediaActiveChanged(bool)</code></td><td>The phone has OCTAVE's media controls (set when it starts playing, cleared by <code>releaseMedia</code>, its app going away or the session ending)</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1209,7 +1210,7 @@
           <tbody>
             <tr><td><code>setVolume(float volume)</code></td><td><code>void</code></td><td>Called by VolumeController (0&ndash;1 linear); phone audio follows OCTAVE volume</td></tr>
             <tr><td><code>setAudioGain(float gain)</code></td><td><code>void</code></td><td>Linear gain on phone PCM before OCTAVE volume (setting <code>scrcpyAudioGain</code>)</td></tr>
-            <tr><td><code>setAudioEnabled(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioEnabled</code></td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>OCTAVE's mute (<code>MediaManager.muteChanged</code>) silences phone audio too; phone audio always plays through OCTAVE while mirroring</td></tr>
             <tr><td><code>setAudioDuckEnabled(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckEnabled</code></td></tr>
             <tr><td><code>setAudioDuckLevel(float level)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckLevel</code> (linear factor)</td></tr>
             <tr><td><code>setDisplaySize(QString size)</code></td><td><code>void</code></td><td>Virtual display size (snapped to multiples of 8, or <code>"auto"</code>); restarts a running session</td></tr>
@@ -1242,6 +1243,10 @@
             <tr><td><code>forgetWireless()</code></td><td><code>void</code></td><td>Stop a Wi-Fi session, <code>adb disconnect</code> and clear <code>wirelessAddress</code></td></tr>
             <tr><td><code>startQrPairing()</code></td><td><code>void</code></td><td>Show a QR code for the phone's &ldquo;Pair device with QR code&rdquo; scanner, wait up to 2 min for its mDNS pairing service, then <code>adb pair</code> and connect; result via <code>wirelessResult</code></td></tr>
             <tr><td><code>cancelQrPairing()</code></td><td><code>void</code></td><td>Drop the shown code; the waiting job gives up within a second</td></tr>
+            <tr><td><code>mediaPlayPause()</code>, <code>mediaPlay()</code>, <code>mediaPause()</code>, <code>mediaNext()</code>, <code>mediaPrevious()</code></td><td><code>void</code></td><td>Drive the phone's media session</td></tr>
+            <tr><td><code>mediaSeek(int positionMs)</code></td><td><code>void</code></td><td>Seek the phone's media session</td></tr>
+            <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>Phone media position in ms, extrapolated while playing</td></tr>
+            <tr><td><code>releaseMedia(bool pausePhone)</code></td><td><code>void</code></td><td>An OCTAVE source took over: the controls leave the phone, optionally pausing it</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -1260,6 +1265,8 @@
             <tr><td><code>audioPlayingChanged(bool playing)</code></td><td>Sound detected / silence</td></tr>
             <tr><td><code>phoneAsleepChanged(bool asleep)</code></td><td>Phone went to sleep / woke up while mirrored</td></tr>
             <tr><td><code>phoneInUseChanged(bool inUse)</code></td><td>Phone taken in hand / handed back</td></tr>
+            <tr><td><code>mediaChanged()</code> / <code>mediaArtChanged()</code></td><td>Notify for the phone media properties / <code>mediaArtUrl</code></td></tr>
+            <tr><td><code>mediaActiveChanged(bool active)</code></td><td>The phone took / gave back the media controls; <code>main</code> pauses local media (and Spotify unless the phone app is Spotify) when it takes over</td></tr>
             <tr><td><code>duckingChanged(float factor)</code></td><td>Duck factor while the phone makes sound and ducking is on, 1.0 otherwise; <code>main</code> routes it to <code>mediaManager.setDucking</code></td></tr>
             <tr><td><code>wirelessAddressChanged(QString address)</code></td><td>Remembered Wi-Fi phone changed (paired, moved to a new port, forgotten); <code>main</code> saves it with <code>save_scrcpy_wireless_address</code></td></tr>
             <tr><td><code>connectionTypeChanged()</code> / <code>wirelessBusyChanged()</code></td><td>Property notifications</td></tr>

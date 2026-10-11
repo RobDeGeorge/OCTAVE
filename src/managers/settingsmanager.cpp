@@ -219,7 +219,6 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("returnToLibraryAfterSelection")] = false;
     d[QStringLiteral("androidAutoEnabled")]      = false;
     d[QStringLiteral("phoneMirrorEnabled")]      = false;
-    d[QStringLiteral("scrcpyAudioEnabled")]      = false;
     d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("auto");  // --new-display WxH, "auto" = fit the view, "" = phone screen
     d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)
     d[QStringLiteral("scrcpyAudioDuckEnabled")]  = true;  // duck local media while the phone produces sound
@@ -494,7 +493,6 @@ void SettingsManager::populateMembers()
     // Android Auto / Phone Mirror
     m_androidAutoEnabled  = s(QStringLiteral("androidAutoEnabled")).toBool();
     m_phoneMirrorEnabled  = s(QStringLiteral("phoneMirrorEnabled")).toBool();
-    m_scrcpyAudioEnabled  = s(QStringLiteral("scrcpyAudioEnabled")).toBool();
     m_scrcpyDisplaySize   = s(QStringLiteral("scrcpyDisplaySize")).toString();
     m_scrcpyAudioGain     = s(QStringLiteral("scrcpyAudioGain")).toDouble();
     m_scrcpyAudioDuckEnabled = s(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
@@ -950,7 +948,6 @@ QString SettingsManager::lastSettingsSection() const { return m_lastSettingsSect
 // --- Android Auto / Phone Mirror ---
 bool    SettingsManager::androidAutoEnabled() const  { return m_androidAutoEnabled; }
 bool    SettingsManager::phoneMirrorEnabled() const  { return m_phoneMirrorEnabled; }
-bool    SettingsManager::scrcpyAudioEnabled() const  { return m_scrcpyAudioEnabled; }
 QString SettingsManager::scrcpyDisplaySize() const   { return m_scrcpyDisplaySize; }
 double  SettingsManager::scrcpyAudioGain() const     { return m_scrcpyAudioGain; }
 bool    SettingsManager::scrcpyAudioDuckEnabled() const { return m_scrcpyAudioDuckEnabled; }
@@ -1764,14 +1761,6 @@ void SettingsManager::save_phone_mirror_enabled(bool enabled)
     emit phoneMirrorEnabledChanged(enabled);
 }
 
-void SettingsManager::save_scrcpy_audio_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving scrcpy audio enabled:" << enabled;
-    m_scrcpyAudioEnabled = enabled;
-    updateSetting(QStringLiteral("scrcpyAudioEnabled"), enabled);
-    emit scrcpyAudioEnabledChanged(enabled);
-}
-
 void SettingsManager::save_scrcpy_display_size(const QString &size)
 {
     qCDebug(lcSettings) << "Saving scrcpy display size:" << size;
@@ -2095,7 +2084,6 @@ QString SettingsManager::get_music_button_default_page() { return m_musicButtonD
 bool    SettingsManager::get_return_to_library_after_selection() { return m_returnToLibraryAfterSelection; }
 bool    SettingsManager::get_android_auto_enabled()    { return m_androidAutoEnabled; }
 bool    SettingsManager::get_phone_mirror_enabled()    { return m_phoneMirrorEnabled; }
-bool    SettingsManager::get_scrcpy_audio_enabled()    { return m_scrcpyAudioEnabled; }
 QString SettingsManager::get_scrcpy_display_size()     { return m_scrcpyDisplaySize; }
 double  SettingsManager::get_scrcpy_audio_gain()       { return m_scrcpyAudioGain; }
 bool    SettingsManager::get_scrcpy_audio_duck_enabled() { return m_scrcpyAudioDuckEnabled; }
@@ -2266,7 +2254,6 @@ void SettingsManager::reset_to_defaults()
     emit returnToLibraryAfterSelectionChanged(m_returnToLibraryAfterSelection);
     emit androidAutoEnabledChanged(m_androidAutoEnabled);
     emit phoneMirrorEnabledChanged(m_phoneMirrorEnabled);
-    emit scrcpyAudioEnabledChanged(m_scrcpyAudioEnabled);
     emit scrcpyDisplaySizeChanged(m_scrcpyDisplaySize);
     emit scrcpyAudioGainChanged(m_scrcpyAudioGain);
     emit scrcpyAudioDuckEnabledChanged(m_scrcpyAudioDuckEnabled);

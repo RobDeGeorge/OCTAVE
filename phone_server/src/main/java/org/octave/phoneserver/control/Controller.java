@@ -98,6 +98,7 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
 
     private boolean keepDisplayPowerOff;
     private MirrorKeeper mirrorKeeper;   // OCTAVE extension, process-wide, attached on first TYPE_OCTAVE_SET_KEEPER
+    private PhoneMedia phoneMedia;       // OCTAVE extension, per client session, created on first TYPE_OCTAVE_MEDIA
 
     // Used for resetting video encoding on RESET_VIDEO message
     private SurfaceCapture surfaceCapture;
@@ -235,6 +236,9 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
                     uhidManager.closeAll();
                 }
                 MirrorKeeper.detach(sender);
+                if (phoneMedia != null) {
+                    phoneMedia.stop();
+                }
                 listener.onTerminated(true);
             }
         }, "control-recv");
@@ -347,6 +351,12 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
                 break;
             case ControlMessage.TYPE_OCTAVE_SET_BIT_RATE:
                 VideoBitRate.set(msg.getBitRate());
+                break;
+            case ControlMessage.TYPE_OCTAVE_MEDIA:
+                if (phoneMedia == null) {
+                    phoneMedia = new PhoneMedia(sender);
+                }
+                phoneMedia.handle(msg.getAction(), msg.getMediaArg());
                 break;
             default:
                 // do nothing

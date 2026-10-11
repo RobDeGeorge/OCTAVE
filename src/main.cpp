@@ -274,7 +274,6 @@ int main(int argc, char *argv[])
 
 #ifndef Q_OS_MOBILE
     // Phone mirror settings from saved config (desktop-only accessors)
-    phoneMirrorManager.setAudioEnabled(settingsManager.get_scrcpy_audio_enabled());
     phoneMirrorManager.setDisplaySize(settingsManager.get_scrcpy_display_size());
     // Picture quality: virtual display density and per-link video bit rate
     phoneMirrorManager.setDisplayDpi(settingsManager.get_scrcpy_display_dpi());
@@ -306,6 +305,31 @@ int main(int argc, char *argv[])
                      &phoneMirrorManager, [&phoneMirrorManager](double l) { phoneMirrorManager.setAudioDuckLevel(float(l)); });
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged,
                      &mediaManager, &MediaManager::setDucking);
+    // OCTAVE's mute silences phone audio too (volume arrives via VolumeController)
+    phoneMirrorManager.setMuted(mediaManager.is_muted());
+    QObject::connect(&mediaManager, &MediaManager::muteChanged, &phoneMirrorManager, &PhoneMirrorManager::setMuted);
+    // Phone media follows what plays: when the phone starts playing, OCTAVE's
+    // controls drive it and local playback pauses; starting a local or
+    // Spotify track hands the controls back. Spotify playing on the phone is
+    // the same playback, so the two never pause each other.
+    static const QString kSpotifyPackage = QStringLiteral("com.spotify.music");
+    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::mediaActiveChanged,
+                     &mediaManager, [&](bool active) {
+        if (!active)
+            return;
+        if (mediaManager.is_playing())
+            mediaManager.pause();
+        if (phoneMirrorManager.mediaApp() != kSpotifyPackage && spotifyManager.is_playing())
+            spotifyManager.pause();
+    });
+    QObject::connect(&mediaManager, &MediaManager::playStateChanged, &phoneMirrorManager, [&](bool playing) {
+        if (playing)
+            phoneMirrorManager.releaseMedia(true);
+    });
+    QObject::connect(&spotifyManager, &SpotifyManager::playStateChanged, &phoneMirrorManager, [&](bool playing) {
+        if (playing)
+            phoneMirrorManager.releaseMedia(phoneMirrorManager.mediaApp() != kSpotifyPackage);
+    });
     // Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
     phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
     QObject::connect(&settingsManager, &SettingsManager::scrcpyPhoneScreenOffChanged,
@@ -445,10 +469,12 @@ int main(int argc, char *argv[])
 
     // Wire gesture sensor actions -> media control (stub never emits on mobile).
     QObject::connect(&gestureSensor, &GestureManager::actionTriggered,
-                     [&mediaManager, &volumeController, &settingsManager](const QString &action) {
-        if (action == "next_track") mediaManager.next_track();
-        else if (action == "previous_track") mediaManager.previous_track();
-        else if (action == "play_pause") mediaManager.toggle_play();
+                     [&mediaManager, &volumeController, &settingsManager, &phoneMirrorManager](const QString &action) {
+        // Track actions drive the phone while it has the media controls
+        const bool phone = phoneMirrorManager.mediaActive();
+        if (action == "next_track") phone ? phoneMirrorManager.mediaNext() : mediaManager.next_track();
+        else if (action == "previous_track") phone ? phoneMirrorManager.mediaPrevious() : mediaManager.previous_track();
+        else if (action == "play_pause") phone ? phoneMirrorManager.mediaPlayPause() : mediaManager.toggle_play();
         else if (action == "mute_toggle") mediaManager.toggle_mute();
         else if (action == "volume_up") {
             int step = settingsManager.gestureVolumeStep();

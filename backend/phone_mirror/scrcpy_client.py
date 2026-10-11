@@ -64,11 +64,23 @@ MSG_SET_DISPLAY_POWER = 10
 MSG_OCTAVE_SET_KEEPER = 100     # enabled, panel_dark, grace_ms
 MSG_OCTAVE_TAKE_BACK = 101
 MSG_OCTAVE_SET_BIT_RATE = 102   # int32 bps (adaptive quality)
+MSG_OCTAVE_MEDIA = 103          # u8 action, int64 argument (phone_server PhoneMedia)
+
+# MSG_OCTAVE_MEDIA actions
+MEDIA_WATCH = 0                 # argument 1 = report the phone's media session, 0 = stop
+MEDIA_PLAY = 1
+MEDIA_PAUSE = 2
+MEDIA_PLAY_PAUSE = 3
+MEDIA_NEXT = 4
+MEDIA_PREVIOUS = 5
+MEDIA_SEEK = 6                  # argument = position in ms
 # Device messages (server -> client, control socket)
 DEVMSG_CLIPBOARD = 0
 DEVMSG_ACK_CLIPBOARD = 1
 DEVMSG_UHID_OUTPUT = 2
 DEVMSG_OCTAVE_PHONE_STATE = 100   # asleep, in_use, panel_dark
+DEVMSG_OCTAVE_MEDIA_STATE = 101   # the phone's media session (PhoneMedia)
+DEVMSG_OCTAVE_MEDIA_ART = 102     # u32 length + JPEG (0 = no art)
 
 # Android MotionEvent / KeyEvent actions
 ACTION_DOWN = 0
@@ -188,6 +200,10 @@ class ScrcpyClient(QObject):
     audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound (GUI thread)
     serverLog = Signal(str)
     phoneStateChanged = Signal(bool, bool, bool)   # asleep, in_use, panel_dark (from the server's MirrorKeeper)
+    # The phone's media session (server PhoneMedia): dict with has_session,
+    # playing, can_seek, position_ms, duration_ms, package, title, artist, album
+    mediaStateChanged = Signal(dict)
+    mediaArtChanged = Signal(bytes)                # JPEG, b"" for no art
     # Video bit rate in force (bps): once when the stream starts, then on every adaptive change
     bitRateChanged = Signal(int)
 
@@ -419,6 +435,10 @@ class ScrcpyClient(QObject):
         """Configure the server's MirrorKeeper: wake the phone on doze, keep
         its panel dark, grace window for a power press from the locked state."""
         self._send(struct.pack(">BBBi", MSG_OCTAVE_SET_KEEPER, 1 if enabled else 0, 1 if panel_dark else 0, int(grace_ms)))
+
+    def media_command(self, action: int, argument: int = 0):
+        """Watch / drive the phone's media session (MEDIA_* actions)."""
+        self._send(struct.pack(">BBq", MSG_OCTAVE_MEDIA, int(action), int(argument)))
 
     def take_back(self):
         """Leave the in-use state: the keeper wakes the phone if needed and re-applies the panel policy."""
@@ -816,6 +836,21 @@ class ScrcpyClient(QObject):
                 elif t == DEVMSG_OCTAVE_PHONE_STATE:
                     asleep, in_use, dark = _recv_exact(control, 3)
                     self.phoneStateChanged.emit(bool(asleep), bool(in_use), bool(dark))
+                elif t == DEVMSG_OCTAVE_MEDIA_STATE:
+                    flags = _recv_exact(control, 1)[0]
+                    position, duration = struct.unpack(">qq", _recv_exact(control, 16))
+                    texts = []
+                    for _ in range(4):
+                        (n,) = struct.unpack(">H", _recv_exact(control, 2))
+                        texts.append(_recv_exact(control, n).decode("utf-8", "replace"))
+                    self.mediaStateChanged.emit({
+                        "has_session": bool(flags & 1), "playing": bool(flags & 2), "can_seek": bool(flags & 4),
+                        "position_ms": position, "duration_ms": duration,
+                        "package": texts[0], "title": texts[1], "artist": texts[2], "album": texts[3],
+                    })
+                elif t == DEVMSG_OCTAVE_MEDIA_ART:
+                    (n,) = struct.unpack(">I", _recv_exact(control, 4))
+                    self.mediaArtChanged.emit(_recv_exact(control, n) if n else b"")
                 else:
                     logger.warning(f"scrcpy client: unknown device message type {t}; stopping the reader")
                     break

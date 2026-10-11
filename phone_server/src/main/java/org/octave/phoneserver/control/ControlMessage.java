@@ -29,6 +29,16 @@ public final class ControlMessage {
     public static final int TYPE_OCTAVE_SET_KEEPER = 100;   // enabled, panelDark, graceMs
     public static final int TYPE_OCTAVE_TAKE_BACK = 101;    // leave the in-use state
     public static final int TYPE_OCTAVE_SET_BIT_RATE = 102; // video bit rate in bps (adaptive quality)
+    public static final int TYPE_OCTAVE_MEDIA = 103;        // PhoneMedia: action, argument
+
+    // TYPE_OCTAVE_MEDIA actions
+    public static final int MEDIA_WATCH = 0;       // arg 1 = report the phone's media session, 0 = stop
+    public static final int MEDIA_PLAY = 1;
+    public static final int MEDIA_PAUSE = 2;
+    public static final int MEDIA_PLAY_PAUSE = 3;
+    public static final int MEDIA_NEXT = 4;
+    public static final int MEDIA_PREVIOUS = 5;
+    public static final int MEDIA_SEEK = 6;        // arg = position in ms
 
     public static final long SEQUENCE_INVALID = 0;
 
@@ -57,6 +67,7 @@ public final class ControlMessage {
     private boolean on;
     private boolean panelDark;
     private int graceMs;
+    private long mediaArg;
     private int vendorId;
     private int productId;
 
@@ -140,6 +151,18 @@ public final class ControlMessage {
         msg.type = TYPE_OCTAVE_SET_BIT_RATE;
         msg.id = bitRate;
         return msg;
+    }
+
+    public static ControlMessage createOctaveMedia(int action, long arg) {
+        ControlMessage msg = new ControlMessage();
+        msg.type = TYPE_OCTAVE_MEDIA;
+        msg.action = action;
+        msg.mediaArg = arg;
+        return msg;
+    }
+
+    public long getMediaArg() {
+        return mediaArg;
     }
 
     public int getBitRate() {

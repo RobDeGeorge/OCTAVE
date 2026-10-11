@@ -28,6 +28,54 @@ Item {
     property bool useSpotify: settingsManager && settingsManager.mediaSource === "spotify" &&
                               spotifyManager && spotifyManager.is_connected()
 
+    // Phone mirror media: while the phone is playing (or played last), show
+    // and drive the phone's media session (any app on the phone)
+    property bool usePhone: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null &&
+                            phoneMirrorManager.mediaActive
+    // Read the manager directly: signal handlers can run before usePhone updates
+    function phoneActive() {
+        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.mediaActive
+    }
+    function syncPhoneProgress() {
+        var duration = phoneMirrorManager.mediaDuration
+        progressSlider.to = duration > 0 ? duration : 1
+        durationText.text = formatTime(duration)
+        if (!progressSlider.userSeeking) {
+            var position = phoneMirrorManager.mediaPosition()
+            progressSlider.value = position
+            positionText.text = formatTime(position)
+        }
+    }
+
+    Connections {
+        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
+        function onMediaChanged() { if (mainMenu.phoneActive()) mainMenu.syncPhoneProgress() }
+        function onMediaActiveChanged(active) {
+            if (active) {
+                mainMenu.syncPhoneProgress()
+                return
+            }
+            // Back to OCTAVE's own source
+            mainMenu.updateMedia()
+            var manager = mainMenu.useSpotify ? spotifyManager : mediaManager
+            if (manager) {
+                var duration = manager.get_duration()
+                progressSlider.to = duration > 0 ? duration : 1
+                durationText.text = formatTime(duration)
+                progressSlider.value = manager.get_position()
+                positionText.text = formatTime(progressSlider.value)
+            }
+        }
+    }
+
+    // The phone does not stream its position: read the extrapolated one
+    Timer {
+        interval: 500
+        repeat: true
+        running: mainMenu.usePhone && phoneMirrorManager.mediaPlaying && mainMenu.visible
+        onTriggered: mainMenu.syncPhoneProgress()
+    }
+
     // Spotify track info cache (updated from signals)
     property string spotifyTrackName: ""
     property string spotifyArtist: ""
@@ -37,24 +85,36 @@ Item {
     // Media content properties - unified for both local and Spotify
     property string currentFile: ""
     property string currentArt: {
+        if (usePhone) {
+            return phoneMirrorManager.mediaArtUrl || "./assets/missing_art.png"
+        }
         if (useSpotify && spotifyAlbumArt) {
             return spotifyAlbumArt
         }
         return _localArt || "./assets/missing_art.png"
     }
     property string currentTitle: {
+        if (usePhone) {
+            return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaTitle : "Phone"
+        }
         if (useSpotify && spotifyTrackName) {
             return spotifyTrackName
         }
         return _localTitle || ""
     }
     property string currentArtist: {
+        if (usePhone) {
+            return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaArtist : "Nothing playing"
+        }
         if (useSpotify && spotifyArtist) {
             return spotifyArtist
         }
         return _localArtist || ""
     }
     property string currentAlbum: {
+        if (usePhone) {
+            return phoneMirrorManager.mediaAlbum
+        }
         if (useSpotify && spotifyAlbum) {
             return spotifyAlbum
         }
@@ -369,7 +429,9 @@ Item {
                                 userSeeking = true
                             } else {
                                 userSeeking = false
-                                if (useSpotify && spotifyManager) {
+                                if (mainMenu.phoneActive()) {
+                                    phoneMirrorManager.mediaSeek(value)
+                                } else if (useSpotify && spotifyManager) {
                                     spotifyManager.set_position(value)
                                 } else if (mediaManager) {
                                     mediaManager.set_position(value)
@@ -486,7 +548,7 @@ Item {
         target: mediaManager
 
         function onMetadataChanged(title, artist, album) {
-            if (!useSpotify) {
+            if (!useSpotify) {   // cached even while the phone plays: shown again when it stops
                 mainMenu._localTitle = title
                 mainMenu._localArtist = artist
                 mainMenu._localAlbum = album
@@ -495,21 +557,21 @@ Item {
         }
 
         function onPositionChanged(position) {
-            if (!useSpotify && !progressSlider.userSeeking) {
+            if (!useSpotify && !mainMenu.phoneActive() && !progressSlider.userSeeking) {
                 progressSlider.value = position
                 positionText.text = formatTime(position)
             }
         }
 
         function onDurationChanged(duration) {
-            if (!useSpotify) {
+            if (!useSpotify && !mainMenu.phoneActive()) {
                 progressSlider.to = duration > 0 ? duration : 1
                 durationText.text = formatTime(duration)
             }
         }
 
         function onCurrentMediaChanged(filename) {
-            if (!useSpotify && mediaManager) {
+            if (!useSpotify && !mainMenu.phoneActive() && mediaManager) {
                 var duration = mediaManager.get_duration()
                 durationText.text = formatTime(duration)
                 positionText.text = "0:00"
@@ -530,7 +592,7 @@ Item {
             mainMenu.spotifyAlbumArt = artUrl
 
             // Only update progress UI if we're in Spotify mode
-            if (useSpotify) {
+            if (useSpotify && !mainMenu.phoneActive()) {
                 progressSlider.value = 0
                 positionText.text = "0:00"
                 if (spotifyManager) {
@@ -542,14 +604,14 @@ Item {
         }
 
         function onPositionChanged(position) {
-            if (useSpotify && !progressSlider.userSeeking) {
+            if (useSpotify && !mainMenu.phoneActive() && !progressSlider.userSeeking) {
                 progressSlider.value = position
                 positionText.text = formatTime(position)
             }
         }
 
         function onDurationChanged(duration) {
-            if (useSpotify) {
+            if (useSpotify && !mainMenu.phoneActive()) {
                 progressSlider.to = duration > 0 ? duration : 1
                 durationText.text = formatTime(duration)
             }

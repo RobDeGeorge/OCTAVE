@@ -104,6 +104,8 @@ public slots:
 
     // Metadata / album art
     void extract_colors_from_album_art(const QString &filename);
+    // Same, from an image file or file:// URL (phone album art)
+    void extract_colors_from_image(const QString &imagePath);
 
     // Library scanning
     void scan_library(bool resetDisplayNames = true);
@@ -225,6 +227,7 @@ private:
 
     // Color extraction (k-means)
     QString _extract_album_colors(const QString &imagePath);
+    void extractColorsFrom(const QString &imagePath, const QString &filename);
     QVector<QVector<int>> _kmeans_colors(const QVector<QVector<int>> &pixels, int k = 5, int maxIterations = 10);
     QString _generate_theme_from_colors(const QVector<QVector<int>> &colors, bool isDark);
 

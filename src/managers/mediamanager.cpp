@@ -1398,7 +1398,20 @@ void MediaManager::extract_colors_from_album_art(const QString &filename)
         return;
     m_lastColorFile = filename;
     m_lastColorMs = now;
+    extractColorsFrom(imagePath, filename);
+}
 
+void MediaManager::extract_colors_from_image(const QString &imagePath)
+{
+    const QString path = imagePath.startsWith(QStringLiteral("file:")) ? QUrl(imagePath).toLocalFile() : imagePath;
+    if (path.isEmpty() || !QFile::exists(path))
+        return;
+    m_lastColorFile.clear();   // a local track asked for next is extracted again
+    extractColorsFrom(path, path);
+}
+
+void MediaManager::extractColorsFrom(const QString &imagePath, const QString &filename)
+{
     // k-means over the cover runs on a worker; a newer request supersedes
     // this one so a fast skip through tracks applies only the last theme.
     const int job = ++m_colorJob;

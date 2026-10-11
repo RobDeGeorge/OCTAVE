@@ -163,7 +163,6 @@ phone_mirror_manager = PhoneMirrorManager()
 engine.rootContext().setContextProperty("phoneMirrorManager", phone_mirror_manager)
 
 # Phone mirror settings
-phone_mirror_manager.setAudioEnabled(settings_manager.get_scrcpy_audio_enabled())
 phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
 # Picture quality: virtual display density and per-link video bit rate
 phone_mirror_manager.setDisplayDpi(settings_manager.get_scrcpy_display_dpi())
@@ -186,6 +185,30 @@ phone_mirror_manager.setAudioDuckLevel(settings_manager.get_scrcpy_audio_duck_le
 settings_manager.scrcpyAudioDuckEnabledChanged.connect(phone_mirror_manager.setAudioDuckEnabled)
 settings_manager.scrcpyAudioDuckLevelChanged.connect(phone_mirror_manager.setAudioDuckLevel)
 phone_mirror_manager.duckingChanged.connect(media_manager.setDucking)
+# OCTAVE's mute silences phone audio too (volume arrives via VolumeController)
+phone_mirror_manager.setMuted(media_manager.is_muted())
+media_manager.muteChanged.connect(phone_mirror_manager.setMuted)
+
+# Phone media follows what plays: when the phone starts playing, OCTAVE's
+# controls drive it and local playback pauses; starting a local or Spotify
+# track hands the controls back. Spotify playing on the phone is the same
+# playback, so the two never pause each other.
+SPOTIFY_PACKAGE = "com.spotify.music"
+
+
+def _on_phone_media_active(active):
+    if not active:
+        return
+    if media_manager.is_playing():
+        media_manager.pause()
+    if phone_mirror_manager.mediaApp != SPOTIFY_PACKAGE and spotify_manager.is_playing():
+        spotify_manager.pause()
+
+
+phone_mirror_manager.mediaActiveChanged.connect(_on_phone_media_active)
+media_manager.playStateChanged.connect(lambda playing: phone_mirror_manager.releaseMedia(True) if playing else None)
+spotify_manager.playStateChanged.connect(
+    lambda playing: phone_mirror_manager.releaseMedia(phone_mirror_manager.mediaApp != SPOTIFY_PACKAGE) if playing else None)
 # Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
 phone_mirror_manager.setPhoneScreenOff(settings_manager.get_scrcpy_phone_screen_off())
 settings_manager.scrcpyPhoneScreenOffChanged.connect(phone_mirror_manager.setPhoneScreenOff)
@@ -195,9 +218,6 @@ phone_mirror_manager.setWirelessAddress(settings_manager.get_scrcpy_wireless_add
 phone_mirror_manager.wirelessAddressChanged.connect(settings_manager.save_scrcpy_wireless_address)
 # Startup volume is applied to all outputs by VolumeController below,
 # after every manager is constructed.
-settings_manager.scrcpyAudioEnabledChanged.connect(
-    lambda enabled: phone_mirror_manager.setAudioEnabled(enabled)
-)
 
 # ESP32 Volume Manager - wireless rotary encoder volume control
 esp32_volume_manager = ESP32VolumeManager()
@@ -256,12 +276,14 @@ engine.rootContext().setContextProperty("dashboardManager", dashboard_manager)
 
 # Hardware signal wiring — gesture, ESP32, phone mirror
 def handle_gesture_action(action):
+    # Track actions drive the phone while it has the media controls
+    phone = phone_mirror_manager.mediaActive
     if action == "next_track":
-        media_manager.next_track()
+        phone_mirror_manager.mediaNext() if phone else media_manager.next_track()
     elif action == "previous_track":
-        media_manager.previous_track()
+        phone_mirror_manager.mediaPrevious() if phone else media_manager.previous_track()
     elif action == "play_pause":
-        media_manager.toggle_play()
+        phone_mirror_manager.mediaPlayPause() if phone else media_manager.toggle_play()
     elif action == "mute_toggle":
         media_manager.toggle_mute()
     elif action == "volume_up":

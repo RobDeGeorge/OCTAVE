@@ -202,7 +202,6 @@ class SettingsManager(QObject):
     returnToLibraryAfterSelectionChanged = Signal(bool)
     androidAutoEnabledChanged = Signal(bool)
     phoneMirrorEnabledChanged = Signal(bool)
-    scrcpyAudioEnabledChanged = Signal(bool)
     scrcpyDisplaySizeChanged = Signal(str)
     scrcpyAudioGainChanged = Signal(float)
     scrcpyAudioDuckEnabledChanged = Signal(bool)
@@ -451,7 +450,6 @@ class SettingsManager(QObject):
             "returnToLibraryAfterSelection": False,  # If True, return to MediaPlayer after song selection
             "androidAutoEnabled": False,  # If True, show Android Auto button in bottom bar
             "phoneMirrorEnabled": False,  # If True, show Phone Mirror button in bottom bar
-            "scrcpyAudioEnabled": False,  # If True, forward audio from phone
             "scrcpyDisplaySize": "auto",  # Virtual display WxH (--new-display); "auto" = fit the view, "" = phone screen
             "scrcpyAudioGain": 2.0,  # Linear gain on phone audio before OCTAVE's volume (+6 dB)
             "scrcpyAudioDuckEnabled": True,  # Duck local media while the phone produces sound
@@ -639,7 +637,6 @@ class SettingsManager(QObject):
 
         # Phone Mirror settings
         self._phone_mirror_enabled = self._settings.get("phoneMirrorEnabled", False)
-        self._scrcpy_audio_enabled = self._settings.get("scrcpyAudioEnabled", False)
         self._scrcpy_display_size = self._settings.get("scrcpyDisplaySize", "auto")
         self._scrcpy_audio_gain = float(self._settings.get("scrcpyAudioGain", 2.0))
         self._scrcpy_audio_duck_enabled = bool(self._settings.get("scrcpyAudioDuckEnabled", True))
@@ -1802,23 +1799,6 @@ class SettingsManager(QObject):
         self._phone_mirror_enabled = enabled
         self.update_setting("phoneMirrorEnabled", enabled, self.phoneMirrorEnabledChanged)
 
-    @Property(bool, notify=scrcpyAudioEnabledChanged)
-    def scrcpyAudioEnabled(self):
-        """Get whether scrcpy audio forwarding is enabled"""
-        return self._scrcpy_audio_enabled
-
-    @Slot(result=bool)
-    def get_scrcpy_audio_enabled(self):
-        """Get whether scrcpy audio forwarding is enabled"""
-        return self._scrcpy_audio_enabled
-
-    @Slot(bool)
-    def save_scrcpy_audio_enabled(self, enabled):
-        """Save whether scrcpy audio forwarding is enabled"""
-        logger.debug(f"Saving scrcpy audio enabled: {enabled}")
-        self._scrcpy_audio_enabled = enabled
-        self.update_setting("scrcpyAudioEnabled", enabled, self.scrcpyAudioEnabledChanged)
-
     @Property(str, notify=scrcpyDisplaySizeChanged)
     def scrcpyDisplaySize(self):
         """Get the scrcpy virtual display size ("WxH", "" = mirror phone screen)"""
@@ -2540,7 +2520,6 @@ class SettingsManager(QObject):
         self.returnToLibraryAfterSelectionChanged.emit(self._return_to_library_after_selection)
         self.androidAutoEnabledChanged.emit(self._android_auto_enabled)
         self.phoneMirrorEnabledChanged.emit(self._phone_mirror_enabled)
-        self.scrcpyAudioEnabledChanged.emit(self._scrcpy_audio_enabled)
         self.scrcpyDisplaySizeChanged.emit(self._scrcpy_display_size)
         self.scrcpyAudioGainChanged.emit(self._scrcpy_audio_gain)
         self.scrcpyAudioDuckEnabledChanged.emit(self._scrcpy_audio_duck_enabled)

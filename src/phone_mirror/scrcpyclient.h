@@ -20,6 +20,7 @@
 #include <QVideoFrame>
 #include <QLoggingCategory>
 #include <QByteArray>
+#include <QVariantMap>
 #include <QList>
 
 #include <atomic>
@@ -100,6 +101,10 @@ public:
     // panel dark, grace window for a press from the locked state
     void setKeeper(bool enabled, bool panelDark, int graceMs);
     void takeBack();
+    // OCTAVE extension (phone_server PhoneMedia): watch / drive the phone's media session
+    enum MediaAction { MediaWatch = 0, MediaPlay = 1, MediaPause = 2, MediaPlayPause = 3,
+                       MediaNext = 4, MediaPrevious = 5, MediaSeek = 6 /* argument: ms */ };
+    void mediaCommand(int action, qint64 argument = 0);
     // While true, all-black frames are never shown (the phone is asleep and
     // the last good frame stays up); otherwise only for kBlackHoldMs.
     void setHoldBlack(bool hold) { m_holdBlack = hold; }
@@ -117,6 +122,10 @@ signals:
     void audioPlayingChanged(bool playing);     // the phone is (not) producing sound (GUI thread)
     void serverLog(const QString &line);
     void phoneStateChanged(bool asleep, bool inUse, bool panelDark);   // from the keeper
+    // The phone's media session (PhoneMedia): has_session, playing, can_seek,
+    // position_ms, duration_ms, package, title, artist, album
+    void mediaStateChanged(const QVariantMap &state);
+    void mediaArtChanged(const QByteArray &jpeg);   // empty for no art
     // Video bit rate in force (bps): once when the stream starts, then on every adaptive change
     void bitRateChanged(int bps);
 

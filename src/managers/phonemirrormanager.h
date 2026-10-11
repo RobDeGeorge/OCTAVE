@@ -12,6 +12,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 #include <QPair>
 #include <QList>
 #include <QLoggingCategory>
@@ -66,6 +67,23 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool qrPairingActive READ qrPairingActive NOTIFY qrPairingChanged)
     // Video bit rate of the running session in bps (follows adaptive changes), 0 when idle
     Q_PROPERTY(int currentBitRate READ currentBitRate NOTIFY currentBitRateChanged)
+    // The phone's media session (phone_server PhoneMedia), reported while a
+    // session is up: what is playing on the phone, whatever app plays it
+    Q_PROPERTY(bool mediaAvailable READ mediaAvailable NOTIFY mediaChanged)
+    Q_PROPERTY(bool mediaPlaying READ mediaPlaying NOTIFY mediaChanged)
+    Q_PROPERTY(QString mediaTitle READ mediaTitle NOTIFY mediaChanged)
+    Q_PROPERTY(QString mediaArtist READ mediaArtist NOTIFY mediaChanged)
+    Q_PROPERTY(QString mediaAlbum READ mediaAlbum NOTIFY mediaChanged)
+    Q_PROPERTY(QString mediaApp READ mediaApp NOTIFY mediaChanged)          // package name
+    Q_PROPERTY(int mediaDuration READ mediaDuration NOTIFY mediaChanged)    // ms, 0 = unknown
+    Q_PROPERTY(bool mediaCanSeek READ mediaCanSeek NOTIFY mediaChanged)
+    // file:// URL of the album art (a JPEG in the app data temp dir), "" for none
+    Q_PROPERTY(QString mediaArtUrl READ mediaArtUrl NOTIFY mediaArtChanged)
+    // The phone is the media source OCTAVE's controls drive: set for the
+    // whole mirroring session (from the first media report); a local /
+    // Spotify track starting clears it (releaseMedia) until the phone plays
+    // again, and the session ending clears it
+    Q_PROPERTY(bool mediaActive READ mediaActive NOTIFY mediaActiveChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -91,6 +109,16 @@ public:
     QStringList qrPairingRows() const { return m_qrRows; }
     bool qrPairingActive() const { return !m_qrRows.isEmpty(); }
     int currentBitRate() const { return m_currentBitRate; }
+    bool mediaAvailable() const { return m_mediaAvailable; }
+    bool mediaPlaying() const { return m_mediaPlaying; }
+    QString mediaTitle() const { return m_mediaTitle; }
+    QString mediaArtist() const { return m_mediaArtist; }
+    QString mediaAlbum() const { return m_mediaAlbum; }
+    QString mediaApp() const { return m_mediaApp; }
+    int mediaDuration() const { return m_mediaDuration; }
+    bool mediaCanSeek() const { return m_mediaCanSeek; }
+    QString mediaArtUrl() const { return m_mediaArtUrl; }
+    bool mediaActive() const { return m_mediaActive; }
     // "WIFI:T:ADB;S:<service>;P:<password>;;" -- the payload Android's
     // "Pair device with QR code" scanner expects (Android Studio's format)
     static QString qrPairingPayload(const QString &service, const QString &password);
@@ -148,14 +176,19 @@ signals:
     void wirelessResult(bool ok, const QString &message);
     void qrPairingChanged();
     void currentBitRateChanged();
+    void mediaChanged();
+    void mediaArtChanged();
+    // main.cpp pauses OCTAVE's own sources when the phone takes over
+    void mediaActiveChanged(bool active);
 
 public slots:
     // Called by VolumeController on every volume change (0..1 linear);
-    // phone audio played through OCTAVE follows it.
+    // phone audio, always played through OCTAVE while mirroring, follows it.
     void setVolume(float volume);
+    // OCTAVE's mute (MediaManager::muteChanged) silences phone audio too
+    void setMuted(bool muted);
     // Linear gain on phone PCM before OCTAVE's volume (setting scrcpyAudioGain)
     void setAudioGain(float gain);
-    void setAudioEnabled(bool enabled);
     // Duck OCTAVE's other sources while the phone produces sound
     // (settings scrcpyAudioDuckEnabled / scrcpyAudioDuckLevel, linear factor)
     void setAudioDuckEnabled(bool enabled);
@@ -215,6 +248,19 @@ public slots:
     void startQrPairing();
     void cancelQrPairing();
 
+    // ── phone media (OCTAVE's media controls on the phone's media session) ──
+    // Position now in ms, extrapolated from the last report while playing
+    int mediaPosition() const;
+    void mediaPlayPause();
+    void mediaPlay();
+    void mediaPause();
+    void mediaNext();
+    void mediaPrevious();
+    void mediaSeek(int positionMs);
+    // An OCTAVE source (local, Spotify) took over: the controls leave the
+    // phone; pausePhone also pauses what the phone is playing
+    void releaseMedia(bool pausePhone);
+
 private:
     QString runAdb(const QStringList &args, int timeoutMs = 10000) const;
     // Output and exit code whatever the result; safe from any thread
@@ -251,10 +297,14 @@ private:
     void onPhoneState(bool asleep, bool inUse, bool panelDark);
     void resetPhoneState();
     void onServerLog(const QString &line);
+    void onMediaState(const QVariantMap &state);
+    void onMediaArt(const QByteArray &jpeg);
+    void resetMedia();
+    void setMediaActive(bool active);
 
     QString m_adbPath;
-    bool m_audioEnabled = false;
     float m_volume = 1.0f;
+    bool m_muted = false;
     QString m_displaySize;
     QString m_activeDisplaySize;
     int m_viewWidth = 0;
@@ -303,6 +353,21 @@ private:
     qint64 m_lastAutoConnectMs = 0;
     QStringList m_qrRows;
     std::atomic<int> m_qrGeneration{0};           // bumped on start/cancel; a stale wait gives up
+
+    bool m_mediaAvailable = false;
+    bool m_mediaPlaying = false;
+    QString m_mediaTitle;
+    QString m_mediaArtist;
+    QString m_mediaAlbum;
+    QString m_mediaApp;
+    int m_mediaDuration = 0;
+    bool m_mediaCanSeek = false;
+    qint64 m_mediaPositionMs = 0;      // as last reported...
+    qint64 m_mediaPositionAtMs = 0;    // ...at this wall-clock time
+    QString m_mediaArtUrl;
+    int m_mediaArtSeq = 0;             // alternates the art file so QML reloads it
+    bool m_mediaActive = false;
+    bool m_mediaReported = false;      // the session's first media report arrived
 };
 
 #else // Q_OS_MOBILE — mobile stub
@@ -333,8 +398,28 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(QStringList qrPairingRows READ qrPairingRows CONSTANT)
     Q_PROPERTY(bool qrPairingActive READ qrPairingActive CONSTANT)
     Q_PROPERTY(int currentBitRate READ currentBitRate CONSTANT)
+    Q_PROPERTY(bool mediaAvailable READ mediaAvailable CONSTANT)
+    Q_PROPERTY(bool mediaPlaying READ mediaPlaying CONSTANT)
+    Q_PROPERTY(QString mediaTitle READ mediaTitle CONSTANT)
+    Q_PROPERTY(QString mediaArtist READ mediaArtist CONSTANT)
+    Q_PROPERTY(QString mediaAlbum READ mediaAlbum CONSTANT)
+    Q_PROPERTY(QString mediaApp READ mediaApp CONSTANT)
+    Q_PROPERTY(int mediaDuration READ mediaDuration CONSTANT)
+    Q_PROPERTY(bool mediaCanSeek READ mediaCanSeek CONSTANT)
+    Q_PROPERTY(QString mediaArtUrl READ mediaArtUrl CONSTANT)
+    Q_PROPERTY(bool mediaActive READ mediaActive CONSTANT)
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr) : QObject(parent) {}
+    bool mediaAvailable() const { return false; }
+    bool mediaPlaying() const { return false; }
+    QString mediaTitle() const { return {}; }
+    QString mediaArtist() const { return {}; }
+    QString mediaAlbum() const { return {}; }
+    QString mediaApp() const { return {}; }
+    int mediaDuration() const { return 0; }
+    bool mediaCanSeek() const { return false; }
+    QString mediaArtUrl() const { return {}; }
+    bool mediaActive() const { return false; }
     bool audioActive() const { return false; }
     bool audioPlaying() const { return false; }
     bool phoneAsleep() const { return false; }
@@ -360,8 +445,8 @@ public:
 
 public slots:
     void setVolume(float) {}
+    void setMuted(bool) {}
     void setAudioGain(float) {}
-    void setAudioEnabled(bool) {}
     void setAudioDuckEnabled(bool) {}
     void setAudioDuckLevel(float) {}
     void setDisplaySize(const QString &) {}
@@ -389,6 +474,14 @@ public slots:
     void forgetWireless() {}
     void startQrPairing() {}
     void cancelQrPairing() {}
+    int mediaPosition() const { return 0; }
+    void mediaPlayPause() {}
+    void mediaPlay() {}
+    void mediaPause() {}
+    void mediaNext() {}
+    void mediaPrevious() {}
+    void mediaSeek(int) {}
+    void releaseMedia(bool) {}
 
 signals:
     void scrcpyStarted(int);
@@ -404,6 +497,7 @@ signals:
     void duckingChanged(float);
     void wirelessAddressChanged(const QString &);
     void wirelessResult(bool, const QString &);
+    void mediaActiveChanged(bool);
 };
 
 #endif // Q_OS_MOBILE
