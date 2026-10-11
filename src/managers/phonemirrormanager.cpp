@@ -11,6 +11,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
+#include <QMutex>
 #include <QUrl>
 #include <climits>
 #include <QProcess>
@@ -37,6 +39,16 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     : QObject(parent), m_displaySize(kDefaultDisplaySize)
 {
     m_adbPath = findAdb();
+    if (m_adbPath.isEmpty()) {
+        qCWarning(lcPhoneMirror) << "No adb found: phone mirroring is unavailable";
+    } else {
+        const int tools = adbToolsMajor(m_adbPath);
+        qCInfo(lcPhoneMirror).noquote() << "Using adb" << m_adbPath << "(platform-tools"
+                                        << (tools > 0 ? QString::number(tools) : QStringLiteral("unknown")) + ')';
+        if (tools < kAdbWirelessMinTools)
+            qCWarning(lcPhoneMirror) << "This adb is too old for wireless pairing; QR pairing needs platform-tools"
+                                     << kAdbWirelessMinTools << "or newer";
+    }
     // Wireless jobs run one at a time, so a reconnect never races a pairing
     m_wirelessPool.setMaxThreadCount(1);
     m_resizeTimer.setSingleShot(true);
@@ -113,39 +125,71 @@ QString PhoneMirrorManager::findAdb()
     const QString osName = QStringLiteral("linux");
 #endif
     const QString appDir = QCoreApplication::applicationDirPath();
-    const QStringList bundled{
+    const QString home = QDir::homePath();
+    QStringList candidates{
         appDir + QStringLiteral("/platform-tools/") + exe,
         appDir + QStringLiteral("/../tools/platform-tools/") + osName + QLatin1Char('/') + exe,
         appDir + QStringLiteral("/../Resources/platform-tools/") + exe,
-    };
-    for (const QString &c : bundled) {
-        if (QFileInfo::exists(c)) {
-            qCDebug(lcPhoneMirror) << "Using bundled platform-tools adb:" << c;
-            return QFileInfo(c).absoluteFilePath();
-        }
-    }
-    const QString inPath = QStandardPaths::findExecutable(QStringLiteral("adb"));
-    if (!inPath.isEmpty())
-        return inPath;
+        QStandardPaths::findExecutable(QStringLiteral("adb")),
 #ifdef Q_OS_WIN
-    const QString home = QDir::homePath();
-    const QStringList common{
         QStringLiteral("C:/Program Files/Android/platform-tools/adb.exe"),
         QStringLiteral("C:/Program Files (x86)/Android/platform-tools/adb.exe"),
         home + QStringLiteral("/AppData/Local/Android/Sdk/platform-tools/adb.exe"),
-    };
 #else
-    const QString home = QDir::homePath();
-    const QStringList common{
+        // The SDK before the distro paths: Ubuntu 22.04's /usr/bin/adb is
+        // 28.x, too old to pair, and Google ships no ARM64 Linux build
+        home + QStringLiteral("/Android/Sdk/platform-tools/adb"),
         QStringLiteral("/usr/bin/adb"),
         QStringLiteral("/usr/local/bin/adb"),
-        home + QStringLiteral("/Android/Sdk/platform-tools/adb"),
-    };
 #endif
-    for (const QString &c : common)
-        if (QFileInfo::exists(c))
-            return c;
-    return {};
+    };
+    candidates.removeAll(QString());
+    // First adb new enough for wireless pairing wins; with none, the first
+    // one found still serves USB
+    QString fallback;
+    for (const QString &c : std::as_const(candidates)) {
+        if (!QFileInfo::exists(c))
+            continue;
+        const QString path = QFileInfo(c).absoluteFilePath();
+        if (adbToolsMajor(path) >= kAdbWirelessMinTools)
+            return path;
+        if (fallback.isEmpty())
+            fallback = path;
+    }
+    return fallback;
+}
+
+int PhoneMirrorManager::adbToolsMajor(const QString &adbPath)
+{
+    // `adb version` prints "Version 36.0.2-..." (platform-tools); builds
+    // too old to have that line are far too old to pair. Cached: findAdb
+    // runs from several managers and a box64-run adb is slow to start.
+    static QMutex mutex;
+    static QHash<QString, int> cache;
+    {
+        QMutexLocker lock(&mutex);
+        const auto it = cache.constFind(adbPath);
+        if (it != cache.constEnd())
+            return *it;
+    }
+    QProcess proc;
+    proc.setProcessChannelMode(QProcess::MergedChannels);
+    ScrcpyClient::hideConsoleWindow(&proc);
+    proc.start(adbPath, {QStringLiteral("version")});
+    int major = 0;
+    if (proc.waitForFinished(5000)) {
+        const QRegularExpressionMatch m = QRegularExpression(QStringLiteral("^Version (\\d+)\\."),
+                                                             QRegularExpression::MultilineOption)
+                                              .match(QString::fromUtf8(proc.readAllStandardOutput()));
+        if (m.hasMatch())
+            major = m.captured(1).toInt();
+    } else {
+        proc.kill();
+        proc.waitForFinished(1000);
+    }
+    QMutexLocker lock(&mutex);
+    cache.insert(adbPath, major);
+    return major;
 }
 
 QString PhoneMirrorManager::runAdb(const QStringList &args, int timeoutMs) const
@@ -1295,6 +1339,13 @@ void PhoneMirrorManager::startQrPairing()
 {
     if (m_adbPath.isEmpty()) {
         emit wirelessResult(false, describeDeviceState(QStringLiteral("no-adb")));
+        return;
+    }
+    if (adbToolsMajor(m_adbPath) < kAdbWirelessMinTools) {
+        qCWarning(lcPhoneMirror) << "QR pairing: adb" << m_adbPath << "is too old to pair";
+        emit wirelessResult(false, QStringLiteral("adb is too old for wireless pairing (needs platform-tools %1 or "
+                                                  "newer). Install a newer adb, or pair over USB.")
+                                       .arg(kAdbWirelessMinTools));
         return;
     }
     const QString service = QStringLiteral("octave-") + randomToken(8);

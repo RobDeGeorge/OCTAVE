@@ -151,8 +151,13 @@ public:
     static constexpr int kTcpipPort = 5555;
     static constexpr int kNewDisplayMinSdk = 30;  // Android 11
     // adb discovery: bundled platform-tools, then PATH, then common SDK
-    // locations. Shared with AndroidAutoManager so both find the same binary.
+    // locations, preferring the first new enough to pair (kAdbWirelessMinTools).
+    // Shared with AndroidAutoManager so both find the same binary.
     static QString findAdb();
+    // platform-tools major version of an adb binary, 0 if unknown (cached)
+    static int adbToolsMajor(const QString &adbPath);
+    // `adb pair` / `adb mdns` arrived in platform-tools 30
+    static constexpr int kAdbWirelessMinTools = 30;
     // Video bit rate defaults, Mbps (settings scrcpyBitRateUsb / scrcpyBitRateWifi)
     static constexpr int kDefaultUsbBitRateMbps = 16;
     static constexpr int kDefaultWifiBitRateMbps = 8;

@@ -155,31 +155,63 @@ def _bundled_adb() -> Optional[str]:
     return None
 
 
+# `adb pair` / `adb mdns` arrived in platform-tools 30
+ADB_WIRELESS_MIN_TOOLS = 30
+_adb_tools_cache: dict = {}
+_adb_tools_lock = threading.Lock()
+
+
+def adb_tools_major(adb_path: str) -> int:
+    """platform-tools major version of an adb binary, 0 if unknown. `adb
+    version` prints "Version 36.0.2-..."; builds too old to have that line are
+    far too old to pair. Cached: a box64-run adb is slow to start."""
+    with _adb_tools_lock:
+        if adb_path in _adb_tools_cache:
+            return _adb_tools_cache[adb_path]
+    major = 0
+    try:
+        creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+        out = subprocess.run([adb_path, "version"], capture_output=True, text=True,
+                             timeout=5, creationflags=creationflags).stdout
+        m = re.search(r"^Version (\d+)\.", out, re.MULTILINE)
+        if m:
+            major = int(m.group(1))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    with _adb_tools_lock:
+        _adb_tools_cache[adb_path] = major
+    return major
+
+
 def _find_adb() -> Optional[str]:
-    """Bundled platform-tools first, then PATH, then common install locations."""
-    bundled = _bundled_adb()
-    if bundled:
-        logger.debug(f" Using bundled platform-tools adb: {bundled}")
-        return bundled
-    in_path = shutil.which("adb")
-    if in_path:
-        return in_path
+    """Bundled platform-tools first, then PATH, then common install locations,
+    preferring the first adb new enough to pair (ADB_WIRELESS_MIN_TOOLS); with
+    none, the first one found still serves USB."""
+    candidates = [_bundled_adb(), shutil.which("adb")]
     if platform.system() == "Windows":
-        common = [
+        candidates += [
             r"C:\Program Files\Android\platform-tools\adb.exe",
             r"C:\Program Files (x86)\Android\platform-tools\adb.exe",
             str(Path.home() / "AppData" / "Local" / "Android" / "Sdk" / "platform-tools" / "adb.exe"),
         ]
     else:
-        common = [
+        # The SDK before the distro paths: Ubuntu 22.04's /usr/bin/adb is
+        # 28.x, too old to pair, and Google ships no ARM64 Linux build
+        candidates += [
+            str(Path.home() / "Android" / "Sdk" / "platform-tools" / "adb"),
             "/usr/bin/adb",
             "/usr/local/bin/adb",
-            str(Path.home() / "Android" / "Sdk" / "platform-tools" / "adb"),
         ]
-    for path in common:
-        if os.path.exists(path):
+    fallback = None
+    for path in candidates:
+        if not path or not os.path.exists(path):
+            continue
+        path = os.path.abspath(path)
+        if adb_tools_major(path) >= ADB_WIRELESS_MIN_TOOLS:
             return path
-    return None
+        if fallback is None:
+            fallback = path
+    return fallback
 
 
 class PhoneMirrorManager(QObject):
@@ -225,6 +257,14 @@ class PhoneMirrorManager(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._adb_path: Optional[str] = _find_adb()
+        if not self._adb_path:
+            logger.warning("Phone mirror: no adb found, phone mirroring is unavailable")
+        else:
+            tools = adb_tools_major(self._adb_path)
+            logger.info(f"Phone mirror: using adb {self._adb_path} (platform-tools {tools or 'unknown'})")
+            if tools < ADB_WIRELESS_MIN_TOOLS:
+                logger.warning("Phone mirror: this adb is too old for wireless pairing; QR pairing needs "
+                               f"platform-tools {ADB_WIRELESS_MIN_TOOLS} or newer")
         self._volume: float = 1.0
         self._display_size: str = AUTO_DISPLAY_SIZE
         self._active_display_size: str = ""
@@ -1415,6 +1455,11 @@ class PhoneMirrorManager(QObject):
         Outcome via wirelessResult; qrPairingRows clears when it ends."""
         if not self._adb_path:
             self.wirelessResult.emit(False, self.describeDeviceState("no-adb"))
+            return
+        if adb_tools_major(self._adb_path) < ADB_WIRELESS_MIN_TOOLS:
+            logger.warning(f"Phone mirror: QR pairing, adb {self._adb_path} is too old to pair")
+            self.wirelessResult.emit(False, f"adb is too old for wireless pairing (needs platform-tools "
+                                            f"{ADB_WIRELESS_MIN_TOOLS} or newer). Install a newer adb, or pair over USB.")
             return
         service = "octave-" + _random_token(8)
         password = _random_token(12)
