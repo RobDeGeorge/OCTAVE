@@ -13,3 +13,5 @@ Third-party code bundled in this repository:
   (https://www.nayuki.io/page/qr-code-generator-library).
   src/phone_mirror/qrcodegen.{hpp,cpp}, backend/phone_mirror/qrcodegen.py
 - phone_server/: fork of the scrcpy server, Apache License 2.0 (see phone_server/LICENSE.scrcpy)
+- backend/music_dl/: fork of spotDL 4.4.3, Copyright (c) 2021 spotDL Developers,
+  MIT License (https://github.com/spotDL/spotify-downloader, see backend/music_dl/LICENSE)
