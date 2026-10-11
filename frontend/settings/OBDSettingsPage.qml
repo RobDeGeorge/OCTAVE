@@ -60,13 +60,13 @@ Item {
         { cardId: "obd_connection", title: "Connection", component: connectionContent,
           summary: function() {
               if (!obdManager) return {}
-              var short = pageRoot._shortStatus(obdManager.connectionStatus)
+              var brief = pageRoot._shortStatus(obdManager.connectionStatus)
               var vehicle = obdManager.vehicleModelYear > 0
                   ? obdManager.vehicleModelYear + " " + obdManager.vehicleMake : obdManager.vehicleMake
-              return { state: short === "Connected" && vehicle ? vehicle : short,
-                       active: short === "Connected",
-                       status: short === "Connected" ? App.Style.statusConnected
-                             : short === "Connecting" ? App.Style.statusWarning : App.Style.statusDisconnected }
+              return { state: brief === "Connected" && vehicle ? vehicle : brief,
+                       active: brief === "Connected",
+                       status: brief === "Connected" ? App.Style.statusConnected
+                             : brief === "Connecting" ? App.Style.statusWarning : App.Style.statusDisconnected }
           } },
         { cardId: "obd_adapters", title: "Adapters", component: adaptersContent,
           summary: function() {
