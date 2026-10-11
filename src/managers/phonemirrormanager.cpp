@@ -630,6 +630,7 @@ void PhoneMirrorManager::startScrcpy()
         }
     }, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::audioStateChanged, this, &PhoneMirrorManager::audioActiveChanged, Qt::QueuedConnection);
+    connect(m_client, &ScrcpyClient::audioPlayed, this, &PhoneMirrorManager::audioPlayed);
     connect(m_client, &ScrcpyClient::audioPlayingChanged, this, [this](bool playing) {
         if (playing == m_audioPlaying)
             return;

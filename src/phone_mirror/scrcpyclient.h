@@ -120,6 +120,9 @@ signals:
     void audioReady();                          // PCM chunks are queued (GUI thread writes them)
     void audioStateChanged(bool active);        // phone audio is (not) being played through OCTAVE
     void audioPlayingChanged(bool playing);     // the phone is (not) producing sound (GUI thread)
+    // PCM just written to the audio sink, bufferedMs still queued ahead of
+    // it in the sink (GUI thread); feeds the live visualizer
+    void audioPlayed(const QByteArray &pcm, int bufferedMs);
     void serverLog(const QString &line);
     void phoneStateChanged(bool asleep, bool inUse, bool panelDark);   // from the keeper
     // The phone's media session (PhoneMedia): has_session, playing, can_seek,

@@ -198,6 +198,9 @@ class ScrcpyClient(QObject):
     audioReady = Signal()               # PCM chunks are queued (GUI thread writes them to the sink)
     audioStateChanged = Signal(bool)    # phone audio is (not) being played through OCTAVE
     audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound (GUI thread)
+    # PCM just written to the audio sink, buffered ms still queued ahead of it
+    # in the sink (GUI thread); feeds the live visualizer
+    audioPlayed = Signal(bytes, int)
     serverLog = Signal(str)
     phoneStateChanged = Signal(bool, bool, bool)   # asleep, in_use, panel_dark (from the server's MirrorKeeper)
     # The phone's media session (server PhoneMedia): dict with has_session,
@@ -818,6 +821,8 @@ class ScrcpyClient(QObject):
             with self._audio_lock:
                 self._audio_queue.popleft()
                 self._audio_queue_bytes -= len(chunk)
+            buffered = self._audio_sink.bufferSize() - self._audio_sink.bytesFree()
+            self.audioPlayed.emit(chunk, buffered * 1000 // (AUDIO_SAMPLE_RATE * AUDIO_BYTES_PER_FRAME))
 
     def _drain_device_messages(self, control: socket.socket):
         """Device messages on the control socket (phone_server DeviceMessageWriter)."""

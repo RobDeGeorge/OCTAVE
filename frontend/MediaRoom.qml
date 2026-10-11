@@ -1191,7 +1191,7 @@ Item {
                 horizontalCenter: parent.horizontalCenter
                 bottomMargin: dp(10)
             }
-            visible: settingsManager && settingsManager.showWaveformVisualizer && !mediaRoom.usePhone && !playlistEmpty
+            visible: settingsManager && settingsManager.showWaveformVisualizer && !playlistEmpty
             // Kept for back-compat with animateTrackChange() / onAnalysisComplete
             // handler below. No longer hides the visualizer — bars just drop
             // to zero on track change (via dropBars()) and animate back up
@@ -1204,6 +1204,22 @@ Item {
             // Track playback state reactively (method calls aren't reactive in bindings)
             property bool isPlaying: false
             property string lastAnalyzedFile: ""
+
+            // Phone media: no file to analyse, the bars come live from the
+            // phone audio OCTAVE is playing (audioAnalyzer.update_live)
+            readonly property bool live: mediaRoom.usePhone
+            onLiveChanged: initializeWaveform()
+
+            Connections {
+                target: mediaRoom
+                enabled: waveformContainer.live
+
+                function onDevicePlayingChanged() {
+                    waveformContainer.isPlaying = mediaRoom.devicePlaying
+                    if (audioAnalyzer)
+                        audioAnalyzer.set_active(waveformContainer.isPlaying)
+                }
+            }
 
             // 96 bars at 60 FPS with pill-shaped fancy bars
             property int timerInterval: 16
@@ -1326,7 +1342,11 @@ Item {
                 repeat: true
 
                 onTriggered: {
-                    if (audioAnalyzer && audioAnalyzer.is_analyzed() && mediaManager) {
+                    if (!audioAnalyzer)
+                        return
+                    if (waveformContainer.live) {
+                        audioAnalyzer.update_live()
+                    } else if (audioAnalyzer.is_analyzed() && mediaManager) {
                         audioAnalyzer.update_position(mediaManager.get_position() / 1000.0)
                     }
                 }
@@ -1342,6 +1362,8 @@ Item {
                 }
 
                 function onPlayStateChanged(playing) {
+                    if (waveformContainer.live)
+                        return   // local media is not what is playing
                     waveformContainer.isPlaying = playing
                     if (audioAnalyzer) {
                         audioAnalyzer.set_active(playing)
@@ -1359,7 +1381,15 @@ Item {
 
             // Initialize waveform when needed
             function initializeWaveform() {
-                if (audioAnalyzer && mediaManager && !mediaRoom.usePhone) {
+                if (!audioAnalyzer)
+                    return
+                audioAnalyzer.set_live(waveformContainer.live)
+                if (waveformContainer.live) {
+                    waveformContainer.isPlaying = mediaRoom.devicePlaying
+                    audioAnalyzer.set_active(waveformContainer.isPlaying)
+                    return
+                }
+                if (mediaManager) {
                     var currentFile = mediaManager.get_current_file()
                     if (currentFile) {
                         var fullPath = mediaManager.get_full_file_path(currentFile)

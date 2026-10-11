@@ -163,6 +163,9 @@ signals:
     void videoSinkChanged();
     void audioActiveChanged(bool active);
     void audioPlayingChanged(bool playing);
+    // Phone PCM as it is handed to the speakers (ScrcpyClient::audioPlayed);
+    // main.cpp routes it to AudioAnalyzer::feed_live_pcm
+    void audioPlayed(const QByteArray &pcm, int bufferedMs);
     void phoneAsleepChanged(bool asleep);
     void phoneInUseChanged(bool inUse);
     // Emitted whenever duckingFactor() changes; main.cpp routes it to the

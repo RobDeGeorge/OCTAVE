@@ -567,3 +567,148 @@ void AudioAnalyzer::clear()
         m_currentLevels.append(0);
 }
 
+
+// ════════════════════════════════════════════════════════════════
+// Live mode (phone mirror)
+//
+// The phone's audio arrives as PCM that OCTAVE plays itself, so there
+// is no file to pre-analyse. ScrcpyClient hands every chunk it writes
+// to the audio sink to feed_live_pcm(), which mixes it to mono and
+// decimates it to 8 kHz into a one-second ring. update_live(), polled
+// at the visualizer frame rate, analyses the 100 ms ending at the
+// sample being heard (the sink's backlog behind the newest one) with
+// the same window, FFT and log bands as a file chunk. A stream has no
+// whole-track 95th percentile to normalise by, so the reference
+// follows each frame's 95th percentile: it jumps up at once and
+// decays over kLiveReleaseSec, floored so silence shows flat bars;
+// kLiveRefScale brings the bar heights in line with a file's.
+// Python twin: backend/audio_analyzer.py (LIVE_*).
+// ════════════════════════════════════════════════════════════════
+
+static constexpr int   kLiveInputRate   = 48000;   // ScrcpyClient: s16le stereo
+static constexpr int   kLiveFactor      = kLiveInputRate / 8000;
+static constexpr int   kLiveRate        = kLiveInputRate / kLiveFactor;
+static constexpr int   kLiveRingSamples = kLiveRate;           // 1 s
+static constexpr int   kLiveStaleMs     = 250;   // no PCM for this long: the stream stopped
+static constexpr float kLiveReleaseSec  = 1.0f;
+// The held per-frame 95th percentile runs higher than a track's global one;
+// scaled down, the bars reach the same heights as a pre-analysed file
+static constexpr float kLiveRefScale    = 0.85f;
+// Mean band magnitude of a ~-46 dBFS tone (ScrcpyClient's "is this sound"
+// threshold); below it the bars stay flat instead of amplifying noise
+static constexpr float kLiveRefFloor    = 1.0f;
+
+QVariantList AudioAnalyzer::zeroLevels() const
+{
+    QVariantList zeros;
+    zeros.reserve(m_numBars);
+    for (int i = 0; i < m_numBars; ++i)
+        zeros.append(0);
+    return zeros;
+}
+
+void AudioAnalyzer::resetLive()
+{
+    m_liveRing.assign(kLiveRingSamples, 0.0f);
+    m_liveTotal = 0;
+    m_livePhase = 0;
+    m_liveBufferedMs = 0;
+    m_liveRef = kLiveRefFloor;
+    m_liveSinceFeed.invalidate();
+    m_liveSinceUpdate.invalidate();
+}
+
+void AudioAnalyzer::set_live(bool live)
+{
+    if (live == m_live)
+        return;
+    qCInfo(lcAudioAnalyzer) << "live mode" << (live ? "on" : "off");
+    m_live = live;
+    if (live) {
+        const int chunkSize = static_cast<int>(kLiveRate * m_chunkDuration);
+        const int fftSize = nextPow2(chunkSize);
+        m_liveWindow = hannWindow(chunkSize);
+        m_liveEdges = logBandEdges(fftSize / 2, m_numBars);
+        m_liveBuf.resize(fftSize);
+        m_liveBands.resize(m_numBars);
+        resetLive();
+    } else {
+        m_liveRing.clear();
+        m_liveRing.shrink_to_fit();
+    }
+    m_currentLevels = zeroLevels();
+    emit fftDataChanged(m_currentLevels);
+}
+
+void AudioAnalyzer::feed_live_pcm(const QByteArray &pcm, int bufferedMs)
+{
+    if (!m_live)
+        return;
+    const auto *s = reinterpret_cast<const qint16 *>(pcm.constData());
+    const int frames = pcm.size() / 4;
+    constexpr float k = 1.0f / 65536.0f;   // average of two channels, to -1..1
+    int i = (kLiveFactor - m_livePhase) % kLiveFactor;
+    for (; i < frames; i += kLiveFactor) {
+        m_liveRing[static_cast<size_t>(m_liveTotal % kLiveRingSamples)] =
+            (static_cast<float>(s[2 * i]) + static_cast<float>(s[2 * i + 1])) * k;
+        ++m_liveTotal;
+    }
+    m_livePhase = (m_livePhase + frames) % kLiveFactor;
+    m_liveBufferedMs = std::max(0, bufferedMs);
+    m_liveSinceFeed.start();
+}
+
+void AudioAnalyzer::update_live()
+{
+    if (!m_live || !m_isActive)
+        return;
+
+    const int chunkSize = static_cast<int>(m_liveWindow.size());
+    const qint64 sinceFeed = m_liveSinceFeed.isValid() ? m_liveSinceFeed.elapsed() : -1;
+    QVariantList varList;
+    varList.reserve(m_numBars);
+
+    if (sinceFeed < 0 || sinceFeed > kLiveStaleMs || m_liveTotal < chunkSize) {
+        varList = zeroLevels();
+    } else {
+        // The newest sample is still bufferedMs - sinceFeed ahead of the speaker
+        const long long delay = std::clamp<long long>(
+            (m_liveBufferedMs - sinceFeed) * kLiveRate / 1000, 0, kLiveRingSamples - chunkSize);
+        const long long end = std::max<long long>(chunkSize, m_liveTotal - delay);
+        std::fill(m_liveBuf.begin(), m_liveBuf.end(), std::complex<float>(0.0f, 0.0f));
+        for (int i = 0; i < chunkSize; ++i) {
+            const float v = m_liveRing[static_cast<size_t>((end - chunkSize + i) % kLiveRingSamples)];
+            m_liveBuf[i] = {v * m_liveWindow[i], 0.0f};
+        }
+        fft_radix2(m_liveBuf);
+
+        // Mean magnitude per log band (+1 skips DC), as in ChunkStream
+        for (int b = 0; b < m_numBars; ++b) {
+            const int startIdx = m_liveEdges[b];
+            const int endIdx   = m_liveEdges[b + 1];
+            float sum = 0.0f;
+            for (int i = startIdx; i < endIdx; ++i)
+                sum += std::abs(m_liveBuf[i + 1]);
+            m_liveBands[b] = endIdx > startIdx ? sum / static_cast<float>(endIdx - startIdx) : 0.0f;
+        }
+
+        std::vector<float> sorted(m_liveBands);
+        const size_t idx95 = std::min(static_cast<size_t>(sorted.size() * 0.95), sorted.size() - 1);
+        std::nth_element(sorted.begin(), sorted.begin() + idx95, sorted.end());
+        const float p95 = sorted[idx95];
+        const float dt = m_liveSinceUpdate.isValid() ? m_liveSinceUpdate.elapsed() / 1000.0f : 0.0f;
+        m_liveRef = std::max({p95, kLiveRefFloor, m_liveRef * std::exp(-dt / kLiveReleaseSec)});
+
+        const float ref = std::max(kLiveRefFloor, m_liveRef * kLiveRefScale);
+        for (int b = 0; b < m_numBars; ++b) {
+            const float norm = std::pow(std::min(1.0f, m_liveBands[b] / ref), 0.6f);
+            varList.append(static_cast<int>(norm * 8.0f));
+        }
+    }
+    m_liveSinceUpdate.start();
+
+    if (varList != m_currentLevels) {
+        m_currentLevels = varList;
+        emit fftDataChanged(m_currentLevels);
+    }
+}

@@ -9,6 +9,7 @@
 #include <QVector>
 #include <QFuture>
 #include <QFutureWatcher>
+#include <QElapsedTimer>
 
 #include <vector>
 #include <complex>
@@ -35,6 +36,16 @@ public slots:
     int get_num_bars() const;
     bool is_analyzed() const;
     void clear();
+
+    // ── Live mode (phone mirror) ──────────────────────────────
+    //    Bars from the PCM OCTAVE is playing right now instead of a
+    //    pre-analysed file. update_live() is polled at the visualizer
+    //    frame rate, like update_position() for files.
+    void set_live(bool live);
+    void update_live();
+    // s16le 48 kHz stereo just written to the audio sink; bufferedMs is
+    // how much the sink still holds ahead of it (what is not heard yet)
+    void feed_live_pcm(const QByteArray &pcm, int bufferedMs);
 
 public:
     // ── FFT helpers (no external deps) ─────────────────────────
@@ -75,6 +86,23 @@ private:
 
     // Async worker
     QFutureWatcher<AnalysisResult> m_watcher;
+
+    // Live mode: decimated (~8 kHz) mono ring of the last second played,
+    // analysed with the same window, FFT and bands as a file. GUI thread only.
+    void resetLive();
+    QVariantList zeroLevels() const;
+    bool               m_live           = false;
+    std::vector<float> m_liveRing;
+    long long          m_liveTotal      = 0;   // decimated samples ever written
+    int                m_livePhase      = 0;   // decimation phase (stereo frames)
+    int                m_liveBufferedMs = 0;
+    float              m_liveRef        = 0.0f;  // adaptive normalisation (95th pct, peak-held)
+    QElapsedTimer      m_liveSinceFeed;
+    QElapsedTimer      m_liveSinceUpdate;
+    std::vector<float> m_liveWindow;
+    std::vector<int>   m_liveEdges;
+    std::vector<std::complex<float>> m_liveBuf;
+    std::vector<float> m_liveBands;
 };
 
 #endif // AUDIOANALYZER_H

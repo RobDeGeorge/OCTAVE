@@ -265,6 +265,9 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("phoneMirrorManager", &phoneMirrorManager);
 
 #ifndef Q_OS_MOBILE
+    // Phone audio drives the visualizer's live mode
+    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::audioPlayed,
+                     &audioAnalyzer, &AudioAnalyzer::feed_live_pcm);
     // Phone mirror settings from saved config (desktop-only accessors)
     phoneMirrorManager.setDisplaySize(settingsManager.get_scrcpy_display_size());
     // Picture quality: virtual display density and per-link video bit rate

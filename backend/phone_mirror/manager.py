@@ -199,6 +199,9 @@ class PhoneMirrorManager(QObject):
     videoSinkChanged = Signal()
     audioActiveChanged = Signal(bool)   # phone audio playing through OCTAVE (or not)
     audioPlayingChanged = Signal(bool)  # the phone is (not) producing sound
+    # Phone PCM as it is handed to the speakers (ScrcpyClient.audioPlayed);
+    # main.py routes it to AudioAnalyzer.feed_live_pcm
+    audioPlayed = Signal(bytes, int)
     phoneAsleepChanged = Signal(bool)   # the phone was put to sleep (locked) during a session
     phoneInUseChanged = Signal(bool)    # the user unlocked the phone: OCTAVE stops blanking / waking it
     # Emitted whenever duckingFactor changes; main.py routes it to the other
@@ -1010,6 +1013,7 @@ class PhoneMirrorManager(QObject):
         client.frameReady.connect(self.frameReady)
         client.audioStateChanged.connect(self.audioActiveChanged)
         client.audioPlayingChanged.connect(self._on_audio_playing)
+        client.audioPlayed.connect(self.audioPlayed)
         client.serverLog.connect(self._on_server_log)
         client.phoneStateChanged.connect(self._on_phone_state)
         client.mediaStateChanged.connect(self._on_media_state)

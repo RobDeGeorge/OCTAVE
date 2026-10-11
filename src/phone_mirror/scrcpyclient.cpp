@@ -1103,9 +1103,13 @@ void ScrcpyClient::deliverAudio()
         if (m_audioSink->bytesFree() < chunk.size())
             return;  // try again on the next audioReady
         m_audioIo->write(chunk);
-        std::lock_guard<std::mutex> lock(m_audioMutex);
-        m_audioQueue.removeFirst();
-        m_audioQueueBytes -= chunk.size();
+        {
+            std::lock_guard<std::mutex> lock(m_audioMutex);
+            m_audioQueue.removeFirst();
+            m_audioQueueBytes -= chunk.size();
+        }
+        const qsizetype buffered = m_audioSink->bufferSize() - m_audioSink->bytesFree();
+        emit audioPlayed(chunk, int(buffered * 1000 / (kAudioSampleRate * kAudioBytesPerFrame)));
     }
 }
 

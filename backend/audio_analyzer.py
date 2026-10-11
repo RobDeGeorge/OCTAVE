@@ -3,8 +3,9 @@ Audio Analyzer for Waveform Visualization
 Analyzes audio files using FFT to generate real-time waveform visualization data.
 """
 
-from PySide6.QtCore import QObject, Signal, Slot, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, QTimer, QElapsedTimer
 from concurrent.futures import ThreadPoolExecutor
+import math
 import os
 
 from backend.logging_config import get_logger
@@ -28,6 +29,20 @@ av = lazy_module("av")
 MAX_ANALYSIS_SECONDS = 3 * 60 * 60
 # Chunks FFT'd per batch while decoding (60 s at 100 ms chunks).
 ANALYSIS_BATCH_CHUNKS = 600
+
+# Live mode (phone mirror), see update_live; same values as the C++ kLive*.
+LIVE_INPUT_RATE = 48000          # ScrcpyClient: s16le stereo
+LIVE_FACTOR = LIVE_INPUT_RATE // 8000
+LIVE_RATE = LIVE_INPUT_RATE // LIVE_FACTOR
+LIVE_RING_SAMPLES = LIVE_RATE    # 1 s
+LIVE_STALE_MS = 250              # no PCM for this long: the stream stopped
+LIVE_RELEASE_SEC = 1.0
+# The held per-frame 95th percentile runs higher than a track's global one;
+# scaled down, the bars reach the same heights as a pre-analysed file
+LIVE_REF_SCALE = 0.85
+# Mean band magnitude of a ~-46 dBFS tone (ScrcpyClient's "is this sound"
+# threshold); below it the bars stay flat instead of amplifying noise
+LIVE_REF_FLOOR = 1.0
 
 
 class AudioAnalyzer(QObject):
@@ -72,6 +87,20 @@ class AudioAnalyzer(QObject):
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(100)
         self._poll_timer.timeout.connect(self._check_analysis_done)
+
+        # Live mode (GUI thread only): decimated mono ring of the last second
+        self._live = False
+        self._live_ring = None
+        self._live_total = 0
+        self._live_phase = 0
+        self._live_buffered_ms = 0
+        self._live_ref = LIVE_REF_FLOOR
+        self._live_since_feed = QElapsedTimer()
+        self._live_since_update = QElapsedTimer()
+        self._live_window = None
+        self._live_starts = None
+        self._live_widths = None
+        self._live_fft_len = 0
 
     @Slot(str)
     def analyze_file(self, file_path: str):
@@ -346,3 +375,97 @@ class AudioAnalyzer(QObject):
         self._current_file = ""
         self._current_levels = [0] * self._num_bars
 
+    # ── Live mode (phone mirror) ─────────────────────────────────────
+    #
+    # The phone's audio arrives as PCM that OCTAVE plays itself, so there is
+    # no file to pre-analyse. ScrcpyClient hands every chunk it writes to the
+    # audio sink to feed_live_pcm(), which mixes it to mono and decimates it
+    # to 8 kHz into a one-second ring. update_live(), polled at the visualizer
+    # frame rate, analyses the 100 ms ending at the sample being heard (the
+    # sink's backlog behind the newest one) with the same window, FFT and log
+    # bands as a file chunk. A stream has no whole-track 95th percentile to
+    # normalise by, so the reference follows each frame's 95th percentile: it
+    # jumps up at once and decays over LIVE_RELEASE_SEC, floored so silence
+    # shows flat bars; LIVE_REF_SCALE brings the bar heights in line with a
+    # file's. C++ twin: AudioAnalyzer::update_live.
+
+    @Slot(bool)
+    def set_live(self, live: bool):
+        """Drive the bars from phone PCM (feed_live_pcm) instead of a file."""
+        live = bool(live) and NUMPY_AVAILABLE
+        if live == self._live:
+            return
+        logger.info("live mode %s", "on" if live else "off")
+        self._live = live
+        if live:
+            chunk_size = int(LIVE_RATE * self._chunk_duration)
+            self._live_fft_len = chunk_size // 2
+            edges = np.asarray(self._log_band_edges(self._live_fft_len, self._num_bars))
+            self._live_widths = np.diff(edges)
+            self._live_starts = np.minimum(edges[:-1], self._live_fft_len - 1)
+            self._live_window = np.hanning(chunk_size).astype(np.float32)
+            self._live_ring = np.zeros(LIVE_RING_SAMPLES, dtype=np.float32)
+            self._live_total = 0
+            self._live_phase = 0
+            self._live_buffered_ms = 0
+            self._live_ref = LIVE_REF_FLOOR
+            self._live_since_feed.invalidate()
+            self._live_since_update.invalidate()
+        else:
+            self._live_ring = None
+        self._current_levels = [0] * self._num_bars
+        self.fftDataChanged.emit(self._current_levels)
+
+    def feed_live_pcm(self, pcm: bytes, buffered_ms: int):
+        """s16le 48 kHz stereo just written to the audio sink; buffered_ms is
+        how much the sink still holds ahead of it (what is not heard yet)."""
+        if not self._live:
+            return
+        frames = len(pcm) // 4
+        if frames == 0:
+            return
+        stereo = np.frombuffer(pcm, dtype="<i2", count=frames * 2).reshape(-1, 2)
+        start = (LIVE_FACTOR - self._live_phase) % LIVE_FACTOR
+        piece = stereo[start::LIVE_FACTOR].sum(axis=1, dtype=np.float32) * (1.0 / 65536.0)
+        self._live_phase = (self._live_phase + frames) % LIVE_FACTOR
+        n = len(piece)
+        if n:
+            if n >= LIVE_RING_SAMPLES:
+                piece = piece[-LIVE_RING_SAMPLES:]
+                self._live_total += n - LIVE_RING_SAMPLES
+                n = LIVE_RING_SAMPLES
+            pos = self._live_total % LIVE_RING_SAMPLES
+            first = min(n, LIVE_RING_SAMPLES - pos)
+            self._live_ring[pos:pos + first] = piece[:first]
+            self._live_ring[:n - first] = piece[first:]
+            self._live_total += n
+        self._live_buffered_ms = max(0, int(buffered_ms))
+        self._live_since_feed.start()
+
+    @Slot()
+    def update_live(self):
+        """Emit the bars for the phone audio being heard right now."""
+        if not self._live or not self._is_active:
+            return
+        chunk_size = len(self._live_window)
+        since_feed = self._live_since_feed.elapsed() if self._live_since_feed.isValid() else -1
+        if since_feed < 0 or since_feed > LIVE_STALE_MS or self._live_total < chunk_size:
+            new_levels = [0] * self._num_bars
+        else:
+            # The newest sample is still buffered_ms - since_feed ahead of the speaker
+            delay = (self._live_buffered_ms - since_feed) * LIVE_RATE // 1000
+            delay = min(max(delay, 0), LIVE_RING_SAMPLES - chunk_size)
+            end = max(chunk_size, self._live_total - delay)
+            idx = np.arange(end - chunk_size, end) % LIVE_RING_SAMPLES
+            fft = np.abs(np.fft.rfft(self._live_ring[idx] * self._live_window))[1:1 + self._live_fft_len]
+            sums = np.add.reduceat(fft, self._live_starts)
+            bands = np.where(self._live_widths > 0, sums / np.maximum(self._live_widths, 1), 0.0)
+            p95 = float(np.sort(bands)[min(int(len(bands) * 0.95), len(bands) - 1)])
+            dt = self._live_since_update.elapsed() / 1000.0 if self._live_since_update.isValid() else 0.0
+            self._live_ref = max(p95, LIVE_REF_FLOOR, self._live_ref * math.exp(-dt / LIVE_RELEASE_SEC))
+            ref = max(LIVE_REF_FLOOR, self._live_ref * LIVE_REF_SCALE)
+            new_levels = (np.minimum(1.0, bands / ref) ** 0.6 * 8).astype(np.uint8).tolist()
+        self._live_since_update.start()
+        if new_levels != self._current_levels:
+            self._current_levels = new_levels
+            self.fftDataChanged.emit(new_levels)

@@ -156,6 +156,8 @@ engine.addImageProvider("dhuframe", android_auto_manager._dhu_capture.frame_prov
 # Phone Mirror Manager
 phone_mirror_manager = PhoneMirrorManager()
 engine.rootContext().setContextProperty("phoneMirrorManager", phone_mirror_manager)
+# Phone audio drives the visualizer's live mode
+phone_mirror_manager.audioPlayed.connect(audio_analyzer.feed_live_pcm)
 
 # Phone mirror settings
 phone_mirror_manager.setDisplaySize(settings_manager.get_scrcpy_display_size())
