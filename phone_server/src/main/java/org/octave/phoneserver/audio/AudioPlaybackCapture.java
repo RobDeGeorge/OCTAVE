@@ -2,6 +2,7 @@ package org.octave.phoneserver.audio;
 
 import org.octave.phoneserver.AndroidVersions;
 import org.octave.phoneserver.FakeContext;
+import org.octave.phoneserver.control.PhoneMedia;
 import org.octave.phoneserver.util.Ln;
 
 import android.annotation.SuppressLint;
@@ -125,6 +126,12 @@ public final class AudioPlaybackCapture implements AudioCapture {
     @Override
     public void stop() {
         if (recorder != null) {
+            // OCTAVE: with LOOP_BACK the phone's media plays only through us;
+            // once the capture is released it falls back to the phone's own
+            // speaker. Pause it first so it does not start playing out loud.
+            if (!keepPlayingOnDevice && recorder.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                PhoneMedia.pausePlaying();
+            }
             // Will call .stop() if necessary, without throwing an IllegalStateException
             recorder.release();
         }

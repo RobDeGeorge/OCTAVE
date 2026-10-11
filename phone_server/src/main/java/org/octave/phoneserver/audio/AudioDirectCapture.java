@@ -3,6 +3,7 @@ package org.octave.phoneserver.audio;
 import org.octave.phoneserver.AndroidVersions;
 import org.octave.phoneserver.FakeContext;
 import org.octave.phoneserver.Workarounds;
+import org.octave.phoneserver.control.PhoneMedia;
 import org.octave.phoneserver.util.Ln;
 import org.octave.phoneserver.wrappers.ServiceManager;
 
@@ -12,6 +13,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.media.AudioRecord;
 import android.media.MediaCodec;
+import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.SystemClock;
 
@@ -129,6 +131,14 @@ public class AudioDirectCapture implements AudioCapture {
     @Override
     public void stop() {
         if (recorder != null) {
+            // OCTAVE: REMOTE_SUBMIX ("output", the default) takes the phone's
+            // media away from its speaker only while it records; once released
+            // the media falls back to the speaker. Pause it first so it does
+            // not start playing out loud when OCTAVE goes away.
+            if (audioSource == MediaRecorder.AudioSource.REMOTE_SUBMIX
+                    && recorder.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                PhoneMedia.pausePlaying();
+            }
             // Will call .stop() if necessary, without throwing an IllegalStateException
             recorder.release();
         }

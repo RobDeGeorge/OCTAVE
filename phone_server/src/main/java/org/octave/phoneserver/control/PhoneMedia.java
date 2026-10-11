@@ -39,6 +39,7 @@ public final class PhoneMedia {
     private static final long PICK_MS = 1000;
     private static final int ART_MAX_PX = 400;
     private static final int ART_QUALITY = 85;
+    private static final long PAUSE_WAIT_MS = 500;
 
     /** What the client is told; immutable once sent. */
     public static final class State {
@@ -64,8 +65,6 @@ public final class PhoneMedia {
     private final Handler handler;
 
     private boolean watching;
-    private Object sessionManager;     // android.media.session.ISessionManager
-    private Method getSessionsMethod;
     private MediaController controller;
     private State lastSent;
     private long lastSentAt;           // uptime ms
@@ -237,36 +236,77 @@ public final class PhoneMedia {
         }
     }
 
-    @SuppressLint("PrivateApi")
-    @SuppressWarnings("unchecked")
     private List<MediaSession.Token> getSessions() {
         try {
-            if (sessionManager == null) {
-                IBinder binder = (IBinder) Class.forName("android.os.ServiceManager").getMethod("getService", String.class)
-                        .invoke(null, "media_session");
-                sessionManager = Class.forName("android.media.session.ISessionManager$Stub").getMethod("asInterface", IBinder.class)
-                        .invoke(null, binder);
-                for (Method m : sessionManager.getClass().getMethods()) {
-                    Class<?>[] p = m.getParameterTypes();
-                    // getSessions(ComponentName, int userId[, String packageFilter]) (the filter since Android 17)
-                    if (m.getName().equals("getSessions") && p.length >= 2 && p[0] == ComponentName.class && p[1] == int.class) {
-                        getSessionsMethod = m;
-                        break;
-                    }
-                }
-                if (getSessionsMethod == null) {
-                    throw new NoSuchMethodException("ISessionManager.getSessions");
-                }
-            }
-            if (getSessionsMethod.getParameterTypes().length == 3) {
-                return (List<MediaSession.Token>) getSessionsMethod.invoke(sessionManager, null, 0, null);   // every package
-            }
-            return (List<MediaSession.Token>) getSessionsMethod.invoke(sessionManager, null, 0);
+            return querySessions();
         } catch (ReflectiveOperationException | RuntimeException e) {
             Ln.e("Phone media: could not list media sessions", e);
             watching = false;   // no point polling an API that does not work here
             handler.removeCallbacks(pickRunnable);
             return null;
+        }
+    }
+
+    private static Object sessionManager;     // android.media.session.ISessionManager
+    private static Method getSessionsMethod;
+
+    @SuppressLint("PrivateApi")
+    @SuppressWarnings("unchecked")
+    private static synchronized List<MediaSession.Token> querySessions() throws ReflectiveOperationException {
+        if (sessionManager == null) {
+            IBinder binder = (IBinder) Class.forName("android.os.ServiceManager").getMethod("getService", String.class)
+                    .invoke(null, "media_session");
+            Object sm = Class.forName("android.media.session.ISessionManager$Stub").getMethod("asInterface", IBinder.class)
+                    .invoke(null, binder);
+            for (Method m : sm.getClass().getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                // getSessions(ComponentName, int userId[, String packageFilter]) (the filter since Android 17)
+                if (m.getName().equals("getSessions") && p.length >= 2 && p[0] == ComponentName.class && p[1] == int.class) {
+                    getSessionsMethod = m;
+                    break;
+                }
+            }
+            if (getSessionsMethod == null) {
+                throw new NoSuchMethodException("ISessionManager.getSessions");
+            }
+            sessionManager = sm;
+        }
+        if (getSessionsMethod.getParameterTypes().length == 3) {
+            return (List<MediaSession.Token>) getSessionsMethod.invoke(sessionManager, null, 0, null);   // every package
+        }
+        return (List<MediaSession.Token>) getSessionsMethod.invoke(sessionManager, null, 0);
+    }
+
+    /**
+     * Pause every session that is playing. Called when OCTAVE stops capturing
+     * the phone's audio (the client closed, crashed or dropped): the audio
+     * would otherwise fall back to the phone's own speaker and keep playing
+     * out loud. Falls back to a media pause key if sessions cannot be listed.
+     */
+    public static void pausePlaying() {
+        try {
+            List<MediaSession.Token> tokens = querySessions();
+            List<MediaController> paused = new java.util.ArrayList<>();
+            if (tokens != null) {
+                for (MediaSession.Token token : tokens) {
+                    MediaController mc = new MediaController(FakeContext.get(), token);
+                    if (isPlaying(mc.getPlaybackState())) {
+                        Ln.i("Phone media: pausing " + mc.getPackageName() + " (audio leaving OCTAVE)");
+                        mc.getTransportControls().pause();
+                        paused.add(mc);
+                    }
+                }
+            }
+            // The app pauses asynchronously: hold the capture a moment so the
+            // tail of the track does not leak out of the speaker
+            long deadline = SystemClock.uptimeMillis() + PAUSE_WAIT_MS;
+            while (!paused.isEmpty() && SystemClock.uptimeMillis() < deadline) {
+                paused.removeIf(mc -> !isPlaying(mc.getPlaybackState()));
+                SystemClock.sleep(20);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            Ln.w("Phone media: could not pause sessions, sending a pause key: " + e.getMessage());
+            Device.pressReleaseKeycode(KeyEvent.KEYCODE_MEDIA_PAUSE, 0, Device.INJECT_MODE_WAIT_FOR_FINISH);
         }
     }
 
