@@ -92,17 +92,8 @@ ApplicationWindow {
                 stage = -1
                 browser.runJavaScript("document.title.includes('OCTAVE') && !!window.octaveWiki && parseFloat(getComputedStyle(document.body).fontSize) >= 20 && getComputedStyle(document.querySelector('#sidebar')).visibility === 'hidden' ", function(ok) {
                     if (!ok) { stage = 1; return }
-                    for (var i = 0; i < 4; ++i)
-                        find(viewer, "wikiSmallerTextButton").clicked()
-                    stage = 19
-                })
-            } else if (stage === 19) {
-                stage = -1
-                browser.runJavaScript("parseFloat(getComputedStyle(document.body).fontSize)", function(fontSize) {
-                    if (fontSize > 14.1) { stage = 19; return }
-                    if (!check(fontSize >= 14, "reader text can be reduced to 14px")) return
-                    for (var i = 0; i < 6; ++i)
-                        find(viewer, "wikiLargerTextButton").clicked()
+                    if (!check(!find(viewer, "wikiSmallerTextButton") && !find(viewer, "wikiLargerTextButton"),
+                               "reader sizes text itself, no A-/A+ buttons")) return
                     find(viewer, "wikiTopicsButton").clicked()
                     stage = 20
                 })
@@ -111,7 +102,7 @@ ApplicationWindow {
                 browser.runJavaScript("({font:parseFloat(getComputedStyle(document.body).fontSize),open:document.querySelector('#sidebar').classList.contains('open'),target:document.querySelector('.sidebar-link').getBoundingClientRect().height,styles:Array.from(document.styleSheets).map(s=>s.href)})", function(state) {
                     // QML property changes and the injected stylesheet both
                     // cross the WebEngine process boundary asynchronously.
-                    if (state.font < 24 || !state.open || state.target < 52) {
+                    if (state.font < 20 || !state.open || state.target < 52) {
                         debugMessage = JSON.stringify(state)
                         stage = 20
                         return

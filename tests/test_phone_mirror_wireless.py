@@ -55,8 +55,12 @@ def test_wifi_messages_keep_retry_phrases():
     assert "USB" in disconnected_message(USB)
 
 
-def test_qr_pairing_payload_and_cancel():
+def test_qr_pairing_payload_and_cancel(monkeypatch):
+    from backend.phone_mirror import manager as manager_module
     from backend.phone_mirror.manager import qr_pairing_payload
+
+    # No adb is run, so report one new enough to pair
+    monkeypatch.setattr(manager_module, "adb_tools_major", lambda path: manager_module.ADB_WIRELESS_MIN_TOOLS)
 
     assert qr_pairing_payload("octave-abc", "pw123") == "WIFI:T:ADB;S:octave-abc;P:pw123;;"
     m = _manager([])
