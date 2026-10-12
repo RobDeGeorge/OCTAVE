@@ -3,7 +3,7 @@
 # OCTAVE
 
 ### An open-source car head unit
-**Runs on Raspberry Pi, desktop, and Android. C++ or Python backend, QML frontend, MIT.**
+**Runs on Raspberry Pi, desktop, and Android. C++ or Python backend, QML frontend, GPLv3.**
 
 <img src="frontend/assets/readme/drive.webp" alt="OCTAVE on the dash of a 2003 Jeep TJ: album art beside live speed and RPM during a full-throttle pull" width="900">
 
@@ -12,7 +12,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/RobDeGeorge/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/RobDeGeorge/OCTAVE/releases/latest)
 [![Stars](https://img.shields.io/github/stars/RobDeGeorge/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/RobDeGeorge/OCTAVE/stargazers)
 [![Downloads](https://img.shields.io/github/downloads/RobDeGeorge/OCTAVE/total?style=for-the-badge&color=2b8aff&label=downloads)](https://github.com/RobDeGeorge/OCTAVE/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)](LICENSE)
+[![License: GPL v3+](https://img.shields.io/badge/license-GPLv3%2B-orange?style=for-the-badge)](LICENSE)
 
 [![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20Linux%20%7C%20Pi%20%7C%20Android-success?style=flat-square)](#install)
 [![Backend](https://img.shields.io/badge/backend-C%2B%2B%20%7C%20Python-orange?style=flat-square)](#two-backends-one-frontend)
@@ -171,7 +171,7 @@ Pitch, roll, heading, a G-force plot with a trail, altitude and temperature from
 
 | | OCTAVE | Crankshaft | OpenAuto Pro | Stock Android Auto |
 |---|---|---|---|---|
-| Open source | yes (MIT) | yes | partial | no |
+| Open source | yes (GPLv3) | yes | partial | no |
 | Runs without a phone | yes | no (AA projection) | no (AA projection) | no |
 | Built-in OBD-II + custom gauges | yes | no | limited | no |
 | Phone mirroring | yes (built-in, nothing to install) | AA only | AA only | n/a |
@@ -374,4 +374,8 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 
 ## License
 
-2026 Rob DeGeorge. MIT License.
+Copyright 2026 Rob DeGeorge.
+
+OCTAVE is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
+
+Code published before 2026-10-12 (v0.9.4 and earlier) was released under the MIT License and remains available under those terms.

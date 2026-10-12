@@ -6,7 +6,7 @@
 <component type="desktop-application">
   <id>com.robdegeorge.octave</id>
   <metadata_license>MIT</metadata_license>
-  <project_license>MIT</project_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <name>OCTAVE</name>
   <summary>Open-source cross-platform telematics for an augmented vehicle experience</summary>
   <developer id="com.robdegeorge">
