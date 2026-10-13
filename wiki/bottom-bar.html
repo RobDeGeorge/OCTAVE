@@ -341,7 +341,7 @@
             </tr>
             <tr>
               <td>Settings</td><td><code>settings_button.svg</code> / <code>bottomBarSettingsButton</code></td>
-              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid; a no-op for Sidebar and Carousel). Otherwise pops to root and opens the cached <code>SettingsMenu.qml</code> (built the first time with <code>initialSection: lastSettingsSection</code>, a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>; on later visits the page simply keeps the section it was on). Press-and-hold (<code>onPressAndHold</code>, in both orientations) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
+              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid, closes the open card in the default grid layout, a no-op for Carousel). Otherwise pops to root and opens the cached <code>SettingsMenu.qml</code> (built the first time with <code>initialSection: lastSettingsSection</code>, a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>; on later visits the page simply keeps the section it was on). Press-and-hold (<code>onPressAndHold</code>, in both orientations) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
             </tr>
             <tr>
               <td>Android Auto</td><td><code>android_auto_button.svg</code> / <code>bottomBarAndroidAutoButton</code></td>
@@ -378,7 +378,7 @@
     }
 }</code></pre>
 
-        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (sidebar row, carousel tab, hub card, dashboard card) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is produced by <code>NetworkManager</code> in both backends (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
+        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (carousel tab, hub card, dashboard card; the default grid's About tile shows a static dot) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is produced by <code>NetworkManager</code> in both backends (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
 
         <!-- Clock -->
         <h2 id="clock">Clock Section</h2>

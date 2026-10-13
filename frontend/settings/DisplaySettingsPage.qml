@@ -37,11 +37,16 @@ Flickable {
         onTriggered: pageRoot._now = new Date()
     }
 
+    // The grid settings layout is still stored as "Sidebar" (the layout it
+    // replaced) so existing settings files keep working.
+    function layoutLabel(style) { return style === "Sidebar" ? "Grid" : style }
+    function layoutStyleFor(label) { return label === "Grid" ? "Sidebar" : label }
+
     property var tileModel: [
         { cardId: "display_layout", title: "Layout", component: layoutContent,
           summary: function() {
               if (!settingsManager) return {}
-              return { state: settingsManager.settingsLayoutStyle }
+              return { state: pageRoot.layoutLabel(settingsManager.settingsLayoutStyle) }
           } },
         { cardId: "display_window", title: "Window", component: windowContent,
           summary: function() {
@@ -224,7 +229,7 @@ Flickable {
             SettingCategory {
                 id: layoutCategory
                 title: "Settings Layout"
-                description: "Sidebar is the default. The other layouts are experimental."
+                description: "Grid is the default. The other layouts are experimental."
 
                 readonly property var experimentalLayouts: ["Carousel", "Hub", "Dashboard"]
 
@@ -238,12 +243,12 @@ Flickable {
                 SettingsChips {
                     Layout.fillWidth: true
                     options: layoutCategory.showExperimental
-                             ? ["Sidebar", "Carousel", "Hub", "Dashboard"]
-                             : ["Sidebar"]
-                    currentValue: settingsManager ? settingsManager.settingsLayoutStyle : "Sidebar"
+                             ? ["Grid", "Carousel", "Hub", "Dashboard"]
+                             : ["Grid"]
+                    currentValue: pageRoot.layoutLabel(settingsManager ? settingsManager.settingsLayoutStyle : "Sidebar")
                     onSelected: function(value) {
                         if (settingsManager)
-                            settingsManager.save_settings_layout_style(value)
+                            settingsManager.save_settings_layout_style(pageRoot.layoutStyleFor(value))
                     }
                 }
 
