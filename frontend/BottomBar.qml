@@ -793,10 +793,21 @@ Rectangle {
                         // Volume Control
                         Control {
                             id: volumeControl
-                            implicitWidth: App.Spacing.bottomBarVolumeSliderWidth
+                            // The percentage is drawn as text, which is far wider than the
+                            // slider-sized box; size to the widest value ("100%") so the
+                            // layout reserves its real footprint and the text never spills
+                            // into the nav buttons.
+                            implicitWidth: Math.max(App.Spacing.bottomBarVolumeSliderWidth,
+                                                    App.Spacing.overallMargin + Math.ceil(volumeTextMetrics.advanceWidth))
                             implicitHeight: App.Spacing.bottomBarVolumeSliderHeight
                             Layout.alignment: Qt.AlignVCenter
                             
+                            TextMetrics {
+                                id: volumeTextMetrics
+                                text: "100%"
+                                font: volumeText.font
+                            }
+
                             Text {
                                 id: volumeText
                                 anchors {
@@ -1011,6 +1022,7 @@ Rectangle {
                         // Shrink the gap between buttons when they would not fit,
                         // instead of overflowing under the clock / media controls.
                         readonly property real preferredSpacing: App.Spacing.bottomBarBetweenButtonMargin * 6
+                        readonly property real edgeGap: App.Spacing.bottomBarBetweenButtonMargin * 3
                         readonly property real fitSpacing: {
                             var n = 0, w = 0
                             for (var i = 0; i < children.length; ++i) {
@@ -1018,7 +1030,9 @@ Rectangle {
                                 if (c.visible && c.implicitWidth > 0) { n++; w += c.implicitWidth }
                             }
                             if (n < 2) return preferredSpacing
-                            var avail = parent.width - w
+                            // Keep a gap at both ends so the outermost buttons never sit
+                            // flush against the media controls or the clock.
+                            var avail = parent.width - w - 2 * edgeGap
                             return Math.max(dp(4), Math.min(preferredSpacing, avail / (n - 1)))
                         }
                         spacing: fitSpacing
