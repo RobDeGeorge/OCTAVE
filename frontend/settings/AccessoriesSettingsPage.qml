@@ -1696,17 +1696,33 @@ Flickable {
 
 
                     SettingLabel {
-                        text: "Virtual Display Size"
+                        text: "Display Mode"
                     }
 
                     SettingDescription {
-                        text: "The phone draws its apps on a separate display made for OCTAVE (Android 11+). "
-                              + "Fit to screen sizes it to the mirror view, so the picture fills the screen pixel for pixel. "
-                              + "Turn it off to pick a size, or leave the size empty to mirror the phone's own screen."
+                        text: scrcpyModeControl.currentValue === "Mirror Phone"
+                              ? "Shows exactly what is on the phone's screen, in the phone's own shape, with Back/Home/Recents buttons."
+                              : "The phone draws its apps on a separate desktop-style display made for OCTAVE (Android 11+; Samsung phones show DeX). "
+                                + "Fit to screen sizes it to the mirror view, so the picture fills the screen pixel for pixel. Turn it off to pick a size."
+                    }
+
+                    SettingsSegmentedControl {
+                        id: scrcpyModeControl
+                        Layout.fillWidth: true
+                        options: ["Mirror Phone", "Desktop (DeX)"]
+                        currentValue: settingsManager && settingsManager.scrcpyDisplaySize === "" ? "Mirror Phone" : "Desktop (DeX)"
+
+                        onSelected: function(value) {
+                            if (!settingsManager || value === currentValue) return
+                            var size = value === "Mirror Phone" ? "" : "auto"
+                            settingsManager.save_scrcpy_display_size(size)
+                            if (phoneMirrorManager) phoneMirrorManager.setDisplaySize(size)
+                        }
                     }
 
                     SettingsToggle {
                         id: scrcpyFitToggle
+                        visible: scrcpyModeControl.currentValue !== "Mirror Phone"
                         compact: true
                         Layout.fillWidth: false
                         Layout.alignment: Qt.AlignLeft
@@ -1733,9 +1749,9 @@ Flickable {
                     SettingsTextField {
                         id: scrcpyDisplaySizeField
                         Layout.fillWidth: true
-                        visible: !scrcpyFitToggle.checked
+                        visible: scrcpyFitToggle.visible && !scrcpyFitToggle.checked
                         text: settingsManager && settingsManager.scrcpyDisplaySize !== "auto" ? settingsManager.scrcpyDisplaySize : ""
-                        placeholderText: "Empty = phone screen, e.g. 1280x800"
+                        placeholderText: "e.g. 1280x800"
 
                         onEditingFinished: {
                             if (settingsManager) {
@@ -1763,6 +1779,8 @@ Flickable {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: App.Spacing.rowSpacing
+                    // Density only applies to the desktop display
+                    visible: scrcpyModeControl.currentValue !== "Mirror Phone"
 
                     SettingLabel {
                         text: "Text Size"

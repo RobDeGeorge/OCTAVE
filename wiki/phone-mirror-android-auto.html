@@ -674,7 +674,7 @@
             <thead><tr><th>Setting</th><th>Default</th><th>Effect</th><th>Applied</th></tr></thead>
             <tbody>
               <tr><td><code>phoneMirrorEnabled</code></td><td>false</td><td>Shows the Phone Mirror button in the bottom bar (hidden on Android regardless)</td><td>live</td></tr>
-              <tr><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code></td><td>Virtual display size (<code>new_display=</code>); <code>"auto"</code> = the view's pixel size, <code>""</code> = phone screen. The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
+              <tr><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code></td><td>Virtual display size (<code>new_display=</code>); <code>"auto"</code> = the view's pixel size, <code>""</code> = phone screen (the "Display Mode" control picks Mirror Phone <code>""</code> or Desktop (DeX) <code>"auto"</code>). The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyDisplayDpi</code></td><td>0</td><td>Appended as <code>new_display=WxH/dpi</code>; 0 = the server scales the phone's own density</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code></td><td>16 / 8</td><td><code>video_bit_rate</code> in Mbps for that link</td><td>restarts a session on that link</td></tr>
               <tr><td><code>scrcpyAutoWifi</code></td><td>true</td><td><code>adb tcpip 5555</code> before a USB session; remembers <code>ip:5555</code></td><td>next USB start</td></tr>
