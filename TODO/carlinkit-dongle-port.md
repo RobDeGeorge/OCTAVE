@@ -24,6 +24,8 @@ The reference implementation we'd port from is **LIVI** (`f-io/LIVI`, MIT licens
 
 A local copy is at `~/Downloads/LIVI-main/` — keep a snapshot before deleting it.
 
+**See also:** `TODO/android-auto-native-receiver.md`, the no-hardware wired alternative. Both should feed one shared projection source (H.264 out, touch in, audio out) so whichever lands second just plugs in.
+
 ## Scope
 
 A new C++ manager `src/managers/carlinkitmanager.{h,cpp}` exposed to QML as `carlinkitManager`. **C++ only** — this is mobile-eligible (Android sideload could use it once Android USB host mode + permissions are wired) and there is no Python peer for USB protocol code. Document the parity exemption in the commit per `CLAUDE.md`.
