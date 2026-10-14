@@ -687,7 +687,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
             emit connected(w, h);
             // 5. demux + decode until stop/disconnect
             m_tFirst = nowMs();
-            videoLoop(video, t0);
+            videoLoop(video, t0, pumpServerLog);
         }
     }
 
@@ -727,7 +727,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     }
 }
 
-void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
+void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0, const std::function<void()> &pumpServerLog)
 {
 #ifdef OCTAVE_HAVE_FFMPEG
     const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
@@ -749,11 +749,18 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
     if (m_adaptiveMaxBps > 0)
         abr.emplace(m_adaptiveMinBps, m_adaptiveMaxBps, m_startBitRate);
     bool rateAnnounced = false;
+    qint64 lastLogPump = 0;
 
     while (!m_stopping.load()) {
         char header[12];
         if (!recvExact(video, header, 12, m_stopping))
             break;
+        // The server's display id (needed by pressHome() on a virtual
+        // display) is only known once its log has been read
+        if (const qint64 now = nowMs(); now - lastLogPump >= 250) {
+            lastLogPump = now;
+            pumpServerLog();
+        }
         const quint64 ptsFlags = qFromBigEndian<quint64>(header);
         const quint32 size = qFromBigEndian<quint32>(header + 8);
         if (size > kMaxVideoPacketBytes) {
@@ -857,7 +864,7 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0)
     av_packet_free(&pkt);
     avcodec_free_context(&ctx);
 #else
-    Q_UNUSED(video) Q_UNUSED(t0)
+    Q_UNUSED(video) Q_UNUSED(t0) Q_UNUSED(pumpServerLog)
 #endif
 }
 

@@ -24,6 +24,7 @@
 #include <QList>
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <thread>
 
@@ -146,7 +147,9 @@ private:
     QTcpSocket *connectUntilReady(qint64 deadlineMs, bool startup = true);
     // interruptible: give up as soon as stop() is requested (false for cleanup calls)
     bool adbRun(const QStringList &args, QString *output, int timeoutMs = 15000, bool interruptible = true);
-    void videoLoop(QTcpSocket *video, qint64 t0);
+    // pumpServerLog drains the server's stdout; called between packets so its
+    // startup lines ("New display ... (id=N)") arrive while the session runs
+    void videoLoop(QTcpSocket *video, qint64 t0, const std::function<void()> &pumpServerLog);
     void audioLoop(QTcpSocket *audio);
     void deviceMessageLoop(qintptr fd);
     bool ensureAudioSink();
