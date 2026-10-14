@@ -292,6 +292,8 @@ private:
     // Blocking helpers for the wireless worker thread
     struct MdnsService { QString name; QString type; QString address; };
     QList<MdnsService> mdnsServices() const;
+    // `avahi-browse` fallback for an adb built without mDNS (distro arm64 adb)
+    static QList<MdnsService> avahiMdnsServices();
     QString mdnsConnectAddressFor(const QString &host) const;
     bool adbConnect(const QString &address, QString *message) const;
     // After a successful adb pair: find the phone's connect port over mDNS

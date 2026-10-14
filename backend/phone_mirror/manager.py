@@ -1349,6 +1349,36 @@ class PhoneMirrorManager(QObject):
             parts = line.split()
             if len(parts) >= 3 and parts[1].startswith("_adb"):
                 rows.append((parts[0], parts[1], parts[2]))
+        return rows or self._avahi_mdns_services()
+
+    @staticmethod
+    def _avahi_mdns_services() -> list:
+        """Same rows from `avahi-browse`. Debian/Ubuntu's arm64 adb is built
+        without working mDNS (`adb mdns services` is always empty) and Google
+        ships platform-tools for x86-64 only, so on a Pi the phone is found
+        through the system's Avahi. Parsable resolved lines look like
+        "=;ap0;IPv4;adb-R3GL…-51sbEx;_adb-tls-connect._tcp;local;Android.local;10.42.0.30;36937;…"""
+        avahi = shutil.which("avahi-browse")
+        if not avahi:
+            return []
+        rows = []
+        for kind in ("_adb-tls-connect._tcp", "_adb-tls-pairing._tcp"):
+            try:
+                out = subprocess.run([avahi, "-rpt", kind], stdout=subprocess.PIPE,
+                                     stderr=subprocess.DEVNULL, text=True, timeout=4).stdout
+            except subprocess.TimeoutExpired as e:
+                out = e.stdout or ""
+                out = out.decode(errors="replace") if isinstance(out, bytes) else out
+            except (subprocess.SubprocessError, OSError):
+                continue
+            for line in out.split("\n"):
+                f = line.split(";")
+                # IPv6 answers are link-local (need a scope id) and repeat the IPv4 ones
+                if len(f) < 9 or f[0] != "=" or f[2] != "IPv4":
+                    continue
+                row = (f[3], f[4], f"{f[7]}:{f[8]}")
+                if row not in rows:
+                    rows.append(row)
         return rows
 
     def _mdns_connect_address_for(self, host: str) -> str:

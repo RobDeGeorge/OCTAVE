@@ -14,6 +14,7 @@
 #include <QHash>
 #include <QMutex>
 #include <QUrl>
+#include <algorithm>
 #include <climits>
 #include <QProcess>
 #include <QRandomGenerator>
@@ -970,6 +971,43 @@ QList<PhoneMirrorManager::MdnsService> PhoneMirrorManager::mdnsServices() const
         if (parts.size() < 3 || !parts[1].startsWith(QLatin1String("_adb")))
             continue;
         out.append({parts[0], parts[1], parts[2]});
+    }
+    if (out.isEmpty())
+        out = avahiMdnsServices();
+    return out;
+}
+
+QList<PhoneMirrorManager::MdnsService> PhoneMirrorManager::avahiMdnsServices()
+{
+    // Debian/Ubuntu's arm64 adb is built without working mDNS (`adb mdns
+    // services` is always empty), and Google ships platform-tools for x86-64
+    // only, so on a Pi the phone is found through the system's Avahi instead.
+    // Parsable resolved lines look like
+    // "=;ap0;IPv4;adb-R3GL…-51sbEx;_adb-tls-connect._tcp;local;Android.local;10.42.0.30;36937;…"
+    QList<MdnsService> out;
+    const QString avahi = QStandardPaths::findExecutable(QStringLiteral("avahi-browse"));
+    if (avahi.isEmpty())
+        return out;
+    for (const QString &type : {QStringLiteral("_adb-tls-connect._tcp"), QStringLiteral("_adb-tls-pairing._tcp")}) {
+        QProcess proc;
+        proc.start(avahi, {QStringLiteral("-rpt"), type});
+        if (!proc.waitForFinished(4000)) {
+            proc.kill();
+            proc.waitForFinished(1000);
+        }
+        const QStringList lines = QString::fromUtf8(proc.readAllStandardOutput()).split(QLatin1Char('\n'));
+        for (const QString &line : lines) {
+            const QStringList f = line.split(QLatin1Char(';'));
+            // IPv6 answers are link-local (need a scope id) and repeat the IPv4 ones
+            if (f.size() < 9 || f[0] != QLatin1String("=") || f[2] != QLatin1String("IPv4"))
+                continue;
+            const MdnsService s{f[3], f[4], f[7] + QLatin1Char(':') + f[8]};
+            const bool seen = std::any_of(out.cbegin(), out.cend(), [&](const MdnsService &o) {
+                return o.name == s.name && o.type == s.type && o.address == s.address;
+            });
+            if (!seen)
+                out.append(s);
+        }
     }
     return out;
 }
