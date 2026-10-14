@@ -349,7 +349,7 @@
             </tr>
             <tr>
               <td>Phone Mirror</td><td><code>phone_mirror_button.svg</code> / <code>bottomBarPhoneMirrorButton</code></td>
-              <td><code>openPhoneMirrorSection()</code> &rarr; <code>stackView.openPage("PhoneMirrorView.qml")</code>: pops back to the cached view if it is on the stack (so the running mirror session is reused) or pushes it. Same visibility rule as Android Auto, keyed on <code>phoneMirrorEnabled</code>.</td>
+              <td><code>openPhoneMirrorSection()</code> &rarr; <code>stackView.openPage("PhoneMirrorView.qml")</code>: pops back to the cached view if it is on the stack (so the running mirror session is reused) or pushes it. Pressed while the mirror view is already showing and <code>mirrorRunning</code>, it calls <code>phoneMirrorManager.pressHome()</code> instead, so the button doubles as the phone's Home button. Same visibility rule as Android Auto, keyed on <code>phoneMirrorEnabled</code>.</td>
             </tr>
           </tbody>
         </table>

@@ -250,7 +250,15 @@ Rectangle {
         stackView.openPage("AndroidAutoView.qml")
     }
 
+    // Pressed again while the mirror is on screen and streaming, the button
+    // is the phone's Home button.
     function openPhoneMirrorSection() {
+        var currentItem = stackView.currentItem
+        if (currentItem && currentItem.objectName === "phoneMirrorView"
+                && currentItem.mirrorRunning && phoneMirrorManager) {
+            phoneMirrorManager.pressHome()
+            return
+        }
         stackView.openPage("PhoneMirrorView.qml")
     }
 
