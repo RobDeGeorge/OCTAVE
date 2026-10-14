@@ -18,7 +18,7 @@
 [![Backend](https://img.shields.io/badge/backend-C%2B%2B%20%7C%20Python-orange?style=flat-square)](#two-backends-one-frontend)
 [![Frontend](https://img.shields.io/badge/frontend-Qt%206%20%2F%20QML-41cd52?style=flat-square)](#)
 
-### [Download Latest Release →](https://github.com/RobDeGeorge/OCTAVE/releases/latest)
+### [Download Latest Release →](https://github.com/RobDeGeorge/OCTAVE/releases/latest) · [Read the Wiki →](https://robdegeorge.com/OCTAVE/)
 
 </div>
 
@@ -270,7 +270,7 @@ Both are kept in sync on desktop. A feature or fix in one lands in the other in 
 
 ## Dev tooling
 
-The clips and screenshots above are scripted. `python -m dev.main_dev --profile` runs OCTAVE with a simulated engine (warm-up, overheat and low-fuel scenarios included), simulated IMU motion and a local command server. `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt in real time, and writes WebP, GIF and PNG. `--list` shows every scene. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. Everything is under `dev/` and documented in the wiki.
+The clips and screenshots above are scripted. `python -m dev.main_dev --profile` runs OCTAVE with a simulated engine (warm-up, overheat and low-fuel scenarios included), simulated IMU motion and a local command server. `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt in real time, and writes WebP, GIF and PNG. `--list` shows every scene. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. Everything is under `dev/` and documented in the [wiki](https://robdegeorge.com/OCTAVE/development.html).
 
 ## System requirements
 
@@ -289,7 +289,7 @@ Larger items in progress. Full plans are under [`TODO/`](TODO/).
 
 ## Documentation
 
-The wiki covers architecture, every backend manager, every frontend page, the settings reference, hardware setup and the build guides. Start at [`wiki/index.html`](wiki/index.html). For gauges and dashboards, [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md) is the spec.
+The wiki covers architecture, every backend manager, every frontend page, the settings reference, hardware setup and the build guides. It is live at **[robdegeorge.com/OCTAVE](https://robdegeorge.com/OCTAVE/)**, and the same pages ship in [`wiki/`](wiki/index.html) and inside the app for offline reading. For gauges and dashboards, [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md) is the spec.
 
 ## Star history
 
