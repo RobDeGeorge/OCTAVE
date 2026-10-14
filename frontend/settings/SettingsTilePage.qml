@@ -11,6 +11,9 @@ Item {
     property var tileModel: []
     // 0 = automatic (2x2 for 4 tiles, otherwise square-ish).
     property int columns: 0
+    // Non-zero: fill top to bottom, this many tiles per column, so a column
+    // can hold one section. Overrides columns.
+    property int rows: 0
 
     signal tileSelected(string cardId, var originRect)
 
@@ -34,6 +37,8 @@ Item {
         columnSpacing: App.Spacing.settingsHubGridSpacing
         rowSpacing: App.Spacing.settingsHubGridSpacing
 
+        flow: tilePage.rows > 0 ? GridLayout.TopToBottom : GridLayout.LeftToRight
+        rows: Math.max(1, tilePage.rows)
         // 2x2 grid for 4 tiles; otherwise square-ish auto-fit.
         columns: tilePage.columns > 0 ? tilePage.columns
             : tilePage.tileModel && tilePage.tileModel.length === 4

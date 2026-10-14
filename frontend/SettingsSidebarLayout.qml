@@ -5,8 +5,8 @@ import "." as App
 import "settings"
 
 // Default settings layout (settingsLayoutStyle "Sidebar" — the stored name
-// predates the grid). One flat grid of every settings card from every
-// section, like an app drawer; tapping a tile grows its card into a popup.
+// predates the grid). One grid of every settings card, a column per section
+// under a caption; tapping a tile grows its card into a popup.
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
@@ -18,9 +18,8 @@ Item {
     property var settingsMenu: null
     property var hubModel: []
 
-    // The grid always has this many rows; columns grow to fit the tiles, so a
-    // tile count that is a multiple of it (20 on desktop, 16 on Android
-    // without Accessories) fills the grid with no empty cells.
+    // The grid always has this many rows, one section per column: 5x4 on
+    // desktop, 4x4 on Android (no Accessories).
     readonly property int gridRows: 4
 
     function openTileId() {
@@ -52,27 +51,45 @@ Item {
             info.status = "#FF9800"
         return info
     }
-    readonly property var allTiles: {
+    // Each section fills one column, top to bottom. A section with fewer
+    // tiles than gridRows (Media) goes after the full ones, so About's single
+    // tile finishes that column and lands in the bottom-right corner.
+    readonly property var sectionColumns: {
         var _ = _allPagesLoaded
-        var tiles = []
+        var full = [], partial = [], about = null
         for (var i = 0; i < hubModel.length; i++) {
             var entry = hubModel[i]
             if (entry.section === "about") {
-                tiles.push({ cardId: "section:about", title: entry.name,
-                             summary: sidebarLayout._aboutSummary,
-                             component: aboutContent, section: entry.section })
+                about = { cardId: "section:about", title: entry.name,
+                          summary: sidebarLayout._aboutSummary,
+                          component: aboutContent, section: entry.section }
                 continue
             }
             var loader = allPagesRepeater.itemAt(i)
             var page = loader ? loader.item : null
-            if (page && typeof page.tileModel !== "undefined") {
-                for (var j = 0; j < page.tileModel.length; j++) {
-                    var t = page.tileModel[j]
-                    tiles.push({ cardId: t.cardId, title: t.title, summary: t.summary,
-                                 component: t.component, section: entry.section })
-                }
+            if (!page || typeof page.tileModel === "undefined")
+                continue
+            var tiles = []
+            for (var j = 0; j < page.tileModel.length; j++) {
+                var t = page.tileModel[j]
+                tiles.push({ cardId: t.cardId, title: t.title, summary: t.summary,
+                             component: t.component, section: entry.section })
             }
+            var col = { name: entry.name, tiles: tiles }
+            if (tiles.length < gridRows) partial.push(col); else full.push(col)
         }
+        var cols = full.concat(partial)
+        if (about) {
+            var last = cols.length > 0 ? cols[cols.length - 1] : null
+            if (last && last.tiles.length < gridRows) last.tiles.push(about)
+            else cols.push({ name: "", tiles: [about] })
+        }
+        return cols
+    }
+    readonly property var allTiles: {
+        var tiles = []
+        for (var i = 0; i < sectionColumns.length; i++)
+            tiles = tiles.concat(sectionColumns[i].tiles)
         return tiles
     }
 
@@ -201,15 +218,55 @@ Item {
             visible: App.EnvironmentTheme.active.contentHudLines
         }
 
+        // Section name above each column. Tiles have no implicit width, so
+        // every grid column is the same width and the captions can be laid
+        // out with the grid's own margin and spacing.
+        Row {
+            id: captionRow
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+                topMargin: App.Spacing.settingsContentMargin
+                leftMargin: App.Spacing.settingsContentMargin + App.Spacing.settingsHubGridSpacing
+                rightMargin: App.Spacing.settingsContentMargin + App.Spacing.settingsHubGridSpacing
+            }
+            z: 2
+            spacing: App.Spacing.settingsHubGridSpacing
+
+            readonly property int columnCount: Math.max(1, sidebarLayout.sectionColumns.length)
+            readonly property real columnWidth: (width - spacing * (columnCount - 1)) / columnCount
+
+            Repeater {
+                model: sidebarLayout.sectionColumns
+                Text {
+                    width: captionRow.columnWidth
+                    text: modelData.name
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.8
+                    font.family: App.Style.fontFamily
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 1.5
+                    font.capitalization: Font.AllUppercase
+                    elide: Text.ElideRight
+                }
+            }
+        }
+
         SettingsTilePage {
             id: allTilesGrid
             anchors {
-                fill: parent
-                margins: App.Spacing.settingsContentMargin
+                top: captionRow.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+                leftMargin: App.Spacing.settingsContentMargin
+                rightMargin: App.Spacing.settingsContentMargin
+                bottomMargin: App.Spacing.settingsContentMargin
             }
             z: 2
             tileModel: sidebarLayout.allTiles
-            columns: Math.max(1, Math.ceil(tileModel.length / sidebarLayout.gridRows))
+            rows: sidebarLayout.gridRows
             onTileSelected: function(cardId, rect) { sidebarLayout.selectTile(cardId, rect) }
         }
 
