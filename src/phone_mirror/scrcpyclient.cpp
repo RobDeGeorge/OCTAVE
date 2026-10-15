@@ -564,6 +564,11 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
          << QStringLiteral("send_frame_meta=true") << QStringLiteral("send_codec_meta=true")
          << QStringLiteral("send_dummy_byte=true") << QStringLiteral("log_level=info")
          << QStringLiteral("octave_persist_ms=%1").arg(displaySize.isEmpty() ? 0 : kPersistMs);
+    const QString codecOptions = qEnvironmentVariableIsSet("OCTAVE_VIDEO_CODEC_OPTIONS")
+                                     ? qEnvironmentVariable("OCTAVE_VIDEO_CODEC_OPTIONS")
+                                     : QLatin1String(kVideoCodecOptions);
+    if (!codecOptions.isEmpty())
+        opts << QStringLiteral("video_codec_options=") + codecOptions;
     if (!displaySize.isEmpty())
         opts << QStringLiteral("new_display=") + displaySize;
     if (attach) {

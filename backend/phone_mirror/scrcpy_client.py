@@ -127,6 +127,12 @@ BLACK_LENIENT_FRACTION = 0.05
 # with nohup in the background so it survives its shell (verified on the Pi
 # rig: the process is reparented to init and lives on).
 PERSIST_MS = 60000
+# MediaFormat options for the phone's video encoder ("key:type=value,..."):
+# realtime priority, no frame lookahead and Qualcomm's low-latency mode,
+# for touch-to-picture latency.
+# Encoders ignore keys they do not know. The OCTAVE_VIDEO_CODEC_OPTIONS
+# environment variable replaces them ("" sends none) for experiments.
+VIDEO_CODEC_OPTIONS = "priority:int=0,latency:int=1,vendor.qti-ext-enc-low-latency.enable:int=1"
 
 # Frame header flags (app/src/demuxer.c)
 FLAG_CONFIG = 1 << 63
@@ -588,6 +594,9 @@ class ScrcpyClient(QObject):
             "send_codec_meta=true", "send_dummy_byte=true", "log_level=info",
             f"octave_persist_ms={PERSIST_MS if display_size else 0}",
         ]
+        codec_options = os.environ.get("OCTAVE_VIDEO_CODEC_OPTIONS", VIDEO_CODEC_OPTIONS)
+        if codec_options:
+            opts.append(f"video_codec_options={codec_options}")
         if display_size:
             opts.append(f"new_display={display_size}")
         # The assignment must precede nohup (it applies to the command it prefixes).

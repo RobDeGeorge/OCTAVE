@@ -92,6 +92,12 @@ public:
     QString scid() const { return m_scid; }
     // How long the phone-side server keeps the virtual display after the client drops
     static constexpr int kPersistMs = 60000;
+    // MediaFormat options for the phone's video encoder ("key:type=value,..."):
+    // realtime priority, no frame lookahead and Qualcomm's low-latency mode,
+    // for touch-to-picture latency.
+    // Encoders ignore keys they do not know. The OCTAVE_VIDEO_CODEC_OPTIONS
+    // environment variable replaces them ("" sends none) for experiments.
+    static constexpr const char *kVideoCodecOptions = "priority:int=0,latency:int=1,vendor.qti-ext-enc-low-latency.enable:int=1";
     void stop();
 
     // Touch on the mirrored display, x/y in frame pixels
