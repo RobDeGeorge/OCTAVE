@@ -488,7 +488,7 @@
           <tbody>
             <tr><td><code>refreshNetwork()</code></td><td><code>void</code></td><td>Re-probe connectivity and network name now</td></tr>
             <tr><td><code>checkForUpdates()</code></td><td><code>void</code></td><td>Query the GitHub API for the latest <code>main</code> commit and compare with local HEAD (same / behind / ahead / diverged)</td></tr>
-            <tr><td><code>applySelfUpdate()</code></td><td><code>void</code></td><td><code>git fetch</code> + <code>git reset --hard origin/main</code> (+ pip install on Python), with rollback on failure; refuses when the tree is dirty</td></tr>
+            <tr><td><code>applySelfUpdate()</code></td><td><code>void</code></td><td><code>git fetch</code> + <code>git reset --hard origin/main</code> (+ pip install on Python; cmake configure + build on C++), with rollback on failure; refuses when the tree is dirty</td></tr>
             <tr><td><code>restartApp()</code></td><td><code>void</code></td><td>Relaunch the app with the same arguments and quit</td></tr>
             <tr><td><code>shutdown_device()</code></td><td><code>void</code></td><td>Quit OCTAVE and power the OS off (<code>systemctl poweroff</code> / <code>sudo shutdown</code> / <code>shutdown /s</code>)</td></tr>
             <tr><td><code>cleanup()</code> <span class="platform-badge desktop">C++ only</span></td><td><code>void</code></td><td>Stop timers and kill any running git process (called at exit). Python has the same method but it is not a <code>@Slot</code></td></tr>

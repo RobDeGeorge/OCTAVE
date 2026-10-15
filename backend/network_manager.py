@@ -349,6 +349,8 @@ class NetworkManager(QObject):
             else:
                 status = "update-available"
                 message = f"Update available (latest: {remote_hash})"
+            if dirty and status == "update-available":
+                message += " — uncommitted changes block updating"
 
             logger.info(
                 f"Update check: local={local_hash}, remote={remote_hash}, "

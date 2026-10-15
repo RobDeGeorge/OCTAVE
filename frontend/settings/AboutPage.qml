@@ -471,6 +471,8 @@ Flickable {
 
                                 SettingsButton {
                                     text: "Retry Update"
+                                    // A dirty tree is refused again; the warning above says why
+                                    visible: networkManager && !networkManager.workingTreeDirty
                                     buttonColor: "#FF9800"
                                     height: dp(30)
                                     onClicked: {

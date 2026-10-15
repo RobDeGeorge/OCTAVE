@@ -3,6 +3,8 @@
 
 #include "networkmanager.h"
 
+#include "buildinfo.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -13,7 +15,10 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QRegularExpression>
+#include <QStandardPaths>
 #include <QSysInfo>
+#include <QThread>
 #include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(lcNetwork, "octave.network")
@@ -217,9 +222,20 @@ void NetworkManager::checkForUpdates()
             const QString relation = localVsRemote(remoteSha, localHash);
             const bool dirty = refreshWorkingTreeDirty();
 
+            // The checkout can be current while the binary is not: a source update
+            // that was never rebuilt. Judge "up to date" by the commit baked into
+            // this binary, so the Update button can finish the job by rebuilding.
+            const QString builtFrom = QStringLiteral(OCTAVE_GIT_COMMIT);
+            const bool staleBinary = builtFrom != QLatin1String("unknown")
+                && !builtFrom.startsWith(localHash) && !localHash.startsWith(builtFrom);
+
             QString status;
             QString message;
-            if (relation == QLatin1String("same")) {
+            if (relation == QLatin1String("same") && staleBinary) {
+                status = QStringLiteral("update-available");
+                message = QStringLiteral("Source is at %1 but this build is %2 — update to rebuild")
+                              .arg(localHash, builtFrom);
+            } else if (relation == QLatin1String("same")) {
                 status = QStringLiteral("up-to-date");
                 message = QStringLiteral("You're running the latest version");
             } else if (relation == QLatin1String("ahead")) {
@@ -232,8 +248,10 @@ void NetworkManager::checkForUpdates()
                 status = QStringLiteral("update-available");
                 message = QStringLiteral("Update available (latest: %1)").arg(remoteSha);
             }
+            if (dirty && status == QLatin1String("update-available"))
+                message += QStringLiteral(" — uncommitted changes block updating");
 
-            qCInfo(lcNetwork) << "Update check: local=" << localHash
+            qCInfo(lcNetwork) << "Update check: local=" << localHash << "built=" << builtFrom
                               << "remote=" << remoteSha << "relation=" << relation
                               << "dirty=" << dirty << "status=" << status;
 
@@ -343,23 +361,16 @@ void NetworkManager::restartApp()
     if (!args.isEmpty())
         args.removeFirst();
 
-    // Pre-flight: For Python-based launcher, verify main.py can parse.
-    // In C++ build this is a no-op, but we keep the structure for hybrid setups.
-    QString mainPy = QDir(repoDir()).filePath(QStringLiteral("main.py"));
-    if (QFileInfo::exists(mainPy)) {
-        QProcess check;
-        check.setWorkingDirectory(repoDir());
-        check.start(QStringLiteral("python3"),
-                     {QStringLiteral("-m"), QStringLiteral("py_compile"), mainPy});
-        if (check.waitForFinished(15000) && check.exitCode() != 0) {
-            qCWarning(lcNetwork) << "Restart aborted — main.py has errors:"
-                                 << QString::fromUtf8(check.readAllStandardError()).trimmed();
-            m_selfUpdateStatus = QStringLiteral("error");
-            emit selfUpdateStatusChanged(m_selfUpdateStatus);
-            m_selfUpdateMessage = QStringLiteral("Restart aborted — code has errors");
-            emit selfUpdateMessageChanged(m_selfUpdateMessage);
-            return;
-        }
+    // Pre-flight: quitting with nothing to start would leave a dead screen.
+    // (applicationFilePath() is cached from startup, so it still names the
+    // path even though a rebuild has replaced the file behind it.)
+    if (!QFileInfo(appPath).isExecutable()) {
+        qCWarning(lcNetwork) << "Restart aborted —" << appPath << "is missing or not executable";
+        m_selfUpdateStatus = QStringLiteral("error");
+        emit selfUpdateStatusChanged(m_selfUpdateStatus);
+        m_selfUpdateMessage = QStringLiteral("Restart aborted — the OCTAVE binary is missing");
+        emit selfUpdateMessageChanged(m_selfUpdateMessage);
+        return;
     }
 
     qCInfo(lcNetwork) << "Restarting:" << appPath << args;
@@ -703,14 +714,16 @@ void NetworkManager::onUpdateCheckReplyFinished()
 void NetworkManager::runSelfUpdateStep()
 {
     // Self-update is implemented as a step machine using QProcess.
-    // Each step starts a git command; when it finishes, the next step runs.
+    // Each step starts one process; when it finishes, the next step runs.
     //
     // Steps:
     //   1 — git fetch origin main
     //   2 — git reset --hard origin/main
-    //   3 — (Python pre-flight check — py_compile main.py)
-    //   4 — pip install -r requirements.txt
+    //   3 — cmake -S <repo> -B <build dir> (re-bakes the commit hash)
+    //   4 — cmake --build <build dir> (the running binary is only replaced here)
     //   5 — git log -1 --format=%h %s (get new commit info)
+    //
+    // The Python backend runs from source and does py_compile + pip instead.
 
     if (m_gitProcess) {
         m_gitProcess->deleteLater();
@@ -741,32 +754,53 @@ void NetworkManager::runSelfUpdateStep()
         break;
     }
     case 3: {
-        // Pre-flight check: python3 -m py_compile main.py
-        setProgress(QStringLiteral("Verifying new code..."));
-        QString mainPy = QDir(repoDir()).filePath(QStringLiteral("main.py"));
-        if (!QFileInfo::exists(mainPy)) {
-            // No main.py to check — skip to next step
-            m_selfUpdateStep = 4;
-            runSelfUpdateStep();
-            return;
-        }
-        m_gitProcess->start(QStringLiteral("python3"),
-                            {QStringLiteral("-m"), QStringLiteral("py_compile"), mainPy});
+        // Reconfigure against the existing cache. `cmake --build` would also do
+        // this when CMakeLists.txt or .git/HEAD changed, but running it always
+        // guarantees the commit hash in buildinfo.h matches the new HEAD.
+        setProgress(QStringLiteral("Configuring build..."));
+        m_gitProcess->setProcessChannelMode(QProcess::MergedChannels);
+        m_gitProcess->start(findCmake(), {QStringLiteral("-S"), repoDir(),
+                                          QStringLiteral("-B"), buildDir()});
         break;
     }
     case 4: {
-        // pip install -r requirements.txt
-        setProgress(QStringLiteral("Installing dependencies..."));
-        QString requirementsPath = QDir(repoDir()).filePath(QStringLiteral("requirements.txt"));
-        QString pipPath = findVenvPip();
-
-        if (pipPath.isEmpty() || !QFileInfo::exists(requirementsPath)) {
-            qCWarning(lcNetwork) << "Could not locate venv pip or requirements.txt — skipping dependency install";
-            m_selfUpdateStep = 5;
-            runSelfUpdateStep();
-            return;
+        setProgress(QStringLiteral("Building..."));
+        m_buildTail.clear();
+        backUpBinary();
+        // Merged so a compiler error lands in m_buildTail next to the progress lines
+        m_gitProcess->setProcessChannelMode(QProcess::MergedChannels);
+        connect(m_gitProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+            if (!m_gitProcess)
+                return;
+            const QString chunk = QString::fromUtf8(m_gitProcess->readAllStandardOutput());
+            m_buildTail = (m_buildTail + chunk).right(8192);
+            // Makefiles print "[ 45%]", Ninja "[123/456]"; report the latest one
+            static const QRegularExpression progressRe(
+                QStringLiteral(R"(\[\s*(\d+)%\]|\[(\d+)/(\d+)\])"));
+            QString progress;
+            auto it = progressRe.globalMatch(chunk);
+            while (it.hasNext()) {
+                const auto m = it.next();
+                progress = m.captured(1).isEmpty()
+                    ? QStringLiteral("%1/%2").arg(m.captured(2), m.captured(3))
+                    : m.captured(1) + QLatin1Char('%');
+            }
+            if (!progress.isEmpty())
+                setProgress(QStringLiteral("Building... [%1]").arg(progress));
+        });
+        // An incremental build can take minutes on the Pi; keep the UI's share of
+        // the CPU. One job per core: a bare --parallel means unlimited jobs with make.
+        QStringList args{QStringLiteral("--build"), buildDir(), QStringLiteral("--parallel"),
+                         QString::number(qMax(1, QThread::idealThreadCount()))};
+        const QString nice = QStandardPaths::findExecutable(QStringLiteral("nice"));
+        if (nice.isEmpty()) {
+            m_gitProcess->start(findCmake(), args);
+        } else {
+            args.prepend(findCmake());
+            args.prepend(QStringLiteral("10"));
+            args.prepend(QStringLiteral("-n"));
+            m_gitProcess->start(nice, args);
         }
-        m_gitProcess->start(pipPath, {QStringLiteral("install"), QStringLiteral("-r"), requirementsPath});
         break;
     }
     case 5: {
@@ -785,22 +819,22 @@ void NetworkManager::runSelfUpdateStep()
 
     if (!m_gitProcess->waitForStarted(5000)) {
         qCWarning(lcNetwork) << "Failed to start process for self-update step" << m_selfUpdateStep;
-        if (m_selfUpdateStep <= 2) {
+        if (m_selfUpdateStep <= 4) {
+            const bool building = m_selfUpdateStep >= 3;
             rollback();
-            finishSelfUpdate(QStringLiteral("error"), QStringLiteral("Failed to start git process"));
+            restoreBinary();
+            finishSelfUpdate(QStringLiteral("error"),
+                             building ? QStringLiteral("Failed to start cmake — update rolled back")
+                                      : QStringLiteral("Failed to start git process"));
         } else {
-            // Non-critical step — try to proceed
-            m_selfUpdateStep++;
-            if (m_selfUpdateStep <= 5)
-                runSelfUpdateStep();
-            else
-                finishSelfUpdate(QStringLiteral("restart-required"),
-                                 QStringLiteral("Update applied (some steps skipped)"));
+            // Only the commit summary is left; the update itself is done
+            finishSelfUpdate(QStringLiteral("restart-required"),
+                             QStringLiteral("Update applied — restart to run it"));
         }
     }
 }
 
-void NetworkManager::onSelfUpdateStepFinished(int exitCode, QProcess::ExitStatus /*exitStatus*/)
+void NetworkManager::onSelfUpdateStepFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     if (!m_gitProcess)
         return;
@@ -838,39 +872,29 @@ void NetworkManager::onSelfUpdateStepFinished(int exitCode, QProcess::ExitStatus
         runSelfUpdateStep();
         break;
     }
-    case 3: {
-        // py_compile finished
-        if (exitCode != 0) {
-            qCWarning(lcNetwork) << "Pre-flight check failed:" << errorOutput;
-            // Roll back — new code has syntax errors
-            setProgress(QStringLiteral("New code has errors, rolling back..."));
+    case 3:
+    case 4: {
+        // cmake configure / build finished
+        if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+            const QString log = m_selfUpdateStep == 4 ? m_buildTail + output : output;
+            qCWarning(lcNetwork).noquote() << (m_selfUpdateStep == 3 ? "Configure" : "Build")
+                                           << "failed, rolling back. Output tail:\n" << log.right(4096);
+            setProgress(QStringLiteral("Build failed, rolling back..."));
             rollback();
+            restoreBinary();
+            QString reason = firstErrorLine(log);
             finishSelfUpdate(QStringLiteral("error"),
-                             QStringLiteral("Update rolled back — new code failed syntax check"));
+                             QStringLiteral("Build failed — update rolled back to %1%2")
+                                 .arg(m_oldCommit.left(7),
+                                      reason.isEmpty() ? QString() : QStringLiteral("\n") + reason));
             return;
         }
-        m_selfUpdateStep = 4;
-        runSelfUpdateStep();
-        break;
-    }
-    case 4: {
-        // pip install finished
-        QString depWarning;
-        if (exitCode != 0) {
-            // Log but don't block — the code update already succeeded
-            qCWarning(lcNetwork) << "Dependency install had issues:" << errorOutput;
-            depWarning = errorOutput.left(120);
-        } else {
-            qCInfo(lcNetwork) << "Dependencies installed successfully";
+        if (m_selfUpdateStep == 4) {
+            qCInfo(lcNetwork) << "Build finished";
+            QFile::remove(m_binaryBackup);
+            m_binaryBackup.clear();
         }
-        // Store dep warning for final message
-        m_selfUpdateStep = 5;
-        // Stash warning in progress message temporarily
-        if (!depWarning.isEmpty()) {
-            QMutexLocker locker(&m_progressLock);
-            // We'll check for this in step 5 completion
-            m_progressMessage = QStringLiteral("dep_warning:") + depWarning;
-        }
+        ++m_selfUpdateStep;
         runSelfUpdateStep();
         break;
     }
@@ -879,24 +903,61 @@ void NetworkManager::onSelfUpdateStepFinished(int exitCode, QProcess::ExitStatus
         QString newInfo = (exitCode == 0) ? output : QString();
 
         qCInfo(lcNetwork) << "Self-update applied successfully:" << newInfo;
-        QString msg = QStringLiteral("Update applied. Now on: %1").arg(newInfo);
-
-        // Check for dep warning stashed in progress
-        {
-            QMutexLocker locker(&m_progressLock);
-            if (m_progressMessage.startsWith(QLatin1String("dep_warning:"))) {
-                msg += QStringLiteral("\n(Some dependencies may need manual install)");
-                m_progressMessage.clear();
-            }
-        }
-
-        finishSelfUpdate(QStringLiteral("restart-required"), msg);
+        finishSelfUpdate(QStringLiteral("restart-required"),
+                         QStringLiteral("Update applied. Now on: %1").arg(newInfo));
         break;
     }
     default:
         finishSelfUpdate(QStringLiteral("error"), QStringLiteral("Internal error: invalid step"));
         break;
     }
+}
+
+void NetworkManager::backUpBinary()
+{
+    // A failed link can leave build/octave missing or truncated, and then the
+    // launcher has nothing to restart. Keep a copy until the build succeeds.
+    // (A successful link writes a new inode, so the running process keeps its
+    // own mapping of the old file either way.)
+    const QString bin = QCoreApplication::applicationFilePath();
+    m_binaryBackup = bin + QStringLiteral(".pre-update");
+    m_binaryMtime = QFileInfo(bin).lastModified();
+    QFile::remove(m_binaryBackup);
+    if (!QFile::copy(bin, m_binaryBackup)) {
+        qCWarning(lcNetwork) << "Could not back up" << bin << "before building";
+        m_binaryBackup.clear();
+    }
+}
+
+void NetworkManager::restoreBinary()
+{
+    if (m_binaryBackup.isEmpty())
+        return;
+    const QString bin = QCoreApplication::applicationFilePath();
+    const QFileInfo fi(bin);
+    // Untouched (the build failed before linking): just drop the copy
+    if (fi.exists() && fi.lastModified() == m_binaryMtime) {
+        QFile::remove(m_binaryBackup);
+    } else {
+        QFile::remove(bin);
+        if (QFile::rename(m_binaryBackup, bin))
+            qCInfo(lcNetwork) << "Restored the previous binary";
+        else
+            qCWarning(lcNetwork) << "Could not restore the previous binary from" << m_binaryBackup;
+    }
+    m_binaryBackup.clear();
+}
+
+QString NetworkManager::firstErrorLine(const QString &log)
+{
+    static const QRegularExpression errorRe(QStringLiteral(R"((^|\s)(fatal )?error:|Error \d+|CMake Error)"),
+                                            QRegularExpression::CaseInsensitiveOption);
+    const QStringList lines = log.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        if (errorRe.match(line).hasMatch())
+            return line.trimmed().left(200);
+    }
+    return {};
 }
 
 void NetworkManager::rollback()
@@ -960,6 +1021,30 @@ QString NetworkManager::repoDir() const
     // (assuming the binary lives in a build/ or bin/ subdirectory).
     // This mirrors the Python approach of going up from backend/ to the repo root.
     return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral(".."));
+}
+
+QString NetworkManager::buildDir() const
+{
+    // The binary runs from its CMake build directory (build/octave)
+    return QCoreApplication::applicationDirPath();
+}
+
+QString NetworkManager::findCmake() const
+{
+    // Prefer the cmake that configured this build dir; the launcher's PATH can be thin
+    QFile cache(QDir(buildDir()).filePath(QStringLiteral("CMakeCache.txt")));
+    if (cache.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        while (!cache.atEnd()) {
+            const QString line = QString::fromUtf8(cache.readLine()).trimmed();
+            if (line.startsWith(QLatin1String("CMAKE_COMMAND:"))) {
+                const QString path = line.section(QLatin1Char('='), 1);
+                if (QFileInfo(path).isExecutable())
+                    return path;
+                break;
+            }
+        }
+    }
+    return QStandardPaths::findExecutable(QStringLiteral("cmake"));
 }
 
 QString NetworkManager::runGitSync(const QStringList &args, bool *ok, int timeoutMs) const
@@ -1037,6 +1122,18 @@ bool NetworkManager::checkCanSelfUpdate()
     if (!QFileInfo::exists(gitDir))
         return false;
 
+    // The update rebuilds the binary in place, so it needs the CMake build dir
+    // it was built in and a cmake to drive it. Without them it would update the
+    // source and keep running the old binary.
+    if (!QFileInfo::exists(QDir(buildDir()).filePath(QStringLiteral("CMakeCache.txt")))) {
+        qCInfo(lcNetwork) << "Self-update unavailable: no CMakeCache.txt in" << buildDir();
+        return false;
+    }
+    if (findCmake().isEmpty()) {
+        qCInfo(lcNetwork) << "Self-update unavailable: cmake not found";
+        return false;
+    }
+
     // Check git is available
     QProcess gitCheck;
     gitCheck.start(QStringLiteral("git"), {QStringLiteral("--version")});
@@ -1044,20 +1141,4 @@ bool NetworkManager::checkCanSelfUpdate()
         return false;
 
     return gitCheck.exitCode() == 0;
-}
-
-QString NetworkManager::findVenvPip()
-{
-    // Locate the pip executable inside the project's venv
-    QString venvDir = QDir(repoDir()).filePath(QStringLiteral("venv"));
-
-#ifdef Q_OS_WIN
-    QString pipPath = QDir(venvDir).filePath(QStringLiteral("Scripts/pip.exe"));
-#else
-    QString pipPath = QDir(venvDir).filePath(QStringLiteral("bin/pip"));
-#endif
-
-    if (QFileInfo::exists(pipPath))
-        return pipPath;
-    return {};
 }

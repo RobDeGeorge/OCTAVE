@@ -1,6 +1,7 @@
 #ifndef NETWORKMANAGER_H
 #define NETWORKMANAGER_H
 
+#include <QDateTime>
 #include <QObject>
 #include <QProcess>
 #include <QString>
@@ -99,6 +100,8 @@ private:
     void startConnectivityCheck();
     void startNetworkNameCheck();
     QString repoDir() const;
+    QString buildDir() const;
+    QString findCmake() const;
     bool checkCanSelfUpdate();
     // Blocking git invocation for the short, cheap queries below. These run on the
     // GUI thread deliberately: they gate a destructive action, so their answer must
@@ -112,7 +115,10 @@ private:
     void rollback();
     void finishSelfUpdate(const QString &status, const QString &message);
     void setProgress(const QString &msg);
-    QString findVenvPip();
+    // Copy the binary aside before building, and put it back if the build fails
+    void backUpBinary();
+    void restoreBinary();
+    static QString firstErrorLine(const QString &log);
 
     // ==================== State ====================
 
@@ -135,6 +141,9 @@ private:
     bool m_autoUpdateChecked = false;
     QString m_oldCommit;
     int m_selfUpdateStep = 0;
+    QString m_buildTail;              // last 8 KB of build output, for the error report
+    QString m_binaryBackup;           // build/octave.pre-update while a build runs
+    QDateTime m_binaryMtime;
 
     // Progress relay
     QMutex m_progressLock;

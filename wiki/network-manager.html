@@ -55,7 +55,7 @@
             <code>ThreadPoolExecutor</code> with a single worker, and results are polled back on the main thread by a
             250&nbsp;ms <code>QTimer</code> so Qt signals are only ever emitted from the GUI thread. The C++ backend has no
             worker thread: it uses asynchronous <code>QProcess</code> and <code>QNetworkAccessManager</code> whose
-            completion slots already run on the main thread. Both backends still perform synchronous startup git checks, click-time dirty-tree checks and restart syntax checks. C++ also waits for processes to start and runs short git queries
+            completion slots already run on the main thread. Both backends still perform synchronous startup git checks and click-time dirty-tree checks; Python also runs its restart syntax check synchronously. C++ also waits for processes to start and runs short git queries
             (<code>runGitSync()</code>: <code>status --porcelain</code>, <code>cat-file</code>, <code>merge-base</code>,
             <code>rev-list</code>) and the rollback <code>reset --hard</code> -- the header comment says they run on the
             GUI thread "deliberately: they gate a destructive action, so their answer must be current at the moment of the
@@ -92,7 +92,7 @@ NetworkManager (src/managers/networkmanager.cpp)
   |
   |-- QNetworkAccessManager m_nam     generate_204 probe, GitHub API (async replies)
   |-- QProcess m_networkNameProcess   nmcli / networksetup / netsh (async)
-  |-- QProcess m_gitProcess           self-update step machine (async, one step at a time)
+  |-- QProcess m_gitProcess           self-update steps: fetch / reset / cmake configure / build / log
   |-- runGitSync()                    short blocking git queries that gate the reset
   |
   |-- QTimer m_pollTimer              kPollOnlineMs 30000 / kPollOfflineMs 120000
@@ -247,8 +247,16 @@ NetworkManager (src/managers/networkmanager.cpp)
               <strong>Emit result</strong> -- <code>updateStatus</code> becomes <code>"up-to-date"</code>,
               <code>"ahead"</code>, <code>"diverged"</code> or <code>"update-available"</code> with a matching
               <code>updateMessage</code>; <code>remoteCommit</code>, <code>remoteCommitMsg</code> and
-              <code>workingTreeDirty</code> are refreshed. Both backends log
-              <code>local=… remote=… relation=… dirty=… status=…</code> at info level.
+              <code>workingTreeDirty</code> are refreshed. When an update is available but the tree is dirty, the
+              message gains " — uncommitted changes block updating". Both backends log
+              <code>local=… remote=… relation=… dirty=… status=…</code> at info level (C++ adds <code>built=…</code>).
+            </li>
+            <li>
+              <strong>Stale binary (C++)</strong> -- the C++ backend also compares <code>HEAD</code> with the commit baked
+              into the running binary (<code>OCTAVE_GIT_COMMIT</code> in the generated <span class="file-path">buildinfo.h</span>).
+              If the checkout matches origin/main but the binary was built from another commit, the status is
+              <code>"update-available"</code> with "Source is at &lt;head&gt; but this build is &lt;built&gt; — update to
+              rebuild", so the Update button finishes the job by rebuilding.
             </li>
           </ol>
 
@@ -321,7 +329,9 @@ NetworkManager (src/managers/networkmanager.cpp)
             <div class="info-box-title">Availability</div>
             Self-update is only available when running from a git checkout. <code>canSelfUpdate</code> is probed 2&nbsp;s
             after startup: Python requires <code>git --version</code> to succeed and the interpreter not to be frozen
-            (<code>sys.frozen</code>); C++ additionally requires a <code>.git</code> path in <code>repoDir()</code> and
+            (<code>sys.frozen</code>); C++ additionally requires a <code>.git</code> path in <code>repoDir()</code>, a
+            <span class="file-path">CMakeCache.txt</span> in the binary's directory (the build dir it rebuilds) and a
+            <code>cmake</code> (the cache's <code>CMAKE_COMMAND</code>, else <code>PATH</code>), and
             returns <code>false</code> unconditionally on Android. Packaged builds therefore report <code>false</code> and
             the About page shows its "not available" card instead.
           </div>
@@ -339,8 +349,8 @@ NetworkManager (src/managers/networkmanager.cpp)
             </ul>
             If git itself cannot be queried, the tree is assumed dirty. The ahead/diverged check uses the cached
             <code>updateStatus</code>; ancestry is not rechecked after fetch or immediately before reset. These checks therefore
-            do not guarantee preservation of commits or edits made after the checks. The About page additionally hides the update button while
-            <code>workingTreeDirty</code> is true and shows a "commit or stash first" warning instead.
+            do not guarantee preservation of commits or edits made after the checks. The About page additionally hides the update
+            and "Retry Update" buttons while <code>workingTreeDirty</code> is true and shows a "commit or stash first" warning instead.
           </div>
 
           <h3>Pre-Conditions</h3>
@@ -360,7 +370,8 @@ NetworkManager (src/managers/networkmanager.cpp)
 
           <h3>Update Pipeline</h3>
           <p>
-            Python runs <code>_do_self_update_sync()</code> as one worker job. C++ implements the same sequence as a
+            The first three steps are shared. After that the backends differ, because Python runs from source while C++
+            must rebuild its binary. Python runs <code>_do_self_update_sync()</code> as one worker job. C++ implements its sequence as a
             <strong>step machine</strong> (<code>runSelfUpdateStep()</code> / <code>onSelfUpdateStepFinished()</code>): each
             step starts one <code>QProcess</code> and the <code>finished</code> slot starts the next. A double-tap guard
             (<code>_updating</code> / <code>m_updating</code>) prevents concurrent update attempts.
@@ -380,19 +391,34 @@ NetworkManager (src/managers/networkmanager.cpp)
               "Applying update...". Failure ends with "Apply failed: &lt;stderr&gt;".
             </li>
             <li>
-              <strong>Pre-flight verification</strong> -- if <span class="file-path">main.py</span> exists, compile it with
+              <strong>Pre-flight verification (Python)</strong> -- if <span class="file-path">main.py</span> exists, compile it with
               <code>py_compile</code> (Python uses <code>sys.executable</code>, C++ runs <code>python3</code>; 15&nbsp;s timeout in
               Python). Progress "Verifying new code...". If the new code fails to parse the update is
               <strong>rolled back</strong> to the saved commit and ends with "Update rolled back — new code failed syntax
-              check". C++ skips the step when there is no <span class="file-path">main.py</span>.
+              check".
             </li>
             <li>
-              <strong>Install dependencies</strong> -- locate the venv pip (<span class="file-path">venv/bin/pip</span> or
+              <strong>Install dependencies (Python)</strong> -- locate the venv pip (<span class="file-path">venv/bin/pip</span> or
               <span class="file-path">venv/Scripts/pip.exe</span>) and run <code>pip install -r requirements.txt</code>
               (Python timeout 600&nbsp;s). Progress "Installing dependencies...". Failures are logged. When captured stderr is non-empty, the final message adds
               "(Some dependencies may need manual install)", but
               they do not roll back -- the code update already succeeded. A missing pip or
               <span class="file-path">requirements.txt</span> skips the step with a warning.
+            </li>
+            <li>
+              <strong>Configure (C++)</strong> -- <code>cmake -S &lt;repo&gt; -B &lt;build dir&gt;</code> against the existing
+              cache, so the baked commit hash matches the new <code>HEAD</code>. Progress "Configuring build...".
+            </li>
+            <li>
+              <strong>Build (C++)</strong> -- <code>nice -n 10 cmake --build &lt;build dir&gt; --parallel &lt;cores&gt;</code>
+              (no timeout; an incremental build can take minutes on a Pi). Progress "Building... [45%]" (Makefiles) or
+              "Building... [123/456]" (Ninja), parsed from the build output. The binary is copied to
+              <span class="file-path">octave.pre-update</span> first. On a failed configure or build the source is
+              <strong>rolled back</strong>, the copy replaces the binary if the build touched it, and the update ends
+              with "Build failed — update rolled back to &lt;hash&gt;" plus the first error line. The linker writes the new
+              binary as a new inode, so the running process is unaffected; the commit hash lives in a generated header
+              included only by <code>SettingsManager</code> and <code>NetworkManager</code>, so a new commit does not
+              rebuild every source file.
             </li>
             <li>
               <strong>Confirm</strong> -- <code>git log -1 --format=%h %s</code> produces the final message
@@ -402,18 +428,14 @@ NetworkManager (src/managers/networkmanager.cpp)
             </li>
           </ol>
 
-          <p><strong>C++ source builds need a separate rebuild.</strong> This pipeline updates checkout files and Python
-            dependencies; it does not run CMake or replace the C++ executable. Restarting alone continues to run the existing
-            binary. Build the updated C++ source before expecting backend changes to take effect.</p>
-
           <h3>Rollback Mechanism</h3>
           <p>
             Rollback is <code>git reset --hard &lt;old_commit&gt;</code> (30&nbsp;s timeout) and is a no-op when step 1 failed to
             record a hash. Python rolls back on the syntax-check failure, on any <code>subprocess.TimeoutExpired</code>
             ("Update timed out and was rolled back") and on any other exception ("Update failed and was rolled back: ...");
             a failed fetch or reset returns its error without a rollback call. C++ calls <code>rollback()</code> on fetch,
-            reset and syntax-check failures, and on a git process that fails to start during steps 1-2; later steps that
-            fail to start are skipped ("Update applied (some steps skipped)").
+            reset, configure and build failures, and when git or cmake fails to start; configure and build failures
+            also restore the previous binary.
           </p>
           <pre><code><span class="kw">if</span> old_commit:
     subprocess.run(
@@ -429,7 +451,8 @@ NetworkManager (src/managers/networkmanager.cpp)
             thread picks the message up and emits <code>selfUpdateMessageChanged</code>. In Python the timer is started by
             <code>_submit_work()</code>; in C++ <code>applySelfUpdate()</code> starts the same <code>m_resultPollTimer</code>
             before setting the initial "Fetching latest changes...", so every step's message ("Applying update...",
-            "Verifying new code...", "Installing dependencies...") reaches the About page on both backends.
+            then "Verifying new code..." / "Installing dependencies..." in Python or "Configuring build..." /
+            "Building... [n%]" in C++) reaches the About page on both backends.
           </p>
 
           <h3>Self-Update Status Values</h3>
@@ -443,11 +466,11 @@ NetworkManager (src/managers/networkmanager.cpp)
         <section id="app-restart">
           <h2>Application Restart</h2>
           <p>
-            After a successful self-update the About page offers <code>restartApp()</code>. Both backends first run a
-            pre-flight <code>py_compile</code> of <span class="file-path">main.py</span> (Python always; C++ only when the file
-            exists in the repo root, using <code>python3</code>) and abort with <code>selfUpdateStatus = "error"</code> /
-            "Restart aborted — code has errors" if the check completes with a non-zero exit code. A timeout or inability to run
-            the check does not block restart. The restart itself is platform-dependent:
+            After a successful self-update the About page offers <code>restartApp()</code>. Python first runs a
+            pre-flight <code>py_compile</code> of <span class="file-path">main.py</span> and aborts with
+            <code>selfUpdateStatus = "error"</code> / "Restart aborted — code has errors" if the check completes with a
+            non-zero exit code; a timeout or inability to run the check does not block restart. C++ instead checks that its
+            binary still exists and is executable ("Restart aborted — the OCTAVE binary is missing"). The restart itself is platform-dependent:
           </p>
           <ul>
             <li><strong>Python, Windows:</strong> <code>subprocess.Popen([python, main.py, *argv])</code>, then <code>QApplication.quit()</code></li>
@@ -458,9 +481,9 @@ NetworkManager (src/managers/networkmanager.cpp)
 
           <div class="info-box danger">
             <div class="info-box-title">Restart Safety</div>
-            If the pre-flight syntax check fails, the restart is aborted and the user is notified
-            via <code>selfUpdateMessage</code>. This catches syntax errors in the entry point when the check completes; it does not validate imported modules or dependencies. (For the C++ binary the check only
-            covers the Python entry point in a mixed checkout; it cannot validate the compiled executable.)
+            If the pre-flight check fails, the restart is aborted and the user is notified
+            via <code>selfUpdateMessage</code>. In Python this catches syntax errors in the entry point when the check completes; it does not validate imported modules or dependencies.
+            In C++ the build step already proved the code compiles; the check only guards against restarting into a missing binary.
           </div>
         </section>
 

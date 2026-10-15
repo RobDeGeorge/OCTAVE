@@ -3,6 +3,8 @@
 
 #include "settingsmanager.h"
 
+#include "buildinfo.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>

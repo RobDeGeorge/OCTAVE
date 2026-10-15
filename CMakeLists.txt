@@ -186,11 +186,15 @@ if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
         "${CMAKE_SOURCE_DIR}/.git/HEAD" "${CMAKE_SOURCE_DIR}/.git/index")
 endif()
 message(STATUS "Build commit: ${OCTAVE_GIT_COMMIT} (${OCTAVE_GIT_DATE})")
+# A generated header, not compile definitions: a changed definition rebuilds
+# every source file, which made each self-update on the Pi a full rebuild.
+# configure_file only rewrites the header when the values change, so a new
+# commit recompiles just the files that include it.
+configure_file(src/util/buildinfo.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/buildinfo.h" @ONLY)
+target_include_directories(octave PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 target_compile_definitions(octave PRIVATE
     OCTAVE_VERSION="${PROJECT_VERSION}"
-    OCTAVE_GIT_COMMIT="${OCTAVE_GIT_COMMIT}"
-    OCTAVE_GIT_DATE="${OCTAVE_GIT_DATE}"
     $<$<BOOL:${OCTAVE_ENABLE_DOWNLOADS}>:OCTAVE_ENABLE_DOWNLOADS>
     $<$<BOOL:${OCTAVE_HAVE_FFMPEG}>:OCTAVE_HAVE_FFMPEG>
     # Activate existing #ifndef Q_OS_MOBILE guards on Android (and iOS later).
