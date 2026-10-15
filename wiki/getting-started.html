@@ -78,7 +78,7 @@
             <tr>
               <td><strong>Python</strong> (dev backend only)</td>
               <td>3.10+</td>
-              <td><code>pyproject.toml</code> declares <code>requires-python = "&gt;=3.10"</code> with no upper cap and <code>setup.py</code> exits below 3.10; CI tests 3.11 and the developer machines run 3.14. Not needed for release binaries or Android.</td>
+              <td><code>pyproject.toml</code> declares <code>requires-python = "&gt;=3.10"</code> with no upper cap and <code>setup.py</code> exits below 3.10; CI tests Python 3.11. Not needed for release binaries or Android.</td>
             </tr>
             <tr>
               <td><strong>C++ toolchain</strong> (source builds only)</td>
@@ -87,13 +87,13 @@
             </tr>
             <tr>
               <td><strong>Display</strong></td>
-              <td>Any resolution</td>
-              <td>Auto-scales from a 720-pixel baseline (Python: screen height / 720; C++: shorter edge / 720), clamped to 0.4&ndash;3.0.</td>
+              <td>Responsive layout</td>
+              <td>Both backends divide the shorter available screen edge by 720, clamped to 0.4&ndash;3.0; the user scale is applied on top.</td>
             </tr>
             <tr>
               <td><strong>Audio</strong></td>
-              <td>PulseAudio / ALSA / CoreAudio / DirectSound</td>
-              <td>Qt Multimedia uses the platform's native audio.</td>
+              <td>Working system audio output</td>
+              <td>Playback is provided by Qt Multimedia; available codecs and outputs depend on the installed Qt backend.</td>
             </tr>
             <tr>
               <td><strong>Network</strong></td>
@@ -106,8 +106,8 @@
         <!-- Release install -->
         <h2 id="install-release">Installing a Pre-built Release</h2>
         <p>
-          Every release on the <a href="https://github.com/RobDeGeorge/OCTAVE/releases">GitHub Releases</a>
-          page is built from the C++ tree by CI. No toolchain, no Python.
+          The current CI release workflow builds the packages on the <a href="https://github.com/RobDeGeorge/OCTAVE/releases">GitHub Releases</a>
+          page from the C++ tree. No toolchain, no Python.
         </p>
         <table>
           <thead>
@@ -116,9 +116,9 @@
           <tbody>
             <tr><td>Windows</td><td><code>OCTAVE-&lt;version&gt;-windows-x86_64.exe</code></td><td>Run the Inno Setup installer. Bundles Qt, TagLib, FFmpeg DLLs and <code>adb</code>.</td></tr>
             <tr><td>macOS</td><td><code>OCTAVE-&lt;version&gt;-macos.dmg</code></td><td>Open, drag to Applications. <code>adb</code> is inside the bundle.</td></tr>
-            <tr><td>Linux x86_64</td><td><code>OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code></td><td><code>chmod +x</code> and run. Built on Ubuntu 22.04, so it runs on 22.04+ and newer distros. Arch may need <code>fuse2</code>, or use <code>--appimage-extract-and-run</code>.</td></tr>
+            <tr><td>Linux x86_64</td><td><code>OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code></td><td><code>chmod +x</code> and run. CI builds on Ubuntu 22.04; runtime compatibility also depends on the host graphics, audio, and system libraries. Arch may need <code>fuse2</code>, or use <code>--appimage-extract-and-run</code>.</td></tr>
             <tr><td>Linux aarch64 (Pi / Orange Pi)</td><td><code>OCTAVE-&lt;version&gt;-linux-aarch64.AppImage</code></td><td>Same as above. Install the distro's <code>adb</code> (<code>sudo apt install adb</code>) if you want phone mirroring &mdash; Google ships no aarch64 platform-tools.</td></tr>
-            <tr><td>Android</td><td><code>OCTAVE-&lt;version&gt;-android-arm64-v8a.apk</code></td><td>Sideload. From 0.9.4 every release is signed with the same key, so a new APK installs over the previous one and keeps your settings. Releases up to 0.9.3 each used a throwaway key, so going from 0.9.3 (or earlier) to 0.9.4 needs a one-time uninstall.</td></tr>
+            <tr><td>Android</td><td><code>OCTAVE-&lt;version&gt;-android-arm64-v8a.apk</code></td><td>Sideload. The workflow uses a persistent release key when signing secrets are available. An update must use the same key as the installed app; older releases and builds without the secrets can have different keys. Back up app data before any required uninstall.</td></tr>
           </tbody>
         </table>
 
@@ -128,7 +128,7 @@
 
         <pre><code><span class="cmt"># Clone the repository</span>
 git clone https://github.com/RobDeGeorge/OCTAVE.git
-cd octave
+cd OCTAVE
 
 <span class="cmt"># Setup and run (creates venv, installs deps, launches app)</span>
 python setup.py</code></pre>
@@ -172,7 +172,7 @@ python main.py</code></pre>
           <li>
             <strong>Installs system dependencies</strong> (Linux only, via <code>sudo</code>) &mdash; audio
             (PulseAudio/ALSA), OpenGL/EGL, the XCB platform-plugin libraries, X11, fonts, D-Bus, and on Arch/Fedora
-            the Qt 6 base + multimedia packages. Missing packages are ignored rather than fatal.
+            the Qt 6 base + multimedia packages. The script continues after a package-manager failure, so check its output if dependencies remain missing.
           </li>
           <li>
             <strong>Creates a virtual environment</strong> at <code>./venv/</code> with the built-in <code>venv</code>
@@ -260,12 +260,12 @@ sudo apt install -y python3 python3-venv python3-pip libpulse0 libasound2 \
           <li>
             <strong>Clone and run setup</strong>:
             <pre><code>git clone https://github.com/RobDeGeorge/OCTAVE.git
-cd octave
+cd OCTAVE
 python setup.py</code></pre>
           </li>
         </ol>
         <p>
-          No system dependencies are needed on Windows &mdash; the PySide6 wheel bundles Qt. The venv activation
+          The PySide6 wheel bundles Qt on Windows. Optional features can need additional tools, such as <code>adb</code> for phone mirroring. The venv activation
           command is <code>venv\Scripts\activate</code>. <code>smbus2</code> is skipped (no I²C on Windows).
         </p>
 
@@ -279,13 +279,12 @@ python setup.py</code></pre>
           <li>
             <strong>Clone and run setup</strong>:
             <pre><code>git clone https://github.com/RobDeGeorge/OCTAVE.git
-cd octave
+cd OCTAVE
 python3 setup.py</code></pre>
           </li>
         </ol>
         <p>
-          macOS needs no extra system packages for the Python backend; <code>setup.py</code> only prints a note and
-          proceeds to the venv.
+          On macOS, <code>setup.py</code> does not install system packages; it proceeds to the venv. Optional integrations can still require tools such as <code>adb</code>.
         </p>
 
         <!-- WSL -->
@@ -295,8 +294,8 @@ python3 setup.py</code></pre>
           The setup script detects WSL by checking for "microsoft" in <code>/proc/version</code>.
         </p>
         <ul>
-          <li><strong>WSLg (Windows 11)</strong> &mdash; Should work automatically. Run <code>wsl --update</code> to ensure it's current.</li>
-          <li><strong>X Server (Windows 10)</strong> &mdash; Install VcXsrv or X410, then set <code>export DISPLAY=:0</code>.</li>
+          <li><strong>WSLg (WSL 2)</strong> &mdash; Available on Windows 10 build 19044+ and Windows 11. Follow <a href="https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps">Microsoft's GUI-app setup guide</a>; use <code>wsl --update</code> and restart WSL if needed.</li>
+          <li><strong>External X server</strong> &mdash; If you use one instead of WSLg, configure <code>DISPLAY</code> for that server and the WSL network mode; <code>:0</code> is not a universal value.</li>
         </ul>
         <p>If no display is detected (<code>DISPLAY</code> and <code>WAYLAND_DISPLAY</code> both unset),
           the setup script installs dependencies but skips launching.</p>
@@ -304,8 +303,7 @@ python3 setup.py</code></pre>
         <!-- C++ build -->
         <h2 id="cpp-build">Building the C++ Backend</h2>
         <p>
-          The C++ tree is what ships. A desktop build needs CMake 3.21+, Qt 6.7.3 (the CI-pinned version; other
-          6.7.x / 6.8.x will likely work but are untested) with the Multimedia, SerialPort,
+          The C++ tree is what ships. A desktop build needs CMake 3.21+, Qt 6.7.3 (the CI-pinned version) with the Multimedia, SerialPort,
           Connectivity, Qt5Compat and ShaderTools modules, TagLib, and optionally FFmpeg (libavcodec/libavutil, for
           the built-in phone-mirror decoder) and Qt Quick 3D (for the 3D vehicle view).
         </p>
@@ -315,17 +313,23 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
 
 <span class="cmt"># Run — the binary finds frontend/ one directory up from build/</span>
-./build/octave            <span class="cmt"># Linux / macOS</span>
+./build/octave            <span class="cmt"># Linux</span>
+<span class="cmt"># macOS: stage the frontend, then run</span>
+cp -R frontend build/octave.app/Contents/MacOS/
+./build/octave.app/Contents/MacOS/octave <span class="cmt"># macOS</span>
+<span class="cmt"># Windows PowerShell: stage the frontend, then run</span>
+Copy-Item -Recurse -Force frontend build/Debug/
 ./build/Debug/octave.exe  <span class="cmt"># Windows (MSVC multi-config)</span>
 
 <span class="cmt"># App-store variant: music download feature compiled out</span>
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_ENABLE_DOWNLOADS=OFF
 cmake --build build -j</code></pre>
+        <p>For the Windows multi-config and macOS bundle layouts, stage the runtime frontend before launching. In PowerShell, run <code>Copy-Item -Recurse -Force frontend build/Debug/</code> for the Debug executable (use <code>build/Release/</code> for Release). On macOS, run <code>cp -R frontend build/octave.app/Contents/MacOS/</code>. Refresh these copies after QML or asset changes. Linux's <code>build/octave</code> finds the checkout's frontend one level up.</p>
 
         <p>
           CMake reports <code>Built-in phone mirror decoder (libavcodec): ON/OFF</code> and whether
           <code>QtQuick3D</code> was found at configure time; both are optional and the app degrades gracefully
-          without them (external scrcpy for mirroring, greyed-out "3D View" card). Per-platform package lists, the
+          without them (phone mirroring unavailable without FFmpeg, greyed-out "3D View" card without Quick3D). Per-platform package lists, the
           AppImage / DMG / Inno Setup packaging that CI runs, and the pinned tool versions are in
           <span class="file-path">BUILD.md</span> and on the <a href="building.html">Building &amp; CI/CD</a> page.
         </p>
@@ -333,8 +337,8 @@ cmake --build build -j</code></pre>
         <div class="info-box info">
           <div class="info-box-title">The C++ binary also runs the Python backend's QML</div>
           Both backends load <code>frontend/Main.qml</code> from disk at runtime rather than compiling it in, so a
-          QML change is visible on the next launch of either without a rebuild. On Android the directory is bundled
-          as <code>assets:/frontend</code>.
+          QML change is visible on the next launch when the app loads that checkout directly; refresh staged Windows/macOS frontend copies first. Android bundles
+          the directory as <code>assets:/frontend</code>, so QML changes there require a new APK.
         </div>
 
         <!-- Android -->
@@ -358,15 +362,15 @@ cmake --build build -j</code></pre>
         <ul>
           <li><strong>Linux host</strong> with roughly 40&ndash;60 GB free on the <code>$HOME</code> disk</li>
           <li><strong>Qt for Android 6.7.3</strong> (<code>android_arm64_v8a</code>) plus the matching host Qt (<code>gcc_64</code>) for <code>androiddeployqt</code></li>
-          <li><strong>OpenJDK 17</strong> &mdash; required by Android Gradle Plugin 8.x (not 11, not 21)</li>
-          <li><strong>Android SDK</strong> (platform <code>android-34</code>, Build-Tools 35.0.0) and <strong>NDK</strong> <code>26.1.10909125</code></li>
+          <li><strong>OpenJDK 17</strong> &mdash; the version used by OCTAVE's APK CI job; this checkout pins Android Gradle Plugin 7.4.1</li>
+          <li><strong>Android SDK</strong> (platform <code>android-33</code>, Build-Tools 33.0.2) and <strong>NDK</strong> <code>26.1.10909125</code></li>
         </ul>
 
         <h3>Build the APK</h3>
         <p>
           With the toolchain environment variables set (see <span class="file-path">BUILD.md</span>), configure
           with Qt's <code>qt-cmake</code> cross-compile wrapper and build the <code>apk</code> target. OpenSSL for
-          Android is wired in at build time via the KDAB <code>android_openssl</code> CMake project:
+          Android is bundled from <code>android/openssl/&lt;abi&gt;/</code> through <code>QT_ANDROID_EXTRA_LIBS</code>:
         </p>
         <pre><code>qt-cmake -S . -B build-android \
     -DCMAKE_BUILD_TYPE=Debug \
@@ -379,9 +383,9 @@ cmake --build build-android --target apk -j
 adb install build-android/android-build/build/outputs/apk/debug/android-build-debug.apk</code></pre>
         <p>
           CI builds Release with downloads left <em>on</em> (the default for sideload APKs; the youtubedl-android AAR
-          bundles Python, yt-dlp and ffmpeg) and signs with a throw-away keystore. If <code>adb install</code> reports
-          <code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>, a differently-signed build is already installed &mdash;
-          uninstall it first.
+          bundles Python, yt-dlp and ffmpeg). It uses the persistent release key when signing secrets are available,
+          otherwise a temporary key. <code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code> means the installed app uses
+          a different key. Use a build signed with the same key, or back up settings before uninstalling the old app.
         </p>
 
         <h3>Android Feature Differences</h3>
@@ -412,7 +416,7 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
             </tr>
             <tr>
               <td>Phone mirror, Android Auto</td>
-              <td>Built-in scrcpy-protocol client; Google DHU capture</td>
+              <td>Built-in scrcpy-protocol client; experimental DHU integration (see <a href="phone-mirror-android-auto.html#android-auto">limitations</a>)</td>
               <td>Not applicable (stubs)</td>
             </tr>
             <tr>
@@ -569,7 +573,7 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
           <li>
             <strong>Set your music directory</strong> &mdash; Open Settings and point the media library at a folder of
             MP3 / M4A / FLAC / OGG / Opus / WAV files. OCTAVE scans it, extracts album art and caches tags in
-            <code>metadata_cache.json</code> so later launches are instant.
+            <code>metadata_cache.json</code> to reduce repeated metadata work on later launches.
           </li>
           <li>
             <strong>Connect OBD-II</strong> (optional) &mdash; Plug in an ELM327 adapter (USB, or pair a Bluetooth one
@@ -581,7 +585,7 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
             follows the vehicle's attitude (use ZERO on level ground).
           </li>
           <li>
-            <strong>Explore Settings</strong> &mdash; OCTAVE has 100+ configurable settings across display, media, OBD,
+            <strong>Explore Settings</strong> &mdash; OCTAVE provides settings across display, media, OBD,
             accessories and device, all persisted to <code>settingsConfigure.json</code>. Settings &gt; Device &gt;
             Diagnostics shows the running backend, its version, and lets you export the logs.
           </li>

@@ -50,7 +50,7 @@
           gauge primitives on a grid. Five presets ship in <span class="file-path">frontend/dashboards/presets/</span>;
           users build their own in an in-app editor, or drop a JSON file into the user dashboards directory.
           <code>DashboardManager</code> (C++ <span class="file-path">src/managers/dashboardmanager.{h,cpp}</span>, Python
-          <span class="file-path">backend/dashboard_manager.py</span>, full parity) enumerates both sources, watches the
+          <span class="file-path">backend/dashboard_manager.py</span>, shared QML API) enumerates both sources, watches the
           user directory, and exposes save / delete / duplicate plus export / import for sharing.
           <span class="file-path">frontend/dashboards/DashboardRenderer.qml</span>
           turns a spec into live widgets; the chooser popup shows every dashboard as a scaled live miniature; the selection
@@ -73,7 +73,7 @@
         <h2 id="files">Files at a Glance</h2>
         <pre class="diagram">
 frontend/
-  OBDParameterModel.qml          singleton: allParameters (92 ids + kinds), paramValues, simulation, vehicle gate
+  OBDParameterModel.qml          singleton: allParameters (129 ids + kinds), paramValues, simulation, vehicle gate
   OBDMenu.qml                    Parameter Cards (vehicle PIDs), DashboardRenderer host, swipe, chooser (Import/Share), gallery
   qmldir                         registers OBDParameterModel and WidgetCatalog as singletons
   gauges/
@@ -112,7 +112,7 @@ tests/test_vehicle_gate_qml.py          headless QML gate test with a fake obdMa
         <h2 id="parameter-model">Data Flow: OBDParameterModel</h2>
         <pre class="diagram">
 obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues[id] -->  gauge bindings
-  (either backend)        (92 handlers)         _pendingValues                             _normalized
+  (either backend)        (dedicated + generic handlers)         _pendingValues                             _normalized
                                                 33 ms flush timer                         _animNorm (Behavior)
         </pre>
         <p>
@@ -122,9 +122,9 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
         <table>
           <thead><tr><th>Member</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>allParameters</code></td><td>Array of <code>{ id, title, unit, min, max, kind }</code>: <strong>92</strong> entries -- 84 OBD ids (the 18 default-enabled including <code>IGNITION_TIMING</code>, plus 66 extended) and 8 BerryIMU ids. <code>docs/GAUGE_AUTHORING.md</code> and several QML comments say 93; the array has 92.</td></tr>
+            <tr><td><code>allParameters</code></td><td>Array of <code>{ id, title, unit, min, max, kind }</code>: <strong>129</strong> entries: 121 OBD entries (including the <code>IGNITION_TIMING</code> alias and adapter voltage) and 8 BerryIMU readings. Of the OBD entries, 37 newer values arrive through <code>obdParameterChanged(paramId, value)</code>.</td></tr>
             <tr><td><code>kind</code></td><td>One of <code>percentage</code> (0-100 %), <code>temperature</code> (°C), <code>voltage</code>, <code>pressure</code> (kPa/Pa), <code>bidirectional</code> (signed, straddles zero: trims, timing, EGR error, WR currents, pitch/roll/G), <code>numeric</code> (everything else). Widgets declare which kinds they accept; the PID picker filters on it.</td></tr>
-            <tr><td><code>originalParameters</code>, <code>isOriginalParameter(id)</code></td><td>The 18 default-enabled ids.</td></tr>
+            <tr><td><code>originalParameters</code>, <code>isOriginalParameter(id)</code></td><td>The historical group of 18 ids, also used as the settings list fallback before a supported-PID list is available.</td></tr>
             <tr><td><code>shortTitles</code>, <code>parameterInfo</code>, <code>getParamInfo(id)</code></td><td>Compact metadata (<code>SPD</code>, <code>CLT</code>, <code>AFR</code>...) keyed by id for the home cards; <code>getParamInfo</code> returns a permissive fallback for unknown ids.</td></tr>
             <tr><td><code>hasParameter(id)</code></td><td>Strict membership test, added for renderer/editor validation precisely because <code>getParamInfo</code> never fails.</td></tr>
             <tr><td><code>paramValues</code>, <code>getParamValue(id)</code></td><td>Live values. A plain object that is <em>replaced</em> (never mutated) so bindings re-evaluate; missing ids read as 0.</td></tr>
@@ -134,7 +134,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>vehicleKnown</code>, <code>vehicleSupportedParameters</code></td><td>Mirrors of <code>obdManager.vehicleScanComplete</code> / <code>vehicleSupportedParameters</code>: this session's supported-PID scan, cleared on disconnect, never loaded from the saved list. Guarded with <code>typeof obdManager</code>.</td></tr>
             <tr><td><code>isSupported(id)</code></td><td>True for sensor ids, and for OBD ids the scanned vehicle reported. False otherwise, including when no vehicle is known (callers wanting "anything goes offline", like the PID picker, check <code>vehicleKnown</code> first).</td></tr>
             <tr><td><code>vehicleParameters</code></td><td>The supported OBD entries of <code>allParameters</code>, in <code>allParameters</code> order; empty until a vehicle has been scanned. Feeds Parameter Cards.</td></tr>
-            <tr><td><code>_obdConnections</code>, <code>_imuConnections</code></td><td>Two <code>Connections</code> blocks, one handler per signal. The IMU one is guarded with <code>typeof berryIMU !== "undefined"</code> and <code>ignoreUnknownSignals</code> so stripped builds still load.</td></tr>
+            <tr><td><code>_obdConnections</code>, <code>_imuConnections</code></td><td>Two <code>Connections</code> blocks, dedicated handlers plus the generic <code>onObdParameterChanged(paramId, value)</code> handler. The IMU one is guarded with <code>typeof berryIMU !== "undefined"</code> and <code>ignoreUnknownSignals</code> so stripped builds still load.</td></tr>
           </tbody>
         </table>
         <p>The eight sensor parameters (fed by <code>berryIMU</code>, not <code>obdManager</code>):</p>
@@ -151,11 +151,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>BARO_TEMP</code></td><td>Cabin Baro Temp</td><td>°C</td><td>-20</td><td>60</td><td>temperature</td></tr>
           </tbody>
         </table>
-        <p>
-          The full 84-id OBD list with units and ranges is in <span class="file-path">docs/GAUGE_AUTHORING.md</span> §6 and,
-          authoritatively, in the QML file. Note the C++ backend can only feed 61 of the 84 OBD ids (see
-          <a href="obd-manager.html#supported-parameters">OBD Manager</a>); the rest simply stay at 0 on C++.
-        </p>
+        <p>The full OBD metadata list is in <span class="file-path">docs/GAUGE_AUTHORING.md</span> &sect;6 and <span class="file-path">frontend/OBDParameterModel.qml</span>. A model entry describes a displayable value; availability depends on the vehicle, adapter and decoding path. See <a href="obd-manager.html">OBD Manager</a> for backend polling and supported-PID behavior.</p>
 
         <h2 id="vehicle-gate">Vehicle Gate and Polling Demand</h2>
         <p>
@@ -183,6 +179,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>"dashboard"</code></td><td><code>OBDMenu</code> while it is the active StackView page and a dashboard is showing</td><td><code>DashboardRenderer.paramIds</code> (distinct ids in the spec)</td></tr>
             <tr><td><code>"cards"</code></td><td><code>OBDMenu</code> while Parameter Cards is showing</td><td>every id in <code>vehicleParameters</code></td></tr>
             <tr><td><code>"editor"</code></td><td><code>DashboardEditor</code> for its lifetime</td><td>the canvas cells' ids (live preview while editing)</td></tr>
+            <tr><td><code>"carMenu"</code></td><td>CarMenu while visible</td><td><code>RPM</code> and <code>SPEED</code> for the rig animation</td></tr>
             <tr><td><code>"home"</code></td><td><code>HomeOBDView</code> while visible</td><td>the Home tiles' ids</td></tr>
             <tr><td><code>"settings"</code></td><td><code>OBDSettingsPage</code> while its list is visible</td><td>its visible parameters</td></tr>
           </tbody>
@@ -219,8 +216,8 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>title</code>, <code>unit</code></td><td>string</td><td>from paramId</td><td>Override the label / suffix (a preset can set <code>"title"</code> in <code>props</code>).</td></tr>
             <tr><td><code>min</code>, <code>max</code></td><td>real</td><td>from paramId (0 / 100 when unbound)</td><td>Range used for normalisation. Presets override them freely (the TJ preset rescales RPM to 0-6000, coolant to 60-115). <code>DigitalReadout</code> has no min/max.</td></tr>
             <tr><td><code>value</code></td><td>real</td><td>live</td><td>Override for previews (the Primitives Gallery does this).</td></tr>
-            <tr><td><code>decimals</code></td><td>int</td><td>0</td><td>Digits after the point in the readout.</td></tr>
-            <tr><td><code>labelColor</code>, <code>valueColor</code></td><td>color</td><td><code>App.Style.obdLabelColor</code>, <code>App.Style.obdValueColor</code></td><td>Theme tokens; all other colours also come from <code>App.Style</code> (<code>obdBarColor</code>, <code>obdBoxBackground</code>, <code>statusDanger</code>, <code>accent</code>).</td></tr>
+            <tr><td><code>decimals</code></td><td>int</td><td>0</td><td>Digits after the point in numeric readouts; WarningLight has no decimals property.</td></tr>
+            <tr><td><code>labelColor</code>, <code>valueColor</code></td><td>color</td><td><code>App.Style.obdLabelColor</code>, <code>App.Style.obdValueColor</code></td><td>Numeric readout colors; WarningLight has its own label colors. Other default colors come from <code>App.Style</code> (<code>obdBarColor</code>, <code>obdBoxBackground</code>, <code>statusDanger</code>, <code>accent</code>).</td></tr>
             <tr><td><code>octaveSupportedKinds</code></td><td>var (readonly)</td><td>per widget</td><td>Kinds the widget accepts, <code>["*"]</code> = any, <code>[]</code> = self-binding. Must mirror <code>WidgetCatalog.supportedKinds</code>.</td></tr>
             <tr><td><code>octaveEditableProps</code></td><td>var (readonly)</td><td>per widget</td><td>Manifest of editable props declared in the gauge itself. <strong>Not read by the current editor</strong> -- the properties panel uses the curated <code>editableProps</code> list in <code>WidgetCatalog</code> instead (see <a href="#widget-catalog">WidgetCatalog</a>).</td></tr>
           </tbody>
@@ -353,8 +350,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
         <h3>WarningLight</h3>
         <p>
           Round tell-tale. <code>["*"]</code>. Lit when <code>value &gt;= triggerAbove</code> or <code>value &lt;= triggerBelow</code>
-          (either or both may be set; NaN disables). Colour and border animate over 160 ms; the optional pulse is a 1 Hz
-          opacity loop (1.0 -&gt; 0.45 -&gt; 1.0) that only runs while lit.
+          (either or both may be set; NaN disables). Colour and border animate over 160 ms; the optional pulse is an opacity loop (1.0 -&gt; 0.45 -&gt; 1.0) that only runs while lit, pulsing is enabled and the widget is visible.
         </p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
@@ -426,7 +422,7 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
       <span class="prop">"paramId"</span>: <span class="str">"RPM"</span>,             <span class="cmt">// an OBDParameterModel id; omit or "" for self-binding widgets</span>
       <span class="prop">"col"</span>: <span class="num">6</span>, <span class="prop">"row"</span>: <span class="num">0</span>,             <span class="cmt">// 0-based grid position, default 0/0</span>
       <span class="prop">"colSpan"</span>: <span class="num">6</span>, <span class="prop">"rowSpan"</span>: <span class="num">7</span>,     <span class="cmt">// default 1/1</span>
-      <span class="prop">"props"</span>: { <span class="prop">"showNeedle"</span>: <span class="kw">true</span>, <span class="prop">"redlineStart"</span>: <span class="num">6500</span>,   <span class="cmt">// any QML property of the widget</span>
+      <span class="prop">"props"</span>: { <span class="prop">"showNeedle"</span>: <span class="kw">true</span>, <span class="prop">"redlineStart"</span>: <span class="num">5500</span>,   <span class="cmt">// any QML property of the widget</span>
                  <span class="prop">"title"</span>: <span class="str">"Revs"</span>, <span class="prop">"max"</span>: <span class="num">6000</span>,          <span class="cmt">// per-widget overrides (Label &amp; Range)</span>
                  <span class="prop">"fillColor"</span>: <span class="str">"#2ECC71"</span>, <span class="prop">"needleColor"</span>: <span class="str">"#2ECC71"</span> }  <span class="cmt">// Color row</span>
     }
@@ -471,7 +467,7 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
           demand.
         </p>
         <table>
-          <thead><tr><th>Member</th><th>Kind</th><th>Behaviour (identical in both backends)</th></tr></thead>
+          <thead><tr><th>Member</th><th>Kind</th><th>Shared behavior</th></tr></thead>
           <tbody>
             <tr><td><code>dashboards</code></td><td>Property (list), notify <code>dashboardsChanged</code></td><td>Headers <code>{ id, label, builtIn, path }</code>: presets first in file-name order, then user files in file-name order.</td></tr>
             <tr><td><code>loadDashboard(id)</code></td><td>Invokable -&gt; map</td><td>Full parsed spec, or an empty map for an unknown id / unreadable file (logged).</td></tr>
@@ -490,13 +486,13 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
         </table>
         <ul>
           <li><strong>Scanning</strong>: every <code>*.json</code> is fully parsed (there is no lightweight header read; <code>readHeader</code> calls <code>readFullSpec</code>). Non-object roots, parse errors, missing ids, duplicate preset ids and user ids colliding with a built-in are logged (<code>octave.dashboards</code> category / module logger) and skipped.</li>
-          <li><strong>Atomic writes</strong>: pretty-printed JSON is written through <code>QSaveFile</code> in C++ (temp file, fsync, rename over the target); Python writes a <code>.dashboard_tmp_*.json</code> temp file in the same directory and <code>os.replace</code>s it. Overwriting an existing dashboard is atomic in both, so a power cut leaves the old spec or the new one.</li>
+          <li><strong>Atomic writes</strong>: pretty-printed JSON is written through <code>QSaveFile</code> in C++ (temporary file committed over the target); Python writes a <code>.dashboard_tmp_*.json</code> temp file in the same directory and <code>os.replace</code>s it. Both replace the destination after writing a temporary file. This prevents readers from seeing a partially written JSON file; it is not a guarantee against every power-loss failure.</li>
           <li><strong>Id generation</strong>: <code>slugify</code> lowercases, replaces runs of <code>[^a-z0-9]</code> with <code>-</code>, trims dashes, and falls back to <code>"dashboard"</code>; <code>uniqueUserIdFromLabel</code> appends <code>-2</code>, <code>-3</code>, ... up to 999 (then a millisecond timestamp). The editor reimplements the same rule in QML so it can pick an id before calling save.</li>
           <li><strong>Hot reload</strong> (<code>c754f3d</code>): a <code>QFileSystemWatcher</code> on the user dir, a 300 ms single-shot debounce, and a signature <code>name:mtime:size|...</code> of the JSON files. A directory event only triggers a rescan when the signature differs from the one recorded at the last scan -- the manager's own saves already rescanned, so they do not double-fire. If the directory was recreated the watch is re-armed.</li>
         </ul>
         <div class="info-box info">
           <div class="info-box-title">Differences between the two implementations</div>
-          There are none in behaviour. The C++ side uses <code>QJsonDocument</code>, <code>QTemporaryFile</code>, and
+          The implementations expose the same QML API and JSON format. The C++ side uses <code>QJsonDocument</code>, <code>QTemporaryFile</code>, and
           <code>QFileInfo::lastModified().toSecsSinceEpoch()</code>; Python uses <code>json</code>, <code>tempfile.mkstemp</code>
           and <code>int(st.st_mtime)</code>. Both return the user file's absolute path in the header, and both emit
           <code>dashboardsChanged</code> synchronously at the end of every rescan -- which is why the chooser's delete
@@ -614,7 +610,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <li><strong>Chooser popup</strong> (square Dashboards button top-right, <code>openDashboardChooser()</code> / <code>closeDashboardChooser()</code> are also callable from the command server): a modal <code>Popup</code> up to 960 dp wide with a 2-column grid of cards. Each card renders a live miniature -- a second <code>DashboardRenderer</code> laid out at the page's full size and scaled down with <code>transformOrigin: Item.Center</code>. The miniature Loaders activate at <code>aboutToShow</code> (<code>preloadMinis</code>) so instantiation overlaps the popup's enter animation, and the stage fades in 180 ms after the spec lands so the gauges' 140 ms zero-to-value animation is never visible. The "grid" card uses a schematic 3 × 3 placeholder instead.</li>
           <li><strong>Card actions</strong>: always-visible buttons, no long-press ("discoverability-hostile in a glance-and-go in-car UI"). <strong>Copy</strong> on every JSON dashboard (calls <code>duplicateDashboard(id, "")</code>), <strong>Share</strong> on every JSON dashboard (see <a href="#sharing">Sharing</a>), <strong>Edit</strong> and <strong>Delete</strong> only when <code>builtIn === false</code>; Delete is two-tap ("Delete" -&gt; "Sure?" with a 3 s timer). The grid sentinel has no actions.</li>
           <li><strong>+ New</strong> pushes <code>dashboards/editor/DashboardEditor.qml</code> onto the page's <code>StackView</code> with <code>{ stackView, callerPage }</code>; <strong>Edit</strong> adds <code>editingId</code>. <strong>▲ Draft</strong> appears when the <code>dashboardEditorDraft</code> setting is non-empty (re-read on every <code>aboutToShow</code>) and pushes the editor with <code>draftJson</code>. <strong>Import</strong> (<code>importDashboardButton</code>) opens a menu: From file… / Paste from clipboard.</li>
-          <li><strong>Primitives Gallery</strong>: a second popup with eight <code>GalleryTile</code>s showing every gauge with hard-coded values -- a dev/showcase screen the source marks for removal now that the editor exists.</li>
+          <li><strong>Primitives Gallery</strong>: a second popup with eight <code>GalleryTile</code>s showing the seven PID-bound primitives (BarGauge twice) with hard-coded values -- a dev/showcase screen the source marks for removal now that the editor exists.</li>
         </ul>
 
         <h2 id="editor">Dashboard Editor Internals</h2>
@@ -654,7 +650,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           </tbody>
         </table>
         <p>
-          <strong>Draft stash</strong>: switching menus mid-build pops the whole <code>StackView</code>, destroying the page.
+          <strong>Draft stash</strong>: popping the editor (for example with Home or Settings) destroys it. Opening another cached page above it can leave the editor alive underneath.
           <code>Component.onDestruction</code> first forces <code>OBDParameterModel.simulationActive = false</code> (demo data
           must never leak into the real OBD views), then, if <code>dirty</code>, writes
           <code>{ editingId, label, gridColumns, gridRows, cells }</code> (plus <code>margins</code> / <code>spacing</code>
@@ -767,11 +763,11 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <li><strong>Built-ins read-only, "Copy" to derive.</strong> Presets are authoritative and their ids are reserved; a user file that reuses one is rejected at load rather than shadowing it, so an update to a preset can never be masked by a stale copy.</li>
           <li><strong>The editor is pure QML.</strong> The backend already had everything the editor needed; the only missing piece, "unique id from a label", was duplicated in QML rather than adding a slot to two backends. No CMake / <code>main.py</code> churn, no parity work.</li>
           <li><strong>One catalog, three consumers.</strong> The type -&gt; url map used to live inline in the renderer; lifting it into <code>WidgetCatalog</code> means the palette cannot offer a type the renderer cannot draw, and the panel cannot expose a prop the gauge does not declare.</li>
-          <li><strong>Curated, honest editable props.</strong> The panel shows a deliberately small set of scalar props with the gauge's real defaults so the in-car UI stays simple; the JSON stays fully expressive for power users (the TJ preset overrides <code>min</code>/<code>max</code> and sample intervals that the panel never offers).</li>
+          <li><strong>Curated, honest editable props.</strong> The panel shows a deliberately small set of scalar props with the gauge's real defaults so the in-car UI stays simple; the JSON stays fully expressive for power users (the TJ preset uses min/max and sample-interval overrides, which the current panel also offers).</li>
           <li><strong>Hybrid tap-and-drag.</strong> The original plan was tap-to-place only, because drag fights the chooser's <code>Flickable</code>; the editor canvas is a full-screen non-scrolling page, so drag is safe there and was added for placement. Tap-to-place stays for new widgets, steppers stay for precision.</li>
           <li><strong>Visible action buttons, two-tap destructive actions.</strong> Long-press is hidden; a Delete or Discard that fires on one tap is dangerous at 60 mph. Both confirmations time out after 3 s.</li>
-          <li><strong>Draft rescue on destruction.</strong> The bottom bar pops the whole StackView when the user changes menus, which destroys the editor with no chance to ask; stashing the working spec in a setting and offering it back was the smallest fix that loses no work.</li>
-          <li><strong>Demo data lives in the model, is forced off on exit.</strong> A sine sweep in QML needs no backend and no mock; the destruction hook guarantees the real OBD views can never show fake readings.</li>
+          <li><strong>Draft rescue on destruction.</strong> Home and Settings can pop and destroy the editor without going through its Cancel action; stashing the working spec in a setting and offering it back was the smallest fix that loses no work.</li>
+          <li><strong>Demo data lives in the model and is forced off on editor destruction.</strong> A sine sweep in QML needs no backend and no mock; the destruction hook turns it off when the editor is destroyed. Because the model is global, other views can observe demo values while an editor remains alive underneath a cached page.</li>
           <li><strong>Validation logs and degrades, never throws.</strong> A typo in one cell of a hand-written spec must not take down the OBD page in a moving vehicle.</li>
           <li><strong>Hot reload with a signature, not just an event.</strong> Directory events fire for the manager's own atomic saves; comparing a name/mtime/size signature makes the external-edit path and the in-app path share one rescan without double work.</li>
         </ul>

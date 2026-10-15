@@ -65,8 +65,8 @@
           <ul>
             <li><strong>Phone Mirror</strong> -- OCTAVE is its own scrcpy-protocol client. It pushes OCTAVE's forked
               scrcpy server to the phone over <code>adb</code>, decodes the H.264 stream itself, plays the phone's audio,
-              and injects real multitouch over the control socket. Nothing has to be installed by the user. Both backends
-              implement it in full; it is desktop-only (the Android build registers a stub).</li>
+              and injects real multitouch over the control socket. The server jar is bundled; adb and a decoder must also be available (see prerequisites below). Both backends
+              implement it in full; it is desktop-only (mobile builds register a stub).</li>
             <li><strong>Android Auto</strong> -- Runs Google's Desktop Head Unit (DHU) as a separate process and embeds
               its window. In practice this works only with the Python backend on Windows; see
               <a href="#aa-status">What actually works</a>.</li>
@@ -109,8 +109,7 @@
             <strong>OCTAVE's fork of the scrcpy server</strong> (<span class="file-path">phone_server/</span>,
             Apache-2.0, forked at v3.3.4, Java package <code>org.octave.phoneserver</code>, version string
             <code>3.3.4-octave</code>). It needs shell privileges, which only an adb-launched process gets, so it cannot
-            be an installed app. There is no scrcpy binary, no v4l2loopback, no ffmpeg subprocess and no
-            <code>adb shell input</code> anywhere in the path (all removed in commit <code>7a8c8b8</code>).
+            be an installed app. There is no external scrcpy binary, v4l2loopback or ffmpeg subprocess in the mirroring path. Touch uses the control socket; <code>wakePhone()</code> still uses <code>adb shell input keyevent 224</code> as a wake-up fallback.
           </p>
           <table>
             <thead><tr><th>File</th><th>Class</th><th>Role</th></tr></thead>
@@ -126,7 +125,7 @@
             </tbody>
           </table>
           <p>Logging: C++ categories <code>octave.phonemirror</code> (manager) and <code>octave.phonemirror.client</code>;
-            Python loggers <code>backend.phone_mirror.manager</code> and <code>backend.phone_mirror.scrcpy_client</code>.
+            Python loggers <code>octave.phone_mirror</code> and <code>octave.phone_mirror.scrcpy_client</code>.
             Server log lines are relayed at INFO (WARN/ERROR lines at warning level) with a <code>server:</code> prefix.</p>
           <p>Measured on the Orange Pi 5 Plus with a Galaxy S22 Ultra (Android 16), from the click on the button:
             handshake at +0.34 s (Python) / +0.51 s (C++), first decoded frame at +0.65–0.83 s regardless of how long the
@@ -137,8 +136,7 @@
         <section id="pm-manager">
           <h3>PhoneMirrorManager</h3>
           <p>Owns the single session (one phone at a time), the adb probes the UI needs, and the settings that shape a
-            session. Identical public surface in both backends; the mobile C++ build compiles a stub with the same
-            members that reports <code>nativeAvailable = false</code> and "Phone mirroring is desktop-only".</p>
+            session. The desktop backends share the QML-facing session API. Mobile C++ builds compile a reduced compatibility stub that reports <code>nativeAvailable = false</code> and "Phone mirroring is desktop-only".</p>
           <h4>Properties</h4>
           <table>
             <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
@@ -162,8 +160,9 @@
               <tr><td><code>currentBitRate</code></td><td><code>int</code></td><td>Video bit rate of the running session in bps, following adaptive changes; 0 when idle</td></tr>
               <tr><td><code>mediaAvailable</code>, <code>mediaPlaying</code>, <code>mediaTitle</code>, <code>mediaArtist</code>, <code>mediaAlbum</code>, <code>mediaApp</code>, <code>mediaDuration</code>, <code>mediaCanSeek</code></td><td>various</td><td>The phone's active media session as <code>PhoneMedia</code> reports it (<code>mediaApp</code> is the package name, <code>mediaDuration</code> ms); notify <code>mediaChanged</code>. See <a href="#pm-media">Phone media</a></td></tr>
               <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<code>&lt;app data&gt;/temp/phone_media_art_{0,1}.jpg</code>, alternating so QML reloads), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
+              <tr><td><code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td><td><code>list</code>, <code>qint64</code>, <code>str</code></td><td>Phone app’s published play queue, current item ID (<code>-1</code> for none), and queue title; notify <code>mediaQueueChanged</code>. Each entry has <code>id</code>, <code>title</code>, <code>artist</code>, <code>art_uri</code> and a local <code>art</code> URL</td></tr>
               <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>The phone is the source OCTAVE's media controls drive; notify <code>mediaActiveChanged(bool)</code></td></tr>
-            </tbody
+            </tbody>
           </table>
           <h4>Signals</h4>
           <table>
@@ -179,6 +178,9 @@
               <tr><td><code>duckingChanged</code></td><td><code>float</code></td><td>Factor other sources should apply: the duck level while <code>audioPlaying</code> and ducking is on, 1.0 otherwise. <code>main</code> routes it to <code>MediaManager.setDucking()</code></td></tr>
               <tr><td><code>wirelessAddressChanged</code></td><td><code>str</code></td><td>Remembered Wi-Fi phone changed; <code>main</code> saves it to <code>scrcpyWirelessAddress</code></td></tr>
               <tr><td><code>connectionTypeChanged</code>, <code>wirelessBusyChanged</code>, <code>qrPairingChanged</code></td><td>--</td><td>Property notifications</td></tr>
+              <tr><td><code>audioPlayed</code></td><td><code>QByteArray, int</code> / Python <code>bytes, int</code></td><td>PCM handed to the audio sink and buffered delay in ms; connected to <code>AudioAnalyzer.feed_live_pcm()</code> for the phone waveform</td></tr>
+              <tr><td><code>currentBitRateChanged</code>, <code>mediaChanged</code>, <code>mediaArtChanged</code>, <code>mediaQueueChanged</code></td><td>--</td><td>Property notifications</td></tr>
+              <tr><td><code>mediaActiveChanged</code></td><td><code>bool</code></td><td>The phone takes or releases OCTAVE’s media controls</td></tr>
               <tr><td><code>wirelessResult</code></td><td><code>bool, str</code></td><td>Outcome of QR pairing, message ready to show</td></tr>
             </tbody>
           </table>
@@ -196,13 +198,14 @@
               <tr><td><code>setAutoWifi(bool)</code></td><td>--</td><td>Setting <code>scrcpyAutoWifi</code>; read at the next USB start</td></tr>
               <tr><td><code>setBitRateAuto(bool)</code></td><td>--</td><td>Setting <code>scrcpyBitRateAuto</code>; restarts a running session</td></tr>
               <tr><td><code>setAudioGain(float)</code>, <code>setAudioDuckEnabled(bool)</code>, <code>setAudioDuckLevel(float)</code>, <code>setPhoneScreenOff(bool)</code></td><td>--</td><td>Applied live. Gain is clamped 0.25..8 (−12..+18 dB), duck level 0..1</td></tr>
-              <tr><td><code>setVolume(float)</code></td><td>--</td><td>Called by <code>VolumeController</code> on every volume change with the 0..1 linear value; the phone-audio <code>QAudioSink</code> follows it. Must exist even with audio off</td></tr>
+              <tr><td><code>setVolume(float)</code></td><td>--</td><td>Called by <code>VolumeController</code> on every volume change with the 0..1 linear value; the phone-audio <code>QAudioSink</code> follows it. Mute is applied separately through <code>setMuted(bool)</code></td></tr>
               <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>--</td><td>Touch on the mirrored display: action 0 down / 1 up / 2 move, coordinates 0..1 of the frame (scaled to frame pixels here)</td></tr>
               <tr><td><code>injectKey(keycode)</code>, <code>pressBack()</code>, <code>pressHome()</code>, <code>pressAppSwitch()</code></td><td>--</td><td>Android key events (down + up). <code>pressHome()</code> on a virtual display runs <code>am start --display &lt;id&gt;</code> instead, see <a href="#pm-input">Touch and navigation</a></td></tr>
               <tr><td><code>wakePhone()</code></td><td>--</td><td><code>adb shell input keyevent 224</code> (<code>KEYCODE_WAKEUP</code>) from OCTAVE's side; the keeper normally wakes the phone itself, this is the asleep overlay's tap-to-retry</td></tr>
               <tr><td><code>resumeMirroring()</code></td><td>--</td><td>Sends <code>OCTAVE_TAKE_BACK</code>: the keeper leaves the in-use state, wakes the phone if needed and re-applies the panel policy. Implemented in both backends, not exposed in the view</td></tr>
               <tr><td><code>forgetWireless()</code>, <code>setWirelessAddress(address)</code>, <code>startQrPairing()</code>, <code>cancelQrPairing()</code></td><td>--</td><td>Wi-Fi, see <a href="#pm-wifi">Mirroring over Wi-Fi</a></td></tr>
               <tr><td><code>mediaPlayPause()</code>, <code>mediaPlay()</code>, <code>mediaPause()</code>, <code>mediaNext()</code>, <code>mediaPrevious()</code>, <code>mediaSeek(ms)</code></td><td>--</td><td>Drive the phone's media session (<code>OCTAVE_MEDIA</code>)</td></tr>
+              <tr><td><code>mediaSkipToQueueItem(qint64 id)</code></td><td>--</td><td>Ask the phone app to play an item from <code>mediaQueue</code></td></tr>
               <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>Position in ms, extrapolated from the last report while playing (the phone reports only on changes)</td></tr>
               <tr><td><code>releaseMedia(pausePhone)</code></td><td>--</td><td>An OCTAVE source took over: clear <code>mediaActive</code>, optionally pausing the phone</td></tr>
             </tbody>
@@ -211,7 +214,7 @@
 
         <section id="pm-session">
           <h3>Session lifecycle</h3>
-          <p>Everything below runs on the client's worker thread (C++ <code>std::thread</code> named <code>scrcpy-client</code>;
+          <p>After manager preflight, session setup and video decoding run on the client's worker thread (C++ <code>std::thread</code> named <code>scrcpy-client</code>;
             Python daemon thread of the same name). The sequence and the launch arguments are identical in both backends.</p>
           <ol class="steps">
             <li><strong>Preflight</strong> (manager, GUI thread): <code>nativeAvailable</code>, then <code>getDeviceState()</code> must
@@ -301,7 +304,7 @@
               <tr><td>100</td><td><code>OCTAVE_SET_KEEPER</code></td><td><code>[u8 enabled][u8 panelDark][i32 graceMs]</code></td><td>7 B</td><td>yes, 500 ms after connect and on every setting change</td></tr>
               <tr><td>101</td><td><code>OCTAVE_TAKE_BACK</code></td><td>none</td><td>1 B</td><td><code>resumeMirroring()</code></td></tr>
               <tr><td>102</td><td><code>OCTAVE_SET_BIT_RATE</code></td><td><code>[i32 bps]</code></td><td>5 B</td><td>Adaptive quality, from the video thread (<code>VideoBitRate.java</code>: <code>MediaCodec.setParameters</code> on the running encoder, and the rate for every encoder created later)</td></tr>
-              <tr><td>103</td><td><code>OCTAVE_MEDIA</code></td><td><code>[u8 action][i64 arg]</code></td><td>10 B</td><td><code>PhoneMedia</code>: action 0 WATCH (arg 1 = on, sent on connect), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms)</td></tr>
+              <tr><td>103</td><td><code>OCTAVE_MEDIA</code></td><td><code>[u8 action][i64 arg]</code></td><td>10 B</td><td><code>PhoneMedia</code>: action 0 WATCH (arg 1 = on, sent on connect), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms), 7 SKIP_TO_QUEUE_ITEM (arg = 64-bit queue ID)</td></tr>
               <tr><td>1, 3, 4, 5..9, 11..</td><td>upstream text / scroll / back-or-screen-on / clipboard / panels / UHID / start-app / reset-video</td><td>as in scrcpy 3.3.4</td><td></td><td>parsed by the server, never sent</td></tr>
             </tbody>
           </table>
@@ -315,6 +318,8 @@
               <tr><td>100</td><td><code>OCTAVE_PHONE_STATE</code></td><td><code>[u8 asleep][u8 inUse][u8 panelDark]</code></td><td><code>phoneStateChanged</code> &rarr; <code>phoneAsleep</code> / <code>phoneInUse</code>, black-frame hold</td></tr>
               <tr><td>101</td><td><code>OCTAVE_MEDIA_STATE</code></td><td><code>[u8 flags: 1 session, 2 playing, 4 canSeek][i64 positionMs][i64 durationMs]</code> then package, title, artist, album as <code>[u16 len][utf8]</code></td><td><code>mediaStateChanged</code> &rarr; the <code>media*</code> properties, <code>mediaActive</code></td></tr>
               <tr><td>102</td><td><code>OCTAVE_MEDIA_ART</code></td><td><code>[u32 len][JPEG]</code>, len 0 = no art</td><td><code>mediaArtChanged</code> &rarr; file &rarr; <code>mediaArtUrl</code></td></tr>
+              <tr><td>103</td><td>OCTAVE_MEDIA_QUEUE</td><td><code>[i64 activeId][u16 titleLen][title][u16 count]</code>, then each item: <code>[i64 id]</code> and title, artist/subtitle, art URI as <code>[u16 len][utf8]</code></td><td>Up to 500 entries → <code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td></tr>
+              <tr><td>104</td><td>OCTAVE_MEDIA_QUEUE_ART</td><td>Art URI as <code>[u16 len][utf8]</code>, then <code>[u32 len][JPEG]</code>; zero bytes means unreadable art</td><td>Cache the art locally and update the queue entries</td></tr>
               <tr><td>other</td><td></td><td></td><td>reader logs a warning and stops (the stream keeps running)</td></tr>
             </tbody>
           </table>
@@ -338,7 +343,7 @@
             <code>QIODevice</code> (<code>FormatError "Could not open file"</code> after 1.5 MB fed, Phase 0 spike). C++ therefore links
             libavcodec/libavutil when CMake finds them (<code>OCTAVE_HAVE_FFMPEG</code>, pkg-config on Linux/macOS, vcpkg on Windows;
             without them the build still succeeds and <code>nativeAvailable</code> is false); Python gets it for free because
-            <code>av</code> is already in <code>requirements.txt</code>. Software H.264 at 1280x800 costs 12–15 % of one RK3588 core.</p>
+            <code>av</code> is already in <code>requirements.txt</code>. The measurements in the native-client plan report software H.264 at 1280x800 using 12–15 % of one RK3588 core; this is hardware-specific.</p>
         </section>
 
         <section id="pm-black">
@@ -404,7 +409,7 @@
             phone again. Doing that from the dash (an adb poll every second, then a keyevent) left ~1 s of black and a visible
             panel relight, so the logic moved <strong>into the phone</strong>:
             <span class="file-path">phone_server/.../control/MirrorKeeper.java</span> (commit <code>67809d1</code>). OCTAVE only sets the
-            policy, can take the phone back, and shows the state; it no longer runs adb while a session is up.</p>
+            policy, can take the phone back, and shows the state; it no longer polls adb to maintain the panel policy. Explicit wake and virtual-display Home actions still launch adb commands.</p>
           <p><strong>Policy</strong>: <code>OCTAVE_SET_KEEPER(enabled=1, panelDark=scrcpyPhoneScreenOff, graceMs=8000)</code>, sent 500 ms after
             the handshake and again whenever the setting changes (the server's own default grace is 5000 ms if a client never sets
             one). The keeper is a <strong>process-wide singleton</strong> on the phone: <code>Controller</code> attaches it on the first
@@ -455,7 +460,7 @@
           <p>Music playing on the phone (any app with a media session: Spotify, YouTube Music, podcasts...) shows up in
             OCTAVE's own now-playing UI and is driven by its normal controls: the bottom bar, the Media Room, the home
             screen card, the dashboard <code>NowPlayingWidget</code> / <code>MediaControlsWidget</code>, gesture swipes and
-            Album Art Capture theming. Audio forwarding does not need to be on; this is control and metadata only.</p>
+            Album Art Capture theming. These controls and metadata use the control socket, independently of whether the phone successfully supplies audio.</p>
           <p><strong>Phone side</strong>: <span class="file-path">phone_server/.../control/PhoneMedia.java</span>, created by
             <code>Controller</code> on the first <code>OCTAVE_MEDIA</code> and stopped with the client session. It lists sessions
             through the <code>media_session</code> binder (<code>ISessionManager.getSessions(null, 0[, null])</code>: the third
@@ -473,6 +478,8 @@
             Pressing play with no media app sends <code>KEYCODE_MEDIA_PLAY</code>, which restarts the last media app. <code>main.cpp</code> / <code>main.py</code> wire the hand-offs: when the phone takes over, local playback
             pauses; a local track starting calls <code>releaseMedia(true)</code> (the phone pauses). With no media app the views show "Phone" / "Nothing playing". The Media Room shows a "Phone" source pill meanwhile; tapping it hands the controls
             back to local media and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
+          <p><strong>Queue:</strong> <code>PhoneMedia</code> follows the selected app’s <code>MediaController</code> queue and active queue ID, sending up to 500 entries. Queue artwork is fetched separately, scaled to 160 px and sent once per URI per session. The desktop manager stores it under <code>&lt;app data&gt;/temp/phone_queue_art/</code> and batches artwork notifications for 150 ms. <code>MediaPlayer.qml</code> shows this queue while the phone is active and a queue is available; selecting an entry calls <code>mediaSkipToQueueItem(id)</code>. The available tracks and skip behavior depend on what the phone app publishes. This is its active queue, not a browsable account library.</p>
+          <p><strong>Waveform:</strong> the client emits <code>audioPlayed(pcm, bufferedMs)</code> as audio is handed to the sink. Both entry points route it to <code>AudioAnalyzer.feed_live_pcm()</code>; QML selects live analysis while phone media is active. Without captured phone audio, the controls can still work but there is no live PCM waveform.</p>
           <p><strong>QML</strong> picks the phone first in every source switch (<code>phoneMirrorManager.mediaActive</code>, else
             local). Handlers that can fire while <code>mediaActive</code> is changing read the manager directly
             (<code>phoneActive()</code>) instead of the <code>usePhone</code> binding. Position is not streamed: views poll
@@ -515,7 +522,7 @@
             client's <code>adb -s &lt;serial&gt;</code> push, forward and shell work exactly as over USB. The manager only gets the phone
             into that list and keeps it there. <code>ScrcpyClient::isNetworkSerial()</code> / <code>is_network_serial()</code> tells the
             two apart (USB serials never contain <code>:</code>).</p>
-          <p><strong>QR code is the only way to connect wirelessly</strong> (Android 11+). Typing a pairing code, an IP:port, or
+          <p><strong>QR pairing is the wireless setup offered by the UI</strong> (Android 11+); a USB session can also enable the legacy TCP connection described below. Typing a pairing code, an IP:port, or
             scanning for adb services was removed again in favour of it; USB needs no setup and stays as it was.</p>
           <ul>
             <li><strong>Where the code appears</strong>: <code>PhoneMirrorView</code> becomes the QR screen whenever no phone is connected
@@ -563,6 +570,7 @@
               Wireless debugging is on." instead of the USB-cable text; offline / unauthorized network devices and "no device while a Wi-Fi
               phone is remembered" get Wi-Fi wording. All keep the phrases the view's retry regex matches.</li>
           </ul>
+          <p>When <code>adb mdns services</code> returns no usable services, both backends try <code>avahi-browse</code> on Linux. This supports distro adb builds without working mDNS; the fallback requires <code>avahi-browse</code> to be installed.</p>
           <p><strong>Threading</strong>: QR waits and reconnects block on adb, so they run on one worker (C++: a <code>QThreadPool</code> with
             one thread; Python: one daemon thread fed by a queue) and post results back to the GUI thread. One worker serialises them, so a
             background reconnect never races a pairing; the C++ destructor cancels a QR wait and waits for the worker.</p>
@@ -647,7 +655,7 @@
           <p><strong>Build</strong>: <code>phone_server/build_without_gradle.sh</code> (upstream's no-Gradle script) generates
             <code>BuildConfig.VERSION_NAME = "3.3.4-octave"</code> from <code>SCRCPY_VERSION_NAME</code>, compiles against
             <code>platforms;android-36</code> / <code>build-tools;36.0.0</code> and produces <code>octave-phone-server</code> (a jar of
-            <code>classes.dex</code>, ~96 KB). The result is committed at <span class="file-path">tools/phone-server/octave-phone-server</span>;
+            <code>classes.dex</code>). The result is committed at <span class="file-path">tools/phone-server/octave-phone-server</span>;
             the C++ binary embeds it as the Qt resource <code>:/phone-server/octave-phone-server</code> (CMake
             <code>qt_add_resources</code>) so no packaging target carries a loose file; Python reads it from the checkout.</p>
           <p><strong>Version invariant</strong>: <code>Options.parse</code> throws <em>"The server version (3.3.4-octave) does not match the

@@ -134,7 +134,7 @@
             <div class="info-box-title">Firmware is not in this repository</div>
             The ESP32 sketches are not part of the OCTAVE tree (there are no <code>.ino</code> / PlatformIO sources here). What
             this page documents is the <em>contract</em> both backends implement: the serial parameters, the incoming command
-            grammar and the outgoing LED commands. Any firmware that speaks this protocol works.
+            grammar and the outgoing LED commands. Firmware must implement this serial protocol; the wireless link and LED behaviour are outside this repository.
           </div>
         </section>
 
@@ -217,7 +217,7 @@
                 <span class="kw">if</span> line:
                     <span class="prop">self</span>._process_command(line)
         <span class="kw">except</span> serial.SerialException <span class="kw">as</span> e:
-            QTimer.singleShot(<span class="num">0</span>, <span class="prop">self</span>._handle_disconnect)  <span class="cmt"># hop to the main thread</span>
+            run_on_main(self._handle_disconnect)  <span class="cmt"># hop to the main thread</span>
             <span class="kw">break</span></code></pre>
         </section>
 
@@ -342,7 +342,7 @@
 
           <h4>Keepalive and LED sleep</h4>
           <p>
-            The dongle turns its LEDs off after a 5 s silence (per the source comment "ESP32 timeout is 5s"). With
+            The manager assumes firmware that turns its LEDs off after a 5 s silence (source comment: "ESP32 timeout is 5s"). With
             <code>esp32LedSleepEnabled</code> <strong>off</strong>, a 2 s keepalive timer re-sends <code>V&lt;currentVolume&gt;</code>
             so the ring stays lit; with it <strong>on</strong> (the default &mdash; "LEDs turn off when OCTAVE closes"), no
             keepalives are sent and the ring sleeps. Toggling the setting while connected starts or stops the timer
@@ -370,7 +370,7 @@
           <table>
             <thead><tr><th>Event</th><th>Python</th><th>C++</th></tr></thead>
             <tbody>
-              <tr><td>Read error</td><td><code>serial.SerialException</code> in the read thread &rarr; <code>QTimer.singleShot(0, _handle_disconnect)</code> so the state change happens on the main thread</td><td><code>QSerialPort::errorOccurred</code> with <code>ResourceError</code> (device unplugged), <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code> or <code>WriteError</code> &mdash; the failures pyserial raises as <code>SerialException</code> &mdash; &rarr; <code>handleDisconnect()</code> (a no-op while not connected, e.g. a failed <code>open()</code>, which schedules its own reconnect); every other error code is only logged</td></tr>
+              <tr><td>Read error</td><td><code>serial.SerialException</code> in the read thread &rarr; <code>run_on_main(_handle_disconnect)</code> so the state change happens on the main thread</td><td><code>QSerialPort::errorOccurred</code> with <code>ResourceError</code> (device unplugged), <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code> or <code>WriteError</code> &mdash; the failures pyserial raises as <code>SerialException</code> &mdash; &rarr; <code>handleDisconnect()</code> (a no-op while not connected, e.g. a failed <code>open()</code>, which schedules its own reconnect); every other error code is only logged</td></tr>
               <tr><td>Write error</td><td>Keepalive <code>SerialException</code> &rarr; <code>_handle_disconnect()</code>; other writes only log</td><td>Every command goes through <code>writeCommand()</code>, which checks the byte count and logs "failed to send &lt;what&gt;"; a rejected <em>keepalive</em> write &rarr; <code>handleDisconnect()</code>, other writes only log</td></tr>
             </tbody>
           </table>
@@ -490,11 +490,11 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
             The bus number and the three addresses are constants in both backends (<code>I2C_BUS = 2</code>; there is no
             setting to change them). Python uses <code>smbus2.SMBus(2)</code>; C++ opens <code>/dev/i2c-2</code> with
             <code>O_RDWR</code> and selects each chip with <code>ioctl(I2C_SLAVE, addr)</code>, then does raw
-            <code>write(reg)</code> / <code>read(n)</code> pairs (<code>readBlockData</code>) &mdash; the same wire traffic as
-            <code>read_i2c_block_data</code>.
+            <code>write(reg)</code> / <code>read(n)</code> pairs (<code>readBlockData</code>). Python reads the corresponding
+            register blocks with <code>read_i2c_block_data</code>.
           </p>
           <table>
-            <thead><tr><th>Chip</th><th>Address</th><th>Function</th><th>Init writes (reg &larr; value, as commented in code)</th><th>Data read</th><th>Scale</th></tr></thead>
+            <thead><tr><th>Chip</th><th>Address</th><th>Function</th><th>Init writes (reg &larr; value; source settings)</th><th>Data read</th><th>Scale</th></tr></thead>
             <tbody>
               <tr>
                 <td><strong>LSM6DSL</strong></td>
@@ -522,6 +522,8 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
               </tr>
             </tbody>
           </table>
+
+          <p>The chip set and default I2C addresses are documented by the <a href="https://ozzmaker.com/berryimu-quick-start-guide/">BerryIMU manufacturer</a>; OCTAVE's constants and register writes above are in both drivers. The LSM6DSL scale and rate constants also match <a href="https://github.com/STMicroelectronics/stm32-lsm6dsl/blob/main/lsm6dsl.h">ST's driver header</a>.</p>
 
           <h4>BMP388 calibration and compensation</h4>
           <p>
@@ -564,7 +566,7 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
             from the settings toggle resets the counter and starts over.
           </p>
           <p>
-            <strong>Threading model.</strong> Python runs <code>_read_loop</code> in a daemon <code>threading.Thread</code>.
+            <strong>Threading model.</strong> Python opens and initialises the sensors in <code>_start()</code> on the GUI thread, then runs <code>_read_loop</code> in a daemon <code>threading.Thread</code>.
             C++ moves a <code>BerryIMUWorker</code> QObject to a <code>QThread</code>; <code>QThread::started</code> triggers
             <code>run()</code>, and the worker's signals are forwarded 1:1 to the manager's public signals (queued connections,
             so QML always receives them on the GUI thread). <code>stopWorker()</code> sets the atomic <code>m_running</code>
@@ -635,10 +637,9 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
             The three block reads cost about <strong>4.3 ms</strong> per iteration, so the loop is I2C-bound: it settles around
             <strong>172 Hz</strong> with ~1.5 ms of sleep, and the worker thread's ~8 % CPU "is the cost of reading the sensor,
             not a spin". The earlier fixed 1 ms sleep kept the bus saturated for no benefit: the LSM6DSL output data rate is
-            416 Hz and emission is 60 Hz. 200 Hz stays below the ODR (no duplicate samples) and still gives the filter 3+
-            samples per emit. The source warns not to set <code>SAMPLE_INTERVAL</code> below the read cost (the sleep is
-            skipped and the loop really does spin) and notes that <code>0.01</code> (100 Hz) is where a real CPU saving lives
-            (~1.7 samples per emit; below ~100 Hz the filter starts to starve).
+            416 Hz and emission is 60 Hz. The 200 Hz target stays below the configured output data rate and still gives the filter 3+
+            samples per emit. Setting <code>SAMPLE_INTERVAL</code> below the I2C read cost skips the explicit sleep and continuously requests bus reads.
+            A longer interval reduces bus work but also gives the filter fewer samples per emitted value; actual rates depend on hardware and bus timing.
           </div>
           <p>The loop exit is logged as <code>read loop exited after N reads</code>.</p>
         </section>
@@ -760,7 +761,7 @@ tz = yw*qz - yz*qw</code></pre>
                   <br><strong>Steering is not an IMU input:</strong> the Jeep's front wheels follow a manual slider
                   (<code>objectName: "jeepSteering"</code>, &minus;1&hellip;1 &rarr; <code>jeep.steeringInput</code>), with
                   "Center wheels" and "Spin wheels" controls; doors, hood, tailgate and lights are likewise manual toggles on
-                  <code>JeepVehicle.qml</code>. The IMU supplies only the whole-body rotation.
+                  <code>JeepVehicle.qml</code>. The IMU supplies whole-body rotation; when OBD is connected, RPM and SPEED also drive the engine and wheels. Those two controls are manual when live OBD drive is inactive.
                 </td>
               </tr>
               <tr>
@@ -813,7 +814,7 @@ tz = yw*qz - yz*qw</code></pre>
             <li>Lateral G = <code>ax / 9.81</code>, longitudinal G = <code>ay / 9.81</code>, magnitude = <code>|a| / 9.81</code> (QtSensors reports m/s&sup2;).</li>
             <li>Heading = compass azimuth, normalised to &ge; 0 because some Android devices report &minus;180&hellip;180.</li>
             <li>Altitude from the pressure sensor (Pa, against 101 325 Pa) at 10 Hz; <code>baroTempChanged</code> and <code>hasTemperature</code> only turn on once a non-zero temperature arrives (most phones report 0).</li>
-            <li>Rates: accelerometer and compass run at <code>setEmitRate()</code> (default 60, clamped 10&ndash;120 like desktop) and drop to 5 Hz when <code>setActive(false)</code> &mdash; here it throttles the sensors themselves rather than the emission.</li>
+            <li>Rates: accelerometer and compass run at <code>setEmitRate()</code> (default 60, clamped 10&ndash;120 like desktop) and drop to 5 Hz when <code>setActive(false)</code> &mdash; the requested sensor rate drops to 5 Hz, and <code>idleThrottled()</code> separately caps accelerometer and compass emission at once per 200 ms because Android may treat the requested rate as a hint. Pressure remains requested at 10 Hz.</li>
             <li>Status is "Connected" if the accelerometer starts, otherwise <strong>"Unavailable"</strong>. <code>setEnabled()</code> persists <code>imuEnabled</code> through <code>save_imu_enabled</code> exactly like desktop, starts/stops the sensors and emits "Connected" / "Unavailable" / "Disabled"; because the phone sensors are started in the constructor, <code>connect_settings_manager()</code> stops them again when the persisted value is <code>false</code>.</li>
           </ul>
         </section>
@@ -888,7 +889,7 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td><code>REG_GESTURE_1</code></td><td><code>0x44</code></td><td>Wave flag (bit 0)</td></tr>
             </tbody>
           </table>
-          <h4>Initialisation (worker thread, after the 1 s start delay)</h4>
+          <h4>Initialisation (after the 1 s start delay)</h4>
           <ol class="steps">
             <li>Open the bus (Python sleeps 50 ms first).</li>
             <li><strong>Wake up</strong>: write <code>0xEF &larr; 0x00</code>, sleep 10 ms. If the first write raises <code>OSError</code> / fails, wait 50 ms and try once more (the chip is asleep until addressed).</li>
@@ -896,6 +897,7 @@ tz = yw*qz - yz*qw</code></pre>
             <li><strong>Write the init table</strong>: <code>INIT_REGISTER_ARRAY</code>, the DFRobot reference configuration &mdash; 219 register/value pairs starting with a bank-0 select, switching to bank 1 midway. It sets the sensor's gain, thresholds and gesture-engine parameters.</li>
             <li>Select bank 0 again for gesture reading; log <code>PAJ7620U2 initialized (chip ID: 0x7620)</code>; emit "Connected".</li>
           </ol>
+          <p>C++ initialises the sensor on its worker thread. Python opens and initialises the bus in <code>_start()</code> on the GUI thread, then starts the read-loop thread.</p>
           <p>Failure handling, retries (5 &times; linear 5 s), the no-retry on a permission error and the C++ dead-bus threshold (5 consecutive failed reads of the flag registers &rarr; "Error" &rarr; retry) are identical to the <a href="#imu-startup">IMU manager</a>.</p>
         </section>
 
@@ -948,7 +950,7 @@ tz = yw*qz - yz*qw</code></pre>
             Python: an exception in the loop emits "Error", closes the bus and schedules a retry. C++: a failed block read
             zeroes the flags and is skipped; after 5 consecutive failures (<code>MAX_CONSECUTIVE_READ_FAILURES</code>) the loop
             logs "read loop error: 5 consecutive I2C read failures", exits, emits "Error" and retries &mdash; the same outcome
-            as Python, one NACK later.
+            as Python, after tolerating four consecutive failures.
           </p>
         </section>
 
@@ -1042,8 +1044,8 @@ tz = yw*qz - yz*qw</code></pre>
             The IMU and gesture drivers run their loops on dedicated threads (Python <code>threading.Thread</code>, C++
             <code>QThread</code> + worker QObject) rather than <code>QTimer</code> ticks on the GUI thread. The measurement in
             <code>f1eb526</code> is the reason it has to be that way: one IMU iteration blocks on the bus for ~4.3 ms
-            (80 %+ of the period), and the gesture loop deliberately sleeps 300&ndash;400 ms mid-detection. Neither can share the
-            thread that paints QML at 60 fps. The price is that every emitted value crosses threads as a queued signal, which
+            (80 %+ of the period), and the gesture loop deliberately sleeps 300&ndash;400 ms mid-detection. The continuous loops therefore run away from the
+            thread that paints QML. Python still performs initialisation on the GUI thread. The price is that every emitted value crosses threads as a queued signal, which
             is exactly what the emission gating below manages. The ESP32 knob, by contrast, sends a few bytes per second: C++
             lets <code>QSerialPort</code> integrate with the event loop (<code>readyRead</code>), and Python
             (<code>94d61be</code>) blocks in <code>readline()</code> with the GIL released "instead of polling
@@ -1054,8 +1056,7 @@ tz = yw*qz - yz*qw</code></pre>
           <p>
             <code>ed826ed</code>: the loops used to sleep a fixed 1 ms, which "with three I2C reads per iteration kept the bus
             saturated and left the worker thread in D-state at ~9 % CPU on the Orange Pi. The LSM6DSL ODR is 416 Hz and the emit
-            rate is 60 Hz, so reading that fast bought nothing." The 5 ms period is chosen to stay under the sensor ODR (no
-            duplicate samples) while giving the filter 3+ samples per emit, and sleeping out the remainder makes the cadence
+            rate is 60 Hz, so reading that fast bought nothing." The 5 ms period is chosen to stay under the configured sensor output data rate while giving the filter 3+ samples per emit, and sleeping out the remainder makes the cadence
             independent of bus speed. Moving the barometer from "every 80th iteration" to a time-based interval removed a
             cadence that only approximated 5 Hz at the old loop rate. <code>f1eb526</code> then corrected the record: the old
             loop was not spinning, it was bus-bound, so the CPU shown is the cost of reading the sensor; the explicit period is

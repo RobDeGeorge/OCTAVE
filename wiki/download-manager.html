@@ -53,7 +53,7 @@
           <ul>
             <li><strong>Python</strong> (<span class="file-path">backend/download_manager.py</span>) wraps the vendored
               <code>music_dl</code> engine (<span class="file-path">backend/music_dl/</span>, a trimmed fork of spotdl) that
-              drives <code>yt-dlp</code> and <code>ffmpeg</code> as Python libraries.</li>
+              uses <code>yt-dlp</code> as a Python library and launches the <code>ffmpeg</code> executable for conversion.</li>
             <li><strong>C++</strong> (<span class="file-path">src/managers/downloadmanager.{h,cpp}</span>) spawns the
               <code>yt-dlp</code> executable with <code>QProcess</code>, runs a small Python helper
               (<span class="file-path">scripts/ytmusic_search.py</span>) for search, and tags files with TagLib. On Android
@@ -62,8 +62,7 @@
 
           <div class="info-box tip">
             <div class="info-box-title">YouTube Only, No Credentials</div>
-            Both backends search YouTube Music (<code>ytmusicapi</code>) and download with <code>yt-dlp</code>. No account
-            or API key is needed.
+            Both backends search YouTube Music (<code>ytmusicapi</code>) and download with <code>yt-dlp</code>. The search path uses no configured account or API key. Downloads may require cookies when YouTube rejects an unauthenticated request.
           </div>
         </section>
 
@@ -178,7 +177,7 @@ DownloadManager
         <section id="cpp-tooling">
           <h2>yt-dlp, ytmusicapi and TagLib (C++)</h2>
           <h3>Finding yt-dlp</h3>
-          <p><code>_findYtDlp()</code> caches its answer. It checks <code>PATH</code> first
+          <p><code>_findYtDlp()</code> caches a successful result. It first checks the checkout venv beside or above the application directory (<code>venv/bin/yt-dlp</code>, or <code>venv/Scripts/yt-dlp.exe</code> on Windows), then <code>PATH</code>
             (<code>QStandardPaths::findExecutable</code>), then the application directory,
             <span class="file-path">/usr/local/bin</span>, <span class="file-path">/usr/bin</span> and
             <span class="file-path">~/.local/bin</span> (<code>yt-dlp.exe</code> variants on Windows). When nothing is found,
@@ -302,15 +301,15 @@ DownloadManager
               The conversion flags are added for mp3 (with <code>--audio-quality</code> unless the bitrate is
               <code>auto</code> or <code>disable</code>), flac, opus and ogg; m4a downloads natively. The source comment
               explains the template: <code>%(artist,uploader)s</code> falls back to the uploader when YouTube Music's artist
-              field is missing, and the "Artist - Title" shape matches the Python engine so
-              <code>mediaManager.play_downloaded_song()</code> finds files written by either backend. On desktop yt-dlp
+              field is missing, and the "Artist - Title" shape matches the Python engine for filename-based matching by
+              <code>mediaManager.play_downloaded_song()</code>; artist/title differences from the source can still prevent an exact match. On desktop yt-dlp
               writes into the hidden staging dir <span class="file-path">&lt;downloadPath&gt;/.octave-partial/&lt;songId&gt;/</span>
               (Android writes straight to <code>&lt;downloadPath&gt;</code>); when nothing else is in flight, a new download
               first sweeps leftovers from a power cut or mid-download quit out of <span class="file-path">.octave-partial/</span>.</li>
             <li><strong>Finish</strong> -- on exit code 0 the last <code>Destination:</code> line in stdout gives the file path
               (falling back to the newest audio file in the song's staging dir). Desktop then runs
               <code>_embedMetadata()</code> and <code>_downloadCoverArt()</code> on the staged file; once the cover request ends
-              (embedded or not) <code>_finishDownload()</code> fsyncs it and renames it into <code>&lt;downloadPath&gt;</code>.
+              (embedded or not) <code>_finishDownload()</code> publishes it into <code>&lt;downloadPath&gt;</code>: POSIX uses fsync and rename; Windows removes any existing destination and then renames, without an atomic replacement guarantee.
               Android runs <code>runEmbedCover()</code>. <code>downloadComplete</code> (on desktop now only after the cover is
               embedded), <code>statusMessage("Downloaded: …")</code> and an <code>is_downloaded</code> patch
               follow. A non-zero exit yields "Download failed (exit code N)"; a missing file yields "Download completed but
@@ -386,7 +385,7 @@ C++ desktop                       C++ Android
               (<code>start</code>, <code>finished</code>, <code>readAllStandardOutput</code>, <code>kill</code>) that
               <code>downloadmanager.cpp</code> compiles unchanged via the <code>YtDlpProcess</code> typedef. The JNI call
               blocks a dedicated <code>QThread</code> and delivers the combined output only at the end; <code>kill()</code>
-              merely flags the thread to suppress its final signal (the AAR has no cancellation hook), and
+              merely flags the thread to suppress its final signal (this adapter does not invoke runtime cancellation), and
               <code>processId()</code> returns 0 so pause/resume are no-ops.</li>
             <li><strong>Argument marshalling:</strong> <code>runYtDlp()</code> splits the flag list into
               <code>(flag, value)</code> pairs by treating any URL-looking argument as positional, then feeds a
@@ -394,11 +393,8 @@ C++ desktop                       C++ Android
             <li><strong>Extra yt-dlp flags:</strong> <code>--embed-metadata --add-metadata</code>, and for m4a
               <code>--extract-audio --audio-format m4a</code> (an AAC→m4a rewrap, "no re-encode, no quality loss", needed so the
               metadata post-processors actually run). There is deliberately <em>no</em> <code>player_client</code>
-              override any more: until v0.9.2 the Android build forced
-              <code>youtube:player_client=android_vr,ios,tv_embedded,android</code>, and by September 2026 that set produced
-              nothing (android_vr wants a GVS PO token, tv_embedded is no longer a client), so every download ended in
-              <code>HTTP Error 403</code> while yt-dlp's default client list fetched the same videos fine. The bundled yt-dlp
-              self-updates on launch, so its defaults track what YouTube currently accepts.</li>
+              override: the manager leaves client selection to yt-dlp. The bridge attempts to update yt-dlp on launch;
+              a failed update leaves the existing version in place.</li>
             <li><strong>Search bundle:</strong> the AAR's Python has no pip, so <span class="file-path">scripts/build-android-pylib-bundle.sh</span>
               packs ytmusicapi and its pure-Python dependencies into
               <span class="file-path">android/assets/python-packages/ytmusic-bundle.zip</span>; the bridge extracts it to
@@ -406,16 +402,15 @@ C++ desktop                       C++ Android
               <span class="file-path">ytmusic_search.py</span> with <code>PYTHONPATH</code> pointing there. Commit
               <code>3fb687c</code> added the bundle build to the CI Android job after released APKs shipped without it and search
               "silently failed".</li>
-            <li><strong>yt-dlp self-fetch:</strong> the AAR's built-in <code>updateYoutubeDL()</code> is broken on Android
-              (commons-io's <code>Java7Support</code> static initialiser NPEs because <code>getClassLoader()</code> returns null),
-              so its bundled yt-dlp snapshot would go stale. Commit <code>09f0358</code> added
+            <li><strong>yt-dlp self-fetch:</strong> the bridge source records a failure in the bundled updater's
+              <code>Java7Support</code> static initialiser on Android and bypasses <code>updateYoutubeDL()</code>. Commit <code>09f0358</code> added
               <code>directDownloadYtDlp()</code>: on a background thread at init it downloads
               <code>https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp</code> (the zipapp), sanity-checks the size
               and shebang, and atomically replaces
               <span class="file-path">noBackupFilesDir/youtubedl-android/yt-dlp/yt-dlp</span>. The AAR reads that path on every
               <code>execute()</code>, so the next download uses the new version. Best-effort and non-fatal.</li>
-            <li><strong>Thumbnails and covers:</strong> the APK ships without Qt's OpenSSL backend, so QML cannot load
-              <code>https</code> images. <code>_parseSearchOutput()</code> routes each cover through
+            <li><strong>Thumbnails and covers:</strong> to support images even when Qt's OpenSSL backend is missing,
+              <code>_parseSearchOutput()</code> routes each cover through
               <code>OctaveAndroid::cacheHttpImage()</code> (Java <code>HttpURLConnection</code>) and substitutes a
               <code>file://</code> URL. After download, <code>runEmbedCover()</code> runs
               <span class="file-path">scripts/embed_cover.py</span> (mutagen, present in the AAR's site-packages) to replace
@@ -429,8 +424,7 @@ C++ desktop                       C++ Android
         <section id="bot-wall">
           <h2>YouTube Bot Wall, Cookies and VPNs</h2>
           <p>
-            As of 2026 YouTube answers many yt-dlp requests with "Sign in to confirm you're not a bot". Commit
-            <code>b25a14a</code> added the same zero-UI bypass to both backends: if a Netscape-format cookies file exists at
+            For download failures such as "Sign in to confirm you're not a bot", both backends support a cookies file: if a Netscape-format cookies file exists at
             <code>QStandardPaths::DownloadLocation + "/youtube_cookies.txt"</code>, it is handed to yt-dlp.
           </p>
           <table>
@@ -452,10 +446,8 @@ C++ desktop                       C++ Android
               file, like C++.</li>
           </ul>
           <p>
-            The README's troubleshooting entry (added in the same commit) positions VPNs as the usual cause -- YouTube
-            blocklists most shared VPN exit IPs -- with cookies as the fallback for users who cannot leave the VPN: export
-            with the "Get cookies.txt LOCALLY" browser extension while logged in to YouTube and save under the name above; the
-            next download picks it up. There is no in-app indication that the file was found; an in-app picker is parked in
+            Supply a Netscape-format cookies file under the name above; the next download checks for it. This passes
+            cookies to yt-dlp, but does not guarantee that YouTube will accept a request. There is no in-app indication that the file was found; an in-app picker is parked in
             <span class="file-path">TODO/yt-cookies-file-picker.md</span>.
           </p>
         </section>
@@ -479,11 +471,12 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             demand. Python also rewrites the live engine's output template when the override changes.</p>
 
           <div class="info-box warning">
-            <div class="info-box-title">Path Traversal Protection</div>
+            <div class="info-box-title">Subfolder validation</div>
             Python validates the subfolder with <code>is_safe_path()</code> from
             <span class="file-path">backend/media_manager.py</span> (realpath containment); C++ compares
-            <code>QDir::cleanPath</code> of the target against the canonical media folder. A subfolder that escapes the media
-            folder falls back to <code>"Downloads"</code> with a warning.
+            <code>QDir::cleanPath</code> of the target with a string prefix of the canonical media folder. A rejected target
+            falls back to <code>"Downloads"</code> with a warning. Unlike Python's check, that C++ prefix comparison does not
+            check a directory boundary or resolve symlinks in the target; it is not equivalent containment validation.
           </div>
 
           <h3>Android storage</h3>
@@ -568,13 +561,13 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
           <h2>App-Store Builds</h2>
           <p>
             <span class="file-path">CMakeLists.txt</span> declares <code>option(OCTAVE_ENABLE_DOWNLOADS "Enable music download
-            feature (disable for app store builds)" ON)</code> and forwards it as a compile definition. The comment above it
-            states the reason: yt-dlp is forbidden on the Apple, Microsoft and Play stores. Configure with
+            feature (disable for app store builds)" ON)</code> and forwards it as a compile definition. It is intended for builds that omit the downloading feature. Configure with
             <code>-DOCTAVE_ENABLE_DOWNLOADS=OFF</code> and <span class="file-path">downloadmanager.h</span> compiles a stub class
-            with the same properties, signals and slots: <code>search()</code> emits
+            that preserves the core download properties, signals and slots: <code>search()</code> emits
             <code>searchError("Downloads disabled in this build")</code>, <code>download()</code> / <code>download_song()</code>
             emit the same text through <code>downloadError</code>, everything else is a no-op and
-            <code>get_download_playlist()</code> returns <code>"Downloads"</code>. The whole
+            <code>get_download_playlist()</code> returns <code>"Downloads"</code>. The stub omits <code>hasStorageAccess()</code> and <code>requestStorageAccess()</code>; the QML guards those optional methods.
+            The manager is still constructed and registered. The whole
             <span class="file-path">downloadmanager.cpp</span> is wrapped in <code>#ifdef OCTAVE_ENABLE_DOWNLOADS</code>. The
             Python backend has no equivalent switch because it is never packaged.
           </p>
@@ -595,7 +588,7 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
               <tr><td><code>downloadProgress</code></td><td><code>str, float</code></td><td>song_id, progress (0.0 to 1.0)</td></tr>
               <tr><td><code>downloadComplete</code></td><td><code>str, str</code></td><td>song_id, file path -- download finished (also triggers a library rescan)</td></tr>
               <tr><td><code>downloadError</code></td><td><code>str, str, str</code></td><td>song_id, display name, error message (also used for cancellation in C++)</td></tr>
-              <tr><td><code>downloadQueueChanged</code></td><td>--</td><td>Queue state changed. C++ emits it on every queue mutation; Python has no explicit queue (the executor serialises work) and emits it when a download or URL download starts and again when it completes or fails, so QML bindings refresh identically</td></tr>
+              <tr><td><code>downloadQueueChanged</code></td><td>--</td><td>Queue state changed. C++ emits it when queued work is added, removed or completed; Python has no explicit queue (the executor serialises work) and emits it when a download starts and again when it completes or fails</td></tr>
               <tr><td><code>downloadStatusChanged</code></td><td><code>str, str, str</code></td><td>song_id, field, value_json -- targeted patch</td></tr>
               <tr><td><code>statusMessage</code></td><td><code>str</code></td><td>General status text for the page footer</td></tr>
               <tr><td><code>isSearchingChanged</code></td><td><code>bool</code></td><td>Search state property changed</td></tr>
@@ -706,8 +699,8 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
           <p>Both backends deliberately query <code>ytmusicapi</code> rather than yt-dlp's <code>ytsearch</code>. The C++
             source states why: <code>ytsearch</code> "returns generic YouTube videos (wrong thumbnails, uncurated results)",
             whereas ytmusicapi returns songs with real album art -- and on Android it answers in "~1-2s" instead of spinning
-            up yt-dlp. The desktop C++ build reuses the same script through <code>python3</code> so the two backends produce
-            identical result rows; the yt-dlp path survives only as a fallback.</p>
+            up yt-dlp. The desktop C++ build reuses the same script through <code>python3</code> so the two backends use
+            a common result shape (with different search limits); the yt-dlp path survives only as a fallback.</p>
           <h3>Song IDs as the identity, patches instead of re-emits</h3>
           <p>Commit <code>9573c7b</code> reworked downloads "to use unique song IDs instead of display names": every signal
             and every internal map is keyed by the YouTube video ID, so two results with the same title cannot collide and a
@@ -734,18 +727,15 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             trade-offs honestly: no stdin, no live stdout, and a "kill" that only suppresses the final signal -- "acceptable
             for MVP". The separate 250&nbsp;ms progress poller exists precisely because that adapter cannot stream progress.</p>
           <h3>Zero-UI cookies bypass</h3>
-          <p>The cookies file is auto-detected at one canonical path "so there's no setting/UI churn" (C++ comment). It is
-            "universal, user-accessible, no permissions needed beyond what's already granted for downloaded music"
-            (<span class="file-path">TODO/yt-cookies-file-picker.md</span>), and it ships identically on both backends. The
-            README steers users to fix the VPN first because that is the common cause.</p>
+          <p>The cookies file is auto-detected at one canonical path "so there's no setting/UI churn" (C++ comment). The path is derived from Qt's Downloads location; reading it still requires filesystem access, particularly for shared storage on Android.</p>
           <h3>Bypassing the AAR updater on Android</h3>
-          <p>YouTube's bot detection "rotates faster" than youtubedl-android releases, and the AAR's own updater crashes on
-            Android, so the bridge fetches the latest yt-dlp zipapp from GitHub itself and overwrites the file the AAR
-            executes. It runs on a background thread, tolerates every failure, and takes effect on the next download.</p>
+          <p>The bridge bypasses the updater failure recorded in its source comments by fetching the latest yt-dlp zipapp
+            from GitHub and replacing the file the AAR executes. It runs on a background thread; a failed update leaves
+            the existing version in place, while a successful update takes effect on the next download.</p>
           <h3>Downloads as a build option</h3>
-          <p>App stores forbid yt-dlp-based downloading, so the feature is a CMake option rather than a runtime setting: the
-            stub keeps every QML binding valid while the binary contains no download code, which is what the store review
-            requires. Default is ON for sideload and desktop builds.</p>
+          <p>The feature is controlled by a CMake option rather than a runtime setting. Turning it off compiles the manager
+            stub instead of its implementation. This build switch does not establish compliance with any store's current
+            policies. The CMake default is ON.</p>
         </section>
 
         <div class="related-pages">

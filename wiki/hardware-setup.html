@@ -77,7 +77,7 @@
           <div class="info-box-title">Firmware is not in this repository</div>
           There are no ESP32 sketches under the OCTAVE tree. The table below is the protocol the two OCTAVE backends
           implement (<span class="file-path">backend/esp32_volume_manager.py</span>,
-          <span class="file-path">src/managers/esp32volumemanager.cpp</span>); any firmware that speaks it will work.
+          <span class="file-path">src/managers/esp32volumemanager.cpp</span>); the wireless link and LED behaviour depend on compatible firmware.
         </div>
 
         <h3>Serial Protocol</h3>
@@ -113,7 +113,7 @@
           <li><strong>Linux:</strong> Python matches the VID via pyserial and adds every <code>/dev/ttyUSB*</code> and <code>/dev/ttyACM*</code> device.</li>
           <li><strong>macOS:</strong> VID match plus <code>/dev/tty.usbserial*</code>, <code>/dev/cu.usbserial*</code>, <code>/dev/tty.usbmodem*</code>, <code>/dev/cu.usbmodem*</code>, <code>/dev/tty.SLAB*</code>, <code>/dev/cu.SLAB*</code>, <code>/dev/tty.wchusbserial*</code>, <code>/dev/cu.wchusbserial*</code>.</li>
           <li><strong>Windows:</strong> all COM ports; the ESP32-S3 by VID or "USB JTAG/serial debug unit" in the description.</li>
-          <li><strong>C++ on every platform:</strong> <code>QSerialPortInfo::availablePorts()</code> with the same VID / keyword test; every enumerated port is listed.</li>
+          <li><strong>C++ desktop:</strong> <code>QSerialPortInfo::availablePorts()</code> with the same VID / keyword test; every enumerated port is listed.</li>
         </ul>
         <div class="info-box info">
           <div class="info-box-title">First run: the port is picked for you</div>
@@ -129,14 +129,14 @@
           <li>Startup: a 3 s delay, a port scan, then <code>connect_device()</code> if <code>esp32VolumeEnabled</code> is true.</li>
           <li>Unplug: detected on read error (Python: any <code>SerialException</code>; C++: <code>QSerialPort::ResourceError</code>, <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code>, <code>WriteError</code>, or a keepalive write the port rejects). With <code>esp32AutoReconnect</code> on, up to 5 attempts at 3, 6, 9, 10, 10 s (<code>min(10 s, 3 s &times; n)</code>); the Accessories page shows "Reconnecting in Ns... (n/5)" and finally "Max retries reached. Check connection." Pressing Connect there resets the counter.</li>
           <li>While disconnected, a background scan every 10 s keeps the port list fresh.</li>
-          <li>Changing the port or toggling the feature in settings disconnects / reconnects immediately.</li>
+          <li>Changing the port disconnects and schedules reconnect 500 ms later. The enable toggle starts or stops the feature.</li>
         </ul>
 
         <h3>LED ring modes</h3>
         <ul>
           <li><strong>Theme</strong> (<code>esp32LedColorMode = "theme"</code>, default): the accent colour extracted from the current album art is sent as <code>C</code> whenever the theme changes.</li>
           <li><strong>Static</strong> (<code>"static"</code>): a fixed colour from the picker (<code>esp32LedStaticColor</code>, default <code>#00FFFF</code>).</li>
-          <li><strong>LED sleep</strong> (<code>esp32LedSleepEnabled</code>, default on): the dongle turns its LEDs off after 5 s without traffic. OCTAVE implements "keep LEDs on" by sending a <code>V</code> keepalive every 2 s only when sleep is <em>off</em>; leaving sleep on means the ring also goes dark when OCTAVE exits.</li>
+          <li><strong>LED sleep</strong> (<code>esp32LedSleepEnabled</code>, default on): the manager assumes firmware that turns the LEDs off after 5 s without traffic. OCTAVE implements "keep LEDs on" by sending a <code>V</code> keepalive every 2 s only when sleep is <em>off</em>; leaving sleep on means the ring also goes dark when OCTAVE exits.</li>
         </ul>
         <p>
           Both launchers (<span class="file-path">main.py</span> and <span class="file-path">src/main.cpp</span>) send the colour
@@ -187,7 +187,7 @@ i2cdetect -y 2
         <p>
           The BerryIMU v3 carries an LSM6DSL accelerometer/gyroscope, a LIS3MDL magnetometer and a BMP388 barometer. OCTAVE
           fuses accelerometer + gyroscope with a Madgwick filter into a quaternion that rotates the Jeep model on
-          <code>CarMenu</code>, and derives pitch, roll, compass heading, G-forces, altitude and cabin temperature for the
+          <code>CarMenu</code>, and derives pitch, roll, compass heading, G-forces, altitude and the barometer's temperature for the
           sensor page, dashboards and home cards.
         </p>
 
@@ -201,7 +201,7 @@ i2cdetect -y 2
   |  SCL      |------------------|  SCL   exposed as i2c-2   |
   +-----------+                  +---------------------------+
         </pre>
-        <p>Four wires. Keep the run short and away from ignition wiring.</p>
+        <p>Use the BerryIMUv3's 3.3 V connection for this wiring; the board also has level shifting for 5 V hosts. Verify the connector pinout in the <a href="https://ozzmaker.com/product/berryimu-accelerometer-gyroscope-magnetometer-barometricaltitude-sensor/">manufacturer's BerryIMUv3 guide</a>. Keep the run short and away from ignition wiring.</p>
 
         <h3>I2C addresses and initialisation</h3>
         <table>
@@ -216,7 +216,7 @@ i2cdetect -y 2
 
         <h3>Filter and rates</h3>
         <ul>
-          <li><strong>Sample loop:</strong> 5 ms period (200 Hz target); the three I2C reads take ~4.3 ms on the Orange Pi 5 Plus so it settles around 172 Hz. Sleeps out the remainder, never spins.</li>
+          <li><strong>Sample loop:</strong> 5 ms period (200 Hz target). The documented Orange Pi 5 Plus measurement was about 4.3 ms for the three I2C reads and about 172 Hz overall; actual timing depends on the bus and device. The loop sleeps only when time remains in the target period.</li>
           <li><strong>Madgwick beta:</strong> 0.03. <strong>Gyro deadband:</strong> 0.4 dps; the filter is only stepped while some axis is moving, so a parked vehicle's model does not creep.</li>
           <li><strong>Fusion inputs:</strong> gyroscope + accelerometer (6DOF). The magnetometer is read but used only for the compass heading (<code>atan2(my, mx)</code>); yaw is stripped from the quaternion before it reaches the model.</li>
           <li><strong>Emission:</strong> ~60 Hz by default (<code>sensorEmitRate</code>, 10&ndash;120 Hz in Settings &rarr; Accessories &rarr; IMU Sensor); automatically 5 Hz while no page shows the values (car view, sensor pages, OBD dashboards, or a home card bound to an IMU parameter).</li>
@@ -235,7 +235,7 @@ i2cdetect -y 2
         <h3>Mounting orientation, ZERO and RESET</h3>
         <div class="info-box tip">
           <div class="info-box-title">Level the vehicle with ZERO</div>
-          Mount the board rigidly in any orientation, park on level ground, then press <strong>ZERO</strong> (on
+          Mount the board rigidly with its Z axis aligned vertically, park on level ground, then press <strong>ZERO</strong> (on
           <code>CarMenu</code> next to the LIVE badge, or at the bottom of <code>SensorMenu</code>). The current tilt is
           captured as a tare quaternion and the current accelerometer reading as the G-force zero, so the model sits flat and
           lateral / longitudinal G read 0. <strong>RESET</strong> clears it. The tare is held in memory only: it is not saved
@@ -261,7 +261,7 @@ i2cdetect -y 2
         <h2 id="gesture-sensor">PAJ7620U2 Gesture Sensor</h2>
         <span class="platform-badge linux">Linux / Raspberry Pi / Orange Pi</span>
         <p>
-          The PAJ7620U2 recognises nine hand gestures in front of its IR emitter. OCTAVE polls it at ~50 Hz on a worker
+          OCTAVE maps nine PAJ7620U2 gestures in front of its IR emitter. OCTAVE polls it at ~50 Hz on a worker
           thread and turns each gesture into a media / volume action.
         </p>
 
@@ -277,6 +277,10 @@ i2cdetect -y 2
 
   I2C address: 0x73     Chip ID: 0x7620 (verified at start)
         </pre>
+
+        <p>The diagram uses a breakout board that accepts 3.3 V supply and logic. Check the pinout for the exact module:
+          <a href="https://wiki.dfrobot.com/sen0315/">DFRobot SEN0315</a> and
+          <a href="https://www.waveshare.com/wiki/PAJ7620U2_Gesture_Sensor">Waveshare PAJ7620U2</a> both document 3.3 V operation, but their connectors differ.</p>
 
         <h3>Gestures and default actions</h3>
         <table>
@@ -304,7 +308,7 @@ i2cdetect -y 2
           <li><strong>Poll interval:</strong> 20 ms (~50 Hz).</li>
           <li><strong>Cooldown:</strong> <code>gestureCooldown</code>, default 300 ms (100&ndash;2000 ms in 50 ms steps) &mdash; gestures inside the window are ignored.</li>
           <li><strong>Forward / backward settle:</strong> 300 ms / 400 ms. An approach or retreat that turns out to be a swipe is re-read after the wait and reported as the swipe; otherwise as FORWARD / BACKWARD. These two gestures therefore respond a little later than swipes.</li>
-          <li><strong>Post-flush:</strong> 100 ms of read-and-discard after every accepted gesture, so one motion never fires twice.</li>
+          <li><strong>Post-flush:</strong> 100 ms of read-and-discard after every accepted gesture, to reduce repeated triggers from the same motion.</li>
         </ul>
 
         <h3>Initialisation</h3>
@@ -328,7 +332,7 @@ i2cdetect -y 2
         <!-- Verify -->
         <h2 id="verify">Verifying the Install (Log Lines)</h2>
         <p>
-          Run with <code>--debug</code> (Python) or watch <code>octave.log</code> (see <a href="troubleshooting.html">Troubleshooting</a>
+          Run with <code>--debug</code> for detailed logging. Watch <code>octave.log</code> for Python or <code>octave-cpp.log</code> for C++ (see <a href="troubleshooting.html">Troubleshooting</a>
           for log locations). C++ logging categories: <code>octave.esp32volume</code>, <code>octave.berryimu</code>,
           <code>octave.gesture</code>. A healthy start looks like this:
         </p>
@@ -339,7 +343,7 @@ i2cdetect -y 2
             <tr><td><code>connected to /dev/ttyACM0</code></td><td>Port open; the read loop / readyRead handler is live</td></tr>
             <tr><td><code>keepalive timer started (sleep disabled)</code> or <code>&hellip;NOT started (sleep enabled)</code></td><td>Reflects <code>esp32LedSleepEnabled</code></td></tr>
             <tr><td rowspan="4">BerryIMU</td><td><code>all sensors initialized successfully</code></td><td>All three chips answered their init writes</td></tr>
-            <tr><td><code>gyro calibrated - bias x=&hellip; y=&hellip; z=&hellip; dps</code></td><td>~1 s after connect; large values mean the vehicle moved during calibration</td></tr>
+            <tr><td><code>gyro calibrated - bias x=&hellip; y=&hellip; z=&hellip; dps</code></td><td>~1 s after connect; keep the vehicle stationary during this measurement; a large bias alone does not identify the cause</td></tr>
             <tr><td><code>first emit - pitch=&hellip; roll=&hellip; heading=&hellip; g=&hellip; q=[&hellip;]</code></td><td>First values reached QML; <code>g</code> should be near 1.0 at rest</td></tr>
             <tr><td><code>baro - alt=&hellip;m temp=&hellip;C</code></td><td>Logged once on the first barometer read</td></tr>
             <tr><td rowspan="2">Gesture</td><td><code>PAJ7620U2 initialized (chip ID: 0x7620)</code></td><td>Chip present and configured</td></tr>
@@ -353,7 +357,7 @@ i2cdetect -y 2
 
         <!-- 3D Printed Mounts -->
         <h2 id="3d-mounts">3D Printed Mounts</h2>
-        <p>The <span class="file-path">hardware/</span> directory holds vehicle-specific mounting parts.</p>
+        <p>The <span class="file-path">hardware/</span> directory holds vehicle-specific mounting parts and an Orange Pi case.</p>
 
         <h3>2003 Jeep TJ media console</h3>
         <p><span class="file-path">hardware/2003-jeep-tj/media-console/</span>:</p>
@@ -366,8 +370,15 @@ i2cdetect -y 2
             <tr><td><code>media-console-bracket-mk2.SLDPRT</code></td><td>SolidWorks part</td><td>Source for the Mk2 bracket</td></tr>
           </tbody>
         </table>
-        <p>
-          No slicer profile is checked in; choose a filament rated for cabin heat. The Jeep TJ itself is also the vehicle
+        <p>Other checked-in parts:</p>
+        <table>
+          <thead><tr><th>Directory</th><th>Files</th></tr></thead>
+          <tbody>
+            <tr><td><code>hardware/orange-pi-5-plus-case/</code></td><td><code>opi5plus-case-with-magnets.STL</code> and its <code>.SLDPRT</code> source</td></tr>
+            <tr><td><code>hardware/2003-jeep-tj/glove-box-mount/</code></td><td><code>glove-box-mount-base.STL</code>, <code>glove-box-mount-opi5-magnetic.STL</code> and its <code>.scad</code> source</td></tr>
+          </tbody>
+        </table>
+        <p>No slicer profile is checked in; choose a filament rated for cabin heat. The Jeep TJ itself is also the vehicle
           rendered on <code>CarMenu</code> (see <a href="pages.html#carmenu">Pages &rarr; CarMenu</a>).
         </p>
 
@@ -375,14 +386,14 @@ i2cdetect -y 2
         <h2 id="power">Power &amp; Vehicle Installation</h2>
         <p>General guidance for a permanent in-vehicle install; none of this is enforced by the software.</p>
         <ul>
-          <li><strong>SBC power:</strong> feed the board from a regulated buck converter on switched 12 V, not from a vehicle USB socket. Sudden power loss can corrupt the boot medium; a supercapacitor or UPS HAT with a graceful-shutdown trigger is the usual answer. OCTAVE runs its cleanup (<code>esp32VolumeManager.cleanup()</code>, <code>berryIMU.cleanup()</code>, <code>gestureSensor.cleanup()</code>) on SIGTERM / SIGINT as well as on window close, so a shutdown script that signals the process closes the ports cleanly.</li>
+          <li><strong>SBC power:</strong> use a supply that meets the board's voltage and current requirements and is designed for the vehicle electrical environment. Sudden power loss can corrupt the boot medium; a power-hold circuit or UPS with a graceful-shutdown trigger can allow the OS to finish writing before power is removed. OCTAVE runs its cleanup (<code>esp32VolumeManager.cleanup()</code>, <code>berryIMU.cleanup()</code>, <code>gestureSensor.cleanup()</code>) on SIGTERM / SIGINT as well as on window close, so a shutdown script that signals the process closes the ports cleanly.</li>
           <li><strong>Sensors:</strong> both I2C boards run from the SBC's 3.3 V rail.</li>
           <li><strong>ESP32 dongle:</strong> USB-powered by the host. The encoder unit needs its own supply.</li>
-          <li><strong>Display:</strong> give it its own supply rather than the SBC's USB.</li>
-          <li><strong>I2C cable length:</strong> keep it short; I2C is not designed for long runs and the loop reads the bus ~172 times a second, so marginal wiring shows up as read errors (Python restarts the driver on the first one; C++ skips the sample and restarts after five in a row).</li>
+          <li><strong>Display:</strong> size its supply according to the display's requirements and the host's available power budget.</li>
+          <li><strong>I2C cable length:</strong> keep it short; I2C is not designed for long runs and the loop targets 200 samples per second, so marginal wiring shows up as read errors (Python restarts the driver on the first one; C++ skips the sample and restarts after five in a row).</li>
           <li><strong>Vibration and heat:</strong> strain-relieve connectors, keep electronics out of direct sun.</li>
-          <li><strong>Grounding:</strong> common ground for the SBC, sensors and display; ground loops show up as noise on the accelerometer.</li>
-          <li><strong>OBD-II:</strong> unrelated to these sensors but shares the port list: the Bluetooth ELM327 is paired over rfcomm and its port set in OBD settings (<code>obdBluetoothPort</code>, empty by default); that port is hidden from the ESP32 picker. On Linux/Pi the easiest route is "Connect Bluetooth OBD2" on the empty OBD page (or "Find Bluetooth Adapters" in OBD settings): it scans, pairs with the adapter's PIN (1234 / 0000 / 6789 / 1111, answered by OCTAVE), trusts it and connects, with no MAC to type and no <code>bluetoothctl</code>. See <a href="obd-manager.html#adapter-finder">Adapter Finder</a>. By hand, the most reliable route is the "Direct" button: enter the adapter's MAC and it connects over a Bluetooth socket (saved as <code>rfcomm://&lt;MAC&gt;</code>) with no <code>rfcomm bind</code>, retrying every 10 s while the ignition is off. The adapter only needs to be trusted in <code>bluetoothctl</code>; pairing it isn't needed for the NEXAS. See <a href="obd-manager.html#direct-bluetooth">Direct Bluetooth</a>. On the Android build the same OBD settings page lists the phone's paired Bluetooth devices as "&lt;name&gt; &middot; &lt;MAC&gt;" once the Bluetooth permission has been granted on the first Connect tap, so the adapter is picked from the list rather than typed in.</li>
+          <li><strong>Grounding:</strong> follow each board's power and signal-ground requirements; verify the complete installation independently of OCTAVE.</li>
+          <li><strong>OBD-II:</strong> unrelated to these sensors but shares the port list: a Bluetooth Classic ELM327 can use a bound RFCOMM serial port or a direct RFCOMM socket, selected in OBD settings (<code>obdBluetoothPort</code>, empty by default); that port is hidden from the ESP32 picker. On Linux/Pi the easiest route is "Connect Bluetooth OBD2" on the empty OBD page (or "Find Bluetooth Adapters" in OBD settings): it scans, pairs with the adapter's PIN (1234 / 0000 / 6789 / 1111, answered by OCTAVE), trusts it and connects, with no MAC to type and no <code>bluetoothctl</code>. See <a href="obd-manager.html#adapter-finder">Adapter Finder</a>. For a manual direct connection, use the "Direct" button: enter the adapter's MAC and it connects over a Bluetooth socket (saved as <code>rfcomm://&lt;MAC&gt;</code>) with no <code>rfcomm bind</code>, retrying every 10 s while the ignition is off. Pairing requirements depend on the adapter; the finder can try a trusted Classic connection even if pairing fails. See <a href="obd-manager.html#direct-bluetooth">Direct Bluetooth</a>. On the Android build the same OBD settings page lists the phone's paired Bluetooth devices as "&lt;name&gt; &middot; &lt;MAC&gt;" once the Bluetooth permission has been granted on the first Connect tap, so the adapter is picked from the list rather than typed in.</li>
         </ul>
 
         <!-- Why -->
@@ -392,7 +403,7 @@ i2cdetect -y 2
           <li><strong>Text lines, not a binary frame.</strong> One printable command per line keeps the firmware trivial and lets you test with any serial terminal (<code>echo -e "V50\n" &gt; /dev/ttyACM0</code>, or type <code>+</code> to the port).</li>
           <li><strong>Bus 2 hard-coded.</strong> The constants were set for the reference board and never needed to move; the price is the overlay step above. If you need another bus, it is a one-line change in each of the four driver files.</li>
           <li><strong>Gyro bias measured at every start, tare on demand.</strong> Bias drifts with temperature, so it is re-measured each run; the mounting slope is a user decision, so it is a button rather than a config value, and it is deliberately not persisted.</li>
-          <li><strong>Retry, but not forever.</strong> Five linear-backoff attempts cover a bus that appears late at boot without hammering a bus that will never appear; a permission error is not retried in either backend because only a re-login fixes it.</li>
+          <li><strong>Retry, but not forever.</strong> Five linear-backoff attempts cover a bus that appears late at boot without hammering a bus that will never appear; a permission error is not retried in either backend because permissions must be corrected before another attempt.</li>
           <li><strong>The driver, not the UI, decides the emit rate.</strong> Whatever page is showing, the sensor loop keeps the attitude current; only the rate of signals into QML changes, so the first frame after opening the car view is already right.</li>
         </ul>
 

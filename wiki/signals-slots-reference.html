@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Signals &amp; Slots Reference</div>
           <h1 class="page-title">Signals &amp; Slots Reference</h1>
-          <p class="page-subtitle">Exhaustive public API of every backend object registered as a QML context property, verified against both the C++ (<span class="file-path">src/managers/</span>) and Python (<span class="file-path">backend/</span>) backends.</p>
+          <p class="page-subtitle">Public API of the backend objects registered as a QML context property, verified against both the C++ (<span class="file-path">src/managers/</span>) and Python (<span class="file-path">backend/</span>) backends.</p>
         </div>
 
         <nav class="toc">
@@ -22,6 +22,7 @@
             <li><a href="#registry">Context property registry</a></li>
             <li><a href="#conventions">Reading this page</a></li>
             <li><a href="#settingsManager">SettingsManager</a></li>
+            <li><a href="#assetStore">AssetStore</a></li>
             <li><a href="#clock">Clock</a></li>
             <li><a href="#diagnosticsManager">DiagnosticsManager</a></li>
             <li><a href="#networkManager">NetworkManager</a></li>
@@ -45,15 +46,16 @@
 
         <div class="info-box info">
           <div class="info-box-title">How managers reach QML</div>
-          Every manager is a <code>QObject</code> registered in <span class="file-path">src/main.cpp</span> (<code>ctx-&gt;setContextProperty(...)</code>) and <span class="file-path">main.py</span> (<code>engine.rootContext().setContextProperty(...)</code>) under the <em>same</em> name, so QML never knows which backend is running: <code>mediaManager.next_track()</code>, <code>settingsManager.themeSetting</code>, <code>obdManager.onRpmChanged</code>. Two scalar context properties exist as well: <code>screenAutoScale</code> (float, short screen edge / 720 clamped to 0.4&ndash;3.0) and <code>isAndroid</code> (bool, always <code>false</code> on Python). The <code>qmlRegisterType</code>'d <code>OCTAVE.AndroidAuto.EmbeddedDhuItem</code> and the QML singletons (<code>OBDParameterModel</code>, <code>WidgetCatalog</code>, &hellip;) are documented in <a href="components.html">Components</a>, not here.
+          Every manager is a <code>QObject</code> registered in <span class="file-path">src/main.cpp</span> (<code>ctx-&gt;setContextProperty(...)</code>) and <span class="file-path">main.py</span> (<code>engine.rootContext().setContextProperty(...)</code>) under the <em>same</em> name, so QML never knows which backend is running: <code>mediaManager.next_track()</code>, <code>settingsManager.themeSetting</code>, <code>obdManager.onRpmChanged</code>. Other context values are <code>screenAutoScale</code> (float, short screen edge / 720 clamped to 0.4&ndash;3.0) <code>isAndroid</code> (bool, always <code>false</code> on Python), <code>wikiViewerAvailable</code> (bool: an embedded web viewer is available), and <code>wikiHomeUrl</code> (<code>QUrl</code>: the wiki entry point). The <code>qmlRegisterType</code>'d <code>OCTAVE.AndroidAuto.EmbeddedDhuItem</code> and the QML singletons (<code>OBDParameterModel</code>, <code>WidgetCatalog</code>, &hellip;) are documented in <a href="components.html">Components</a>, not here.
         </div>
 
         <h2 id="registry">Context property registry</h2>
-        <p>16 context properties (plus one sub-object and one profiler) &mdash; about 780 public members in total.</p>
+        <p>17 QObject context properties, plus the <code>dhuCapture</code> sub-object and an optional Python profiler. The scalar context values are described above.</p>
         <table>
           <thead><tr><th>QML name</th><th>C++ class &amp; file</th><th>Python class &amp; file</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td><a href="#settingsManager"><code>settingsManager</code></a></td><td><code>SettingsManager</code> &mdash; <span class="file-path">src/managers/settingsmanager.h</span></td><td><code>SettingsManager</code> &mdash; <span class="file-path">backend/settings_manager.py</span></td><td></td></tr>
+            <tr><td><a href="#assetStore"><code>assetStore</code></a></td><td><code>AssetStore</code> — <span class="file-path">src/util/assetstore.h</span></td><td><code>AssetStore</code> — <span class="file-path">backend/asset_store.py</span></td><td>Local URLs for bundled assets, with APK extraction on Android</td></tr>
             <tr><td><a href="#clock"><code>clock</code></a></td><td><code>Clock</code> &mdash; <span class="file-path">src/managers/clock.h</span></td><td><code>Clock</code> &mdash; <span class="file-path">backend/clock.py</span></td><td></td></tr>
             <tr><td><a href="#diagnosticsManager"><code>diagnosticsManager</code></a></td><td><code>DiagnosticsManager</code> &mdash; <span class="file-path">src/managers/diagnosticsmanager.h</span></td><td><code>DiagnosticsManager</code> &mdash; <span class="file-path">backend/diagnostics_manager.py</span></td><td></td></tr>
             <tr><td><a href="#networkManager"><code>networkManager</code></a></td><td><code>NetworkManager</code> &mdash; <span class="file-path">src/managers/networkmanager.h</span></td><td><code>NetworkManager</code> &mdash; <span class="file-path">backend/network_manager.py</span></td><td></td></tr>
@@ -86,7 +88,7 @@
         <!-- SettingsManager -->
         <h2 id="settingsManager">SettingsManager <span class="cmt">&mdash; <code>settingsManager</code></span></h2>
         <p><span class="file-path">src/managers/settingsmanager.h</span> / <span class="file-path">backend/settings_manager.py</span> &mdash; QML context property <code>settingsManager</code></p>
-        <p>Central settings store. Persists <span class="file-path">settingsConfigure.json</span> in the OS config dir (writes are debounced; <code>flushPendingSave()</code> forces them). Every setting follows the same triple: a read-only <code>Q_PROPERTY</code>, a <code>&lt;name&gt;Changed</code> signal and a <code>save_&lt;snake_name&gt;()</code> slot. Types and defaults for every key are in the <a href="settings-reference.html">Settings Reference</a>.</p>
+        <p>Central settings store. Persists <span class="file-path">settingsConfigure.json</span> in the OS config dir (writes are debounced; <code>flushPendingSave()</code> forces them). Settings with a dedicated property follow a triple: a read-only <code>Q_PROPERTY</code>, a <code>&lt;name&gt;Changed</code> signal and a <code>save_&lt;snake_name&gt;()</code> slot. Types and defaults for every key are in the <a href="settings-reference.html">Settings Reference</a>.</p>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -111,17 +113,17 @@
             <tr><td><code>settingsLayoutStyle</code></td><td><code>QString</code></td><td>read-only</td><td><code>settingsLayoutStyleChanged</code></td><td>Which Settings*Layout.qml renders the menu: <code>"Carousel"</code>, <code>"Sidebar"</code>, <code>"Hub"</code>, <code>"Dashboard"</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>albumArtColors</code></td><td><code>QString</code></td><td>read-only</td><td><code>albumArtColorsChanged</code></td><td>JSON of the last extracted album-art palette (written by the media managers via <code>set_album_art_colors</code>) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>settingsMenuVisibility</code></td><td><code>QString</code></td><td>read-only</td><td><code>settingsMenuVisibilityChanged</code></td><td>JSON map of settings section id &rarr; visible (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>; a section missing from the file counts as visible in both backends) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>startUpVolume</code></td><td><code>float</code></td><td>read-only</td><td><code>startUpVolumeChanged</code></td><td>Volume percent applied at launch &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>startUpVolume</code></td><td><code>float</code></td><td>read-only</td><td><code>startUpVolumeChanged</code></td><td>Linear gain applied at launch (0–1; default 0.1) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>currentVolume</code></td><td><code>int</code></td><td>read-only</td><td><code>currentVolumeChanged</code></td><td>Live volume percent (0&ndash;100); set only through <code>volumeController.applyVolume()</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>mediaFolder</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaFolderChanged</code></td><td>Root folder of the local music library &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>autoPlayOnStartup</code></td><td><code>bool</code></td><td>read-only</td><td><code>autoPlayOnStartupChanged</code></td><td>Resume playback automatically at launch &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>persistShuffleState</code></td><td><code>bool</code></td><td>read-only</td><td><code>persistShuffleStateChanged</code></td><td>Remember shuffle across restarts &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>lastShuffleState</code></td><td><code>bool</code></td><td>read-only</td><td><code>lastShuffleStateChanged</code></td><td>Shuffle state saved at exit &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>lastShuffleState</code></td><td><code>bool</code></td><td>read-only</td><td><code>lastShuffleStateChanged</code></td><td>Shuffle state saved whenever it changes &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>lastPlayedSong</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastPlayedSongChanged</code></td><td>Filename to resume &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>lastPlayedPosition</code></td><td><code>int</code></td><td>read-only</td><td><code>lastPlayedPositionChanged</code></td><td>Resume position in ms &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>lastPlayedPlaylist</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastPlayedPlaylistChanged</code></td><td>Playlist to resume &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>musicButtonDefaultPage</code></td><td><code>QString</code></td><td>read-only</td><td><code>musicButtonDefaultPageChanged</code></td><td>View the music nav button opens: <code>"mediaRoom"</code> / <code>"mediaPlayer"</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>returnToLibraryAfterSelection</code></td><td><code>bool</code></td><td>read-only</td><td><code>returnToLibraryAfterSelectionChanged</code></td><td>Go back to the library after picking a song &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>returnToLibraryAfterSelection</code></td><td><code>bool</code></td><td>read-only</td><td><code>returnToLibraryAfterSelectionChanged</code></td><td>Keep the library open after selecting a track; false opens Now Playing &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>showWaveformVisualizer</code></td><td><code>bool</code></td><td>read-only</td><td><code>showWaveformVisualizerChanged</code></td><td>Show the FFT waveform on the player &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>show3DButtonTilt</code></td><td><code>bool</code></td><td>read-only</td><td><code>show3DButtonTiltChanged</code></td><td>3D tilt effect on buttons &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>show3DAlbumPreview</code></td><td><code>bool</code></td><td>read-only</td><td><code>show3DAlbumPreviewChanged</code></td><td>Show previous/next album art side cards &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -137,17 +139,17 @@
             <tr><td><code>textScrollSpeed</code></td><td><code>int</code></td><td>read-only</td><td><code>textScrollSpeedChanged</code></td><td>Marquee scroll speed for long titles &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdBluetoothPort</code></td><td><code>QString</code></td><td>read-only</td><td><code>obdBluetoothPortChanged</code></td><td>OBD adapter identifier: serial port / COM port / <code>/dev</code> path, or BLE MAC on Android &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdSavedAdapters</code></td><td><code>QString</code></td><td>read-only</td><td><code>obdSavedAdaptersChanged</code></td><td>JSON array of remembered <code>{name, mac}</code> adapters, most recent first &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>obdFastMode</code></td><td><code>bool</code></td><td>read-only</td><td><code>obdFastModeChanged</code></td><td>Poll only the PIDs shown on screen &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>obdFastMode</code></td><td><code>bool</code></td><td>read-only</td><td><code>obdFastModeChanged</code></td><td>Adapter fast-mode option, applied at the next connection; on-screen demand independently selects the PIDs &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td><code>int</code></td><td>read-only</td><td><code>obdAutoReconnectAttemptsChanged</code></td><td>Max automatic reconnect attempts before giving up &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>fuelTankCapacity</code></td><td><code>float</code></td><td>read-only</td><td><code>fuelTankCapacityChanged</code></td><td>Tank size used for fuel-level derived readouts &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>fuelTankCapacity</code></td><td><code>float</code></td><td>read-only</td><td><code>fuelTankCapacityChanged</code></td><td>Legacy tank-capacity setting in gallons; no current consumer uses it &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>homeOBDParameters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>homeOBDParametersChanged</code></td><td>Ordered list of PID ids shown on the home screen &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>customThemes</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>customThemesChanged</code></td><td>List of user-saved theme objects &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>customThemes</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>customThemesChanged</code></td><td>Names of user-saved themes; use <code>get_custom_theme(name)</code> for an object &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>directoryHistory</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>directoryHistoryChanged</code></td><td>Recently used media folders (max 10) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>windowState</code></td><td><code>QString</code></td><td>read-only</td><td><code>windowStateChanged</code></td><td><code>"windowed"</code> / <code>"fullscreen"</code> / <code>"maximized"</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>lastSettingsSection</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastSettingsSectionChanged</code></td><td>Settings section to reopen (e.g. <code>"mediaSettings"</code>) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>androidAutoEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>androidAutoEnabledChanged</code></td><td>Show the Android Auto page &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>phoneMirrorEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>phoneMirrorEnabledChanged</code></td><td>Show the Phone Mirror page &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>scrcpyDisplaySize</code></td><td><code>QString</code></td><td>read-only</td><td><code>scrcpyDisplaySizeChanged</code></td><td>Virtual display <code>"WxH"</code> for mirroring; <code>""</code> mirrors the phone screen &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>scrcpyDisplaySize</code></td><td><code>QString</code></td><td>read-only</td><td><code>scrcpyDisplaySizeChanged</code></td><td>Virtual display <code>"WxH"</code> or <code>"auto"</code> for mirroring; <code>""</code> mirrors the phone screen &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyAudioGain</code></td><td><code>double</code></td><td>read-only</td><td><code>scrcpyAudioGainChanged</code></td><td>Linear gain applied to phone audio before OCTAVE volume &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyAudioDuckEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>scrcpyAudioDuckEnabledChanged</code></td><td>Duck local media while the phone produces sound &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>scrcpyAudioDuckLevel</code></td><td><code>double</code></td><td>read-only</td><td><code>scrcpyAudioDuckLevelChanged</code></td><td>Duck factor (linear, e.g. 0.1 = -20 dB) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -175,57 +177,57 @@
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>save_device_name(QString name)</code></td><td><code>void</code></td><td>Validate and persist <code>deviceName</code>, then emit <code>deviceNameChanged</code></td></tr>
-            <tr><td><code>save_font_setting(QString font)</code></td><td><code>void</code></td><td>Validate and persist <code>fontSetting</code>, then emit <code>fontSettingChanged</code></td></tr>
-            <tr><td><code>save_theme_setting(QString theme)</code></td><td><code>void</code></td><td>Validate and persist <code>themeSetting</code>, then emit <code>themeSettingChanged</code></td></tr>
-            <tr><td><code>save_ui_scale(float scale)</code></td><td><code>void</code></td><td>Validate and persist <code>uiScale</code>, then emit <code>uiScaleChanged</code></td></tr>
-            <tr><td><code>save_color_transition_ms(int ms)</code></td><td><code>void</code></td><td>Validate and persist <code>colorTransitionMs</code>, then emit <code>colorTransitionMsChanged</code></td></tr>
-            <tr><td><code>save_song_length_transition(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>songLengthTransition</code>, then emit <code>songLengthTransitionChanged</code></td></tr>
-            <tr><td><code>save_show_clock(bool show)</code></td><td><code>void</code></td><td>Validate and persist <code>showClock</code>, then emit <code>showClockChanged</code></td></tr>
-            <tr><td><code>save_clock_format(bool is24hour)</code></td><td><code>void</code></td><td>Validate and persist <code>clockFormat24Hour</code>, then emit <code>clockFormat24HourChanged</code></td></tr>
-            <tr><td><code>save_clock_show_seconds(bool show)</code></td><td><code>void</code></td><td>Validate and persist <code>clockShowSeconds</code>, then emit <code>clockShowSecondsChanged</code></td></tr>
-            <tr><td><code>save_clock_size(int size)</code></td><td><code>void</code></td><td>Validate and persist <code>clockSize</code>, then emit <code>clockSizeChanged</code></td></tr>
+            <tr><td><code>save_device_name(QString name)</code></td><td><code>void</code></td><td>Save <code>deviceName</code>, then emit <code>deviceNameChanged</code></td></tr>
+            <tr><td><code>save_font_setting(QString font)</code></td><td><code>void</code></td><td>Save <code>fontSetting</code>, then emit <code>fontSettingChanged</code></td></tr>
+            <tr><td><code>save_theme_setting(QString theme)</code></td><td><code>void</code></td><td>Save <code>themeSetting</code>, then emit <code>themeSettingChanged</code></td></tr>
+            <tr><td><code>save_ui_scale(float scale)</code></td><td><code>void</code></td><td>Save <code>uiScale</code>, then emit <code>uiScaleChanged</code></td></tr>
+            <tr><td><code>save_color_transition_ms(int ms)</code></td><td><code>void</code></td><td>Save <code>colorTransitionMs</code>, then emit <code>colorTransitionMsChanged</code></td></tr>
+            <tr><td><code>save_song_length_transition(bool enabled)</code></td><td><code>void</code></td><td>Save <code>songLengthTransition</code>, then emit <code>songLengthTransitionChanged</code></td></tr>
+            <tr><td><code>save_show_clock(bool show)</code></td><td><code>void</code></td><td>Save <code>showClock</code>, then emit <code>showClockChanged</code></td></tr>
+            <tr><td><code>save_clock_format(bool is24hour)</code></td><td><code>void</code></td><td>Save <code>clockFormat24Hour</code>, then emit <code>clockFormatChanged</code></td></tr>
+            <tr><td><code>save_clock_show_seconds(bool show)</code></td><td><code>void</code></td><td>Save <code>clockShowSeconds</code>, then emit <code>clockShowSecondsChanged</code></td></tr>
+            <tr><td><code>save_clock_size(int size)</code></td><td><code>void</code></td><td>Save <code>clockSize</code>, then emit <code>clockSizeChanged</code></td></tr>
             <tr><td><code>save_clock_size_auto(bool autoSize)</code></td><td><code>void</code></td><td>Persist <code>clockSizeAuto</code>, then emit <code>clockSizeAutoChanged</code></td></tr>
-            <tr><td><code>save_background_grid(QString grid)</code></td><td><code>void</code></td><td>Validate and persist <code>backgroundGrid</code>, then emit <code>backgroundGridChanged</code></td></tr>
-            <tr><td><code>save_screen_width(int width)</code></td><td><code>void</code></td><td>Validate and persist <code>screenWidth</code>, then emit <code>screenWidthChanged</code></td></tr>
-            <tr><td><code>save_screen_height(int height)</code></td><td><code>void</code></td><td>Validate and persist <code>screenHeight</code>, then emit <code>screenHeightChanged</code></td></tr>
-            <tr><td><code>save_background_blur_radius(int radius)</code></td><td><code>void</code></td><td>Validate and persist <code>backgroundBlurRadius</code>, then emit <code>backgroundBlurRadiusChanged</code></td></tr>
-            <tr><td><code>save_bottom_bar_orientation(QString orientation)</code></td><td><code>void</code></td><td>Validate and persist <code>bottomBarOrientation</code>, then emit <code>bottomBarOrientationChanged</code></td></tr>
-            <tr><td><code>save_show_bottom_bar_media_controls(bool show)</code></td><td><code>void</code></td><td>Validate and persist <code>showBottomBarMediaControls</code>, then emit <code>showBottomBarMediaControlsChanged</code></td></tr>
-            <tr><td><code>save_settings_layout_style(QString style)</code></td><td><code>void</code></td><td>Validate and persist <code>settingsLayoutStyle</code>, then emit <code>settingsLayoutStyleChanged</code></td></tr>
+            <tr><td><code>save_background_grid(QString grid)</code></td><td><code>void</code></td><td>Save <code>backgroundGrid</code>, then emit <code>backgroundGridChanged</code></td></tr>
+            <tr><td><code>save_screen_width(int width)</code></td><td><code>void</code></td><td>Save <code>screenWidth</code>, then emit <code>screenWidthChanged</code></td></tr>
+            <tr><td><code>save_screen_height(int height)</code></td><td><code>void</code></td><td>Save <code>screenHeight</code>, then emit <code>screenHeightChanged</code></td></tr>
+            <tr><td><code>save_background_blur_radius(int radius)</code></td><td><code>void</code></td><td>Save <code>backgroundBlurRadius</code>, then emit <code>backgroundBlurRadiusChanged</code></td></tr>
+            <tr><td><code>save_bottom_bar_orientation(QString orientation)</code></td><td><code>void</code></td><td>Save <code>bottomBarOrientation</code>, then emit <code>bottomBarOrientationChanged</code></td></tr>
+            <tr><td><code>save_show_bottom_bar_media_controls(bool show)</code></td><td><code>void</code></td><td>Save <code>showBottomBarMediaControls</code>, then emit <code>showBottomBarMediaControlsChanged</code></td></tr>
+            <tr><td><code>save_settings_layout_style(QString style)</code></td><td><code>void</code></td><td>Save <code>settingsLayoutStyle</code>, then emit <code>settingsLayoutStyleChanged</code></td></tr>
             <tr><td><code>set_album_art_colors(QString colorsJson)</code></td><td><code>void</code></td><td>Cache the latest extracted palette JSON so the theme survives a restart</td></tr>
-            <tr><td><code>save_start_volume(float volume)</code></td><td><code>void</code></td><td>Validate and persist <code>startUpVolume</code>, then emit <code>startUpVolumeChanged</code></td></tr>
+            <tr><td><code>save_start_volume(float volume)</code></td><td><code>void</code></td><td>Save <code>startUpVolume</code>, then emit <code>startUpVolumeChanged</code></td></tr>
             <tr><td><code>setCurrentVolume(int volume)</code></td><td><code>void</code></td><td>Store the live volume percent and emit <code>currentVolumeChanged</code> (not written to disk). Call <code>volumeController.applyVolume()</code> instead of this from QML</td></tr>
-            <tr><td><code>save_media_folder(QString folderPath)</code></td><td><code>void</code></td><td>Validate and persist <code>mediaFolder</code>, then emit <code>mediaFolderChanged</code></td></tr>
-            <tr><td><code>save_auto_play_on_startup(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>autoPlayOnStartup</code>, then emit <code>autoPlayOnStartupChanged</code></td></tr>
-            <tr><td><code>save_persist_shuffle_state(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>persistShuffleState</code>, then emit <code>persistShuffleStateChanged</code></td></tr>
-            <tr><td><code>save_last_shuffle_state(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>lastShuffleState</code>, then emit <code>lastShuffleStateChanged</code></td></tr>
-            <tr><td><code>save_last_played_song(QString filename)</code></td><td><code>void</code></td><td>Validate and persist <code>lastPlayedSong</code>, then emit <code>lastPlayedSongChanged</code></td></tr>
-            <tr><td><code>save_last_played_position(int positionMs)</code></td><td><code>void</code></td><td>Validate and persist <code>lastPlayedPosition</code>, then emit <code>lastPlayedPositionChanged</code></td></tr>
-            <tr><td><code>save_last_played_playlist(QString playlistName)</code></td><td><code>void</code></td><td>Validate and persist <code>lastPlayedPlaylist</code>, then emit <code>lastPlayedPlaylistChanged</code></td></tr>
+            <tr><td><code>save_media_folder(QString folderPath)</code></td><td><code>void</code></td><td>Save <code>mediaFolder</code>, then emit <code>mediaFolderChanged</code></td></tr>
+            <tr><td><code>save_auto_play_on_startup(bool enabled)</code></td><td><code>void</code></td><td>Save <code>autoPlayOnStartup</code>, then emit <code>autoPlayOnStartupChanged</code></td></tr>
+            <tr><td><code>save_persist_shuffle_state(bool enabled)</code></td><td><code>void</code></td><td>Save <code>persistShuffleState</code>, then emit <code>persistShuffleStateChanged</code></td></tr>
+            <tr><td><code>save_last_shuffle_state(bool enabled)</code></td><td><code>void</code></td><td>Save <code>lastShuffleState</code>, then emit <code>lastShuffleStateChanged</code></td></tr>
+            <tr><td><code>save_last_played_song(QString filename)</code></td><td><code>void</code></td><td>Save <code>lastPlayedSong</code>, then emit <code>lastPlayedSongChanged</code></td></tr>
+            <tr><td><code>save_last_played_position(int positionMs)</code></td><td><code>void</code></td><td>Save <code>lastPlayedPosition</code>, then emit <code>lastPlayedPositionChanged</code></td></tr>
+            <tr><td><code>save_last_played_playlist(QString playlistName)</code></td><td><code>void</code></td><td>Save <code>lastPlayedPlaylist</code>, then emit <code>lastPlayedPlaylistChanged</code></td></tr>
             <tr><td><code>save_playback_state(QString song, int positionMs, QString playlist)</code></td><td><code>void</code></td><td>Write song, position (ms) and playlist in one disk write for resume-on-launch</td></tr>
-            <tr><td><code>save_music_button_default_page(QString page)</code></td><td><code>void</code></td><td>Validate and persist <code>musicButtonDefaultPage</code>, then emit <code>musicButtonDefaultPageChanged</code></td></tr>
-            <tr><td><code>save_return_to_library_after_selection(bool returnToLibrary)</code></td><td><code>void</code></td><td>Validate and persist <code>returnToLibraryAfterSelection</code>, then emit <code>returnToLibraryAfterSelectionChanged</code></td></tr>
-            <tr><td><code>save_show_waveform_visualizer(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>showWaveformVisualizer</code>, then emit <code>showWaveformVisualizerChanged</code></td></tr>
-            <tr><td><code>save_show_3d_button_tilt(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>show3DButtonTilt</code>, then emit <code>show3DButtonTiltChanged</code></td></tr>
-            <tr><td><code>save_show_3d_album_preview(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>show3DAlbumPreview</code>, then emit <code>show3DAlbumPreviewChanged</code></td></tr>
-            <tr><td><code>save_rounded_album_art(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>roundedAlbumArt</code>, then emit <code>roundedAlbumArtChanged</code></td></tr>
-            <tr><td><code>save_album_art_corner_radius(int radius)</code></td><td><code>void</code></td><td>Validate and persist <code>albumArtCornerRadius</code>, then emit <code>albumArtCornerRadiusChanged</code></td></tr>
-            <tr><td><code>save_show_album_art_shadow(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>showAlbumArtShadow</code>, then emit <code>showAlbumArtShadowChanged</code></td></tr>
-            <tr><td><code>save_vinyl_record_mode(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>vinylRecordMode</code>, then emit <code>vinylRecordModeChanged</code></td></tr>
-            <tr><td><code>save_album_art_transition(QString transition)</code></td><td><code>void</code></td><td>Validate and persist <code>albumArtTransition</code>, then emit <code>albumArtTransitionChanged</code></td></tr>
-            <tr><td><code>save_background_overlay_opacity(int opacity)</code></td><td><code>void</code></td><td>Validate and persist <code>backgroundOverlayOpacity</code>, then emit <code>backgroundOverlayOpacityChanged</code></td></tr>
-            <tr><td><code>save_side_card_opacity(double opacity)</code></td><td><code>void</code></td><td>Validate and persist <code>sideCardOpacity</code>, then emit <code>sideCardOpacityChanged</code></td></tr>
-            <tr><td><code>save_side_card_angle(int angle)</code></td><td><code>void</code></td><td>Validate and persist <code>sideCardAngle</code>, then emit <code>sideCardAngleChanged</code></td></tr>
-            <tr><td><code>save_button_tilt_duration(int duration)</code></td><td><code>void</code></td><td>Validate and persist <code>buttonTiltDuration</code>, then emit <code>buttonTiltDurationChanged</code></td></tr>
-            <tr><td><code>save_text_scroll_speed(int speed)</code></td><td><code>void</code></td><td>Validate and persist <code>textScrollSpeed</code>, then emit <code>textScrollSpeedChanged</code></td></tr>
-            <tr><td><code>save_obd_bluetooth_port(QString port)</code></td><td><code>void</code></td><td>Validate and persist <code>obdBluetoothPort</code>, then emit <code>obdBluetoothPortChanged</code></td></tr>
+            <tr><td><code>save_music_button_default_page(QString page)</code></td><td><code>void</code></td><td>Save <code>musicButtonDefaultPage</code>, then emit <code>musicButtonDefaultPageChanged</code></td></tr>
+            <tr><td><code>save_return_to_library_after_selection(bool returnToLibrary)</code></td><td><code>void</code></td><td>Save <code>returnToLibraryAfterSelection</code>, then emit <code>returnToLibraryAfterSelectionChanged</code></td></tr>
+            <tr><td><code>save_show_waveform_visualizer(bool enabled)</code></td><td><code>void</code></td><td>Save <code>showWaveformVisualizer</code>, then emit <code>showWaveformVisualizerChanged</code></td></tr>
+            <tr><td><code>save_show_3d_button_tilt(bool enabled)</code></td><td><code>void</code></td><td>Save <code>show3DButtonTilt</code>, then emit <code>show3DButtonTiltChanged</code></td></tr>
+            <tr><td><code>save_show_3d_album_preview(bool enabled)</code></td><td><code>void</code></td><td>Save <code>show3DAlbumPreview</code>, then emit <code>show3DAlbumPreviewChanged</code></td></tr>
+            <tr><td><code>save_rounded_album_art(bool enabled)</code></td><td><code>void</code></td><td>Save <code>roundedAlbumArt</code>, then emit <code>roundedAlbumArtChanged</code></td></tr>
+            <tr><td><code>save_album_art_corner_radius(int radius)</code></td><td><code>void</code></td><td>Save <code>albumArtCornerRadius</code>, then emit <code>albumArtCornerRadiusChanged</code></td></tr>
+            <tr><td><code>save_show_album_art_shadow(bool enabled)</code></td><td><code>void</code></td><td>Save <code>showAlbumArtShadow</code>, then emit <code>showAlbumArtShadowChanged</code></td></tr>
+            <tr><td><code>save_vinyl_record_mode(bool enabled)</code></td><td><code>void</code></td><td>Save <code>vinylRecordMode</code>, then emit <code>vinylRecordModeChanged</code></td></tr>
+            <tr><td><code>save_album_art_transition(QString transition)</code></td><td><code>void</code></td><td>Save <code>albumArtTransition</code>, then emit <code>albumArtTransitionChanged</code></td></tr>
+            <tr><td><code>save_background_overlay_opacity(int opacity)</code></td><td><code>void</code></td><td>Save <code>backgroundOverlayOpacity</code>, then emit <code>backgroundOverlayOpacityChanged</code></td></tr>
+            <tr><td><code>save_side_card_opacity(double opacity)</code></td><td><code>void</code></td><td>Save <code>sideCardOpacity</code>, then emit <code>sideCardOpacityChanged</code></td></tr>
+            <tr><td><code>save_side_card_angle(int angle)</code></td><td><code>void</code></td><td>Save <code>sideCardAngle</code>, then emit <code>sideCardAngleChanged</code></td></tr>
+            <tr><td><code>save_button_tilt_duration(int duration)</code></td><td><code>void</code></td><td>Save <code>buttonTiltDuration</code>, then emit <code>buttonTiltDurationChanged</code></td></tr>
+            <tr><td><code>save_text_scroll_speed(int speed)</code></td><td><code>void</code></td><td>Save <code>textScrollSpeed</code>, then emit <code>textScrollSpeedChanged</code></td></tr>
+            <tr><td><code>save_obd_bluetooth_port(QString port)</code></td><td><code>void</code></td><td>Save <code>obdBluetoothPort</code>, then emit <code>obdBluetoothPortChanged</code></td></tr>
             <tr><td><code>save_obd_saved_adapters(QString json)</code></td><td><code>void</code></td><td>Replace the remembered-adapters JSON array wholesale</td></tr>
             <tr><td><code>add_obd_saved_adapter(QString name, QString mac)</code></td><td><code>void</code></td><td>Upsert a <code>{name, mac}</code> entry (MAC upper-cased) at the front of <code>obdSavedAdapters</code></td></tr>
             <tr><td><code>remove_obd_saved_adapter(QString mac)</code></td><td><code>void</code></td><td>Drop the entry with this MAC from <code>obdSavedAdapters</code></td></tr>
-            <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>obdFastMode</code>, then emit <code>obdFastModeChanged</code></td></tr>
-            <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td><code>void</code></td><td>Validate and persist <code>obdAutoReconnectAttempts</code>, then emit <code>obdAutoReconnectAttemptsChanged</code></td></tr>
-            <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td><code>void</code></td><td>Validate and persist <code>fuelTankCapacity</code>, then emit <code>fuelTankCapacityChanged</code></td></tr>
+            <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td><code>void</code></td><td>Save <code>obdFastMode</code>, then emit <code>obdFastModeChanged</code></td></tr>
+            <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td><code>void</code></td><td>Save <code>obdAutoReconnectAttempts</code>, then emit <code>obdAutoReconnectAttemptsChanged</code></td></tr>
+            <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td><code>void</code></td><td>Save <code>fuelTankCapacity</code>, then emit <code>fuelTankCapacityChanged</code></td></tr>
             <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td><code>void</code></td><td>Legacy per-PID enable flag, kept for settings-file compatibility; writes are debounced (800 ms) then <code>obdParametersChanged</code> fires. No longer drives polling (see <code>obdManager.setParameterDemand</code>)</td></tr>
             <tr><td><code>save_supported_obd_parameters(QVariantList parameters)</code></td><td><code>void</code></td><td>Store the PID list found by the last vehicle scan; emits <code>supportedOBDParametersChanged</code></td></tr>
             <tr><td><code>save_home_obd_parameters(QVariantList parameters)</code></td><td><code>void</code></td><td>Store the ordered home-screen PID list; emits <code>homeOBDParametersChanged</code></td></tr>
@@ -236,29 +238,29 @@
             <tr><td><code>save_window_state(QString state)</code></td><td><code>void</code></td><td>Persist the window mode; ignores values other than windowed / fullscreen / maximized</td></tr>
             <tr><td><code>set_last_settings_section(QString section)</code></td><td><code>void</code></td><td>Persist which settings section was open; accepts the six current section ids (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the legacy <code>androidAutoSettings</code> / <code>phoneMirrorSettings</code> / <code>volumeKnobSettings</code> / <code>gestureSensorSettings</code>; anything else is ignored</td></tr>
             <tr><td><code>save_settings_section_visibility(QString section, bool visible)</code></td><td><code>void</code></td><td>Show/hide one settings section in the hub; emits <code>settingsMenuVisibilityChanged</code></td></tr>
-            <tr><td><code>save_android_auto_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>androidAutoEnabled</code>, then emit <code>androidAutoEnabledChanged</code></td></tr>
-            <tr><td><code>save_phone_mirror_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>phoneMirrorEnabled</code>, then emit <code>phoneMirrorEnabledChanged</code></td></tr>
-            <tr><td><code>save_scrcpy_display_size(QString size)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyDisplaySize</code>, then emit <code>scrcpyDisplaySizeChanged</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_gain(double gain)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioGain</code>, then emit <code>scrcpyAudioGainChanged</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioDuckEnabled</code>, then emit <code>scrcpyAudioDuckEnabledChanged</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_level(double level)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyAudioDuckLevel</code>, then emit <code>scrcpyAudioDuckLevelChanged</code></td></tr>
-            <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code></td><td><code>void</code></td><td>Validate and persist <code>scrcpyPhoneScreenOff</code>, then emit <code>scrcpyPhoneScreenOffChanged</code></td></tr>
+            <tr><td><code>save_android_auto_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>androidAutoEnabled</code>, then emit <code>androidAutoEnabledChanged</code></td></tr>
+            <tr><td><code>save_phone_mirror_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>phoneMirrorEnabled</code>, then emit <code>phoneMirrorEnabledChanged</code></td></tr>
+            <tr><td><code>save_scrcpy_display_size(QString size)</code></td><td><code>void</code></td><td>Save <code>scrcpyDisplaySize</code>, then emit <code>scrcpyDisplaySizeChanged</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_gain(double gain)</code></td><td><code>void</code></td><td>Save <code>scrcpyAudioGain</code>, then emit <code>scrcpyAudioGainChanged</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>scrcpyAudioDuckEnabled</code>, then emit <code>scrcpyAudioDuckEnabledChanged</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_level(double level)</code></td><td><code>void</code></td><td>Save <code>scrcpyAudioDuckLevel</code>, then emit <code>scrcpyAudioDuckLevelChanged</code></td></tr>
+            <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code></td><td><code>void</code></td><td>Save <code>scrcpyPhoneScreenOff</code>, then emit <code>scrcpyPhoneScreenOffChanged</code></td></tr>
             <tr><td><code>save_scrcpy_display_dpi(int dpi)</code>, <code>save_scrcpy_bit_rate_usb(int mbps)</code>, <code>save_scrcpy_bit_rate_wifi(int mbps)</code>, <code>save_scrcpy_auto_wifi(bool enabled)</code>, <code>save_scrcpy_bit_rate_auto(bool enabled)</code></td><td><code>void</code></td><td>Clamp and persist <code>scrcpyDisplayDpi</code> / <code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code> / <code>scrcpyAutoWifi</code>, then emit the matching changed signal</td></tr>
             <tr><td><code>save_scrcpy_wireless_address(QString address)</code></td><td><code>void</code></td><td>Persist <code>scrcpyWirelessAddress</code> (trimmed; no-op when unchanged), then emit <code>scrcpyWirelessAddressChanged</code></td></tr>
-            <tr><td><code>save_esp32_volume_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumeEnabled</code>, then emit <code>esp32VolumeEnabledChanged</code></td></tr>
-            <tr><td><code>save_esp32_volume_port(QString port)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumePort</code>, then emit <code>esp32VolumePortChanged</code></td></tr>
-            <tr><td><code>save_esp32_volume_step_size(double stepSize)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32VolumeStepSize</code>, then emit <code>esp32VolumeStepSizeChanged</code></td></tr>
-            <tr><td><code>save_esp32_auto_reconnect(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32AutoReconnect</code>, then emit <code>esp32AutoReconnectChanged</code></td></tr>
-            <tr><td><code>save_esp32_led_sleep_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32LedSleepEnabled</code>, then emit <code>esp32LedSleepEnabledChanged</code></td></tr>
-            <tr><td><code>save_esp32_led_color_mode(QString mode)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32LedColorMode</code>, then emit <code>esp32LedColorModeChanged</code></td></tr>
-            <tr><td><code>save_esp32_led_static_color(QString color)</code></td><td><code>void</code></td><td>Validate and persist <code>esp32LedStaticColor</code>, then emit <code>esp32LedStaticColorChanged</code></td></tr>
-            <tr><td><code>save_imu_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>imuEnabled</code>, then emit <code>imuEnabledChanged</code></td></tr>
-            <tr><td><code>save_gesture_sensor_enabled(bool enabled)</code></td><td><code>void</code></td><td>Validate and persist <code>gestureSensorEnabled</code>, then emit <code>gestureSensorEnabledChanged</code></td></tr>
+            <tr><td><code>save_esp32_volume_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>esp32VolumeEnabled</code>, then emit <code>esp32VolumeEnabledChanged</code></td></tr>
+            <tr><td><code>save_esp32_volume_port(QString port)</code></td><td><code>void</code></td><td>Save <code>esp32VolumePort</code>, then emit <code>esp32VolumePortChanged</code></td></tr>
+            <tr><td><code>save_esp32_volume_step_size(double stepSize)</code></td><td><code>void</code></td><td>Save <code>esp32VolumeStepSize</code>, then emit <code>esp32VolumeStepSizeChanged</code></td></tr>
+            <tr><td><code>save_esp32_auto_reconnect(bool enabled)</code></td><td><code>void</code></td><td>Save <code>esp32AutoReconnect</code>, then emit <code>esp32AutoReconnectChanged</code></td></tr>
+            <tr><td><code>save_esp32_led_sleep_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>esp32LedSleepEnabled</code>, then emit <code>esp32LedSleepEnabledChanged</code></td></tr>
+            <tr><td><code>save_esp32_led_color_mode(QString mode)</code></td><td><code>void</code></td><td>Save <code>esp32LedColorMode</code>, then emit <code>esp32LedColorModeChanged</code></td></tr>
+            <tr><td><code>save_esp32_led_static_color(QString color)</code></td><td><code>void</code></td><td>Save <code>esp32LedStaticColor</code>, then emit <code>esp32LedStaticColorChanged</code></td></tr>
+            <tr><td><code>save_imu_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>imuEnabled</code>, then emit <code>imuEnabledChanged</code></td></tr>
+            <tr><td><code>save_gesture_sensor_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>gestureSensorEnabled</code>, then emit <code>gestureSensorEnabledChanged</code></td></tr>
             <tr><td><code>save_gesture_action(QString gesture, QString action)</code></td><td><code>void</code></td><td>Map one gesture (e.g. <code>"RIGHT"</code>) to an action (e.g. <code>"next_track"</code>); emits <code>gestureMappingChanged</code></td></tr>
             <tr><td><code>save_gesture_mapping(QVariantMap mapping)</code></td><td><code>void</code></td><td>Replace the whole gesture &rarr; action map</td></tr>
             <tr><td><code>reset_gesture_mapping()</code></td><td><code>void</code></td><td>Restore the default gesture map</td></tr>
-            <tr><td><code>save_gesture_volume_step(int step)</code></td><td><code>void</code></td><td>Validate and persist <code>gestureVolumeStep</code>, then emit <code>gestureVolumeStepChanged</code></td></tr>
-            <tr><td><code>save_gesture_cooldown(int ms)</code></td><td><code>void</code></td><td>Validate and persist <code>gestureCooldown</code>, then emit <code>gestureCooldownChanged</code></td></tr>
+            <tr><td><code>save_gesture_volume_step(int step)</code></td><td><code>void</code></td><td>Save <code>gestureVolumeStep</code>, then emit <code>gestureVolumeStepChanged</code></td></tr>
+            <tr><td><code>save_gesture_cooldown(int ms)</code></td><td><code>void</code></td><td>Save <code>gestureCooldown</code>, then emit <code>gestureCooldownChanged</code></td></tr>
             <tr><td><code>toggle_pin_setting(QString settingId)</code></td><td><code>void</code></td><td>Pin/unpin a registry setting id on the Quick Panel; emits <code>pinnedSettingsChanged</code></td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td><code>void</code></td><td>Write the factory defaults, reload every cached member from them exactly as the constructor does (C++ <code>populateMembers()</code>, Python <code>_load_members_from_settings()</code>) and emit every property signal</td></tr>
             <tr><td><code>save_setting(QString key, QVariant value)</code></td><td><code>void</code></td><td>Generic write of any key; emits <code>genericSettingChanged(key)</code> (typed properties are not refreshed)</td></tr>
@@ -398,6 +400,15 @@
           </tbody>
         </table>
 
+        <h2 id="assetStore">AssetStore <span class="cmt">— <code>assetStore</code></span></h2>
+        <p><span class="file-path">src/util/assetstore.{h,cpp}</span> / <span class="file-path">backend/asset_store.py</span>. Supplies filesystem URLs for assets that external loaders such as Assimp cannot read from an Android APK.</p>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>localUrl(QString relativePath)</code></td><td><code>QUrl</code></td><td>Resolve a path under <code>frontend/assets/</code>. Android copies it to <code>AppDataLocation/asset-cache/</code> when absent or a different size; desktop returns the source file URL. Empty input or any <code>..</code> returns an empty URL. Android also returns an empty URL if extraction fails; desktop can return a URL for a missing file (Python logs a warning).</td></tr>
+          </tbody>
+        </table>
+
         <!-- Clock -->
         <h2 id="clock">Clock <span class="cmt">&mdash; <code>clock</code></span></h2>
         <p><span class="file-path">src/managers/clock.h</span> / <span class="file-path">backend/clock.py</span> &mdash; QML context property <code>clock</code></p>
@@ -420,7 +431,7 @@
         <!-- DiagnosticsManager -->
         <h2 id="diagnosticsManager">DiagnosticsManager <span class="cmt">&mdash; <code>diagnosticsManager</code></span></h2>
         <p><span class="file-path">src/managers/diagnosticsmanager.h</span> / <span class="file-path">backend/diagnostics_manager.py</span> &mdash; QML context property <code>diagnosticsManager</code></p>
-        <p>Field diagnostics behind Settings &rarr; About &rarr; Diagnostics: read the recent log and get the log files off the head unit without a laptop.</p>
+        <p>Field diagnostics behind Settings &rarr; Device &rarr; Diagnostics: read the recent log and get the log files off the head unit without a laptop.</p>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -542,6 +553,7 @@
             <tr><td><code>setVolume(float volume)</code></td><td><code>void</code></td><td>Set the linear output volume 0.0&ndash;1.0 (called by VolumeController, not QML)</td></tr>
             <tr><td><code>setDucking(float factor)</code></td><td><code>void</code></td><td>Temporarily attenuate the output (1.0 = none, 0.1 = -20 dB) while the mirrored phone makes sound; independent of the user volume</td></tr>
             <tr><td><code>set_position(int positionMs)</code></td><td><code>void</code></td><td>Seek to a position in ms</td></tr>
+            <tr><td><code>extract_colors_from_image(QString imagePath)</code></td><td><code>void</code></td><td>Extract an Album Art Capture palette from a local path or <code>file://</code> URL, including phone album art</td></tr>
             <tr><td><code>extract_colors_from_album_art(QString filename)</code></td><td><code>void</code></td><td>Run the palette extraction for a file and emit <code>albumColorsExtracted</code></td></tr>
             <tr><td><code>scan_library(bool resetDisplayNames)</code></td><td><code>void</code></td><td>Rescan the library root for audio files and playlists; <code>resetDisplayNames</code> also rebuilds cleaned display names (Python declares both the zero-arg and the <code>bool</code> <code>@Slot</code> overload)</td></tr>
             <tr><td><code>set_library_root(QString path)</code></td><td><code>void</code></td><td>Point the library at another folder (must exist) and rescan</td></tr>
@@ -627,6 +639,9 @@
             <tr><td><code>set_active(bool active)</code></td><td><code>void</code></td><td>Enable/disable emission; disabling emits a row of zeros to clear the visualizer</td></tr>
             <tr><td><code>get_current_levels()</code></td><td><code>QVariantList</code></td><td>Last emitted bar levels</td></tr>
             <tr><td><code>get_num_bars()</code></td><td><code>int</code></td><td>Number of bars (96)</td></tr>
+            <tr><td><code>set_live(bool live)</code></td><td><code>void</code></td><td>Switch between file analysis and live phone PCM; resets the live buffers on a mode change</td></tr>
+            <tr><td><code>update_live()</code></td><td><code>void</code></td><td>Publish spectrum levels for the phone audio currently being heard; called at the visualizer refresh rate</td></tr>
+            <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code></td><td><code>void</code></td><td>C++ slot; Python plain method connected by <code>main.py</code>. Receives s16le 48 kHz stereo PCM handed to the output sink and its queued delay from <code>PhoneMirrorManager.audioPlayed</code></td></tr>
             <tr><td><code>is_analyzed()</code></td><td><code>bool</code></td><td>True when FFT data for the current file is ready</td></tr>
             <tr><td><code>clear()</code></td><td><code>void</code></td><td>Drop the pre-computed data and reset the levels</td></tr>
           </tbody>
@@ -644,7 +659,7 @@
         <!-- OBDManager -->
         <h2 id="obdManager">OBDManager <span class="cmt">&mdash; <code>obdManager</code></span></h2>
         <p><span class="file-path">src/managers/obdmanager.h</span> / <span class="file-path">backend/obd_manager.py</span> &mdash; QML context property <code>obdManager</code></p>
-        <p>OBD-II diagnostics over an ELM327 adapter: USB / Bluetooth serial on desktop (worker thread), BLE GATT on Android. Every PID has its own <code>&lt;name&gt;Changed(float)</code> signal so QML gauges bind directly. PID numbers, command names and decoders follow python-obd on both backends (C++ <code>ELM327Protocol::buildPidTable()</code> carries all 82 mode-01 commands plus <code>ELM_VOLTAGE</code>), and polling is demand-driven: only the PIDs that registered consumers (dashboard, Parameter Cards, Home, editor, settings list) ask for via <code>setParameterDemand()</code> are polled, plus an RPM heartbeat, filtered to what this session's scan found. Changes apply on a live connection without reconnecting (C++ swaps the worker's poll list via <code>updatePidsToWatch()</code>, Android via <code>rebuildAndroidPollList()</code>, Python re-watches). See <a href="obd-manager.html#watcher-system">OBD Manager &rarr; Which PIDs Get Polled</a>.</p>
+        <p>OBD-II diagnostics over an ELM327 adapter: USB / Bluetooth serial on desktop (worker thread), BLE GATT on Android. Base parameters have named signals; extended multi-value parameters use <code>obdParameterChanged(QString, float)</code>. PID numbers, command names and decoders follow python-obd on both backends (C++ <code>ELM327Protocol::buildPidTable()</code> carries all 82 mode-01 commands plus <code>ELM_VOLTAGE</code>), and polling is demand-driven: only the PIDs that registered consumers (dashboard, Parameter Cards, Home, editor, settings list) ask for via <code>setParameterDemand()</code> are polled, plus an RPM heartbeat, filtered to what this session's scan found. Changes apply on a live connection without reconnecting (C++ swaps the worker's poll list via <code>updatePidsToWatch()</code>, Android via <code>rebuildAndroidPollList()</code>, Python re-watches). See <a href="obd-manager.html#watcher-system">OBD Manager &rarr; Which PIDs Get Polled</a>.</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class bypasses the serial worker and talks BLE through <code>OctaveOBDBridge.java</code> (JNI); the QML-facing API is identical. Connect chains the <code>0100</code> through <code>01C0</code> supported-PID bitmaps so default PIDs above 0x20 (fuel level, module voltage, oil temperature) and the multi-value PIDs are polled, the first poll slot reads the VIN, and the bridge requests <code>BLUETOOTH_CONNECT</code> on the first Connect tap (the former <code>requestAndroidBluetoothPermission()</code> helper is gone).</div>
         <h3>Properties</h3>
         <table>
@@ -1005,7 +1020,7 @@
         <!-- AndroidAutoManager -->
         <h2 id="androidAutoManager">AndroidAutoManager <span class="cmt">&mdash; <code>androidAutoManager</code></span></h2>
         <p><span class="file-path">src/managers/androidautomanager.h</span> / <span class="file-path">backend/android_auto/manager.py</span> &mdash; QML context property <code>androidAutoManager</code></p>
-        <p>Android Auto via Google's Desktop Head Unit: launches DHU, hides its window and streams captured frames to QML through the <code>image://dhuframe/</code> provider. adb is found by the same discovery as Phone Mirror (bundled platform-tools &rarr; <code>PATH</code> &rarr; SDK locations; C++ <code>PhoneMirrorManager::findAdb()</code>, Python <code>_find_adb</code>), and only its own <code>tcp:5277</code> forward is removed on setup / cleanup so a live mirror tunnel survives.</p>
+        <p>Android Auto via Google's Desktop Head Unit. Embedded display currently works only with Python on Windows; the C++ window/capture integration is incomplete, and no current QML consumes <code>image://dhuframe/</code>. See <a href="phone-mirror-android-auto.html#aa-status">platform status</a>. adb is found by the same discovery as Phone Mirror (bundled platform-tools &rarr; <code>PATH</code> &rarr; SDK locations; C++ <code>PhoneMirrorManager::findAdb()</code>, Python <code>_find_adb</code>), and only its own <code>tcp:5277</code> forward is removed on setup / cleanup so a live mirror tunnel survives.</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub exposes only <code>isDhuInstalled</code> / <code>isDhuEmbedded</code> (constant <code>false</code>), <code>launchDhuSeamless()</code> (false), <code>closeDhu()</code> and the <code>dhuEmbeddedChanged</code>, <code>error</code>, <code>dhuWindowReady</code> signals.</div>
         <h3>Properties</h3>
         <table>
@@ -1013,8 +1028,8 @@
           <tbody>
             <tr><td><code>isDhuInstalled</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Google Desktop Head Unit binary found in the Android SDK</td></tr>
             <tr><td><code>dhuPath</code></td><td><code>QString</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Path of the DHU binary</td></tr>
-            <tr><td><code>isDhuEmbedded</code></td><td><code>bool</code></td><td>read-only</td><td><code>dhuEmbeddedChanged</code></td><td>DHU window is hidden and its frames are streamed into OCTAVE</td></tr>
-            <tr><td><code>dhuWindowHandle</code></td><td><code>int</code></td><td>read-only</td><td><code>dhuWindowReady</code></td><td>Native handle of the DHU window (0 until found)</td></tr>
+            <tr><td><code>isDhuEmbedded</code></td><td><code>bool</code></td><td>read-only</td><td><code>dhuEmbeddedChanged</code></td><td>Manager considers the DHU running/embedded; this alone does not prove its window is displayed</td></tr>
+            <tr><td><code>dhuWindowHandle</code></td><td><code>int</code></td><td>read-only</td><td><code>dhuWindowReady</code></td><td>Python/Windows: native HWND; C++ currently uses a process ID or 0 rather than a discovered HWND</td></tr>
             <tr><td><code>dhuCapture</code></td><td><code>QObject*</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>The <a href="#dhuCapture">DhuCapture</a> object streaming frames to <code>image://dhuframe/</code></td></tr>
           </tbody>
         </table>
@@ -1023,8 +1038,8 @@
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>getDhuInstallInstructions()</code></td><td><code>QString</code></td><td>User-facing SDK Manager instructions</td></tr>
-            <tr><td><code>launchDhuSeamless()</code></td><td><code>bool</code></td><td>Start the headunit server / adb forward, launch DHU, hide its window and start frame capture; false when DHU is missing</td></tr>
-            <tr><td><code>sendDhuClick(int x, int y)</code></td><td><code>void</code></td><td>Forward a click to the DHU window</td></tr>
+            <tr><td><code>launchDhuSeamless()</code></td><td><code>bool</code></td><td>Prepare the headunit server and adb forward, then launch DHU; embedding depends on backend/platform (see above)</td></tr>
+            <tr><td><code>sendDhuClick(int x, int y)</code></td><td><code>void</code></td><td>Forward a click through DhuCapture (Python/Windows implementation; C++ stub)</td></tr>
             <tr><td><code>closeDhu()</code></td><td><code>void</code></td><td>Stop capture and kill the DHU process</td></tr>
             <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Close DHU at exit</td></tr>
           </tbody>
@@ -1042,7 +1057,7 @@
 
         <!-- DhuCapture -->
         <h2 id="dhuCapture">DhuCapture <span class="cmt">&mdash; <code>dhuCapture</code></span></h2>
-        <p><span class="file-path">src/managers/androidautomanager.h</span> / <span class="file-path">backend/android_auto/dhu_capture.py</span> &mdash; QML context property <code>dhuCapture</code></p>
+        <p><span class="file-path">src/managers/androidautomanager.h</span> / <span class="file-path">backend/android_auto/dhu_capture.py</span> &mdash; sub-object <code>androidAutoManager.dhuCapture</code></p>
         <p>Sub-object reached through <code>androidAutoManager.dhuCapture</code>; grabs the DHU window at 30 fps into the image provider. Not a context property of its own.</p>
         <h3>Properties</h3>
         <table>
@@ -1067,7 +1082,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>frameReady()</code></td><td>A new frame is available; QML bumps the <code>image://dhuframe/&lt;n&gt;</code> counter</td></tr>
+            <tr><td><code>frameReady()</code></td><td>A new provider frame is available; the current QML does not display this provider</td></tr>
             <tr><td><code>captureStarted()</code></td><td>Capture started</td></tr>
             <tr><td><code>captureStopped()</code></td><td>Capture stopped</td></tr>
             <tr><td><code>error(QString message)</code></td><td>Capture error</td></tr>
@@ -1078,7 +1093,7 @@
         <h2 id="phoneMirrorManager">PhoneMirrorManager <span class="cmt">&mdash; <code>phoneMirrorManager</code></span></h2>
         <p><span class="file-path">src/managers/phonemirrormanager.h</span> / <span class="file-path">backend/phone_mirror/manager.py</span> &mdash; QML context property <code>phoneMirrorManager</code></p>
         <p>Built-in scrcpy-protocol client (see <a href="phone-mirror-android-auto.html">Phone Mirror</a>): pushes <span class="file-path">tools/phone-server/octave-phone-server</span> over adb, decodes H.264 itself and injects touch. Desktop only; the mobile build registers a stub. adb discovery (<code>findAdb()</code>, public static in C++) is shared with AndroidAutoManager; on Windows every adb / server process goes through <code>ScrcpyClient::hideConsoleWindow()</code> so no console flashes. Errors are reported through <code>scrcpyError</code> only &mdash; there is no separate <code>error</code> signal in either backend.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub keeps every property (all <code>CONSTANT</code>), every signal except <code>phoneAsleepChanged</code> / <code>phoneInUseChanged</code> / <code>connectionTypeChanged</code> / <code>wirelessBusyChanged</code> / <code>qrPairingChanged</code>, and every slot except <code>describeDeviceState</code>, <code>getDeviceSerial</code>, <code>getDeviceName</code>, <code>getDeviceResolution</code>, <code>getDeviceSdk</code> and <code>cleanup</code>.</div>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile C++ stub keeps every property (all <code>CONSTANT</code>), only its compatibility signals (session, frame, audio-active/playing, ducking, wireless address/result and media-active notifications), and every slot except <code>describeDeviceState</code>, <code>getDeviceSerial</code>, <code>getDeviceName</code>, <code>getDeviceResolution</code>, <code>getDeviceSdk</code> and <code>cleanup</code>.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1087,7 +1102,7 @@
             <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>adb found, server jar present and (C++) libavcodec linked</td></tr>
             <tr><td><code>serverVersion</code></td><td><code>QString</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Phone-server version the client speaks; must match the jar</td></tr>
             <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>read-only</td><td><code>isRunningChanged</code></td><td>A mirror session is active</td></tr>
-            <tr><td><code>displaySize</code></td><td><code>QString</code></td><td>read-only</td><td><code>displaySizeChanged</code></td><td>Requested virtual display <code>"WxH"</code> (Android 11+); <code>""</code> = phone screen</td></tr>
+            <tr><td><code>displaySize</code></td><td><code>QString</code></td><td>read-only</td><td><code>displaySizeChanged</code></td><td>Requested virtual display <code>"WxH"</code> or <code>"auto"</code> (fit the view, Android 11+); <code>""</code> = phone screen</td></tr>
             <tr><td><code>activeDisplaySize</code></td><td><code>QString</code></td><td>read-only</td><td><code>frameSizeChanged</code></td><td><code>"WxH"</code> of the virtual display in use, <code>""</code> when mirroring the phone screen</td></tr>
             <tr><td><code>videoSink</code></td><td><code>QObject*</code></td><td>read/write</td><td><code>videoSinkChanged</code></td><td>QML binds <code>VideoOutput.videoSink</code> here; decoded frames go straight to it</td></tr>
             <tr><td><code>frameWidth</code></td><td><code>int</code></td><td>read-only</td><td><code>frameSizeChanged</code></td><td>Decoded frame width</td></tr>
@@ -1106,7 +1121,10 @@
             <tr><td><code>mediaTitle</code>, <code>mediaArtist</code>, <code>mediaAlbum</code>, <code>mediaApp</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaChanged</code></td><td>What the phone is playing; <code>mediaApp</code> is the package name</td></tr>
             <tr><td><code>mediaDuration</code></td><td><code>int</code></td><td>read-only</td><td><code>mediaChanged</code></td><td>Track length in ms, 0 = unknown</td></tr>
             <tr><td><code>mediaArtUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaArtChanged</code></td><td><code>file://</code> URL of the phone's album art, <code>""</code> for none</td></tr>
-            <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>read-only</td><td><code>mediaActiveChanged(bool)</code></td><td>The phone has OCTAVE's media controls (set when it starts playing, cleared by <code>releaseMedia</code>, its app going away or the session ending)</td></tr>
+            <tr><td><code>mediaQueue</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Phone queue entries: <code>{id, title, artist, art_uri, art}</code>; <code>art</code> is a local JPEG URL, initially empty</td></tr>
+            <tr><td><code>mediaQueueActiveId</code></td><td><code>qint64</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Playing queue item ID; <code>-1</code> when absent</td></tr>
+            <tr><td><code>mediaQueueTitle</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Queue title supplied by the phone app</td></tr>
+            <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>read-only</td><td><code>mediaActiveChanged(bool)</code></td><td>The phone has OCTAVE's media controls from the first session report, even when paused or no app is playing. Cleared by <code>releaseMedia()</code> or disconnect; after release, resumed phone playback takes control again</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1149,6 +1167,7 @@
             <tr><td><code>startQrPairing()</code></td><td><code>void</code></td><td>Show a QR code for the phone's &ldquo;Pair device with QR code&rdquo; scanner, wait up to 2 min for its mDNS pairing service, then <code>adb pair</code> and connect; result via <code>wirelessResult</code></td></tr>
             <tr><td><code>cancelQrPairing()</code></td><td><code>void</code></td><td>Drop the shown code; the waiting job gives up within a second</td></tr>
             <tr><td><code>mediaPlayPause()</code>, <code>mediaPlay()</code>, <code>mediaPause()</code>, <code>mediaNext()</code>, <code>mediaPrevious()</code></td><td><code>void</code></td><td>Drive the phone's media session</td></tr>
+            <tr><td><code>mediaSkipToQueueItem(qint64 id)</code></td><td><code>void</code></td><td>Ask the phone app to skip to an item from <code>mediaQueue</code>; Python also declares a 64-bit <code>qint64</code> slot</td></tr>
             <tr><td><code>mediaSeek(int positionMs)</code></td><td><code>void</code></td><td>Seek the phone's media session</td></tr>
             <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>Phone media position in ms, extrapolated while playing</td></tr>
             <tr><td><code>releaseMedia(bool pausePhone)</code></td><td><code>void</code></td><td>An OCTAVE source took over: the controls leave the phone, optionally pausing it</td></tr>
@@ -1158,6 +1177,8 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
+            <tr><td><code>audioPlayed(QByteArray pcm, int bufferedMs)</code></td><td>PCM handed to the audio sink and buffered delay; Python signal is <code>Signal(bytes, int)</code>. Connected to AudioAnalyzer for the live waveform</td></tr>
+            <tr><td><code>mediaQueueChanged()</code></td><td>Phone queue, current item, title or loaded queue artwork changed</td></tr>
             <tr><td><code>scrcpyStarted(int handle)</code></td><td>Session started (the handle is always 1 with the built-in client)</td></tr>
             <tr><td><code>scrcpyStopped()</code></td><td>Session ended</td></tr>
             <tr><td><code>scrcpyError(QString message)</code></td><td>Session failed to start / died; carries <code>describeDeviceState()</code>-style text</td></tr>

@@ -51,13 +51,13 @@
 
           <div class="info-box info">
             <div class="info-box-title">Thread Safety</div>
-            In the Python backend every blocking operation (subprocess calls, HTTP requests) runs on a
+            In the Python backend the routine connectivity, update-check and update-pipeline work runs on a
             <code>ThreadPoolExecutor</code> with a single worker, and results are polled back on the main thread by a
             250&nbsp;ms <code>QTimer</code> so Qt signals are only ever emitted from the GUI thread. The C++ backend has no
             worker thread: it uses asynchronous <code>QProcess</code> and <code>QNetworkAccessManager</code> whose
-            completion slots already run on the main thread. The only synchronous calls in C++ are the short git queries
+            completion slots already run on the main thread. Both backends still perform synchronous startup git checks, click-time dirty-tree checks and restart syntax checks. C++ also waits for processes to start and runs short git queries
             (<code>runGitSync()</code>: <code>status --porcelain</code>, <code>cat-file</code>, <code>merge-base</code>,
-            <code>rev-list</code>, and the rollback <code>reset --hard</code>) -- the header comment says they run on the
+            <code>rev-list</code>) and the rollback <code>reset --hard</code> -- the header comment says they run on the
             GUI thread "deliberately: they gate a destructive action, so their answer must be current at the moment of the
             click".
           </div>
@@ -292,7 +292,7 @@ NetworkManager (src/managers/networkmanager.cpp)
 <span class="str">""</span>                  <span class="cmt"># No check has run yet (About page hides the status row)</span>
 <span class="str">"checking"</span>          <span class="cmt"># Currently checking</span>
 <span class="str">"up-to-date"</span>        <span class="cmt"># Local matches remote</span>
-<span class="str">"update-available"</span>  <span class="cmt"># Local is strictly behind the remote</span>
+<span class="str">"update-available"</span>  <span class="cmt"># Classified as behind by the local-history check</span>
 <span class="str">"ahead"</span>             <span class="cmt"># Source checkout with local commits (dev build)</span>
 <span class="str">"diverged"</span>          <span class="cmt"># Both sides moved -- not a safe update</span>
 <span class="str">"error"</span>             <span class="cmt"># Check failed (no internet, API error, not a git checkout)</span></code></pre>
@@ -305,8 +305,8 @@ NetworkManager (src/managers/networkmanager.cpp)
           </p>
 
           <div class="info-box warning">
-            <div class="info-box-title">Packaged builds always report "error"</div>
-            An AppImage, <code>.dmg</code>, <code>.exe</code> or <code>.apk</code> has no <code>.git</code> next to it, so
+            <div class="info-box-title">Packaged builds normally cannot check for updates</div>
+            A normally installed binary has no source checkout at the expected repository path, so
             <code>git rev-parse</code> fails in step 2 and the About page shows "Could not determine local version". The
             update check is a source-checkout feature today; there is no fallback that compares the build's version tag
             against GitHub releases.
@@ -321,24 +321,25 @@ NetworkManager (src/managers/networkmanager.cpp)
             <div class="info-box-title">Availability</div>
             Self-update is only available when running from a git checkout. <code>canSelfUpdate</code> is probed 2&nbsp;s
             after startup: Python requires <code>git --version</code> to succeed and the interpreter not to be frozen
-            (<code>sys.frozen</code>); C++ additionally requires a <code>.git</code> directory in <code>repoDir()</code> and
+            (<code>sys.frozen</code>); C++ additionally requires a <code>.git</code> path in <code>repoDir()</code> and
             returns <code>false</code> unconditionally on Android. Packaged builds therefore report <code>false</code> and
             the About page shows its "not available" card instead.
           </div>
 
           <div class="info-box warning">
             <div class="info-box-title">Preconditions (checked at click time)</div>
-            Step 2 below is <code>git reset --hard origin/main</code>, which discards every uncommitted change
+            The apply step below is <code>git reset --hard origin/main</code>, which discards every uncommitted change
             to tracked files. <code>applySelfUpdate()</code> therefore re-verifies state at the moment it is
-            called -- not from the cached update status, which may be minutes stale -- and refuses to run when:
+            called for uncommitted changes, and refuses to run when:
             <ul>
               <li>the working tree is dirty (<code>git status --porcelain</code> is non-empty) --
                   <code>selfUpdateMessage</code> "Uncommitted changes — commit or stash them first", or</li>
               <li><code>updateStatus</code> is <code>"ahead"</code> or <code>"diverged"</code>, since resetting
                   would discard local commits -- "Local commits would be lost — refusing to reset".</li>
             </ul>
-            If git itself cannot be queried, the tree is assumed dirty -- the safe default is the one that
-            destroys nothing. The About page additionally hides the update button while
+            If git itself cannot be queried, the tree is assumed dirty. The ahead/diverged check uses the cached
+            <code>updateStatus</code>; ancestry is not rechecked after fetch or immediately before reset. These checks therefore
+            do not guarantee preservation of commits or edits made after the checks. The About page additionally hides the update button while
             <code>workingTreeDirty</code> is true and shows a "commit or stash first" warning instead.
           </div>
 
@@ -388,8 +389,8 @@ NetworkManager (src/managers/networkmanager.cpp)
             <li>
               <strong>Install dependencies</strong> -- locate the venv pip (<span class="file-path">venv/bin/pip</span> or
               <span class="file-path">venv/Scripts/pip.exe</span>) and run <code>pip install -r requirements.txt</code>
-              (Python timeout 600&nbsp;s). Progress "Installing dependencies...". Failures are logged and the first 120
-              characters of stderr become a "(Some dependencies may need manual install)" suffix on the final message, but
+              (Python timeout 600&nbsp;s). Progress "Installing dependencies...". Failures are logged. When captured stderr is non-empty, the final message adds
+              "(Some dependencies may need manual install)", but
               they do not roll back -- the code update already succeeded. A missing pip or
               <span class="file-path">requirements.txt</span> skips the step with a warning.
             </li>
@@ -400,6 +401,10 @@ NetworkManager (src/managers/networkmanager.cpp)
               "Update applied — restart to complete".
             </li>
           </ol>
+
+          <p><strong>C++ source builds need a separate rebuild.</strong> This pipeline updates checkout files and Python
+            dependencies; it does not run CMake or replace the C++ executable. Restarting alone continues to run the existing
+            binary. Build the updated C++ source before expecting backend changes to take effect.</p>
 
           <h3>Rollback Mechanism</h3>
           <p>
@@ -440,8 +445,9 @@ NetworkManager (src/managers/networkmanager.cpp)
           <p>
             After a successful self-update the About page offers <code>restartApp()</code>. Both backends first run a
             pre-flight <code>py_compile</code> of <span class="file-path">main.py</span> (Python always; C++ only when the file
-            exists next to the repo root, using <code>python3</code>) and abort with <code>selfUpdateStatus = "error"</code> /
-            "Restart aborted — code has errors" if it fails. The restart itself is platform-dependent:
+            exists in the repo root, using <code>python3</code>) and abort with <code>selfUpdateStatus = "error"</code> /
+            "Restart aborted — code has errors" if the check completes with a non-zero exit code. A timeout or inability to run
+            the check does not block restart. The restart itself is platform-dependent:
           </p>
           <ul>
             <li><strong>Python, Windows:</strong> <code>subprocess.Popen([python, main.py, *argv])</code>, then <code>QApplication.quit()</code></li>
@@ -453,7 +459,7 @@ NetworkManager (src/managers/networkmanager.cpp)
           <div class="info-box danger">
             <div class="info-box-title">Restart Safety</div>
             If the pre-flight syntax check fails, the restart is aborted and the user is notified
-            via <code>selfUpdateMessage</code>. This prevents booting into broken code. (For the C++ binary the check only
+            via <code>selfUpdateMessage</code>. This catches syntax errors in the entry point when the check completes; it does not validate imported modules or dependencies. (For the C++ binary the check only
             covers the Python entry point in a mixed checkout; it cannot validate the compiled executable.)
           </div>
         </section>
@@ -464,8 +470,9 @@ NetworkManager (src/managers/networkmanager.cpp)
           <p>
             The <code>shutdown_device()</code> slot (the power button on
             <span class="file-path">frontend/settings/DeviceSettingsPage.qml</span>) gives vehicle-mounted installs a clean
-            power-off: it launches the OS shutdown command detached and then quits OCTAVE, so the
-            <code>aboutToQuit</code> cleanup runs before the OS goes down.
+            power-off request: it launches the OS shutdown command detached and then quits OCTAVE, triggering
+            <code>aboutToQuit</code> cleanup. The manager does not verify that the OS accepted the request or wait for cleanup
+            before requesting shutdown; the command also depends on the host's permissions.
           </p>
           <pre><code><span class="cmt"># Platform-specific shutdown commands (Popen / QProcess::startDetached):</span>
 Linux:   systemctl --no-block poweroff
@@ -558,8 +565,7 @@ engine.rootContext().setContextProperty(<span class="str">"networkManager"</span
               <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>Green/red dot from <code>isConnected</code>, <code>networkName</code> ("Not Connected" / "No internet access" texts), <code>refreshNetwork()</code>, and the power-off button calling <code>shutdown_device()</code></td></tr>
             </tbody>
           </table>
-          <p>All bindings are guarded with <code>networkManager &amp;&amp; ...</code> so the pages also load when the context
-            property is absent.</p>
+          <p>Many bindings guard a null <code>networkManager</code>. The normal launchers register this context property before loading QML.</p>
 
           <h3>Cleanup</h3>
           <p>
@@ -575,7 +581,7 @@ engine.rootContext().setContextProperty(<span class="str">"networkManager"</span
             </thead>
             <tbody>
               <tr><td><code>_poll_timer</code> / <code>m_pollTimer</code></td><td>30,000 ms online; 120,000 ms after three consecutive misses</td><td>Periodic network status check</td></tr>
-              <tr><td><code>_result_poll_timer</code> / <code>m_resultPollTimer</code></td><td>250 ms while a job runs</td><td>Poll for background task completion and relay progress text (not started in C++, see above)</td></tr>
+              <tr><td><code>_result_poll_timer</code> / <code>m_resultPollTimer</code></td><td>250 ms while a job runs</td><td>Python: poll task completion and progress. C++: relay progress during self-update</td></tr>
               <tr><td>startup single-shot</td><td>2,000 ms, once</td><td><code>git --version</code> probe for <code>canSelfUpdate</code> + first network check</td></tr>
               <tr><td>auto-update single-shot</td><td>500 ms, once</td><td><code>checkForUpdates()</code> after the first successful probe</td></tr>
             </tbody>
@@ -597,7 +603,7 @@ engine.rootContext().setContextProperty(<span class="str">"networkManager"</span
               <tr><td>Name/connectivity probes</td><td>Parallel; Android reports fixed "WiFi"; empty string when nothing is found</td><td>Sequential; empty string when nothing is found</td></tr>
               <tr><td>Step timeouts</td><td>None on fetch / reset / pip (only 5&nbsp;s to start a process)</td><td>60 s fetch, 30 s reset, 15 s py_compile, 600 s pip</td></tr>
               <tr><td>Rollback triggers</td><td>fetch, reset, syntax-check failures, git failing to start in steps 1-2</td><td>syntax-check failure, timeout, unexpected exception</td></tr>
-              <tr><td>Progress relay</td><td>Timer never started; only first and last messages shown</td><td>Every step's message shown</td></tr>
+              <tr><td>Progress relay</td><td>250 ms timer started by <code>applySelfUpdate()</code></td><td>Every step's message shown</td></tr>
               <tr><td>Unix restart</td><td>Detached new process on <code>aboutToQuit</code></td><td><code>os.execv</code> on <code>aboutToQuit</code></td></tr>
             </tbody>
           </table>
@@ -624,15 +630,14 @@ engine.rootContext().setContextProperty(<span class="str">"networkManager"</span
             <code>HEAD</code>, which avoids a misleading <code>merge-base</code> failure on the common "remote moved ahead"
             case.</p>
           <h3>Re-verify at click time; assume the worst when git is silent</h3>
-          <p>Because step 2 is a hard reset, <code>applySelfUpdate()</code> re-runs <code>git status --porcelain</code> at the
+          <p>Because the apply step is a hard reset, <code>applySelfUpdate()</code> re-runs <code>git status --porcelain</code> at the
             moment of the tap instead of trusting a check that may be minutes old ("the tree can be dirtied, or commits
             made, long after the last check ran"). If git cannot be queried the tree is treated as dirty -- "the safe default
             when we cannot tell is the one that refuses to destroy anything". <code>workingTreeDirty</code> is exposed as a
             property purely so the UI can hide the button before it "eats real work" (header comment).</p>
-          <h3>Synchronous git only where it gates destruction (C++)</h3>
+          <h3>Synchronous checks alongside asynchronous work</h3>
           <p>The C++ header explains why <code>runGitSync()</code> blocks the GUI thread: the queries are short, and their
-            answer must be current at the instant of the click, not whatever an async check last cached. Everything else --
-            probes, the GitHub request, each update step -- stays asynchronous.</p>
+            answer must be current at the instant of the click, not whatever an async check last cached. The network probes, GitHub request and update steps use asynchronous completion; startup and restart checks and process-start waits can still block the GUI thread.</p>
           <h3>Verify before trusting the new code</h3>
           <p>A syntax error in a freshly pulled <span class="file-path">main.py</span> would leave the head unit unable to
             boot, so the pipeline compiles it and rolls back on failure, and <code>restartApp()</code> repeats the check
@@ -643,9 +648,9 @@ engine.rootContext().setContextProperty(<span class="str">"networkManager"</span
           <p>The update check runs once on first connectivity (500&nbsp;ms later, so the connectivity state has settled) and
             afterwards only from the About page. There is no periodic polling of GitHub, which keeps the API call count
             negligible and avoids surprising the driver with a badge mid-journey.</p>
-          <h3>Git as the update channel</h3>
+          <h3>Git as the source update channel</h3>
           <p>The self-updater is <code>git fetch</code> + <code>git reset --hard</code> + <code>pip install</code>, which is
-            exactly what a tinkerer running from a checkout would type. It intentionally does not try to replace a packaged
+            the source-checkout update sequence implemented here. It intentionally does not try to replace a packaged
             binary; <code>canSelfUpdate</code> is false there and the About page says so.</p>
         </section>
 

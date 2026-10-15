@@ -75,7 +75,7 @@
           </tbody>
         </table>
         <p>
-          Both classes expose the same slot, signal and JSON surface. Where the two implementations differ in behavior
+          Both classes expose the shared QML playback and library API. Where the two implementations differ in behavior
           this page says so explicitly; everything else applies to both.
         </p>
 
@@ -93,7 +93,7 @@ AUDIO_EXTENSIONS = (<span class="str">'.mp3'</span>, <span class="str">'.m4a'</s
           Python module also exposes <code>strip_audio_extension(filename)</code>, which removes any of these extensions
           (and only these) and is what the display-name and metadata fallbacks use.
         </p>
-        <p>Which tags and embedded covers each backend can read is the same for every format except WAV art, which neither backend extracts. Python's dispatch lives in <code>_read_tags(file_path, base_name)</code> (tags, never raises) and <code>_extract_art_for(file_path, album_id)</code> (cover, mirrors the C++ function of the same name); a file that fails to open yields the file-name title with "Unknown Artist" / "Unknown Album" in both backends:</p>
+        <p>The desktop readers handle the formats below; neither extracts WAV art. Actual playback also depends on the codecs available to Qt Multimedia. Python's dispatch lives in <code>_read_tags(file_path, base_name)</code> (tags, never raises) and <code>_extract_art_for(file_path, album_id)</code> (cover, mirrors the C++ function of the same name); a file that fails to open yields the file-name title with "Unknown Artist" / "Unknown Album" in both backends:</p>
         <table>
           <thead><tr><th>Format</th><th>C++ (TagLib, desktop)</th><th>Python (mutagen)</th></tr></thead>
           <tbody>
@@ -112,8 +112,8 @@ AUDIO_EXTENSIONS = (<span class="str">'.mp3'</span>, <span class="str">'.m4a'</s
           The constructor creates one <code>QMediaPlayer</code> with one <code>QAudioOutput</code> and starts it at
           volume 0.5 (the real startup volume is applied a moment later by <code>VolumeController</code>, see
           <a href="#volume-mute">Volume</a>). The Python constructor additionally sets the <code>probe-size</code>
-          (10&nbsp;MB) and <code>analyzeduration</code> (5&nbsp;s) dynamic properties on the player for more reliable
-          format probing; the C++ constructor does not.
+          (10&nbsp;MB) and <code>analyzeduration</code> (5&nbsp;s) dynamic properties on the player with the intent of improving
+          format probing; the code does not check whether the active Qt backend uses these dynamic properties. The C++ constructor does not set them.
         </p>
         <p>
           <strong>Output device.</strong> A <code>QAudioOutput</code> stays bound to the device that was the system
@@ -240,7 +240,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <p>How the store is used:</p>
         <ul>
           <li><code>_cache_metadata()</code> first asks <code>_meta_from_store()</code>. An entry is served without opening the audio file if the file still exists and its size and integer mtime match. After the first run, scrolling a list or opening the media page therefore no longer opens every file with TagLib / mutagen.</li>
-          <li>A stale entry (file deleted, renamed or rewritten) is removed on lookup, so the store stays bounded by the current library rather than by everything ever seen.</li>
+          <li>A stale entry is removed when that filename is looked up and its size/mtime check fails. There is no full-library pruning pass for the tag store, so entries for files no longer requested can remain on disk.</li>
           <li>Only on a miss does <code>_cache_metadata_from_file()</code> read the tags; the result is written back with <code>_meta_to_store()</code>.</li>
           <li>Writes are coalesced: a single-shot 2&nbsp;s timer is restarted on every change and <code>_save_meta_store()</code> writes the compact JSON once, atomically (<code>QSaveFile</code> / <code>atomic_write_text()</code> from <span class="file-path">backend/atomic_io.py</span>), so a power cut leaves the old store or the new one. The dirty flag is only cleared when the write succeeded, so a failed write is retried on the next change or at shutdown.</li>
           <li>Shutdown flushes it explicitly: <code>flush_metadata_store()</code> is called from the <code>aboutToQuit</code> handler in <code>main.cpp</code> and from <code>cleanup_on_quit()</code> in <code>main.py</code> (the C++ destructor also saves).</li>
@@ -259,7 +259,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <p>
           <code>get_album_art(filename)</code> returns a <code>file://</code> URL to a cover image written into the temp
           directory: <code>&lt;app dir&gt;/temp</code> in the C++ desktop build, <code>backend/temp/</code> in Python,
-          the app-data <code>temp/</code> folder on Android. Covers are content-addressed by album:
+          the app-data <code>temp/</code> folder on Android. Cover filenames are derived from the album identifier:
           <code>cover_&lt;sha256(albumId + "_0")[:16]&gt;.&lt;jpg|png|gif|img&gt;</code>. The extension follows the
           picture's MIME type; only the first embedded picture is used.
         </p>
@@ -294,10 +294,10 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <code>_clear_temp_files()</code> still exists as a slot but nothing calls it any more.
         </p>
 
-        <h3>Single-Read Population</h3>
+        <h3>Populate Tags and Covers Together</h3>
         <p>
           When <code>_cache_metadata_from_file()</code> has to open a file for its tags it also extracts the cover in
-          the same pass (<code>_extract_art_for()</code> after <code>_read_tags()</code> in both backends, skipped when
+          the same cache-population operation (<code>_extract_art_for()</code> after <code>_read_tags()</code> in both backends; these may open the audio file separately, and cover extraction is skipped when
           the album's cover is already known or found by hash), so the <code>get_album_art()</code> call that follows in
           a QML binding is an instant map hit. Entries served from the tag store skip this step on purpose; their cover is found by the hash fast
           path.
@@ -342,11 +342,11 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li><code>obd.boxBackground</code>, <code>obd.barColor</code>, <code>obd.labelColor</code>, <code>obd.valueColor</code> - gauge colors against <code>baseAlt</code></li>
         </ul>
         <p>
-          Every icon/accent color is passed through <code>ensureIconContrast()</code>, which requires a WCAG contrast
-          ratio of at least 3.0 against the background, trying brightness factors 1.3 to 3.0 (dark base) or 0.7 to 0.2
+          Every icon/accent color is passed through <code>ensureIconContrast()</code>, which targets a contrast
+          ratio of 3.0 against the background, trying brightness factors 1.3 to 3.0 (dark base) or 0.7 to 0.2
           (light base) and falling back to a muted gold <code>(200, 180, 130)</code> or a dark brown
           <code>(50, 40, 30)</code>. Colors that already pass are capped at 85% brightness by
-          <code>capBrightness()</code> (with saturation nudged &times;1.1) to avoid washed-out pastels.
+          <code>capBrightness()</code> (with saturation nudged &times;1.1) to avoid washed-out pastels. The final capped or fallback colour is not rechecked, so this is a heuristic rather than a guaranteed minimum contrast.
         </p>
 
         <!-- Playback Control -->
@@ -563,7 +563,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         QTimer.singleShot(<span class="num">150</span>, self._unlock_mute_toggle)</code></pre>
         <p>
           Because mute is applied by <code>applyOutputVolume()</code> rather than by overwriting the volume, a slider
-          move while muted updates <code>m_volume</code> silently and unmute restores exactly that. <code>play_file()</code>,
+          move while muted updates <code>m_volume</code> silently and unmute uses it when positive; a zero value falls back to the previous positive volume or 0.5. <code>play_file()</code>,
           <code>toggle_play()</code> and recovery re-apply <code>setVolume(0)</code> on the output after
           <code>setSource()</code>, which can reset the output level.
         </p>
@@ -593,7 +593,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           shuffle if persisted, selects the last playlist, checks the song is still in it, sets the source
           <em>without</em> playing, emits <code>currentMediaChanged</code> and the metadata so the UI shows the track,
           seeks to the saved position after 100&nbsp;ms, and only if the <code>autoPlayOnStartup</code> setting is on
-          starts playback after a further 500&nbsp;ms (the delay lets the audio system initialize and avoids crackling).
+          schedules playback 500&nbsp;ms after restoration (the delay lets the audio system initialize and avoids crackling).
         </p>
 
         <!-- Precaching -->
@@ -611,7 +611,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         <p>Both desktop backends use the same three-phase, race-free model (C++ since commit <code>1232538</code>, Python since the mutagen rework): phase 1 on a worker reads tags (<code>_read_tags()</code>) for neighbors not already in the map or the tag store; phase 2 on the GUI thread inserts them (and writes them to the store), then hands the neighbors still lacking a cover to a second worker that only writes cover files (<code>_extract_art_for()</code>); phase 3 on the GUI thread records the URLs. The GUI thread is therefore the sole owner of the metadata and album-art maps, and the workers never touch them. What differs is the plumbing:</p>
         <ul>
           <li><strong>C++ desktop:</strong> <code>QtConcurrent</code> workers, results delivered through <code>QFutureWatcher</code>. The earlier version mutated the hashes from the worker while list delegates were reading them.</li>
-          <li><strong>C++ mobile:</strong> <code>_precache_tracks()</code> runs synchronously on the GUI thread, since the platform tag reader is cheap.</li>
+          <li><strong>C++ mobile:</strong> <code>_precache_tracks()</code> runs synchronously on the GUI thread, using the platform tag reader.</li>
           <li><strong>Python:</strong> daemon <code>threading.Thread</code>s, results delivered through the internal queued signals <code>_precacheTagsReady(neighbors, [(filename, path, meta)])</code> &rarr; <code>_apply_precached_tags()</code> and <code>_precacheArtReady([(album_id, url)])</code> &rarr; <code>_apply_precached_art()</code>. The earlier <code>_precache_tracks()</code> thread called <code>_cache_metadata()</code> / <code>get_album_art()</code> directly and wrote the dicts from the worker.</li>
         </ul>
 
@@ -728,6 +728,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>toggle_shuffle</code></td><td>()</td><td>Toggle shuffle, persist via SettingsManager</td></tr>
             <tr><td><code>setVolume</code></td><td>(float)</td><td>Set the user volume (0.0-1.0 linear); call <code>volumeController.applyVolume(percent)</code> instead from QML and handlers</td></tr>
             <tr><td><code>getVolume</code></td><td>() -&gt; float</td><td>User's volume (ignores mute and ducking)</td></tr>
+            <tr><td><code>extract_colors_from_image</code></td><td>(str)</td><td>Extract the Album Art Capture palette from an image path or <code>file://</code> URL, used for mirrored-phone artwork in both backends</td></tr>
             <tr><td><code>setDucking</code></td><td>(float)</td><td>Temporarily attenuate output (1.0 = none); ramped 80 ms in / 500 ms out</td></tr>
             <tr><td><code>get_current_file</code></td><td>() -&gt; str</td><td>Current filename (initializes the order if needed, never plays)</td></tr>
             <tr><td><code>get_next_track_name</code> / <code>get_previous_track_name</code></td><td>() -&gt; str</td><td>Peek at neighbors</td></tr>
@@ -781,7 +782,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         <table>
           <thead><tr><th>Choice</th><th>Why (from code comments and commit history)</th></tr></thead>
           <tbody>
-            <tr><td><strong>QMediaPlayer + QAudioOutput</strong> rather than a custom decoder</td><td>Qt Multimedia provides a native decoder on every target (the analyzer's decoder comment lists them: MediaCodec on Android, GStreamer/FFmpeg on Linux, Media Foundation on Windows, AVFoundation on macOS), so one class serves every build target and both backends with the same signals. The manager only adds what Qt lacks: the position timer as a safety net for backends whose <code>positionChanged</code> is coarse, and the recovery logic for files Qt cannot decode.</td></tr>
+            <tr><td><strong>QMediaPlayer + QAudioOutput</strong> rather than a custom decoder</td><td>Qt Multimedia provides the playback interface across targets; the selected backend and supported codecs depend on the Qt build and platform. One manager class serves the build targets through the same signals. The manager only adds what Qt lacks: the position timer as a safety net for backends whose <code>positionChanged</code> is coarse, and the recovery logic for files Qt cannot decode.</td></tr>
             <tr><td><strong>Folders as playlists</strong></td><td>The music folder's sub-folders are the only source of truth: there is no playlist database to keep in sync, every edit (<code>create_playlist</code>, <code>move_song_to_playlist</code>, <code>delete_*</code>) is a plain filesystem operation followed by a rescan, and "All Music" is the union. The scanner keeps empty folders on purpose "so user-created playlists survive a rescan (e.g. after moving the last song out)".</td></tr>
             <tr><td><strong>Persistent tag store on disk</strong> (<code>metadata_cache.json</code>)</td><td>Reading tags is file I/O per track; on the Pi's SD card, scrolling a list or opening the media page opened every file with TagLib/mutagen on every run. Tags rarely change, and size + mtime is a cheap, sufficient validity check. The format is shared so the two backends can run against the same app-data directory (commit <code>1232538</code>).</td></tr>
             <tr><td><strong>Content-addressed covers kept across runs</strong></td><td>The cover of an album is the same bytes every time; wiping the temp dir at start and quit made every cover a fresh tag read + JPEG write on each boot. Hashing the album id makes the file name derivable without opening the audio file, and the startup prune bounds the directory once the in-memory LRU can no longer see earlier runs (<code>43432c3</code>).</td></tr>
@@ -818,8 +819,8 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         <div class="info-box warning">
           <div class="info-box-title">Parity Notes</div>
           The extension list, the per-format tag and cover readers (TagLib / mutagen), the three-phase pre-cache and the
-          extension-stripping fallbacks now match between the backends; the remaining differences are the tag-store
-          eviction order (oldest insertion in Python, <code>QHash::begin()</code> in C++), the Python-only
+          extension-stripping fallbacks now match between the backends; documented differences include the
+          in-memory metadata-cache eviction order (oldest insertion in Python, <code>QHash::begin()</code> in C++), the Python-only
           <code>probe-size</code> / <code>analyzeduration</code> player properties, and the mobile C++ paths. The QML
           never needs to know which backend is running.
         </div>

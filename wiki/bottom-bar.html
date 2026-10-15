@@ -42,7 +42,7 @@
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
 
-        <p><span class="file-path">frontend/BottomBar.qml</span> (about 2700 lines) is the persistent control surface that is visible on every page. It is a <code>Rectangle</code> with a themed gradient background whose contents are provided by a <code>Loader</code> that swaps between two complete layout components: a horizontal bar docked at the bottom of the window and a vertical bar docked at the left. Both layouts carry the same three logical sections &mdash; media transport controls, navigation buttons, and the clock.</p>
+        <p><span class="file-path">frontend/BottomBar.qml</span> is the persistent control surface that is visible on every page. It is a <code>Rectangle</code> with a themed gradient background whose contents are provided by a <code>Loader</code> that swaps between two complete layout components: a horizontal bar docked at the bottom of the window and a vertical bar docked at the left. Both layouts carry the same three logical sections &mdash; media transport controls, navigation buttons, and the clock.</p>
 
         <p>It is instantiated once in <span class="file-path">frontend/Main.qml</span> with <code>z: 0</code>; the page <code>StackView</code> sits above it (<code>z: 1</code>) and anchors to <code>bottomBar.top</code> (horizontal) or <code>bottomBar.right</code> (vertical). A 12&nbsp;px gradient <code>Rectangle</code> (<code>bottomBarShadow</code> / <code>sideBarShadow</code>) in Main.qml draws a soft shadow along the bar's inner edge.</p>
 
@@ -150,7 +150,7 @@
 
         <p>It runs from <code>Component.onCompleted</code>, from <code>onIsVerticalChanged</code>, and from a <code>Connections</code> on <code>settingsManager.bottomBarOrientationChanged</code>. A second <code>Connections</code> on the parent's <code>widthChanged</code> / <code>heightChanged</code> keeps the explicit width/height current after a window resize.</p>
 
-        <p>Main.qml reacts to the same signal: it flips <code>isVerticalLayout</code>, re-asserts the z-order (<code>stackView.z = 1</code>, <code>bottomBar.z = 0</code>) and, if the Settings page is open, restarts <code>navReloadTimer</code> (150&nbsp;ms) which replaces the current <code>SettingsMenu</code> with a fresh instance on the same section so the settings layout re-measures against the new content area.</p>
+        <p>Main.qml reacts to the same signal: it flips <code>isVerticalLayout</code>, re-asserts the z-order (<code>stackView.z = 1</code>, <code>bottomBar.z = 0</code>) and, if the Settings page is open, restarts <code>navReloadTimer</code> (150&nbsp;ms) which replaces the current <code>SettingsMenu</code> with a fresh instance on the same section and open tile (<code>initialTile</code>) so the settings layout re-measures against the new content area.</p>
 
         <!-- Media Transport Controls -->
         <h2 id="media-controls">Media Transport Controls</h2>
@@ -325,7 +325,7 @@
           <tbody>
             <tr>
               <td>Home</td><td><code>home_button.svg</code> / <code>bottomBarHomeButton</code></td>
-              <td>Pops the stack to the root: <code>while (stackView.depth &gt; 1) stackView.pop()</code>.</td>
+              <td>Normally pops to the root. When Settings owns an open wiki reader, <code>openHomeSection()</code> keeps that page on the stack and opens or reuses a MainMenu above it so the reader can resume later.</td>
             </tr>
             <tr>
               <td>OBD</td><td><code>obd_button.svg</code> / <code>bottomBarOBDButton</code></td>
@@ -341,7 +341,7 @@
             </tr>
             <tr>
               <td>Settings</td><td><code>settings_button.svg</code> / <code>bottomBarSettingsButton</code></td>
-              <td>If the current item is <code>settingsMenu</code>, calls its <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid, closes the open card in the default grid layout, a no-op for Carousel). Otherwise pops to root and opens the cached <code>SettingsMenu.qml</code> (built the first time with <code>initialSection: lastSettingsSection</code>, a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>; on later visits the page simply keeps the section it was on). Press-and-hold (<code>onPressAndHold</code>, in both orientations) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
+              <td>If the current item is <code>settingsMenu</code>, calls <code>handleSettingsButton()</code>: an open wiki reader closes back to About; otherwise it calls <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid, closes the open card in the default grid layout, a no-op for Carousel). If an open wiki reader is preserved below the current page, it pops back to that Settings instance and restores the reader. Otherwise it pops to root and opens the cached <code>SettingsMenu.qml</code> (built the first time with <code>initialSection: lastSettingsSection</code>, a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>; on later visits the page simply keeps the section it was on). Press-and-hold (<code>onPressAndHold</code>, in both orientations) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
             </tr>
             <tr>
               <td>Android Auto</td><td><code>android_auto_button.svg</code> / <code>bottomBarAndroidAutoButton</code></td>
@@ -354,7 +354,7 @@
           </tbody>
         </table>
 
-        <p>Every button ends in <code>stackView.openPage()</code> (see <a href="frontend-overview.html#page-cache">the page cache</a>): the page is built once with <code>stackView</code> and <code>mainWindow</code> supplied by <code>cachedPage()</code>, and every later press re-pushes or pops back to that same instance. Both bar orientations share one set of <code>open*Section()</code> functions on <code>bottomBar</code>; the horizontal and vertical <code>MouseArea</code>s only call them. They fire on <code>onPressed</code>, not <code>onClicked</code>, so a page changes on touch-down instead of waiting ~100 ms for the finger to lift. The switch is delayed by about two frames so the press animation is on screen first; see <a href="#animation-pattern">Button Animation Pattern</a>. Settings keeps <code>onPressAndHold</code>, so holding it opens Settings and then the Toggle View popup on top.</p>
+        <p>Navigation helpers use <code>stackView.openPage()</code> or pop to an existing page (see <a href="frontend-overview.html#page-cache">the page cache</a>): the page is built once with <code>stackView</code> and <code>mainWindow</code> supplied by <code>cachedPage()</code>, and every later press re-pushes or pops back to that same instance. Both bar orientations share one set of <code>open*Section()</code> functions on <code>bottomBar</code>; the horizontal and vertical <code>MouseArea</code>s only call them. They fire on <code>onPressed</code>, not <code>onClicked</code>, so a page changes on touch-down instead of waiting ~100 ms for the finger to lift. The switch is delayed by about two frames so the press animation is on screen first; see <a href="#animation-pattern">Button Animation Pattern</a>. Settings keeps <code>onPressAndHold</code>, so holding it opens Settings and then the Toggle View popup on top.</p>
 
         <h3 id="active-highlight">Active Page Highlight</h3>
         <p>The button for the page you are on gets a faint accent-tinted fill (18% opacity) inside its outline. <code>bottomBar.activeSection</code> maps <code>stackView.currentItem.objectName</code> to a section: <code>mainMenu</code> &rarr; home, <code>obd*</code> &rarr; obd, <code>mediaRoom</code> / <code>mediaPlayer</code> / <code>downloadPage</code> &rarr; media, <code>sensor*</code> / <code>carMenu</code> &rarr; sensor, <code>settingsMenu</code> &rarr; settings, <code>androidAutoView</code> &rarr; androidAuto, <code>phoneMirrorView</code> &rarr; phoneMirror. Any other page leaves every button unlit. Each orientation has one <code>NavHighlight</code> (an inline component) placed next to its button layout and declared before it, so it draws behind the icons. It is given a <code>{ section: button }</code> map, because ids inside the Loader components can't be reached from <code>bottomBar</code>. Each button has its own plate, made by a <code>Repeater</code> over that map. On a page change the new button's plate grows out from its centre while the old one shrinks away (240 ms scale, <code>OutCubic</code>, plus a 200 ms fade). A plate also fades out when its button is hidden through the Toggle View popup. A new page only lights a button if its <code>objectName</code> matches one of these rules.</p>
@@ -383,7 +383,7 @@
         <!-- Clock -->
         <h2 id="clock">Clock Section</h2>
 
-        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and <code>font.pixelSize: settingsManager.clockSize</code> (default 18, slider 10&ndash;85). Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
+        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>), fitted to the available clock slot. With Auto off, it uses <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px). Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
 
         <p>Both layouts bind their clock <code>Text</code> to one bar-level property, <code>bottomBar.clockTimeText</code>, which a single <code>Connections</code> on <code>clock.timeChanged</code> (also at bar level, outside both layout components) keeps current:</p>
 
@@ -500,7 +500,7 @@
           <tbody>
             <tr>
               <td>Two complete layout <code>Component</code>s instead of one reflowing layout</td>
-              <td>The horizontal and vertical bars differ in more than direction (section proportions, button widths, hit areas, popup ids), so each is written out in full and a <code>Loader</code> swaps them. The cost is duplication: helper functions, most <code>Connections</code> and the mute/volume logic exist twice (suffixed <code>Vertical</code>); only the clock text (<code>clockTimeText</code>) and the shuffle flag are shared at bar level.</td>
+              <td>The horizontal and vertical bars differ in more than direction (section proportions, button widths, hit areas, popup ids), so each is written out in full and a <code>Loader</code> swaps them. The cost is duplication: helper functions, most <code>Connections</code> and the mute/volume logic exist twice (suffixed <code>Vertical</code>); navigation helpers, phone/local media dispatch, clock text and sizing, and the shuffle flag are shared at bar level.</td>
             </tr>
             <tr>
               <td>Release anchors before re-anchoring</td>

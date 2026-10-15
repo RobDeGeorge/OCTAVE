@@ -54,7 +54,7 @@
         </ul>
         <p>
           Both backends define the same <strong>96 top-level default keys</strong> with identical literal defaults
-          (verified key by key against both sources on 2026-09-10). Settings are read once at startup, validated against
+          (verified key by key against both sources on 2026-10-13). Settings are read once at startup, validated against
           the defaults, served from memory, and written back atomically 500&nbsp;ms after the last change. The mechanics
           are on the <a href="settings-manager.html">Settings Manager</a> page; this page is the key catalogue.
         </p>
@@ -100,12 +100,12 @@
             <tr><td><code>uiScale</code></td><td>uiScale</td><td>float (C++ <code>float</code>)</td><td>1.0</td><td>– (UI 0.5 – 2.0, step 0.05)</td><td>Display page</td><td>Global UI scale factor (<code>Spacing.globalScale</code>). A stored 0.6 (an old default) is migrated to 1.0 at load. Pinnable</td></tr>
             <tr><td><code>themeSetting</code></td><td>themeSetting</td><td>str</td><td>"CosmicVoyager"</td><td>Any built-in or custom theme name; "Album Art Capture" enables palette extraction</td><td>Display page; <code>Main.updateTheme()</code></td><td>Active colour theme (<a href="theme-system.html">Theme System</a>). Pinnable (chips from <code>themeList</code>)</td></tr>
             <tr><td><code>customThemes</code></td><td>customThemes</td><td>dict (property is a list of names)</td><td>{}</td><td>name → theme object with colour keys and optional <code>albumArt</code> file URL</td><td>Saved from MediaRoom (<code>save_custom_theme</code>), deleted from the Display page</td><td>User-created themes captured from album art; art files live in <code>theme_art/</code></td></tr>
-            <tr><td><code>colorTransitionMs</code></td><td>colorTransitionMs</td><td>int</td><td>1000</td><td>0 – 2000, step 50 (Display slider and pinned-card registry agree)</td><td>Display page</td><td>Duration of theme colour transitions in ms. Pinnable</td></tr>
+            <tr><td><code>colorTransitionMs</code></td><td>colorTransitionMs</td><td>int</td><td>1000</td><td>– (UI and registry 0 – 2000, step 50)</td><td>Display page</td><td>Duration of theme colour transitions in ms. Pinnable</td></tr>
             <tr><td><code>songLengthTransition</code></td><td>songLengthTransition</td><td>bool</td><td>false</td><td>true/false</td><td>Display page</td><td>Animate the theme colour transition over the whole song length instead of <code>colorTransitionMs</code></td></tr>
             <tr><td><code>showClock</code></td><td>showClock</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Clock); Display widget</td><td>Show the clock in the bottom bar. Pinnable</td></tr>
             <tr><td><code>clockFormat24Hour</code></td><td>clockFormat24Hour</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Clock)</td><td>24-hour clock (false = 12-hour). Signal is <code>clockFormatChanged</code></td></tr>
             <tr><td><code>clockShowSeconds</code></td><td>clockShowSeconds</td><td>bool</td><td>false</td><td>true/false</td><td>Display page (Clock)</td><td>Show seconds in the bottom-bar clock</td></tr>
-            <tr><td><code>clockSize</code></td><td>clockSize</td><td>int</td><td>18</td><td>– (UI 10 – 85, step 1)</td><td>Display page (Clock)</td><td>Clock font size in points</td></tr>
+            <tr><td><code>clockSize</code></td><td>clockSize</td><td>int</td><td>18</td><td>– (UI 10 – 85, step 1)</td><td>Display page (Clock)</td><td>Manual clock font size in pixels</td></tr>
             <tr><td><code>clockSizeAuto</code></td><td>clockSizeAuto</td><td>bool</td><td>true</td><td>–</td><td>Display page (Clock)</td><td>Fit the clock to its slot in the nav bar (either orientation); when on, <code>clockSize</code> is ignored</td></tr>
             <tr><td><code>bottomBarOrientation</code></td><td>bottomBarOrientation</td><td>str</td><td>"bottom"</td><td>"bottom", "side" (UI chips; slot does not validate)</td><td>Display page (Layout)</td><td>Navigation bar along the bottom edge or the side</td></tr>
             <tr><td><code>showBottomBarMediaControls</code></td><td>showBottomBarMediaControls</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Layout)</td><td>Play/skip controls inside the navigation bar. Pinnable</td></tr>
@@ -131,13 +131,14 @@
             <tr><td><code>autoPlayOnStartup</code></td><td>autoPlayOnStartup</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback); Media widget</td><td>Resume the last song at launch. Pinnable</td></tr>
             <tr><td><code>persistShuffleState</code></td><td>persistShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback)</td><td>Restore <code>lastShuffleState</code> at launch. Pinnable</td></tr>
             <tr><td><code>musicButtonDefaultPage</code></td><td>musicButtonDefaultPage</td><td>str</td><td>"mediaRoom"</td><td>"mediaRoom", "mediaPlayer" (others ignored)</td><td>Media page (Playback)</td><td>Which view the music nav button opens</td></tr>
-            <tr><td><code>returnToLibraryAfterSelection</code></td><td>returnToLibraryAfterSelection</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback)</td><td>Go back to the player after picking a song from the library</td></tr>
+            <tr><td><code>returnToLibraryAfterSelection</code></td><td>returnToLibraryAfterSelection</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback)</td><td>Keep the library open after selecting a track when true; false opens the Now Playing view</td></tr>
             <tr><td><code>showWaveformVisualizer</code></td><td>showWaveformVisualizer</td><td>bool</td><td>true</td><td>true/false</td><td>Media page; NowPlayingStudio; Media widget</td><td>FFT waveform in MediaRoom (<a href="audio-analyzer.html">Audio Analyzer</a>). Pinnable</td></tr>
             <tr><td><code>show3DButtonTilt</code></td><td>show3DButtonTilt</td><td>bool</td><td>false</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>3D tilt on prev/play/next press. Pinnable</td></tr>
             <tr><td><code>show3DAlbumPreview</code></td><td>show3DAlbumPreview</td><td>bool</td><td>false</td><td>true/false</td><td>Media page; NowPlayingStudio; Media widget</td><td>Coverflow-style side cards around the album art. Pinnable</td></tr>
             <tr><td><code>roundedAlbumArt</code></td><td>roundedAlbumArt</td><td>bool</td><td>true</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>Rounded corners on album art. Pinnable</td></tr>
             <tr><td><code>albumArtCornerRadius</code></td><td>albumArtCornerRadius</td><td>int</td><td>16</td><td>clamped 2 – 32</td><td>Media page; NowPlayingStudio</td><td>Corner radius in dp when rounded. Pinnable</td></tr>
             <tr><td><code>showAlbumArtShadow</code></td><td>showAlbumArtShadow</td><td>bool</td><td>true</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>Drop shadow behind album art. Pinnable</td></tr>
+            <tr><td><code>get_setting_with_default()</code> / <code>save_setting()</code></td><td>musicDeviceModel</td><td>str</td><td>"Album art"</td><td>"Album art", "Record player", "MP3 player", "CD player", "Cassette player", "iPod" (validated by <code>MusicDevicePreference</code>; backend checks only the string type)</td><td>Media page; NowPlayingStudio</td><td>Now Playing artwork or 3D music-device model. The 3D choices require the Quick3D scene to load; unknown stored choices display as "Album art"</td></tr>
             <tr><td><code>vinylRecordMode</code></td><td>vinylRecordMode</td><td>bool</td><td>false</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>Spin the album art like a record while playing. Pinnable</td></tr>
             <tr><td><code>albumArtTransition</code></td><td>albumArtTransition</td><td>str</td><td>"Crossfade"</td><td>"Crossfade", "Slide", "Vinyl Lift", "Dissolve", "Flip", "Coverflow", "Conveyor", "Stack", "Depth", "Swing" (others ignored)</td><td>Media page; NowPlayingStudio</td><td>Track-change animation. With 3D preview on, the side cards animate along; off, only the centre card animates. Pinnable</td></tr>
             <tr><td><code>backgroundOverlayOpacity</code></td><td>backgroundOverlayOpacity</td><td>int</td><td>80</td><td>clamped 0 – 100</td><td>Media page; NowPlayingStudio</td><td>Dark overlay percentage over the blurred background. Pinnable</td></tr>
@@ -178,20 +179,20 @@
             <tr><td><code>obdFastMode</code></td><td>obdFastMode</td><td>bool</td><td>true</td><td>true/false</td><td>OBD page (Tuning); OBD widget</td><td>Fast polling mode, applied on the next connection. Pinnable</td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td>obdAutoReconnectAttempts</td><td>int</td><td>0</td><td>clamped 0 – 10 (0 = disabled)</td><td>OBD page (Connection)</td><td>Automatic reconnect attempts after a drop</td></tr>
             <tr><td><code>fuelTankCapacity</code></td><td>fuelTankCapacity</td><td>float (C++ <code>float</code>)</td><td>15.0</td><td>–</td><td>None</td><td>Tank size in gallons. Property and slot exist in both backends but nothing reads or writes them today</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(pid)</code> / <code>save_obd_parameter_enabled(pid, on)</code></td><td>obdParameters</td><td>dict of bool</td><td>86 PIDs, 20 enabled (<a href="#obd-parameters">list</a>)</td><td>PID name → enabled</td><td>Legacy; nothing in the UI writes it any more (<code>enable_all_supported()</code> still can)</td><td>Formerly chose which PIDs are polled. Polling is now demand-driven (<a href="obd-manager.html#watcher-system">what is on screen</a>), so this dict is kept only for settings-file compatibility. Writes are debounced 800&nbsp;ms; PIDs missing from the file are merged in from the defaults at load</td></tr>
+            <tr><td><code>get_obd_parameter_enabled(pid)</code> / <code>save_obd_parameter_enabled(pid, on)</code></td><td>obdParameters</td><td>dict of bool</td><td>123 parameter IDs, 20 enabled (<a href="#obd-parameters">list</a>)</td><td>PID name → enabled</td><td>Legacy; nothing in the UI writes it any more (<code>enable_all_supported()</code> still can)</td><td>Formerly chose which PIDs are polled. Polling is now demand-driven (<a href="obd-manager.html#watcher-system">what is on screen</a>), so this dict is kept only for settings-file compatibility. Writes are debounced 800&nbsp;ms; PIDs missing from the file are merged in from the defaults at load</td></tr>
             <tr><td><code>homeOBDParameters</code></td><td>homeOBDParameters</td><td>list of str</td><td>["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"]</td><td>PID names</td><td>OBD page</td><td>PIDs shown on the home-screen cards</td></tr>
             <tr><td><code>get_supported_obd_parameters()</code></td><td>supportedOBDParameters</td><td>list of str</td><td>[]</td><td>PID names</td><td>Written by OBDManager after a vehicle scan</td><td>PIDs the last scanned vehicle answered; lists the OBD settings page's parameters while offline. The live gate uses <code>obdManager.vehicleSupportedParameters</code> (this session only) instead</td></tr>
           </tbody>
         </table>
 
         <h2 id="obd-parameters">OBD Parameter PIDs</h2>
-        <p>The <code>obdParameters</code> default dict holds these 86 keys. The full gauge/PID catalogue with units is in <a href="obd-manager.html">OBD Manager</a> and <span class="file-path">docs/GAUGE_AUTHORING.md</span>.</p>
+        <p>The <code>obdParameters</code> default dict holds these 123 keys. The full gauge/PID catalogue with units is in <a href="obd-manager.html">OBD Manager</a> and <span class="file-path">docs/GAUGE_AUTHORING.md</span>.</p>
         <p><strong>Enabled by default (20):</strong></p>
         <pre><code>COOLANT_TEMP  CONTROL_MODULE_VOLTAGE  ENGINE_LOAD  THROTTLE_POS  INTAKE_TEMP
 TIMING_ADVANCE  MAF  SPEED  RPM  COMMANDED_EQUIV_RATIO  FUEL_LEVEL  INTAKE_PRESSURE
 SHORT_FUEL_TRIM_1  LONG_FUEL_TRIM_1  O2_B1S1  FUEL_PRESSURE  OIL_TEMP
 FUEL_ECONOMY  DISTANCE_TO_EMPTY  IGNITION_TIMING</code></pre>
-        <p><strong>Disabled by default (66):</strong></p>
+        <p><strong>Disabled by default (103):</strong></p>
         <pre><code>RUN_TIME  DISTANCE_W_MIL  FUEL_RAIL_PRESSURE_VAC  FUEL_RAIL_PRESSURE_DIRECT
 BAROMETRIC_PRESSURE  AMBIANT_AIR_TEMP  RELATIVE_THROTTLE_POS  THROTTLE_POS_B
 ACCELERATOR_POS_D  CATALYST_TEMP_B1S1  CATALYST_TEMP_B1S2  EVAP_VAPOR_PRESSURE
@@ -322,7 +323,7 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- Downloads -->
         <h2 id="download">Downloads</h2>
-        <p>No settings-page control writes these; <a href="download-manager.html">DownloadManager</a> reads them with <code>get_setting()</code>, so they are changed by editing the JSON (the type check keeps them strings). Compiled out of app-store builds together with the manager (<code>OCTAVE_ENABLE_DOWNLOADS=OFF</code>).</p>
+        <p>No settings-page control writes these; <a href="download-manager.html">DownloadManager</a> reads them with <code>get_setting()</code>, so they can be changed in the JSON while OCTAVE is closed. Their defaults remain in SettingsManager when downloads are disabled (<code>OCTAVE_ENABLE_DOWNLOADS=OFF</code>), but the download implementation is replaced by a stub.</p>
         <table>
           <thead>
             <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
@@ -378,7 +379,7 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td>dashboardEditorDraft</td><td>str (JSON)</td><td>""</td><td>DashboardEditor (saved on exit when there are unsaved changes; <code>_clearStoredDraft()</code> blanks it)</td><td>OBDMenu</td><td>Unsaved dashboard-editor state</td></tr>
           </tbody>
         </table>
-        <p>The six "read only" <code>rpm_*</code> keys have no writer in the current QML; they take effect only if added to the JSON by hand.</p>
+        <p>The seven "read only" <code>rpm_*</code> keys have no writer in the current QML; they take effect only if added to the JSON by hand.</p>
 
         <!-- In-memory -->
         <h2 id="in-memory">In-Memory Only</h2>
@@ -387,7 +388,7 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><th>Property</th><th>Type</th><th>Initial value</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. Only <code>VolumeController.applyVolume()</code> sets it; it is never written to the file</td></tr>
+            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. <code>VolumeController.applyVolume()</code> updates it during normal volume changes; it is also initialized on load/reset and is never written to the file</td></tr>
           </tbody>
         </table>
 
@@ -405,16 +406,16 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- Parity -->
         <h2 id="parity">C++ / Python Parity Check</h2>
-        <p>Result of comparing <code>buildDefaultSettings()</code> with <code>_default_settings</code> and both slot sets on 2026-09-10:</p>
+        <p>Result of comparing <code>buildDefaultSettings()</code> with <code>_default_settings</code> and both slot sets on 2026-10-13:</p>
         <ul>
           <li><strong>Keys:</strong> 96 in both; no key exists in only one backend.</li>
-          <li><strong>Default values:</strong> identical for every key, including all 86 PID flags and the nine gesture bindings.</li>
-          <li><strong>Properties / signals / slots:</strong> identical names. The shutdown flush is <code>flushPendingSave()</code> on both sides; Python keeps a <code>flush_pending_save()</code> alias for older callers.</li>
+          <li><strong>Default values:</strong> identical for every key, including all 123 parameter flags and the nine gesture bindings.</li>
+          <li><strong>Properties / signals:</strong> the same 79 properties and 83 signals. The shared callable methods also match, apart from the Python-only legacy flush alias. The shutdown flush is <code>flushPendingSave()</code> on both sides; Python keeps a <code>flush_pending_save()</code> alias for older callers.</li>
         </ul>
         <div class="info-box warning">
           <div class="info-box-title">Differences that affect stored values</div>
           <ul>
-            <li><code>mediaFolder</code> resolves an empty value to <code>QStandardPaths::MusicLocation</code> in C++ and to <code>~/Music</code> in Python. Identical on Linux and macOS; may differ on Windows and Android.</li>
+            <li><code>mediaFolder</code> resolves an empty value to <code>QStandardPaths::MusicLocation</code> in C++ and to <code>~/Music</code> in Python. The effective paths can differ with the platform or user configuration; Python is desktop-only.</li>
           </ul>
         </div>
 

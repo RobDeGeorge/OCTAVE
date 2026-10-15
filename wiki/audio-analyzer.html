@@ -26,6 +26,7 @@
             <li><a href="#fft-pipeline">FFT Pipeline</a></li>
             <li><a href="#frequency-bands">Frequency Band Distribution</a></li>
             <li><a href="#data-flow">Data Flow</a></li>
+            <li><a href="#live-audio">Live Phone Audio</a></li>
             <li><a href="#signals-slots">Signals and Slots</a></li>
             <li><a href="#threading">Threading Model</a></li>
             <li><a href="#qml-integration">QML Integration</a></li>
@@ -38,7 +39,7 @@
         <!-- Overview -->
         <h2 id="overview">Pipeline Overview</h2>
 
-        <p><span class="file-path">backend/audio_analyzer.py</span> (Python) and <span class="file-path">src/managers/audioanalyzer.{h,cpp}</span> (C++) pre-compute FFT visualization data for an entire audio track (up to 3&nbsp;hours) on a worker thread, then serve time-indexed levels to QML based on the playback position. Nothing is computed in real time during playback. Both backends expose the same <code>audioAnalyzer</code> API, use 96 bars and 100&nbsp;ms chunks, and produce the same 0-8 integer levels; where their internals differ this page says so.</p>
+        <p><span class="file-path">backend/audio_analyzer.py</span> (Python) and <span class="file-path">src/managers/audioanalyzer.{h,cpp}</span> (C++) pre-compute FFT visualization data for an entire audio track (up to 3&nbsp;hours) on a worker thread, then serve time-indexed levels to QML based on the playback position. Local-file playback uses this precomputed data; mirrored-phone audio uses the separate <a href="#live-audio">live PCM pipeline</a>. Both backends expose the same <code>audioAnalyzer</code> API, use 96 bars and 100&nbsp;ms chunks, and produce levels on the same 0-8 integer scale (the FFT binning differs, so results need not be identical); where their internals differ this page says so.</p>
 
         <div class="diagram">
 <pre>
@@ -101,7 +102,7 @@
         <table>
           <thead><tr><th>Implementation</th><th>Platforms</th><th>Decoder</th><th>FFT</th><th>Worker</th></tr></thead>
           <tbody>
-            <tr><td><span class="file-path">src/managers/audioanalyzer.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td><code>QAudioDecoder</code> (Qt Multimedia: MediaCodec on Android, GStreamer/FFmpeg on Linux, Media Foundation on Windows, AVFoundation on macOS)</td><td>Own in-place radix-2 Cooley-Tukey (<code>fft_radix2</code>), no external dependency</td><td><code>QtConcurrent::run()</code> + <code>QFutureWatcher</code></td></tr>
+            <tr><td><span class="file-path">src/managers/audioanalyzer.{h,cpp}</span></td><td><span class="platform-badge all">All (C++)</span></td><td><code>QAudioDecoder</code> (Qt Multimedia; codec availability depends on the Qt build and selected multimedia backend)</td><td>Own in-place radix-2 Cooley-Tukey (<code>fft_radix2</code>), no external dependency</td><td><code>QtConcurrent::run()</code> + <code>QFutureWatcher</code></td></tr>
             <tr><td><span class="file-path">backend/audio_analyzer.py</span></td><td><span class="platform-badge desktop">Desktop</span></td><td>PyAV (<code>av</code>, FFmpeg bindings)</td><td><code>numpy.fft.rfft</code></td><td><code>ThreadPoolExecutor(max_workers=1)</code> polled by a 100&nbsp;ms <code>QTimer</code></td></tr>
           </tbody>
         </table>
@@ -116,7 +117,7 @@
         <h2 id="decoding">Audio Decoding</h2>
 
         <h3>Python: PyAV</h3>
-        <p>The Python backend decodes with <strong>PyAV</strong>, so virtually any container FFmpeg understands works. The decode is streamed: each frame is converted to an ndarray, mixed to mono and decimated as it arrives, and nothing at the native rate is kept beyond the current frame. Planar frames are <code>(channels, n)</code>; packed (interleaved) frames are <code>(1, n&nbsp;&times;&nbsp;channels)</code> and are reshaped by the layout's channel count before averaging:</p>
+        <p>The Python backend decodes with <strong>PyAV</strong>; supported inputs depend on the codecs available in its FFmpeg build. The decode is streamed: each frame is converted to an ndarray, mixed to mono and decimated as it arrives, and nothing at the native rate is kept beyond the current frame. Planar frames are <code>(channels, n)</code>; packed (interleaved) frames are <code>(1, n&nbsp;&times;&nbsp;channels)</code> and are reshaped by the layout's channel count before averaging:</p>
 
         <pre><code>container = av.<span class="fn">open</span>(file_path)
 audio_stream = <span class="fn">next</span>((s <span class="kw">for</span> s <span class="kw">in</span> container.streams <span class="kw">if</span> s.type == <span class="str">'audio'</span>), <span class="kw">None</span>)
@@ -136,7 +137,7 @@ audio_stream = <span class="fn">next</span>((s <span class="kw">for</span> s <sp
     pending.<span class="fn">append</span>(piece)                     <span class="cmt"># FFT'd every ANALYSIS_BATCH_CHUNKS chunks</span></code></pre>
         <p>Packed multichannel frames were previously flattened as a single mono stream, so a 16-bit stereo WAV produced twice as many samples as it should and the bars ran at half speed. They are now de-interleaved before the mix.</p>
 
-        <p>The FFT is vectorised per batch: every <code>ANALYSIS_BATCH_CHUNKS = 600</code> chunks (60&nbsp;s of audio) the pending decimated samples become one <code>(n, chunk_size)</code> array, Hann-windowed and transformed with a single <code>np.fft.rfft(..., axis=1)</code>, band means come from <code>np.add.reduceat</code>, and only the resulting band magnitudes are kept; a remainder shorter than a chunk carries over to the next batch. Normalisation and quantisation at the end are array operations. That matters on the Python backend in particular. The analysis runs on a worker thread, but Python-level loops, and numpy calls fed Python lists such as the old <code>np.percentile(list)</code>, hold the GIL. Every Python call the GUI thread made during a track skip then waited for it, freezing the UI for 135&ndash;354&nbsp;ms per skip. The vectorised version produces byte-identical levels, runs 2&ndash;3&times; faster, and never holds the GIL for more than a few milliseconds.</p>
+        <p>The FFT is vectorised per batch: every <code>ANALYSIS_BATCH_CHUNKS = 600</code> chunks (60&nbsp;s of audio) the pending decimated samples become one <code>(n, chunk_size)</code> array, Hann-windowed and transformed with a single <code>np.fft.rfft(..., axis=1)</code>, band means come from <code>np.add.reduceat</code>, and only the resulting band magnitudes are kept; a remainder shorter than a chunk carries over to the next batch. Normalisation and quantisation at the end are array operations. That matters on the Python backend in particular. The analysis runs on a worker thread, but Python-level loops, and numpy calls fed Python lists such as the old <code>np.percentile(list)</code>, hold the GIL. Every Python call the GUI thread made during a track skip then waited for it, freezing the UI for 135&ndash;354&nbsp;ms per skip. The vectorised implementation reduces Python-loop work; latency depends on the file, machine and NumPy/PyAV build.</p>
 
         <h3>Python preprocessing</h3>
         <ol class="steps">
@@ -154,9 +155,9 @@ batch_samples = ANALYSIS_BATCH_CHUNKS * chunk_size</code></pre>
         <p>There is no peak normalisation of the samples. Scaling the samples scales every band magnitude and the 95th-percentile reference by the same factor (see <a href="#fft-pipeline">Global Normalization</a>), so the 0-8 levels do not depend on sample scale; the old peak pass was removed with no change in output.</p>
 
         <h3>C++: QAudioDecoder</h3>
-        <p>The C++ backend runs Qt Multimedia's <code>QAudioDecoder</code> <strong>in the file's native format</strong> &mdash; no <code>setAudioFormat()</code> &mdash; and does the rest itself so the pipeline matches Python step for step: <code>appendMono()</code> averages the channels of each <code>QAudioBuffer</code> into a float vector holding just that buffer (Float, Int16, Int32 and UInt8 sources are handled), and a <code>ChunkStream</code> (an anonymous-namespace struct in <span class="file-path">audioanalyzer.cpp</span>) stride-decimates it by <code>nativeRate / 8000</code> to an effective rate of <code>nativeRate / factor</code> (8820&nbsp;Hz for a 44.1&nbsp;kHz MP3, 8000&nbsp;Hz for 48&nbsp;kHz), carrying the decimation phase across buffers exactly as Python does. <code>ChunkStream</code> is initialised from the first buffer's rate; it FFTs each 100&nbsp;ms chunk as soon as it fills and keeps only the 96 band magnitudes per chunk. Once <code>kMaxAnalysisSeconds</code> (3&nbsp;h) of decimated audio is reached, the drain stops and the loop quits early. As in Python, the samples are not peak-normalised. Because the worker has no event loop of its own, the decode runs a local <code>QEventLoop</code> that quits on <code>finished</code> or <code>error</code>, with a 30&nbsp;s watchdog so a stalled codec cannot hang the worker forever; any buffers still queued when <code>finished</code> fires are drained before the decoder is stopped. An error, a timeout or an empty buffer fails the analysis (bars stay at zero) and each case is logged with its own <code>console.warn</code>-level message, including how many samples the watchdog case had managed to decode.</p>
+        <p>The C++ backend runs Qt Multimedia's <code>QAudioDecoder</code> <strong>in the file's native format</strong> &mdash; no <code>setAudioFormat()</code> &mdash; and does the rest itself so the pipeline matches Python step for step: <code>appendMono()</code> averages the channels of each <code>QAudioBuffer</code> into a float vector holding just that buffer (Float, Int16, Int32 and UInt8 sources are handled), and a <code>ChunkStream</code> (an anonymous-namespace struct in <span class="file-path">audioanalyzer.cpp</span>) stride-decimates it by <code>nativeRate / 8000</code> to an effective rate of <code>nativeRate / factor</code> (8820&nbsp;Hz for a 44.1&nbsp;kHz MP3, 8000&nbsp;Hz for 48&nbsp;kHz), carrying the decimation phase across buffers exactly as Python does. <code>ChunkStream</code> is initialised from the first buffer's rate; it FFTs each 100&nbsp;ms chunk as soon as it fills and keeps only the 96 band magnitudes per chunk. Once <code>kMaxAnalysisSeconds</code> (3&nbsp;h) of decimated audio is reached, the drain stops and the loop quits early. As in Python, the samples are not peak-normalised. Because the worker has no event loop of its own, the decode runs a local <code>QEventLoop</code> that quits on <code>finished</code> or <code>error</code>, with a 30&nbsp;s watchdog so a stalled codec cannot hang the worker forever; any buffers still queued when <code>finished</code> fires are drained before the decoder is stopped. An error, a timeout or an empty buffer fails the analysis (bars stay at zero) and each case is logged with its own Qt warning message, including how many samples the watchdog case had managed to decode.</p>
 
-        <p><strong>Why native format:</strong> the analyzer used to ask the decoder for 8&nbsp;kHz mono Int16 output directly. On Qt&nbsp;6.11's FFmpeg backend that request yields <em>no buffers and no error</em> for MP3 sources (WAV converted fine, which hid it), so every analysis ran into the 30&nbsp;s watchdog, logged <code>Analysis failed</code>, and the visualizer stayed dark on the shipped binary. Decoding natively takes a few hundred milliseconds for a full track and removes the dependency on the backend's converter; on Android it also sidesteps MediaCodec's sample-format quirks that were the reason for the old Int16 request.</p>
+        <p><strong>Why native format:</strong> the analyzer used to ask the decoder for 8&nbsp;kHz mono Int16 output directly. On Qt&nbsp;6.11's FFmpeg backend that request yields <em>no buffers and no error</em> for MP3 sources (WAV converted fine, which hid it), so every analysis ran into the 30&nbsp;s watchdog, logged <code>Analysis failed</code>, and the visualizer stayed dark on the shipped binary. Decoding natively removes the dependency on the backend's format converter. Analysis time depends on the track, device and Qt Multimedia backend.</p>
 
         <pre><code><span class="cls">QAudioDecoder</span> decoder;                       <span class="cmt">// no setAudioFormat(): native rate/channels/format</span>
 decoder.<span class="fn">setSource</span>(<span class="cls">QUrl</span>::<span class="fn">fromLocalFile</span>(filePath));
@@ -197,7 +198,7 @@ window = np.<span class="fn">hanning</span>(chunk_size).<span class="fn">astype<
           <li><strong>FFT and magnitude</strong> - both backends keep the magnitudes of every positive-frequency bin except DC, i.e. bins <code>1 .. N/2</code>, which at the 8&nbsp;kHz effective rate is <strong>0-4&nbsp;kHz</strong>:
             <pre><code>fft_len = chunk_size // <span class="num">2</span>
 fft = np.<span class="fn">abs</span>(np.fft.<span class="fn">rfft</span>(windowed))[<span class="num">1</span>:<span class="num">1</span> + fft_len]   <span class="cmt"># skip DC</span></code></pre>
-            Python gets <code>chunk_size // 2</code> bins (441 at 10&nbsp;Hz for an 882-sample chunk, 400 for 800 samples); C++ runs the complex radix-2 FFT on the 1024-point padded buffer and keeps <code>fftSize / 2</code> = 512 magnitudes at 7.8&nbsp;Hz per bin. (An earlier Python version halved the <code>rfft</code> output a second time and so only showed 0-2&nbsp;kHz; the two visualizers now cover the same range.)
+            Python gets <code>chunk_size // 2</code> bins (441 at 10&nbsp;Hz for an 882-sample chunk, 400 for 800 samples); C++ runs the complex radix-2 FFT on the 1024-point padded buffer and keeps <code>fftSize / 2</code> = 512 magnitudes at about 7.8&nbsp;Hz per bin for 8000&nbsp;Hz audio, or 8.6&nbsp;Hz for 8820&nbsp;Hz audio. (An earlier Python version halved the <code>rfft</code> output a second time and so only showed 0-2&nbsp;kHz; the two visualizers now cover the same range.)
           </li>
           <li><strong>Logarithmic frequency bands</strong> - the bins are grouped into 96 bands with logarithmic spacing, giving more resolution to low frequencies. The edges are computed once per file by <code>_log_band_edges(fft_len, num_bars)</code> / <code>logBandEdges(fftLen, numBars)</code>, since they depend only on the bin count:
             <pre><code>edges = [<span class="num">0</span>] * (num_bars + <span class="num">1</span>)
@@ -238,7 +239,7 @@ global_max = np.<span class="fn">percentile</span>(positive, <span class="num">9
         <!-- Frequency Band Distribution -->
         <h2 id="frequency-bands">Frequency Band Distribution</h2>
 
-        <p>Linear spacing would dedicate most bars to high frequencies, which are less musically interesting; logarithmic spacing mirrors how pitch is perceived. Boundary <code>i</code> of 96 sits at bin <code>N^(i/96)</code> (truncated to an integer, then bumped to at least the previous boundary + 1), where <code>N</code> is the number of magnitude bins covering 0-4&nbsp;kHz: 512 in C++ (7.8&nbsp;Hz/bin), 400 or 441 in Python depending on whether the source decimated to 8000 or 8820&nbsp;Hz (10&nbsp;Hz/bin). Approximate boundaries for the 8&nbsp;kHz case:</p>
+        <p>Linear spacing would dedicate most bars to high frequencies, which are less musically interesting; logarithmic spacing mirrors how pitch is perceived. Boundary <code>i</code> of 96 sits at bin <code>N^(i/96)</code> (truncated to an integer, then bumped to at least the previous boundary + 1), where <code>N</code> is the number of magnitude bins up to the effective Nyquist frequency (4&nbsp;kHz at 8000&nbsp;Hz, 4.41&nbsp;kHz at 8820&nbsp;Hz): 512 in C++ (about 7.8 or 8.6&nbsp;Hz/bin), 400 or 441 in Python (10&nbsp;Hz/bin). Approximate boundaries for the 8&nbsp;kHz case:</p>
 
         <table>
           <thead><tr><th>Bar</th><th>C++ (N = 512, 7.8 Hz/bin)</th><th>Python (N = 400, 10 Hz/bin)</th></tr></thead>
@@ -261,7 +262,7 @@ global_max = np.<span class="fn">percentile</span>(positive, <span class="num">9
 
         <pre><code><span class="cls">@Slot</span>(<span class="cls">float</span>)
 <span class="kw">def</span> <span class="fn">update_position</span>(self, position_seconds: <span class="cls">float</span>):
-    <span class="kw">if not</span> self._fft_data <span class="kw">or not</span> self._is_active:
+    <span class="kw">if not</span> <span class="fn">len</span>(self._fft_data) <span class="kw">or not</span> self._is_active:
         <span class="kw">return</span>
 
     chunk_index = <span class="fn">int</span>(position_seconds * <span class="num">10</span>)     <span class="cmt"># 10 chunks per second</span>
@@ -276,6 +277,19 @@ global_max = np.<span class="fn">percentile</span>(positive, <span class="num">9
         <p>The change detection prevents a signal (and 96 QML property writes) when the position is still inside the same chunk. The C++ version builds a <code>QVariantList</code> from row <code>chunkIndex</code> of the flat <code>m_fftData</code> (offset <code>chunkIndex &times; m_numBars</code>, row count <code>chunkCount()</code>) and compares it with the last emitted one the same way. In both backends a position past the last analysed chunk (beyond the 3&nbsp;h cap, or the sub-chunk tail of a track) yields 96 zeros rather than holding the last chunk. <code>set_active(false)</code> emits a list of 96 zeros to clear the display; <code>clear()</code> drops the data and remembered file.</p>
 
         <!-- Signals and Slots -->
+        <h2 id="live-audio">Live Phone Audio</h2>
+        <p>Both launchers connect <code>phoneMirrorManager.audioPlayed</code> to <code>feed_live_pcm(pcm, bufferedMs)</code>.
+          The input is signed 16-bit little-endian PCM at 48 kHz, stereo, just written to the phone-audio sink.
+          <code>set_live(true)</code> selects this mode; MediaRoom calls <code>update_live()</code> every 16 ms while active.</p>
+        <p>The feed is mixed to mono, decimated to 8 kHz and kept in a one-second ring buffer. Each update analyses a
+          100 ms window ending near the sample currently being heard, using the sink backlog and elapsed time since the
+          last feed. It uses the same Hann window, frequency-band layout and 0–8 quantization as file analysis, but an
+          adaptive reference: the frame's 95th percentile, a one-second exponential release, a 0.85 scale and a floor of
+          1.0. These operations run on the GUI thread. No PCM for more than 250 ms, or insufficient samples, produces zeros.</p>
+        <p>Only changed levels emit <code>fftDataChanged</code>. Switching live mode clears the displayed levels;
+          <code>set_active(false)</code> also clears them. <code>is_analyzed()</code> reports file-analysis availability,
+          not whether the live ring has audio.</p>
+
         <h2 id="signals-slots">Signals and Slots</h2>
 
         <h3>Signals</h3>
@@ -298,6 +312,8 @@ global_max = np.<span class="fn">percentile</span>(positive, <span class="num">9
             <tr><td><code>clear</code></td><td>None</td><td>Drop all analysis data</td></tr>
             <tr><td><code>get_current_levels</code></td><td>None &rarr; <code>list</code></td><td>Current levels synchronously</td></tr>
             <tr><td><code>get_num_bars</code></td><td>None &rarr; <code>int</code></td><td>Bar count (96)</td></tr>
+            <tr><td><code>set_live</code></td><td><code>bool</code></td><td>Select live PCM analysis (both backends)</td></tr>
+            <tr><td><code>update_live</code></td><td>None</td><td>Analyse the current live window and emit changed levels</td></tr>
             <tr><td><code>is_analyzed</code></td><td>None &rarr; <code>bool</code></td><td>Whether FFT data is available</td></tr>
           </tbody>
         </table>
@@ -335,21 +351,21 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
         <p><code>analyzeAudio()</code> is a static function that receives everything it needs as arguments; <code>QFutureWatcher::finished</code> delivers the result to <code>onAnalysisDone()</code> on the GUI thread. The destructor cancels and waits for the watcher so the app can quit mid-analysis.</p>
 
         <div class="info-box warning">
-          <strong>Thread Safety:</strong> the worker functions must NOT touch member state or Qt GUI objects. They take the file path (and bar count) as arguments and return the computed data; all signal emissions and member writes happen on the GUI thread in <code>_check_analysis_done()</code> / <code>onAnalysisDone()</code>.
+          <strong>Thread Safety:</strong> the file-analysis workers must not write shared state or access Qt GUI objects. C++ takes the path and analysis settings as arguments; Python reads its fixed bar-count and chunk-duration members. Both return computed data; all signal emissions and member writes happen on the GUI thread in <code>_check_analysis_done()</code> / <code>onAnalysisDone()</code>.
         </div>
 
         <h3>Guard Conditions</h3>
         <ul>
           <li><strong>Missing file:</strong> an empty or non-existent path is rejected with a warning</li>
           <li><strong>Skip if already analyzed:</strong> if the same path is requested and data exists, nothing happens</li>
-          <li><strong>Busy:</strong> if an analysis is running, the Python backend drops the new request; the C++ backend remembers the latest requested file (<code>m_pendingFile</code>) and <code>onAnalysisDone()</code> chains into it, so a fast skip sequence does not leave the visualizer on the old track's data (or blank if the old track was never analyzed). A request that lands during the chained analysis replaces the pending file again.</li>
+          <li><strong>Busy:</strong> if an analysis is running, both backends remember only the latest requested file (<code>_queued_file</code> / <code>m_pendingFile</code>). When the worker finishes, a superseded result is discarded and the queued file is analysed next, so a fast skip sequence does not leave the visualizer on the old track's data (or blank if the old track was never analyzed). A request that lands during the chained analysis replaces the pending file again.</li>
           <li><strong>Graceful degradation:</strong> if NumPy or PyAV are not installed the Python analyzer logs a warning and returns; the C++ analyzer needs only Qt Multimedia</li>
         </ul>
 
         <!-- QML Integration -->
         <h2 id="qml-integration">QML Integration</h2>
 
-        <p>The only consumer is the waveform container in <span class="file-path">frontend/MediaRoom.qml</span>, visible when <code>settingsManager.showWaveformVisualizer</code> is on, the local player (not the phone while mirroring) is the source, and the playlist is not empty. The pieces, quoted from the QML:</p>
+        <p>The display consumer is the waveform container in <span class="file-path">frontend/MediaRoom.qml</span>, visible when <code>settingsManager.showWaveformVisualizer</code> is on and <code>playlistEmpty</code> is false. It switches between local-file and live phone audio with <code>mediaRoom.usePhone</code>. The following excerpt shows the local-file path; the timer calls <code>update_live()</code> instead when the phone is selected:</p>
 
         <pre><code><span class="cmt">// Analysis is deferred until the album-art carousel has settled, so decoding</span>
 <span class="cmt">// does not compete with animation frames (called from the carousel's settled signal)</span>
@@ -398,7 +414,7 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
 }</code></pre>
 
         <h3>Track Changes</h3>
-        <p>On a track change MediaRoom snaps every bar to zero (<code>dropBars()</code>, with the <code>Behavior</code> animations disabled while <code>_cardAnimBusy</code> is true so the drop is instant) and leaves the visualizer visible. The bars sit at zero until the new analysis lands and then animate up on the next data tick. An earlier version faded the whole visualizer out for the duration of the analysis, which on Android (where MediaCodec decoding is slower than desktop FFmpeg) meant several seconds of a missing visualizer that looked broken. The QML also calls <code>initializeWaveform()</code> whenever the container becomes visible, which re-requests the current file (a no-op if already analyzed) and syncs <code>set_active</code> with <code>mediaManager.is_playing()</code>.</p>
+        <p>On a track change MediaRoom snaps every bar to zero (<code>dropBars()</code>, with the <code>Behavior</code> animations disabled while <code>_cardAnimBusy</code> is true so the drop is instant) and leaves the visualizer visible. The bars sit at zero until the new analysis lands and then animate up on the next data tick. An earlier version faded the whole visualizer out for the duration of the analysis, which could leave the visualizer missing for several seconds while decoding. The QML also calls <code>initializeWaveform()</code> whenever the container becomes visible, which re-requests the current file (a no-op if already analyzed) and syncs <code>set_active</code> with <code>mediaManager.is_playing()</code>.</p>
 
         <!-- Performance -->
         <h2 id="performance">Performance Considerations</h2>
@@ -411,15 +427,15 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
         <p>The stored result is one byte per bar per chunk: a 3-minute song is about 1800 &times; 96 = 172,800 bytes (~170&nbsp;KB), a Python <code>(num_chunks, 96)</code> <code>uint8</code> array or a flat C++ <code>std::vector&lt;quint8&gt;</code>. Only the current track's data is kept; a new analysis replaces it.</p>
 
         <h3>QML Rendering Impact</h3>
-        <p>Each of the 96 bars is a separate <code>Rectangle</code> with an animated height, updated at most 10 times per second by data but re-laid out every animation frame. The <code>Row</code> is rendered through a cached layer (<code>layer.enabled</code>), which is frozen (<code>layer.live: false</code>) during the card animation so the 96 gradient draws collapse into one texture blit. On low-powered devices the remaining cost is the bar animations themselves; disable the visualizer with <code>showWaveformVisualizer</code> if a target cannot keep up.</p>
+        <p>Each of the 96 bars is a separate <code>Rectangle</code> with an animated height, updated about 10 times per second by local-file data (up to the visualizer timer rate for live audio) but re-laid out every animation frame. The <code>Row</code> is rendered through a cached layer (<code>layer.enabled</code>), which is frozen (<code>layer.live: false</code>) during the card animation so the 96 gradient draws collapse into one texture blit. On low-powered devices the remaining cost is the bar animations themselves; disable the visualizer with <code>showWaveformVisualizer</code> if a target cannot keep up.</p>
 
         <h3>Signal Emission Throttling</h3>
-        <p>MediaRoom polls every 16&nbsp;ms, but since chunks span 100&nbsp;ms and <code>update_position()</code> only emits when the levels differ from the last emission, the visualizer receives at most 10 updates per second.</p>
+        <p>MediaRoom polls every 16&nbsp;ms, but since chunks span 100&nbsp;ms and <code>update_position()</code> only emits when the levels differ from the last emission, local-file playback at normal speed produces at most 10 chunk updates per second. Seeks can select another chunk immediately; live phone audio is analysed at the visualizer timer rate.</p>
 
         <!-- Dependencies -->
         <h2 id="dependencies">Dependencies and Graceful Degradation</h2>
 
-        <p>The Python AudioAnalyzer needs two optional libraries, both listed in <span class="file-path">requirements.txt</span> (<code>numpy&gt;=1.26.0</code>, <code>av&gt;=12.0.0</code>) and installed by <code>python setup.py</code>. Since commit <code>ee5a23e</code> they are imported lazily through <span class="file-path">backend/lazy_import.py</span>: importing them at startup cost about 0.2&nbsp;s before the first frame, so they load on the first <code>analyze_file()</code> instead.</p>
+        <p>The Python AudioAnalyzer needs two optional libraries, both listed in <span class="file-path">requirements.txt</span> (<code>numpy&gt;=1.26.0</code>, <code>av&gt;=12.0.0</code>) and installed by <code>python setup.py</code>. Since commit <code>ee5a23e</code> they are imported lazily through <span class="file-path">backend/lazy_import.py</span>: importing them at startup cost about 0.2&nbsp;s before the first frame, so file analysis loads them on first use; live mode can also load NumPy.</p>
 
         <pre><code><span class="kw">from</span> backend.lazy_import <span class="kw">import</span> available, lazy_module
 
@@ -433,7 +449,7 @@ AV_AVAILABLE = <span class="fn">available</span>(<span class="str">"av"</span>)
     logger.<span class="fn">warning</span>(<span class="str">"PyAV not available - waveform visualization will be disabled"</span>)
 av = <span class="fn">lazy_module</span>(<span class="str">"av"</span>)</code></pre>
 
-        <p>If either library is missing, <code>analyze_file()</code> logs a warning and returns; no data is ever produced, so the bars simply stay at zero. OCTAVE therefore runs on a Python environment without NumPy or PyAV with no errors, just without the visualizer. The C++ backend has no dependency beyond Qt Multimedia, which is already linked for <code>QMediaPlayer</code>.</p>
+        <p>If either library is missing, <code>analyze_file()</code> logs a warning and returns; the local-file analyzer produces no data. Live PCM analysis needs NumPy but does not need PyAV for its FFT; other app features may have their own dependency requirements. The C++ backend has no dependency beyond Qt Multimedia, which is already linked for <code>QMediaPlayer</code>.</p>
 
         <div class="info-box info">
           <strong>Installation:</strong> <code>numpy</code> and <code>av</code> come from <span class="file-path">requirements.txt</span>. PyAV's binary wheels bundle their own FFmpeg libraries, so no system FFmpeg is needed.
@@ -444,13 +460,13 @@ av = <span class="fn">lazy_module</span>(<span class="str">"av"</span>)</code></
         <table>
           <thead><tr><th>Choice</th><th>Why (from code comments and commit history)</th></tr></thead>
           <tbody>
-            <tr><td><strong>Pre-compute the whole track</strong> instead of analyzing live</td><td>The class docstring states the design: "Pre-computes FFT for entire track, then provides data based on playback position." Playback then costs one list lookup per poll regardless of device, and there is no need to tap the audio output on any platform.</td></tr>
+            <tr><td><strong>Pre-compute local tracks</strong></td><td>The class docstring states the design: "Pre-computes FFT for entire track, then provides data based on playback position." Playback then costs one list lookup per poll regardless of device, while mirrored-phone audio uses the live PCM feed described above.</td></tr>
             <tr><td><strong>Streamed decode, compact storage, 3&nbsp;h cap</strong></td><td>Decoding the whole track before analysing it held the full decoded audio in memory (about 1&nbsp;MB per second in Python), which froze the Orange Pi on a long mix. Mixing and decimating each frame on arrival and keeping only band magnitudes bounds memory to ~4&nbsp;KB per second of audio; the levels are stored as bytes. The 3&nbsp;h cap bounds the remaining cost for very long files; past it the bars are flat.</td></tr>
             <tr><td><strong>No animation in the backend</strong></td><td>The first version interpolated the bars toward target levels on its own timer inside the analyzer, which was the visualizer "eating CPU" (commit <code>e25ea66</code> removed <code>_animation_timer</code> / <code>_target_levels</code>). Now <code>update_position()</code> emits only when the chunk's levels differ ("No intermediate animation &mdash; QML handles any smoothing it needs"), and the QML <code>Behavior</code> animations do the easing on the scene graph.</td></tr>
-            <tr><td><strong>8&nbsp;kHz, 100&nbsp;ms chunks, 0-8 levels</strong></td><td>The code comments give the reason for the rate ("Downsample to ~8kHz for faster processing"); the spectrum is analysed up to the 4&nbsp;kHz Nyquist limit in both backends, 100&nbsp;ms chunks give 10 data frames per second, which the 120&nbsp;ms bar animations bridge, and nine discrete integer levels make "did anything change?" a cheap list comparison so unchanged chunks emit nothing.</td></tr>
+            <tr><td><strong>8&nbsp;kHz, 100&nbsp;ms chunks, 0-8 levels</strong></td><td>The code comments give the reason for the rate ("Downsample to ~8kHz for faster processing"); the spectrum is analysed up to the effective Nyquist limit (4 or 4.41&nbsp;kHz for common source rates) in both backends, 100&nbsp;ms chunks give 10 data frames per second, which the 120&nbsp;ms bar animations bridge, and nine discrete integer levels make "did anything change?" a cheap list comparison so unchanged chunks emit nothing.</td></tr>
             <tr><td><strong>Analysis after the card animation</strong></td><td>MediaRoom calls <code>analyze_file</code> from the carousel's settled signal so decoding and the first FFT do not compete with animation frames; the bars drop to zero and stay visible meanwhile.</td></tr>
-            <tr><td><strong>QAudioDecoder in C++</strong></td><td>Qt Multimedia is already linked for <code>QMediaPlayer</code> and supplies the native codec on every target (including MediaCodec on Android, where shipping FFmpeg would be a separate build). An earlier C++ version shelled out to an <code>ffmpeg</code> CLI to mirror PyAV; the decoder route removed the external binary (Android sweep, commit <code>d751c9d</code>) and the source comments and log lines no longer mention ffmpeg. Running the decoder inside a local <code>QEventLoop</code> on the worker, with a watchdog, is what makes it usable off the GUI thread.</td></tr>
-            <tr><td><strong>Native format from the decoder, own mix-down and decimation</strong></td><td>Requesting 8&nbsp;kHz mono Int16 from the decoder silently produced nothing for MP3 on Qt&nbsp;6.11's FFmpeg backend (every analysis timed out). Taking whatever the platform decoder emits and converting in <code>appendMono()</code> works on every backend, needs no assumptions about which sample formats MediaCodec accepts, and makes the C++ preprocessing identical to Python's (mono average, stride decimate with the phase carried across buffers).</td></tr>
+            <tr><td><strong>QAudioDecoder in C++</strong></td><td>Qt Multimedia, already linked for <code>QMediaPlayer</code>, provides the decoder interface used by the C++ analyzer. An earlier C++ version shelled out to an <code>ffmpeg</code> CLI to mirror PyAV; the decoder route removed the external binary (Android sweep, commit <code>d751c9d</code>) and the source comments and log lines no longer mention ffmpeg. Running the decoder inside a local <code>QEventLoop</code> on the worker, with a watchdog, is what makes it usable off the GUI thread.</td></tr>
+            <tr><td><strong>Native format from the decoder, own mix-down and decimation</strong></td><td>Requesting 8&nbsp;kHz mono Int16 from the decoder silently produced nothing for MP3 on Qt&nbsp;6.11's FFmpeg backend (every analysis timed out). Taking whatever the platform decoder emits and converting in <code>appendMono()</code> avoids requesting a decoder-side format conversion and makes the C++ preprocessing identical to Python's (mono average, stride decimate with the phase carried across buffers).</td></tr>
             <tr><td><strong>Own radix-2 FFT</strong></td><td>The header labels the helpers "FFT helpers (no external deps)": a 1024-point transform ten times per second of audio does not justify another library across nine build targets, and zero-padding 800 samples to 1024 is the only cost.</td></tr>
             <tr><td><strong>Pending-file chaining (both backends)</strong></td><td>Rapid skip presses used to drop every request after the first, leaving the visualizer on the previous track's FFT or blank. Both backends now remember only the latest request (<code>m_pendingFile</code> / <code>_queued_file</code>). When the running job ends and a newer track is waiting, its result is discarded rather than applied, and the waiting track is analysed next, without cancelling decoders mid-flight. The previous track's levels are also cleared when a new analysis starts, so the bars sit at zero instead of dancing to the wrong song. Python was the backend that still dropped requests until this change.</td></tr>
             <tr><td><strong>Poll timer instead of callbacks (Python)</strong></td><td>A <code>concurrent.futures</code> callback would run on the worker thread, where Qt signals must not be emitted; a 100&nbsp;ms <code>QTimer</code> keeps every Qt interaction on the main thread with no cross-thread signal plumbing.</td></tr>

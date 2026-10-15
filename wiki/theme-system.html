@@ -70,7 +70,7 @@
         <!-- Style.qml -->
         <h2 id="style-qml">Style.qml &mdash; Theme Resolution</h2>
 
-        <p><span class="file-path">frontend/Style.qml</span> (about 1200 lines) holds the built-in palettes, the custom-theme map, the live album-art palette, the font registry, and one reactive colour property per UI token. The <code>activeTheme</code> object is what every token binds to, resolved in priority order:</p>
+        <p><span class="file-path">frontend/Style.qml</span> holds the built-in palettes, the custom-theme map, the live album-art palette, the font registry, and one reactive colour property per UI token. The <code>activeTheme</code> object is what every token binds to, resolved in priority order:</p>
 
         <pre><code><span class="prop">property var</span> activeTheme: {
     <span class="cmt">// 1. Album Art Capture with a live palette</span>
@@ -130,12 +130,12 @@
           </tbody>
         </table>
 
-        <p>Themes differ in how much per-button variety they carry. The eight themes added with the swatch redesign (commit <code>7ac3c31</code>: ArcticChill, Parchment, Sunshine, MintGarden, RoseQuartz, LavenderMist, SlateCloud, AmberConsole, plus CrimsonEmber and ForestEmerald) give each bottom-bar destination its own hue, while SolarizedLight and NeonMatrix tint every button with the accent.</p>
+        <p>Themes differ in how much per-button variety they carry. The themes added with the swatch redesign (commit <code>7ac3c31</code>: ArcticChill, Parchment, Sunshine, MintGarden, RoseQuartz, LavenderMist, SlateCloud, AmberConsole, plus CrimsonEmber and ForestEmerald) give each bottom-bar destination its own hue, while SolarizedLight and NeonMatrix tint every button with the accent.</p>
 
         <!-- Theme object -->
         <h2 id="theme-object">Theme Object Structure</h2>
 
-        <p>Every theme &mdash; built-in, custom, or extracted &mdash; is a plain object with the same ten top-level keys. <code>MediaManager::_generate_theme_from_colors()</code> in both backends emits exactly this shape as JSON, which is why an extracted palette can be dropped straight into <code>activeTheme</code>:</p>
+        <p>Every theme &mdash; built-in, custom, or extracted &mdash; is a plain object with the same core top-level keys. <code>MediaManager::_generate_theme_from_colors()</code> in both backends emits exactly this shape as JSON, which is why an extracted palette can be dropped straight into <code>activeTheme</code>:</p>
 
         <pre><code>{
     <span class="str">"base"</span>: <span class="str">"#0C0C0C"</span>,            <span class="cmt">// backgroundColor, sidebarColor, rowBackgroundColor</span>
@@ -202,7 +202,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
           <li>Startup: a one-second timer (<code>_extract_colors_on_startup</code>) re-extracts for the restored track if the mode is active.</li>
         </ul>
 
-        <h3>Extraction Algorithm (identical in C++ and Python)</h3>
+        <h3>Extraction Algorithm (shared design)</h3>
         <ol class="steps">
           <li>Load the cover with <code>QImage</code>, convert to <code>Format_RGBA8888</code>, scale to 50&times;50 ignoring aspect ratio &mdash; 2500 RGB samples.</li>
           <li>Run k-means with <code>k = 5</code>, at most 10 iterations, centroids seeded from a random generator fixed at seed 42, stopping early when no centroid moves by more than 1 per channel. (The Python version uses a local <code>random.Random(42)</code>; a comment notes that seeding the global module had made every later <code>random.shuffle()</code> in the process deterministic.)</li>
@@ -238,7 +238,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
     }
 }</code></pre>
 
-        <p>Because <code>albumArtTheme</code> is a <code>var</code> holding a fresh object, assigning it does not by itself re-trigger the <code>activeTheme</code> binding; the <code>currentTheme</code> toggle forces it. At startup Main.qml primes <code>albumArtTheme</code> from the persisted <code>settingsManager.albumArtColors</code> <em>before</em> calling <code>setThemeInstant("Album Art Capture")</code>, so the placeholder palette never paints.</p>
+        <p>The implementation also toggles <code>currentTheme</code> to force theme re-evaluation. This is an explicit compatibility step in this code, not a general rule that assigning a new object to a QML <code>var</code> fails to notify bindings. At startup Main.qml primes <code>albumArtTheme</code> from the persisted <code>settingsManager.albumArtColors</code> <em>before</em> calling <code>setThemeInstant("Album Art Capture")</code>, so the placeholder palette never paints.</p>
 
         <!-- Color Tokens -->
         <h2 id="color-tokens">Colour Token Reference</h2>
@@ -324,13 +324,13 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
 
         <div class="info-box warning">
           <div class="info-box-title">Performance</div>
-          Each <code>Behavior on</code> is an animation object; with roughly sixty colour tokens a palette change runs sixty <code>ColorAnimation</code>s in parallel. This is fine on desktop and acceptable on the Pi-class head units, and a transition speed of 0 makes theme shifts free.
+          Each <code>Behavior on</code> is an animation object; with roughly sixty colour tokens a palette change runs sixty <code>ColorAnimation</code>s in parallel. A transition speed of 0 disables the animated interpolation; theme changes still update bindings and render the resulting colors.
         </div>
 
         <!-- Font System -->
         <h2 id="font-system">Font System</h2>
 
-        <p><code>App.Style.fontFamily</code> is the family used by every <code>Text</code> in the app (the root <code>ApplicationWindow</code> also binds <code>font.family</code> to it):</p>
+        <p><code>App.Style.fontFamily</code> is the default text family used throughout the UI (the root <code>ApplicationWindow</code> also binds <code>font.family</code> to it):</p>
 
         <pre><code><span class="prop">property string</span> fontFamily: currentFont === <span class="str">"System Default"</span>
     ? systemDefaultFont
@@ -458,7 +458,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
         <table>
           <thead><tr><th>Property</th><th>Default</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td><code>source</code> (url)</td><td>""</td><td>A single-fill SVG; relative paths resolve against the importing file, so callers use <code>App.Style.assetBase + "tile_x.svg"</code></td></tr>
+            <tr><td><code>source</code> (url)</td><td>""</td><td>A single-fill SVG; relative paths resolve against the importing file, so callers use <code>App.Style.assetBase + "cat_display.svg"</code></td></tr>
             <tr><td><code>color</code></td><td><code>#FFFFFF</code></td><td>Tint applied to every opaque pixel (tiles pass <code>App.Style.accent</code>)</td></tr>
             <tr><td><code>shadow</code>, <code>shadowColor</code>, <code>shadowOffsetX/Y</code></td><td>true, 40&nbsp;% black, 1, 2</td><td>A second <code>ColorOverlay</code> of the same image, offset &mdash; "cheap, not a blur, no per-frame cost"</td></tr>
             <tr><td><code>fillRatio</code></td><td>1.0</td><td>Fraction of the item used by the image (the bottom bar's buttons use 0.7)</td></tr>
@@ -548,7 +548,7 @@ App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span c
             </tr>
             <tr>
               <td>Deterministic k-means (seed 42, 50&times;50 downscale, k = 5, 10 iterations)</td>
-              <td>The same cover always yields the same palette (stable when a track is replayed), and 2500 samples keep the pure-Python path to about 0.3&nbsp;s on desktop and about a second on a Pi &mdash; run on a worker with job supersession so skipping tracks applies only the last result.</td>
+              <td>Each backend deterministically seeds its clustering, so repeated extraction is stable within that implementation; C++ shuffles with <code>std::mt19937</code> and Python samples with <code>random.Random</code>, so exact cross-backend palette equality is not guaranteed, and 2500 samples keep the pure-Python path to about 0.3&nbsp;s on desktop and about a second on a Pi &mdash; run on a worker with job supersession so skipping tracks applies only the last result.</td>
             </tr>
             <tr>
               <td>Per-button accents in generated palettes</td>
