@@ -235,14 +235,18 @@
   scid=SCID tunnel_forward=true video=true audio=true|false control=true clipboard_autosync=false \
   video_codec=h264 audio_codec=raw max_size=0 video_bit_rate=8000000 max_fps=60 stay_awake=true cleanup=true \
   send_device_meta=true send_frame_meta=true send_codec_meta=true send_dummy_byte=true log_level=info \
-  octave_persist_ms=60000|0 [new_display=WxH] 2&gt;&amp;1 &amp; wait"</code></pre>
+  octave_persist_ms=60000|0 [video_codec_options=...] [new_display=WxH] 2&gt;&amp;1 &amp; wait"</code></pre>
               The <code>CLASSPATH=</code> assignment must come <em>before</em> <code>nohup</code> (an assignment after it is exec'd as a
               literal command; commit <code>bba3de6</code>). <code>nohup ... &amp; wait</code> keeps the adb shell relaying stdout for
               as long as the server lives, while the server survives adbd killing that shell on a USB dropout (it is reparented
               to init). <code>octave_persist_ms</code> is 60000 for a virtual-display session and 0 (exit like scrcpy) when mirroring
               the phone screen. On Linux the adb child gets <code>PR_SET_PDEATHSIG=SIGTERM</code> (C++ <code>setChildProcessModifier</code>,
               Python <code>preexec_fn</code>) so it dies with OCTAVE. The child's merged stdout/stderr is the server log; a
-              <code>New display: ... (id=N)</code> line yields the virtual display id used by <code>pressHome()</code>.</li>
+              <code>New display: ... (id=N)</code> line yields the virtual display id used by <code>pressHome()</code>.
+              <code>video_codec_options</code> defaults to <code>priority:int=0,latency:int=1,vendor.qti-ext-enc-low-latency.enable:int=1</code>
+              (C++ <code>ScrcpyClient::kVideoCodecOptions</code>, Python <code>VIDEO_CODEC_OPTIONS</code>): realtime priority, no
+              frame lookahead and Qualcomm's low-latency mode, which took the lag out of dragging on an S26 Ultra. Encoders ignore keys
+              they do not know. The <code>OCTAVE_VIDEO_CODEC_OPTIONS</code> environment variable replaces the list (empty sends none).</li>
             <li><strong>Connect</strong>: with <code>tunnel_forward</code> the local TCP connect succeeds before the server listens and
               then EOFs, so connect every 100 ms until the dummy byte actually arrives; that socket is the <strong>video</strong>
               socket. Deadline 20 s from the click (4 s when attaching); if the server process exits meanwhile the failure is
@@ -330,9 +334,10 @@
         <section id="pm-video">
           <h3>Video decode and frame delivery</h3>
           <p>A config packet (SPS/PPS) is not decoded on its own; it is prepended to the next packet, as the scrcpy client does.
-            C++ decodes with libavcodec (<code>avcodec_find_decoder(AV_CODEC_ID_H264)</code>, <code>FF_THREAD_SLICE | FF_THREAD_FRAME</code>,
+            C++ decodes with libavcodec (<code>avcodec_find_decoder(AV_CODEC_ID_H264)</code>, slice threading only, set before <code>avcodec_open2</code>,
             packets padded with <code>AV_INPUT_BUFFER_PADDING_SIZE</code>); Python with PyAV
-            (<code>av.CodecContext.create("h264", "r")</code>, <code>thread_type = "AUTO"</code>). Both produce YUV420P (Python
+            (<code>av.CodecContext.create("h264", "r")</code>, <code>thread_type = "SLICE"</code>). Frame threading is avoided because it delays
+            every picture by one frame per thread. Both produce YUV420P (Python
             reformats if the decoder returns anything else; C++ accepts <code>YUV420P</code>/<code>YUVJ420P</code> and drops other
             formats) and copy the three planes row by row into a <code>QVideoFrame(Format_YUV420P)</code> -- no RGB conversion, the
             GPU does the colour conversion in <code>VideoOutput</code>. The frame is stored as "latest" under a mutex and

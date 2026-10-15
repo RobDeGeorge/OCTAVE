@@ -157,7 +157,9 @@ NetworkManager (src/managers/networkmanager.cpp)
             <tbody>
               <tr>
                 <td><span class="platform-badge linux">Linux</span></td>
-                <td><code>nmcli -t -f ACTIVE,SSID dev wifi</code> -- first line starting <code>yes:</code></td>
+                <td><code>nmcli -t -f ACTIVE,SSID dev wifi list --rescan no</code> -- first line starting <code>yes:</code>. Without
+                  <code>--rescan no</code> nmcli rescans when the last scan is over 30&nbsp;s old, taking the radio off channel for
+                  ~4&nbsp;s; on the Pi that stalled phone mirroring over the OCTAVE-Jeep hotspot, which shares the radio, once a minute.</td>
                 <td><code>nmcli -t -f TYPE,STATE dev</code> -- a line containing both <code>ethernet</code> and <code>connected</code></td>
               </tr>
               <tr>
