@@ -511,11 +511,15 @@ void NetworkManager::startNetworkNameCheck()
             this, &NetworkManager::onNetworkNameCheckFinished);
 
 #ifdef Q_OS_LINUX
-    // Linux: nmcli -t -f ACTIVE,SSID dev wifi
+    // Linux: nmcli -t -f ACTIVE,SSID dev wifi list --rescan no. Without
+    // --rescan no, nmcli scans when the last scan is over 30 s old: the radio
+    // leaves its channel for ~4 s, which stalls a hotspot sharing it (phone
+    // mirroring over OCTAVE-Jeep froze once a minute).
     m_networkNameProcess->start(QStringLiteral("nmcli"),
                                 {QStringLiteral("-t"), QStringLiteral("-f"),
                                  QStringLiteral("ACTIVE,SSID"), QStringLiteral("dev"),
-                                 QStringLiteral("wifi")});
+                                 QStringLiteral("wifi"), QStringLiteral("list"),
+                                 QStringLiteral("--rescan"), QStringLiteral("no")});
 #elif defined(Q_OS_MACOS)
     // macOS: networksetup -getairportnetwork en0
     m_networkNameProcess->start(QStringLiteral("networksetup"),

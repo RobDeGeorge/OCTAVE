@@ -890,7 +890,9 @@ class ScrcpyClient(QObject):
     def _video_loop(self, video: socket.socket, t0: float):
         ctx = av.CodecContext.create("h264", "r")
         try:
-            ctx.thread_type = "AUTO"
+            # Slice threading only: frame threading ("AUTO") delays every
+            # picture by one frame per thread
+            ctx.thread_type = "SLICE"
         except Exception:
             pass
         pending_config = b""

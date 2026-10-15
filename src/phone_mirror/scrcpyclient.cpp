@@ -732,12 +732,15 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0, const std::function<v
 #ifdef OCTAVE_HAVE_FFMPEG
     const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
     AVCodecContext *ctx = codec ? avcodec_alloc_context3(codec) : nullptr;
+    // Slice threading only: frame threading delays every picture by one
+    // frame per thread. Must be set before avcodec_open2 to take effect.
+    if (ctx)
+        ctx->thread_type = FF_THREAD_SLICE;
     if (!ctx || avcodec_open2(ctx, codec, nullptr) < 0) {
         fail(QStringLiteral("could not open H.264 decoder"));
         if (ctx) avcodec_free_context(&ctx);
         return;
     }
-    ctx->thread_type = FF_THREAD_SLICE | FF_THREAD_FRAME;
     AVPacket *pkt = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
     QByteArray pendingConfig;

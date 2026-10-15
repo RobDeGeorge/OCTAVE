@@ -228,7 +228,7 @@ class NetworkManager(QObject):
         try:
             if system == "Linux":
                 result = subprocess.run(
-                    ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+                    ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi', 'list', '--rescan', 'no'],
                     capture_output=True, text=True, timeout=5
                 )
                 if result.returncode == 0:
