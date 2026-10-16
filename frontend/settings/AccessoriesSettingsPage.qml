@@ -1982,7 +1982,7 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "Keep the phone's own screen dark while it is mirrored. The mirror and touch keep working, and the phone's screen comes back when you close the mirror. If the phone is locked with its power button during a session, OCTAVE wakes it again so the mirror does not go black."
+                        text: "Keep the phone's own screen dark while it is mirrored (off by default: some phones only dim instead of switching off). The mirror and touch keep working, and the phone's screen comes back when you close the mirror. If the phone is locked with its power button during a session, OCTAVE wakes it again so the mirror does not go black."
                     }
 
                     SettingsToggle {
@@ -1991,7 +1991,7 @@ Flickable {
                         Layout.fillWidth: false
                         Layout.alignment: Qt.AlignLeft
                         text: "Phone screen off while mirroring"
-                        checked: settingsManager ? settingsManager.scrcpyPhoneScreenOff : true
+                        checked: settingsManager ? settingsManager.scrcpyPhoneScreenOff : false
                         activeColor: App.Style.accent
                         inactiveColor: App.Style.hoverColor
 

@@ -359,7 +359,7 @@ private:
     bool m_duckEnabled = true;
     float m_duckLevel = 0.1f;        // -20 dB
     float m_duckFactor = 1.0f;       // last value emitted through duckingChanged
-    bool m_phoneScreenOff = true;    // setting scrcpyPhoneScreenOff
+    bool m_phoneScreenOff = false;   // setting scrcpyPhoneScreenOff
     bool m_phoneAsleep = false;
     bool m_phoneInUse = false;
     QString m_serial;

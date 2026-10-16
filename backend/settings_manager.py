@@ -466,7 +466,7 @@ class SettingsManager(QObject):
             "scrcpyAudioGain": 2.0,  # Linear gain on phone audio before OCTAVE's volume (+6 dB)
             "scrcpyAudioDuckEnabled": True,  # Duck local media while the phone produces sound
             "scrcpyAudioDuckLevel": 0.1,  # Linear factor applied to local media while ducked (-20 dB)
-            "scrcpyPhoneScreenOff": True,  # Keep the phone's own panel dark while mirroring
+            "scrcpyPhoneScreenOff": False,  # Opt-in: keep the phone's own panel dark while mirroring (dims instead of blanking on some phones)
             "scrcpyDisplayDpi": 0,  # Virtual display density, 0 = scaled from the phone's own
             "scrcpyBitRateUsb": 16,  # Video bit rate over USB, Mbps
             "scrcpyBitRateWifi": 8,  # Video bit rate over Wi-Fi, Mbps
@@ -657,7 +657,7 @@ class SettingsManager(QObject):
         self._scrcpy_audio_gain = float(self._settings.get("scrcpyAudioGain", 2.0))
         self._scrcpy_audio_duck_enabled = bool(self._settings.get("scrcpyAudioDuckEnabled", True))
         self._scrcpy_audio_duck_level = float(self._settings.get("scrcpyAudioDuckLevel", 0.1))
-        self._scrcpy_phone_screen_off = bool(self._settings.get("scrcpyPhoneScreenOff", True))
+        self._scrcpy_phone_screen_off = bool(self._settings.get("scrcpyPhoneScreenOff", False))
         self._scrcpy_display_dpi = int(self._settings.get("scrcpyDisplayDpi", 0))
         self._scrcpy_bit_rate_usb = int(self._settings.get("scrcpyBitRateUsb", 16))
         self._scrcpy_bit_rate_wifi = int(self._settings.get("scrcpyBitRateWifi", 8))

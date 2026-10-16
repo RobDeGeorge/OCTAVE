@@ -222,7 +222,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)
     d[QStringLiteral("scrcpyAudioDuckEnabled")]  = true;  // duck local media while the phone produces sound
     d[QStringLiteral("scrcpyAudioDuckLevel")]    = 0.1;   // linear factor applied to local media while ducked (-20 dB)
-    d[QStringLiteral("scrcpyPhoneScreenOff")]    = true;  // keep the phone's own panel dark while mirroring
+    d[QStringLiteral("scrcpyPhoneScreenOff")]    = false; // opt-in: keep the phone's own panel dark while mirroring (dims instead of blanking on some phones)
     d[QStringLiteral("scrcpyDisplayDpi")]        = 0;     // virtual display density, 0 = scaled from the phone's own
     d[QStringLiteral("scrcpyBitRateUsb")]        = 16;    // video bit rate over USB, Mbps
     d[QStringLiteral("scrcpyBitRateWifi")]       = 8;     // video bit rate over Wi-Fi, Mbps

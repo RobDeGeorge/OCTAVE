@@ -314,7 +314,7 @@ class PhoneMirrorManager(QObject):
         self._duck_enabled: bool = True
         self._duck_level: float = 0.1        # -20 dB
         self._duck_factor: float = 1.0       # last value emitted through duckingChanged
-        self._phone_screen_off: bool = True  # blank the phone's panel while mirroring (setting scrcpyPhoneScreenOff)
+        self._phone_screen_off: bool = False  # blank the phone's panel while mirroring (setting scrcpyPhoneScreenOff)
         self._phone_asleep: bool = False
         self._phone_in_use: bool = False
         self._serial: str = ""

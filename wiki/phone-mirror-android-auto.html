@@ -435,7 +435,9 @@
             <li><strong>Start</strong>: an awake, unlocked phone is in the user's hand (in use); an awake, locked one is in the cradle and
               gets the panel policy; an asleep one is woken.</li>
             <li><strong>Press while locked</strong> (phone in the cradle): wake it, then <em>force the panel on</em> once interactive (the wake
-              alone does not reliably relight a SurfaceControl-dark panel; commit <code>2cdd28e</code>) and leave it lit for the
+              alone does not reliably relight a SurfaceControl-dark panel; commit <code>2cdd28e</code>). The forced relight only runs while
+              <code>panelDark</code> is on: setting the power mode bypasses the brightness controller and wakes a Galaxy S22 dim, so a
+              phone the keeper never darkened is left alone. Leave it lit for the
               <strong>8 s grace window</strong>. If the keyguard is dismissed in that window (or at any time), or the phone turns out to be
               unlocked already (a lock-after delay had not run), or the button is pressed <em>again</em> within grace + 2 s (nothing
               visible happened for them the first time, so they are trying to get in), the phone is <strong>in use</strong>: panel on, locks
@@ -692,7 +694,7 @@
               <tr><td><code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code></td><td>16 / 8</td><td><code>video_bit_rate</code> in Mbps for that link</td><td>restarts a session on that link</td></tr>
               <tr><td><code>scrcpyAutoWifi</code></td><td>true</td><td><code>adb tcpip 5555</code> before a USB session; remembers <code>ip:5555</code></td><td>next USB start</td></tr>
               <tr><td><code>scrcpyBitRateAuto</code></td><td>true</td><td>Adaptive quality; the per-link rates become the ceiling</td><td>restarts the session</td></tr>
-              <tr><td><code>scrcpyPhoneScreenOff</code></td><td>true</td><td>Keeper <code>panelDark</code></td><td>live (<code>OCTAVE_SET_KEEPER</code>)</td></tr>
+              <tr><td><code>scrcpyPhoneScreenOff</code></td><td>false</td><td>Keeper <code>panelDark</code></td><td>live (<code>OCTAVE_SET_KEEPER</code>)</td></tr>
               <tr><td><code>scrcpyWirelessAddress</code></td><td><code>""</code></td><td>Phone last connected over Wi-Fi; written by the manager (<code>wirelessAddressChanged</code> &rarr; <code>save_scrcpy_wireless_address</code>)</td><td>startup + live</td></tr>
               <tr><td><code>scrcpyAudioGain</code></td><td>2.0</td><td>Linear PCM gain before OCTAVE's volume (UI shows dB)</td><td>live</td></tr>
               <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>true</td><td>Duck local media while the phone makes sound</td><td>live</td></tr>

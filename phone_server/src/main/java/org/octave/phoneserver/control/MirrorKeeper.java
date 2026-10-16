@@ -249,10 +249,15 @@ public final class MirrorKeeper {
                 blankOnWake = false;
                 setPanel(false);
             } else if (relightOnWake) {
-                // Do not trust the wake to relight a SurfaceControl-dark panel
+                // Do not trust the wake to relight a SurfaceControl-dark panel.
+                // Only when the panel-dark policy is on: forcing the power mode
+                // bypasses the brightness controller and wakes the panel dim
+                // (Galaxy S22), so a phone we never darkened is left alone.
                 relightOnWake = false;
-                panelIsDark = true;
-                setPanel(true);
+                if (panelDark) {
+                    panelIsDark = true;
+                    setPanel(true);
+                }
                 Boolean locked = isKeyguardLocked();
                 if (locked != null && !locked && !inUse) {
                     // Woke to an unlocked phone (lock-after delay had not run):

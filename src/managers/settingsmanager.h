@@ -643,7 +643,7 @@ private:
     double m_scrcpyAudioGain = 2.0;
     bool m_scrcpyAudioDuckEnabled = true;
     double m_scrcpyAudioDuckLevel = 0.1;
-    bool m_scrcpyPhoneScreenOff = true;
+    bool m_scrcpyPhoneScreenOff = false;
     int m_scrcpyDisplayDpi = 0;
     int m_scrcpyBitRateUsb = 16;
     int m_scrcpyBitRateWifi = 8;
