@@ -194,15 +194,13 @@
         <!-- OBDHome -->
         <h2 id="obdhome">OBDHome.qml</h2>
 
-        <p><span class="file-path">frontend/OBDHome.qml</span> is the OBD hub the BottomBar's OBD button opens. Above a 2&times;2 card grid it shows a 48&nbsp;dp status row &mdash; a dot that is green when connected, amber and pulsing while the status contains "Connecting", red otherwise &mdash; with the status text and an elided detail string, and beneath it a rolling <strong>connection log</strong> (<code>connectionLogLineAppended</code>, capped at 40 lines, monospace <code>ListView</code> that <code>positionViewAtEnd()</code>s). The comment explains the log: "Most useful on Android where the BLE state machine has many steps and silent failures are easy unless we surface each transition."</p>
+        <p><span class="file-path">frontend/OBDHome.qml</span> is the OBD hub the BottomBar's OBD button opens. Above a two-card row it shows a 48&nbsp;dp status row &mdash; a dot that is green when connected, amber and pulsing while the status contains "Connecting", red otherwise &mdash; with the status text and an elided detail string, and beneath it a rolling <strong>connection log</strong> (<code>connectionLogLineAppended</code>, capped at 40 lines, monospace <code>ListView</code> that <code>positionViewAtEnd()</code>s). The comment explains the log: "Most useful on Android where the BLE state machine has many steps and silent failures are easy unless we surface each transition."</p>
 
         <table>
           <thead><tr><th>Card</th><th>Subtitle</th><th>Action</th></tr></thead>
           <tbody>
             <tr><td>Dashboards</td><td>Live gauges &amp; parameters</td><td><code>pushSubpage("OBDMenu.qml")</code></td></tr>
             <tr><td>Trouble Codes</td><td>Read &amp; clear DTCs</td><td><code>pushSubpage("OBDDiagnostics.qml")</code></td></tr>
-            <tr><td>Vehicle Scan</td><td>Coming soon</td><td>placeholder at 50&nbsp;% opacity, no <code>MouseArea</code></td></tr>
-            <tr><td>Connection</td><td>Coming soon</td><td>placeholder at 50&nbsp;% opacity, no <code>MouseArea</code></td></tr>
           </tbody>
         </table>
 
@@ -273,15 +271,13 @@
         <!-- SensorHome -->
         <h2 id="sensorhome">SensorHome.qml</h2>
 
-        <p><span class="file-path">frontend/SensorHome.qml</span> is the sensors hub, "styled to match OBDHome's palette so the two hubs feel like the same surface": an IMU status bar (green dot / "IMU Connected" or red / "IMU Disconnected", from <code>berryIMU.connected</code> and <code>connectionStatusChanged</code>) above a 2&times;2 grid.</p>
+        <p><span class="file-path">frontend/SensorHome.qml</span> is the sensors hub, "styled to match OBDHome's palette so the two hubs feel like the same surface": an IMU status bar (green dot / "IMU Connected" or red / "IMU Disconnected", from <code>berryIMU.connected</code> and <code>connectionStatusChanged</code>) above a two-card row.</p>
 
         <table>
           <thead><tr><th>Card</th><th>Subtitle</th><th>Behaviour</th></tr></thead>
           <tbody>
             <tr><td>Sensors</td><td>Pitch, roll, heading, G-force</td><td><code>pushSubpage("SensorMenu.qml")</code></td></tr>
             <tr><td>3D View</td><td>"Live vehicle attitude", or "Requires the QtQuick3D module"</td><td><code>pushSubpage("CarMenu.qml")</code>; opacity 0.5 and <code>MouseArea.enabled: false</code> when <code>has3DView</code> is false</td></tr>
-            <tr><td>Calibration</td><td>Coming soon</td><td>placeholder at 50&nbsp;% opacity</td></tr>
-            <tr><td>Sensor Log</td><td>Coming soon</td><td>placeholder at 50&nbsp;% opacity</td></tr>
           </tbody>
         </table>
 
