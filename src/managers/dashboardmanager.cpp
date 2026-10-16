@@ -99,7 +99,7 @@ QVariantMap DashboardManager::findEntry(const QString &id) const
 
 QSet<QString> DashboardManager::existingIds() const
 {
-    QSet<QString> ids;
+    QSet<QString> ids = m_builtInIds;   // hidden presets keep their ids
     for (const QVariant &v : m_dashboards)
         ids.insert(v.toMap().value(QStringLiteral("id")).toString());
     return ids;
@@ -108,6 +108,62 @@ QSet<QString> DashboardManager::existingIds() const
 bool DashboardManager::isBuiltIn(const QString &id) const
 {
     return findEntry(id).value(QStringLiteral("builtIn")).toBool();
+}
+
+// ---------------------------------------------------------------------------
+// Hidden built-ins
+// ---------------------------------------------------------------------------
+
+QString DashboardManager::hiddenBuiltInsPath() const
+{
+    if (m_userDir.isEmpty()) return {};
+    return m_userDir + QDir::separator() + QStringLiteral(".hidden-builtins");
+}
+
+void DashboardManager::loadHiddenBuiltIns()
+{
+    m_hiddenBuiltIns.clear();
+    QFile f(hiddenBuiltInsPath());
+    if (!f.exists() || !f.open(QIODevice::ReadOnly)) return;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    const QJsonArray ids = doc.array();
+    for (const QJsonValue &v : ids) {
+        if (v.isString() && !v.toString().isEmpty())
+            m_hiddenBuiltIns.insert(v.toString());
+    }
+}
+
+bool DashboardManager::saveHiddenBuiltIns() const
+{
+    const QString path = hiddenBuiltInsPath();
+    if (path.isEmpty()) return false;
+    if (m_hiddenBuiltIns.isEmpty())
+        return !QFile::exists(path) || QFile::remove(path);
+
+    QStringList ids(m_hiddenBuiltIns.begin(), m_hiddenBuiltIns.end());
+    ids.sort();
+    ensureUserDir();
+    QSaveFile out(path);
+    if (!out.open(QIODevice::WriteOnly)) {
+        qCWarning(lcDashboards) << "Cannot write" << path << ":" << out.errorString();
+        return false;
+    }
+    const QByteArray data = QJsonDocument(QJsonArray::fromStringList(ids)).toJson();
+    return out.write(data) == data.size() && out.commit();
+}
+
+bool DashboardManager::restoreBuiltInDashboards()
+{
+    if (m_hiddenBuiltIns.isEmpty()) return false;
+    m_hiddenBuiltIns.clear();
+    if (!saveHiddenBuiltIns()) {
+        qCWarning(lcDashboards) << "Failed to clear hidden built-in list";
+        loadHiddenBuiltIns();
+        return false;
+    }
+    qCInfo(lcDashboards) << "Restored all built-in dashboards";
+    rescanAll();
+    return true;
 }
 
 QVariant DashboardManager::loadDashboard(const QString &id)
@@ -133,7 +189,9 @@ void DashboardManager::ensureUserDir() const
 void DashboardManager::rescanAll()
 {
     m_dashboards.clear();
+    m_builtInIds.clear();
     QSet<QString> takenIds;
+    loadHiddenBuiltIns();
 
     // Built-in presets first — these are authoritative; any user JSON that
     // tries to reuse a built-in id gets rejected below.
@@ -152,10 +210,13 @@ void DashboardManager::rescanAll()
                         << fi.fileName();
                     continue;
                 }
+                takenIds.insert(id);
+                m_builtInIds.insert(id);
+                if (m_hiddenBuiltIns.contains(id))
+                    continue;   // deleted by the user; id stays reserved
                 header.insert(QStringLiteral("builtIn"), true);
                 header.insert(QStringLiteral("path"), fi.absoluteFilePath());
                 m_dashboards.append(header);
-                takenIds.insert(id);
             }
         } else {
             qCWarning(lcDashboards) << "Presets dir does not exist:" << m_presetsDir;
@@ -283,9 +344,8 @@ QString DashboardManager::saveDashboard(const QVariantMap &spec)
         return {};
     }
 
-    // Don't allow saving over a built-in id.
-    QVariantMap existing = findEntry(id);
-    if (!existing.isEmpty() && existing.value(QStringLiteral("builtIn")).toBool()) {
+    // Don't allow saving over a built-in id (hidden ones included).
+    if (m_builtInIds.contains(id)) {
         qCWarning(lcDashboards)
             << "Cannot save: id" << id << "collides with a built-in preset";
         return {};
@@ -303,8 +363,16 @@ bool DashboardManager::deleteDashboard(const QString &id)
     QVariantMap entry = findEntry(id);
     if (entry.isEmpty()) return false;
     if (entry.value(QStringLiteral("builtIn")).toBool()) {
-        qCWarning(lcDashboards) << "Refusing to delete built-in dashboard:" << id;
-        return false;
+        // Preset files are read-only app resources: hide instead.
+        m_hiddenBuiltIns.insert(id);
+        if (!saveHiddenBuiltIns()) {
+            qCWarning(lcDashboards) << "Failed to hide built-in dashboard:" << id;
+            m_hiddenBuiltIns.remove(id);
+            return false;
+        }
+        qCInfo(lcDashboards) << "Hid built-in dashboard:" << id;
+        rescanAll();
+        return true;
     }
 
     const QString path = entry.value(QStringLiteral("path")).toString();

@@ -108,4 +108,15 @@ def test_dashboard_manager_discovers_presets(qapp, tmp_path):
     new_id = dm.duplicateDashboard("minimal", "Copy For Test")
     assert new_id == "copy-for-test"
     assert dm.deleteDashboard(new_id) is True
-    assert dm.deleteDashboard("minimal") is False  # built-in is protected
+    # Deleting a built-in hides it (persisted) and keeps its id reserved.
+    assert dm.deleteDashboard("minimal") is True
+    assert "minimal" not in {e["id"] for e in dm.dashboards}
+    assert dm.hiddenBuiltInCount == 1
+    assert dm.saveDashboard({"id": "minimal", "label": "x"}) == ""
+    dm2 = DashboardManager()
+    dm2.setPresetsDir(presets_dir)
+    dm2.setUserDir(str(tmp_path / "dashboards"))
+    assert "minimal" not in {e["id"] for e in dm2.dashboards}
+    assert dm.restoreBuiltInDashboards() is True
+    assert "minimal" in {e["id"] for e in dm.dashboards}
+    assert dm.hiddenBuiltInCount == 0

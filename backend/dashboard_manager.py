@@ -4,6 +4,8 @@ Both backends scan the same on-disk JSON layout:
 
 - Built-in presets: frontend/dashboards/presets/*.json (read-only)
 - User dashboards:  <app_data_dir>/dashboards/*.json  (read/write)
+- Hidden built-ins: <app_data_dir>/dashboards/.hidden-builtins (JSON array of
+  preset ids the user deleted; restoreBuiltInDashboards() clears it)
 
 The QML frontend binds to a single `dashboardManager` context property whose
 public API must stay identical across backends. Keep this file and the C++
@@ -123,6 +125,8 @@ class DashboardManager(QObject):
         self._presets_dir = ""
         self._user_dir = ""
         self._dashboards = []
+        self._builtin_ids = set()      # every preset on disk, hidden or not
+        self._hidden_builtins = set()  # presets the user deleted
         self._last_share_error = ""
 
         # User-dir hot reload: a JSON dropped into / removed from the user
@@ -200,6 +204,10 @@ class DashboardManager(QObject):
             return {}
         return self._read_full_spec(entry["path"])
 
+    @Property(int, notify=dashboardsChanged)
+    def hiddenBuiltInCount(self):
+        return len(self._hidden_builtins)
+
     @Slot(str, result=bool)
     def isBuiltIn(self, dashboard_id: str) -> bool:
         return bool(self._find_entry(dashboard_id).get("builtIn", False))
@@ -217,8 +225,8 @@ class DashboardManager(QObject):
             logger.warning("User dashboards dir not configured")
             return ""
 
-        existing = self._find_entry(dashboard_id)
-        if existing and existing.get("builtIn"):
+        # Don't allow saving over a built-in id (hidden ones included).
+        if dashboard_id in self._builtin_ids:
             logger.warning(
                 "Cannot save: id %s collides with a built-in preset",
                 dashboard_id,
@@ -238,8 +246,15 @@ class DashboardManager(QObject):
         if not entry:
             return False
         if entry.get("builtIn"):
-            logger.warning("Refusing to delete built-in dashboard: %s", dashboard_id)
-            return False
+            # Preset files are read-only app resources: hide instead.
+            self._hidden_builtins.add(dashboard_id)
+            if not self._save_hidden_builtins():
+                logger.warning("Failed to hide built-in dashboard: %s", dashboard_id)
+                self._hidden_builtins.discard(dashboard_id)
+                return False
+            logger.info("Hid built-in dashboard: %s", dashboard_id)
+            self._rescan_all()
+            return True
         try:
             os.remove(entry["path"])
         except OSError as e:
@@ -266,6 +281,20 @@ class DashboardManager(QObject):
         spec["label"] = final_label
 
         return self.saveDashboard(spec)
+
+    @Slot(result=bool)
+    def restoreBuiltInDashboards(self) -> bool:
+        """Un-hide every built-in preset deleted with deleteDashboard()."""
+        if not self._hidden_builtins:
+            return False
+        self._hidden_builtins = set()
+        if not self._save_hidden_builtins():
+            logger.warning("Failed to clear hidden built-in list")
+            self._load_hidden_builtins()
+            return False
+        logger.info("Restored all built-in dashboards")
+        self._rescan_all()
+        return True
 
     @Slot()
     def refresh(self):
@@ -372,7 +401,37 @@ class DashboardManager(QObject):
         return {}
 
     def _existing_ids(self) -> set:
-        return {entry.get("id", "") for entry in self._dashboards}
+        # Hidden presets keep their ids reserved.
+        return self._builtin_ids | {entry.get("id", "") for entry in self._dashboards}
+
+    def _hidden_builtins_path(self) -> str:
+        return os.path.join(self._user_dir, ".hidden-builtins") if self._user_dir else ""
+
+    def _load_hidden_builtins(self):
+        self._hidden_builtins = set()
+        path = self._hidden_builtins_path()
+        if not path or not os.path.exists(path):
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                ids = json.load(f)
+        except (OSError, ValueError):
+            return
+        if isinstance(ids, list):
+            self._hidden_builtins = {i for i in ids if isinstance(i, str) and i}
+
+    def _save_hidden_builtins(self) -> bool:
+        path = self._hidden_builtins_path()
+        if not path:
+            return False
+        if not self._hidden_builtins:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                return False
+            return True
+        return self._write_spec(path, sorted(self._hidden_builtins))
 
     def _ensure_user_dir(self):
         if self._user_dir:
@@ -380,7 +439,9 @@ class DashboardManager(QObject):
 
     def _rescan_all(self):
         self._dashboards = []
+        self._builtin_ids = set()
         taken_ids = set()
+        self._load_hidden_builtins()
 
         # Built-ins first. Any user JSON that tries to reuse a built-in id
         # gets rejected below (same rule the C++ side enforces).
@@ -400,13 +461,16 @@ class DashboardManager(QObject):
                             fname,
                         )
                         continue
+                    taken_ids.add(dashboard_id)
+                    self._builtin_ids.add(dashboard_id)
+                    if dashboard_id in self._hidden_builtins:
+                        continue  # deleted by the user; id stays reserved
                     self._dashboards.append({
                         "id": dashboard_id,
                         "label": header.get("label", ""),
                         "builtIn": True,
                         "path": path,
                     })
-                    taken_ids.add(dashboard_id)
             else:
                 logger.warning("Presets dir does not exist: %s", self._presets_dir)
 

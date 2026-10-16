@@ -1268,6 +1268,7 @@
           <tbody>
             <tr><td><code>dashboards</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Merged headers <code>[{id, label, builtIn, path}, &hellip;]</code>, built-ins first</td></tr>
             <tr><td><code>lastShareError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastShareErrorChanged</code></td><td>Reason the last export/import failed; <code>""</code> after a success</td></tr>
+            <tr><td><code>hiddenBuiltInCount</code></td><td><code>int</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Built-in presets the user deleted (hidden); shows the chooser's "Restore defaults" button</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1277,7 +1278,8 @@
             <tr><td><code>loadDashboard(QString id)</code></td><td><code>QVariant</code></td><td>Fully parsed spec object for an id; empty object if unknown or unparsable</td></tr>
             <tr><td><code>isBuiltIn(QString id)</code></td><td><code>bool</code></td><td>True for a read-only preset</td></tr>
             <tr><td><code>saveDashboard(QVariantMap spec)</code></td><td><code>QString</code></td><td>Write a user dashboard JSON (needs <code>id</code> + <code>label</code>); returns the id, <code>""</code> on failure or collision with a built-in</td></tr>
-            <tr><td><code>deleteDashboard(QString id)</code></td><td><code>bool</code></td><td>Delete a user dashboard file; false for built-ins</td></tr>
+            <tr><td><code>deleteDashboard(QString id)</code></td><td><code>bool</code></td><td>Delete a user dashboard file, or hide a built-in (persisted in <code>.hidden-builtins</code>)</td></tr>
+            <tr><td><code>restoreBuiltInDashboards()</code></td><td><code>bool</code></td><td>Un-hide every deleted built-in; false if none were hidden</td></tr>
             <tr><td><code>duplicateDashboard(QString sourceId, QString newLabel)</code></td><td><code>QString</code></td><td>Clone any dashboard into a new user dashboard with a unique id derived from the label; returns the new id</td></tr>
             <tr><td><code>refresh()</code></td><td><code>void</code></td><td>Rescan both directories and emit <code>dashboardsChanged</code></td></tr>
             <tr><td><code>exportDashboard(QString id)</code></td><td><code>QString</code></td><td>Write the spec to <code>&lt;Downloads&gt;/OCTAVE-dashboards/&lt;id&gt;.json</code>; returns the path, <code>""</code> on failure</td></tr>

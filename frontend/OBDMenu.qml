@@ -131,7 +131,7 @@ Item {
     function openDashboardChooser() { dashboardChooserPopup.open() }
     function closeDashboardChooser() { dashboardChooserPopup.close() }
 
-    // Delete a user dashboard from the chooser. Lives on the page (not in the
+    // Delete a dashboard from the chooser (built-ins are hidden, not removed). Lives on the page (not in the
     // card delegate) because dashboardsChanged rebuilds the registry
     // synchronously inside deleteDashboard(), which destroys the delegate that
     // tapped Delete — any code after the call in the delegate context throws
@@ -191,6 +191,12 @@ Item {
         title: "Import a dashboard"
         nameFilters: ["OCTAVE dashboards (*.json)", "All files (*)"]
         onAccepted: obdPage.finishImport(dashboardManager.importDashboard(selectedFile.toString()))
+    }
+
+    function restoreDefaultDashboards() {
+        if (typeof dashboardManager === "undefined" || !dashboardManager) return
+        if (dashboardManager.restoreBuiltInDashboards())
+            showShareStatus("Default dashboards restored", false)
     }
 
     function deleteUserDashboard(id) {
@@ -1141,6 +1147,45 @@ Item {
                 }
             }
 
+            // Bring back built-in dashboards the user deleted.
+            Rectangle {
+                id: restoreDefaultsButton
+                objectName: "restoreDefaultsButton"
+                visible: typeof dashboardManager !== "undefined" && dashboardManager
+                         && dashboardManager.hiddenBuiltInCount > 0
+                anchors.top: parent.top
+                anchors.left: importDashboardButton.right
+                anchors.topMargin: App.Spacing.mediaRoomMargin
+                anchors.leftMargin: dp(8)
+                height: App.Spacing.bottomBarNavButtonHeight
+                width: restoreDefaultsLabel.implicitWidth + dp(24)
+                radius: dpMin(8, 2)
+                color: "transparent"
+                border.color: App.Style.accent
+                border.width: 1
+                scale: restoreDefaultsMouse.pressed ? 0.9 : 1.0
+                Behavior on scale {
+                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+                }
+
+                Text {
+                    id: restoreDefaultsLabel
+                    anchors.centerIn: parent
+                    text: "Restore defaults"
+                    color: App.Style.accent
+                    font.pixelSize: App.Spacing.overallText
+                    font.bold: true
+                    font.family: obdPage.globalFont
+                }
+
+                MouseArea {
+                    id: restoreDefaultsMouse
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: obdPage.restoreDefaultDashboards()
+                }
+            }
+
             // Primitives gallery button — temporary dev/showcase screen.
             // Anchored with the same top/right margins as the OBDMenu
             // dashboards button so it sits centered within the header strip.
@@ -1419,9 +1464,11 @@ Item {
                             // Card actions (Phase 3 Milestone C): always-visible
                             // buttons, no long-press (discoverability-hostile in
                             // a glance-and-go in-car UI — see roadmap). Duplicate
-                            // on every JSON dashboard; Edit/Delete only on
-                            // user-authored ones. The "grid" sentinel (Parameter
-                            // Cards) has no JSON spec, so no actions at all.
+                            // and Delete on every JSON dashboard (deleting a
+                            // built-in hides it until "Restore defaults"); Edit
+                            // only on user-authored ones. The "grid" sentinel
+                            // (Parameter Cards) has no JSON spec and can't be
+                            // deleted, so no actions at all.
                             Row {
                                 visible: card.dash.id !== "grid"
                                 anchors.top: parent.top
@@ -1436,7 +1483,7 @@ Item {
                                         { "action": "edit",      "label": "Edit",   "danger": false, "show": card.dash.builtIn === false },
                                         { "action": "duplicate", "label": "Copy",   "danger": false, "show": true },
                                         { "action": "share",     "label": "Share",  "danger": false, "show": true },
-                                        { "action": "delete",    "label": "Delete", "danger": true,  "show": card.dash.builtIn === false }
+                                        { "action": "delete",    "label": "Delete", "danger": true,  "show": true }
                                     ]
                                     delegate: Rectangle {
                                         objectName: "dashCard_" + card.dash.id + "_" + modelData.action

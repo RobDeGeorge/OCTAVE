@@ -13,6 +13,11 @@
 // a user dashboard shares an id with a built-in, the user JSON is rejected
 // at load time (logged + skipped). Duplicating a built-in auto-generates a
 // unique user id derived from the new label.
+//
+// Deleting a built-in hides it instead (the preset files ship read-only):
+// hidden ids persist in <userDir>/.hidden-builtins (a JSON array of ids) and
+// restoreBuiltInDashboards() brings them all back. A hidden preset still
+// reserves its id, so a user dashboard can't take it over.
 
 #ifndef DASHBOARDMANAGER_H
 #define DASHBOARDMANAGER_H
@@ -33,6 +38,9 @@ class DashboardManager : public QObject
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
     Q_PROPERTY(QString lastShareError READ lastShareError NOTIFY lastShareErrorChanged)
+    // Built-in presets the user deleted (hidden) — the chooser shows
+    // "Restore defaults" while this is non-zero.
+    Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
 
 public:
     explicit DashboardManager(QObject *parent = nullptr);
@@ -56,6 +64,7 @@ public:
     Q_INVOKABLE bool isBuiltIn(const QString &id) const;
 
     QString lastShareError() const { return m_lastShareError; }
+    int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
 
     // Highest dashboard `schema` this build understands. Imports declaring a
     // newer schema are refused rather than half-rendered.
@@ -67,9 +76,13 @@ public slots:
     // failure (id collision with built-in, I/O error, etc.).
     QString saveDashboard(const QVariantMap &spec);
 
-    // Deletes a user dashboard file. Built-ins cannot be deleted (returns
-    // false). Returns true on success.
+    // Deletes a user dashboard file, or hides a built-in preset (persisted
+    // in .hidden-builtins). Returns true on success.
     bool deleteDashboard(const QString &id);
+
+    // Un-hides every built-in preset deleted with deleteDashboard().
+    // Returns true if anything was restored.
+    bool restoreBuiltInDashboards();
 
     // Clones a source dashboard (built-in or user) into a new user dashboard
     // with the given label. The new id is auto-derived from the label +
@@ -113,6 +126,13 @@ private:
     QString m_presetsDir;
     QString m_userDir;
     QVariantList m_dashboards;
+
+    // Ids of every preset on disk (hidden or not) and the hidden subset.
+    QSet<QString> m_builtInIds;
+    QSet<QString> m_hiddenBuiltIns;
+    QString hiddenBuiltInsPath() const;
+    void loadHiddenBuiltIns();
+    bool saveHiddenBuiltIns() const;
 
     // User-dir hot reload: a JSON dropped into / removed from the user
     // dashboards folder while the app runs shows up in the chooser without

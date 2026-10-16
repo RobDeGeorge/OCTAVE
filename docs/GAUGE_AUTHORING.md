@@ -357,7 +357,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 ### 5.4 Registry rules
 
 - Built-in preset ids must be unique. User ids colliding with a built-in are rejected at load time (logged).
-- Built-ins are read-only (`deleteDashboard` returns false). "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id.
+- Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` drives the chooser's "Restore defaults" button. Parameter Cards (`grid`) can't be deleted. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id.
 - **Validation.** `DashboardRenderer` checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`; failures are `console.warn`ed with the dashboard id and never crash the view. The editor applies the same checks when loading a spec (`_sanitizeCells`) — unknown types are dropped, unknown PIDs cleared so the panel shows "Choose PID…".
 - **Import sanitizing.** `importDashboard` / `importDashboardFromClipboard` /
   `importDashboardFromText` (both backends, same rules) refuse a spec whose

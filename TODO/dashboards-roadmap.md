@@ -134,7 +134,7 @@ needs to persist:
   both `id` and `label` in the spec**, rejects collisions with a built-in id,
   returns `""` on failure. (User-id collisions overwrite — the editor must
   generate a unique id itself; see below.)
-- `deleteDashboard(QString id) -> bool` — removes user JSON, refuses built-ins
+- `deleteDashboard(QString id) -> bool` — removes user JSON; hides built-ins (`.hidden-builtins`, undone by `restoreBuiltInDashboards()`)
 - `duplicateDashboard(QString sourceId, QString newLabel) -> QString id` —
   clones to user dir with an auto-slugified unique id
 - `loadDashboard(QString id) -> QVariant`, `isBuiltIn(QString id) -> bool`,
