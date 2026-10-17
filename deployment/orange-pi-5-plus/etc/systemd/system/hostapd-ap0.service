@@ -1,0 +1,12 @@
+[Unit]
+Description=hostapd for OCTAVE-Jeep AP on ap0
+Requires=ap0-iface.service
+After=ap0-iface.service
+
+[Service]
+ExecStart=/usr/sbin/hostapd /etc/hostapd/ap0.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

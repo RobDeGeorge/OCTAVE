@@ -1,0 +1,132 @@
+/* === Plain dark theme, white text === */
+@define-color bg_color #121212;
+@define-color bg_module #1e1e1e;
+@define-color text_color #ffffff;
+@define-color text_dim #9a9a9a;
+@define-color accent_color #e6e6e6;
+@define-color urgent_color #e06060;
+
+* {
+    font-family: "VictorMono Nerd Font", "VictorMono NFM", sans-serif;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background-color: alpha(@bg_color, 0.75);
+    border-bottom: 2px solid alpha(@accent_color, 0.25);
+    color: @text_color;
+}
+
+/* === Workspace Buttons === */
+#workspaces button {
+    padding: 0 6px;
+    margin: 2px 1px;
+    background-color: transparent;
+    color: @text_dim;
+    border-radius: 4px;
+    border: none;
+    box-shadow: none;
+}
+
+#workspaces button:hover {
+    background-color: alpha(@accent_color, 0.12);
+    color: @text_color;
+}
+
+#workspaces button.active {
+    background-color: alpha(@accent_color, 0.18);
+    color: @text_color;
+    border-bottom: 2px solid @accent_color;
+}
+
+#workspaces button.urgent {
+    background-color: alpha(@urgent_color, 0.3);
+    color: @text_color;
+}
+
+#window {
+    padding: 0 8px;
+    margin: 2px 0;
+    color: @text_dim;
+    font-style: italic;
+}
+
+#clock {
+    padding: 0 8px;
+    margin: 2px 0;
+    font-weight: bold;
+    color: @text_color;
+}
+
+/* === Pills === */
+#pulseaudio,
+#network,
+#cpu,
+#custom-cpu-temp,
+#custom-gpu-temp,
+#memory,
+#disk,
+#custom-osk {
+    background-color: alpha(@bg_module, 0.9);
+    color: @text_color;
+    padding: 0 14px;
+    margin: 4px 4px;
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+/* CPU group: usage | cpu temp | gpu temp */
+#cpu {
+    border-radius: 10px 0 0 10px;
+    margin-right: 0;
+}
+
+#custom-cpu-temp {
+    border-radius: 0;
+    margin-left: 0;
+    margin-right: 0;
+    border-left: 1px solid alpha(@accent_color, 0.15);
+}
+
+#custom-gpu-temp {
+    border-radius: 0 10px 10px 0;
+    margin-left: 0;
+    border-left: 1px solid alpha(@accent_color, 0.15);
+}
+
+#network.disconnected,
+#pulseaudio.muted {
+    color: @text_dim;
+}
+
+#pulseaudio:hover,
+#network:hover,
+#cpu:hover,
+#custom-cpu-temp:hover,
+#custom-gpu-temp:hover,
+#memory:hover,
+#disk:hover,
+#custom-osk:hover {
+    background-color: alpha(@accent_color, 0.12);
+}
+
+#tray {
+    padding: 0 8px;
+    margin: 2px 0 2px 6px;
+    background-color: transparent;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    background-color: alpha(@urgent_color, 0.3);
+}
+
+/* On-screen keyboard toggle */
+#custom-osk {
+    font-size: 18px;
+}

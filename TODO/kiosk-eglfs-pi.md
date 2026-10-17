@@ -19,7 +19,7 @@ The user prefers to upgrade the Pi's OS first, to a current kernel with mainline
 
 - A systemd unit (or an autologin TTY) that runs `octave` with `QT_QPA_PLATFORM=eglfs`, `QT_QPA_EGLFS_KMS_CONFIG` pointing to a JSON that selects the HDMI/DSI connector, and the `seat`/`video`/`input`/`render` groups. Drop the i3 `exec` lines and keep i3 installable as a fallback.
 - Input: eglfs reads evdev/libinput directly; check that the touchscreen maps correctly (`QT_QPA_EGLFS_ROTATION`, `QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS`).
-- Things that assume X11 and need checking: phone mirror (`VideoOutput` is fine), Android Auto DHU embedding (Python/Windows only, n/a), any `xdotool`/`DISPLAY` use in scripts (`scripts/octave-start.sh` exports `DISPLAY=:0`), and the screenshot tooling (already uses grabWindow).
+- Things that assume X11 and need checking: phone mirror (`VideoOutput` is fine), Android Auto DHU embedding (Python/Windows only, n/a), any `xdotool`/`DISPLAY` use in scripts (the Pi's launcher in `deployment/orange-pi-5-plus/home/.local/bin/octave-start.sh` no longer sets `DISPLAY`; it runs under Hyprland/Wayland), and the screenshot tooling (already uses grabWindow).
 - QML popups and multiple windows: eglfs allows one fullscreen window. NowPlayingStudio and the popups are in-window, so they should be fine; verify.
 - `scripts/octave-update.sh --apply` must still run before launch (ExecStartPre).
 

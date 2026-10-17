@@ -1,13 +1,7 @@
 #!/bin/bash
-# Octave Start Script
-# Launches Octave with proper environment
-
-OCTAVE_DIR="/home/rob/Roxy/octave"
-
-cd "$OCTAVE_DIR" || exit 1
-source ./venv/bin/activate
-
-export DISPLAY=:0
-export MESA_GL_VERSION_OVERRIDE=3.3
-
-exec python3 main.py >> /home/rob/Roxy/octave.log 2>&1
+# Moved. The Orange Pi head unit's launcher now lives with the rest of its config:
+#   deployment/orange-pi-5-plus/home/.local/bin/octave-start.sh
+# (C++ build under Hyprland, with a crash-restart loop). See
+# deployment/orange-pi-5-plus/README.md for the full setup.
+echo "$(basename "$0") has moved to deployment/orange-pi-5-plus/home/.local/bin/octave-start.sh" >&2
+exit 1

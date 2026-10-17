@@ -5,9 +5,9 @@
 ### An open-source car head unit
 **Runs on Raspberry Pi, desktop, and Android. C++ or Python backend, QML frontend, GPLv3.**
 
-<img src="frontend/assets/readme/drive.webp" alt="OCTAVE on the dash of a 2003 Jeep TJ: album art beside live speed and RPM during a full-throttle pull" width="900">
+<img src="frontend/assets/readme/drive.webp" alt="OCTAVE drive view: album art beside live speed and RPM during a full-throttle pull" width="900">
 
-<sub>Recorded on the head unit in my Jeep TJ, an Orange Pi 5 driving a 2560x1080 dash display. Every clip and screenshot in this README was captured from the running app. The theme is following the album art.</sub>
+<sub>My Jeep TJ runs OCTAVE on an Orange Pi 5 Plus driving a 10.1-inch 1280x800 touchscreen. Every clip and screenshot in this README was captured from the running app. The theme is following the album art.</sub>
 
 [![Latest Release](https://img.shields.io/github/v/release/RobDeGeorge/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/RobDeGeorge/OCTAVE/releases/latest)
 [![Stars](https://img.shields.io/github/stars/RobDeGeorge/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/RobDeGeorge/OCTAVE/stargazers)

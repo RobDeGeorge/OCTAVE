@@ -1,19 +1,7 @@
 #!/bin/bash
-# OCTAVE C++ start script
-# Launches the native C++ build from the local clone at ~/octave-cpp
-# (cloned from the Dropbox repo; does not depend on Dropbox running).
-# The Python launcher is still /home/rob/Roxy/octave-start.sh — see the
-# i3 config for the one-line switch back.
-
-OCTAVE_CPP_DIR="/home/rob/octave-cpp"
-
-cd "$OCTAVE_CPP_DIR/build" || exit 1
-
-export DISPLAY=:0
-export MESA_GL_VERSION_OVERRIDE=3.3
-
-# Force aux/headphone output on - unmute and set port before launching
-wpctl set-mute @DEFAULT_AUDIO_SINK@ 0
-pactl set-sink-port alsa_output.platform-es8388-sound.stereo-fallback analog-output-headphones
-
-exec ./octave >> /home/rob/Roxy/octave-cpp-console.log 2>&1
+# Moved. The Orange Pi head unit's launcher now lives with the rest of its config:
+#   deployment/orange-pi-5-plus/home/.local/bin/octave-start.sh
+# (C++ build under Hyprland, with a crash-restart loop). See
+# deployment/orange-pi-5-plus/README.md for the full setup.
+echo "$(basename "$0") has moved to deployment/orange-pi-5-plus/home/.local/bin/octave-start.sh" >&2
+exit 1

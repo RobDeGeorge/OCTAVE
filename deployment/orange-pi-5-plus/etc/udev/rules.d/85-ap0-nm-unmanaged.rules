@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="ap0", ENV{NM_UNMANAGED}="1"

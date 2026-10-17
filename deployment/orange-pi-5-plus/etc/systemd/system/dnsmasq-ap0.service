@@ -1,0 +1,13 @@
+[Unit]
+Description=DHCP-only dnsmasq for OCTAVE-Jeep (ap0; no gateway, no DNS)
+Requires=hostapd-ap0.service
+After=hostapd-ap0.service
+
+[Service]
+ExecStartPre=/usr/sbin/ip addr replace 10.42.0.1/24 dev ap0
+ExecStart=/usr/sbin/dnsmasq -k --conf-file=/etc/dnsmasq-ap0.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

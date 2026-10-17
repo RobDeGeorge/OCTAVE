@@ -1,0 +1,417 @@
+#!/usr/bin/env python3
+"""Floating on-screen keyboard for Hyprland.
+
+Drag the top strip to move it, drag the bottom-right corner to resize it.
+Position and size are saved to ~/.config/osk/state.json and restored on launch.
+Keystrokes are sent to the focused window with wtype; Hyprland's no_focus rule
+(see hyprland.conf) keeps this window from stealing focus.
+"""
+import json
+import os
+import socket
+import subprocess
+import time
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+from gi.repository import GLib, Gtk, Gdk  # noqa: E402
+
+GLib.set_prgname("osk")  # becomes the Wayland app_id / Hyprland class
+
+DEBUG = bool(os.environ.get("OSK_DEBUG"))  # OSK_DEBUG=1 osk  -> logs drag events
+STATE_FILE = os.path.expanduser("~/.config/osk/state.json")
+DEFAULT_STATE = {"x": 20, "y": 40, "w": 1240, "h": 400}  # nearly full width, just below the bar
+MIN_W, MIN_H = 420, 170
+KEEP_VISIBLE = 120  # px of keyboard that must stay on screen horizontally
+HANDLE_H = 40       # keep the drag strip reachable at the bottom edge
+
+# (label, action, width-in-key-units). Each row adds up to 14 units.
+# action: ("text", s) | ("key", keysym) | ("mod", name) | ("layer", name) | ("hide",)
+def letters(s):
+    return [(c, ("text", c), 1) for c in s]
+
+BASE = [
+    [("Esc", ("key", "Escape"), 1.5)] + letters("1234567890") + [("⌫", ("key", "BackSpace"), 2.5)],
+    [("Tab", ("key", "Tab"), 1.5)] + letters("qwertyuiop") + [("-", ("text", "-"), 1), ("=", ("text", "="), 1.5)],
+    [("Ctrl", ("mod", "ctrl"), 1.75)] + letters("asdfghjkl") + [(";", ("text", ";"), 1), ("⏎", ("key", "Return"), 2.25)],
+    [("⇧", ("mod", "shift"), 2.25)] + letters("zxcvbnm,./") + [("⇧", ("mod", "shift"), 1.75)],
+    [("?123", ("layer", "sym"), 1.5), ("Mod", ("mod", "logo"), 1.25), ("Alt", ("mod", "alt"), 1.25),
+     ("", ("text", " "), 5),
+     ("←", ("key", "Left"), 1), ("↓", ("key", "Down"), 1), ("↑", ("key", "Up"), 1), ("→", ("key", "Right"), 1),
+     ("▾", ("hide",), 1)],
+]
+
+SHIFTED = dict(zip("1234567890-=;,./", "!@#$%^&*()_+:<>?"))
+UNSHIFTED = {v: k for k, v in SHIFTED.items()}
+
+# Hyprland modmask bits (as reported by `hyprctl binds -j`)
+MODMASK = {"shift": 1, "ctrl": 4, "alt": 8, "logo": 64}
+KEY_NAMES = {" ": "space"}  # text -> keysym name where they differ
+
+SYMBOLS = {  # replaces the letter rows on the ?123 layer
+    1: "[]{}()<>`~",
+    2: "|\\\"'@#$%&",
+    3: "+*^!?_=:\"'",
+}
+
+
+class Hypr:
+    """Minimal client for Hyprland's IPC socket (much faster than spawning hyprctl)."""
+
+    def __init__(self):
+        sig = os.environ["HYPRLAND_INSTANCE_SIGNATURE"]
+        self.path = f"{os.environ['XDG_RUNTIME_DIR']}/hypr/{sig}/.socket.sock"
+
+    def __call__(self, cmd):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.connect(self.path)
+            s.sendall(cmd.encode())
+            out = b""
+            while chunk := s.recv(65536):
+                out += chunk
+        return out.decode()
+
+
+class Keyboard(Gtk.Window):
+    def __init__(self):
+        super().__init__(title="Keyboard")
+        self.hypr = Hypr()
+        self.addr = None
+        self.state = self.load_state()
+        self.mods = set()        # one-shot modifiers
+        self.caps = False        # shift double-tapped
+        self.layer = "base"
+        self.last_shift = 0.0
+        self.drag = None         # active move/resize drag
+        self.repeat_id = None
+
+        self.set_accept_focus(False)
+        self.set_focus_on_map(False)
+        self.set_type_hint(Gdk.WindowTypeHint.UTILITY)
+        self.set_default_size(self.state["w"], self.state["h"])
+
+        css = Gtk.CssProvider()
+        css.load_from_data(b"""
+            window { background: rgba(24, 24, 32, 0.92); }
+            .handle { background: rgba(255,255,255,0.10); color: #aab; font-size: 13px; }
+            .key { background: #3a3a48; color: #eee; border: none; border-radius: 6px;
+                   margin: 3px; padding: 0; font-size: 24px; box-shadow: none; }
+            .key:active { background: #6a6a88; }
+            .key.special { background: #2c2c38; font-size: 18px; }
+            .key.on { background: #5577cc; }
+            .key.special:active, .key.on:active { background: #6a6a88; }
+            .grip { color: #778; font-size: 14px; }
+        """)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add(outer)
+
+        handle = self.drag_area("⠿  drag to move  ⠿", "move")
+        handle.get_style_context().add_class("handle")
+        handle.set_size_request(-1, 32)
+        outer.pack_start(handle, False, False, 0)
+
+        self.grid = Gtk.Grid(row_homogeneous=True, column_homogeneous=True)
+        self.grid.set_margin_start(3)
+        self.grid.set_margin_end(3)
+        outer.pack_start(self.grid, True, True, 0)
+
+        bottom = Gtk.Box()
+        grip = self.drag_area("◢", "resize")
+        grip.get_style_context().add_class("grip")
+        grip.set_size_request(34, 20)
+        bottom.pack_end(grip, False, False, 0)
+        outer.pack_start(bottom, False, False, 0)
+
+        self.build_keys()
+        self.connect("destroy", Gtk.main_quit)
+        self.show_all()
+        GLib.timeout_add(150, self.restore_geometry)
+
+    # ---------- keys ----------
+
+    def build_keys(self):
+        for child in self.grid.get_children():
+            self.grid.remove(child)
+        shift = "shift" in self.mods or self.caps
+        for r, row in enumerate(BASE):
+            col = 0
+            sym_iter = iter(SYMBOLS.get(r, "")) if self.layer == "sym" else None
+            for label, action, width in row:
+                if action[0] == "text" and len(action[1]) == 1 and action[1] != " ":
+                    ch = action[1]
+                    if sym_iter is not None and ch.isalpha() or (sym_iter is not None and r == 3 and ch in ",./"):
+                        ch = next(sym_iter, ch)
+                    elif shift:
+                        ch = SHIFTED.get(ch, ch.upper())
+                    label, action = ch, ("text", ch)
+                if action[0] == "layer":
+                    label = "abc" if self.layer == "sym" else "?123"
+                btn = Gtk.Button(label=label)
+                btn.set_can_focus(False)
+                ctx = btn.get_style_context()
+                ctx.add_class("key")
+                if action[0] != "text":
+                    ctx.add_class("special")
+                if action[0] == "mod" and (action[1] in self.mods or (action[1] == "shift" and self.caps)):
+                    ctx.add_class("on")
+                if action == ("key", "BackSpace"):
+                    btn.connect("pressed", self.start_repeat, action)
+                    btn.connect("released", self.stop_repeat)
+                else:
+                    btn.connect("clicked", self.on_key, action)
+                span = int(width * 4)
+                self.grid.attach(btn, col, r, span, 1)
+                col += span
+        self.grid.show_all()
+
+    def on_key(self, _btn, action):
+        kind = action[0]
+        if kind == "hide":
+            self.save_state()
+            Gtk.main_quit()
+        elif kind == "layer":
+            self.layer = "base" if self.layer == "sym" else "sym"
+            self.build_keys()
+        elif kind == "mod":
+            self.toggle_mod(action[1])
+        else:
+            self.send(action)
+
+    def toggle_mod(self, mod):
+        if mod == "shift":
+            now = time.monotonic()
+            if self.caps:
+                self.caps = False
+                self.mods.discard("shift")
+            elif "shift" in self.mods and now - self.last_shift < 0.4:
+                self.caps = True          # double-tap = caps lock
+                self.mods.discard("shift")
+            else:
+                self.mods ^= {"shift"}
+            self.last_shift = now
+        else:
+            self.mods ^= {mod}
+        self.build_keys()
+
+    def refocus_target(self):
+        """Tapping the keyboard focuses it; hand focus back to the last app so keys land there."""
+        try:
+            clients = json.loads(self.hypr("j/clients"))
+        except (OSError, ValueError):
+            return
+        me = next((c for c in clients if c.get("pid") == os.getpid()), None)
+        if not me or me.get("focusHistoryID") != 0:
+            return  # keyboard isn't focused; keys already go to the right place
+        others = [c for c in clients if c.get("pid") != os.getpid() and c.get("focusHistoryID", -1) >= 0
+                  and c.get("workspace", {}).get("id") == me.get("workspace", {}).get("id")
+                  or (c.get("pid") != os.getpid() and c.get("pinned"))]
+        if others:
+            target = min(others, key=lambda c: c["focusHistoryID"])
+            self.hypr(f"dispatch focuswindow address:{target['address']}")
+
+    def run_hypr_bind(self, kind, value):
+        """Hyprland ignores shortcuts typed on a virtual keyboard, so for Mod+key
+        look up the matching bind in your config and run its action directly."""
+        # caps lock deliberately doesn't count as Shift here (Mod+1 shouldn't become Mod+Shift+1)
+        mask = sum(MODMASK[m] for m in self.mods if m in MODMASK)
+        if kind == "key":
+            name = value
+        else:
+            base = UNSHIFTED.get(value, value.lower())
+            name = KEY_NAMES.get(base, base)
+        try:
+            binds = json.loads(self.hypr("j/binds"))
+        except (OSError, ValueError):
+            return False
+        for b in binds:
+            if (b.get("modmask") == mask and b.get("key", "").lower() == name.lower()
+                    and not b.get("mouse") and not b.get("submap")):
+                self.hypr(f"dispatch {b['dispatcher']} {b['arg']}".rstrip())
+                return True
+        return False
+
+    def send(self, action):
+        self.refocus_target()
+        kind, value = action
+        if "logo" in self.mods and self.run_hypr_bind(kind, value):
+            self.mods.clear()
+            self.build_keys()
+            return
+        held = [m for m in ("ctrl", "alt", "logo") if m in self.mods]
+        args = ["wtype"]
+        for m in held:
+            args += ["-M", m]
+        if kind == "key":
+            args += ["-k", value]
+        else:
+            args += ["--", value] if not held else [value]
+        for m in held:
+            args += ["-m", m]
+        subprocess.Popen(args)
+        if self.mods - {"shift"} or ("shift" in self.mods and kind == "text"):
+            self.mods.clear()
+            self.build_keys()
+
+    def start_repeat(self, _btn, action):
+        self.send(action)
+        self.stop_repeat()
+        self.repeat_id = GLib.timeout_add(450, self.repeat_begin, action)
+
+    def repeat_begin(self, action):
+        self.repeat_id = GLib.timeout_add(60, self.repeat_tick, action)
+        return False
+
+    def repeat_tick(self, action):
+        self.send(action)
+        return True
+
+    def stop_repeat(self, *_):
+        if self.repeat_id:
+            GLib.source_remove(self.repeat_id)
+            self.repeat_id = None
+
+    # ---------- move / resize ----------
+
+    def drag_area(self, text, mode):
+        box = Gtk.EventBox()
+        box.add(Gtk.Label(label=text))
+        box.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
+                       | Gdk.EventMask.POINTER_MOTION_MASK)
+        box.connect("button-press-event", self.drag_start, mode)
+        box.connect("motion-notify-event", self.drag_motion)
+        box.connect("button-release-event", self.drag_end)
+        return box
+
+    def find_self(self):
+        try:
+            for c in json.loads(self.hypr("j/clients")):
+                if c.get("pid") == os.getpid():
+                    self.addr = c["address"]
+                    return c
+        except (OSError, ValueError):
+            pass
+        return None
+
+    def monitor_bounds(self, c):
+        """Usable area of the keyboard's monitor (excluding the bar): x0, y0, x1, y1."""
+        try:
+            for m in json.loads(self.hypr("j/monitors")):
+                if m["id"] == c.get("monitor"):
+                    left, top, right, bottom = m.get("reserved", [0, 0, 0, 0])
+                    return (m["x"] + left, m["y"] + top,
+                            m["x"] + m["width"] - right, m["y"] + m["height"] - bottom)
+        except (OSError, ValueError, KeyError):
+            pass
+        return (0, 0, 1280, 800)
+
+    @staticmethod
+    def clamp(geom, bounds):
+        """Let the keyboard move freely, even partly off screen, but never lose it:
+        keep KEEP_VISIBLE px of it on screen sideways and the drag strip on screen."""
+        x, y, w, h = geom
+        x0, y0, x1, y1 = bounds
+        w = max(MIN_W, min(w, x1 - x0))
+        h = max(MIN_H, min(h, y1 - y0))
+        x = max(x0 - w + KEEP_VISIBLE, min(x, x1 - KEEP_VISIBLE))
+        y = max(y0, min(y, y1 - HANDLE_H))
+        return int(x), int(y), int(w), int(h)
+
+    def drag_start(self, _w, ev, mode):
+        c = self.find_self()
+        if not c:
+            return False
+        dev = ev.get_source_device()
+        self.drag = {
+            "mode": mode, "px": ev.x, "py": ev.y,
+            "bounds": self.monitor_bounds(c),
+            "start": (*c["at"], *c["size"]),
+            "geom": (*c["at"], *c["size"]),
+            # Touch coordinates stay relative to where the window was at touch-down
+            # (Hyprland doesn't update them as the window moves); mouse coordinates
+            # follow the window. So touch uses start + total finger movement, and
+            # mouse adds each step onto the current position.
+            "touch": bool(dev and dev.get_source() == Gdk.InputSource.TOUCHSCREEN),
+            "stale": False,
+        }
+        if DEBUG:
+            print(f"drag start mode={mode} touch={self.drag['touch']} geom={self.drag['geom']}", flush=True)
+        return True
+
+    def drag_motion(self, _w, ev):
+        d = self.drag
+        if not d or d["stale"]:
+            return True
+        x, y, w, h = d["start"] if d["touch"] else d["geom"]
+        dx, dy = ev.x - d["px"], ev.y - d["py"]
+        if DEBUG:
+            print(f"motion t={ev.time} ev=({ev.x:.0f},{ev.y:.0f}) d=({dx:.0f},{dy:.0f}) geom={d['geom']}", flush=True)
+        if d["mode"] == "move":
+            target = self.clamp((x + dx, y + dy, w, h), d["bounds"])
+        else:
+            target = self.clamp((x, y, w + dx, h + dy), d["bounds"])
+        if target == d["geom"]:
+            return True
+        if d["mode"] == "move":
+            self.hypr(f"dispatch movewindowpixel exact {target[0]} {target[1]},address:{self.addr}")
+        else:
+            self.hypr(f"dispatch resizewindowpixel exact {target[2]} {target[3]},address:{self.addr}")
+        d["geom"] = target
+        if d["touch"]:
+            return True
+        # Mouse events already on their way to us were measured against the old
+        # window position; using them would count the same finger movement twice
+        # and send the keyboard flying. Hyprland has applied the move (it replied),
+        # so do a round trip to pull in everything it sent before that, and drop
+        # all of it. The idle callback runs once those queued events are handled.
+        Gdk.Display.get_default().sync()
+        d["stale"] = True
+        GLib.idle_add(self.drag_fresh)
+        return True
+
+    def drag_fresh(self):
+        if self.drag:
+            self.drag["stale"] = False
+        return False
+
+    def drag_end(self, *_):
+        if self.drag:
+            self.drag = None
+            self.save_state()
+        return True
+
+    # ---------- saved geometry ----------
+
+    def load_state(self):
+        try:
+            with open(STATE_FILE) as f:
+                return {**DEFAULT_STATE, **json.load(f)}
+        except (OSError, ValueError):
+            return dict(DEFAULT_STATE)
+
+    def save_state(self):
+        c = self.find_self()
+        if not c:
+            return
+        (x, y), (w, h) = c["at"], c["size"]
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        with open(STATE_FILE, "w") as f:
+            json.dump({"x": x, "y": y, "w": w, "h": h}, f)
+
+    def restore_geometry(self):
+        c = self.find_self()
+        if not c:
+            return True  # not mapped yet, try again
+        s = self.state
+        x, y, w, h = self.clamp((s["x"], s["y"], s["w"], s["h"]), self.monitor_bounds(c))
+        self.hypr(f"dispatch resizewindowpixel exact {w} {h},address:{self.addr}")
+        self.hypr(f"dispatch movewindowpixel exact {x} {y},address:{self.addr}")
+        return False
+
+
+if __name__ == "__main__":
+    Keyboard()
+    Gtk.main()

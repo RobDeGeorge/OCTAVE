@@ -1,0 +1,3 @@
+#!/bin/sh
+# Open the on-screen keyboard, or close it if it's already open.
+pkill -f "$HOME/.local/bin/osk$" || setsid -f "$HOME/.local/bin/osk" >/dev/null 2>&1

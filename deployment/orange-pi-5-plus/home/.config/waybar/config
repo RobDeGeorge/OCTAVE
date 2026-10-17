@@ -1,0 +1,99 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 34,
+    "spacing": 0,
+    "modules-left": [
+        "hyprland/workspaces",
+        "hyprland/window"
+    ],
+    "modules-center": [
+        "clock"
+    ],
+    "modules-right": [
+        "pulseaudio",
+        "network",
+        "cpu",
+        "custom/cpu-temp",
+        "custom/gpu-temp",
+        "memory",
+        "disk",
+        "custom/osk",
+        "tray"
+    ],
+    "hyprland/workspaces": {
+        "disable-scroll": true,
+        "all-outputs": true,
+        "on-click": "activate",
+        "format": "{icon}",
+        "format-icons": {
+            "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
+            "6": "6", "7": "7", "8": "8", "9": "9", "10": "0"
+        }
+    },
+    "hyprland/window": {
+        "format": "{}",
+        "max-length": 50
+    },
+    "clock": {
+        "format": "{:%a %b %d  %I:%M %p}",
+        "format-alt": "{:%Y-%m-%d}",
+        "tooltip-format": "<tt><small>{calendar}</small></tt>"
+    },
+    "pulseaudio": {
+        "format": "󰕾 {volume}%",
+        "format-muted": "󰝟 muted",
+        "on-click": "pavucontrol",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+        "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
+        "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
+        "tooltip-format": "Volume: {volume}%\nDevice: {desc}"
+    },
+    "network": {
+        "format-wifi": "󰤨 {essid}",
+        "format-ethernet": "󰈀 {ifname}",
+        "format-linked": "󰈀",
+        "format-disconnected": "󰤭",
+        "tooltip-format-wifi": "{essid}\n{ipaddr}/{cidr}\nSignal: {signalStrength}%",
+        "tooltip-format-ethernet": "{ifname}: {ipaddr}/{cidr}\nGateway: {gwaddr}",
+        "tooltip-format-disconnected": "Disconnected",
+        "on-click": "nm-connection-editor"
+    },
+    "cpu": {
+        "format": "󰻠 {usage}%",
+        "tooltip-format": "CPU: {usage}%\n{avg_frequency} GHz",
+        "interval": 2
+    },
+    "custom/cpu-temp": {
+        "exec": "for z in /sys/class/thermal/thermal_zone*; do [ \"$(cat $z/type)\" = package-thermal ] && temp=$(cat $z/temp) && break; done; val=$((${temp:-0} / 1000)); printf '{\"text\": \"󰔐 %s°\", \"tooltip\": \"SoC Temp: %s°C\"}' \"$val\" \"$val\"",
+        "return-type": "json",
+        "interval": 5,
+        "format": "{}"
+    },
+    "custom/gpu-temp": {
+        "exec": "for z in /sys/class/thermal/thermal_zone*; do [ \"$(cat $z/type)\" = gpu-thermal ] && temp=$(cat $z/temp) && break; done; val=$((${temp:-0} / 1000)); printf '{\"text\": \"󰢮 %s°\", \"tooltip\": \"GPU Temp: %s°C\"}' \"$val\" \"$val\"",
+        "return-type": "json",
+        "interval": 5,
+        "format": "{}"
+    },
+    "memory": {
+        "format": "󰍛 {percentage}%",
+        "tooltip-format": "RAM: {used:0.1f}/{total:0.1f}G ({percentage}%)\nSwap: {swapUsed:0.1f}/{swapTotal:0.1f}G",
+        "interval": 5
+    },
+    "disk": {
+        "interval": 30,
+        "format": "󰋊 {percentage_used}%",
+        "path": "/",
+        "tooltip-format": "Disk: {used}/{total} ({percentage_used}%)\n{free} free"
+    },
+    "custom/osk": {
+        "format": "󰌌",
+        "tooltip-format": "On-screen keyboard",
+        "on-click": "~/.local/bin/osk-toggle"
+    },
+    "tray": {
+        "icon-size": 18,
+        "spacing": 8
+    }
+}

@@ -1,0 +1,20 @@
+{
+    "activeDashboard": "tj-wrangler",
+    "esp32VolumeEnabled": true,
+    "esp32VolumePort": "/dev/ttyS0",
+    "esp32AutoReconnect": true,
+    "gestureSensorEnabled": true,
+    "imuEnabled": true,
+    "mediaFolder": "/home/roxy/Music/OCTAVE",
+    "obdBluetoothPort": "rfcomm://XX:XX:XX:XX:XX:XX",
+    "obdFastMode": true,
+    "phoneMirrorEnabled": true,
+    "scrcpyAutoWifi": true,
+    "scrcpyHoldWifiScans": true,
+    "scrcpyWirelessAddress": "10.42.0.30:<ADB-PORT>",
+    "scrcpyDisplaySize": "auto",
+    "scrcpyBitRateWifi": 20,
+    "screenWidth": 1254,
+    "screenHeight": 740,
+    "windowState": "windowed"
+}

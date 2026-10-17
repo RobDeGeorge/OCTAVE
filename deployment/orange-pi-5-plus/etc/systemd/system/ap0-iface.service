@@ -1,0 +1,19 @@
+[Unit]
+Description=Create ap0 virtual AP interface on the RTL8852BE (OCTAVE-Jeep)
+BindsTo=sys-subsystem-net-devices-wlP2p33s0.device
+After=sys-subsystem-net-devices-wlP2p33s0.device
+Before=NetworkManager.service hostapd-ap0.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'iw dev ap0 info >/dev/null 2>&1 || iw dev wlP2p33s0 interface add ap0 type __ap'
+ExecStart=/usr/sbin/ip link set ap0 down
+# Fixed locally-administered MAC = stable BSSID (Android keys wireless-debugging trust on it).
+# Pick your own: any MAC whose first byte has the 0x02 bit set, e.g. 02:xx:xx:xx:xx:xx.
+ExecStart=/usr/sbin/ip link set ap0 address <AP-MAC>
+ExecStart=/usr/sbin/ip addr replace 10.42.0.1/24 dev ap0
+ExecStop=/usr/sbin/iw dev ap0 del
+
+[Install]
+WantedBy=multi-user.target

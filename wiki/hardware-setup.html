@@ -26,6 +26,7 @@
             <li><a href="#gesture-sensor">PAJ7620U2 Gesture Sensor</a></li>
             <li><a href="#verify">Verifying the Install (Log Lines)</a></li>
             <li><a href="#3d-mounts">3D Printed Mounts</a></li>
+            <li><a href="#reference-install">Reference Install: Orange Pi 5 Plus</a></li>
             <li><a href="#power">Power &amp; Vehicle Installation</a></li>
             <li><a href="#why">Why It Is Set Up This Way</a></li>
           </ul>
@@ -381,6 +382,20 @@ i2cdetect -y 2
         <p>No slicer profile is checked in; choose a filament rated for cabin heat. The Jeep TJ itself is also the vehicle
           rendered on <code>CarMenu</code> (see <a href="pages.html#carmenu">Pages &rarr; CarMenu</a>).
         </p>
+
+        <!-- Reference install -->
+        <h2 id="reference-install">Reference Install: Orange Pi 5 Plus</h2>
+        <p>The author's Jeep TJ runs OCTAVE on an Orange Pi 5 Plus (RK3588, 16 GB, NVMe) driving a 10.1-inch 1280&times;800 HDMI
+          touchscreen, under Armbian with the mainline kernel and Hyprland. The system and desktop config from that box is
+          checked in at <span class="file-path">deployment/orange-pi-5-plus/</span>, laid out the way it sits on the box
+          (<code>home/</code>, <code>etc/</code>, <code>boot/</code>). Its <code>README.md</code> lists the full hardware and every file.</p>
+        <ul>
+          <li><strong>Session:</strong> GDM autologin into Hyprland. <code>exec-once = ~/.local/bin/octave-start.sh</code> starts the C++ build, routes audio to the 3.5&nbsp;mm jack and restarts OCTAVE after a crash (it stops after 5 crashes in 3 minutes).</li>
+          <li><strong>Touch:</strong> the hyprgrass plugin for multi-finger gestures, plus a small GTK on-screen keyboard toggled from Waybar.</li>
+          <li><strong>Phone mirroring:</strong> a local <code>OCTAVE-Jeep</code> 5&nbsp;GHz hotspot on a virtual <code>ap0</code> interface (hostapd + DHCP-only dnsmasq, no gateway or DNS so the phone keeps mobile data). See <a href="phone-mirror-android-auto.html">Phone Mirror</a>.</li>
+          <li><strong>Reliability:</strong> hardware watchdog, reboot on kernel panic or oops, a persistent journal, and suspend disabled.</li>
+        </ul>
+        <p>Secrets and device identifiers (hotspot password, MAC addresses, ADB port, disk UUID) are replaced with placeholders. Change the user name, paths and audio sink names to match your install.</p>
 
         <!-- Power -->
         <h2 id="power">Power &amp; Vehicle Installation</h2>

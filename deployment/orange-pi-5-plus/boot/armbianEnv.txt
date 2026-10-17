@@ -1,0 +1,9 @@
+verbosity=1
+bootlogo=true
+console=both
+extraargs=cma=256M
+overlay_prefix=rockchip-rk3588
+fdtfile=rockchip/rk3588-orangepi-5-plus.dtb
+rootdev=UUID=<ROOT-UUID>
+rootfstype=ext4
+usbstoragequirks=0x2537:0x1066:u,0x2537:0x1068:u
