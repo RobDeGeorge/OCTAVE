@@ -24,7 +24,7 @@
 
 ---
 
-OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi behind the dash, a laptop in a project car, or an Android tablet. It plays local music, reads live data from the car over OBD-II, mirrors an Android phone over USB, and recolours its interface to match the album art.
+OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi behind the dash, a laptop in a project car, or an Android tablet. It plays local music, reads live data from the car over OBD-II, mirrors an Android phone over USB or Wi-Fi, and recolours its interface to match the album art.
 
 It sits in the same space as Crankshaft, OpenAuto Pro and AGL, but it runs on its own rather than projecting a phone, and it is built to be modified. Most of the customisation (themes, dashboards, layouts, hardware bindings) happens inside the app. Past that, the code is small enough to fork, and it ships in both C++/Qt and Python/PySide6 so you can work in whichever you already know.
 
@@ -123,7 +123,7 @@ Warning lights are ordinary dashboard widgets with a threshold, so any parameter
   <img src="frontend/assets/readme/mirror_live.png" alt="A Samsung phone's DeX desktop mirrored onto the head unit over USB" width="700">
 </p>
 
-Plug in an Android phone and OCTAVE mirrors a DeX-style desktop onto the head unit through a built-in scrcpy-protocol client. There is nothing to install on the phone. Its own screen stays dark in the cradle, an accidental power press is reverted, unlocking the phone hands control back to it, and a brief USB disconnect resumes where you were instead of resetting to the home screen.
+Plug in an Android phone, or pair it once over Wi-Fi by scanning a QR code, and OCTAVE mirrors a DeX-style desktop onto the head unit through a built-in scrcpy-protocol client. There is nothing to install on the phone. Its own screen can stay dark in the cradle (opt-in, since some phones only dim), an accidental power press is reverted, unlocking the phone hands control back to it, and a brief USB disconnect resumes where you were instead of resetting to the home screen.
 
 ### The vehicle, live
 
@@ -188,7 +188,7 @@ Pitch, roll, heading, a G-force plot with a trail, altitude and temperature from
 
 ### Vehicle & Hardware
 - OBD-II diagnostics over ELM327 (serial, Bluetooth, BLE on Android) — 50+ live parameters, custom gauges, full dashboards, DTC read and clear
-- Phone mirroring over USB with a built-in scrcpy-protocol client and a phone-side keeper that survives locks and cable blips
+- Phone mirroring over USB or Wi-Fi (one-time QR pairing) with a built-in scrcpy-protocol client and a phone-side keeper that survives locks and cable blips
 - ESP32 wireless volume knob with LED sync
 - BerryIMU 9DOF sensor fusion (accelerometer, gyro, magnetometer, barometer) with a live vehicle view
 - PAJ7620U2 gesture sensor for touchless control
