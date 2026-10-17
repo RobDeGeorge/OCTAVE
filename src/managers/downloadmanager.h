@@ -51,6 +51,9 @@ class DownloadManager : public QObject
     Q_PROPERTY(bool isSearching READ isSearching NOTIFY isSearchingChanged)
     Q_PROPERTY(int activeDownloads READ activeDownloads NOTIFY activeDownloadsChanged)
     Q_PROPERTY(QString downloadPath READ downloadPath CONSTANT)
+    // False only in the stub below (OCTAVE_ENABLE_DOWNLOADS=OFF, app-store
+    // builds); QML hides every download entry point on it.
+    Q_PROPERTY(bool downloadsAvailable READ downloadsAvailable CONSTANT)
 
 public:
     explicit DownloadManager(QObject *parent = nullptr);
@@ -60,6 +63,7 @@ public:
     bool isSearching() const;
     int activeDownloads() const;
     QString downloadPath() const;
+    bool downloadsAvailable() const { return true; }
 
     // Android All-Files-Access (MANAGE_EXTERNAL_STORAGE). On other platforms
     // hasStorageAccess() always returns true and requestStorageAccess() is a
@@ -215,6 +219,7 @@ class DownloadManager : public QObject
     Q_PROPERTY(bool isSearching READ isSearching NOTIFY isSearchingChanged)
     Q_PROPERTY(int activeDownloads READ activeDownloads NOTIFY activeDownloadsChanged)
     Q_PROPERTY(QString downloadPath READ downloadPath CONSTANT)
+    Q_PROPERTY(bool downloadsAvailable READ downloadsAvailable CONSTANT)
 
 public:
     explicit DownloadManager(QObject *parent = nullptr) : QObject(parent) {}
@@ -223,6 +228,7 @@ public:
     bool isSearching() const { return false; }
     int activeDownloads() const { return 0; }
     QString downloadPath() const { return QString(); }
+    bool downloadsAvailable() const { return false; }
 
 signals:
     void searchResults(const QString &jsonArray);

@@ -181,16 +181,18 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("mediaManager", &mediaManager);
 
 #ifdef Q_OS_ANDROID
+#ifdef OCTAVE_ENABLE_DOWNLOADS
     // Initialize the youtubedl-android bridge off the GUI thread — on first
     // launch it extracts Python 3.9 + yt-dlp + ffmpeg to the app's private data
     // dir (~10–20s). Subsequent launches are instant.
     QtConcurrent::run([] {
-        if (OctaveAndroid::initMediaBridge()) {
-            qInfo() << "[OctaveMediaBridge] yt-dlp + ffmpeg ready";
+        if (OctaveAndroid::initDownloadBridge()) {
+            qInfo() << "[OctaveDownloadBridge] yt-dlp + ffmpeg ready";
         } else {
-            qWarning() << "[OctaveMediaBridge] init failed — downloads + waveform disabled";
+            qWarning() << "[OctaveDownloadBridge] init failed — downloads disabled";
         }
     });
+#endif
 
     // Request runtime permissions needed for the media library and (eventual)
     // OBD Bluetooth transport. Declared in the manifest isn't enough on

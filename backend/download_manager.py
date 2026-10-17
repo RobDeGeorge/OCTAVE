@@ -250,6 +250,12 @@ class DownloadManager(QObject):
     def downloadPath(self):
         return self._get_download_path()
 
+    @Property(bool, constant=True)
+    def downloadsAvailable(self):
+        # Always True here; False only in the C++ OCTAVE_ENABLE_DOWNLOADS=OFF
+        # stub (app-store builds), where QML hides the download entry points.
+        return True
+
     # ─── QML Slots ────────────────────────────────────────────────────
 
     @Slot(str)

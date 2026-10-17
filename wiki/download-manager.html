@@ -103,7 +103,7 @@ DownloadManager (src/managers/downloadmanager.cpp)
           <div class="diagram">
 DownloadManager
   |-- YtDlpProcess = AndroidProcessAdapter  (QProcess-shaped, runs on a QThread)
-  |     '-- OctaveAndroid::runYtDlp(args) --JNI--> OctaveMediaBridge.runYtDlp
+  |     '-- OctaveAndroid::runYtDlp(args) --JNI--> OctaveDownloadBridge.runYtDlp
   |                                                  '-- youtubedl-android YoutubeDL.execute()
   |-- search: QtConcurrent::run(OctaveAndroid::runYtMusicSearch) -> ytmusic_search.py under the AAR's Python
   |-- m_mobileProgressPoller (250 ms) -> OctaveAndroid::pollProgress()
@@ -376,10 +376,11 @@ C++ desktop                       C++ Android
           <h2>Android Specifics</h2>
           <p>Android is C++-only. The relevant pieces live in <span class="file-path">src/platform/androidprocessadapter.h</span>,
             <span class="file-path">src/platform/androidmediabridge.h</span> and
-            <span class="file-path">android/src/org/octave/app/OctaveMediaBridge.java</span>.</p>
+            <span class="file-path">android/src-downloads/org/octave/app/OctaveDownloadBridge.java</span> (yt-dlp, ffmpeg,
+            ytmusicapi; general media helpers stay in <span class="file-path">android/src/org/octave/app/OctaveMediaBridge.java</span>).</p>
           <ul>
             <li><strong>Runtime:</strong> the <code>youtubedl-android</code> 0.18.1 AAR bundles Python 3.12, yt-dlp and ffmpeg.
-              <code>OctaveMediaBridge.init()</code> initialises both, extracts the ytmusicapi bundle, and kicks off the yt-dlp
+              <code>OctaveDownloadBridge.init()</code> initialises both, extracts the ytmusicapi bundle, and kicks off the yt-dlp
               self-update (below).</li>
             <li><strong>Process adapter:</strong> <code>AndroidProcessAdapter</code> mimics enough of <code>QProcess</code>
               (<code>start</code>, <code>finished</code>, <code>readAllStandardOutput</code>, <code>kill</code>) that
@@ -567,9 +568,22 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
             <code>searchError("Downloads disabled in this build")</code>, <code>download()</code> / <code>download_song()</code>
             emit the same text through <code>downloadError</code>, everything else is a no-op and
             <code>get_download_playlist()</code> returns <code>"Downloads"</code>. The stub omits <code>hasStorageAccess()</code> and <code>requestStorageAccess()</code>; the QML guards those optional methods.
-            The manager is still constructed and registered. The whole
+            The manager is still constructed and registered, and its <code>downloadsAvailable</code> property is <code>false</code>
+            (<code>true</code> in the full class and in Python), which hides the download buttons in
+            <span class="file-path">MediaRoom.qml</span> and <span class="file-path">MediaPlayer.qml</span> so a store build shows no download entry point. The whole
             <span class="file-path">downloadmanager.cpp</span> is wrapped in <code>#ifdef OCTAVE_ENABLE_DOWNLOADS</code>. The
             Python backend has no equivalent switch because it is never packaged.
+          </p>
+          <p>
+            On Android the flag also reaches Gradle: CMake writes <code>octaveEnableDownloads=true|false</code> to
+            <span class="file-path">&lt;build&gt;/octave-android-features.properties</span>, and
+            <span class="file-path">android/build.gradle</span> reads it (failing the build if it is missing). With the flag off the APK
+            leaves out the <code>youtubedl-android</code> AAR, <span class="file-path">android/src-downloads/</span>
+            (<code>OctaveDownloadBridge</code>), the <code>assets/python-packages</code> and <code>assets/scripts</code> helpers, and,
+            through the <span class="file-path">android/store-manifest/</span> overlay, the <code>MANAGE_EXTERNAL_STORAGE</code>
+            permission. The C++ wrappers for the download bridge (<span class="file-path">androidmediabridge.h</span>) and
+            <span class="file-path">androidprocessadapter.h</span> compile out with it. The arm64 store APK is about 60&nbsp;MB against
+            118&nbsp;MB with downloads on.
           </p>
         </section>
 
@@ -608,6 +622,7 @@ download_path = os.path.join(media_folder, subfolder)</code></pre>
               <tr><td><code>isSearching</code></td><td><code>bool</code></td><td><code>isSearchingChanged</code></td><td>True while a search is running</td></tr>
               <tr><td><code>activeDownloads</code></td><td><code>int</code></td><td><code>activeDownloadsChanged</code></td><td>Number of queued + in-progress downloads</td></tr>
               <tr><td><code>downloadPath</code></td><td><code>str</code></td><td>constant</td><td>Current download directory (computed on read)</td></tr>
+              <tr><td><code>downloadsAvailable</code></td><td><code>bool</code></td><td>constant</td><td><code>false</code> only in the <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> stub; QML hides download buttons on it</td></tr>
             </tbody>
           </table>
         </section>

@@ -626,7 +626,7 @@ Item {
         // Download Button (top right corner)
         Control {
             id: downloadButton
-            visible: true
+            visible: downloadManager.downloadsAvailable
             width: App.Spacing.bottomBarNavButtonWidth
             height: App.Spacing.bottomBarNavButtonHeight
             z: 3

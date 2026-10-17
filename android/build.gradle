@@ -23,6 +23,21 @@ repositories {
 
 apply plugin: 'com.android.application'
 
+// OCTAVE_ENABLE_DOWNLOADS, handed over by CMakeLists.txt (Android packaging):
+// Gradle runs in <cmake build dir>/android-build*/, so the file sits one level
+// up. With downloads OFF (app-store builds) the youtubedl-android AAR,
+// src-downloads/ (OctaveDownloadBridge), the yt-dlp helper assets, and the
+// MANAGE_EXTERNAL_STORAGE permission all stay out of the APK. A missing file
+// fails the build: guessing could put yt-dlp into a store build.
+def octaveFeaturesFile = new File(projectDir.parentFile, 'octave-android-features.properties')
+if (!octaveFeaturesFile.exists()) {
+    throw new GradleException("${octaveFeaturesFile} not found: build the APK through CMake (cmake --build <dir> --target apk)")
+}
+def octaveFeatures = new Properties()
+octaveFeaturesFile.withInputStream { octaveFeatures.load(it) }
+def octaveEnableDownloads = octaveFeatures.getProperty('octaveEnableDownloads') == 'true'
+println "OCTAVE: downloads ${octaveEnableDownloads ? 'enabled' : 'disabled (store build)'}"
+
 dependencies {
     // Qt's androiddeployqt copies its JARs into libs/ during packaging — this
     // is how QtActivityBase/QtApplicationBase make it onto the classpath.
@@ -31,9 +46,11 @@ dependencies {
     // youtubedl-android: bundles Python 3.9 + yt-dlp + ffmpeg as an AAR.
     // Library init extracts the Python runtime to the app's private data dir
     // on first launch (~10-20s). FFmpeg is a separate artifact. Used by
-    // downloadmanager (search + download) and audioanalyzer (PCM decode).
-    implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
-    implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
+    // downloadmanager (search + download) via OctaveDownloadBridge.
+    if (octaveEnableDownloads) {
+        implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
+        implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
+    }
 
     // androidx.core intentionally omitted — any version recent enough to be
     // useful requires compileSdk 34, which AGP 7.4.1 can't do. Qt itself
@@ -55,13 +72,19 @@ android {
     sourceSets {
         main {
             manifest.srcFile 'AndroidManifest.xml'
-            java.srcDirs = [qtAndroidDir + '/src', 'src', 'java']
+            java.srcDirs = [qtAndroidDir + '/src', 'src', 'java'] + (octaveEnableDownloads ? ['src-downloads'] : [])
             aidl.srcDirs = [qtAndroidDir + '/src', 'src', 'aidl']
             res.srcDirs = [qtAndroidDir + '/res', 'res']
             resources.srcDirs = ['resources']
             renderscript.srcDirs = ['src']
             assets.srcDirs = ['assets']
             jniLibs.srcDirs = ['libs']
+        }
+        if (!octaveEnableDownloads) {
+            // Build-type overlays merge over main/: strips MANAGE_EXTERNAL_STORAGE,
+            // which only the download feature needs and Play restricts.
+            debug.manifest.srcFile 'store-manifest/AndroidManifest.xml'
+            release.manifest.srcFile 'store-manifest/AndroidManifest.xml'
         }
     }
 
@@ -88,5 +111,19 @@ android {
         minSdkVersion qtMinSdkVersion
         targetSdkVersion qtTargetSdkVersion
         ndk.abiFilters = qtTargetAbiList.split(",")
+    }
+}
+
+// Store builds: drop the download-only assets (assets/python-packages holds
+// the ytmusicapi bundle, assets/scripts the yt-dlp/ytmusic helper scripts)
+// from the merged assets so no yt-dlp tooling ships in the APK.
+if (!octaveEnableDownloads) {
+    android.applicationVariants.all { variant ->
+        variant.mergeAssetsProvider.configure { task ->
+            task.doLast {
+                def out = task.outputDir.get().asFile
+                project.delete(new File(out, 'python-packages'), new File(out, 'scripts'))
+            }
+        }
     }
 }

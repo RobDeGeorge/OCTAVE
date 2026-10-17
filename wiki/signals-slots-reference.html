@@ -1206,7 +1206,7 @@
         <h2 id="downloadManager">DownloadManager <span class="cmt">&mdash; <code>downloadManager</code></span></h2>
         <p><span class="file-path">src/managers/downloadmanager.h</span> / <span class="file-path">backend/download_manager.py</span> &mdash; QML context property <code>downloadManager</code></p>
         <p>Music search and download. The C++ backend drives <code>yt-dlp</code> (YouTube Music); the Python backend drives <code>music_dl</code> (ytmusicapi search, yt-dlp download). Compiled out with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> (app-store builds register a stub with the same members minus the two storage-access invokables).</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class runs yt-dlp through the bundled <code>OctaveMediaBridge</code> (JNI) and polls progress on a timer; <code>hasStorageAccess()</code> / <code>requestStorageAccess()</code> are meaningful only there.</div>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class runs yt-dlp through the bundled <code>OctaveDownloadBridge</code> (JNI) and polls progress on a timer; <code>hasStorageAccess()</code> / <code>requestStorageAccess()</code> are meaningful only there.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1214,6 +1214,7 @@
             <tr><td><code>isSearching</code></td><td><code>bool</code></td><td>read-only</td><td><code>isSearchingChanged</code></td><td>A search is in flight</td></tr>
             <tr><td><code>activeDownloads</code></td><td><code>int</code></td><td>read-only</td><td><code>activeDownloadsChanged</code></td><td>Downloads queued or running</td></tr>
             <tr><td><code>downloadPath</code></td><td><code>QString</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Destination folder (media folder / download sub-folder)</td></tr>
+            <tr><td><code>downloadsAvailable</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td><code>false</code> only in app-store builds (<code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> stub); QML hides every download button on it</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>

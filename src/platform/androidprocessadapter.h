@@ -2,7 +2,8 @@
 #define ANDROIDPROCESSADAPTER_H
 
 // QProcess-shaped wrapper that runs yt-dlp / ffmpeg via the JNI bridge
-// (OctaveMediaBridge) on Android. Mirrors enough of QProcess's API that
+// (OctaveDownloadBridge) on Android. Download-only, so it compiles out with
+// OCTAVE_ENABLE_DOWNLOADS=OFF like the Java class it calls. Mirrors enough of QProcess's API that
 // downloadmanager.cpp can use it interchangeably through a conditional typedef.
 //
 // Key difference from QProcess: no stdin; no live streaming of stdout.
@@ -13,7 +14,7 @@
 
 // Guard on Q_OS_MOBILE (not Q_OS_ANDROID) because moc only sees defines
 // emitted into moc_predefs.h — and our CMakeLists sets Q_OS_MOBILE there.
-#ifdef Q_OS_MOBILE
+#if defined(Q_OS_MOBILE) && defined(OCTAVE_ENABLE_DOWNLOADS)
 
 #include <QObject>
 #include <QProcess>   // for QProcess::ExitStatus and ProcessError enums
@@ -146,5 +147,5 @@ private:
     std::atomic<bool> m_canceled{false};
 };
 
-#endif // Q_OS_MOBILE
+#endif // Q_OS_MOBILE && OCTAVE_ENABLE_DOWNLOADS
 #endif // ANDROIDPROCESSADAPTER_H

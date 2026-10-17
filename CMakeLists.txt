@@ -352,5 +352,15 @@ if(ANDROID)
         set_property(TARGET octave APPEND PROPERTY QT_ANDROID_EXTRA_PLUGINS
             "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/assetimporters")
     endif()
+    # android/build.gradle reads this to keep the youtubedl-android AAR, the
+    # Java download bridge, and the yt-dlp assets out of store APKs. Gradle
+    # runs in android-build*/ directly under this dir and looks one level up.
+    if(OCTAVE_ENABLE_DOWNLOADS)
+        set(_octave_gradle_downloads true)
+    else()
+        set(_octave_gradle_downloads false)
+    endif()
+    file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/octave-android-features.properties"
+         CONTENT "octaveEnableDownloads=${_octave_gradle_downloads}\n")
     # No manual qt_finalize_executable call — qt_add_executable schedules it automatically.
 endif()

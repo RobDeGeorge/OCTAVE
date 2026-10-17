@@ -718,6 +718,7 @@ Item {
         Control {
             id: downloadButton
             visible: mediaFiles.length > 0 && !mediaPlayer.phoneQueueShown
+                     && downloadManager.downloadsAvailable
             width: App.Spacing.bottomBarNavButtonWidth
             height: App.Spacing.bottomBarNavButtonHeight
             z: 3
