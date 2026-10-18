@@ -41,6 +41,8 @@ class DashboardManager : public QObject
     // Built-in presets the user deleted (hidden) — the chooser shows
     // "Restore defaults" while this is non-zero.
     Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
+    // kSupportedSchema, for DashboardRenderer's "needs a newer OCTAVE" placeholder
+    Q_PROPERTY(int supportedSchema READ supportedSchema CONSTANT)
 
 public:
     explicit DashboardManager(QObject *parent = nullptr);
@@ -65,6 +67,7 @@ public:
 
     QString lastShareError() const { return m_lastShareError; }
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
+    int supportedSchema() const { return kSupportedSchema; }
 
     // Highest dashboard `schema` this build understands. Imports declaring a
     // newer schema are refused rather than half-rendered.

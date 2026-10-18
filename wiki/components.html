@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Components</div>
           <h1 class="page-title">Components</h1>
-          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, GalleryTile, SensorCard, GForceDisplay, HomeOBDView, OBDAdapterSheet, the OBDParameterModel singleton and the rigged Jeep TJ</p>
+          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, SensorCard, GForceDisplay, HomeOBDView, OBDAdapterSheet, the OBDParameterModel singleton and the rigged Jeep TJ</p>
         </div>
 
         <nav class="toc">
@@ -26,7 +26,6 @@
             <li><a href="#music-devices">Music Device Components</a></li>
             <li><a href="#terminal-feedback">TerminalFeedback</a></li>
             <li><a href="#corner-brackets">CornerBrackets</a></li>
-            <li><a href="#gallery-tile">GalleryTile</a></li>
             <li><a href="#sensor-card">SensorCard</a></li>
             <li><a href="#gforce-display">GForceDisplay</a></li>
             <li><a href="#phone-qr-pairing-panel">PhoneQrPairingPanel</a></li>
@@ -53,7 +52,6 @@
             <tr><td><code>ThemedIcon</code></td><td><code>Item</code></td><td>settings tiles and cards, hub widgets</td></tr>
             <tr><td><code>TerminalFeedback</code></td><td><code>Rectangle</code></td><td><span class="file-path">settings/MediaSettingsPage.qml</span> (library-scan output); <span class="file-path">OBDDiagnostics.qml</span> has its own inline terminal instead</td></tr>
             <tr><td><code>CornerBrackets</code></td><td><code>Item</code></td><td><code>TerminalFeedback</code>, <code>SettingsCard</code>, <code>SettingsTile</code>, <code>SettingsDashboardCard</code>, <code>SettingsHubCard</code>, <code>SettingsHubGridCard</code> (always hidden, see below)</td></tr>
-            <tr><td><code>GalleryTile</code></td><td><code>Rectangle</code></td><td>the Primitives Gallery popup in <span class="file-path">OBDMenu.qml</span></td></tr>
             <tr><td><code>SensorCard</code>, <code>GForceDisplay</code></td><td><code>Rectangle</code></td><td><span class="file-path">SensorMenu.qml</span></td></tr>
             <tr><td><code>HomeOBDView</code></td><td><code>Item</code></td><td><span class="file-path">MainMenu.qml</span></td></tr>
             <tr><td><code>OBDAdapterSheet</code></td><td><code>Popup</code></td><td><span class="file-path">OBDMenu.qml</span> (empty-state Connect button), <span class="file-path">settings/OBDSettingsPage.qml</span> (Adapters card)</td></tr>
@@ -249,17 +247,6 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
         <p><span class="file-path">frontend/CornerBrackets.qml</span> draws eight 1&nbsp;px <code>Rectangle</code>s &mdash; a horizontal and a vertical arm of length <code>bracketLength = dp(12)</code> at each corner, offset by &minus;1 so they sit on the parent's border &mdash; tinted with <code>App.Style.accent</code> at an alpha that pulses 0.5 &rarr; 0.8 &rarr; 0.3 in two 2000&nbsp;ms <code>InOutSine</code> legs, looping forever. It anchors itself to fill the parent; the caller controls <code>visible</code>, and the <code>SequentialAnimation</code> has <code>running: brackets.visible</code>, so a hidden instance costs nothing per frame.</p>
 
         <p>It is instantiated in six places (<code>TerminalFeedback</code>, <code>SettingsCard</code>, <code>SettingsTile</code>, <code>SettingsDashboardCard</code>, <code>SettingsHubCard</code>, <code>SettingsHubGridCard</code>), every one bound to <code>App.EnvironmentTheme.active.cornerBrackets</code> or <code>.terminalCornerBrackets</code>. Both flags are permanently <code>false</code> in the single remaining environment (the file's own comment still calls it the "spacecraft theme" overlay), so the brackets are never shown in a shipped build. The component is retained because the ~40 <code>EnvironmentTheme.active.X</code> bindings were deliberately left intact when the presets were removed.</p>
-
-        <!-- GalleryTile -->
-        <h2 id="gallery-tile">GalleryTile</h2>
-
-        <p><span class="file-path">frontend/GalleryTile.qml</span> is a labelled tile for the Primitives Gallery popup in <a href="pages.html#obdmenu">OBDMenu</a>: a header <code>Text</code> (<code>title</code>), a preview <code>Rectangle</code> that receives the tile's child items through <code>default property alias _content: previewArea.data</code>, and a subdued footer (<code>props</code>). It is <code>Layout.fillWidth</code> with <code>Layout.preferredHeight: dp(240)</code>, coloured from the OBD tokens (<code>obdBoxBackground</code> darkened 1.05, <code>obdBarColor</code> border, <code>obdValueColor</code> / <code>obdLabelColor</code> text). Its header still describes planned removal after the editor; the editor has shipped, but the gallery remains accessible in the chooser.</p>
-
-        <pre><code><span class="cls">GalleryTile</span> {
-    <span class="prop">title</span>: <span class="str">"CircularGauge"</span>
-    <span class="prop">props</span>: <span class="str">"paramId: RPM · showNeedle"</span>
-    Gauges.<span class="cls">CircularGauge</span> { <span class="prop">anchors.centerIn</span>: parent; ... }   <span class="cmt">// parent = preview area</span>
-}</code></pre>
 
         <!-- SensorCard -->
         <h2 id="sensor-card">SensorCard</h2>

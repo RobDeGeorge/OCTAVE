@@ -135,8 +135,12 @@ Item {
             function send(points, action) {
                 for (var i = 0; i < points.length; ++i) {
                     var p = points[i], rp = rawPos(p)
-                    if (action === 0 && rp && (rp.x < 0 || rp.x > 1 || rp.y < 0 || rp.y > 1))
-                        _ignored[p.pointId] = true
+                    // Decided at the press, for the touch's whole life: outside
+                    // the picture, or before it has a size (no down sent, so no
+                    // moves or up either). Re-set on every press so a missed
+                    // release can't swallow the next touch with the same id.
+                    if (action === 0)
+                        _ignored[p.pointId] = !rp || rp.x < 0 || rp.x > 1 || rp.y < 0 || rp.y > 1
                     if (_ignored[p.pointId]) {
                         if (action === 1) delete _ignored[p.pointId]
                         continue

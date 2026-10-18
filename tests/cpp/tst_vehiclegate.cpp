@@ -121,6 +121,41 @@ private slots:
         m_root = nullptr;
     }
 
+    void newerSchemaShowsAMessageAndPollsNothing()
+    {
+        // A dashboard written by a newer OCTAVE, copied into the folder by hand:
+        // no half-rendered cells, no PIDs demanded, one message instead
+        QQmlEngine engine;
+        engine.addImportPath(kFrontend);
+        FakeObd obd;
+        engine.rootContext()->setContextProperty("obdManager", &obd);
+        QQmlComponent comp(&engine);
+        comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
+        std::unique_ptr<QObject> root(comp.create());
+        QVERIFY2(root, qPrintable(comp.errorString()));
+        QObject *renderer = root->findChild<QObject *>("renderer");
+        QVERIFY(renderer);
+        QCOMPARE(renderer->property("paramIds").toStringList().size(), 3);
+
+        QVariantMap spec{{"schema", 2}, {"label", "Future"}, {"gridColumns", 12}, {"gridRows", 6},
+                         {"cells", QVariantList{QVariantMap{{"type", "DigitalReadout"}, {"paramId", "RPM"}}}}};
+        renderer->setProperty("spec", spec);
+        QCoreApplication::processEvents();
+        QVERIFY(renderer->property("tooNew").toBool());
+        QCOMPARE(renderer->property("paramIds").toStringList(), QStringList());
+        QObject *message = root->findChild<QObject *>("dashTooNew");
+        QVERIFY(message);
+        QVERIFY(message->property("visible").toBool());
+        QVERIFY(message->property("text").toString().contains("Future"));
+
+        spec["schema"] = 1;   // the current schema renders as usual
+        renderer->setProperty("spec", spec);
+        QCoreApplication::processEvents();
+        QVERIFY(!renderer->property("tooNew").toBool());
+        QVERIFY(!message->property("visible").toBool());
+        QCOMPARE(renderer->property("paramIds").toStringList(), QStringList{"RPM"});
+    }
+
 private:
     QVariant call(const char *method, const QVariant &arg = QVariant())
     {

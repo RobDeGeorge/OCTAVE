@@ -1,29 +1,14 @@
-# Dashboards: last cleanup and on-device checks
+# Dashboards: on-device checks
 
-**Goal:** remove the leftover dev gallery, handle too-new dashboard files politely, and prove the dashboard editor and demand-driven polling work on a real touchscreen and a real car.
+**Goal:** prove the dashboard editor and demand-driven polling work on a real touchscreen and a real car.
 **Status:** active. Primitives, JSON dashboards, the in-app editor, renderer validation and user-folder hot-reload are all done and verified on desktop (2026-09-08 and 2026-10-04 passes).
 **Last updated:** 2026-10-18
 
+Done 2026-10-18: the Primitives Gallery is gone, and a dashboard with a newer `schema` shows "needs a newer OCTAVE" instead of its cells (`tst_vehiclegate`).
+
 Dropped: the `"source": "Custom.qml"` QML fallback. It would load arbitrary code from a dashboard file, which is the risk `TODO/user-primitives.md` exists to design around.
 
-## 1. Remove the Primitives Gallery
-
-The dev showcase is still in the app though its own comment says to remove it once the editor shipped (it has).
-
-1. `frontend/OBDMenu.qml`: delete the gallery button (comment at line 1219, `onClicked: primitivesGalleryPopup.open()` at 1277) and the `primitivesGalleryPopup` Popup (about lines 1555–1787). Fix the comment at line 943 that sizes another popup "to match primitivesGalleryPopup".
-2. Delete `frontend/GalleryTile.qml` (used only by that popup).
-3. Remove gallery mentions from `wiki/gauges-dashboards.html`, `pages.html`, `components.html`, `frontend-overview.html`, `obd-manager.html`, `docs/GAUGE_AUTHORING.md` and the CLAUDE.md "Gauges & Dashboards" paragraph; run `python wiki/build_search_index.py`.
-4. Build, `qmllint`, and open the OBD page with `./build/octave --dev` to check the header still lays out.
-
-**Effort:** S. **Needs:** desktop only.
-
-## 2. "Requires a newer OCTAVE" placeholder
-
-Import already rejects `schema > kSupportedSchema` (`src/managers/dashboardmanager.cpp:577-581`), but a newer file dropped straight into `<config>/dashboards/` is rendered as if it were schema 1. In `frontend/dashboards/DashboardRenderer.qml`, if `spec.schema` is greater than the supported version (expose `kSupportedSchema` from `DashboardManager` or mirror it), render one centred "This dashboard needs a newer OCTAVE" message instead of the cells. Add a case to the dashboard QtTest if the manager side changes.
-
-**Effort:** S. **Needs:** desktop only.
-
-## 3. On-device checks
+## On-device checks
 
 None of these can be done on the desktop rig.
 
@@ -44,4 +29,4 @@ None of these can be done on the desktop rig.
 
 Related: `TODO/user-primitives.md` (next dashboard feature; wants these checks done first), `TODO/android-cpp-port.md` (APK polish).
 
-Delete this file when sections 1–3 are done.
+Delete this file when every check above is ticked.

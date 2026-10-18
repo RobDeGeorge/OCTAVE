@@ -361,6 +361,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 
 - Built-in preset ids must be unique. User ids colliding with a built-in are rejected at load time (logged).
 - Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` drives the chooser's "Restore defaults" button. Parameter Cards (`grid`) can't be deleted. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id.
+- **Newer schema.** A spec whose `schema` is above `dashboardManager.supportedSchema` (`kSupportedSchema`, 1) renders no cells, demands no PIDs, and shows one centred "This dashboard needs a newer version of OCTAVE" message. Import refuses such files; this covers one dropped into the folder by hand.
 - **Validation.** `DashboardRenderer` checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`; failures are `console.warn`ed with the dashboard id and never crash the view. The editor applies the same checks when loading a spec (`_sanitizeCells`) — unknown types are dropped, unknown PIDs cleared so the panel shows "Choose PID…".
 - **Import sanitizing.** `importDashboard` / `importDashboardFromClipboard` /
   `importDashboardFromText` refuse a spec whose
@@ -635,8 +636,8 @@ frontend/
 │       └── tj-wrangler.json   "TJ Wrangler 4.0": 17-cell board from the Orange Pi rig
 ├── OBDParameterModel.qml      singleton aggregator (SOURCE OF TRUTH for PIDs)
 └── OBDMenu.qml                hosts DashboardRenderer, Parameter Cards, swipe
-                               between dashboards, the chooser popup (Import /
-                               Share), and a Primitives Gallery dev screen
+                               between dashboards, and the chooser popup
+                               (Import / Share)
 
 src/managers/
 ├── dashboardmanager.h         enumerates presets + user dashboards, save/

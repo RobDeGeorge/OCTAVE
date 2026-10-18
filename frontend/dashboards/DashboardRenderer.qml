@@ -35,6 +35,11 @@
 // `paramId` are still placed — some widgets (WarningLight driven by
 // explicit `value`) can be used decoratively.
 //
+// Newer schema: a spec whose `schema` is above what this build reads
+// (dashboardManager.supportedSchema; 1 without a manager) renders no cells,
+// polls nothing, and shows one "needs a newer OCTAVE" message. Import
+// already refuses such files; this covers one copied into the folder by hand.
+//
 // Vehicle gate: once a connected vehicle has been scanned
 // (OBDParameterModel.vehicleKnown), a cell bound to a PID that vehicle
 // doesn't report shows a "not supported" placeholder instead of a gauge
@@ -50,11 +55,15 @@ Item {
     // by DashboardManager; can also be an inline object literal for testing.
     property var spec: null
 
+    readonly property int supportedSchema:
+        (typeof dashboardManager !== "undefined" && dashboardManager) ? dashboardManager.supportedSchema : 1
+    readonly property bool tooNew: !!spec && spec.schema !== undefined && Number(spec.schema) > supportedSchema
+
     // Every distinct paramId the spec binds — the host registers these with
     // obdManager.setParameterDemand() so exactly these PIDs get polled.
     readonly property var paramIds: {
         var seen = {}, out = []
-        var cells = (spec && spec.cells) ? spec.cells : []
+        var cells = (spec && spec.cells && !tooNew) ? spec.cells : []
         for (var i = 0; i < cells.length; i++) {
             var id = cells[i].paramId
             if (id && !seen[id]) { seen[id] = true; out.push(id) }
@@ -96,8 +105,23 @@ Item {
     readonly property real _cellH: Math.max(1,
         (height - 2 * _margin - _spacing * (_rows - 1)) / _rows)
 
+    Text {
+        objectName: "dashTooNew"
+        visible: root.tooNew
+        anchors.centerIn: parent
+        width: parent.width - App.Spacing.dp(40)
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        text: "This dashboard needs a newer version of OCTAVE"
+              + (root.spec && root.spec.label ? " (\u201C" + root.spec.label + "\u201D)" : "")
+              + ". Update OCTAVE to show it."
+        color: App.Style.obdLabelColor
+        font.family: App.Style.fontFamily
+        font.pixelSize: App.Spacing.overallText
+    }
+
     Repeater {
-        model: (root.spec && root.spec.cells) ? root.spec.cells : []
+        model: (root.spec && root.spec.cells && !root.tooNew) ? root.spec.cells : []
         delegate: Item {
             id: cell
 

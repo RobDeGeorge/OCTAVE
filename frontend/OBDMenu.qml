@@ -5,7 +5,6 @@ import QtQuick.Shapes 1.15
 import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
 import "." as App
-import "gauges" as Gauges
 import "dashboards" as Dashboards
 
 Item {
@@ -940,8 +939,6 @@ Item {
         parent: Overlay.overlay
         x: Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 2)
-        // Sized to match primitivesGalleryPopup so both popups feel the
-        // same — consistent visual weight when switching between them.
         width: Math.min(parent.width * 0.92, dp(960))
         height: Math.min(
             parent.height * 0.9,
@@ -977,9 +974,8 @@ Item {
         contentItem: Item {
             id: chooserContent
 
-            // Header strip — sized to the button + margins so the title row
-            // and the top-right primitives button share the same frame and
-            // can't overlap when the popup narrows. Mirrors obdHeader.
+            // Header strip — sized to the button + margins, like obdHeader:
+            // the New / Import / Restore row on the left, the title centred.
             Rectangle {
                 id: chooserHeader
                 anchors.top: parent.top
@@ -1213,68 +1209,6 @@ Item {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: obdPage.restoreDefaultDashboards()
-                }
-            }
-
-            // Primitives gallery button — temporary dev/showcase screen.
-            // Anchored with the same top/right margins as the OBDMenu
-            // dashboards button so it sits centered within the header strip.
-            // Remove this once the Phase 3 in-app dashboard editor lands.
-            Control {
-                id: primitivesButton
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: App.Spacing.mediaRoomMargin
-                anchors.rightMargin: App.Spacing.mediaRoomMargin
-                width: App.Spacing.bottomBarNavButtonWidth
-                height: App.Spacing.bottomBarNavButtonHeight
-
-                background: Rectangle {
-                    color: "transparent"
-                    radius: dpMin(8, 2)
-                    border.color: App.Style.accent
-                    border.width: 1
-                    scale: primitivesButtonMouse.pressed ? 0.8 : 1.0
-                    opacity: primitivesButtonMouse.pressed ? 0.7 : 1.0
-                    Behavior on scale {
-                        NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                    }
-                    Behavior on opacity { NumberAnimation { duration: 150 } }
-                }
-
-                contentItem: Item {
-                    scale: primitivesButtonMouse.pressed ? 0.8 : 1.0
-                    opacity: primitivesButtonMouse.pressed ? 0.7 : 1.0
-                    Behavior on scale {
-                        NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                    }
-                    Behavior on opacity { NumberAnimation { duration: 150 } }
-                    Image {
-                        id: primitivesButtonImage
-                        anchors.centerIn: parent
-                        width: parent.width * 0.7
-                        height: parent.height * 0.7
-                        source: "./assets/primitives_button.svg"
-                        sourceSize: Qt.size(width * 2, height * 2)
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                        antialiasing: true
-                        mipmap: true
-                        visible: false
-                    }
-                    ColorOverlay {
-                        anchors.fill: primitivesButtonImage
-                        source: primitivesButtonImage
-                        color: App.Style.accent
-                    }
-                }
-
-                MouseArea {
-                    id: primitivesButtonMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: primitivesGalleryPopup.open()
                 }
             }
 
@@ -1543,240 +1477,6 @@ Item {
                                             onClicked: card.triggerAction(modelData.action)
                                         }
                                     }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // ── Primitives Gallery Popup ─────────────────────────────────────
-    // Temporary dev/showcase screen — live preview of every gauge
-    // primitive with hardcoded demo values, so you can see what each
-    // one looks like regardless of OBD connection state. Tear this out
-    // once the Phase 3 in-app editor ships (see TODO/dashboards-roadmap.md).
-    Popup {
-        id: primitivesGalleryPopup
-        parent: Overlay.overlay
-        x: Math.round((parent.width - width) / 2)
-        y: Math.round((parent.height - height) / 2)
-        width: Math.min(parent.width * 0.92, dp(960))
-        height: Math.min(
-            parent.height * 0.9,
-            galleryTitle.height + gallerySubtitle.height + galleryGrid.implicitHeight + dp(80)
-        )
-        modal: true
-        focus: true
-        padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        background: Rectangle {
-            color: Qt.rgba(App.Style.contentColor.r, App.Style.contentColor.g, App.Style.contentColor.b, 0.97)
-            radius: App.Spacing.overallMargin
-            border.color: App.Style.accent
-            border.width: 2
-        }
-
-        contentItem: Item {
-            Text {
-                id: galleryTitle
-                anchors.top: parent.top
-                anchors.topMargin: dp(18)
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "Primitives Gallery"
-                color: App.Style.primaryTextColor
-                font.pixelSize: App.Spacing.overallText * 1.3
-                font.bold: true
-                font.family: obdPage.globalFont
-            }
-
-            Text {
-                id: gallerySubtitle
-                anchors.top: galleryTitle.bottom
-                anchors.topMargin: dp(4)
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "Live preview of every gauge primitive"
-                color: App.Style.obdLabelColor
-                font.pixelSize: App.Spacing.overallText * 0.85
-                font.family: obdPage.globalFont
-            }
-
-            Flickable {
-                id: galleryScroll
-                anchors {
-                    top: gallerySubtitle.bottom
-                    bottom: parent.bottom
-                    left: parent.left
-                    right: parent.right
-                    topMargin: dp(16)
-                    leftMargin: dp(18)
-                    rightMargin: dp(18)
-                    bottomMargin: dp(18)
-                }
-                contentWidth: width
-                contentHeight: galleryGrid.implicitHeight
-                flickableDirection: Flickable.VerticalFlick
-                clip: true
-                boundsBehavior: Flickable.DragAndOvershootBounds
-                flickDeceleration: 1200
-                maximumFlickVelocity: 4000
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOff }
-
-                GridLayout {
-                    id: galleryGrid
-                    width: galleryScroll.width
-                    columns: 2
-                    rowSpacing: dp(14)
-                    columnSpacing: dp(14)
-
-                    // ── CircularGauge ───────────────────────────────
-                    // Demo value pushed into the redline zone so the
-                    // needle points hard-right instead of straight up —
-                    // otherwise it lands at the same angle as the
-                    // ArcGauge tile's needle and the two look identical.
-                    GalleryTile {
-                        title: "CircularGauge"
-                        props: "paramId: RPM · showNeedle · redlineStart: 6500 (demo in redline)"
-                        Gauges.CircularGauge {
-                            anchors.centerIn: parent
-                            width: Math.min(parent.width, parent.height) * 0.92
-                            height: width
-                            paramId: "RPM"
-                            value: 7200
-                            showNeedle: true
-                            redlineStart: 6500
-                        }
-                    }
-
-                    // ── ArcGauge ────────────────────────────────────
-                    GalleryTile {
-                        title: "ArcGauge"
-                        props: "paramId: SPEED · showNeedle · 180° top arc"
-                        Gauges.ArcGauge {
-                            anchors.fill: parent
-                            anchors.margins: dp(6)
-                            paramId: "SPEED"
-                            value: 65
-                            showNeedle: true
-                        }
-                    }
-
-                    // ── BarGauge (horizontal, with warn) ────────────
-                    GalleryTile {
-                        title: "BarGauge — horizontal"
-                        props: "paramId: COOLANT_TEMP · warnAbove: 105"
-                        Item {
-                            anchors.fill: parent
-                            anchors.margins: dp(14)
-                            Gauges.BarGauge {
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                height: dp(56)
-                                paramId: "COOLANT_TEMP"
-                                value: 92
-                                warnAbove: 105
-                                orientation: "horizontal"
-                            }
-                        }
-                    }
-
-                    // ── BarGauge (vertical) ─────────────────────────
-                    GalleryTile {
-                        title: "BarGauge — vertical"
-                        props: "paramId: FUEL_LEVEL · orientation: vertical"
-                        Item {
-                            anchors.fill: parent
-                            anchors.margins: dp(14)
-                            Gauges.BarGauge {
-                                anchors.top: parent.top
-                                anchors.bottom: parent.bottom
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: dp(90)
-                                paramId: "FUEL_LEVEL"
-                                value: 65
-                                orientation: "vertical"
-                            }
-                        }
-                    }
-
-                    // ── LinearGauge (bidirectional) ─────────────────
-                    GalleryTile {
-                        title: "LinearGauge"
-                        props: "paramId: SHORT_FUEL_TRIM_1 · bidirectional (min<0<max)"
-                        Gauges.LinearGauge {
-                            anchors.fill: parent
-                            anchors.margins: dp(14)
-                            paramId: "SHORT_FUEL_TRIM_1"
-                            value: 6
-                        }
-                    }
-
-                    // ── DigitalReadout ──────────────────────────────
-                    GalleryTile {
-                        title: "DigitalReadout"
-                        props: "paramId: SPEED · padDigits: 3 · valueScale: 5"
-                        Gauges.DigitalReadout {
-                            anchors.fill: parent
-                            paramId: "SPEED"
-                            value: 65
-                            padDigits: 3
-                            valueScale: 5
-                        }
-                    }
-
-                    // ── SparklineGauge (live) ───────────────────────
-                    GalleryTile {
-                        title: "SparklineGauge"
-                        props: "paramId: ENGINE_LOAD · live 500ms sampling · fillBelow"
-                        Gauges.SparklineGauge {
-                            anchors.fill: parent
-                            anchors.margins: dp(12)
-                            paramId: "ENGINE_LOAD"
-                            // Left live — in dev mode you see real motion;
-                            // on hardware without OBD, flat line at 0.
-                        }
-                    }
-
-                    // ── WarningLight (off + on + pulse) ─────────────
-                    GalleryTile {
-                        title: "WarningLight"
-                        props: "triggerAbove/Below · pulse (right is lit)"
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: dp(20)
-                            Item {
-                                width: dp(72); height: width
-                                Gauges.WarningLight {
-                                    anchors.fill: parent
-                                    paramId: "COOLANT_TEMP"
-                                    value: 85            // below trigger — off
-                                    triggerAbove: 110
-                                    label: "TEMP"
-                                }
-                            }
-                            Item {
-                                width: dp(72); height: width
-                                Gauges.WarningLight {
-                                    anchors.fill: parent
-                                    paramId: "COOLANT_TEMP"
-                                    value: 115           // above trigger — lit
-                                    triggerAbove: 110
-                                    label: "TEMP"
-                                    pulse: true
-                                }
-                            }
-                            Item {
-                                width: dp(72); height: width
-                                Gauges.WarningLight {
-                                    anchors.fill: parent
-                                    paramId: "FUEL_LEVEL"
-                                    value: 8
-                                    triggerBelow: 12
-                                    label: "FUEL"
-                                    activeColor: "#F1C40F"   // amber
                                 }
                             }
                         }

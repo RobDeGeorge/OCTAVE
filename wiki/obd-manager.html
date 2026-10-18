@@ -908,7 +908,6 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
           <tbody>
             <tr><td><code>OBDParameterModel.simulationActive</code></td><td>Dashboard editor "Demo data" button</td><td>Pure QML: every parameter sweeps a sine between its min and max with a per-parameter period (4-16 s) and phase, 10 Hz. While active, real backend writes are dropped; on deactivation <code>paramValues</code> is reset so fake readings never linger. The editor forces it off in <code>Component.onDestruction</code>.</td></tr>
             <tr><td><code>SimElm327Device</code> + <code>CarSim</code> (<span class="file-path">src/dev/</span>)</td><td>Dev mode (<code>octave --dev</code>, Debug builds)</td><td>Keeps the real manager and swaps the adapter underneath it: a <code>QIODevice</code> answering the AT init, every Mode 01 PID of the protocol tables (encoded with the inverse of the shipped decoders, all reported supported), DTC modes 03/04/07/0A, the freeze-frame DTC and a CAN multi-frame VIN. Bluetooth-like 35&ndash;70 ms replies with 2 % <code>NO DATA</code> in realistic mode; dropouts close the device so the real lost-link and reconnect paths run. Driven by the keyboard and the <code>sim_*</code> command-server actions (<a href="development.html#mock-obd">Development</a>).</td></tr>
-            <tr><td>Primitives Gallery</td><td>Dashboard chooser (dev/showcase screen)</td><td>Each gauge tile has hard-coded demo values; no model involvement.</td></tr>
           </tbody>
         </table>
 
