@@ -174,6 +174,8 @@ private slots:
     void _extract_colors_on_startup();
 
 private:
+    // tests/cpp checks the cover cache directly
+    friend class TstMediaManager;
     // ──────────────────────────────────────────────────────────────
     // Internal helpers
     // ──────────────────────────────────────────────────────────────

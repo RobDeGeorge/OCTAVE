@@ -1,0 +1,151 @@
+// Vehicle support gate, QML side: the real OBDParameterModel singleton and
+// DashboardRenderer against a fake `obdManager` with the gate API
+// (vehicleSupportedParameters / vehicleScanComplete / setParameterDemand).
+// Checks what the renderer shows before a scan, after one, and after the
+// vehicle disconnects. Ported from tests/test_vehicle_gate_qml.py.
+
+#include <QJSValue>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlEngine>
+#include <QTest>
+#include <QUrl>
+
+#include <memory>
+
+class FakeObd : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QStringList vehicleSupportedParameters MEMBER m_supported NOTIFY vehicleSupportedParametersChanged)
+    Q_PROPERTY(bool vehicleScanComplete MEMBER m_complete NOTIFY vehicleSupportedParametersChanged)
+
+public:
+    Q_INVOKABLE void setParameterDemand(const QString &consumer, const QStringList &ids) { demand[consumer] = ids; }
+
+    void scan(const QStringList &names, bool complete = true)
+    {
+        m_supported = names;
+        m_complete = complete;
+        emit vehicleSupportedParametersChanged();
+    }
+
+    QHash<QString, QStringList> demand;
+
+signals:
+    void vehicleSupportedParametersChanged();
+
+private:
+    QStringList m_supported;
+    bool m_complete = false;
+};
+
+namespace {
+const QString kFrontend = QStringLiteral(OCTAVE_SOURCE_DIR "/frontend");
+
+const char *kQml = R"qml(
+import QtQuick
+import "%1" as App
+import "%1/dashboards" as Dash
+
+Item {
+    id: root
+    width: 1200; height: 600
+    property var model: App.OBDParameterModel
+    Dash.DashboardRenderer {
+        objectName: "renderer"
+        anchors.fill: parent
+        spec: ({ gridColumns: 12, gridRows: 6, cells: [
+            { type: "DigitalReadout", paramId: "RPM",              col: 0, row: 0, colSpan: 6, rowSpan: 3 },
+            { type: "DigitalReadout", paramId: "BOOST_PRESSURE_A", col: 6, row: 0, colSpan: 6, rowSpan: 3 },
+            { type: "DigitalReadout", paramId: "PITCH",            col: 0, row: 3, colSpan: 6, rowSpan: 3 }
+        ] })
+    }
+    function supported(id) { return App.OBDParameterModel.isSupported(id) }
+    // Visual-tree lookup: Repeater delegates aren't QObject children
+    function _find(item, name) {
+        if (item.objectName === name) return item
+        for (var i = 0; i < item.children.length; i++) {
+            var hit = _find(item.children[i], name)
+            if (hit) return hit
+        }
+        return null
+    }
+    function placeholderVisible(i) {
+        var it = _find(root, "dashUnsupported_" + i)
+        return it ? it.visible : null
+    }
+    function vehicleIds() { return App.OBDParameterModel.vehicleParameters.map(function(p) { return p.id }) }
+}
+)qml";
+} // namespace
+
+class TstVehicleGate : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void gateFollowsTheScan()
+    {
+        QQmlEngine engine;
+        engine.addImportPath(kFrontend);
+        FakeObd obd;
+        engine.rootContext()->setContextProperty("obdManager", &obd);
+        QQmlComponent comp(&engine);
+        comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
+        std::unique_ptr<QObject> root(comp.create());
+        QVERIFY2(root, qPrintable(comp.errorString()));
+        QCoreApplication::processEvents();
+        m_root = root.get();
+
+        // No vehicle: nothing gated, Parameter Cards list empty
+        for (int i = 0; i < 3; ++i)
+            QCOMPARE(placeholder(i), false);
+        QCOMPARE(call("vehicleIds").toStringList(), QStringList());
+        QCOMPARE(call("supported", "PITCH").toBool(), true);    // sensors never gated
+        QCOMPARE(call("supported", "RPM").toBool(), false);     // unknown until scanned
+
+        // Scanned vehicle supports RPM + SPEED only
+        obd.scan({"RPM", "SPEED"});
+        QCoreApplication::processEvents();
+        QCOMPARE(placeholder(0), false);   // RPM supported
+        QCOMPARE(placeholder(1), true);    // BOOST not reported: placeholder
+        QCOMPARE(placeholder(2), false);   // PITCH is a sensor
+        QCOMPARE(call("vehicleIds").toStringList(), (QStringList{"SPEED", "RPM"}));   // allParameters order, OBD only
+
+        // Disconnect: gate lifts, list empties again
+        obd.scan({}, false);
+        QCoreApplication::processEvents();
+        for (int i = 0; i < 3; ++i)
+            QCOMPARE(placeholder(i), false);
+        QCOMPARE(call("vehicleIds").toStringList(), QStringList());
+        m_root = nullptr;
+    }
+
+private:
+    QVariant call(const char *method, const QVariant &arg = QVariant())
+    {
+        QVariant ret;
+        const bool ok = arg.isValid()
+            ? QMetaObject::invokeMethod(m_root, method, Q_RETURN_ARG(QVariant, ret), Q_ARG(QVariant, arg))
+            : QMetaObject::invokeMethod(m_root, method, Q_RETURN_ARG(QVariant, ret));
+        if (!ok)
+            qWarning() << "no QML function" << method;
+        if (ret.metaType() == QMetaType::fromType<QJSValue>())
+            ret = ret.value<QJSValue>().toVariant();
+        return ret;
+    }
+
+    // A placeholder's visibility; fails the test if it doesn't exist
+    bool placeholder(int index)
+    {
+        const QVariant v = call("placeholderVisible", index);
+        if (!v.isValid() || v.isNull())
+            QTest::qFail(qPrintable(QStringLiteral("placeholder %1 missing").arg(index)), __FILE__, __LINE__);
+        return v.toBool();
+    }
+
+    QObject *m_root = nullptr;
+};
+
+QTEST_MAIN(TstVehicleGate)
+#include "tst_vehiclegate.moc"

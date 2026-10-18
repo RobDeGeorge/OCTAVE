@@ -160,6 +160,8 @@ qt_add_executable(octave
     src/managers/audioanalyzer.cpp
     src/managers/downloadmanager.h
     src/managers/downloadmanager.cpp
+    src/managers/downloadutil.h
+    src/managers/downloadutil.cpp
     src/managers/elm327protocol.h
     src/managers/elm327protocol.cpp
     src/managers/obdmanager.h

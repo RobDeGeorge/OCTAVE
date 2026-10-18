@@ -152,6 +152,9 @@ private slots:
     void deliverAudio();
 
 private:
+    // tests/cpp feeds device messages and reads control bytes through a socket pair
+    friend class TstScrcpyClient;
+    friend class TstPhoneMirror;
     void session(QString displaySize, int maxFps, int bitRate, bool audio, bool stayAwake, QString attachScid);
     QTcpSocket *connectUntilReady(qint64 deadlineMs, bool startup = true);
     // interruptible: give up as soon as stop() is requested (false for cleanup calls)

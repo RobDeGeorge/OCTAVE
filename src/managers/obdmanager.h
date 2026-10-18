@@ -234,6 +234,12 @@ public:
     // 250 ms debounce. Mirrors Python OBDManager.setParameterDemand.
     Q_INVOKABLE void setParameterDemand(const QString &consumer, const QStringList &paramIds);
 
+    // The poll list for a demand set (consumer -> parameter ids) and this
+    // session's scan result: what buildPidsToWatch() uses. Static so the
+    // rules can be tested without a connection.
+    static QList<PidKey> pidsToWatch(const QHash<QString, QSet<QString>> &demand,
+                                     const QStringList &vehicleSupported);
+
     // Use `port` instead of the saved obdBluetoothPort, without writing it
     // to settings (dev tooling points this at the simulated adapter, see
     // src/dev/). Takes effect on the next connection attempt.

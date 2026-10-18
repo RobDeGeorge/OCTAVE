@@ -81,6 +81,9 @@ signals:
     void statusChanged();
 
 private:
+    // tests/cpp drives the pairing outcome and list order directly
+    friend class TstObdAdapterFinder;
+
     // Creates the QtBluetooth objects once org.bluez is on the system bus.
     // Never at startup otherwise: with bluetoothd stopped (or no adapter)
     // QBluetoothLocalDevice's constructor D-Bus-activates org.bluez and

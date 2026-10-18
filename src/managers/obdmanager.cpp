@@ -784,17 +784,21 @@ static const PidKey kRpmKey{1, 0x0C};
 
 QList<PidKey> OBDManager::buildPidsToWatch() const
 {
-    // Mirror of Python compute_poll_params().
+    return pidsToWatch(m_paramDemand, m_vehicleSupportedParameters);
+}
+
+QList<PidKey> OBDManager::pidsToWatch(const QHash<QString, QSet<QString>> &demand,
+                                      const QStringList &vehicleSupported)
+{
     QSet<QString> wanted;
-    for (auto it = m_paramDemand.constBegin(); it != m_paramDemand.constEnd(); ++it)
+    for (auto it = demand.constBegin(); it != demand.constEnd(); ++it)
         wanted.unite(it.value());
     wanted.subtract(imuParamIds());
 
     // Filter to this session's scan once it produced a result; an unknown or
     // empty result filters nothing (the adapter answers NO DATA, which the
     // decode paths already ignore).
-    const QSet<QString> supported(m_vehicleSupportedParameters.cbegin(),
-                                  m_vehicleSupportedParameters.cend());
+    const QSet<QString> supported(vehicleSupported.cbegin(), vehicleSupported.cend());
     auto ok = [&supported](const QString &id) { return supported.isEmpty() || supported.contains(id); };
 
     QList<PidKey> pids;
@@ -1433,7 +1437,10 @@ void OBDManager::startRfcommBind(const QString &mac)
         waitForRfcommNode(generation, 9);
     });
 
-    proc->start(QStringLiteral("rfcomm"),
+    // OCTAVE_RFCOMM_PROGRAM stands in for rfcomm in tests (tests/cpp)
+    const QString program = qEnvironmentVariableIsSet("OCTAVE_RFCOMM_PROGRAM")
+        ? qEnvironmentVariable("OCTAVE_RFCOMM_PROGRAM") : QStringLiteral("rfcomm");
+    proc->start(program,
                 QStringList() << QStringLiteral("bind")
                               << QStringLiteral("0") << mac
                               << QStringLiteral("1"));

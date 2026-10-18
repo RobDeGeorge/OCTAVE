@@ -168,6 +168,8 @@ public:
     // "WIFI:T:ADB;S:<service>;P:<password>;;" -- the payload Android's
     // "Pair device with QR code" scanner expects (Android Studio's format)
     static QString qrPairingPayload(const QString &service, const QString &password);
+    // "192.168.1.5:5555" -> "192.168.1.5", "[fe80::1]:5555" -> "fe80::1"
+    static QString hostOf(const QString &address);
     // How long a shown QR code waits for the phone to scan it
     static constexpr int kQrPairingTimeoutMs = 120000;
     // Factor other sources should currently apply: duck level while the phone
@@ -322,6 +324,8 @@ public slots:
     void releaseMedia(bool pausePhone);
 
 private:
+    // tests/cpp drives probes, media state and notices directly
+    friend class TstPhoneMirror;
     QString runAdb(const QStringList &args, int timeoutMs = 10000) const;
     // What a probe found (built on the probe thread, applied on the GUI thread)
     struct Probe {

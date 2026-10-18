@@ -34,8 +34,6 @@ static const QString kAutoDisplaySize = QStringLiteral("auto");
 // A view resize restarts an "auto" session once the size has settled
 static constexpr int kResizeRestartMs = 1500;
 
-static QString hostOf(const QString &address);
-
 // ─── Construction ─────────────────────────────────────────────────────
 
 PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
@@ -1206,8 +1204,7 @@ void PhoneMirrorManager::setConnectionType(const QString &type)
     emit connectionTypeChanged();
 }
 
-// "192.168.1.5:5555" -> "192.168.1.5", "[fe80::1]:5555" -> "fe80::1"
-static QString hostOf(const QString &address)
+QString PhoneMirrorManager::hostOf(const QString &address)
 {
     QString host = address.trimmed();
     const int colon = host.lastIndexOf(QLatin1Char(':'));

@@ -715,6 +715,10 @@ self._data_watchdog_timeout = <span class="num">30.0</span>          <span class
         </p>
         <h3>C++: <code>buildPidsToWatch()</code> / <code>applyPollList()</code></h3>
         <p>
+          The rules themselves are the public static <code>OBDManager::pidsToWatch(demand, vehicleSupported)</code>, which
+          <code>buildPidsToWatch()</code> calls with the current state; <code>tst_obdmanager</code> pins them.
+        </p>
+        <p>
           <code>startConnection()</code> hands the current <code>QList&lt;PidKey&gt;</code> (sorted by PID so the
           round-robin order is deterministic) to the worker before the thread starts. The debounce timer calls
           <code>applyPollList()</code>: while connected it rebuilds the list and queues

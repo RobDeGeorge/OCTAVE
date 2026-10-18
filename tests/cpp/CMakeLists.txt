@@ -36,6 +36,12 @@ octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_esp32readbuffer SOURCES managers/esp32volumemanager.h managers/esp32volumemanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui Qt6::SerialPort)
+octave_add_test(tst_downloadutil SOURCES managers/downloadutil.cpp)
+octave_add_test(tst_obdmanager
+    SOURCES managers/obdmanager.h managers/obdmanager.cpp
+            managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui Qt6::SerialPort)
 
 # Integration: the real OBD stack against the simulated adapter (src/dev/)
 if(OCTAVE_DEV_TOOLS)
@@ -46,3 +52,100 @@ if(OCTAVE_DEV_TOOLS)
                 dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
         LIBS Qt6::Gui Qt6::SerialPort)
 endif()
+
+# The adapter finder's hand-off connects to the simulated adapter (src/dev/)
+if(OCTAVE_DEV_TOOLS)
+    set(_finder_sources managers/obdadapterfinder.h managers/obdadapterfinder.cpp)
+    set(_finder_libs Qt6::Gui Qt6::SerialPort Qt6::Bluetooth)
+    set(_finder_defines)
+    if(TARGET Qt6::DBus)   # Linux: the BlueZ pairing agent, as in the app
+        list(APPEND _finder_sources platform/bluezpairer.h platform/bluezpairer.cpp)
+        list(APPEND _finder_libs Qt6::DBus)
+        list(APPEND _finder_defines OCTAVE_BLUEZ)
+    endif()
+    octave_add_test(tst_obdadapterfinder
+        SOURCES ${_finder_sources}
+                managers/obdmanager.h managers/obdmanager.cpp
+                managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+                managers/settingsmanager.h managers/settingsmanager.cpp
+                dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
+        LIBS ${_finder_libs}
+        DEFINES ${_finder_defines})
+endif()
+
+# MediaManager reads tags with TagLib, as the app does
+if(TARGET TagLib::tag)
+    set(_taglib TagLib::tag)
+else()
+    set(_taglib PkgConfig::TAGLIB)
+endif()
+octave_add_test(tst_mediamanager
+    SOURCES managers/mediamanager.h managers/mediamanager.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
+
+octave_add_test(tst_musicdeviceassets)
+octave_add_test(tst_vehiclegate LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+
+octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+
+# QML fixtures (tests/fixtures/), each run in its own qmlfixturehost process
+add_executable(qmlfixturehost qmlfixturehost.cpp
+    "${OCTAVE_SRC}/managers/settingsmanager.h" "${OCTAVE_SRC}/managers/settingsmanager.cpp"
+    "${OCTAVE_SRC}/util/assetstore.h" "${OCTAVE_SRC}/util/assetstore.cpp")
+target_include_directories(qmlfixturehost PRIVATE "${OCTAVE_SRC}" "${CMAKE_BINARY_DIR}/generated")
+target_compile_definitions(qmlfixturehost PRIVATE OCTAVE_SOURCE_DIR="${CMAKE_SOURCE_DIR}" OCTAVE_VERSION="${PROJECT_VERSION}")
+target_link_libraries(qmlfixturehost PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+set(_fixture_defines OCTAVE_QML_FIXTURE_HOST="$<TARGET_FILE:qmlfixturehost>")
+if(TARGET Qt6::WebEngineQuick)
+    target_link_libraries(qmlfixturehost PRIVATE Qt6::WebEngineQuick)
+    target_compile_definitions(qmlfixturehost PRIVATE OCTAVE_HAVE_WEBENGINE)
+    list(APPEND _fixture_defines OCTAVE_HAVE_WEBENGINE)
+endif()
+octave_add_test(tst_qmlfixtures DEFINES ${_fixture_defines})
+add_dependencies(tst_qmlfixtures qmlfixturehost)
+set_tests_properties(tst_qmlfixtures PROPERTIES TIMEOUT 300)
+
+# Phone mirror: the client (and the manager on top) with tests/cpp/fake-adb.sh
+# as adb; the decoding tests need libavcodec, as the app does
+set(_mirror_libs Qt6::Gui Qt6::Multimedia Qt6::Network)
+set(_mirror_defines)
+if(OCTAVE_HAVE_FFMPEG)
+    if(WIN32)
+        list(APPEND _mirror_libs ${FFMPEG_LIBRARIES})
+    else()
+        list(APPEND _mirror_libs PkgConfig::FFMPEG)
+    endif()
+    list(APPEND _mirror_defines OCTAVE_HAVE_FFMPEG)
+endif()
+octave_add_test(tst_scrcpyclient
+    SOURCES phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
+    LIBS ${_mirror_libs}
+    DEFINES ${_mirror_defines})
+if(WIN32 AND OCTAVE_HAVE_FFMPEG)
+    target_include_directories(tst_scrcpyclient PRIVATE ${FFMPEG_INCLUDE_DIRS})
+endif()
+octave_add_test(tst_phonemirror
+    SOURCES managers/phonemirrormanager.h managers/phonemirrormanager.cpp
+            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
+            phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS ${_mirror_libs}
+    DEFINES ${_mirror_defines})
+if(WIN32 AND OCTAVE_HAVE_FFMPEG)
+    target_include_directories(tst_phonemirror PRIVATE ${FFMPEG_INCLUDE_DIRS})
+endif()
+# The bundled phone server, as in the app (ScrcpyClient::available() checks it)
+qt_add_resources(tst_phonemirror "phone_server"
+    PREFIX "/phone-server"
+    BASE "${CMAKE_SOURCE_DIR}/tools/phone-server"
+    FILES "${CMAKE_SOURCE_DIR}/tools/phone-server/octave-phone-server")
+
+# The whole app boots (--smoke), and with the dev tooling --dev --profile too
+set(_boot_defines OCTAVE_APP_BINARY="$<TARGET_FILE:octave>")
+if(OCTAVE_DEV_TOOLS)
+    list(APPEND _boot_defines OCTAVE_DEV_TOOLS)
+endif()
+octave_add_test(tst_boot LIBS Qt6::Network DEFINES ${_boot_defines})
+add_dependencies(tst_boot octave)
+set_tests_properties(tst_boot PROPERTIES TIMEOUT 180)

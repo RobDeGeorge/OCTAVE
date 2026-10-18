@@ -305,7 +305,10 @@ DownloadManager
               <code>mediaManager.play_downloaded_song()</code>; artist/title differences from the source can still prevent an exact match. On desktop yt-dlp
               writes into the hidden staging dir <span class="file-path">&lt;downloadPath&gt;/.octave-partial/&lt;songId&gt;/</span>
               (Android writes straight to <code>&lt;downloadPath&gt;</code>); when nothing else is in flight, a new download
-              first sweeps leftovers from a power cut or mid-download quit out of <span class="file-path">.octave-partial/</span>.</li>
+              first sweeps leftovers from a power cut or mid-download quit out of <span class="file-path">.octave-partial/</span>.
+              The staging helpers, the yt-dlp search parser and the "already downloaded" library scan (which skips the
+              hidden staging dir) live in <span class="file-path">src/managers/downloadutil.{h,cpp}</span>, tested by
+              <code>tst_downloadutil</code>.</li>
             <li><strong>Finish</strong> -- on exit code 0 the last <code>Destination:</code> line in stdout gives the file path
               (falling back to the newest audio file in the song's staging dir). Desktop then runs
               <code>_embedMetadata()</code> and <code>_downloadCoverArt()</code> on the staged file; once the cover request ends
