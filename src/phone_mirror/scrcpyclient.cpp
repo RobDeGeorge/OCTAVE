@@ -569,6 +569,8 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
                                      : QLatin1String(kVideoCodecOptions);
     if (!codecOptions.isEmpty())
         opts << QStringLiteral("video_codec_options=") + codecOptions;
+    if (!m_videoEncoder.isEmpty())
+        opts << QStringLiteral("video_encoder=") + m_videoEncoder;
     if (!displaySize.isEmpty())
         opts << QStringLiteral("new_display=") + displaySize;
     if (attach) {

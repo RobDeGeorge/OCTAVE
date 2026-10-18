@@ -92,6 +92,19 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(QVariantList mediaQueue READ mediaQueue NOTIFY mediaQueueChanged)
     Q_PROPERTY(qint64 mediaQueueActiveId READ mediaQueueActiveId NOTIFY mediaQueueChanged)
     Q_PROPERTY(QString mediaQueueTitle READ mediaQueueTitle NOTIFY mediaQueueChanged)
+    // Last `adb devices` probe, refreshed off the GUI thread (refreshDeviceState):
+    // "device" | "unauthorized" | "offline" | "no-permissions" | "none" | "no-adb"
+    Q_PROPERTY(QString deviceState READ deviceState NOTIFY deviceStateChanged)
+    // Extra context for a phone that is not usable: an iPhone on USB, another
+    // adb server fighting this one. "" when there is nothing to add.
+    Q_PROPERTY(QString deviceHint READ deviceHint NOTIFY deviceStateChanged)
+    // Phones adb lists: [{serial, state, wireless, model, selected}]
+    // (model only for usable phones when more than one is listed)
+    Q_PROPERTY(QVariantList devices READ deviceList NOTIFY deviceStateChanged)
+    // Something about the running session the user should know but that does
+    // not stop it (touch blocked by the phone, no audio before Android 11,
+    // software encoder fallback). "" when all is well; cleared on each start.
+    Q_PROPERTY(QString mirrorNotice READ mirrorNotice NOTIFY mirrorNoticeChanged)
 
 public:
     explicit PhoneMirrorManager(QObject *parent = nullptr);
@@ -130,6 +143,28 @@ public:
     QVariantList mediaQueue() const { return m_mediaQueue; }
     qint64 mediaQueueActiveId() const { return m_mediaQueueActiveId; }
     QString mediaQueueTitle() const { return m_mediaQueueTitle; }
+    QString deviceState() const { return m_deviceState; }
+    QString deviceHint() const { return m_deviceHint; }
+    QVariantList deviceList() const;
+    QString mirrorNotice() const { return m_notices.join(QLatin1Char('\n')); }
+    // `adb devices` output -> (serial, state) rows. Skips the header and the
+    // "* daemon ..." start-up lines; "no permissions (...)" becomes "no-permissions".
+    static QList<QPair<QString, QString>> parseDevices(const QString &output);
+    // Rows -> the single state deviceState reports (best usable state wins)
+    static QString summarizeState(const QList<QPair<QString, QString>> &rows);
+    // Phone to mirror: the preferred serial when it is usable, else USB first
+    static QString pickSerial(const QList<QPair<QString, QString>> &rows, const QString &preferred);
+    // Classify a phone-server log line: "inject" (touch blocked), "no-audio"
+    // (Android < 11), "encoder" (video encoder failed), "" for anything else
+    static QString classifyServerLine(const QString &line);
+    // Software H.264 encoder used when the phone's hardware encoder fails
+    static QString softwareEncoderFor(int sdk);
+    // On-screen text for a mirrorNotice kind ("inject", "no-audio", "software-encoder")
+    static QString noticeText(const QString &kind);
+    // Phone audio capture arrived in Android 11
+    static constexpr int kAudioMinSdk = 30;
+    // An encoder error counts as the cause of a disconnect this soon after it
+    static constexpr int kFatalCauseWindowMs = 5000;
     // "WIFI:T:ADB;S:<service>;P:<password>;;" -- the payload Android's
     // "Pair device with QR code" scanner expects (Android Studio's format)
     static QString qrPairingPayload(const QString &service, const QString &password);
@@ -200,6 +235,8 @@ signals:
     void mediaQueueChanged();
     // main.cpp pauses OCTAVE's own sources when the phone takes over
     void mediaActiveChanged(bool active);
+    void deviceStateChanged();
+    void mirrorNoticeChanged();
 
 public slots:
     // Called by VolumeController on every volume change (0..1 linear);
@@ -239,14 +276,16 @@ public slots:
     void resumeMirroring();
     bool environmentOk();
     QString getInstallInstructions();
-    // "device" | "unauthorized" | "offline" | "none" | "no-adb"
+    // The cached deviceState; also schedules a refresh. Never blocks.
     QString getDeviceState();
+    // Probe `adb devices` on the probe thread; deviceStateChanged follows
+    void refreshDeviceState();
     static QString describeDeviceState(const QString &state);
     bool hasConnectedDevice();
-    QString getDeviceSerial();
-    QString getDeviceName();
-    QString getDeviceResolution();
-    int getDeviceSdk();
+    // Mirror this phone (from `devices`); restarts a session on another phone
+    void selectDevice(const QString &serial);
+    // Hide the current mirrorNotice
+    void dismissNotice();
     // Touch on the mirrored display: action 0 down, 1 up, 2 move; rel 0..1
     void injectTouch(int pointerId, int action, float relX, float relY);
     void injectKey(int keycode);
@@ -284,11 +323,30 @@ public slots:
 
 private:
     QString runAdb(const QStringList &args, int timeoutMs = 10000) const;
+    // What a probe found (built on the probe thread, applied on the GUI thread)
+    struct Probe {
+        QList<QPair<QString, QString>> rows;
+        QString state;
+        QString hint;
+        QHash<QString, QString> models;   // serial -> ro.product.model
+    };
+    // Blocking: run on m_probePool only
+    Probe probeDevices() const;
+    void applyProbe(const Probe &probe);
+    // Probe-thread part of startScrcpy; the result is handed to continueStart
+    struct StartPrep {
+        Probe probe;
+        QString serial;
+        int sdk = 0;
+    };
+    void continueStart(const StartPrep &prep, int generation);
+    void runProbeJob(std::function<void()> job);
+    void addNotice(const QString &notice);
+    void clearNotices();
     // Output and exit code whatever the result; safe from any thread
     QString runAdbFull(const QStringList &args, int timeoutMs, int *exitCode = nullptr) const;
     // ["-s", serial] for the phone getDeviceSerial() picks, [] when none
-    QStringList serialArgs();
-    QString describeProblem(const QString &state);
+    QString describeProblem(const QString &state, const QList<QPair<QString, QString>> &rows) const;
     // Blocking helpers for the wireless worker thread
     struct MdnsService { QString name; QString type; QString address; };
     QList<MdnsService> mdnsServices() const;
@@ -311,7 +369,6 @@ private:
     QString requestedDisplay() const;
     void restartSession();
     void setConnectionType(const QString &type);
-    QList<QPair<QString, QString>> devices() const;  // (serial, state)
     void killStaleServer();
     void onConnected(int w, int h);
     void onDisconnected(const QString &reason);
@@ -340,7 +397,7 @@ private:
     int m_displayDpi = 0;
     int m_bitRateUsbMbps = kDefaultUsbBitRateMbps;
     int m_bitRateWifiMbps = kDefaultWifiBitRateMbps;
-    bool m_autoWifi = true;
+    bool m_autoWifi = false;
     bool m_bitRateAuto = true;
     int m_currentBitRate = 0;
     bool m_tcpipChecked = false;    // the auto-Wi-Fi step ran for the session being started
@@ -371,6 +428,21 @@ private:
     QString m_persistScid;
     qint64 m_persistUntilMs = 0;
     bool m_attaching = false;
+
+    QString m_deviceState = QStringLiteral("none");
+    QString m_deviceHint;
+    QList<QPair<QString, QString>> m_deviceRows;
+    QHash<QString, QString> m_deviceModels;
+    QString m_preferredSerial;      // selectDevice()
+    QThreadPool m_probePool;        // adb devices / start prep, one at a time
+    bool m_probeRunning = false;
+    bool m_probeAgain = false;      // a refresh was asked for while one ran
+    QStringList m_notices;
+    QString m_fatalCause;           // classifyServerLine() of the session's fatal error
+    int m_sessionSdk = 0;
+    QString m_videoEncoder;         // "" = the phone's default (hardware) encoder
+    QString m_softwareEncoderSerial;  // phone whose hardware encoder failed this run
+    qint64 m_fatalCauseAtMs = 0;
 
     QString m_wirelessAddress;
     QString m_connectionType;

@@ -226,7 +226,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("scrcpyDisplayDpi")]        = 0;     // virtual display density, 0 = scaled from the phone's own
     d[QStringLiteral("scrcpyBitRateUsb")]        = 16;    // video bit rate over USB, Mbps
     d[QStringLiteral("scrcpyBitRateWifi")]       = 8;     // video bit rate over Wi-Fi, Mbps
-    d[QStringLiteral("scrcpyAutoWifi")]          = true;  // switch a USB phone to adb over TCP for later Wi-Fi use
+    d[QStringLiteral("scrcpyAutoWifi")]          = false; // switch a USB phone to adb over TCP for later Wi-Fi use (off: adb then listens on the network)
     d[QStringLiteral("scrcpyBitRateAuto")]       = true;  // adapt the bit rate to the link, rates above are the ceiling
     d[QStringLiteral("scrcpyWirelessAddress")]   = QString();  // last phone connected over Wi-Fi ("ip:port"), "" = none
 

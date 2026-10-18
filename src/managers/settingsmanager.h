@@ -647,7 +647,7 @@ private:
     int m_scrcpyDisplayDpi = 0;
     int m_scrcpyBitRateUsb = 16;
     int m_scrcpyBitRateWifi = 8;
-    bool m_scrcpyAutoWifi = true;
+    bool m_scrcpyAutoWifi = false;
     bool m_scrcpyBitRateAuto = true;
     QString m_scrcpyWirelessAddress;
 

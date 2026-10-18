@@ -1355,7 +1355,8 @@ Rectangle {
                             id: phoneMirrorButton
                             implicitWidth: App.Spacing.bottomBarNavButtonWidth
                             implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: (typeof isAndroid === "undefined" || !isAndroid) && (settingsManager ? settingsManager.phoneMirrorEnabled : false)
+                            visible: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.nativeAvailable
+                                     && (settingsManager ? settingsManager.phoneMirrorEnabled : false)
 
                             background: Rectangle {
                                 color: "transparent"
@@ -2378,7 +2379,8 @@ Rectangle {
                             id: phoneMirrorButtonVertical
                             implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
                             implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: (typeof isAndroid === "undefined" || !isAndroid) && (settingsManager ? settingsManager.phoneMirrorEnabled : false)
+                            visible: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.nativeAvailable
+                                     && (settingsManager ? settingsManager.phoneMirrorEnabled : false)
                             Layout.alignment: Qt.AlignHCenter
 
                             background: Rectangle {

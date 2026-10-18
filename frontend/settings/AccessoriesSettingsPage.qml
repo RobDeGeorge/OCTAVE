@@ -1946,7 +1946,7 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "Each time the phone is mirrored over USB, OCTAVE turns on adb over Wi-Fi on it and remembers its address. Later it connects without a cable and without the Wireless debugging toggle, until the phone restarts. The phone and OCTAVE must be on the same Wi-Fi network; no internet is needed."
+                        text: "Each time the phone is mirrored over USB, OCTAVE turns on adb over Wi-Fi on it and remembers its address. Later it connects without a cable and without the Wireless debugging toggle, until the phone restarts. The phone and OCTAVE must be on the same Wi-Fi network; no internet is needed. Until the phone restarts, adb on it accepts connections from any network it joins, so only turn this on if you mirror on networks you trust. QR pairing is the safer way to go wireless."
                     }
 
                     SettingsToggle {
@@ -1955,7 +1955,7 @@ Flickable {
                         Layout.fillWidth: false
                         Layout.alignment: Qt.AlignLeft
                         text: "Enable Wi-Fi when plugged in"
-                        checked: settingsManager ? settingsManager.scrcpyAutoWifi : true
+                        checked: settingsManager ? settingsManager.scrcpyAutoWifi : false
                         activeColor: App.Style.accent
                         inactiveColor: App.Style.hoverColor
 

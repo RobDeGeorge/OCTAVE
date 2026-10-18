@@ -1124,6 +1124,10 @@
             <tr><td><code>mediaQueue</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Phone queue entries: <code>{id, title, artist, art_uri, art}</code>; <code>art</code> is a local JPEG URL, initially empty</td></tr>
             <tr><td><code>mediaQueueActiveId</code></td><td><code>qint64</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Playing queue item ID; <code>-1</code> when absent</td></tr>
             <tr><td><code>mediaQueueTitle</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Queue title supplied by the phone app</td></tr>
+            <tr><td><code>deviceState</code></td><td><code>QString</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td>Last <code>adb devices</code> probe (run off the GUI thread): <code>"device"</code> / <code>"unauthorized"</code> / <code>"no-permissions"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code></td></tr>
+            <tr><td><code>deviceHint</code></td><td><code>QString</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td>iPhone on USB / adb server clash text, <code>""</code> otherwise</td></tr>
+            <tr><td><code>devices</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td><code>[{serial, state, wireless, model, selected}]</code>; feeds the phone picker</td></tr>
+            <tr><td><code>mirrorNotice</code></td><td><code>QString</code></td><td>read-only</td><td><code>mirrorNoticeChanged</code></td><td>Non-fatal notices for the running session (touch blocked, no audio, software encoder)</td></tr>
             <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>read-only</td><td><code>mediaActiveChanged(bool)</code></td><td>The phone has OCTAVE's media controls from the first session report, even when paused or no app is playing. Cleared by <code>releaseMedia()</code> or disconnect; after release, resumed phone playback takes control again</td></tr>
           </tbody>
         </table>
@@ -1147,13 +1151,12 @@
             <tr><td><code>resumeMirroring()</code></td><td><code>void</code></td><td>Leave the in-use state: wake the phone if needed and re-apply screen-off</td></tr>
             <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Everything OCTAVE needs is present (same as <code>nativeAvailable</code>); a failure is then about the phone</td></tr>
             <tr><td><code>getInstallInstructions()</code></td><td><code>QString</code></td><td>User-facing setup help text</td></tr>
-            <tr><td><code>getDeviceState()</code></td><td><code>QString</code></td><td><code>"device"</code> / <code>"unauthorized"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code></td></tr>
+            <tr><td><code>getDeviceState()</code></td><td><code>QString</code></td><td>The cached <code>deviceState</code>; schedules a refresh, never blocks</td></tr>
+            <tr><td><code>refreshDeviceState()</code></td><td><code>void</code></td><td>Probe <code>adb devices</code> off the GUI thread; <code>deviceStateChanged</code> follows</td></tr>
+            <tr><td><code>selectDevice(QString serial)</code></td><td><code>void</code></td><td>Mirror this phone; restarts a session running on another one</td></tr>
+            <tr><td><code>dismissNotice()</code></td><td><code>void</code></td><td>Hide <code>mirrorNotice</code></td></tr>
             <tr><td><code>describeDeviceState(QString state)</code> <span class="platform-badge desktop">C++ only</span></td><td><code>QString</code></td><td>Human-readable explanation of a device state (Python has it as a static method, not a slot)</td></tr>
-            <tr><td><code>hasConnectedDevice()</code></td><td><code>bool</code></td><td>An authorised device is attached</td></tr>
-            <tr><td><code>getDeviceSerial()</code></td><td><code>QString</code></td><td>adb serial of the device</td></tr>
-            <tr><td><code>getDeviceName()</code></td><td><code>QString</code></td><td><code>ro.product.model</code></td></tr>
-            <tr><td><code>getDeviceResolution()</code></td><td><code>QString</code></td><td>Physical size from <code>wm size</code></td></tr>
-            <tr><td><code>getDeviceSdk()</code></td><td><code>int</code></td><td>Android SDK level</td></tr>
+            <tr><td><code>hasConnectedDevice()</code></td><td><code>bool</code></td><td>The cached state is <code>"device"</code></td></tr>
             <tr><td><code>injectTouch(int pointerId, int action, float relX, float relY)</code></td><td><code>void</code></td><td>Multitouch on the mirrored display: action 0 down / 1 up / 2 move; coordinates relative 0&ndash;1</td></tr>
             <tr><td><code>injectKey(int keycode)</code></td><td><code>void</code></td><td>Send an Android keycode</td></tr>
             <tr><td><code>pressHome()</code></td><td><code>void</code></td><td>HOME; on a virtual display launches the launcher there via <code>am start --display</code> because HOME is routed to the default display</td></tr>
@@ -1197,6 +1200,8 @@
             <tr><td><code>wirelessAddressChanged(QString address)</code></td><td>Remembered Wi-Fi phone changed (paired, moved to a new port, forgotten); <code>main</code> saves it with <code>save_scrcpy_wireless_address</code></td></tr>
             <tr><td><code>connectionTypeChanged()</code> / <code>wirelessBusyChanged()</code></td><td>Property notifications</td></tr>
             <tr><td><code>wirelessResult(bool ok, QString message)</code></td><td>Outcome of QR pairing, message ready to show</td></tr>
+            <tr><td><code>deviceStateChanged()</code></td><td>A probe changed <code>deviceState</code>, <code>deviceHint</code> or <code>devices</code> (also emitted when a session starts, for <code>selected</code>)</td></tr>
+            <tr><td><code>mirrorNoticeChanged()</code></td><td><code>mirrorNotice</code> changed</td></tr>
             <tr><td><code>qrPairingChanged()</code></td><td>Notify for <code>qrPairingRows</code> / <code>qrPairingActive</code></td></tr>
             <tr><td><code>currentBitRateChanged()</code></td><td>Notify for <code>currentBitRate</code></td></tr>
           </tbody>

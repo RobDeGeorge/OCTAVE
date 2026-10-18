@@ -120,7 +120,7 @@
                   <td><code>ScrcpyClient</code></td><td>One session: server push/launch or attach, sockets, demux, decode, black-frame hold, audio playback, control and device messages</td></tr>
               <tr><td><span class="file-path">phone_server/src/main/java/org/octave/phoneserver/</span></td>
                   <td><code>Server</code>, <code>DesktopConnection</code>, <code>Streamer</code>, <code>Controller</code>, <code>MirrorKeeper</code>, <code>NewDisplayCapture</code>, <code>CleanUp</code></td><td>The program running on the phone</td></tr>
-              <tr><td><span class="file-path">frontend/PhoneMirrorView.qml</span></td><td>--</td><td><code>VideoOutput</code> + <code>MultiPointTouchArea</code> + nav row, reconnect and asleep overlays, error/retry screen</td></tr>
+              <tr><td><span class="file-path">frontend/PhoneMirrorView.qml</span></td><td>--</td><td><code>VideoOutput</code> + <code>MultiPointTouchArea</code> + nav row, reconnect and asleep overlays, notice banner, phone picker, error/retry screen</td></tr>
               <tr><td><span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td><td>--</td><td>Phone mirror settings card (Wi-Fi QR pairing, display size, phone screen, audio, gain, ducking, status line)</td></tr>
             </tbody>
           </table>
@@ -162,6 +162,10 @@
               <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<code>&lt;app data&gt;/temp/phone_media_art_{0,1}.jpg</code>, alternating so QML reloads), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
               <tr><td><code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td><td><code>list</code>, <code>qint64</code>, <code>str</code></td><td>Phone app’s published play queue, current item ID (<code>-1</code> for none), and queue title; notify <code>mediaQueueChanged</code>. Each entry has <code>id</code>, <code>title</code>, <code>artist</code>, <code>art_uri</code> and a local <code>art</code> URL</td></tr>
               <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>The phone is the source OCTAVE's media controls drive; notify <code>mediaActiveChanged(bool)</code></td></tr>
+              <tr><td><code>deviceState</code></td><td><code>str</code></td><td>Last <code>adb devices</code> probe: <code>"device"</code> / <code>"unauthorized"</code> / <code>"no-permissions"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code> (best usable state wins when several phones are listed). Probes run on a one-thread probe pool, never on the GUI thread; notify <code>deviceStateChanged</code></td></tr>
+              <tr><td><code>deviceHint</code></td><td><code>str</code></td><td>Extra context the probe found: an iPhone on USB (Linux sysfs, Apple vendor <code>05ac</code>, product <code>0x1290</code>&ndash;<code>0x12af</code>), or another adb server fighting this one (<code>"doesn't match this client"</code>). <code>""</code> otherwise; shown under the QR screen and the error text</td></tr>
+              <tr><td><code>devices</code></td><td><code>list</code></td><td><code>[{serial, state, wireless, model, selected}]</code> for every phone adb lists. <code>model</code> (<code>ro.product.model</code>) is fetched only when more than one is usable; <code>selected</code> marks the running session's phone. Drives the phone picker</td></tr>
+              <tr><td><code>mirrorNotice</code></td><td><code>str</code></td><td>Notices for the running session that do not stop it, joined by newlines: touch blocked by the phone (server <code>INJECT_EVENTS</code> error, Xiaomi), no audio before Android 11, software-encoder fallback. Cleared at every start and by <code>dismissNotice()</code>; notify <code>mirrorNoticeChanged</code></td></tr>
             </tbody>
           </table>
           <h4>Signals</h4>
@@ -182,6 +186,7 @@
               <tr><td><code>currentBitRateChanged</code>, <code>mediaChanged</code>, <code>mediaArtChanged</code>, <code>mediaQueueChanged</code></td><td>--</td><td>Property notifications</td></tr>
               <tr><td><code>mediaActiveChanged</code></td><td><code>bool</code></td><td>The phone takes or releases OCTAVE’s media controls</td></tr>
               <tr><td><code>wirelessResult</code></td><td><code>bool, str</code></td><td>Outcome of QR pairing, message ready to show</td></tr>
+              <tr><td><code>deviceStateChanged</code>, <code>mirrorNoticeChanged</code></td><td>--</td><td>Property notifications (<code>deviceStateChanged</code> covers <code>deviceState</code>, <code>deviceHint</code> and <code>devices</code>)</td></tr>
             </tbody>
           </table>
           <h4>Slots</h4>
@@ -189,8 +194,10 @@
             <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td><code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>cleanup()</code></td><td>--</td><td>Session lifecycle (singleton). <code>startScrcpy()</code> re-emits <code>scrcpyStarted(1)</code> if a session is already ready; a deliberate stop also runs <code>adb shell pkill -f org.octave.phoneserver</code></td></tr>
-              <tr><td><code>getDeviceState()</code></td><td><code>str</code></td><td><code>"device"</code> / <code>"unauthorized"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code>, from <code>adb devices</code></td></tr>
-              <tr><td><code>hasConnectedDevice()</code>, <code>getDeviceSerial()</code>, <code>getDeviceName()</code>, <code>getDeviceResolution()</code>, <code>getDeviceSdk()</code></td><td>various</td><td>adb probes (<code>getprop ro.product.model</code>, <code>wm size</code>, <code>getprop ro.build.version.sdk</code>)</td></tr>
+              <tr><td><code>refreshDeviceState()</code></td><td>--</td><td>Probe <code>adb devices</code> on the probe thread; <code>deviceStateChanged</code> follows. A request while a probe runs re-runs it once afterwards</td></tr>
+              <tr><td><code>getDeviceState()</code>, <code>hasConnectedDevice()</code></td><td><code>str</code>, <code>bool</code></td><td>The cached <code>deviceState</code> (they also schedule a refresh). Never block; the blocking <code>getDeviceSerial()</code> / <code>getDeviceName()</code> / <code>getDeviceResolution()</code> / <code>getDeviceSdk()</code> probes were removed in 0.9.5</td></tr>
+              <tr><td><code>selectDevice(serial)</code></td><td>--</td><td>Mirror this phone from now on (the picker); a running session on another phone restarts. Otherwise the pick is USB first, then Wi-Fi</td></tr>
+              <tr><td><code>dismissNotice()</code></td><td>--</td><td>Hide the current <code>mirrorNotice</code></td></tr>
               <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Same as <code>nativeAvailable</code>; the view shows setup text only when false</td></tr>
               <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing (decoder / jar / adb), or the USB-debugging steps</td></tr>
               <tr><td><code>setDisplaySize(str)</code>, <code>setDisplayDpi(int)</code>, <code>setBitRateUsb(int)</code>, <code>setBitRateWifi(int)</code></td><td>--</td><td>Restart a running session (stop, then start 300 ms later); a bit-rate change only restarts a session on that link</td></tr>
@@ -217,10 +224,12 @@
           <p>After manager preflight, session setup and video decoding run on the client's worker thread (C++ <code>std::thread</code> named <code>scrcpy-client</code>;
             Python daemon thread of the same name). The sequence and the launch arguments are identical in both backends.</p>
           <ol class="steps">
-            <li><strong>Preflight</strong> (manager, GUI thread): <code>nativeAvailable</code>, then <code>getDeviceState()</code> must
-              be <code>"device"</code>, then the serial. C++ additionally extracts the embedded jar to
-              <code>&lt;temp&gt;/octave-phone-server-3.3.4-octave</code> (reused when the size matches). Unless attaching to a
-              persisted session, a stale server is killed first: <code>adb shell pkill -f org.octave.phoneserver</code>.</li>
+            <li><strong>Preflight</strong>: <code>nativeAvailable</code> on the GUI thread; then, on the probe thread (so a dead
+              Wi-Fi link or an adb restart never freezes the dash), <code>adb devices</code>, the phone to use (the one picked with
+              <code>selectDevice()</code>, else USB first), and unless attaching to a persisted session a stale-server kill
+              (<code>adb shell pkill -f org.octave.phoneserver</code>) and <code>getprop ro.build.version.sdk</code>. The result is handed
+              back to the GUI thread, which drops it if <code>stopScrcpy()</code> ran meanwhile (a generation counter). C++ additionally
+              extracts the embedded jar to <code>&lt;temp&gt;/octave-phone-server-3.3.4-octave</code> (reused when the size matches).</li>
             <li><strong>Push</strong> the jar to <code>/data/local/tmp/octave-phone-server.jar</code> -- every session, because
               <code>cleanup=true</code> starts a CleanUp helper that unlinks the pushed jar as soon as the server is up.</li>
             <li><strong>Tunnel</strong>: pick a random 31-bit scid (C++ <code>QRandomGenerator::system()</code>, Python
@@ -564,7 +573,7 @@
             <li><strong>Bit rate</strong>: per link from the settings, <code>scrcpyBitRateUsb</code> (default 16 Mbps) and
               <code>scrcpyBitRateWifi</code> (default 8 Mbps). With <code>scrcpyBitRateAuto</code> (default on) those are the ceiling and
               the rate adapts; see <a href="#pm-adaptive">Adaptive quality</a>.</li>
-            <li><strong>Wi-Fi without re-pairing</strong> (<code>scrcpyAutoWifi</code>, on by default): before a USB session the manager
+            <li><strong>Wi-Fi without re-pairing</strong> (<code>scrcpyAutoWifi</code>, off by default since 0.9.5: until the phone reboots, its adbd then accepts connections on whatever network it joins): before a USB session the manager
               reads the phone's Wi-Fi IPv4 from <code>ip -4 -o addr show</code> (a <code>wlan*</code> interface first, then a phone-run hotspot
               <code>swlan*</code> / <code>ap*</code>; mobile data and VPNs are skipped). If <code>service.adb.tcp.port</code> is not already 5555
               it runs <code>adb tcpip 5555</code>, which restarts the phone's adbd, and waits up to 9 s for the USB device to return. It then
@@ -640,9 +649,28 @@
         <section id="pm-recovery">
           <h3>Errors and recovery</h3>
           <p>A missing prerequisite is reported with <code>getInstallInstructions()</code> naming it and the view shows a "Setup" block.
-            Phone-side failures (unplugged, offline, USB debugging not authorized) get the one-line <code>describeDeviceState()</code>
-            text; the error page then polls <code>getDeviceState()</code> every 2 s while it is on screen and restarts on its own when the
-            phone is back -- a nudged cable in a vehicle is the normal case. The bottom-bar button pops back to an existing
+            Phone-side failures (unplugged, offline, USB debugging not authorized, Linux USB "no permissions") get the one-line
+            <code>describeDeviceState()</code> text; the error page then asks for a probe (<code>refreshDeviceState()</code>) every 2 s
+            while it is on screen and restarts on <code>deviceStateChanged</code> when the phone is back -- a nudged cable in a vehicle
+            is the normal case. Failures that retrying cannot fix (the video encoder) stop the loop.</p>
+          <p><strong>Encoder fallback</strong>: when the server logs a video encoder error (<code>Capture/encoding error</code>,
+            <code>Video encoding error</code>, <code>Could not create (default) video encoder</code>) and the session drops within 5 s,
+            the manager restarts once with <code>video_encoder=c2.android.avc.encoder</code> (Google's software encoder;
+            <code>OMX.google.h264.encoder</code> before Android 10) and keeps using it for that phone until OCTAVE restarts, with a
+            notice. If the software encoder fails too, the view shows the cause and stops retrying.</p>
+          <table>
+            <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+            <tbody>
+              <tr><td>"USB permissions keep adb from opening it" (Linux)</td><td><code>adb devices</code> says <code>no permissions</code>: no udev rule for the phone's vendor</td><td><code>sudo cp packaging/linux/51-android.rules /etc/udev/rules.d/ &amp;&amp; sudo udevadm control --reload-rules &amp;&amp; sudo udevadm trigger</code>, then replug</td></tr>
+              <tr><td>Picture works, touch does nothing; notice about Xiaomi</td><td>MIUI / HyperOS block input injection (<code>INJECT_EVENTS</code>)</td><td>Developer options &gt; "USB debugging (Security settings)", then restart the phone</td></tr>
+              <tr><td>Phone keeps dropping; hint about another adb</td><td>Android Studio or a distro adb of another version restarts the adb server (<code>server version ... doesn't match this client</code>), which kills OCTAVE's forwards</td><td>Close the other tool, or point both at the same adb</td></tr>
+              <tr><td>"An iPhone is plugged in"</td><td>Mirroring needs adb, i.e. Android</td><td>--</td></tr>
+              <tr><td>No sound from the phone; notice about Android 10</td><td>Audio capture arrived in Android 11</td><td>Sound stays on the phone</td></tr>
+              <tr><td>"video encoder failed, even in software mode"</td><td>The phone's encoder rejects the size</td><td>A smaller <code>scrcpyDisplaySize</code>, or mirror the phone screen</td></tr>
+              <tr><td>Two phones connected</td><td>USB is picked first</td><td>The &#8644; button (top left of the mirror) switches phones</td></tr>
+            </tbody>
+          </table>
+          <p> The bottom-bar button pops back to an existing
             <code>PhoneMirrorView</code> (found by <code>objectName</code>) instead of stacking a second one, and the view resumes a session that
             is already running.</p>
           <p><strong>Why not QtMultimedia's Camera?</strong> The design before the built-in client streamed scrcpy into a v4l2loopback node
@@ -692,7 +720,7 @@
               <tr><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code></td><td>Virtual display size (<code>new_display=</code>); <code>"auto"</code> = the view's pixel size, <code>""</code> = phone screen (the "Display Mode" control picks Mirror Phone <code>""</code> or Desktop (DeX) <code>"auto"</code>). The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyDisplayDpi</code></td><td>0</td><td>Appended as <code>new_display=WxH/dpi</code>; 0 = the server scales the phone's own density</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code></td><td>16 / 8</td><td><code>video_bit_rate</code> in Mbps for that link</td><td>restarts a session on that link</td></tr>
-              <tr><td><code>scrcpyAutoWifi</code></td><td>true</td><td><code>adb tcpip 5555</code> before a USB session; remembers <code>ip:5555</code></td><td>next USB start</td></tr>
+              <tr><td><code>scrcpyAutoWifi</code></td><td>false</td><td><code>adb tcpip 5555</code> before a USB session; remembers <code>ip:5555</code></td><td>next USB start</td></tr>
               <tr><td><code>scrcpyBitRateAuto</code></td><td>true</td><td>Adaptive quality; the per-link rates become the ceiling</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyPhoneScreenOff</code></td><td>false</td><td>Keeper <code>panelDark</code></td><td>live (<code>OCTAVE_SET_KEEPER</code>)</td></tr>
               <tr><td><code>scrcpyWirelessAddress</code></td><td><code>""</code></td><td>Phone last connected over Wi-Fi; written by the manager (<code>wirelessAddressChanged</code> &rarr; <code>save_scrcpy_wireless_address</code>)</td><td>startup + live</td></tr>

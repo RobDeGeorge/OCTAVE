@@ -54,6 +54,8 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     }
     // Wireless jobs run one at a time, so a reconnect never races a pairing
     m_wirelessPool.setMaxThreadCount(1);
+    // adb probes and start prep: one at a time, never behind a 2-minute QR wait
+    m_probePool.setMaxThreadCount(1);
     m_resizeTimer.setSingleShot(true);
     m_resizeTimer.setInterval(kResizeRestartMs);
     m_queueArtTimer.setSingleShot(true);
@@ -75,6 +77,8 @@ PhoneMirrorManager::~PhoneMirrorManager()
     ++m_qrGeneration;   // a QR pairing wait gives up within a second
     m_wirelessPool.clear();
     m_wirelessPool.waitForDone();
+    m_probePool.clear();
+    m_probePool.waitForDone();
 }
 
 // ─── Availability / environment ───────────────────────────────────────
@@ -228,47 +232,203 @@ QString PhoneMirrorManager::runAdbFull(const QStringList &args, int timeoutMs, i
     return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
 }
 
-QStringList PhoneMirrorManager::serialArgs()
+QList<QPair<QString, QString>> PhoneMirrorManager::parseDevices(const QString &output)
 {
-    // With a phone on both USB and Wi-Fi (or two phones) a bare `adb shell`
-    // fails with "more than one device", so every probe names its phone.
-    const QString serial = getDeviceSerial();
-    if (serial.isEmpty())
-        return {};
-    return {QStringLiteral("-s"), serial};
-}
-
-QList<QPair<QString, QString>> PhoneMirrorManager::devices() const
-{
+    // "List of devices attached", then "<serial>\t<state>" per phone. adb
+    // prints "* daemon not running; starting now ..." lines first when it
+    // has to start its server, and "no permissions (user in plugdev group;
+    // are your udev rules wrong?); see [...]" as the state of a USB phone
+    // this user may not open.
     QList<QPair<QString, QString>> rows;
-    const QStringList lines = runAdb({QStringLiteral("devices")}).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-    for (int i = 1; i < lines.size(); ++i) {
-        const QStringList parts = lines[i].split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
-        if (parts.size() >= 2)
-            rows.append({parts[0], parts[1]});
+    static const QRegularExpression ws(QStringLiteral("\\s+"));
+    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (const QString &raw : lines) {
+        const QString line = raw.trimmed();
+        if (line.isEmpty() || line.startsWith(QLatin1Char('*')) || line.startsWith(QLatin1String("List of devices"))
+            || line.startsWith(QLatin1String("adb server")) || line.startsWith(QLatin1String("adb:")))
+            continue;
+        const int split = line.indexOf(ws);
+        if (split <= 0)
+            continue;
+        const QString serial = line.left(split);
+        const QString rest = line.mid(split).trimmed();
+        QString state = rest.section(ws, 0, 0);
+        if (rest.startsWith(QLatin1String("no permissions")))
+            state = QStringLiteral("no-permissions");
+        if (!state.isEmpty())
+            rows.append({serial, state});
     }
     return rows;
+}
+
+QString PhoneMirrorManager::summarizeState(const QList<QPair<QString, QString>> &rows)
+{
+    // The most useful state wins: a usable phone, then the ones the user can fix
+    static const char *const kOrder[] = {"device", "unauthorized", "no-permissions", "offline"};
+    for (const char *wanted : kOrder)
+        for (const auto &r : rows)
+            if (r.second == QLatin1String(wanted))
+                return r.second;
+    return QStringLiteral("none");
+}
+
+QString PhoneMirrorManager::pickSerial(const QList<QPair<QString, QString>> &rows, const QString &preferred)
+{
+    // The phone picked in the UI, then USB (the faster, steadier link when
+    // the phone is on both), then Wi-Fi
+    QString usb;
+    QString wireless;
+    for (const auto &d : rows) {
+        if (d.second != QLatin1String("device"))
+            continue;
+        if (!preferred.isEmpty() && d.first == preferred)
+            return d.first;
+        if (!ScrcpyClient::isNetworkSerial(d.first)) {
+            if (usb.isEmpty())
+                usb = d.first;
+        } else if (wireless.isEmpty()) {
+            wireless = d.first;
+        }
+    }
+    return usb.isEmpty() ? wireless : usb;
+}
+
+// An iPhone or iPad on USB (Apple's vendor id with an iOS-device product id).
+// Linux only, from sysfs; elsewhere it is not worth a USB library.
+static bool iosDeviceOnUsb()
+{
+#ifdef Q_OS_LINUX
+    const QDir dir(QStringLiteral("/sys/bus/usb/devices"));
+    const QStringList entries = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &entry : entries) {
+        QFile vendor(dir.filePath(entry + QStringLiteral("/idVendor")));
+        if (!vendor.open(QIODevice::ReadOnly) || vendor.readAll().trimmed() != "05ac")
+            continue;
+        QFile product(dir.filePath(entry + QStringLiteral("/idProduct")));
+        if (!product.open(QIODevice::ReadOnly))
+            continue;
+        bool ok = false;
+        const int pid = QString::fromLatin1(product.readAll().trimmed()).toInt(&ok, 16);
+        if (ok && pid >= 0x1290 && pid <= 0x12af)
+            return true;
+    }
+#endif
+    return false;
+}
+
+PhoneMirrorManager::Probe PhoneMirrorManager::probeDevices() const
+{
+    Probe probe;
+    const QString out = runAdbFull({QStringLiteral("devices")}, 10000);
+    probe.rows = parseDevices(out);
+    probe.state = summarizeState(probe.rows);
+    if (out.contains(QLatin1String("doesn't match this client")) || out.contains(QLatin1String("does not match this client")))
+        probe.hint = QStringLiteral("Another adb (Android Studio, or a system adb of a different version) keeps "
+                                    "restarting the adb server, which drops the phone. Close it, or make both use "
+                                    "the same adb.");
+    else if (probe.state == QLatin1String("none") && iosDeviceOnUsb())
+        probe.hint = QStringLiteral("An iPhone is plugged in. Phone mirroring works with Android phones only.");
+    // Names for the picker, only when there is something to pick
+    int usable = 0;
+    for (const auto &r : std::as_const(probe.rows))
+        usable += r.second == QLatin1String("device");
+    if (usable > 1) {
+        for (const auto &r : std::as_const(probe.rows)) {
+            if (r.second != QLatin1String("device"))
+                continue;
+            probe.models.insert(r.first, runAdbFull({QStringLiteral("-s"), r.first, QStringLiteral("shell"),
+                                                     QStringLiteral("getprop"), QStringLiteral("ro.product.model")},
+                                                    3000));
+        }
+    }
+    return probe;
+}
+
+void PhoneMirrorManager::runProbeJob(std::function<void()> job)
+{
+    m_probePool.start(std::move(job));
+}
+
+void PhoneMirrorManager::refreshDeviceState()
+{
+    if (m_adbPath.isEmpty()) {
+        Probe probe;
+        probe.state = QStringLiteral("no-adb");
+        applyProbe(probe);
+        return;
+    }
+    if (m_probeRunning) {
+        m_probeAgain = true;
+        return;
+    }
+    m_probeRunning = true;
+    runProbeJob([this]() {
+        const Probe probe = probeDevices();
+        QMetaObject::invokeMethod(this, [this, probe]() {
+            m_probeRunning = false;
+            applyProbe(probe);
+            if (m_probeAgain) {
+                m_probeAgain = false;
+                refreshDeviceState();
+            }
+        }, Qt::QueuedConnection);
+    });
+}
+
+void PhoneMirrorManager::applyProbe(const Probe &probe)
+{
+    // Keep known model names: a probe only fetches them with several phones
+    QHash<QString, QString> models = m_deviceModels;
+    for (auto it = probe.models.cbegin(); it != probe.models.cend(); ++it)
+        if (!it.value().isEmpty())
+            models.insert(it.key(), it.value());
+    const bool changed = probe.state != m_deviceState || probe.hint != m_deviceHint || probe.rows != m_deviceRows
+                         || models != m_deviceModels;
+    m_deviceState = probe.state;
+    m_deviceHint = probe.hint;
+    m_deviceRows = probe.rows;
+    m_deviceModels = models;
+    if (changed)
+        emit deviceStateChanged();
+    // Nothing usable: if a Wi-Fi phone is remembered, try to reach it in the
+    // background (throttled). The view keeps refreshing, so it is retried for free.
+    if (m_deviceState != QLatin1String("device") && m_deviceState != QLatin1String("no-adb"))
+        maybeReconnectWireless();
+}
+
+QVariantList PhoneMirrorManager::deviceList() const
+{
+    QVariantList out;
+    for (const auto &r : m_deviceRows) {
+        out.append(QVariantMap{
+            {QStringLiteral("serial"), r.first},
+            {QStringLiteral("state"), r.second},
+            {QStringLiteral("wireless"), ScrcpyClient::isNetworkSerial(r.first)},
+            {QStringLiteral("model"), m_deviceModels.value(r.first)},
+            {QStringLiteral("selected"), isRunning() && r.first == m_serial},
+        });
+    }
+    return out;
+}
+
+void PhoneMirrorManager::selectDevice(const QString &serial)
+{
+    if (serial.isEmpty())
+        return;
+    m_preferredSerial = serial;
+    qCInfo(lcPhoneMirror) << "Phone picked:" << serial;
+    if (isRunning() && serial != m_serial) {
+        m_persistScid.clear();   // never reattach to the other phone's session
+        restartSession();
+    }
 }
 
 // ─── Device probes ────────────────────────────────────────────────────
 
 QString PhoneMirrorManager::getDeviceState()
 {
-    if (m_adbPath.isEmpty())
-        return QStringLiteral("no-adb");
-    QStringList states;
-    for (const auto &d : devices())
-        states << d.second;
-    if (states.contains(QLatin1String("device")))
-        return QStringLiteral("device");
-    // Nothing usable: if a Wi-Fi phone is remembered, try to reach it in the
-    // background (throttled). The view polls this, so it is retried for free.
-    maybeReconnectWireless();
-    if (states.contains(QLatin1String("unauthorized")))
-        return QStringLiteral("unauthorized");
-    if (states.contains(QLatin1String("offline")))
-        return QStringLiteral("offline");
-    return QStringLiteral("none");
+    refreshDeviceState();
+    return m_deviceState;
 }
 
 QString PhoneMirrorManager::describeDeviceState(const QString &state)
@@ -280,6 +440,10 @@ QString PhoneMirrorManager::describeDeviceState(const QString &state)
                               "Unlock the phone and tap 'Allow' on the USB debugging prompt.");
     if (state == QLatin1String("offline"))
         return QStringLiteral("Phone is connected but adb reports it offline. Unplug and replug the cable.");
+    if (state == QLatin1String("no-permissions"))
+        return QStringLiteral("A phone is plugged in, but this computer's USB permissions keep adb from opening it. "
+                              "Install the udev rules (packaging/linux/51-android.rules, see the wiki) or add your "
+                              "user to the plugdev group, then replug the phone.");
     if (state == QLatin1String("none"))
         return QStringLiteral("No Android device connected. Connect via USB and enable USB debugging.");
     return {};
@@ -290,15 +454,15 @@ bool PhoneMirrorManager::hasConnectedDevice()
     return getDeviceState() == QLatin1String("device");
 }
 
-QString PhoneMirrorManager::describeProblem(const QString &state)
+QString PhoneMirrorManager::describeProblem(const QString &state, const QList<QPair<QString, QString>> &rows) const
 {
     // describeDeviceState() with the Wi-Fi case spelled out. The phrases the
     // view keys its auto-retry on (No Android device / not authorized /
-    // offline) are kept.
+    // offline / USB permissions) are kept.
     bool wireless = false;
     if (state == QLatin1String("offline") || state == QLatin1String("unauthorized")) {
         wireless = true;
-        for (const auto &d : devices())
+        for (const auto &d : rows)
             if (d.second == state && !ScrcpyClient::isNetworkSerial(d.first))
                 wireless = false;
     }
@@ -313,47 +477,6 @@ QString PhoneMirrorManager::describeProblem(const QString &state)
                               "debugging on the phone (same Wi-Fi network as OCTAVE), or plug it in over USB.")
             .arg(m_wirelessAddress);
     return describeDeviceState(state);
-}
-
-QString PhoneMirrorManager::getDeviceSerial()
-{
-    // USB first: it is the faster, steadier link when the phone is on both
-    QString wireless;
-    for (const auto &d : devices()) {
-        if (d.second != QLatin1String("device"))
-            continue;
-        if (!ScrcpyClient::isNetworkSerial(d.first))
-            return d.first;
-        if (wireless.isEmpty())
-            wireless = d.first;
-    }
-    return wireless;
-}
-
-QString PhoneMirrorManager::getDeviceName()
-{
-    return runAdb(serialArgs() + QStringList{QStringLiteral("shell"), QStringLiteral("getprop"),
-                                             QStringLiteral("ro.product.model")});
-}
-
-QString PhoneMirrorManager::getDeviceResolution()
-{
-    const QStringList lines = runAdb(serialArgs() + QStringList{QStringLiteral("shell"), QStringLiteral("wm"),
-                                                                QStringLiteral("size")})
-                                  .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-    for (const QString &line : lines) {
-        if (line.contains(QLatin1String("Physical size:")))
-            return line.mid(line.indexOf(QLatin1Char(':')) + 1).trimmed();
-    }
-    return {};
-}
-
-int PhoneMirrorManager::getDeviceSdk()
-{
-    bool ok = false;
-    const int sdk = runAdb(serialArgs() + QStringList{QStringLiteral("shell"), QStringLiteral("getprop"),
-                                                      QStringLiteral("ro.build.version.sdk")}).toInt(&ok);
-    return ok ? sdk : 0;
 }
 
 void PhoneMirrorManager::killStaleServer()
@@ -603,12 +726,44 @@ void PhoneMirrorManager::startScrcpy()
         emit scrcpyError(getInstallInstructions());
         return;
     }
-    const QString state = getDeviceState();
-    if (state != QLatin1String("device")) {
-        emit scrcpyError(describeProblem(state));
+    // Everything that talks to adb runs on the probe thread: a dead Wi-Fi
+    // link, an adb server restart or a box64 adb must never freeze the dash.
+    m_isStarting = true;
+    const int gen = ++m_startGeneration;
+    QString attachScid;
+    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
+        attachScid = m_persistScid;
+    const QString preferred = m_preferredSerial;
+    runProbeJob([this, gen, attachScid, preferred]() {
+        StartPrep prep;
+        prep.probe = probeDevices();
+        prep.serial = pickSerial(prep.probe.rows, preferred);
+        if (!prep.serial.isEmpty()) {
+            const QStringList shell{QStringLiteral("-s"), prep.serial, QStringLiteral("shell")};
+            if (attachScid.isEmpty())   // clear a stale server first
+                runAdbFull(shell + QStringList{QStringLiteral("pkill"), QStringLiteral("-f"),
+                                               QLatin1String(ScrcpyClient::kServerProcessPattern)}, 5000);
+            bool ok = false;
+            const int sdk = runAdbFull(shell + QStringList{QStringLiteral("getprop"),
+                                                           QStringLiteral("ro.build.version.sdk")}, 5000)
+                                .trimmed().toInt(&ok);
+            prep.sdk = ok ? sdk : 0;
+        }
+        QMetaObject::invokeMethod(this, [this, prep, gen]() { continueStart(prep, gen); }, Qt::QueuedConnection);
+    });
+}
+
+void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
+{
+    if (generation != m_startGeneration)
+        return;   // stopped (or restarted) meanwhile
+    m_isStarting = false;
+    applyProbe(prep.probe);
+    if (prep.serial.isEmpty()) {
+        emit scrcpyError(describeProblem(prep.probe.state, prep.probe.rows));
         return;
     }
-    const QString serial = getDeviceSerial();
+    const QString serial = prep.serial;
     const bool wireless = ScrcpyClient::isNetworkSerial(serial);
     if (!wireless && m_autoWifi && !m_tcpipChecked) {
         // Off the GUI thread: `adb tcpip` restarts the phone's adbd, which takes
@@ -642,18 +797,18 @@ void PhoneMirrorManager::startScrcpy()
     m_isStarting = true;
     m_isStopping = false;
     m_ready = false;
+    m_fatalCause.clear();
+    m_sessionSdk = prep.sdk;
+    clearNotices();
     const QString requested = requestedDisplay();
     m_activeDisplaySize = requested.section(QLatin1Char('/'), 0, 0);
     m_startedAutoSize = m_displaySize == kAutoDisplaySize ? m_activeDisplaySize : QString();
     QString attachScid;
-    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
+    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs && serial == m_serial)
         attachScid = m_persistScid;
     m_attaching = !attachScid.isEmpty();
-    if (!m_attaching) {
+    if (!m_attaching)
         m_persistScid.clear();
-        runAdb({QStringLiteral("-s"), serial, QStringLiteral("shell"), QStringLiteral("pkill"), QStringLiteral("-f"),
-                QLatin1String(ScrcpyClient::kServerProcessPattern)}, 5000);  // clear a stale server first
-    }
 
     if (m_client) {
         m_client->stop();
@@ -694,16 +849,20 @@ void PhoneMirrorManager::startScrcpy()
     m_client->setAudioGain(m_audioGain);
     m_client->setVolume(m_muted ? 0.0f : m_volume);
 
+    const int sdk = prep.sdk;
     QString displaySize = requested;
-    if (!displaySize.isEmpty()) {
-        const int sdk = getDeviceSdk();
-        if (sdk > 0 && sdk < kNewDisplayMinSdk) {
-            qCWarning(lcPhoneMirror) << "Device SDK" << sdk << "<" << kNewDisplayMinSdk
-                                     << ": virtual display unavailable, mirroring phone screen";
-            displaySize.clear();
-            m_activeDisplaySize.clear();
-            m_startedAutoSize.clear();
-        }
+    if (!displaySize.isEmpty() && sdk > 0 && sdk < kNewDisplayMinSdk) {
+        qCWarning(lcPhoneMirror) << "Device SDK" << sdk << "<" << kNewDisplayMinSdk
+                                 << ": virtual display unavailable, mirroring phone screen";
+        displaySize.clear();
+        m_activeDisplaySize.clear();
+        m_startedAutoSize.clear();
+    }
+    if (sdk > 0 && sdk < kAudioMinSdk)
+        addNotice(noticeText(QStringLiteral("no-audio")));
+    if (!m_softwareEncoderSerial.isEmpty() && m_softwareEncoderSerial == serial) {
+        m_client->setVideoEncoder(softwareEncoderFor(sdk));
+        addNotice(noticeText(QStringLiteral("software-encoder")));
     }
     const int bitRateMbps = wireless ? m_bitRateWifiMbps : m_bitRateUsbMbps;
     int startBps = bitRateMbps * 1000000;
@@ -727,6 +886,64 @@ void PhoneMirrorManager::startScrcpy()
     // Phone audio always plays through OCTAVE while mirroring
     m_client->start(serial, displaySize, 60, startBps, true, true, attachScid);
     emit isRunningChanged();
+    emit deviceStateChanged();   // "selected" in devices follows m_serial
+}
+
+// ── session notices (shown over the mirror; the session keeps running) ──
+
+QString PhoneMirrorManager::classifyServerLine(const QString &line)
+{
+    if (line.contains(QLatin1String("INJECT_EVENTS")))
+        return QStringLiteral("inject");
+    if (line.contains(QLatin1String("Audio disabled")) && line.contains(QLatin1String("before Android 11")))
+        return QStringLiteral("no-audio");
+    if (line.contains(QLatin1String("Capture/encoding error")) || line.contains(QLatin1String("Video encoding error"))
+        || line.contains(QLatin1String("Could not create default video encoder"))
+        || line.contains(QLatin1String("Could not create video encoder"))
+        || (line.contains(QLatin1String("Video encoder '")) && line.contains(QLatin1String("not found"))))
+        return QStringLiteral("encoder");
+    return {};
+}
+
+QString PhoneMirrorManager::softwareEncoderFor(int sdk)
+{
+    // Google's software AVC encoder: Codec2 since Android 10, OMX before
+    return sdk >= 29 || sdk <= 0 ? QStringLiteral("c2.android.avc.encoder") : QStringLiteral("OMX.google.h264.encoder");
+}
+
+QString PhoneMirrorManager::noticeText(const QString &kind)
+{
+    if (kind == QLatin1String("inject"))
+        return QStringLiteral("The phone is blocking touch input from OCTAVE. On Xiaomi / MIUI phones, turn on "
+                              "\"USB debugging (Security settings)\" in Developer options and restart the phone.");
+    if (kind == QLatin1String("no-audio"))
+        return QStringLiteral("This phone runs Android 10 or older, which cannot send its sound to OCTAVE. "
+                              "Audio keeps playing on the phone.");
+    if (kind == QLatin1String("software-encoder"))
+        return QStringLiteral("The phone's hardware video encoder failed, so OCTAVE switched to its software "
+                              "encoder. The picture may be less smooth.");
+    return {};
+}
+
+void PhoneMirrorManager::addNotice(const QString &notice)
+{
+    if (notice.isEmpty() || m_notices.contains(notice))
+        return;
+    m_notices.append(notice);
+    emit mirrorNoticeChanged();
+}
+
+void PhoneMirrorManager::clearNotices()
+{
+    if (m_notices.isEmpty())
+        return;
+    m_notices.clear();
+    emit mirrorNoticeChanged();
+}
+
+void PhoneMirrorManager::dismissNotice()
+{
+    clearNotices();
 }
 
 void PhoneMirrorManager::onConnected(int w, int h)
@@ -749,10 +966,36 @@ void PhoneMirrorManager::onConnected(int w, int h)
     m_client->mediaCommand(ScrcpyClient::MediaWatch, 1);
 }
 
-void PhoneMirrorManager::onDisconnected(const QString &reason)
+void PhoneMirrorManager::onDisconnected(const QString &disconnectReason)
 {
     if (m_isStopping)
         return;
+    QString reason = disconnectReason;
+    const bool encoderFailed = m_fatalCause == QLatin1String("encoder")
+                               && QDateTime::currentMSecsSinceEpoch() - m_fatalCauseAtMs < kFatalCauseWindowMs;
+    m_fatalCause.clear();
+    if (encoderFailed) {
+        // The server is gone with its virtual display: nothing to reattach to
+        m_persistScid.clear();
+        if (m_softwareEncoderSerial != m_serial) {
+            // Hardware encoder failed: once more with Google's software encoder
+            qCWarning(lcPhoneMirror) << "The phone's video encoder failed; retrying with"
+                                     << softwareEncoderFor(m_sessionSdk);
+            m_softwareEncoderSerial = m_serial;
+            resetPhoneState();
+            resetMedia();
+            m_ready = false;
+            m_isStarting = false;
+            m_attaching = false;
+            setConnectionType(QString());
+            emit isRunningChanged();
+            QTimer::singleShot(300, this, &PhoneMirrorManager::startScrcpy);
+            return;
+        }
+        // Not a link problem, so not something the view should keep retrying
+        reason = QStringLiteral("The phone's video encoder failed, even in software mode. Try a smaller virtual "
+                                "display size (Settings > Accessories > Phone Mirror), or mirror the phone screen.");
+    }
     resetPhoneState();
     resetMedia();
     const bool wasReady = m_ready;
@@ -925,6 +1168,15 @@ void PhoneMirrorManager::onServerLog(const QString &line)
     const auto m = re.match(line);
     if (m.hasMatch())
         m_vdisplayId = m.captured(1).toInt();
+    const QString kind = classifyServerLine(line);
+    if (kind == QLatin1String("encoder")) {
+        // The server retries (smaller size) on its own; this only decides
+        // what a disconnect right after it means
+        m_fatalCause = kind;
+        m_fatalCauseAtMs = QDateTime::currentMSecsSinceEpoch();
+    } else if (!kind.isEmpty()) {
+        addNotice(noticeText(kind));
+    }
 }
 
 void PhoneMirrorManager::cleanup()

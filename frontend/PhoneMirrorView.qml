@@ -28,6 +28,17 @@ Item {
     property bool launchFailed: false
     property string errorMessage: ""
     readonly property bool hasVideo: frameCounter >= 1
+    // Phones adb lists in the "device" state; a picker appears with more than one
+    readonly property var usableDevices: {
+        var out = []
+        var list = phoneMirrorManager && phoneMirrorManager.devices ? phoneMirrorManager.devices : []
+        for (var i = 0; i < list.length; ++i)
+            if (list[i].state === "device") out.push(list[i])
+        return out
+    }
+    readonly property string deviceHint: phoneMirrorManager && phoneMirrorManager.deviceHint ? phoneMirrorManager.deviceHint : ""
+    // Failures worth retrying on our own: the phone, not the setup
+    readonly property var deviceErrorPattern: /disconnected|No Android device|not authorized|offline|USB permissions/i
 
     // True when everything OCTAVE needs is present (decoder, server, adb), so
     // any failure is about the phone; the setup text is shown only otherwise.
@@ -152,6 +163,113 @@ Item {
                     Text { anchors.centerIn: parent; text: modelData.label; color: "white"; font.pixelSize: dp(20) }
                     MouseArea { id: navMouse; anchors.fill: parent
                         onClicked: if (phoneMirrorManager) phoneMirrorManager[modelData.slot]() }
+                }
+            }
+        }
+
+        // Something the user should know that does not stop the session
+        // (touch blocked by the phone, no audio, software encoder). Tap to hide.
+        Rectangle {
+            id: noticeBanner
+            readonly property string text: phoneMirrorManager && phoneMirrorManager.mirrorNotice ? phoneMirrorManager.mirrorNotice : ""
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: dp(56)
+            width: Math.min(parent.width - dp(120), noticeLabel.implicitWidth + dp(32))
+            height: noticeLabel.implicitHeight + dp(20)
+            radius: dpMin(10, 2)
+            color: "#DD000000"
+            border.color: App.Style.accent
+            border.width: 1
+            visible: mirrorRunning && hasVideo && text !== ""
+            z: 11
+            Text {
+                id: noticeLabel
+                anchors.centerIn: parent
+                width: Math.min(implicitWidth, noticeBanner.parent.width - dp(152))
+                text: noticeBanner.text + "  ✕"
+                font.pixelSize: dp(14)
+                font.family: phoneMirrorView.globalFont
+                color: "white"
+                wrapMode: Text.WordWrap
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: if (phoneMirrorManager) phoneMirrorManager.dismissNotice()
+            }
+        }
+
+        // More than one phone available: pick which one to mirror
+        Rectangle {
+            id: pickerButton
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.margins: dp(10)
+            width: dp(40)
+            height: dp(40)
+            radius: dpMin(20, 2)
+            color: pickerMouse.pressed ? App.Style.accent : "#AA000000"
+            visible: mirrorRunning && usableDevices.length > 1
+            z: 10
+            Text {
+                anchors.centerIn: parent
+                text: "⇄"
+                font.pixelSize: dp(20)
+                color: "white"
+            }
+            MouseArea {
+                id: pickerMouse
+                anchors.fill: parent
+                onClicked: devicePicker.open()
+            }
+        }
+
+        Popup {
+            id: devicePicker
+            x: dp(10)
+            y: dp(56)
+            padding: dp(8)
+            modal: true
+            z: 12
+            background: Rectangle {
+                color: "#EE000000"
+                radius: dpMin(10, 2)
+                border.color: App.Style.accent
+                border.width: 1
+            }
+            contentItem: Column {
+                spacing: dp(6)
+                Repeater {
+                    model: usableDevices
+                    Rectangle {
+                        width: dp(280)
+                        height: dp(48)
+                        radius: dpMin(8, 2)
+                        color: rowMouse.pressed || modelData.selected ? App.Style.accent : "transparent"
+                        border.color: "#55FFFFFF"
+                        border.width: 1
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: dp(12)
+                            width: parent.width - dp(24)
+                            elide: Text.ElideRight
+                            text: (modelData.model ? modelData.model : modelData.serial)
+                                  + (modelData.wireless ? "  (Wi-Fi)" : "  (USB)")
+                            font.pixelSize: dp(16)
+                            font.family: phoneMirrorView.globalFont
+                            color: "white"
+                        }
+                        MouseArea {
+                            id: rowMouse
+                            anchors.fill: parent
+                            onClicked: {
+                                devicePicker.close()
+                                if (phoneMirrorManager && !modelData.selected)
+                                    phoneMirrorManager.selectDevice(modelData.serial)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -366,6 +484,17 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
+                    visible: deviceHint !== ""
+                    text: deviceHint
+                    font.pixelSize: App.Spacing.overallText * 0.85
+                    font.family: phoneMirrorView.globalFont
+                    color: "#FFB066"
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Text {
+                    Layout.fillWidth: true
                     text: "Or plug the phone in over USB with USB debugging on (Settings > Developer options)."
                     font.pixelSize: App.Spacing.overallText * 0.85
                     font.family: phoneMirrorView.globalFont
@@ -397,6 +526,18 @@ Item {
                     font.pixelSize: dp(16)
                     font.family: phoneMirrorView.globalFont
                     color: App.Style.secondaryTextColor
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.maximumWidth: parent.width
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: deviceHint !== ""
+                    text: deviceHint
+                    font.pixelSize: dp(14)
+                    font.family: phoneMirrorView.globalFont
+                    color: "#FFB066"
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                     Layout.maximumWidth: parent.width
@@ -525,6 +666,25 @@ Item {
             reconnecting = false
         }
 
+        // The timers below only ask for a probe (it runs off the GUI thread);
+        // the answer lands here
+        function onDeviceStateChanged() {
+            if (!phoneMirrorManager || phoneMirrorManager.isRunning
+                    || phoneMirrorManager.deviceState !== "device"
+                    || phoneMirrorView.StackView.status !== StackView.Active)
+                return
+            if (reconnecting) {
+                startMirror()
+            } else if (launchFailed && setupOk && deviceError && !mirrorRunning) {
+                console.log("Phone Mirror: phone is back, restarting")
+                launchFailed = false
+                deviceError = false
+                errorMessage = ""
+                frameCounter = 0
+                startMirror()
+            }
+        }
+
         function onFrameReady() {
             phoneMirrorView.frameCounter++
         }
@@ -537,7 +697,7 @@ Item {
 
         function onScrcpyError(error) {
             console.log("Phone Mirror: error -", error)
-            var isDeviceError = /disconnected|No Android device|not authorized|offline/i.test(error)
+            var isDeviceError = deviceErrorPattern.test(error)
             if (isDeviceError && mirrorRunning && hasVideo && !reconnecting) {
                 // Link dropped mid-stream: hold the picture and try to come back quietly
                 console.log("Phone Mirror: link dropped, holding the last frame while reconnecting")
@@ -576,8 +736,12 @@ Item {
                 launchFailed = true
                 return
             }
-            if (phoneMirrorManager.getDeviceState() === "device")
+            // A short blip may never show up as a state change: the start
+            // probes the phone itself, and a failure keeps the grace running
+            if (phoneMirrorManager.deviceState === "device")
                 startMirror()
+            else
+                phoneMirrorManager.refreshDeviceState()   // onDeviceStateChanged restarts
         }
     }
 
@@ -592,14 +756,16 @@ Item {
         onTriggered: {
             if (!phoneMirrorManager || phoneMirrorManager.isRunning)
                 return
-            if (phoneMirrorManager.getDeviceState() === "device") {
+            if (phoneMirrorManager.deviceState === "device") {
                 console.log("Phone Mirror: phone is back, restarting")
                 launchFailed = false
                 deviceError = false
                 errorMessage = ""
                 frameCounter = 0
                 startMirror()
+                return
             }
+            phoneMirrorManager.refreshDeviceState()   // onDeviceStateChanged restarts
         }
     }
 

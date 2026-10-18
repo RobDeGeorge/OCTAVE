@@ -119,6 +119,9 @@ public:
     // Adaptive quality (AdaptiveBitRate): set before start(). maxBps 0 = off,
     // the stream keeps start()'s bitRate; otherwise that is the starting rate.
     void setAdaptiveBitRate(int minBps, int maxBps) { m_adaptiveMinBps = minBps; m_adaptiveMaxBps = maxBps; }
+    // Server option video_encoder (e.g. a software encoder after the hardware
+    // one failed); "" = the phone's default. Set before start().
+    void setVideoEncoder(const QString &name) { m_videoEncoder = name; }
 
 signals:
     void connected(int width, int height);
@@ -197,6 +200,7 @@ private:
     int m_startBitRate = 0;
     int m_adaptiveMinBps = 0;
     int m_adaptiveMaxBps = 0;
+    QString m_videoEncoder;
     std::mutex m_sendMutex;
 
     QVideoSink *m_sink = nullptr;
