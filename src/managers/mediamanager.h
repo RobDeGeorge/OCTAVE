@@ -46,13 +46,13 @@ public:
     ~MediaManager() override;
 
     // ──────────────────────────────────────────────────────────────
-    // Settings manager wiring (replaces Python connect_settings_manager)
+    // Settings manager wiring
     // ──────────────────────────────────────────────────────────────
     void setSettingsManager(SettingsManager *sm);
 
 signals:
     // ──────────────────────────────────────────────────────────────
-    // Signals — names MUST match the Python originals for QML binding
+    // Signals — the names are the QML binding API; don't rename them
     // ──────────────────────────────────────────────────────────────
     void playbackStateChanged(int state);
     void playStateChanged(bool playing);
@@ -76,10 +76,10 @@ signals:
 
 public slots:
     // ──────────────────────────────────────────────────────────────
-    // Slots — names MUST match the Python @Slot originals for QML
+    // Slots — names are called from QML; don't rename them
     // ──────────────────────────────────────────────────────────────
 
-    // QML compatibility aliases (Python API names called from QML)
+    // QML compatibility aliases (snake_case names called from QML)
     Q_INVOKABLE void connect_settings_manager(QObject *) { /* already wired in main.cpp */ }
     Q_INVOKABLE void _save_playback_state() { _save_playback_state_now(); }
     Q_INVOKABLE void _clear_temp_files() { clearTempFilesInternal(); }
@@ -127,7 +127,7 @@ public slots:
     void invalidate_stats_cache();
 
     // ──────────────────────────────────────────────────────────────
-    // Q_INVOKABLE getters — match Python @Slot(result=...) methods
+    // Q_INVOKABLE getters
     // ──────────────────────────────────────────────────────────────
     Q_INVOKABLE QStringList get_media_files(bool emitSignal = true);
     Q_INVOKABLE QString get_formatted_duration(const QString &filename);
@@ -184,8 +184,7 @@ private:
     void clearTempFilesInternal();
     void _cache_metadata(const QString &filename);
     void _cache_metadata_from_file(const QString &filename);
-    // Persistent tag store (<appdata>/metadata_cache.json, shared with the
-    // Python backend): tags are read from a file once, then served from here
+    // Persistent tag store (<appdata>/metadata_cache.json): tags are read from a file once, then served from here
     // on every later run as long as its size and mtime are unchanged.
     void _load_meta_store();
     void _save_meta_store();

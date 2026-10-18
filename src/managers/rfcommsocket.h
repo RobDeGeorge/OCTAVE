@@ -8,7 +8,6 @@
 // ("Host is down", "Connection refused"), and nothing else on the system
 // (blueman) can release it underneath us. Blocking-friendly on purpose: the
 // OBD worker drives it with waitForReadyRead() like a QSerialPort.
-// Mirrors backend/obd_transports/protocol_rfcomm.py.
 
 #include <QIODevice>
 #include <QString>

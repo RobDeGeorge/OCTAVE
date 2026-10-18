@@ -1,6 +1,6 @@
 // Runs one QML fixture from tests/fixtures/ in its own process, with the C++
-// managers it needs, the way the Python tests ran each fixture in a fresh
-// interpreter. tst_qmlfixtures launches it once per fixture and checks the
+// managers it needs, so every fixture starts from a clean engine.
+// tst_qmlfixtures launches it once per fixture and checks the
 // exit code and output. Not a test by itself.
 //
 //   qmlfixturehost <fixture.qml> <scratch dir> [wiki-available: true|false]

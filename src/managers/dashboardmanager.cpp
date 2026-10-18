@@ -562,8 +562,7 @@ QVariantMap DashboardManager::sanitizeImportedSpec(const QVariantMap &raw, QStri
 {
     auto fail = [error](const QString &msg) { if (error) *error = msg; return QVariantMap{}; };
 
-    // JSON numbers only (no bools, no numeric strings) — same rule as the
-    // Python _int_in().
+    // JSON numbers only (no bools, no numeric strings).
     auto intIn = [](const QVariant &v, int lo, int hi, int def) {
         switch (v.typeId()) {
         case QMetaType::Int:

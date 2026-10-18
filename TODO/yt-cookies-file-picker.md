@@ -1,5 +1,5 @@
 **Status:** deferred (post-v0.9)
-**Last updated:** 2026-05-03
+**Last updated:** 2026-10-18
 
 # In-app file picker for YouTube cookies
 
@@ -51,12 +51,11 @@ A new section in `frontend/settings/DownloadSettingsPage.qml` (or wherever downl
 
 - C++: `src/managers/downloadmanager.{h,cpp}` — `_getYoutubeCookiesPath()` already in place. Add `Q_INVOKABLE void importCookiesFile()` that triggers the SAF picker via JNI on Android, native `QFileDialog::getOpenFileName` elsewhere.
 - Android: `android/src/org/octave/app/OctaveMediaBridge.java` — add a static `pickCookiesFile(Activity)` helper using `QtAndroidPrivate::startActivity` with a result callback that copies the picked file to `<DownloadLocation>/youtube_cookies.txt`.
-- Python: `backend/download_manager.py` — `_get_youtube_cookies_path` and `_youtube_cookies_default_path` already in place. Add `@Slot()` methods so QML can trigger Qt's `QFileDialog` on desktop.
 - QML: `frontend/settings/DownloadSettingsPage.qml` (or equivalent) — UI section described above.
 
 ## Cross-references
 
-- `TODO/android-cpp-port.md` — broad mobile parity; this work fits in there.
+- `TODO/android-cpp-port.md` — broad Android feature work; this fits in there.
 
 ## Estimated effort
 

@@ -29,7 +29,7 @@ CarSim::CarSim(QObject *parent)
     : QObject(parent)
     , m_state(std::make_shared<CarState>())
 {
-    // 60 Hz physics, same step and equations as the Python mock
+    // 60 Hz physics
     m_physics.setInterval(16);
     connect(&m_physics, &QTimer::timeout, this, &CarSim::step);
     m_physics.start();
@@ -257,7 +257,7 @@ void DevKeyboardController::handle_key(int key, bool pressed)
         m_held.remove(key);
     }
     // Only the held keys drive throttle/brake; re-applying them on every key
-    // (as the Python controller does) cancelled Space's rev straight away.
+    // would cancel Space's rev straight away.
     static const QSet<int> continuous{Qt::Key_W, Qt::Key_Up, Qt::Key_S, Qt::Key_Down};
     if (continuous.contains(key))
         updateContinuous();

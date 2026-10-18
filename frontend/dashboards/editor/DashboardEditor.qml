@@ -10,8 +10,8 @@
 //
 // This page owns the working spec. All mutations reassign `cells` wholesale
 // (never in place) so the canvas Repeater rebuilds and every binding stays
-// honest. The backend (DashboardManager, C++ + Python) already provides
-// save/delete/duplicate with full parity, so this page is pure QML.
+// honest. DashboardManager already provides save/delete/duplicate, so
+// this page is pure QML.
 // saveDashboard() requires a unique `id`; built-in ids are rejected and user
 // ids overwrite, so we slugify+uniquify the label here (mirrors the manager's
 // internal logic) rather than adding a backend slot.

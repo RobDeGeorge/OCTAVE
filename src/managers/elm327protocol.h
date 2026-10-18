@@ -18,7 +18,6 @@
 // ELM327/OBD-II Protocol Handler -- pure C++, no I/O.
 //
 // Handles command formatting, response parsing, and PID decoding.
-// Port of backend/elm327_protocol.py
 // ---------------------------------------------------------------------------
 
 // Standard OBD-II SPP UUID for Bluetooth RFCOMM

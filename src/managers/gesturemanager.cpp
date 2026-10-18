@@ -68,7 +68,7 @@ static constexpr double GES_POST_FLUSH       = 0.10;
 
 // Consecutive failed gesture-register reads before the loop declares the bus
 // dead, emits "Error" and hands off to the manager's retry/back-off path
-// (Python raises on the first OSError; a small threshold rides out one NACK).
+// (a small threshold rides out one NACK).
 static constexpr int MAX_CONSECUTIVE_READ_FAILURES = 5;
 
 // PAJ7620U2 initialization register table (DFRobot reference, 219 register pairs)
@@ -206,8 +206,8 @@ bool GestureWorker::openBus(bool &permissionDenied)
     m_fd = ::open(busPath.toLocal8Bit().constData(), O_RDWR);
     if (m_fd < 0) {
         if (errno == EACCES || errno == EPERM) {
-            // Same as the Python backend: a permission problem will not fix
-            // itself on retry, so report it once and stop.
+            // A permission problem will not fix itself on retry, so report
+            // it once and stop.
             permissionDenied = true;
             qCWarning(lcGesture) << "permission denied on" << busPath
                                  << "- add the user to the i2c group; not retrying";
@@ -426,7 +426,7 @@ void GestureWorker::run()
         uint8_t flag0, flag1;
         if (!readGestureRaw(flag0, flag1)) {
             // Dead-bus detection: surface a sustained failure as "Error" +
-            // retry like the Python backend instead of polling zeros forever.
+            // retry instead of polling zeros forever.
             if (++consecutiveFailures >= MAX_CONSECUTIVE_READ_FAILURES) {
                 qCWarning(lcGesture) << "read loop error:" << consecutiveFailures
                                      << "consecutive I2C read failures";

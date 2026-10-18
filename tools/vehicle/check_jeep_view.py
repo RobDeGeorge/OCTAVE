@@ -1,14 +1,15 @@
 """Exercise the real Qt vehicle component, hinges, lights, and IMU mapping.
 
 Run from the checkout: QT_QPA_PLATFORM=xcb xvfb-run -a venv/bin/python tools/vehicle/check_jeep_view.py
-Screenshots are written to /tmp/jeep-rig-*.png. Requires PySide6 with Quick3D.
+Screenshots are written to /tmp/jeep-rig-*.png. Requires PySide6 with Quick3D (pip install PySide6;
+not in requirements.txt, since only this harness uses it).
 """
 
 import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QPointF, Property, QMetaObject, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QPointF, Property, QMetaObject, Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QVector3D
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
@@ -56,13 +57,24 @@ class OBD(QObject):
         self.demand[consumer] = list(ids)
 
 
+class AssetStore(QObject):
+    """assetStore as JeepHinge uses it: a file:// URL under frontend/assets/."""
+
+    def __init__(self, source_dir):
+        super().__init__()
+        self._source_dir = Path(source_dir).resolve()
+
+    @Slot(str, result=QUrl)
+    def localUrl(self, relative_path):
+        if not relative_path or ".." in relative_path:
+            return QUrl()
+        return QUrl.fromLocalFile(str(self._source_dir / relative_path))
+
+
 app = QGuiApplication(sys.argv)
 engine = QQmlApplicationEngine()
 imu = IMU()
 obd = OBD()
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from backend.asset_store import AssetStore  # noqa: E402  (JeepHinge loads parts through it)
-
 assets = AssetStore(str(Path(__file__).resolve().parents[2] / "frontend/assets"))
 engine.rootContext().setContextProperty("berryIMU", imu)
 engine.rootContext().setContextProperty("obdManager", obd)

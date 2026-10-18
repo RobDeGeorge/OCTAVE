@@ -8,9 +8,8 @@
 // DTCs, the Mode 02 freeze-frame DTC and the Mode 09 VIN (CAN multi-frame).
 //
 // Every PID in ELM327Protocol's tables is reported as supported, so no
-// dashboard widget is gated out in dev mode (the Python mock had no vehicle
-// gate at all). Modelled PIDs follow the simulation; the rest hold plausible
-// fixed values.
+// dashboard widget is gated out in dev mode. Modelled PIDs follow the
+// simulation; the rest hold plausible fixed values.
 //
 // Lives on the OBD worker thread; registered for port "sim://elm327" by
 // OctaveDev::Runtime through OBDConnectionWorker::setCustomTransport().

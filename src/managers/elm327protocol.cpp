@@ -84,8 +84,7 @@ static double decVoltage(const QVector<uint8_t> &a) {
 }
 
 // Commanded equivalence ratio (lambda, ~1.0 at stoich) scaled to a gasoline
-// air/fuel ratio, matching the Python backend (`_update_afr` multiplies
-// python-obd's ratio by 14.7). OBDParameterModel's AFR gauge spans 10-18.
+// air/fuel ratio (lambda x 14.7). OBDParameterModel's AFR gauge spans 10-18.
 static double decAirFuelRatio(const QVector<uint8_t> &a) {
     return std::round((a[0] * 256.0 + a[1]) / 32768.0 * 14.7 * 100.0) / 100.0;
 }
@@ -140,8 +139,8 @@ static double decMaxMAF(const QVector<uint8_t> &a) {
 QHash<PidKey, PidEntry> ELM327Protocol::buildPidTable()
 {
     // PID numbers, command names and decoders follow python-obd's
-    // commands.py (the Python backend's authoritative table) so both
-    // backends read the same bytes into the same signal.
+    // commands.py; those command names are also the settings keys and the
+    // scan-result vocabulary.
     QHash<PidKey, PidEntry> t;
 
     // --- Default enabled PIDs (the 16+1 most common) ---
@@ -518,7 +517,6 @@ QStringList ELM327Protocol::parseFreezeFrameDtc(const QStringList &lines)
 // cross-checked against the OBD-II PIDs table on Wikipedia and OBDb's
 // SAEJ1979 signal set. Byte 0 is data byte A. `supportBit` is the bit of A
 // (0 = LSB) the ECU sets when that value is present.
-// Mirrored in backend/elm327_protocol.py (EXTENDED_PID_TABLE).
 // ---------------------------------------------------------------------------
 
 namespace {

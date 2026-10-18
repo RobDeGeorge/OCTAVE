@@ -1,7 +1,6 @@
 // OBDManager without an adapter: the demand-driven poll-list rules, and the
 // Linux rfcomm bind behind connect_to_adapter(MAC), which must run off the
-// GUI thread and report its outcome later. Ported from
-// tests/test_obd_poll_demand.py and tests/test_rfcomm_bind_async.py.
+// GUI thread and report its outcome later.
 
 #include <QElapsedTimer>
 #include <QFile>

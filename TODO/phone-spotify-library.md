@@ -1,7 +1,7 @@
 # Phone Spotify library in the music select menu (*)
 
 **Status:** \* maybe — researched and prototyped, undecided whether to build at all
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-18
 
 ## What it is
 
@@ -57,7 +57,7 @@ is already shipped and is the 50-track slice of this.
 - **Fragile.** Depends on Spotify's 36-row loading window, English labels
   ("Open context menu for", "Now Playing Bar", "Clear filter selection"),
   row pixel layout for crops, and the tail-fix trick. Each Spotify update
-  can silently break it. Ownership spans phone server + both backends + QML.
+  can silently break it. Ownership spans phone server + C++ client + QML.
 - Phone must be awake (MirrorKeeper covers this during a session).
 - Read-only: no move/delete/create playlist.
 
@@ -65,14 +65,14 @@ is already shipped and is the 50-track slice of this.
 
 1. Fold the Phone Queue into the shared song-row delegate (`lib` source
    abstraction in `MediaPlayer.qml`), add shuffle/repeat to the phone
-   (`PhoneMedia.java` custom actions, `MEDIA_STATE` flags, both backends).
+   (`PhoneMedia.java` custom actions, `MEDIA_STATE` flags, the C++ client).
 2. Library reader for **browsing**; tapping a playlist/album plays it from
    the top via deep link; the queue then gives instant jumps within 50.
 3. Disk cache (`<appdata>/phone_library/`, atomic writes, art deduped by
    hash), incremental re-scan by count, offline read-only browsing.
 4. Deep-row tap-to-play as an accepted-latency extra.
 
-Protocol/architecture sketch (new `PhoneLibraryManager` in both backends,
+Protocol/architecture sketch (new C++ `PhoneLibraryManager`,
 control type 104 `TYPE_OCTAVE_LIBRARY`, device types 105/106/108, bulk lane
 in `DeviceMessageSender` — already added) is in the 2026-10-10 session
 notes; re-derive from this file if those are gone.

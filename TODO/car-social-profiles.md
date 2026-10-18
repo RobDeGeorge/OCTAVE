@@ -1,7 +1,7 @@
 # Car profiles and social sharing ("Strava for cars")
 
 **Status:** parked: a long-term idea scoped on 2026-10-17, well after v1.0. No work started.
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 
 ## What it is
 
@@ -19,7 +19,7 @@ Prior art worth studying (mostly dead, so learn why): Fuelly (fuel-log community
 
 ## Why it's parked
 
-- v1.0, the Python sunset (`TODO/python-removal.md`) and the backend split (`TODO/backend-service-split.md`) come first.
+- v1.0 and the backend split (`TODO/backend-service-split.md`) come first.
 - OCTAVE has **no trip or history recording today**. `ObdManager` exposes live values plus a few counters (`distanceWithMIL`, `distanceSinceCodesCleared`, odometer among the multi-value PIDs at 0x61+), but nothing is persisted over time. Local history is the foundation for everything here.
 - There's **no GPS source** on the Jeep box yet. Location-based trip features depend on either a GPS module or the phone GPS link in `TODO/octave-companion-app.md`.
 - Running an online service (hosting, storage, accounts, moderation, costs) is a different kind of commitment from shipping a GPL head unit. Decide that deliberately.

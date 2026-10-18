@@ -421,7 +421,9 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
           and on desktop <code>yt-dlp</code> for music download (looked up next to the checkout, then on <code>PATH</code>
           and in the usual bin directories). YouTube Music search runs <span class="file-path">scripts/ytmusic_search.py</span>
           with <code>python3</code> and <code>ytmusicapi</code> when they are available and otherwise falls back to a yt-dlp search.
+          Both go into a virtualenv next to the checkout, which OCTAVE checks first:
         </p>
+        <pre><code>python3 -m venv venv &amp;&amp; venv/bin/pip install -r requirements.txt</code></pre>
 
         <!-- Directory Structure -->
         <h2 id="directory-structure">Directory Structure</h2>

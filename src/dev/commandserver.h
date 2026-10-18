@@ -2,15 +2,15 @@
 #define OCTAVE_DEV_COMMANDSERVER_H
 
 // TCP command server for driving OCTAVE from scripts (`octave --profile`).
-// C++ port of backend/command_server.py with the same protocol, so the MCP
-// servers (dev/mcp_server.py, dev/mcp_benchmark.py), the perf loops and the
-// screenshot stories drive either backend unchanged:
+// One JSON request per line, one JSON reply per line; the dev/ clients (MCP
+// servers dev/mcp_server.py and dev/mcp_benchmark.py, the perf loops, the
+// screenshot stories) all speak it:
 //
 //     -> {"action": "navigate", "args": {"page": "obd"}}\n
 //     <- {"ok": true, "result": {"navigated_to": "obd"}}\n
 //
 // Listens on 127.0.0.1 only (default port 9876). Each client connection gets
-// its own thread, as with Python's ThreadingMixIn, so a slow GUI call never
+// its own thread, so a slow GUI call never
 // blocks get_metrics on another connection. Handlers run on that connection
 // thread and use onGui() / postGui() for anything that touches Qt objects.
 //

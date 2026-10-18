@@ -5,7 +5,6 @@
 // (src/phone_mirror/scrcpyclient.{h,cpp}): the bundled server jar is pushed
 // to the phone over adb and OCTAVE decodes the stream and injects touch
 // itself. Nothing has to be installed by the user.
-// Mirrors backend/phone_mirror/manager.py.
 
 #ifndef Q_OS_MOBILE
 

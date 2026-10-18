@@ -413,7 +413,7 @@ void DownloadManager::search(const QString &query)
     // Use ytmusicapi via helper script for curated YouTube Music results.
     // yt-dlp's ytsearch returns generic YouTube videos (wrong thumbnails,
     // uncurated results); ytmusicapi returns proper song metadata with
-    // real album art, matching the Python backend's behavior.
+    // real album art.
     QString appDir = QCoreApplication::applicationDirPath();
     QDir scriptDir(appDir);
     QString scriptPath;
@@ -605,7 +605,8 @@ QMap<QString, QString> DownloadManager::_getDownloadedFiles() const
 
 QString DownloadManager::_sanitizeForMatch(const QString &text)
 {
-    // Mirror sanitize_string from music_dl/utils/formatter.py
+    // Normalise for fuzzy matching: drop / ? \ * | < >, turn " into ' and
+    // : into -, lower-case.
     QString result;
     result.reserve(text.length());
     for (const QChar &c : text) {
@@ -872,10 +873,9 @@ void DownloadManager::_startNextDownload()
             continue;
         }
 
-        // Build output path. Matches Python music_dl's "{artists} - {title}.ext"
-        // template so the shared QML's play_downloaded_song fuzzy match against
-        // "artist - name" stems succeeds regardless of which backend wrote the
-        // file. yt-dlp's %(artist,uploader)s falls back to uploader when
+        // Build output path as "{artists} - {title}.ext" so the QML's
+        // play_downloaded_song fuzzy match against "artist - name" stems
+        // succeeds. yt-dlp's %(artist,uploader)s falls back to uploader when
         // YouTube Music's artist field is missing — avoids " - Title.m4a".
         QString dlPath = _getDownloadPath();
         QString dlFormat = _getDownloadFormat();

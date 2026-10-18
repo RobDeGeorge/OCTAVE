@@ -12,7 +12,7 @@ class QNetworkAccessManager;
 class QNetworkReply;
 
 /**
- * NetworkManager — C++ port of backend/network_manager.py
+ * NetworkManager
  *
  * Handles WiFi/internet connectivity status and checks for updates via GitHub.
  * All blocking I/O (subprocess, HTTP) runs asynchronously to avoid freezing

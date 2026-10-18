@@ -5,10 +5,9 @@ import QtQuick.Window 2.15
 /*
     Dev Overlay
     ===========
-    Reparented into the production root window in dev mode: by
-    src/dev/devruntime.cpp (`octave --dev`) or dev/dev_runtime.py
-    (`python -m dev.main_dev`). Production frontend/Main.qml has zero
-    knowledge of this file; without dev mode the overlay never loads.
+    Reparented into the production root window in dev mode by
+    src/dev/devruntime.cpp (`octave --dev`). Production frontend/Main.qml
+    has zero knowledge of this file; without dev mode the overlay never loads.
 
     Provides:
       - DEV MODE banner (click to expand DevToolsPanel)

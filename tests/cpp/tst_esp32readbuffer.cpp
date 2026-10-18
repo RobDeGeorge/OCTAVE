@@ -1,6 +1,5 @@
 // ESP32 knob serial reader: lines split across reads are joined, and a
-// partial line with no newline must not grow forever. Ported from
-// tests/test_esp32_read_buffer.py.
+// partial line with no newline must not grow forever.
 
 #include <QRegularExpression>
 #include <QSignalSpy>

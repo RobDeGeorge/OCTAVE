@@ -10,8 +10,8 @@ The first launch builds the app. Later launches use an incremental build. A desk
 
 Build output is machine-specific: `build-desktop-$(uname -n)/`. This avoids reusing the CMake cache synced from another computer. Launch and application output goes to `~/.local/state/octave/desktop-launch.log` (or `$XDG_STATE_HOME/octave/desktop-launch.log`).
 
-This entry runs the **native C++ backend**. To test changes specifically to the alternative Python backend, run `venv/bin/python main.py` from the checkout. Close the existing app before relaunching to test a fresh session.
+This entry runs the C++ app. Close the existing app before relaunching to test a fresh session.
 
-On Linux, both backends disable GPU acceleration inside the embedded wiki browser before WebEngine initializes. This avoids a Mesa crash during Chromium's Wayland/GBM-to-Vulkan fallback. Qt Quick keeps its normal hardware rendering. Existing `QTWEBENGINE_CHROMIUM_FLAGS` are preserved.
+On Linux, the app disables GPU acceleration inside the embedded wiki browser before WebEngine initializes. This avoids a Mesa crash during Chromium's Wayland/GBM-to-Vulkan fallback. Qt Quick keeps its normal hardware rendering. Existing `QTWEBENGINE_CHROMIUM_FLAGS` are preserved.
 
 The native downloader also finds `venv/bin/yt-dlp` in the checkout (Windows: `venv/Scripts/yt-dlp.exe`) before checking system installations. You do not need to activate the Python environment in a terminal before using search or downloads from the desktop launch.

@@ -1,13 +1,13 @@
 # Phone mirror robustness: what is left after 0.9.5
 
-**Status:** deferred. The first-user gaps (Windows decoder, GUI-thread adb, error messages, auto-Wi-Fi default, encoder fallback, multi-phone picker, Python parity, iOS gating) shipped in 0.9.5. What is left needs a non-Samsung phone, or is polish.
-**Last updated:** 2026-10-17
+**Status:** deferred. The first-user gaps (Windows decoder, GUI-thread adb, error messages, auto-Wi-Fi default, encoder fallback, multi-phone picker, iOS gating) shipped in 0.9.5. What is left needs a non-Samsung phone, or is polish.
+**Last updated:** 2026-10-18
 
 ## Why this is parked here
 
-Phone mirroring (`src/phone_mirror/scrcpyclient.{h,cpp}`, `src/managers/phonemirrormanager.{h,cpp}`, Python peers in `backend/phone_mirror/`, `frontend/PhoneMirrorView.qml`, server fork in `phone_server/`) was audited on 2026-10-17 for "anyone can plug in a phone". The 0.9.5 pass fixed every gap that a new user on a common setup hits first. The items below are either unverifiable without other hardware (a Pixel or Xiaomi, Android 11–13) or only matter on slow links. None of them affect the Jeep (Orange Pi + S22 Ultra).
+Phone mirroring (`src/phone_mirror/scrcpyclient.{h,cpp}`, `src/managers/phonemirrormanager.{h,cpp}`, `frontend/PhoneMirrorView.qml`, server fork in `phone_server/`) was audited on 2026-10-17 for "anyone can plug in a phone". The 0.9.5 pass fixed every gap that a new user on a common setup hits first. The items below are either unverifiable without other hardware (a Pixel or Xiaomi, Android 11–13) or only matter on slow links. None of them affect the Jeep (Orange Pi + S22 Ultra).
 
-Done in 0.9.5, for context. Both backends got the same behaviour, and it is documented in `wiki/phone-mirror-android-auto.html`, "Errors and recovery":
+Done in 0.9.5, for context. It is documented in `wiki/phone-mirror-android-auto.html`, "Errors and recovery":
 - Windows builds link FFmpeg (`find_path` / `find_library`), and `OCTAVE_REQUIRE_FFMPEG` is on in CI. `--smoke` logs `phone mirror native: 1`, which the Windows job checks.
 - adb probes and start prep run on a probe thread. `deviceState` / `deviceStateChanged` replace polling, and `getDeviceState()` returns the cached value.
 - New messages: `no-permissions` (plus `packaging/linux/51-android.rules`), the adb version clash and iPhone hints (`deviceHint`), and `mirrorNotice` (Xiaomi INJECT_EVENTS, no audio before Android 11, software encoder). The view no longer retries forever after an encoder failure.
@@ -15,9 +15,9 @@ Done in 0.9.5, for context. Both backends got the same behaviour, and it is docu
 - `scrcpyAutoWifi` defaults to off. Only the default changed; a saved `true` is kept.
 - Phone picker (`devices`, `selectDevice()`).
 - The bottom-bar button is gated on `nativeAvailable`.
-- Python: a bad packet is skipped instead of ending the session, and non-YUV420P frames are dropped (as in C++).
+- A bad packet is skipped instead of ending the session, and non-YUV420P frames are dropped.
 - `adb devices` parsing skips the "* daemon" start-up lines; before, they showed up as a device called `*`.
-- Tests: `tests/fake_scrcpy_server.py` + `test_scrcpy_fake_server.py` (Python client), `test_phone_mirror_probes.py`, `test_phone_mirror_view_qml.py`.
+- Tests (since ported to C++): `tests/cpp/tst_scrcpyclient.cpp` (the client against a fake scrcpy 3.x server), `tst_phonemirror.cpp` (probes, picker, notices, re-attach), `tst_phonemirrorview.cpp` (the QML view).
 
 ## Remaining gaps
 
@@ -27,7 +27,7 @@ Done in 0.9.5, for context. Both backends got the same behaviour, and it is docu
    - If no launcher draws within a few seconds, fall back to phone-screen mode.
    - Note: the `TRUSTED` flag is only set on API 33+ (`NewDisplayCapture.java:184`).
 2. **Input (M).**
-   - Host keyboard and text through `INJECT_TEXT` (already defined as `MSG_INJECT_TEXT` in Python, unused).
+   - Host keyboard and text through the scrcpy `INJECT_TEXT` control message (type 1; not sent by `scrcpyclient.cpp` yet).
    - Ignore touches that start in the letterbox instead of clamping them (`relPos()` in `PhoneMirrorView.qml`).
    - Optional clipboard sync.
 3. **Slow links (L).**
@@ -38,8 +38,7 @@ Done in 0.9.5, for context. Both backends got the same behaviour, and it is docu
 
 ## Tests still missing
 
-- The C++ client against `tests/fake_scrcpy_server.py`. There is no C++ test target yet; see `TODO/python-removal.md`, which plans one.
-- Persist / re-attach flow in the fake server.
+- Persist / re-attach flow against the fake server in `tests/cpp/tst_scrcpyclient.cpp` (the manager side is covered by `tst_phonemirror.cpp`'s `cablePullReattachesOverWifiToTheSamePhone`).
 
 ## Hardware checks still open
 

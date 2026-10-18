@@ -1,4 +1,3 @@
-// networkmanager.cpp — C++ port of backend/network_manager.py
 // OCTAVE Network Manager
 
 #include "networkmanager.h"
@@ -315,8 +314,7 @@ void NetworkManager::applySelfUpdate()
 
     m_updating = true;
 
-    // Relay setProgress() messages from the step machine to selfUpdateMessage
-    // (mirrors the timer Python's _submit_work() starts).
+    // Relay setProgress() messages from the step machine to selfUpdateMessage.
     m_resultPollTimer->start();
 
     m_selfUpdateStatus = QStringLiteral("fetching");
@@ -451,7 +449,7 @@ void NetworkManager::refreshNetworkStatus()
 void NetworkManager::startConnectivityCheck()
 {
     // Use QNetworkAccessManager to check internet connectivity by hitting
-    // Google's generate_204 endpoint (same as the Python version).
+    // Google's generate_204 endpoint.
     QNetworkRequest request{QUrl(QStringLiteral("https://clients3.google.com/generate_204"))};
     request.setTransferTimeout(5000);
 
@@ -488,7 +486,7 @@ void NetworkManager::startConnectivityCheck()
 void NetworkManager::startNetworkNameCheck()
 {
     // Platform-specific network name detection using external commands.
-    // Same logic as Python's _get_network_name_sync(), but non-blocking via QProcess.
+    // Non-blocking via QProcess.
 
 #ifdef Q_OS_ANDROID
     // Android: simplified — just report "WiFi"
@@ -594,7 +592,7 @@ void NetworkManager::onNetworkNameCheckFinished()
                         }
                     }
                 }
-                // Neither WiFi nor Ethernet — report "" like Python does
+                // Neither WiFi nor Ethernet — report ""
                 clearNetworkName();
             });
             ethProc->start(QStringLiteral("nmcli"),
@@ -630,7 +628,7 @@ void NetworkManager::onNetworkNameCheckFinished()
                     return;
                 }
             }
-            // Neither WiFi nor Ethernet — report "" like Python does
+            // Neither WiFi nor Ethernet — report ""
             clearNetworkName();
         });
         ethProc->start(QStringLiteral("ifconfig"), {QStringLiteral("en0")});
@@ -678,7 +676,7 @@ void NetworkManager::onNetworkNameCheckFinished()
                     }
                 }
             }
-            // Neither WiFi nor Ethernet — report "" like Python does
+            // Neither WiFi nor Ethernet — report ""
             clearNetworkName();
         });
         ethProc->start(QStringLiteral("netsh"),
@@ -726,8 +724,6 @@ void NetworkManager::runSelfUpdateStep()
     //   3 — cmake -S <repo> -B <build dir> (re-bakes the commit hash)
     //   4 — cmake --build <build dir> (the running binary is only replaced here)
     //   5 — git log -1 --format=%h %s (get new commit info)
-    //
-    // The Python backend runs from source and does py_compile + pip instead.
 
     if (m_gitProcess) {
         m_gitProcess->deleteLater();
@@ -1023,7 +1019,6 @@ QString NetworkManager::repoDir() const
 {
     // In C++ build, the repo dir is the application directory's parent
     // (assuming the binary lives in a build/ or bin/ subdirectory).
-    // This mirrors the Python approach of going up from backend/ to the repo root.
     return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral(".."));
 }
 

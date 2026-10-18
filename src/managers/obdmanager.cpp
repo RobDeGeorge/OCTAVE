@@ -769,7 +769,6 @@ void OBDManager::cleanupWorkerThread()
 
 // BerryIMU parameters ride through OBDParameterModel like PIDs but are fed by
 // berryIMU, not the adapter -- demand for them never reaches the poll set.
-// (Same list as Python IMU_PARAM_IDS.)
 static const QSet<QString> &imuParamIds()
 {
     static const QSet<QString> ids = {
@@ -1152,8 +1151,7 @@ void OBDManager::onPortChangeDebounce()
 
 void OBDManager::applyPollList()
 {
-    // Mirror of the Python _refresh_watchers(): swap the poll list in place,
-    // no reconnect.
+    // Swap the poll list in place, no reconnect.
     if (!m_connected) {
         qDebug() << "[OBD] Poll set changed -- applied on next connection";
         return;
@@ -1235,7 +1233,7 @@ bool OBDManager::isConnected() const
 
 QString OBDManager::get_connection_status() const
 {
-    // Same vocabulary as connectionStatusChanged (and the Python backend):
+    // Same vocabulary as connectionStatusChanged:
     // "Disconnected", "Connecting", "Connected", "No Vehicle", ... so the
     // QML status colour map keys on one set of strings.
     return m_connectionStatus;
@@ -1576,8 +1574,7 @@ void OBDManager::scan_vehicle()
 
 #ifdef Q_OS_ANDROID
     // No worker thread here: the supported-PID bitmaps were read during
-    // connect (queryAndroidSupportedPids), so answer from that cache the way
-    // the Python backend answers from python-obd's supported_commands.
+    // connect (queryAndroidSupportedPids), so answer from that cache.
     emit scanOutputChanged(QStringLiteral("[SCAN] Starting vehicle PID scan..."));
     if (m_androidSupportedPids.isEmpty()) {
         emit scanOutputChanged(QStringLiteral("[WARN] No supported PIDs returned from vehicle"));
@@ -1607,7 +1604,7 @@ bool OBDManager::is_scanning() const
 
 QStringList OBDManager::get_all_parameter_names() const
 {
-    // Return command names matching the Python _get_all_commands() keys
+    // Every base command name (python-obd naming)
     static const QStringList names = {
         QStringLiteral("COOLANT_TEMP"), QStringLiteral("CONTROL_MODULE_VOLTAGE"),
         QStringLiteral("ENGINE_LOAD"), QStringLiteral("THROTTLE_POS"),
@@ -2055,8 +2052,7 @@ void OBDConnectionWorker::doConnect()
 
 
     // Try to read a PID to verify vehicle connection. Send RPM request as a
-    // quick check, waiting up to the configured connection timeout (the
-    // python-obd `timeout=` the Python backend passes to obd.Async).
+    // quick check, waiting up to the configured connection timeout.
     QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), m_timeout * 1000);
     if (response.isEmpty() || response.toUpper().contains(QStringLiteral("NO DATA")) ||
         response.toUpper().contains(QStringLiteral("UNABLE"))) {
@@ -2536,7 +2532,7 @@ void OBDConnectionWorker::doScanVehicle()
         }
     }
     // Report in the shared vocabulary (base command names + multi-value
-    // signal ids for PIDs 0x61+), same as the Android path and Python.
+    // signal ids for PIDs 0x61+), same as the Android path.
     const int unsupported = total - supportedNames.size();
     supportedNames = ELM327Protocol::supportedCommandNames(supportedPids);
 
@@ -2560,8 +2556,7 @@ void OBDConnectionWorker::doScanVehicle()
 // owned by OctaveOBDBridge.java; the main thread polls its state code and
 // notification queue on a 50 ms timer. ELM327 init runs as a state machine
 // via QTimer between AT commands; PID polling is response-driven (next PID
-// requested when the previous response arrives). Mirrors the deleted Python
-// AndroidOBDManager (commit 75b1d3f^).
+// requested when the previous response arrives).
 // ===========================================================================
 #ifdef Q_OS_ANDROID
 

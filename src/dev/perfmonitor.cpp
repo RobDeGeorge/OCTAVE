@@ -120,8 +120,8 @@ PerfMonitor::PerfMonitor(const QString &csvPath, const QString &logPath, QObject
     : QObject(parent)
 {
     // A 5 ms precise timer; how late each tick fires is the loop latency.
-    // (Python uses a 0 ms timer and the gap between firings, which keeps the
-    // loop spinning: a whole core in C++, and it skews the CPU numbers.)
+    // (A 0 ms timer timing the gap between firings would keep the loop
+    // spinning: a whole core, and it skews the CPU numbers.)
     m_probeTimer.setInterval(kProbeIntervalMs);
     m_probeTimer.setTimerType(Qt::PreciseTimer);
     connect(&m_probeTimer, &QTimer::timeout, this, &PerfMonitor::onProbe);
@@ -159,7 +159,7 @@ void PerfMonitor::start()
     OctavePerf::g_enabled.store(true);
     m_jitterStop = false;
     m_jitterThread = std::thread([this] {
-        // Sleep 10 ms, record how late the wake-up was (Python's GIL probe)
+        // Sleep 10 ms, record how late the wake-up was
         constexpr auto interval = std::chrono::milliseconds(10);
         while (!m_jitterStop.load()) {
             const qint64 t0 = monotonicNs();
@@ -292,7 +292,7 @@ void PerfMonitor::onReport()
         m_summary = summary;
     }
 
-    // Slots with p95 over 2 ms, as the Python monitor reports them
+    // Slots with p95 over 2 ms
     QStringList slow;
     {
         QMutexLocker l(&s_slotLock);

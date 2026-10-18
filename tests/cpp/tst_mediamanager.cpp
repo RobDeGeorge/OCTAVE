@@ -1,8 +1,7 @@
 // MediaManager playback robustness: a missing track must not silently stop
 // playback, shuffle must survive a playlist re-select (what a library rescan
-// does), and a truncated cover in the cache is never served. Ported from
-// tests/test_media_playback_robustness.py, against a real MediaManager and a
-// scanned temp library (the "songs" are placeholder bytes; nothing here
+// does), and a truncated cover in the cache is never served. Runs against a
+// real MediaManager and a scanned temp library (the "songs" are placeholder bytes; nothing here
 // waits for the player to decode them).
 
 #include <QCryptographicHash>

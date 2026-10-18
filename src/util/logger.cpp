@@ -28,7 +28,7 @@
 
 namespace {
 
-// Rotation policy, same as the Python backend (logging_config.py)
+// One log file, rotated at maxBytes into `backups` numbered copies
 struct RotatingFile {
     QString path;
     qint64 maxBytes = 0;
@@ -93,7 +93,7 @@ const char *levelName(QtMsgType t)
 
 void handler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
 {
-    // Same shape as the Python file format:
+    // Line format:
     // 2026-09-10 12:00:00 | INFO    | octave.media | file.cpp:123 | message
     const QString category = ctx.category ? QString::fromLatin1(ctx.category) : QStringLiteral("default");
     QString where;

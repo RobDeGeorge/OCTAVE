@@ -185,7 +185,6 @@ ApplicationWindow {
         }
 
         // Note: albumColorsExtracted signal is connected via Connections component below
-        // for better reliability with PySide6 signals
         
         // Update theme list when custom themes change
         if (settingsManager) {
@@ -329,8 +328,7 @@ ApplicationWindow {
 
         function onAlbumArtColorsChanged(themeJson) {
             console.log("[AlbumArtCapture] settingsManager received albumArtColorsChanged!")
-            // In PySide6, signal arguments may not pass through Connections properly
-            // So we read directly from the property as a workaround
+            // Read the colours from the property rather than the signal argument
             var colors = settingsManager.albumArtColors
             console.log("[AlbumArtCapture] Colors from property, length:", colors ? colors.length : "null")
             if (colors && colors.length > 0) {
@@ -376,7 +374,7 @@ ApplicationWindow {
         }
     }
 
-    // Remote navigation for perf testing (called from Python command server)
+    // Remote navigation for perf testing (called by the dev command server)
     function navigateTo(pageName) {
         var pageMap = {
             "MainMenu.qml":         { file: "MainMenu.qml",         props: { stackView: stackView, windowWidth: mainWindow.width, windowHeight: mainWindow.height } },
@@ -1278,7 +1276,6 @@ ApplicationWindow {
     }
 
     // Note: OBD manager signal connection is done manually in Component.onCompleted
-    // for better reliability with PySide6
 
     // Settings manager connections for shift light settings changes
     Connections {

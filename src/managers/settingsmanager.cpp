@@ -1,4 +1,3 @@
-// settingsmanager.cpp — C++ port of backend/settings_manager.py
 // OCTAVE Settings Manager
 
 #include "settingsmanager.h"
@@ -41,7 +40,7 @@ Q_LOGGING_CATEGORY(lcSettings, "octave.settings")
 QJsonObject SettingsManager::s_settingsRegistry;
 
 // ---------------------------------------------------------------------------
-// buildSettingsRegistry — mirrors Python SETTINGS_REGISTRY dict
+// buildSettingsRegistry
 // ---------------------------------------------------------------------------
 QJsonObject SettingsManager::buildSettingsRegistry()
 {
@@ -117,7 +116,7 @@ QJsonObject SettingsManager::buildSettingsRegistry()
 }
 
 // ---------------------------------------------------------------------------
-// buildDefaultSettings — mirrors Python _default_settings dict
+// buildDefaultSettings
 // ---------------------------------------------------------------------------
 QJsonObject SettingsManager::buildDefaultSettings() const
 {

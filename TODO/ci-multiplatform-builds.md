@@ -1,17 +1,17 @@
 **Status:** parked — the build matrix exists; what remains is the release process itself
-**Last updated:** 2026-09-09
+**Last updated:** 2026-10-18
 
 # First real release (v0.9.0) and nightly builds
 
 ## What is already done (do not redo)
 
-`.github/workflows/build.yml` now has, on every push/PR to `main`: `lint` (ruff, warn-only),
-`test` (headless pytest smoke + boot), `phone-server` (jar/source invariants),
-`cpp-compile-check` (Linux CMake build + qmllint). On `v*` tags or manual dispatch the full
+`.github/workflows/build.yml` now has, on every push/PR to `main`: `lint` (ruff over the
+Python helper scripts), `phone-server` (jar/source invariants), `cpp-compile-check` (Linux
+CMake build + the `tests/cpp` QtTest suite via ctest + qmllint). On `v*` tags or manual dispatch the full
 C++ matrix runs — `cpp-build-windows`, `cpp-build-macos` (macos-14), `cpp-build-linux`
 (x86_64 AppImage), `cpp-build-linux-arm64` (aarch64 AppImage for the Orange Pi),
 `cpp-build-android` (APK) — and `release` attaches every artifact to one GitHub Release.
-Python is dev-only and is not packaged (see CLAUDE.md); the PyInstaller pipeline is gone.
+The app is C++ only (the Python backend was removed on 2026-10-18); the PyInstaller pipeline is gone.
 The full-matrix dispatch was green on 2026-09-09 (arm64 needed the GStreamer plugin drop).
 
 ## What is left

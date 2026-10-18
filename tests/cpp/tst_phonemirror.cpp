@@ -1,9 +1,7 @@
 // PhoneMirrorManager without a phone: the adb parsing / state / serial-choice
 // / server-log tables, Wi-Fi serials and messages, QR pairing, the phone media
 // follow / hand-back rules, notices, the encoder fallback, and the async start
-// flow with tests/cpp/fake-adb.sh standing in for adb. Ported from
-// tests/test_phone_mirror_probes.py, test_phone_mirror_wireless.py and
-// test_phone_mirror_media.py (manager half).
+// flow with tests/cpp/fake-adb.sh standing in for adb.
 
 #include <QDateTime>
 #include <QElapsedTimer>

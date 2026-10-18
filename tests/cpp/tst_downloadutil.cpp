@@ -1,9 +1,7 @@
 // Download helpers (src/managers/downloadutil.cpp): yt-dlp search output to
 // the result objects the QML download page binds to, the library scan that
 // marks songs as already downloaded, and power-cut-safe staging (a song only
-// appears under its library name once it is complete). The C++ counterpart of
-// tests/test_download_ytm_parse.py and tests/test_download_partial_file.py;
-// the C++ backend searches through yt-dlp, not ytmusicapi.
+// appears under its library name once it is complete).
 
 #include <QDir>
 #include <QFile>

@@ -18,8 +18,7 @@
 // Phase 1 of TODO/obd-adapter-discovery.md: the full flow runs on desktop
 // Linux (Pi / Orange Pi included). Elsewhere `supported` is false and the QML
 // sheet falls back to obdManager.availableAdapters.
-// Mirrors backend/obd_adapter_finder.py; QML context property
-// "obdAdapterFinder".
+// QML context property "obdAdapterFinder".
 
 #include <QObject>
 #include <QHash>

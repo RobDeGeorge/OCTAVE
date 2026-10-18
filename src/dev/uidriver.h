@@ -1,8 +1,7 @@
 #ifndef OCTAVE_DEV_UIDRIVER_H
 #define OCTAVE_DEV_UIDRIVER_H
 
-// GUI-thread half of the command server (Python: NavigationBridge in
-// backend/command_server.py): navigation through Main.qml's functions,
+// GUI-thread half of the command server: navigation through Main.qml's functions,
 // window grabs, MP4 recording through ffmpeg, and finding / poking / clicking
 // QML items by objectName or text. Every method runs on the GUI thread
 // (handlers reach it through CommandServer::onGui()).
@@ -59,7 +58,7 @@ public:
     void drag(double x1, double y1, double x2, double y2, int steps);
     QVariant typeText(const QString &text, bool enter, const QString &field);
 
-    // Geometry + effective visibility of an item, as the Python bridge reports it
+    // Geometry + effective visibility of an item
     static QVariantMap itemGeometry(QQuickItem *item);
 
 private:

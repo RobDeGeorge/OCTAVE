@@ -1,10 +1,8 @@
 #ifndef OCTAVE_DEV_CARSIM_H
 #define OCTAVE_DEV_CARSIM_H
 
-// Simulated car for `octave --dev` (C++ port of dev/mock_obd_manager.py's
-// physics). Unlike the Python mock, which replaced obdManager wholesale, the
-// C++ dev mode keeps the real OBDManager and points it at a simulated ELM327
-// adapter (simelm327.h), so the real protocol parsing, demand-driven polling,
+// Simulated car for `octave --dev`. Dev mode keeps the real OBDManager and
+// points it at a simulated ELM327 adapter (simelm327.h), so the real protocol parsing, demand-driven polling,
 // vehicle scan and VIN decode all run against this model.
 //
 // CarSim lives on the GUI thread and steps the physics at 60 Hz. The adapter
@@ -50,7 +48,7 @@ struct CarValues {
     QStringList storedDtcs{QStringLiteral("P0300"), QStringLiteral("P0420")};
     QStringList pendingDtcs{QStringLiteral("P0300")};
     QString freezeFrameDtc = QStringLiteral("P0420");
-    QString vin = QStringLiteral("1J4FA49S03P123456");   // 2003 Jeep, like the Python mock
+    QString vin = QStringLiteral("1J4FA49S03P123456");   // 2003 Jeep
 };
 
 // Link behaviour the adapter applies on top of the values.
@@ -109,7 +107,7 @@ public:
     // Adapter unplugged (false) until plugged back in: no vehicle at all
     void setLinkUp(bool up);
 
-    // sim_status: same keys as the Python SimBridge.status()
+    // sim_status command result
     QVariantMap status() const;
 
 private slots:
@@ -130,7 +128,7 @@ private:
 
 // Routes the dev overlay's key events into the simulator (W/S throttle and
 // brake while held, Space rev, E engine, Q/R shift, 1-6 gear, F1-F4 scenarios).
-// QML context property `devKeyboardController`, same as Python.
+// QML context property `devKeyboardController`.
 class DevKeyboardController : public QObject
 {
     Q_OBJECT

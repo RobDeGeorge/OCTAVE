@@ -40,8 +40,8 @@ Item {
     // download always goes ahead; the page only mentions the permission once.
     // Until v0.9.2 the first tap instead threw the user into Android's system
     // settings page and did nothing else — and Android killed the backgrounded
-    // app while they were there. Only the C++ backend exposes
-    // hasStorageAccess() (desktop C++ and Python: always true).
+    // app while they were there. On desktop
+    // hasStorageAccess() is always true.
     property bool storageHintShown: false
     function startDownload(songJson) {
         downloadManager.download_song(songJson)

@@ -110,13 +110,13 @@ int main(int argc, char *argv[])
     app.setOrganizationName("OCTAVE");
     app.setApplicationName("OCTAVE");
 
-    // Force Qt Quick Controls to Basic style (matches Python version —
-    // required for full Slider customization)
+    // Force Qt Quick Controls to Basic style (required for full Slider
+    // customization)
     QQuickStyle::setStyle("Basic");
 
     QQmlApplicationEngine engine;
 
-    // ---- Auto-detect screen scale (mirrors main.py logic) ----
+    // ---- Auto-detect screen scale ----
     // Scale off the SHORTER axis so the factor is the same whether the
     // display reports landscape or portrait dimensions. On Android the
     // primary-screen availableSize() is the device's natural (portrait)
@@ -226,8 +226,6 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("audioAnalyzer", &audioAnalyzer);
 
     // Volume wiring moved below after all managers are created
-
-    // Auto-rescan library when download completes (wired when downloadManager is ported)
 
     // ==================================================================
     // Phase 3: Online Features
@@ -347,10 +345,9 @@ int main(int argc, char *argv[])
         mediaManager.scan_library(false);
     });
 
-    // Wire volume controller -> all audio outputs. Same fan-out as
-    // backend/volume_utils.py VolumeController.applyVolume(): media + phone
-    // mirror take the curved linear value, the ESP32 LED ring the raw
-    // percent (the ESP32 manager rate-limits itself).
+    // Wire volume controller -> all audio outputs. Media and phone mirror
+    // take the curved linear value, the ESP32 LED ring the raw percent (the
+    // ESP32 manager rate-limits itself).
     QObject::connect(&volumeController, &VolumeController::volumeApplied,
                      [&mediaManager, &phoneMirrorManager, &esp32VolumeManager](int percent, float linear) {
         mediaManager.setVolume(linear);
@@ -363,7 +360,7 @@ int main(int argc, char *argv[])
     });
     volumeController.applyVolume(settingsManager.currentVolume());
 
-    // ---- QML import path: share frontend/ with Python version ----
+    // ---- QML import path: frontend/ ----
 #ifdef Q_OS_ANDROID
     // On Android, frontend/ is bundled as assets (see android/assets/frontend
     // symlink). Qt supports the "assets:" URL scheme for anything under assets/.
@@ -494,8 +491,7 @@ int main(int argc, char *argv[])
     });
 
 #ifndef Q_OS_MOBILE
-    // ESP32 LED ring colour sync (mirrors main.py send_current_led_color /
-    // sync_theme_to_esp32 / on_static_color_changed / on_color_mode_changed).
+    // ESP32 LED ring colour sync.
     // "static" mode pushes the user's picked colour; "theme" mode follows the
     // album-art accent. Cyan (0,255,255) is the fallback when a colour is
     // missing or unparsable.
@@ -542,7 +538,7 @@ int main(int argc, char *argv[])
     });
     // Push the full state (volume / mute / colour) once the knob is up; the
     // 500 ms delay gives the firmware time to finish its own boot after the
-    // serial port opens (same as main.py on_esp32_connection_changed).
+    // serial port opens.
     QObject::connect(&esp32VolumeManager, &ESP32VolumeManager::connectionStatusChanged,
                      &esp32VolumeManager, [&, sendCurrentLedColor](const QString &status) {
         if (status != QLatin1String("Connected"))

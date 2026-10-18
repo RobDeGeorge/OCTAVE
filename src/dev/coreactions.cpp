@@ -52,7 +52,7 @@ struct NumSetting {
     double lo, hi;
 };
 
-// Same tables as backend/command_server.py
+// Lookup tables for the navigate / settings actions
 const QList<QPair<QString, QString>> kPages = {
     {"home", "MainMenu.qml"}, {"media_room", "MediaRoom.qml"}, {"media_player", "MediaPlayer.qml"},
     {"obd", "OBDMenu.qml"}, {"obd_home", "OBDHome.qml"}, {"obd_diagnostics", "OBDDiagnostics.qml"},

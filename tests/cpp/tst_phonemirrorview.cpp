@@ -1,7 +1,6 @@
 // PhoneMirrorView against a fake phoneMirrorManager: the QR screen for "no
 // phone", the hint under it, auto-restart when a probe reports the phone back,
-// which errors are retried, and the phone picker with two phones. Ported from
-// tests/test_phone_mirror_view_qml.py.
+// which errors are retried, and the phone picker with two phones.
 
 #include <QJSValue>
 #include <QQmlComponent>

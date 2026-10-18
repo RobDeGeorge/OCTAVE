@@ -2,8 +2,7 @@
 #define OCTAVE_DEV_DEVTOOLSMANAGER_H
 
 // Backing object for the dev tools panel (src/dev/qml/DevToolsPanel.qml),
-// exposed to QML as `devToolsManager` in dev mode only. C++ port of
-// dev/dev_tools_manager.py: window grabs into dev/screenshots/output with a
+// exposed to QML as `devToolsManager` in dev mode only: window grabs into dev/screenshots/output with a
 // manifest.json, a markdown gallery, and open/clear of the output folder.
 
 #include <QDir>

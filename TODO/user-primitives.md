@@ -1,7 +1,7 @@
 # User-Created, Shareable Dashboard Primitives
 
 **Status:** parked (design agreed in principle, not started)
-**Last updated:** 2026-10-04
+**Last updated:** 2026-10-18
 
 ---
 
@@ -17,8 +17,7 @@ building blocks.
 ## Why it's parked
 
 Sharing a *dashboard* is safe because a dashboard is pure data: the importer
-(`sanitizeImportedSpec` in `src/managers/dashboardmanager.cpp` and
-`backend/dashboard_manager.py`) keeps only known keys and scalar props, and nothing in
+(`sanitizeImportedSpec` in `src/managers/dashboardmanager.cpp`) keeps only known keys and scalar props, and nothing in
 the file runs.
 
 A primitive is different. The obvious implementation — drop a `.qml` file into a
@@ -51,14 +50,14 @@ Most of what people will want to share is *a look*, not new drawing code:
 
 Both are pure JSON, so they reuse the existing sanitizer and share pipeline
 (`exportDashboard` / `importDashboardFromText` → add `"kind": "preset" | "composite"`
-or a sibling `exportPreset` / `importPreset` pair). No code runs, and both
-backends only need JSON I/O (parity is cheap).
+or a sibling `exportPreset` / `importPreset` pair). No code runs, and
+`DashboardManager` only needs JSON I/O.
 
 Work items:
 - Schema: `{"schema": 1, "kind": "widgetPreset", "label", "baseType", "props"}` and
   `{"schema": 1, "kind": "composite", "label", "gridColumns", "gridRows", "cells"}`.
 - Storage: `<app data>/widgets/*.json` scanned by `DashboardManager` (or a new
-  `WidgetLibraryManager` in both backends), hot-reloaded like dashboards.
+  C++ `WidgetLibraryManager`), hot-reloaded like dashboards.
 - `WidgetCatalog`: merge user presets into `widgets` at runtime (catalog entries
   gain `"source": "builtin" | "user"`, `"baseType"`).
 - Editor: "Save as preset" on the properties panel; the palette gets a "Mine"
@@ -99,7 +98,7 @@ this after Tier 1 ships, and only with all of these:
 
 ## Recommended order
 
-1. Tier 1 widget presets (schema, storage in both backends, "Save as preset", palette
+1. Tier 1 widget presets (schema, storage, "Save as preset", palette
    section, share/import).
 2. Tier 1 composites (renderer + canvas grouping).
 3. Re-ask the user whether Tier 2 is still wanted once presets exist. It may not be.

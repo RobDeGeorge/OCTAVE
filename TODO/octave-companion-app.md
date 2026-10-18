@@ -1,7 +1,7 @@
 # OCTAVE Companion app (Android)
 
 **Status:** deferred — scoped, not started
-**Last updated:** 2026-09-09
+**Last updated:** 2026-10-18
 
 ## What it is
 
@@ -31,8 +31,8 @@ for a few weeks and the wireless-connection pain is real rather than assumed.
 2. **Phone data over the same link:** notifications (NotificationListener),
    calls and SMS (with the user's consent), now-playing metadata
    (MediaSession), battery, phone GPS as a fallback for the car's own. Simple
-   JSON over one TCP socket or WebSocket; OCTAVE side is a new `CompanionManager`
-   (both backends, per CLAUDE.md parity).
+   JSON over one TCP socket or WebSocket; OCTAVE side is a new C++
+   `CompanionManager`.
 3. **Setup UX:** a first-run flow that walks the user through enabling USB /
    wireless debugging instead of the text block in `PhoneMirrorView.qml`.
 
@@ -51,7 +51,7 @@ for a few weeks and the wireless-connection pain is real rather than assumed.
 ## Where the code would live
 
 - `companion/` — Android app (Kotlin, Gradle, minSdk 30 for wireless debugging).
-- `backend/companion_manager.py` + `src/managers/companionmanager.{h,cpp}`.
+- `src/managers/companionmanager.{h,cpp}`.
 - `frontend/settings/AccessoriesSettingsPage.qml` — pairing card.
 - Wiki: new `companion-app.html`, plus `phone-mirror-android-auto.html` for the
   wireless path.

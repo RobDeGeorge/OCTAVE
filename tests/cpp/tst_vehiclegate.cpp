@@ -2,7 +2,7 @@
 // DashboardRenderer against a fake `obdManager` with the gate API
 // (vehicleSupportedParameters / vehicleScanComplete / setParameterDemand).
 // Checks what the renderer shows before a scan, after one, and after the
-// vehicle disconnects. Ported from tests/test_vehicle_gate_qml.py.
+// vehicle disconnects.
 
 #include <QJSValue>
 #include <QQmlComponent>

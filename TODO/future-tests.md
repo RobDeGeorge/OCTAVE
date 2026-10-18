@@ -4,18 +4,20 @@
 
 **Last updated:** 2026-10-18
 
-> **Since 2026-10-18 the Python backend is frozen** (`TODO/python-removal.md`). Add new tests to the C++ QtTest suite in `tests/cpp/` (run with `ctest`), not to the pytest suite below; read the Python-specific items here as "the C++ equivalent". The baseline below describes the frozen pytest suite.
+**Why parked:** the C++ QtTest suite now covers the subsystems that broke most often (ELM327 parsing, OBD demand polling, the simulated car, phone mirror, downloads, dashboards). What is left below is useful but not urgent, and each item is also a prerequisite for a step in `god-object-splits.md`, so it gets picked up when that work starts.
 
 ---
 
 ## Current state (baseline)
 
-The smoke test suite at `tests/test_smoke.py` runs 21 tests in CI on every push / PR:
+The suite lives in `tests/cpp/` (QtTest, one executable per `tst_*.cpp`, registered with `octave_add_test()` in `tests/cpp/CMakeLists.txt`). `ctest --test-dir build --output-on-failure` runs 17 tests, headless on the offscreen platform, and CI runs them on every push / PR:
 
-- **16 import tests** (one per backend module) — catches syntax errors, missing dependencies, top-level crashes
-- **QApplication init test** — proves headless Qt startup works
-- **Volume curve math test** — pins the quadratic curve in `backend/volume_utils.py`
-- **Safe manager instantiation test** — constructs `SettingsManager` / `AudioAnalyzer` / `NetworkManager` with a tmp config dir
+- **Protocol and parsing:** `tst_elm327protocol` (DTC / freeze frame / VIN parsing, extended PIDs, multi-frame replies, every extended parameter wired), `tst_esp32readbuffer`, `tst_downloadutil`, `tst_adaptivebitrate`, `tst_scrcpyclient` (fake scrcpy server)
+- **Managers:** `tst_settingsmanager` (backup restore after a truncated file, failed write leaves the file intact), `tst_dashboardmanager` (import sanitizer, export/import round trip), `tst_mediamanager` (missing tracks, shuffle, zero-byte covers), `tst_obdmanager` (demand-driven poll list, RFCOMM bind failure), `tst_obdadapterfinder`, `tst_phonemirror`, `tst_vehiclegate`
+- **Integration:** `tst_obdsim` (the real `OBDManager` against `src/dev/simelm327`), `tst_boot` (the app boots, and `--dev --profile` answers on the command server)
+- **QML:** `tst_qmlfixtures` (runs `tests/fixtures/*Smoke.qml` through `tests/cpp/qmlfixturehost`), `tst_phonemirrorview`, `tst_musicdeviceassets`
+
+CI also runs a `qmllint` error pass over `frontend/` in the `cpp-compile-check` job, so the old "qmllint in CI" item is done and dropped from this list. So is the old ELM327 parser suite (`tst_elm327protocol`) and the Android stub-interface check (the C++ build uses `#ifdef Q_OS_ANDROID` inside the real managers, not separate stub classes, so there is nothing to drift).
 
 That's the floor. Everything below is optional additions, ordered by value-to-effort ratio.
 
@@ -23,188 +25,96 @@ That's the floor. Everything below is optional additions, ordered by value-to-ef
 
 ## Tier 1: Cheap wins (start here)
 
-### 1. ELM327 protocol unit tests
+### 1. Settings round-trip test
 
-**File:** `tests/test_elm327_protocol.py`
-**Effort:** ~2 hours
-**Value:** Very high
-
-`backend/elm327_protocol.py` is pure Python with no I/O. It parses ELM327 adapter responses into PID values. Feed it recorded byte strings, assert the parsed output.
-
-**Why this is the single highest-value test suite we could add:** OBD bugs are silent and hardware-dependent. Right now there's no way to catch a parser regression without plugging into a real car. This suite would give us confidence to refactor the OBD subsystem without physical hardware in the loop — making `god-object-splits.md` viable for `obd_manager.py`.
-
-**How to build it:** record real adapter responses using the MCP server in dev mode, check them in as fixtures under `tests/fixtures/elm327/`, parametrize a test that feeds each fixture through the parser and asserts the expected output. Cover the major PID types (coolant temp, RPM, speed, fuel level, throttle position) plus edge cases (NO DATA responses, adapter timeouts, protocol-level errors).
-
-### 2. Settings round-trip test
-
-**File:** `tests/test_settings_manager.py`
+**File:** extend `tests/cpp/tst_settingsmanager.cpp`
 **Effort:** ~1 hour
 **Value:** High — catches JSON schema drift
 
-```python
-def test_settings_persist_across_restart(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    from backend.settings_manager import SettingsManager
+The existing tests prove one value survives a truncated file. Add a test that sets a broad spread of settings through the real setters (`setCurrentVolume`, `save_theme_setting`, `save_media_folder`, `save_obd_saved_adapters`, `save_home_obd_parameters`, a custom theme, a pinned setting, ...), calls `flushPendingSave()`, destroys the manager, constructs a new one in the same temp config dir and checks every property. The existing `init()` already gives each test its own `XDG_CONFIG_HOME` / `HOME` / `APPDATA`.
 
-    s1 = SettingsManager()
-    s1.setCurrentVolume(42)
-    s1.setThemeSetting("CosmicVoyager")
-    # ... set a bunch of other settings ...
-    del s1
+Catches: someone renames a JSON key, someone removes a default, someone breaks validation when adding a new field. Users would otherwise only find this when they update OCTAVE and discover their saved settings got cleared — which is terrible.
 
-    s2 = SettingsManager()
-    assert s2.currentVolume == 42
-    assert s2.themeSetting == "CosmicVoyager"
-```
+**Bonus:** also test the upgrade path. Write an "old format" `settingsConfigure.json` (missing newer keys, a key with the wrong type) into the temp dir first, construct `SettingsManager`, and assert it reads cleanly, fills in defaults and keeps the valid old values. This catches schema-evolution bugs in `validateSettings()`.
 
-Catches: someone renames a JSON key, someone removes a default, someone breaks migration logic when adding a new field. Users would otherwise only find this when they update OCTAVE and discover their saved settings got cleared — which is terrible.
+### 2. VolumeController dispatch test
 
-**Bonus:** also test the migration path. Write an "old format" settings JSON file to the tmp dir first, construct `SettingsManager`, assert it reads cleanly and upgrades to the new format. This catches schema-evolution bugs.
-
-### 3. VolumeController dispatch test
-
-**File:** `tests/test_volume_controller.py`
-**Effort:** ~20 minutes
-**Value:** High — guards the Phase 3 refactor
-
-```python
-from unittest.mock import MagicMock
-from backend.volume_utils import VolumeController
-
-def test_apply_volume_dispatches_to_all_outputs():
-    media = MagicMock()
-    phone_mirror = MagicMock()
-    esp32 = MagicMock()
-    settings = MagicMock()
-
-    vc = VolumeController(settings, media, phone_mirror, esp32)
-    vc.applyVolume(75)
-
-    settings.setCurrentVolume.assert_called_once_with(75)
-    media.setVolume.assert_called_once_with(0.5625)  # (75/100)^2
-    phone_mirror.setVolume.assert_called_once_with(0.5625)
-    esp32.send_volume_update.assert_called_once_with(75)
-```
-
-Would have caught every volume-sync bug we fixed in Phase 3. Tiny test, huge coverage on a fragile subsystem. Also cover edge cases:
-
-- Clamping: `applyVolume(-5)` → 0, `applyVolume(150)` → 100
-- Android mode: `phone_mirror=None` — should not crash, should still dispatch to the others
-- Per-output None: any single output being None should not crash the dispatch
-
-### 4. qmllint in CI
-
-**Where:** `.github/workflows/build.yml` lint job
+**File:** new `tests/cpp/tst_volumecontroller.cpp`, `octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)`
 **Effort:** ~30 minutes
-**Value:** Medium-high
+**Value:** High — guards the single volume entry point
 
-Add a step to the existing `lint` job:
+`VolumeController` (`src/managers/volumecontroller.{h,cpp}`) persists the percent to `SettingsManager` and emits `volumeApplied(percent, linear)`; `main.cpp` connects the outputs to that signal. Test it with a `QSignalSpy`:
 
-```yaml
-- name: Install PySide6 for qmllint
-  run: pip install PySide6==6.8.0
-- name: Run qmllint on all QML files
-  run: pyside6-qmllint frontend/*.qml frontend/settings/*.qml
-```
+- `applyVolume(75)` emits once with `(75, 0.5625)` and `settingsManager.currentVolume()` becomes 75
+- Clamping: `applyVolume(-5)` → 0, `applyVolume(150)` → 100
+- `toLinear()` and `toLinearStatic()` agree and follow `(percent/100)^2`
 
-Catches: QML syntax errors, missing imports, unresolved property references, type mismatches, deprecated API usage. The `scrcpy_capture.py` missing-`Qt`-import bug that ruff caught in Phase 2 had a direct QML equivalent waiting to happen — qmllint would catch that class of bug on the QML side.
-
-**Caveat:** qmllint has some false positives with Qt Quick Controls and custom properties. Start with it as warn-only (`|| true`) to see the baseline noise, then tighten once the noise is characterized.
+Give it a temp `XDG_CONFIG_HOME` like `tst_settingsmanager`. Tiny test, good coverage on a subsystem that has drifted before.
 
 ---
 
 ## Tier 2: Medium effort, good payoff
 
-### 5. Music metadata sanitization tests
+### 3. Music metadata sanitization tests
 
-**File:** `tests/test_media_metadata.py`
+**File:** extend `tests/cpp/tst_mediamanager.cpp`
 **Effort:** ~1 hour
 **Value:** Medium
 
-`media_manager.py` has ID3 tag sanitization logic (control character removal, encoding normalization). Pure functions, easy to test. Pass in strings with:
+`MediaManager::_sanitize_metadata(text, maxLength)` (`src/managers/mediamanager.cpp`, around line 302) is static and the test class is already a friend (`friend class TstMediaManager` in `mediamanager.h`). Pass in strings with:
 
 - Control characters (`\x00`, `\x1f`)
 - Emoji (`🎵`, `🎸`)
-- Mixed encodings (UTF-8 bytes interpreted as Latin-1)
+- Mis-decoded text (UTF-8 bytes read as Latin-1)
 - Empty strings
 - Unicode normalization quirks (combining characters, NFC vs NFD)
-- Extremely long strings (DoS protection for malformed tags)
+- Extremely long strings (the `maxLength` cap, for malformed tags)
 
-Assert the cleaned output. Prevents regressions in how OCTAVE displays song titles from badly-tagged MP3s — which is a surprisingly large fraction of real-world music libraries.
+Assert the cleaned output. Prevents regressions in how OCTAVE displays song titles from badly-tagged files — which is a surprisingly large fraction of real-world music libraries. If it is worth the effort, also feed a few small tagged files through `_read_tags()`.
 
-### 6. pytest-qt signal assertion tests
+### 4. Signal wiring tests
 
-**File:** `tests/test_signals.py`
+**File:** new `tests/cpp/tst_signalwiring.cpp`, or cases added to the manager tests that already exist
 **Effort:** ~3 hours
 **Value:** Medium-high
 
-Add `pytest-qt` as a dev dependency. It provides `qtbot.waitSignal(signal, timeout=100)` — a clean way to assert signals fire within a time window.
+The per-manager tests check each manager on its own. The connections between managers are made in `src/main.cpp` and only `tst_boot` exercises them, without asserting anything about them. Pull the cross-manager `connect()` calls into a function the test can call (or build the same graph in the test), then use `QSignalSpy` / `QTRY_COMPARE` for each critical path:
 
-Write one test per critical signal path:
+- `volumeController.applyVolume(75)` reaches `MediaManager::setVolume` with the curved value
+- A track change in `MediaManager` updates the playback state saved through `SettingsManager`
+- Changing `obdBluetoothPort` in settings triggers `OBDManager`'s debounced reconnect
 
-- "Calling `media_manager.next_track()` emits `currentTrackChanged` within 100ms"
-- "Calling `volume_controller.applyVolume(75)` emits `currentVolumeChanged(75)` on `settings_manager`"
-
-Catches signal/slot wiring regressions — the kind of thing that silently breaks when someone renames a signal and forgets to update all the `.connect()` callers.
-
-### 7. Android stub interface test
-
-**File:** extend `tests/test_smoke.py`
-**Effort:** ~1 hour
-**Value:** Medium
-
-The Android build uses `backend/stubs.py` to replace hardware managers. If the real `OBDManager` grows a method that QML calls, and the stub doesn't have it, the Android build breaks silently at runtime.
-
-```python
-def test_stubs_cover_real_interfaces():
-    from backend import stubs
-    from backend import obd_manager, berryimu_manager
-    # ... etc ...
-
-    pairs = [
-        (stubs.StubOBDManager, obd_manager.OBDManager),
-        (stubs.StubBerryIMUManager, berryimu_manager.BerryIMUManager),
-        # ... etc ...
-    ]
-
-    for stub_cls, real_cls in pairs:
-        real_public = {m for m in dir(real_cls) if not m.startswith("_")}
-        stub_public = {m for m in dir(stub_cls) if not m.startswith("_")}
-        missing = real_public - stub_public
-        assert not missing, f"{stub_cls.__name__} missing: {missing}"
-```
-
-Would catch: "QML calls `obd_manager.new_feature()`, Android build crashes at runtime because the stub doesn't have `new_feature()`."
+Catches signal/slot wiring regressions — the kind of thing that silently breaks when someone renames a signal and forgets to update a `connect()` in `main.cpp`.
 
 ---
 
 ## Tier 3: High effort, worth it eventually
 
-### 8. Headless QML integration test
+### 5. Headless QML integration tests
 
-**File:** `tests/test_qml_integration.py`
+**File:** new fixtures in `tests/fixtures/`, run by `tests/cpp/tst_qmlfixtures.cpp`
 **Effort:** ~1 day initial, ongoing maintenance
-**Value:** High — but only once the suite exists and is reliably green
+**Value:** High — but only once the tests are reliably green
 
-Build a minimal `tests/fixtures/TestMain.qml` that loads a single view, inject mock managers via `engine.rootContext().setContextProperty()`, use `QTest.mouseClick()` to trigger user interactions, assert resulting state.
+The fixture host exists (`tests/cpp/qmlfixturehost.cpp`, used for the music-device and wiki smokes), and `tst_phonemirrorview.cpp` shows the pattern of a fake manager behind a real view. Extend that to the cross-cutting UI paths: load one view with real or fake managers as context properties, drive it with `QTest::mouseClick()` or property writes, assert the resulting state.
 
 Catches bugs only a full integration test can see:
 - "The volume slider doesn't update when the gesture sensor changes volume"
 - "The settings page doesn't reflect changes made via the ESP32 knob"
 
-**Warning:** these tests are notoriously flaky on headless runners if you're not careful — timing issues, missing platform plugins, subpixel rendering differences. Start with ONE test that you can get reliably green in CI, then expand slowly. Don't try to build a whole integration suite on day one.
+**Warning:** these tests are notoriously flaky on headless runners if you're not careful — timing issues, missing platform plugins, subpixel rendering differences. Start with ONE test that you can get reliably green in CI, then expand slowly.
 
-### 9. OBD protocol replay suite
+### 6. OBD protocol replay suite
 
-**File:** `tests/test_obd_replay.py`
+**File:** new `tests/cpp/tst_obdreplay.cpp`, fixtures under `tests/fixtures/obd/{make}/{model}/`
 **Effort:** ~2 days initial, ongoing as new cars are added
-**Value:** Very high — tests a subsystem that's currently impossible to test without hardware
+**Value:** Very high — the simulated car only speaks the dialect we wrote
 
-Record real adapter responses from several cars (different makes, models, ELM327 firmware versions) via the MCP server. Save them as JSON fixtures in `tests/fixtures/obd/{make}/{model}/`. Replay them through `OBDManager` with a mocked serial port that returns the recorded bytes.
+`tst_obdsim` already drives the real `OBDManager` through `OBDConnectionWorker::setCustomTransport()` with `src/dev/simelm327`. The replay suite uses the same hook with a `QIODevice` that answers from recorded traffic: capture real adapter request/response pairs from several cars and ELM327 clones (different makes, firmware versions, the Jeep first), check them in as JSON fixtures, and replay them.
 
-Tests the entire OBD subsystem — connection state machine, watchdog timer, diagnostic-mode cancellation, protocol negotiation, watcher refresh — all without a car.
+Tests the OBD subsystem against real-world quirks — echo and prompt handling, `SEARCHING...`, `NO DATA`, `CAN ERROR`, slow clones, multi-frame replies, protocol negotiation, diagnostic mode and reconnects — all without a car.
 
-**This is the prerequisite for safely splitting `obd_manager.py`** (see `god-object-splits.md`). Without this, the `obd_manager.py` split is "refactor and pray."
+**This is the prerequisite for safely splitting `obdmanager.cpp`** (see `god-object-splits.md`). Without this, the split is "refactor and pray."
 
 ---
 
@@ -212,11 +122,11 @@ Tests the entire OBD subsystem — connection state machine, watchdog timer, dia
 
 ### Snapshot testing QML visuals
 
-Flaky on headless runners (subpixel AA differences, driver-specific color variations, timing). Rewards churn (every theme tweak breaks 50 snapshots) over substance. There are exceptions if you only snapshot a few critical pages, but in general: not worth it for this project.
+Flaky on headless runners (subpixel AA differences, driver-specific color variations, timing). Rewards churn (every theme tweak breaks 50 snapshots) over substance. There are exceptions if you only snapshot a few critical pages, but in general: not worth it for this project. The dev screenshot tooling is for humans, not assertions.
 
 ### Mocking every manager in every test
 
-Brittle — every time you add a method or rename a signal, dozens of mocks need updating. Mock ONLY at the seam you're testing. Testing `VolumeController.applyVolume()`? Mock the four managers it calls. Don't reach for a universal mock framework.
+Brittle — every time you add a method or rename a signal, dozens of fakes need updating. Fake ONLY at the seam you're testing. Testing `VolumeController::applyVolume()`? Use a real `SettingsManager` in a temp dir and a `QSignalSpy`. Don't reach for a universal mock framework.
 
 ### 100% coverage as a goal
 
@@ -228,10 +138,12 @@ Coverage percentage is a vanity metric. It rewards writing trivial tests that pa
 
 ## Recommended next batch (if we ever do this)
 
-If you want the maximum bang for buck in one day of testing work, do these three together:
+If you want the maximum bang for buck in one day of testing work, do these together:
 
-1. **ELM327 protocol tests** (~2 hours) — unlocks OBD refactoring later
-2. **VolumeController dispatch test** (~20 minutes) — protects the Phase 3 refactor
-3. **qmllint in CI** (~30 minutes) — catches a whole class of QML-side bugs for free
+1. **VolumeController dispatch test** (~30 minutes) — protects the single volume entry point
+2. **Settings round-trip test** (~1 hour) — unblocks the `settingsmanager.cpp` split
+3. **Metadata sanitization tests** (~1 hour) — with item 2, unblocks the `mediamanager.cpp` split
 
-Together they cover the three most fragile subsystems in the app (OBD parsing, volume sync, QML) and take ~3 hours combined — leaving most of the day for the Settings round-trip test and music metadata sanitization tests if you're still feeling it.
+That leaves most of the day for the signal wiring tests. The OBD replay suite is its own project; start it when there is time to record traffic in the Jeep.
+
+Delete this file when every item above is either done or explicitly dropped.

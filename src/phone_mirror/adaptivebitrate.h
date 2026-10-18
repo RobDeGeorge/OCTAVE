@@ -2,8 +2,6 @@
 #define ADAPTIVEBITRATE_H
 
 // Adaptive video bit rate for phone mirroring (setting scrcpyBitRateAuto).
-// Mirrors backend/phone_mirror/adaptive_bitrate.py; the tests in
-// tests/test_adaptive_bitrate.py exercise the Python twin, keep them in step.
 //
 // Every video packet carries the phone's presentation time. Arrival time on
 // our clock minus that is the one-way delay plus an unknown clock offset; the

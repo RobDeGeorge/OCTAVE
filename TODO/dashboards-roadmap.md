@@ -1,7 +1,7 @@
 # Dashboards Roadmap — "Tony Hawk Create-A-Park for OBD Dashboards"
 
-**Status:** Phases 1–3 complete and verified on desktop (2026-09-08). A 2026-10-04 pass added per-widget label/range/color overrides, enum/string options, a drag-to-resize grip, swipe between dashboards, dashboard share/import, a vehicle support gate and demand-driven OBD polling (both backends), all verified on desktop with xvfb, the Python backend and real X input (`dev/tests/drive_dashboard_editor.py` 42/42, `dev/tests/drive_dashboard_features.py` 19/19, pytest 130/130). **Remaining: the on-device checks listed below** — delete this file once they pass.
-**Last updated:** 2026-10-04
+**Status:** Phases 1–3 complete and verified on desktop (2026-09-08). A 2026-10-04 pass added per-widget label/range/color overrides, enum/string options, a drag-to-resize grip, swipe between dashboards, dashboard share/import, a vehicle support gate and demand-driven OBD polling, all verified on desktop with xvfb and real X input (`dev/tests/drive_dashboard_editor.py` 42/42, `dev/tests/drive_dashboard_features.py` 19/19, and the then-current pytest suite 130/130). The Python backend, also verified in that pass, was removed on 2026-10-18. **Remaining: the on-device checks listed below** — delete this file once they pass.
+**Last updated:** 2026-10-18
 
 ---
 
@@ -9,7 +9,7 @@
 
 End goal: users build their own OBD dashboards from within the app, Tony-Hawk-create-a-park style. Drag gauge primitives onto a grid, wire them to PIDs, tweak thresholds and colors, save with a name. No code edits required.
 
-Today: dashboards are **JSON specs** under `frontend/dashboards/presets/`, rendered by `frontend/dashboards/DashboardRenderer.qml` and enumerated by `DashboardManager` (C++ `src/managers/dashboardmanager.{h,cpp}` + Python `backend/dashboard_manager.py`), which populates `OBDMenu.qml`'s `dashboardRegistry`. Four built-ins ship: Sport, Minimal, Full Grid, Performance.
+Today: dashboards are **JSON specs** under `frontend/dashboards/presets/`, rendered by `frontend/dashboards/DashboardRenderer.qml` and enumerated by `DashboardManager` (`src/managers/dashboardmanager.{h,cpp}`), which populates `OBDMenu.qml`'s `dashboardRegistry`. Four built-ins ship: Sport, Minimal, Full Grid, Performance.
 
 ---
 
@@ -54,7 +54,7 @@ Each new primitive requires:
 
 **This is the hinge.** Do not attempt Phase 3 without this.
 
-**Landed:** `DashboardRenderer.qml` (spec → grid); four JSON presets in `frontend/dashboards/presets/` (`sport`, `minimal`, `fullgrid`, `performance`) all carrying `"schema": 1`; `DashboardManager` shipped in **both** backends (`src/managers/dashboardmanager.{h,cpp}` and `backend/dashboard_manager.py`) and wired into `OBDMenu.qml` via `dashboardRegistry` / `_rebuildRegistry()`.
+**Landed:** `DashboardRenderer.qml` (spec → grid); four JSON presets in `frontend/dashboards/presets/` (`sport`, `minimal`, `fullgrid`, `performance`) all carrying `"schema": 1`; `DashboardManager` shipped (`src/managers/dashboardmanager.{h,cpp}`) and wired into `OBDMenu.qml` via `dashboardRegistry` / `_rebuildRegistry()`.
 **Still to verify / finish:** spec validation against `OBDParameterModel` + the type whitelist (work item 5), the `"source"` QML-fallback field (item 6), user-dashboard dir hot-reload, and a side-by-side visual parity check vs. the old hand-written versions.
 
 ### Core idea
@@ -97,7 +97,7 @@ Stop hand-writing dashboard QML files. Define dashboards as data:
 2. **Spec location split:**
    - Built-ins: `frontend/dashboards/presets/*.json` (read-only, shipped in the bundle)
    - User-defined: `~/.config/OCTAVE/dashboards/*.json` on Linux (or platform equivalent via `QStandardPaths::AppConfigLocation`) — writable, survives across installs; parallels the existing `settingsConfigure.json` persistence pattern in `src/managers/settingsmanager.cpp`
-3. **Registry refactor in `OBDMenu.qml`:** instead of hardcoding `dashboardRegistry`, populate it from (built-in presets ∪ user dashboards). `src/managers/dashboardmanager.{h,cpp}` (C++ / Qt 6) enumerates both sources and exposes the list as a QML context property, with a parallel `backend/dashboard_manager.py` peer for the Python dev backend (dual-backend parity — see CLAUDE.md). *(shipped)*
+3. **Registry refactor in `OBDMenu.qml`:** instead of hardcoding `dashboardRegistry`, populate it from (built-in presets ∪ user dashboards). `src/managers/dashboardmanager.{h,cpp}` (C++ / Qt 6) enumerates both sources and exposes the list as a QML context property. *(shipped)*
 4. **Schema versioning:** include `"schema": 1` in every spec so the format can evolve. If `DashboardRenderer` sees a newer schema than it supports, degrade gracefully (render a "this dashboard requires a newer OCTAVE" placeholder).
 5. **Validation:** on load, verify every `paramId` exists in `OBDParameterModel.allParameters` and every `type` exists in a small whitelist (the primitives listed above). Skip invalid cells with a log warning rather than crashing the whole dashboard.
 6. **Keep QML fallback:** a `"source": "path/to/Custom.qml"` field lets a dashboard bypass the JSON renderer entirely when someone needs to do something the grid can't express. Retains the current hand-written option for power users.
@@ -126,8 +126,7 @@ place, so this is unblocked.
 ### The backend is already done
 
 **Critical correction to the original plan:** `DashboardManager` (C++
-`src/managers/dashboardmanager.{h,cpp}` **and** Python
-`backend/dashboard_manager.py`, full parity) already ships everything the editor
+`src/managers/dashboardmanager.{h,cpp}`) already ships everything the editor
 needs to persist:
 
 - `saveDashboard(QVariantMap spec) -> QString id` — writes user JSON; **requires
@@ -141,8 +140,8 @@ needs to persist:
   `refresh()`, and the `dashboardsChanged()` signal (already auto-rebuilds
   `OBDMenu.qml`'s `dashboardRegistry`).
 
-**Consequence: the editor MVP is pure QML.** No `CMakeLists.txt` / `main.py`
-churn, no C++↔Python parity work for the MVP. The only thing the backend
+**Consequence: the editor MVP is pure QML.** No `CMakeLists.txt` / `src/main.cpp`
+churn for the MVP. The only thing the backend
 doesn't expose is "generate a unique id from a label" — the editor does this in
 QML (slugify + uniquify against `dashboardManager.dashboards`), mirroring the
 manager's internal `_slugify`/`_uniqueId` logic, so no new slot is needed.
@@ -255,9 +254,8 @@ These need hardware; none can be done on the desktop rig.
 - [ ] Parameter Cards: empty before the scan, then the car's full supported list.
       Note the refresh rate with every supported PID demanded (ELM327 manages
       ~10–20 PIDs/s total).
-- [ ] Switching pages changes what is polled (watch the OBD log). Python's live
-      re-watch calls `Async.stop()`, which can block the GUI for one poll cycle.
-      Check that it isn't noticeable.
+- [ ] Switching pages changes what is polled (watch the OBD log), with no
+      visible stall when the poll list is rebuilt.
 - [ ] The RPM / ELM_VOLTAGE heartbeat keeps the data watchdog quiet on an empty
       demand (e.g. on Settings pages).
 - [ ] A dashboard bound to a PID the car lacks shows "Not supported by this

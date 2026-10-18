@@ -66,8 +66,8 @@ static constexpr double BARO_INTERVAL = 0.2;
 
 // Consecutive failed accel/gyro/mag block reads before the loop declares the
 // bus dead, emits "Error" and hands off to the manager's retry/back-off path
-// (the Python backend raises on the first OSError; a small threshold here
-// rides out a single NACK without dropping the connection).
+// (a small threshold rides out a single NACK without dropping the
+// connection).
 static constexpr int MAX_CONSECUTIVE_READ_FAILURES = 5;
 
 // ==================== Madgwick AHRS ====================
@@ -282,8 +282,8 @@ bool BerryIMUWorker::openBus(bool &permissionDenied)
     m_fd = ::open(busPath.toLocal8Bit().constData(), O_RDWR);
     if (m_fd < 0) {
         if (errno == EACCES || errno == EPERM) {
-            // Same as the Python backend: a permission problem will not fix
-            // itself on retry, so report it once and stop.
+            // A permission problem will not fix itself on retry, so report
+            // it once and stop.
             permissionDenied = true;
             qCWarning(lcImu) << "permission denied on" << busPath
                              << "- add the user to the i2c group; not retrying";
@@ -640,8 +640,8 @@ void BerryIMUWorker::run()
         const bool magOk   = readMag(mx, my, mz);
         if (!accelOk || !gyroOk || !magOk) {
             // Dead-bus detection: zeros must not be fed to the filter, and a
-            // sustained failure has to surface as "Error" + retry like the
-            // Python backend does instead of silently freezing the model.
+            // sustained failure has to surface as "Error" + retry instead of
+            // silently freezing the model.
             if (++consecutiveFailures >= MAX_CONSECUTIVE_READ_FAILURES) {
                 qCWarning(lcImu) << "read loop error:" << consecutiveFailures
                                  << "consecutive I2C read failures (accel=" << accelOk
@@ -1199,7 +1199,7 @@ bool BerryIMUManager::isEnabled() { return m_enabled; }
 
 void BerryIMUManager::setEmitRate(int hz)
 {
-    hz = qBound(10, hz, 120);   // same clamp as desktop / Python
+    hz = qBound(10, hz, 120);   // same clamp as desktop
     m_emitRate = hz;
     const int rate = m_active ? m_emitRate : 5;
     m_accel->setDataRate(rate);

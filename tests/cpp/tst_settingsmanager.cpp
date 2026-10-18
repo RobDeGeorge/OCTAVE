@@ -1,7 +1,6 @@
 // Settings must survive a power cut: a truncated settings file is restored
 // from the last known-good backup instead of being replaced with defaults,
-// and a failed write never damages the file on disk. Ported from
-// tests/test_settings_persistence.py.
+// and a failed write never damages the file on disk.
 
 #include <QDir>
 #include <QFile>

@@ -1,6 +1,6 @@
 # OCTAVE Build Guide
 
-OCTAVE ships as a **C++ / Qt 6** application. Every distributed binary — `.exe`, `.dmg`, `.AppImage`, `.apk`, and (planned) `.ipa` — is built from `src/` via CMake. The Python tree in `backend/` is a developer/tinkerer backend, not a distribution path.
+OCTAVE ships as a **C++ / Qt 6** application. Every distributed binary — `.exe`, `.dmg`, `.AppImage`, `.apk`, and (planned) `.ipa` — is built from `src/` via CMake. The Python / PySide6 backend it once had is frozen on the `python-final` branch.
 
 This guide covers:
 
@@ -8,7 +8,7 @@ This guide covers:
 2. [Desktop builds](#desktop-builds-linux--macos--windows) (Linux / macOS / Windows)
 3. [Android build](#android-build) (full toolchain setup + APK)
 4. [iOS build](#ios-build) (planned, not yet wired)
-5. [Python developer backend](#python-developer-backend) (`pip install` and run)
+5. [Python helper tools](#python-helper-tools) (optional download helpers and dev scripts)
 6. [CI parity](#ci-parity) (how local commands map to GitHub Actions)
 
 ---
@@ -328,35 +328,20 @@ When this work happens, it will be added here as section 4 alongside Android.
 
 ---
 
-## Python developer backend
+## Python helper tools
 
-The Python tree in `backend/` + `main.py` is a peer backend for tinkering — same QML frontend, same managers in pure Python. Useful for rapid prototyping, hardware hacking on a Pi, or running with a REPL attached.
-
-```bash
-python -m venv venv
-source venv/bin/activate           # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
-
-Flags:
+The app has no Python dependency, but a few optional tools around it are Python. `requirements.txt` lists them; install into `./venv` next to the checkout, which is where the desktop downloader looks for `yt-dlp` and the `python3` that runs `scripts/ytmusic_search.py`:
 
 ```bash
-python main.py --debug             # debug logging
-python -m dev.main_dev             # developer mode: simulated OBD + keyboard controls
-# (the C++ peer: ./build/octave --dev, see Quick start)
+python3 -m venv venv
+venv/bin/pip install -r requirements.txt
 ```
 
-Lint and headless smoke tests (run by CI):
+The same venv carries the dev tooling's clients (MCP servers, screenshot / story / perf scripts) and `ruff`, which CI runs over `scripts/` and `packaging/`:
 
 ```bash
-ruff check .
-QT_QPA_PLATFORM=offscreen pytest tests/
+venv/bin/ruff check .
 ```
-
-The Python backend is **never** packaged or shipped. There is no PyInstaller pipeline. If you want a personal Python-side desktop binary for a Pi, run `python main.py` directly from the checkout.
-
-**Mobile (Android/iOS) is C++-only.** Do not attempt to package the Python backend for mobile.
 
 ---
 

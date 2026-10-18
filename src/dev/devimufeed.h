@@ -1,7 +1,7 @@
 #ifndef OCTAVE_DEV_DEVIMUFEED_H
 #define OCTAVE_DEV_DEVIMUFEED_H
 
-// Synthetic IMU motion for dev mode (C++ port of dev/mock_imu.py). Drives the
+// Synthetic IMU motion for dev mode. Drives the
 // REAL berryIMU manager's signals from a GUI-thread timer so QML sees exactly
 // what it would from hardware: a winding road tied to the simulated speed,
 // lateral G from speed x turn rate, longitudinal G from the change in speed,

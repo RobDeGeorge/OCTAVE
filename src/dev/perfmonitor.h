@@ -1,18 +1,16 @@
 #ifndef OCTAVE_DEV_PERFMONITOR_H
 #define OCTAVE_DEV_PERFMONITOR_H
 
-// Performance monitor for `octave --profile` (C++ port of
-// backend/perf_monitor.py). Measures event-loop latency (how late a 5 ms
-// timer fires), background-thread wake jitter, process CPU / RSS / thread
+// Performance monitor for `octave --profile`. Measures event-loop latency
+// (how late a 5 ms timer fires), background-thread wake jitter, process CPU / RSS / thread
 // count, and the per-label timings recorded by OCTAVE_PERF_SCOPE
 // (src/util/perfscope.h).
 // Prints a status line every second and writes dev/perf/logs/perf_<stamp>
-// .csv and .log in the same formats as the Python monitor, so the MCP perf
-// tools and baselines read either.
+// .csv and .log in the formats the MCP perf tools and saved baselines read.
 //
-// Python's "GIL jitter" has no C++ equivalent; the same probe (a thread that
-// sleeps 10 ms and measures how late it wakes) is kept under the same name
-// and keys, and here measures scheduler / CPU contention.
+// The wake-jitter probe (a thread that sleeps 10 ms and measures how late it
+// wakes) reports under the "GIL" name and gil_* keys those tools expect; it
+// measures scheduler / CPU contention.
 
 #include <QFile>
 #include <QObject>
@@ -25,7 +23,7 @@
 
 namespace OctaveDev {
 
-// Fixed-size sample window with percentiles (mirrors Python's _RingBuffer)
+// Fixed-size sample window with percentiles
 class RingBuffer
 {
 public:

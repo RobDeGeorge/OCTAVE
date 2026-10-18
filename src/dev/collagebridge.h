@@ -1,7 +1,7 @@
 #ifndef OCTAVE_DEV_COLLAGEBRIDGE_H
 #define OCTAVE_DEV_COLLAGEBRIDGE_H
 
-// In-app half of the UI collage tool (C++ port of dev/collage/bridge.py).
+// In-app half of the UI collage tool.
 // The driver, dev/collage/__main__.py, calls these command-server actions:
 //
 //   collage_list_popups   every Popup/Dialog/Drawer/Menu currently in the window

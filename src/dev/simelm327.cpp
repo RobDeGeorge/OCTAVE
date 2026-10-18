@@ -270,7 +270,7 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
         const QByteArray data = mode01(pid);
         if (data.isEmpty())
             return "NO DATA";
-        // Bluetooth byte loss, ~2 % of polls like the Python mock. Never on the
+        // Bluetooth byte loss, ~2 % of polls. Never on the
         // connect probe or the scan queries: a lost bitmap would leave the
         // vehicle gate with a random partial set, a lost probe a 10 s retry
         const bool scanQuery = pid == 0x01 || pid % 0x20 == 0;

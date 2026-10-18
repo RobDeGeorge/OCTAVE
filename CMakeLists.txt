@@ -363,7 +363,6 @@ qt_add_resources(octave "phone_server"
 
 # ---- QML import path: reuse existing frontend/ directory ----
 # The QML files live in frontend/ and are loaded at runtime (not compiled into resources).
-# This keeps them shared with the Python backend during migration.
 set_target_properties(octave PROPERTIES
     QT_QML_IMPORT_PATH "${CMAKE_SOURCE_DIR}/frontend"
 )

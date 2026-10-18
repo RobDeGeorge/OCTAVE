@@ -1,5 +1,5 @@
 // Adaptive phone-mirror bit rate (src/phone_mirror/adaptivebitrate.h) against
-// simulated packet streams. Ported from tests/test_adaptive_bitrate.py.
+// simulated packet streams.
 
 #include <QTest>
 

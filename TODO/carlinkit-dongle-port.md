@@ -1,7 +1,7 @@
 # Carlinkit Dongle Port (CarPlay + wireless Android Auto)
 
 **Status:** deferred — large new subsystem, no work started. Hardware ($60 dongle) required to develop and test.
-**Last updated:** 2026-05-24
+**Last updated:** 2026-10-18
 
 ## Why this is parked here
 
@@ -28,7 +28,7 @@ A local copy is at `~/Downloads/LIVI-main/` — keep a snapshot before deleting 
 
 ## Scope
 
-A new C++ manager `src/managers/carlinkitmanager.{h,cpp}` exposed to QML as `carlinkitManager`. **C++ only** — this is mobile-eligible (Android sideload could use it once Android USB host mode + permissions are wired) and there is no Python peer for USB protocol code. Document the parity exemption in the commit per `CLAUDE.md`.
+A new C++ manager `src/managers/carlinkitmanager.{h,cpp}` exposed to QML as `carlinkitManager`. It is mobile-eligible: Android sideload could use it once Android USB host mode + permissions are wired.
 
 Replaces `androidautomanager` for the wireless case but **keep DHU as a fallback** behind a setting (`useDHUForAndroidAuto`) until the dongle path proves stable in the Jeep.
 
@@ -73,7 +73,6 @@ Image provider name: `carplayframe` (mirrors existing `dhuframe` / `scrcpyframe`
 
 - **MFi compliance noise** — this is the question that always comes up. The dongle holds the MFi cert; OCTAVE talks to the dongle, not to the phone. Same legal posture as every other open-source CarPlay head-unit project on the planet. Add the same disclaimer LIVI uses (see their README) to OCTAVE's README and the in-app About page.
 - **Android sideload (`TODO/android-cpp-port.md`)** — Android USB host mode + `UsbManager` permission flow is its own subproject. Get desktop working first; tackle Android USB after [[android-cpp-port]] Phase 4 ships.
-- **Don't add a Python peer.** USB protocol code has no place in the `backend/` Python tree — note the parity exemption in the commit message per `CLAUDE.md`.
 - **Heartbeat cadence matters.** The dongle drops the connection if heartbeats stall >2s. LIVI's `MAX_ERROR_COUNT = 5` and the `_heartbeatInterval` pattern are load-bearing — port them verbatim.
 
 ## Delete this file when

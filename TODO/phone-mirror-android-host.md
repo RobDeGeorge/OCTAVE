@@ -1,7 +1,7 @@
 # Phone mirror with an Android tablet as the host
 
 **Status:** deferred — scoped, no work started. Bigger than it looks: OCTAVE would need its own adb client.
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 
 ## Why this is parked here
 
@@ -41,7 +41,7 @@ Use `MediaCodec` (JNI) for hardware H.264. Decode either to a `Surface` backed b
 - Replace the mobile stub with the real `PhoneMirrorManager`, built on an `AdbTransport` interface: `QProcess` adb on desktop, the built-in client on Android.
 - The bottom-bar button is already gated on `phoneMirrorManager.nativeAvailable` (0.9.5), so it appears once the Android build reports true.
 - Audio: `QAudioSink` works on Android. Check that ducking goes through `MediaManager.setDucking()` the same way.
-- Settings: none new expected. If any appear, they're mobile-only, so no Python peer (per `CLAUDE.md`).
+- Settings: none new expected.
 
 ### 4. Networking in the car
 

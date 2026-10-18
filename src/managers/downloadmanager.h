@@ -94,7 +94,7 @@ signals:
 
 public slots:
     // ──────────────────────────────────────────────────────────────
-    // Slots — names match the Python @Slot originals for QML
+    // Slots — names are called from QML; don't rename them
     // ──────────────────────────────────────────────────────────────
 
     // Search

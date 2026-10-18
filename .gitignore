@@ -1,7 +1,6 @@
 venv/
 __pycache__/
 *.pyc
-backend/temp/
 .claude/
 
 # Build artifacts
@@ -18,17 +17,12 @@ appimagetool-*.AppImage
 # Android build artifacts
 *.apk
 *.aab
-.buildozer/
-/buildozer.spec
 build-android/
 build-android-*/
 aqtinstall.log
 build-android-configure.log
 # Regenerate via scripts/build-android-pylib-bundle.sh
 android/assets/python-packages/ytmusic-bundle.zip
-
-# Local settings (old Python location)
-backend/settingsConfigure.json
 
 # Old bundled scrcpy binaries (no longer used; the phone server jar in tools/phone-server/ is tracked)
 tools/scrcpy/
@@ -37,20 +31,9 @@ tools/scrcpy-win64-*/
 # Google platform-tools (adb) fetched by scripts/fetch_platform_tools.py
 tools/platform-tools/
 
-# Generated protobuf files (regenerate with compile_protos.py)
-backend/android_auto/proto/aap_protobuf/**/*_pb2.py
-
-# Developer tool clients and the Python dev runtime (synced via Dropbox, not
-# git). Anchored: src/dev/ is the committed C++ dev tooling (OCTAVE_DEV_TOOLS).
+# Developer tool clients (MCP servers, screenshot / story / perf scripts;
+# synced via Dropbox, not git). Anchored: src/dev/ is the committed C++ dev tooling (OCTAVE_DEV_TOOLS).
 /dev/
-
-# Old/extra virtual environments
-venv_old_linux/
-
-# Android Auto SSL certificates (generated locally)
-backend/android_auto/certs/*.key
-backend/android_auto/certs/*.crt
-backend/android_auto/certs/*.pem
 
 # Temp files (editor swap files, crash recovery, etc.)
 *.tmp
@@ -59,11 +42,6 @@ backend/android_auto/certs/*.pem
 *.swp
 *.swo
 *.bak
-
-# Performance profiling (lives in dev/perf/)
-backend/perf_monitor.py
-backend/perf_patches.py
-backend/command_server.py
 
 # MCP config
 .mcp.json

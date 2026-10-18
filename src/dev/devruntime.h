@@ -12,8 +12,7 @@
 //                              screenshot stories and MCP tools launch)
 //   --command-port N           listen somewhere other than 9876
 //
-// Replaces `python -m dev.main_dev [--profile]` / `python main.py --profile`
-// for driving the shipped backend. See wiki/development.html.
+// See wiki/development.html.
 
 #include <QDir>
 #include <QObject>

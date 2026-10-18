@@ -203,8 +203,8 @@ bash packaging/linux/build-appimage.sh
 
         <h3>Triggers</h3>
         <ul>
-          <li><strong>Every push / PR to <code>main</code>:</strong> <code>cpp-compile-check</code> and <code>phone-server</code> (independent of each other)</li>
-          <li><strong>Version tags <code>v*</code> or manual <code>workflow_dispatch</code>:</strong> the five <code>cpp-build-*</code> jobs</li>
+          <li><strong>Every push / PR to <code>main</code>:</strong> <code>lint</code>, <code>cpp-compile-check</code> and <code>phone-server</code> (independent of each other)</li>
+          <li><strong>Version tags <code>v*</code> or manual <code>workflow_dispatch</code>:</strong> the five <code>cpp-build-*</code> jobs, each gated on <code>lint</code> and <code>cpp-compile-check</code> (so a failing ctest blocks a release)</li>
           <li><strong>Version tags only:</strong> <code>release</code>, which needs all five build jobs</li>
         </ul>
 
@@ -212,6 +212,7 @@ bash packaging/linux/build-appimage.sh
         <table>
           <thead><tr><th>Job</th><th>Runner</th><th>What it does / artifact</th><th>Retention</th></tr></thead>
           <tbody>
+            <tr><td>lint</td><td>ubuntu-22.04</td><td>Python 3.11 + <code>ruff==0.15.10</code>; <code>ruff check .</code> over the repo's Python tools (<span class="file-path">scripts/</span>, <span class="file-path">packaging/</span>; settings in <span class="file-path">pyproject.toml</span>). Blocking.</td><td>&mdash;</td></tr>
             <tr><td>cpp-compile-check</td><td>ubuntu-22.04</td><td>apt build deps + Qt 6.7.3 (<code>jurplel/install-qt-action@v4</code>, cached, modules <code>qtmultimedia qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline</code>), <code>cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug</code> + build, <code>ctest --output-on-failure</code> (offscreen), then <code>qmllint -I frontend --json</code> over every <code>frontend/**/*.qml</code>. qmllint exits non-zero on plain warnings, so the step runs it with <code>find -exec ... +</code> (not xargs, which would abort on exit 255), parses the JSON and fails only on <code>"type": "critical"</code> entries (syntax errors, unresolvable imports)</td><td>&mdash;</td></tr>
             <tr><td>phone-server</td><td>ubuntu-22.04</td><td>Temurin JDK 21, <code>android-actions/setup-android@v3</code>, <code>platforms;android-36</code> + <code>build-tools;36.0.0</code>; runs <span class="file-path">phone_server/build_without_gradle.sh</span>, then checks both the fresh jar and <span class="file-path">tools/phone-server/octave-phone-server</span> contain <code>org/octave/phoneserver/Server</code> and <code>3.3.4-octave</code> (hard failure), prints both SHA-256s and emits a <code>::warning::</code> if they are not byte-identical; uploads the fresh build as <code>octave-phone-server</code></td><td>30 days</td></tr>
             <tr><td>cpp-build-windows</td><td>windows-latest</td><td><code>OCTAVE-Windows-cpp</code>: <code>OCTAVE-&lt;v&gt;-windows-x86_64.exe</code> (Qt <code>win64_msvc2019_64</code>, vcpkg taglib + ffmpeg, adb fetch, windeployqt, Inno Setup; <code>if-no-files-found: error</code>)</td><td>30 days</td></tr>

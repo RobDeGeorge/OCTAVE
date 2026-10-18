@@ -97,7 +97,7 @@ QJsonArray parseSearchOutput(const QByteArray &rawOutput)
             }
         }
 
-        // Build the result object matching Python's format
+        // Build the result object the QML download page binds to
         QJsonObject result;
         result.insert(QStringLiteral("name"), title);
         result.insert(QStringLiteral("artist"), channel);
@@ -157,7 +157,7 @@ QMap<QString, QString> scanDownloadedFiles(const QStringList &roots, const QStri
 // and the finished, tagged file is renamed into the library in one step.
 // The head unit loses power with the ignition; writing straight to the
 // library left truncated songs that yt-dlp later reported as "already
-// downloaded". The staging dir is hidden, so neither backend's library scan
+// downloaded". The staging dir is hidden, so the library scan never
 // descends into it.
 // ═══════════════════════════════════════════════════════════════════
 

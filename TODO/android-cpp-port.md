@@ -1,11 +1,11 @@
 # Android C++ Port
 
 **Status:** active — Phases 0–3 complete. OBD-over-BLE and YT Music search/download both shipped. Remaining work is Phase 4 (sideload polish).
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-18
 
 ## Why this is parked here
 
-OCTAVE's C++ / Qt 6 backend (`src/`) is the primary desktop build across Windows, macOS, Linux, Raspberry Pi, and is now the **only** Android build. The Python / PySide6 Android APK (buildozer/p4a) was deleted on 2026-05-02 — Python is desktop-only and there is no longer a Python reference build for Android.
+OCTAVE's C++ / Qt 6 backend (`src/`) is the primary desktop build across Windows, macOS, Linux, Raspberry Pi, and is now the **only** Android build. The Python / PySide6 Android APK (buildozer/p4a) was deleted on 2026-05-02, and the Python backend as a whole was removed on 2026-10-18 (last version on the `python-final` branch).
 
 This TODO tracks finishing the C++ APK feature work. Build + sideload already work:
 
@@ -28,12 +28,12 @@ Single ABI (`arm64-v8a`) for now. Add `armeabi-v7a` only if a real target emerge
 - **Distribution:** LGPL Qt, dynamically linked, open-source-licenses screen required in-app before Play Store submission.
 - **Play Store:** deferred to a dedicated later milestone after sideload is proven. Paid app (Qt for Small Business or ongoing LGPL compliance — decide closer to submission).
 - **Downloads (`yt-dlp`):** kept for sideload (`OCTAVE_ENABLE_DOWNLOADS=ON` default), stripped for Play Store (`OFF`) — YouTube downloads violate Play policy.
-- **OBD transport on Android:** **BLE-first** (`QBluetoothDeviceDiscoveryAgent` restricted to `LowEnergyDiscoveryMethod` for scan; `QLowEnergyController` for connect). Manual MAC entry as a fallback for when the adapter is already known. Classic RFCOMM (`QBluetoothSocket`) only as a last-ditch fallback if a discovered device is explicitly tagged Classic. The QML UI in `frontend/settings/OBDSettingsPage.qml` (Android branch) is already wired for this — backend just needs the C++ implementation; the now-deleted `backend/android_obd_manager.py` is the reference for the API surface QML expects.
+- **OBD transport on Android:** **BLE-first** (`QBluetoothDeviceDiscoveryAgent` restricted to `LowEnergyDiscoveryMethod` for scan; `QLowEnergyController` for connect). Manual MAC entry as a fallback for when the adapter is already known. Classic RFCOMM (`QBluetoothSocket`) only as a last-ditch fallback if a discovered device is explicitly tagged Classic. The QML UI in `frontend/settings/OBDSettingsPage.qml` (Android branch) is already wired for this — backend just needs the C++ implementation; the API surface QML expects was originally taken from the old Python `android_obd_manager.py` (deleted 2026-05-02).
 - **CAMERA + RECORD_AUDIO permissions:** declared aspirationally in manifest (future reverse-camera / voice-command features). Review before Play Store submission — unused permissions trigger review friction.
 
 ## Android-minimum manager matrix
 
-Every manager is always instantiated so QML context properties exist; hardware-absent ones are stubbed to no-ops behind `#ifdef Q_OS_ANDROID` in `src/main.cpp`. (The former Python `backend/platform_config.py` gating module was deleted with the Python-on-Android path — Python is desktop-only and needs no Android gating.)
+Every manager is always instantiated so QML context properties exist; hardware-absent ones are stubbed to no-ops behind `#ifdef Q_OS_ANDROID` in `src/main.cpp`.
 
 | Manager (C++) | Android behavior | Notes |
 |---|---|---|
@@ -42,7 +42,7 @@ Every manager is always instantiated so QML context properties exist; hardware-a
 | `mediamanager` | Full | Local audio playback via QMediaPlayer — already portable |
 | `audioanalyzer` | Full (file FFT only) | Mic input deferred — `RECORD_AUDIO` aspirational |
 | `obdmanager` + `elm327protocol` | Full (new BT transport) | Refactor to `IOBDTransport` with serial + BT impls |
-| `volumecontroller` | Full (phone mirror + ESP32 nulled) | Match Python: pass nullptr to those deps on Android |
+| `volumecontroller` | Full (phone mirror + ESP32 nulled) | Pass nullptr to those deps on Android |
 | `networkmanager` | Full | No change |
 | `dashboardmanager` | Full | JSON format must stay cross-platform compatible |
 | `berryimumanager` | **Replaced** | New `AndroidSensorManager` using `QSensor` (QtSensors module) — accel/gyro/mag/baro from device |
@@ -84,7 +84,7 @@ Reference commits: `f1901d9` (BLE working via JNI), `2d05676` (OBDManager wired 
 
 ### Phase 4 — Sideload polish
 - Splash screen, app icon (all mipmap densities).
-- Landscape lock in manifest (`screenOrientation="landscape"` — Python uses env var, C++ uses manifest).
+- Landscape lock in manifest (`screenOrientation="landscape"` in the manifest).
 - Audio focus: verify QMediaPlayer pauses on incoming call and resumes after.
 - Scoped storage: confirm `settingsConfigure.json` + dashboard JSON land in `AppDataLocation`.
 - "Open-source licenses" screen in settings (LGPL compliance prerequisite).
@@ -106,9 +106,8 @@ Play Store submission. Write `TODO/android-play-store.md` at that point covering
 
 - `ANDROID_BUILD_SETUP.md` — user-facing toolchain install walkthrough at repo root.
 - `BUILD.md` — desktop build matrix, app-store build flag explanation.
-- `android/AndroidManifest.xml` — the C++ APK manifest / permissions (the Python `deployment/buildozer.spec` it used to mirror was deleted with the Python-on-Android path).
-- `backend/android_obd_manager.py` — Python BT OBD implementation, reference for JNI fallback if QtBluetooth fails in Phase 3.
-- `#ifdef Q_OS_ANDROID` / `#ifdef Q_OS_IOS` blocks in `src/main.cpp` and `src/managers/` — the live platform-gating pattern (the Python `backend/platform_config.py` it once mirrored was deleted).
+- `android/AndroidManifest.xml` — the C++ APK manifest / permissions.
+- `#ifdef Q_OS_ANDROID` / `#ifdef Q_OS_IOS` blocks in `src/main.cpp` and `src/managers/` — the live platform-gating pattern.
 - `.private-notes.md` (gitignored) — NEXAS MAC for test sessions.
 
 ## Order of operations

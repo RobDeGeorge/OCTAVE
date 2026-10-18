@@ -159,7 +159,7 @@ MediaManager::MediaManager(QObject *parent)
         applyOutputVolume();
     });
 
-    // Directories — use application dir as base, like the Python backend/ dir.
+    // Directories — use application dir as base.
     // On Android, applicationDirPath is /data/app/.../lib (not writable by us),
     // so use the standard Music location for default library + app's
     // writable data dir for temp.
@@ -176,8 +176,7 @@ MediaManager::MediaManager(QObject *parent)
     // Installed builds: the app dir is read-only (C:\Program Files\OCTAVE, a
     // mounted AppImage, a signed .app). Fall back to per-user locations
     // instead of failing, or on Windows silently landing in VirtualStore.
-    // A source checkout (writable build dir) keeps the old layout, which is
-    // also what the Python backend (always run from a checkout) uses.
+    // A source checkout (writable build dir) keeps the old layout.
     if (!QFileInfo(m_backendDir).isWritable()) {
         const QString music = QStandardPaths::writableLocation(QStandardPaths::MusicLocation);
         m_defaultMediaDir = (music.isEmpty() ? QDir::homePath() : music) + QStringLiteral("/OCTAVE");
@@ -419,7 +418,7 @@ static constexpr int kMaxRecoveryAttempts = 2;        // per file, then skip it
 // A resume after a pause this long reloads the track at its position rather
 // than calling play(): after a long pause the audio sink can come back
 // silent while the player reports PlayingState (seen on the Orange Pi; only
-// a skip brought the sound back). Python: LONG_PAUSE_SECONDS.
+// a skip brought the sound back).
 static constexpr qint64 kLongPauseMs = 30 * 1000;
 
 void MediaManager::_follow_default_output()

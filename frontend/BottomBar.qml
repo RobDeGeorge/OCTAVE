@@ -836,7 +836,7 @@ Rectangle {
                                 if (settingsManager) {
                                     currentValue = settingsManager.currentVolume
                                     // Route startup volume to every audio output via
-                                    // the shared VolumeController (see backend/volume_utils.py).
+                                    // the shared VolumeController (src/managers/volumecontroller.h).
                                     volumeController.applyVolume(currentValue)
                                 } else {
                                     currentValue = 10
@@ -1885,7 +1885,7 @@ Rectangle {
                                 if (settingsManager) {
                                     currentValue = settingsManager.currentVolume
                                     // Route startup volume to every audio output via
-                                    // the shared VolumeController (see backend/volume_utils.py).
+                                    // the shared VolumeController (src/managers/volumecontroller.h).
                                     volumeController.applyVolume(currentValue)
                                 } else {
                                     currentValue = 10

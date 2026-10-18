@@ -1,8 +1,7 @@
 // OBDAdapterFinder logic that needs no Bluetooth hardware: which devices count
 // as OBD adapters, list order, the hand-off to OBDManager after pairing
 // (connect_direct + a named saved-adapter chip, then the outcome read from
-// connectionStatusChanged) and staying inert without BlueZ. Ported from
-// tests/test_obd_adapter_finder.py. The hand-off runs against the real
+// connectionStatusChanged) and staying inert without BlueZ. The hand-off runs against the real
 // OBDManager talking to the simulated ELM327 (needs OCTAVE_DEV_TOOLS).
 
 #include <QSignalSpy>

@@ -12,9 +12,12 @@ actual code, **the code wins** — update this file.
 An OBD value in OCTAVE flows like this:
 
 ```
-backend/obd_manager.py  ── Signal ──▶  OBDParameterModel.qml  ── paramValues[id] ──▶  your gauge
-       (polls PID)        (emits)      (singleton aggregator)    (reactive QML binding)
+OBDManager  ── signal ──▶  OBDParameterModel.qml  ── paramValues[id] ──▶  your gauge
+(polls PIDs)  (emits)      (singleton aggregator)    (reactive QML binding)
 ```
+
+`OBDManager` is the C++ manager in `src/managers/obdmanager.cpp`, registered
+in `src/main.cpp` as the `obdManager` context property.
 
 You do **not** wire signals yourself. The `OBDParameterModel` singleton
 already listens to every `*Changed` signal on `obdManager` and mirrors each
@@ -350,7 +353,7 @@ validated and always become a new user dashboard (§5.4).
 - macOS: `~/Library/Application Support/OCTAVE/dashboards/my-board.json`
 - Windows: `%APPDATA%/OCTAVE/dashboards/my-board.json`
 
-Both backends watch the user dashboards directory, so a hand-dropped file
+`DashboardManager` watches the user dashboards directory, so a hand-dropped file
 appears in the chooser within about a second (see §5.4 Hot reload); no restart
 is needed. `dashboardManager.refresh()` forces an immediate rescan.
 
@@ -360,8 +363,8 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 - Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` drives the chooser's "Restore defaults" button. Parameter Cards (`grid`) can't be deleted. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id.
 - **Validation.** `DashboardRenderer` checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`; failures are `console.warn`ed with the dashboard id and never crash the view. The editor applies the same checks when loading a spec (`_sanitizeCells`) — unknown types are dropped, unknown PIDs cleared so the panel shows "Choose PID…".
 - **Import sanitizing.** `importDashboard` / `importDashboardFromClipboard` /
-  `importDashboardFromText` (both backends, same rules) refuse a spec whose
-  `schema` is newer than `kSupportedSchema` / `SUPPORTED_SCHEMA` (1) with
+  `importDashboardFromText` refuse a spec whose
+  `schema` is newer than `kSupportedSchema` (1) with
   "This dashboard needs a newer version of OCTAVE", keep only `schema`,
   `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `cells` and per
   cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`
@@ -370,7 +373,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   `id`, a `source` field, nested objects) is dropped. The id is always
   regenerated from the label, so an import never overwrites an existing
   dashboard. Failures set `dashboardManager.lastShareError`.
-- **Hot reload.** Both `DashboardManager` backends watch the user dashboards directory (`QFileSystemWatcher`, 300 ms debounce, rescans only when the file-name/mtime/size signature changed). Drop a JSON in from a terminal or sync client and it appears in the chooser without restarting; delete one and it disappears. If the deleted file was the active dashboard, `OBDMenu` falls back to Parameter Cards.
+- **Hot reload.** `DashboardManager` watches the user dashboards directory (`QFileSystemWatcher`, 300 ms debounce, rescans only when the file-name/mtime/size signature changed). Drop a JSON in from a terminal or sync client and it appears in the chooser without restarting; delete one and it disappears. If the deleted file was the active dashboard, `OBDMenu` falls back to Parameter Cards.
 
 ### 5.5 Vehicle gate and polling demand
 
@@ -458,13 +461,14 @@ Misc: `ABSOLUTE_LOAD`, `MAX_MAF`, `HYBRID_BATTERY_REMAINING`,
 ### Multi-value PIDs (37 more, SAE J1979 PIDs 0x61-0xB2)
 
 Newer PIDs pack several sensors into one reply, so they do not get a signal
-each: both backends emit `obdManager.obdParameterChanged(paramId, value)` and
+each: `OBDManager` emits `obdManager.obdParameterChanged(paramId, value)` and
 `OBDParameterModel` routes it into `paramValues` like any other id. Gauges
 bind them by `paramId` exactly as above. All are off by default; the vehicle
 scan enables the ones the car reports. Decoders live in
-`ELM327Protocol::extendedPidTable()` (C++) and `EXTENDED_PID_TABLE` in
-`backend/elm327_protocol.py`; `tests/test_obd_extended_pids.py` checks that
-every id is wired into both settings defaults and the QML model.
+`ELM327Protocol::extendedPidTable()` in `src/managers/elm327protocol.cpp`;
+`everyExtendedParameterIsWired` in `tests/cpp/tst_elm327protocol.cpp` checks
+that every id has a settings default (`src/managers/settingsmanager.cpp`) and
+an entry in the QML model.
 
 Boost pressure is absolute (subtract `BAROMETRIC_PRESSURE` for gauge boost).
 
@@ -638,7 +642,6 @@ src/managers/
 ├── dashboardmanager.h         enumerates presets + user dashboards, save/
 └── dashboardmanager.cpp       delete/duplicate + export/import slots,
                                emits dashboardsChanged
-backend/dashboard_manager.py   Python peer (same API, same import sanitizer)
 ```
 
 User dashboards (outside the repo) live at:

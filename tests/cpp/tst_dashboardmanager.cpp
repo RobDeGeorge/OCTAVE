@@ -1,7 +1,6 @@
 // Dashboard sharing: imports are sanitized to the known schema-1 keys and
 // clamped into the grid, bad input is refused with a reason, and export /
-// import round-trips without overwriting anything. Ported from
-// tests/test_dashboard_sharing.py.
+// import round-trips without overwriting anything.
 
 #include <QDir>
 #include <QFile>

@@ -105,8 +105,7 @@ static int nextPow2(int n)
 // ════════════════════════════════════════════════════════════════
 // Logarithmic band edges: numBars+1 bin indices from 0 to fftLen.
 //
-// Edge i is fftLen^(i/numBars) truncated, the same curve the Python
-// backend uses (np.logspace(0, log10(fftLen), numBars+1)). With
+// Edge i is fftLen^(i/numBars) truncated. With
 // ~400-500 bins over 96 bars the first dozen edges all truncate to
 // 1, which used to leave those bars permanently at 0; every band is
 // therefore forced to be at least one bin wide, so edges are strictly
@@ -131,7 +130,6 @@ static std::vector<int> logBandEdges(int fftLen, int numBars)
 // ════════════════════════════════════════════════════════════════
 // Append one decoded buffer to `mono` (cleared first), averaging
 // channels, in whatever sample format the platform decoder chose.
-// Mirrors the Python backend's per-frame mono mix.
 // ════════════════════════════════════════════════════════════════
 
 static void appendMono(const QAudioBuffer &buf, std::vector<float> &mono, int &sampleRate)
@@ -196,9 +194,8 @@ static void appendMono(const QAudioBuffer &buf, std::vector<float> &mono, int &s
 // Streaming analysis state: decoded audio goes in buffer by buffer and
 // only the per-chunk band magnitudes are kept (~4 KB per second of
 // audio). Collecting the whole decoded track first used hundreds of MB
-// per hour of audio, and the Python twin of this code froze an Orange Pi
-// on a long mix. At most kMaxAnalysisSeconds are analysed (Python:
-// MAX_ANALYSIS_SECONDS).
+// per hour of audio, enough to freeze an Orange Pi on a long mix. At most
+// kMaxAnalysisSeconds are analysed.
 // ════════════════════════════════════════════════════════════════
 
 static constexpr int kMaxAnalysisSeconds = 3 * 60 * 60;
@@ -225,7 +222,7 @@ struct ChunkStream {
     ChunkStream(int bars, double dur) : numBars(bars), chunkDuration(dur) {}
 
     // Decimate to ~8 kHz: every (rate // 8000)th sample of the whole
-    // track, effective rate rate // factor, like the Python backend.
+    // track, effective rate nativeRate / factor.
     bool init(int nativeRate)
     {
         factor = std::max(1, nativeRate / 8000);
@@ -234,8 +231,7 @@ struct ChunkStream {
         if (chunkSize < 2)
             return false;
         // Magnitudes of the positive frequencies, skipping DC: bins 1..N/2,
-        // i.e. 0 to sampleRate/2 (~4 kHz) at the decimated rate (the Python
-        // backend keeps the same range: np.abs(np.fft.rfft(chunk))[1:]).
+        // i.e. 0 to sampleRate/2 (~4 kHz) at the decimated rate.
         fftSize = nextPow2(chunkSize);
         fftLen = fftSize / 2;
         window = AudioAnalyzer::hannWindow(chunkSize);
@@ -295,8 +291,7 @@ struct ChunkStream {
 //
 // Decodes with QAudioDecoder (driven by a local QEventLoop so it
 // works on this worker thread) in the file's native format, mixing
-// each buffer to mono and decimating to ~8 kHz as it arrives, exactly
-// as the Python backend does with each PyAV frame.
+// each buffer to mono and decimating to ~8 kHz as it arrives.
 // ════════════════════════════════════════════════════════════════
 
 AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
@@ -391,7 +386,7 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
     if (raw.empty())
         return result;   // shorter than one chunk
 
-    // ── Global normalisation (95th percentile, matching Python) ─
+    // ── Global normalisation (95th percentile) ─
     // Scaling the samples scales every magnitude and this max alike, so
     // the levels need no peak normalisation of the samples first.
     std::vector<float> allValues;
@@ -584,7 +579,6 @@ void AudioAnalyzer::clear()
 // follows each frame's 95th percentile: it jumps up at once and
 // decays over kLiveReleaseSec, floored so silence shows flat bars;
 // kLiveRefScale brings the bar heights in line with a file's.
-// Python twin: backend/audio_analyzer.py (LIVE_*).
 // ════════════════════════════════════════════════════════════════
 
 static constexpr int   kLiveInputRate   = 48000;   // ScrcpyClient: s16le stereo

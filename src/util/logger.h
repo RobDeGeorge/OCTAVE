@@ -1,8 +1,7 @@
 #ifndef OCTAVE_LOGGER_H
 #define OCTAVE_LOGGER_H
 
-// Persistent logging for the C++ build. Mirrors backend/logging_config.py:
-// a Qt message handler routes every qDebug/qInfo/qWarning/qCritical/qFatal
+// Persistent logging. A Qt message handler routes every qDebug/qInfo/qWarning/qCritical/qFatal
 // and every QML console.* call into rotating files under
 // <app data dir>/logs/ (octave-cpp.log, octave-cpp-error.log and, with
 // --debug, octave-cpp-debug.log), while still echoing to stderr. Crash

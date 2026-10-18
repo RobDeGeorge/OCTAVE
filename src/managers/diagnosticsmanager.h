@@ -2,9 +2,8 @@
 #define DIAGNOSTICSMANAGER_H
 
 // Field diagnostics: lets the user read and get the logs out of the head
-// unit without a laptop (Settings > About > Diagnostics). Mirrors
-// backend/diagnostics_manager.py. Log files themselves come from
-// src/util/logger.cpp (C++) / backend/logging_config.py (Python).
+// unit without a laptop (Settings > About > Diagnostics). Log files
+// themselves come from src/util/logger.cpp.
 
 #include <QObject>
 #include <QString>

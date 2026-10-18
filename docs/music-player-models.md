@@ -41,7 +41,7 @@ The generator sizes everything for how large a part can appear on screen (about 
 - The vinyl groove texture is a 512×512 opaque JPEG with a groove pitch coarse enough to survive mip filtering; the CD's diffraction is one annulus with a 128×128 hue wheel rather than 48 sector meshes and materials.
 - Indices are 16-bit; unused materials, textures and images are pruned from each GLB.
 
-Totals for the set: 4.1 MB → 0.74 MB on disk, the record player 29.7k → 5.6k triangles, and the cassette body 20 materials → 6. `tests/test_music_devices_assets.py` parses every GLB and fails a regeneration that exceeds the triangle or file-size budgets, uses 32-bit indices, leaves unreferenced images, or splits decals back into separate materials.
+Totals for the set: 4.1 MB → 0.74 MB on disk, the record player 29.7k → 5.6k triangles, and the cassette body 20 materials → 6. `tests/cpp/tst_musicdeviceassets.cpp` parses every GLB and fails a regeneration that exceeds the triangle or file-size budgets, uses 32-bit indices, leaves unreferenced images, or splits decals back into separate materials.
 
 `MusicDeviceScene.qml` uses [Qt Quick 3D RuntimeLoader](https://doc.qt.io/qt-6/qml-qtquick3d-assetutils-runtimeloader.html), physical materials, a studio light probe and 4x MSAA. Screen-space ambient occlusion is off, matching the vehicle view in `CarMenu.qml`; the three-light probe carries the shading and the view is rendered every frame beside the media list while a disc spins. The Quick3D availability probe (`MusicDevicePreference.isAvailable()`) runs on first demand, so the default Album art mode never loads the 3D module at startup. The record rotates at 33⅓ RPM. CD and cassette motion use slower illustrative speeds; they are not physical transport simulations. Both digital screens show live album art alongside track, artist, progress, elapsed time and remaining time. Physical keys are modeled details; playback controls remain in the music menu.
 
@@ -49,11 +49,11 @@ The CD's LCD shows live elapsed playback time and PLAY/PAUSE/LOADING/READY state
 
 ## Integration and validation
 
-`MusicDevicePreference.qml` synchronizes the `musicDeviceModel` setting through the existing generic settings API, shared by C++ and Python. Both backends include the default and reset notification. Unknown values resolve to album art. The scene is loaded only when selected and visible, and unloaded when the menu hides. Playback signals from either local media or the phone (while mirroring) drive the animation timer. Pausing preserves the angle.
+`MusicDevicePreference.qml` synchronizes the `musicDeviceModel` setting through the existing generic settings API. `SettingsManager` includes the default and reset notification. Unknown values resolve to album art. The scene is loaded only when selected and visible, and unloaded when the menu hides. Playback signals from either local media or the phone (while mirroring) drive the animation timer. Pausing preserves the angle.
 
 Qt Quick 3D remains optional. Its imports are isolated in the lazily loaded scene. The music menu displays the existing album carousel if the module or assets cannot load. The carousel's transition/settled lifecycle is retained because it also schedules track analysis and metadata updates.
 
-Validated with a desktop C++ build, real Qt/OpenGL rendering of all five models, `tests/test_music_devices.py` (asset loading, playback/pause/hidden lifecycle, selection propagation, invalid value fallback, persistence, reset, and integration QML compilation) and `tests/test_music_devices_assets.py` (geometry, texture and file-size budgets). Existing Python boot and smoke tests also pass. Android and Raspberry Pi hardware performance have not been measured.
+Validated with a desktop C++ build, real Qt/OpenGL rendering of all five models, `tests/cpp/tst_qmlfixtures.cpp` (runs the `tests/fixtures/MusicDevice*Smoke.qml` fixtures: asset loading, playback/pause/hidden lifecycle, selection propagation, invalid value fallback, persistence, reset, and integration QML compilation) and `tests/cpp/tst_musicdeviceassets.cpp` (geometry, texture and file-size budgets). Android and Raspberry Pi hardware performance have not been measured.
 
 ## Loading animation behavior
 

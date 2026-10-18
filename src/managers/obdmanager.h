@@ -33,7 +33,6 @@ class QProcess;
 // ===========================================================================
 // OBDManager -- desktop (USB/serial) OBD-II manager using QSerialPort.
 //
-// Port of backend/obd_manager.py.
 // Signal names match EXACTLY what OBDParameterModel.qml expects.
 // ===========================================================================
 class OBDManager : public QObject
@@ -217,8 +216,8 @@ public:
     Q_INVOKABLE bool isConnected() const;
     QString connectionDetail() const { return m_connectionDetail; }
     int connectionProgress() const { return m_connectionProgress; }
-    // snake_case alias — the shared QML (OBDHome.qml etc.) calls is_connected()
-    // to match the Python backend's @Slot name. Keep both in lockstep.
+    // snake_case alias — QML (OBDHome.qml etc.) calls is_connected().
+    // Keep both in lockstep.
     Q_INVOKABLE bool is_connected() const { return isConnected(); }
     QString vin() const { return m_vin.vin; }
     QString vehicleMake() const { return m_vin.make; }
@@ -231,7 +230,7 @@ public:
     // consumer. The poll set is the union of every consumer, filtered to this
     // session's scan result, plus the RPM heartbeat (ELM_VOLTAGE when the car
     // has no RPM). BerryIMU and unknown ids are ignored. Applied live after a
-    // 250 ms debounce. Mirrors Python OBDManager.setParameterDemand.
+    // 250 ms debounce.
     Q_INVOKABLE void setParameterDemand(const QString &consumer, const QStringList &paramIds);
 
     // The poll list for a demand set (consumer -> parameter ids) and this
@@ -276,7 +275,7 @@ public slots:
     // One-shot connect: normalises the identifier (MAC vs /dev path vs COM),
     // saves it to settings, runs rfcomm bind on Linux when given a MAC, and
     // kicks off force_connect(). The single entry point QML uses for both
-    // adapter-row taps and manual entry "Go". snake_case to match Python.
+    // adapter-row taps and manual entry "Go".
     void connect_to_adapter(const QString &identifier);
     // Returns "windows" | "macos" | "linux" | "android" | "ios". QML uses
     // this only for the per-OS hint string under the entry field — never

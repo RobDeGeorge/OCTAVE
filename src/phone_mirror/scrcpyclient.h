@@ -13,7 +13,6 @@
 //
 // Protocol details (server 3.x) are documented in
 // docs/PHONE_MIRROR_NATIVE_PLAN.md and were verified against scrcpy v3.3.4.
-// Mirrors backend/phone_mirror/scrcpy_client.py.
 
 #include <QObject>
 #include <QString>

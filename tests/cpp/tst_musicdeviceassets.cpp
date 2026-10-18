@@ -3,7 +3,7 @@
 // They keep a regeneration from quietly bringing back what was optimised
 // away: oversized triangle counts, 32-bit index buffers, per-label textures
 // instead of one atlas, unreferenced images, and a light probe whose RLE never
-// compresses. File parsing only. Ported from tests/test_music_devices_assets.py.
+// compresses. File parsing only.
 
 #include <QDir>
 #include <QFile>

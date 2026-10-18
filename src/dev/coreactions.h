@@ -17,9 +17,10 @@ struct CoreTargets {
     QObject *obd = nullptr;          // obdManager
 };
 
-// The actions of backend/command_server.py: perf metrics, navigation,
+// The command server's core actions: perf metrics, navigation,
 // screenshots / recording, UI driving, settings, media and OBD controls.
-// Names, arguments and result shapes match the Python server.
+// Names, arguments and result shapes are what the dev/ clients (MCP
+// servers, screenshot tools) expect; keep them stable.
 void registerCoreActions(CommandServer &server, const CoreTargets &targets);
 
 } // namespace OctaveDev

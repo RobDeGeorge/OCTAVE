@@ -217,9 +217,9 @@ Item {
     onCurrentAlbumArtChanged: _displayAlbumArt = currentAlbumArt
 
     // Side-card art refresh — fires on the next event-loop tick after any
-    // track or shuffle change so the Python slot calls never compete with
+    // track or shuffle change so the backend slot calls never compete with
     // animation frames for frame budget.  Uses a single batched backend
-    // call (get_neighbor_album_arts) to halve PySide6 bridge crossings.
+    // call (get_neighbor_album_arts) to halve QML-to-C++ calls.
     // Also feeds hidden preloader Images so the QML cache is warm.
     Timer {
         id: sideCardRefreshTimer
@@ -791,7 +791,7 @@ Item {
                                 anchors.margins: -App.Spacing.mediaRoomBetweenButton / 2
                                 onClicked: {
                                     mediaRoom._slideDirection = -1
-                                    // Fire animation BEFORE the Python call — enter card
+                                    // Fire animation BEFORE the backend call — enter card
                                     // starts at opacity 0 so stale art is invisible.
                                     // Backend data arrives while card is still transparent.
                                     mediaRoom._userInitiatedChange = true

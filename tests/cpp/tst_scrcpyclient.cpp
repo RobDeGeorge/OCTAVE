@@ -3,9 +3,8 @@
 // pair; stopping mid-start leaves no adb forward or server shell behind; and a
 // fake scrcpy 3.x server (handshake, config and key packets, a mid-stream
 // resolution change, a corrupt packet, a garbage header, early exits).
-// tests/cpp/fake-adb.sh stands in for adb. Ported from
-// tests/test_phone_mirror_media.py (client half), test_scrcpy_client_stop.py
-// and test_scrcpy_fake_server.py; the H.264 clips are tests/fixtures/h264/.
+// tests/cpp/fake-adb.sh stands in for adb; the H.264 clips are
+// tests/fixtures/h264/.
 
 #include <QElapsedTimer>
 #include <QFile>

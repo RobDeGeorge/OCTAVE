@@ -4,8 +4,7 @@
 // OCTAVE_PERF_SCOPE("media.next_track") at the top of a function records how
 // long the rest of the scope took, under that label, for the --profile perf
 // monitor (src/dev/perfmonitor.cpp; read back by the get_slot_timings
-// command). Labels match the Python perf_patches.py names so reports from
-// both backends line up.
+// command).
 //
 // Builds without OCTAVE_DEV_TOOLS (every Release build) compile it to
 // nothing. With dev tools built but no --profile, it costs one relaxed

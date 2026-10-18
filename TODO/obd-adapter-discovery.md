@@ -1,7 +1,7 @@
 # OBD adapter discovery: scan, pair, trust, connect on every platform
 
 **Status:** active. Phase 1 (desktop Linux / Pi) is done; phases 2–4 are deferred.
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-18
 
 ## Why
 
@@ -11,32 +11,32 @@ plug in a dongle, tap "Connect Bluetooth OBD2", pick it from a list, and have OC
 
 ## What phase 1 shipped (desktop Linux, incl. Raspberry Pi / Orange Pi)
 
-- `OBDAdapterFinder` — `src/managers/obdadapterfinder.{h,cpp}` ↔ `backend/obd_adapter_finder.py`, QML
+- `OBDAdapterFinder` — `src/managers/obdadapterfinder.{h,cpp}`, QML
   `obdAdapterFinder`. API: `supported`, `bluetoothOn`, `scanning`, `devices`, `busyAddress`, `status`,
   `statusIsError`; `startScan()`, `stopScan()`, `connectAdapter(address)`, `cancel()`, `powerOn()`.
 - `BluezPairer` + `BluezPinAgent` — `src/platform/bluezpairer.{h,cpp}` (compiled only when `OCTAVE_BLUEZ`, i.e.
-  Linux and not Android; links Qt6::DBus) ↔ `_BluezPairer` / `_BluezPinAgent` in the Python module. Registers its
+  Linux and not Android; links Qt6::DBus). Registers its
   own `org.bluez.Agent1`, answers PINs 1234 / 0000 / 6789 / 1111, sets `Trusted`. When pairing fails but the
   adapter answered, it still trusts it and tries to connect (the NEXAS accepts RFCOMM from a trusted host).
 - SDP lookup for the SPP channel (fallback 1), then `OBDManager::connect_direct(mac, channel)`.
 - `frontend/OBDAdapterSheet.qml` — opened from `obdConnectButton` on the empty OBD page and from Settings → OBD →
   Adapters ("Find Bluetooth Adapters"). When `supported` is false it lists `obdManager.availableAdapters`.
-- Tests: `tests/test_obd_adapter_finder.py`. Wiki: `obd-manager.html#adapter-finder`,
+- Tests: `tests/cpp/tst_obdadapterfinder.cpp`. Wiki: `obd-manager.html#adapter-finder`,
   `signals-slots-reference.html#obdAdapterFinder`, `components.html#obd-adapter-sheet`.
 
 **Still unverified in the car:** the scan was tested on the dev machine (it finds the Jeep's NEXAS23082749 at
 88:1B:99:66:DD:5F as Classic + LE), but the pair → trust → connect path hasn't been run against a real adapter
 yet. Do that on the Orange Pi before calling phase 1 done. Watch the `[OBD-BT]` lines in the log.
 
-## Phase 2 — Android (C++ only; the Python backend never runs on Android)
+## Phase 2 — Android
 
 Today Android lists only already-bonded devices (`OctaveOBDBridge.bondedDevices`,
-`OBDManager::listAndroidPairedDevices()` at `src/managers/obdmanager.cpp:2509`) and connects **only over BLE GATT**
+`OBDManager::listAndroidPairedDevices()` at `src/managers/obdmanager.cpp:2577`) and connects **only over BLE GATT**
 (`OctaveOBDBridge.connect`). Classic SPP dongles (the cheap blue "OBDII" v1.5/v2.1 clones, OBDLink LX/MX+, BAFX,
 Veepeak Mini) cannot connect on Android at all.
 
 1. **Discovery in Java**, not `QBluetoothDeviceDiscoveryAgent` (it has crashed with NullPointerException on
-   Android, see the comment at `obdmanager.cpp:520`): `BluetoothAdapter.startDiscovery()` with an
+   Android, see the comment at `obdmanager.cpp:525`): `BluetoothAdapter.startDiscovery()` with an
    `ACTION_FOUND` receiver for Classic, plus `BluetoothLeScanner.startScan()` for BLE. Queue results like
    `pollLog()` and drain them from C++ on a timer. Needs `BLUETOOTH_SCAN` (already in the manifest,
    `neverForLocation`) requested at runtime alongside `BLUETOOTH_CONNECT`.
@@ -52,27 +52,24 @@ Veepeak Mini) cannot connect on Android at all.
    JNI. Keep the QML untouched — the sheet is already platform-agnostic.
 5. Test on the Galaxy S22 (see the Android phone loop memory / `BUILD.md`).
 
-## Phase 3 — Windows and macOS (C++ and Python)
+## Phase 3 — Windows and macOS
 
 Both can use Qt Bluetooth for discovery and `QBluetoothSocket` (RFCOMM) for Classic connections, which removes the
 need for a COM port / `/dev/tty.*` entirely.
 
 1. **Transport**: add a `QBluetoothSocket` path to `OBDConnectionWorker` for `rfcomm://` URLs on non-Linux
-   (Linux keeps the raw-socket `RfcommSocket`). Python: python-obd needs a pyserial-compatible handler; either a
-   `protocol_qtbt` URL handler bridging to `QBluetoothSocket`, or `socket.AF_BLUETOOTH` where the platform's
-   Python has it (Windows CPython does, macOS does not).
+   (Linux keeps the raw-socket `RfcommSocket`).
 2. **Pairing**:
    - macOS: `QBluetoothLocalDevice::requestPairing()` works (IOBluetooth); legacy-PIN adapters may show the OS
      PIN prompt. Needs `NSBluetoothAlwaysUsageDescription` in the bundle's Info.plist.
    - Windows: Qt can't pair. Use WinRT `DeviceInformation.Pairing.Custom.PairAsync` with a `PairingRequested`
-     handler that calls `args.Accept("1234")` (C++/WinRT in C++; the `winsdk`/`winrt-Windows.Devices.Enumeration`
-     package in Python, desktop-only).
+     handler that calls `args.Accept("1234")` (C++/WinRT).
 3. Flip `supported` for those platforms.
 
 ## Phase 4 — BLE adapters on desktop, then iOS
 
 - Desktop BLE: a `QLowEnergyController` transport in `OBDConnectionWorker` speaking the same three GATT profiles
-  as `OctaveOBDBridge.java` (ISSC, FFF0/FFF1/FFF2, FFE0/FFE1). Python: `QtBluetooth` LE classes or `bleak`.
+  as `OctaveOBDBridge.java` (ISSC, FFF0/FFF1/FFF2, FFE0/FFE1).
   Then set `connectable` true for `ble` rows and route them to the new transport.
 - iOS (once the iOS build is enabled): BLE only. Classic SPP is impossible without Apple's MFi programme, so
   Classic rows must say "not supported on iPhone".

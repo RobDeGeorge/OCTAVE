@@ -102,7 +102,7 @@ void Runtime::afterLoad()
 
     if (m_dev && window) {
         // Main.qml knows nothing about the overlay; it is reparented into the
-        // root window here, as dev/dev_runtime.py does for Python
+        // root window here
         const QString path = m_app.projectRoot.filePath(QStringLiteral("src/dev/qml/DevOverlay.qml"));
         QQmlComponent component(m_app.engine, QUrl::fromLocalFile(path));
         QObject *obj = component.isError() ? nullptr : component.create(m_app.engine->rootContext());
@@ -150,14 +150,14 @@ void Runtime::registerSimActions()
     QPointer<CarSim> sim = m_sim;
     QPointer<DevImuFeed> imu = m_imuFeed;
 
-    // Fire-and-forget on the GUI thread, as Python's SimBridge does
+    // Fire-and-forget on the GUI thread
     auto queued = [this, sim](const QString &name, std::function<void(CarSim *, const QVariantMap &)> apply) {
         m_server->registerAction(name, [sim, name, apply](const QVariantMap &args) -> QVariant {
             CommandServer::postGui([sim, args, apply] { if (sim) apply(sim, args); });
             return QVariantMap{{QStringLiteral("queued"), name}};
         });
     };
-    // Python reads one of these keys, in this order, as the value
+    // The value is the first of these keys present, in this order
     auto value = [](const QVariantMap &a, double def = 0) {
         for (const char *k : {"value", "mph", "rpm", "gear", "intensity"}) {
             if (a.contains(QLatin1String(k)))
@@ -197,7 +197,7 @@ void Runtime::registerSimActions()
         else
             s->resetToNormal();
     });
-    // C++ additions: the link-fault knobs the Python mock only had as slots
+    // Link-fault knobs
     queued("sim_dropouts", [](CarSim *s, const QVariantMap &a) {
         s->setSimulateDropouts(a.value(QStringLiteral("on"), true).toBool());
     });

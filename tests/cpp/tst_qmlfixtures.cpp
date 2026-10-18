@@ -1,7 +1,6 @@
 // QML fixtures in tests/fixtures/, each run by qmlfixturehost in its own
 // process against the C++ managers: the 3D music device scenes and their
-// shared preference (ported from tests/test_music_devices.py) and the offline
-// wiki viewer (tests/test_wiki_viewer.py).
+// shared preference, and the offline wiki viewer.
 
 #include <QProcess>
 #include <QTemporaryDir>

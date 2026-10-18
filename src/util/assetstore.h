@@ -14,8 +14,6 @@
 // Android, localUrl() copies the file out of the APK into the app's data
 // directory once (re-copied when its size changes, i.e. after an update) and
 // returns that path. On desktop it just returns the file inside frontend/.
-// The Python backend mirrors this in backend/asset_store.py (desktop only,
-// so it never has to copy).
 class AssetStore : public QObject
 {
     Q_OBJECT

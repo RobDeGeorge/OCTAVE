@@ -7,6 +7,12 @@ v4l2loopback, no ffmpeg on PATH, no `adb shell input` for touch. OCTAVE talks to
 phone itself; the only external pieces are two small Apache-2.0 files we ship inside
 OCTAVE (`adb` and the scrcpy server jar).
 
+> **History note (2026-10-18):** this plan was carried out in both backends of the time. The
+> Python client (`backend/phone_mirror/scrcpy_client.py`, decoding with PyAV) existed until the
+> Python backend was removed on 2026-10-18; it survives only on the `python-final` branch. The
+> C++ client (`src/phone_mirror/scrcpyclient.{h,cpp}`) is now the only one. Mentions of Python
+> below record what was done then; the protocol byte layouts apply unchanged to the C++ client.
+
 ## Phase 0 results (Orange Pi 5 Plus, scrcpy server 3.3.4, Galaxy S22 Ultra / Android 16)
 
 - **Decoder decision: Option B (PyAV / libavcodec).** Qt's FFmpeg backend refuses a raw
@@ -127,17 +133,17 @@ Write the Annex-B stream into a `QIODevice` (a pipe-like `QBuffer`/custom device
 call `QMediaPlayer::setSourceDevice()`; render through `QVideoSink` → QML `VideoOutput`.
 Qt's ffmpeg backend can demux raw H.264. Unknown: startup probing delay and internal
 buffering may add hundreds of ms of latency, and hardware decode on the RK3588 is not
-available through Qt's bundled ffmpeg. Same code shape in PySide6.
+available through Qt's bundled ffmpeg. (The Python client would have had the same code shape in PySide6.)
 
 **Option B (one build-time dependency): libavcodec directly.**
 C++: link `libavcodec`/`libavutil` (pkg-config on Linux, vcpkg or the gyan.dev shared
 build on Windows, brew on macOS); decode on a worker thread with `h264_rkmpp` /
 `h264_v4l2m2m` / `h264` chosen at runtime; upload frames as a `QVideoFrame` to a
 `QVideoSink` (`VideoOutput` in QML), which avoids the per-frame QImage copy of the
-image-provider path. Python: **PyAV is already in `requirements.txt`** (`av>=12`) and
-wheels bundle ffmpeg, so the Python backend gets Option B for free.
+image-provider path. The Python client of the time used PyAV (`av>=12`, then in
+`requirements.txt`), whose wheels bundle ffmpeg, so it got Option B for free.
 
-Decision (Phase 0): **B in both backends.** Option A cannot open the stream at all. The QML
+Decision (Phase 0): **B in both backends** (C++ and, at the time, Python). Option A cannot open the stream at all. The QML
 side is `VideoOutput` bound to a `QVideoSink` the manager exposes; decoded YUV420P planes go
 into a `QVideoFrame` without an RGB conversion.
 
@@ -149,13 +155,13 @@ falls through as one point) and forwards down/move/up per touchpoint to
 to frame pixels. That gives tap, long-press, drag, scroll, and pinch with socket
 latency. Add `injectKey(keycode)` for BACK / HOME / APP_SWITCH buttons in the overlay.
 
-## Class layout (both backends, mirrored)
+## Class layout (mirrored in both backends at the time; C++ only now)
 
 - `PhoneMirrorManager` (existing name, same context property): device state, settings,
   lifecycle. Loses scrcpy-binary discovery; gains `injectTouch`, `injectKey`, and
   `videoSink` (a `QVideoSink*` the QML `VideoOutput` binds to).
-- `ScrcpyClient` (new, `src/phone_mirror/scrcpyclient.{h,cpp}` /
-  `backend/phone_mirror/scrcpy_client.py`): adb helpers, server push/launch, sockets,
+- `ScrcpyClient` (new, `src/phone_mirror/scrcpyclient.{h,cpp}`; the Python peer
+  `backend/phone_mirror/scrcpy_client.py` was removed with the Python backend): adb helpers, server push/launch, sockets,
   demuxer, control writer. Runs on its own thread; emits `frameSizeChanged`,
   `connected`, `disconnected(reason)`, `serverLog(line)`.
 - `H264Decoder` (new): Option A or B behind one interface: `feed(packet, isConfig)` → `QVideoFrame`.
@@ -170,7 +176,7 @@ through `QMediaPlayer.setSourceDevice` to measure Option A. Also confirm on the 
 touch injection via the control socket lands on the virtual display; SPS/PPS handling;
 `new_display` size rounding. Output: decision A vs B, plus measured first-paint and latency.
 
-**Phase 1 — client + decode, Python first. DONE (commits a3cdd09, 8c04adf):** hardware validation on the Pi in progress.
+**Phase 1 — client + decode, Python first. DONE (commits a3cdd09, 8c04adf; hardware-validated on the Pi, see the Phase 1 results above).**
 Original estimate: Python is the fastest to iterate
 on the Pi. `scrcpy_client.py` + decoder + `VideoOutput` in QML + multitouch. Old paths
 stay behind a `phoneMirrorNative` setting (default off) so the Pi can A/B.

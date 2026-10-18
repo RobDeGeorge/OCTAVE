@@ -1,7 +1,7 @@
 # Run the backend as a headless service so any frontend can connect
 
-**Status:** deferred: an idea scoped on 2026-10-17, after v1.0 and after `TODO/python-removal.md` (Python frozen 2026-10-18). No work started.
-**Last updated:** 2026-10-17
+**Status:** deferred: an idea scoped on 2026-10-17, after v1.0. No work started. (The Python backend it once waited on was removed on 2026-10-18.)
+**Last updated:** 2026-10-18
 
 ## What it is
 
@@ -18,7 +18,7 @@ Today OCTAVE is one process. The C++ managers (`src/managers/`) are registered a
 
 ## Why it's parked
 
-- **v1.0 comes first.** Splitting the process is a big structural change, and doing it during the parity era would double it (C++ and Python).
+- **v1.0 comes first.** Splitting the process is a big structural change. (It no longer has to be done twice: the Python backend was removed on 2026-10-18, so only the C++ managers move.)
 - **Starting point:** the C++ command server exists since 2026-10-18 (`src/dev/commandserver.cpp`, JSON lines on `localhost:9876`, `--profile` only, compiled in with `OCTAVE_DEV_TOOLS`). Grow the service API from it rather than starting over; it would need to leave the dev-only build option first.
 - The car needs road time on v1.0 before the process model changes under it.
 
@@ -71,7 +71,7 @@ Update `docs/GAUGE_AUTHORING.md` when the PID metadata and catalog move.
 
 ## Recommended order of operations
 
-1. (Prerequisite) Python sunset Phase 1: the C++ command server, designed as the service API.
+1. (Prerequisite, done 2026-10-18) the C++ command server (`src/dev/commandserver.cpp`); grow it into the service API.
 2. Move the data logic out of QML (the list above). This helps even with a single process.
 3. Refactor `src/main.cpp` so the managers live in a core library, with an in-process transport for mobile.
 4. Split the process on desktop/Pi with QtRO for the QML UI. Keep video decode in the UI. Road-test in the Jeep.

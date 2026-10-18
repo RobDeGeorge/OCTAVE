@@ -10,7 +10,6 @@
 // Trusted so BlueZ lets the adapter reconnect without asking again.
 // BlueZ routes the pairing callbacks to the agent of the client that called
 // Pair(), so the desktop's own agent (and its PIN dialog) is never involved.
-// Mirrors backend/obd_adapter_finder.py (_BluezPairer).
 
 #include <QObject>
 #include <QString>

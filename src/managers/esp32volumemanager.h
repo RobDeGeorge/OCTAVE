@@ -43,7 +43,7 @@ public:
     void feedSerialData(QByteArray data);
 
     // Longest partial line kept while waiting for its newline; longer is
-    // dropped. Same name and value as the Python backend.
+    // dropped.
     static constexpr int ESP32_MAX_LINE_BYTES = 256;
 
 signals:

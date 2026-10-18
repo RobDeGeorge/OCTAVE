@@ -1,11 +1,11 @@
 # Native Android Auto receiver (replace the DHU screen-scrape)
 
 **Status:** deferred — scoped, no work started. Big subsystem (bigger than the phone-mirror client). Needs a wired test phone with Android Auto installed; no extra hardware.
-**Last updated:** 2026-10-12
+**Last updated:** 2026-10-18
 
 ## Why this is parked here
 
-Android Auto today (`src/managers/androidautomanager.{h,cpp}`, 787 lines; `backend/android_auto/`) launches Google's Desktop Head Unit (DHU) as a subprocess, grabs its window with `QScreen::grabWindow()`, serves the frames to `frontend/AndroidAutoView.qml` through the `dhuframe` image provider, and forwards clicks back into the DHU window. That:
+Android Auto today (`src/managers/androidautomanager.{h,cpp}`, 787 lines) launches Google's Desktop Head Unit (DHU) as a subprocess, grabs its window with `QScreen::grabWindow()`, serves the frames to `frontend/AndroidAutoView.qml` through the `dhuframe` image provider, and forwards clicks back into the DHU window. That:
 
 - needs the Android SDK and the DHU binary installed (desktop x86_64 only),
 - has never worked on the Pi in the Jeep, and can't work on the Android build (`TODO/android-cpp-port.md` lists `androidautomanager` as a stub),
@@ -64,13 +64,7 @@ On the phone, Android Auto refuses uncertified head units unless **Unknown sourc
 - `androidautomanager` gains a native mode. Keep the class name and the `androidAutoManager` context property; DHU stays as a fallback behind a setting until the native path proves itself in the Jeep.
 - New CMake deps: libusb-1.0 (desktop), OpenSSL (already bundled on Android in `android/openssl/` via `QT_ANDROID_EXTRA_LIBS`), and maybe protobuf. All optional with an `OCTAVE_HAVE_NATIVE_AA` flag, like `OCTAVE_HAVE_FFMPEG`.
 
-### Python (desktop parity)
-
-Per `CLAUDE.md`, desktop features need a Python peer. It's doable: `pyusb` for AOA and bulk transfers, `ssl.MemoryBIO` + `SSLObject` for the in-frame TLS, `protobuf` from pip, and PyAV for decode (already used by `backend/phone_mirror/scrcpy_client.py`, line 891). Plan it as Phase 4. Until then, gate the QML with the existing `typeof` pattern and note the parity debt in each commit.
-
-Note: `TODO/carlinkit-dongle-port.md` exempts its USB code from a Python peer. Decide once whether USB protocol code is exempt from parity and make both plans agree.
-
-### Settings (both backends, same commit)
+### Settings
 
 - `androidAutoBackend`: `"native"` | `"dhu"` (default `"dhu"` until Phase 3, then `"native"`).
 - `androidAutoResolution`: `"800x480"` | `"1280x720"` | `"1920x1080"`.
@@ -93,7 +87,7 @@ Update `wiki/settings-reference.html`, `wiki/settings-manager.html` and `wiki/ph
 1. **Wired video, C++, desktop Linux.** Real classes in `src/android_auto/`, shared decoder pulled out of the phone-mirror code, video into `AndroidAutoView.qml`, frame acks, ping. DHU stays the default.
 2. **Touch, audio, sensors.** Touch out, media/speech/system audio through the volume system (`VolumeController::applyVolume`, never a separate volume path), driving status, night mode from `EnvironmentTheme`. Microphone for Assistant last.
 3. **Pi + Jeep.** udev rule, hardware decode, test in the car, then flip `androidAutoBackend` to `"native"`. Diagnostics export logs the session (phone model, AA version, negotiated resolution).
-4. **Python peer** (desktop) and the Windows/macOS USB setup docs.
+4. **Windows/macOS** USB setup and docs.
 5. **Android build** (`UsbManager` accessory host, see `TODO/android-cpp-port.md` Phase 4). Wireless only if it's still feasible by then.
 
 Update `wiki/phone-mirror-android-auto.html`, `wiki/signals-slots-reference.html`, `wiki/hardware-setup.html` (udev, phone developer settings) and `README.md` as each phase lands.

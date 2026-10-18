@@ -3,7 +3,7 @@
 # OCTAVE
 
 ### An open-source car head unit
-**Runs on Raspberry Pi, desktop, and Android. C++ or Python backend, QML frontend, GPLv3.**
+**Runs on Raspberry Pi, desktop, and Android. C++ / Qt 6 with a QML frontend, GPLv3.**
 
 <img src="frontend/assets/readme/drive.webp" alt="OCTAVE drive view: album art beside live speed and RPM during a full-throttle pull" width="900">
 
@@ -15,7 +15,7 @@
 [![License: GPL v3+](https://img.shields.io/badge/license-GPLv3%2B-orange?style=for-the-badge)](LICENSE)
 
 [![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20Linux%20%7C%20Pi%20%7C%20Android-success?style=flat-square)](#install)
-[![Backend](https://img.shields.io/badge/backend-C%2B%2B%20%7C%20Python-orange?style=flat-square)](#two-backends-one-frontend)
+[![Backend](https://img.shields.io/badge/backend-C%2B%2B%20%2F%20Qt%206-orange?style=flat-square)](#building-from-source)
 [![Frontend](https://img.shields.io/badge/frontend-Qt%206%20%2F%20QML-41cd52?style=flat-square)](#)
 
 ### [Download Latest Release →](https://github.com/RobDeGeorge/OCTAVE/releases/latest) · [Read the Wiki →](https://robdegeorge.com/OCTAVE/)
@@ -26,7 +26,7 @@
 
 OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi behind the dash, a laptop in a project car, or an Android tablet. It plays local music, reads live data from the car over OBD-II, mirrors an Android phone over USB or Wi-Fi, and recolours its interface to match the album art.
 
-It sits in the same space as Crankshaft, OpenAuto Pro and AGL, but it runs on its own rather than projecting a phone, and it is built to be modified. Most of the customisation (themes, dashboards, layouts, hardware bindings) happens inside the app. Past that, the code is small enough to fork, and it ships in both C++/Qt and Python/PySide6 so you can work in whichever you already know.
+It sits in the same space as Crankshaft, OpenAuto Pro and AGL, but it runs on its own rather than projecting a phone, and it is built to be modified. Most of the customisation (themes, dashboards, layouts, hardware bindings) happens inside the app. Past that, the code is small enough to fork.
 
 I daily-drive it in a 2003 Jeep TJ. That is where most of the design decisions come from, and it is why the README is full of the Jeep.
 
@@ -195,14 +195,13 @@ Pitch, roll, heading, a G-force plot with a trail, altitude and temperature from
 
 ### Platform & Customization
 - Runs on Windows, macOS, Linux, Raspberry Pi, and Android
-- Two parallel backends (C++ and Python) with the same API surface
 - 100+ user-configurable settings, all persisted to disk
 - Gauge primitives, JSON dashboards and an in-app dashboard editor — build your own and drop them in
 - Rotating logs, crash traces and a Diagnostics page that exports them from the dash
 
 ## Install
 
-Pre-built binaries for every platform are on the [Releases](https://github.com/RobDeGeorge/OCTAVE/releases) page. No toolchain or Python needed:
+Pre-built binaries for every platform are on the [Releases](https://github.com/RobDeGeorge/OCTAVE/releases) page. No toolchain needed:
 
 - **Windows:** `OCTAVE-<version>-windows-x86_64.exe` — run the installer.
 - **macOS:** `OCTAVE-<version>-macos.dmg` — open, drag to Applications.
@@ -212,34 +211,26 @@ Pre-built binaries for every platform are on the [Releases](https://github.com/R
 
 ## Building from source
 
-The Python backend is the quickest way to get a development loop going:
+OCTAVE is a C++ / Qt 6 app built with CMake (Qt 6.7+, CMake 3.21+):
 
 ```bash
 git clone https://github.com/RobDeGeorge/OCTAVE.git
-cd octave
-python setup.py
-```
-
-`setup.py` detects your OS, installs dependencies, builds a virtualenv, and launches the app. Pass `--no-run` to install without launching.
-
-After setup:
-
-```bash
-source venv/bin/activate            # Windows: venv\Scripts\activate
-python main.py                       # normal run
-python main.py --debug               # verbose logging
-python -m dev.main_dev               # simulated OBD + keyboard controls
-```
-
-### C++ build
-
-```bash
+cd OCTAVE
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
 ./build/octave
+ctest --test-dir build --output-on-failure   # the QtTest suite in tests/cpp/
 ```
 
 Full build matrix (9 targets including iOS, Android, Flatpak, and app store variants) lives in [BUILD.md](BUILD.md).
+
+Music downloads on desktop use yt-dlp and a small YouTube Music search helper. Put them in a virtualenv next to the checkout, where OCTAVE looks first:
+
+```bash
+python3 -m venv venv && venv/bin/pip install -r requirements.txt
+```
+
+Until October 2026 OCTAVE also had a Python / PySide6 backend. It is frozen, with its own wiki, on the [`python-final`](https://github.com/RobDeGeorge/OCTAVE/tree/python-final) branch if you want to fork it.
 
 ### YouTube downloads failing
 
@@ -260,21 +251,13 @@ If you need to stay on the VPN, you can authenticate with your YouTube account t
 
 OCTAVE picks the file up automatically. There is no setting to configure.
 
-## Two backends, one frontend
-
-OCTAVE has two backends, C++ / Qt 6 in `src/` and Python / PySide6 in `backend/`, that expose the same managers, signals and settings to a single QML frontend. The frontend does not know which one is running.
-
-The C++ tree is what ships: every release binary on every platform, including Android, is built from it. The Python tree is for development and hardware work. On a Pi with a new sensor on the I²C bus, a Python REPL beats a compile cycle, and most managers are a few hundred lines you can read in one sitting.
-
-Both are kept in sync on desktop. A feature or fix in one lands in the other in the same change.
-
 ## Dev tooling
 
-The clips and screenshots above are scripted. `python -m dev.main_dev --profile` runs OCTAVE with a simulated engine (warm-up, overheat and low-fuel scenarios included), simulated IMU motion and a local command server. `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt in real time, and writes WebP, GIF and PNG. `--list` shows every scene. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. Everything is under `dev/` and documented in the [wiki](https://robdegeorge.com/OCTAVE/development.html).
+The clips and screenshots above are scripted. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with a simulated engine (warm-up, overheat and low-fuel scenarios included), simulated IMU motion and a local command server. `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt in real time, and writes WebP, GIF and PNG. `--list` shows every scene. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; it is documented in the [wiki](https://robdegeorge.com/OCTAVE/development.html).
 
 ## System requirements
 
-- **Python** 3.8+ (for the Python backend) / **Qt 6** + **CMake 3.16+** (for C++)
+- **Qt 6.7+** and **CMake 3.21+** to build; Python 3.10+ only for the optional download helpers and dev scripts
 - **OS:** Windows 10+, macOS 10.14+, Linux (Debian / Arch / Fedora), Raspberry Pi OS, Android
 
 ## Roadmap
@@ -285,7 +268,7 @@ Larger items in progress. Full plans are under [`TODO/`](TODO/).
 - **Companion app** for phone mirroring without USB debugging. See [`TODO/octave-companion-app.md`](TODO/octave-companion-app.md).
 - **CarlinKit wireless CarPlay / Android Auto dongle support.** See [`TODO/carlinkit-dongle-port.md`](TODO/carlinkit-dongle-port.md).
 - **In-app error notifications**, so backend problems show up on screen rather than only in the logs.
-- **More tests** beyond the current smoke suite.
+- **More tests** beyond the current QtTest suite.
 
 ## Documentation
 
@@ -318,22 +301,15 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 | [FFmpeg](https://ffmpeg.org/) (libavcodec, libavutil) | Decoding the phone mirror's H.264 stream |
 | [CMake](https://cmake.org/) | Build system |
 
-### Python backend (desktop development)
+### Python helper tools (optional, `requirements.txt`)
 
 | Package | Used for |
 |---|---|
-| [PySide6](https://doc.qt.io/qtforpython-6/) | Qt bindings, the Python peer of everything above |
-| [PyAV](https://github.com/PyAV-Org/PyAV) | Phone mirror decoding, waveform audio |
-| [NumPy](https://numpy.org/) | Album-art colour analysis for theming |
-| [mutagen](https://github.com/quodlibet/mutagen) | Audio tags and album art |
-| [requests](https://requests.readthedocs.io/) | HTTP |
-| [pySerial](https://github.com/pyserial/pyserial) | ELM327 OBD adapters and the ESP32 knob |
-| [smbus2](https://github.com/kplindegaard/smbus2) | I²C for the BerryIMU and gesture sensor |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Music downloads |
-| [ytmusicapi](https://github.com/sigma67/ytmusicapi) | YouTube Music search and metadata |
-| [RapidFuzz](https://github.com/rapidfuzz/RapidFuzz) | Matching search results to tracks |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Music downloads on desktop |
+| [ytmusicapi](https://github.com/sigma67/ytmusicapi) | YouTube Music search and metadata (`scripts/ytmusic_search.py`, also bundled into the APK) |
+| [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk), [Pillow](https://python-pillow.org/), [mss](https://github.com/BoboTiG/python-mss), [NumPy](https://numpy.org/), [psutil](https://github.com/giampaolo/psutil) | Dev tooling: MCP servers, screenshots and clips, perf scripts |
 | [python-OBD](https://github.com/brendan-w/python-OBD) | Dev scripts for reading and clearing trouble codes |
-| [pytest](https://pytest.org/), [Ruff](https://docs.astral.sh/ruff/) | Tests and lint |
+| [Ruff](https://docs.astral.sh/ruff/) | Lint |
 
 ### Android
 
@@ -348,8 +324,7 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 | Component | License | Where |
 |---|---|---|
 | [scrcpy](https://github.com/Genymobile/scrcpy) server, forked at v3.3.4 | Apache 2.0 | `phone_server/`, prebuilt jar in `tools/phone-server/` |
-| [spotDL](https://github.com/spotDL/spotify-downloader), forked at 4.4.3 | MIT | `backend/music_dl/` |
-| [QR Code generator library](https://www.nayuki.io/page/qr-code-generator-library) by Project Nayuki | MIT | `src/phone_mirror/qrcodegen.*`, `backend/phone_mirror/qrcodegen.py` |
+| [QR Code generator library](https://www.nayuki.io/page/qr-code-generator-library) by Project Nayuki | MIT | `src/phone_mirror/qrcodegen.*` |
 | Android platform-tools (`adb`) | See its `NOTICE.txt` | `tools/platform-tools/` |
 
 ### External tools and services

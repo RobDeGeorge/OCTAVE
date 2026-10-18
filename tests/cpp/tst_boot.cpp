@@ -2,7 +2,7 @@
 // and exits 0 after five seconds. Unit-level checks can't catch a startup path
 // that calls something missing (a removed slot once broke boot while every
 // other test passed). With the dev tooling built, `--dev --profile` must boot
-// too and answer on its command server. Replaces tests/test_boot.py.
+// too and answer on its command server.
 
 #include <QElapsedTimer>
 #include <QProcess>

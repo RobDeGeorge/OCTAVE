@@ -1,7 +1,6 @@
 // ELM327Protocol: DTC, freeze-frame, multi-value PID and VIN parsing.
 // Replies are ELM327 output with headers and spaces off; expected values
-// follow SAE J1979 scaling. Ported from tests/test_elm327_dtc.py and
-// tests/test_obd_extended_pids.py.
+// follow SAE J1979 scaling.
 
 #include <QFile>
 #include <QRegularExpression>

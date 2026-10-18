@@ -561,8 +561,8 @@ void ESP32VolumeManager::onSerialError(QSerialPort::SerialPortError error)
 
     switch (error) {
     // ResourceError typically means the device was unplugged; the others
-    // are the SerialException-class failures the Python backend treats as a
-    // lost link (pyserial raises for a vanished/unreadable/unwritable port).
+    // mean the port vanished or can no longer be read or written. All of
+    // them are a lost link.
     case QSerialPort::ResourceError:
     case QSerialPort::DeviceNotFoundError:
     case QSerialPort::PermissionError:
@@ -788,7 +788,7 @@ void ESP32VolumeManager::sendKeepalive()
         int volume = volVar.isValid() ? volVar.toInt() : 50;
         QString cmd = QStringLiteral("V%1\n").arg(volume);
         // Don't log successful keepalives to avoid spam. A rejected keepalive
-        // write means the port is gone — treat as a lost link, like Python.
+        // write means the port is gone — treat as a lost link.
         if (!writeCommand(cmd.toUtf8(), "keepalive"))
             handleDisconnect();
     }

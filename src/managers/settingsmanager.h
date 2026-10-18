@@ -241,7 +241,7 @@ public:
 
 signals:
     // ======================================================================
-    // Signals — names match the Python Signal() declarations exactly
+    // Signals — the names are the QML binding API; don't rename them
     // ======================================================================
 
     // Device
@@ -269,7 +269,7 @@ signals:
     void settingsMenuVisibilityChanged();
 
     // Media
-    void startUpVolumeChanged(const QString &value);   // Python emits str
+    void startUpVolumeChanged(const QString &value);   // emitted as a string
     void currentVolumeChanged(int value);
     void mediaFolderChanged(const QString &value);
     void autoPlayOnStartupChanged(bool value);
@@ -357,7 +357,7 @@ signals:
 
 public slots:
     // ======================================================================
-    // Save / setter slots — names match @Slot decorated Python methods
+    // Save / setter slots — names are called from QML; don't rename them
     // ======================================================================
 
     // Device
@@ -484,7 +484,7 @@ public slots:
     void save_setting(const QString &key, const QVariant &value);
 
     // ======================================================================
-    // Q_INVOKABLE getter methods (match Python @Slot(result=...) methods)
+    // Q_INVOKABLE getter methods
     // ======================================================================
 
     Q_INVOKABLE QVariant get_setting(const QString &key);
