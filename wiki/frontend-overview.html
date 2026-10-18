@@ -28,7 +28,7 @@
             <li><a href="#import-path">Import Path and Singletons</a></li>
             <li><a href="#controls-style">Qt Quick Controls "Basic" Style</a></li>
             <li><a href="#context-properties">Accessing Backend Managers</a></li>
-            <li><a href="#typeof-guards">Guarding Backend Differences with typeof</a></li>
+            <li><a href="#typeof-guards">Guarding Optional Globals with typeof</a></li>
             <li><a href="#gui-scale">GUI Scale</a></li>
             <li><a href="#font-loading">Dynamic Font Loading</a></li>
             <li><a href="#album-art-capture">Album Art Capture Pipeline</a></li>
@@ -47,7 +47,7 @@
         <!-- Architecture Overview -->
         <h2 id="architecture">QML Architecture Overview</h2>
 
-        <p>OCTAVE's frontend uses Qt Quick / QML. Most files import <code>QtQuick 2.15</code>; the optional vehicle and music-device scenes use unversioned Qt 6 imports and <code>QtQuick3D</code>. Backend managers expose playback, hardware and persistence through context properties, while QML implements presentation and interaction. Both backends load the same frontend tree. The media components use unversioned imports and set the revisioned <code>layer.live</code> property through <code>Binding { target: item.layer; property: "live"; value: ... }</code>: their source comments document order-dependent Qt 6.7 failures with a direct <code>layer.live:</code> declaration.</p>
+        <p>OCTAVE's frontend uses Qt Quick / QML. Most files import <code>QtQuick 2.15</code>; the optional vehicle and music-device scenes use unversioned Qt 6 imports and <code>QtQuick3D</code>. Backend managers expose playback, hardware and persistence through context properties, while QML implements presentation and interaction. The media components use unversioned imports and set the revisioned <code>layer.live</code> property through <code>Binding { target: item.layer; property: "live"; value: ... }</code>: their source comments document order-dependent Qt 6.7 failures with a direct <code>layer.live:</code> declaration.</p>
 
         <div class="diagram">
 <pre>
@@ -245,7 +245,7 @@
         <p>Pages declare what they need: <code>MediaPlayer</code>, <code>OBDHome</code>, <code>OBDMenu</code>, <code>OBDDiagnostics</code>, <code>SensorHome</code>, <code>SensorMenu</code> and <code>ClockMenu</code> use <code>required property StackView stackView</code> and <code>required property ApplicationWindow mainWindow</code>; <code>CarMenu</code> requires only <code>stackView</code>; <code>SettingsMenu</code> additionally requires <code>string initialSection</code>; <code>MainMenu</code>, <code>MediaRoom</code>, <code>DownloadPage</code>, <code>PhoneMirrorView</code> and <code>AndroidAutoView</code> use plain (optional) properties. <code>cachedPage()</code> always passes <code>stackView</code> and <code>mainWindow</code>, so only <code>initialSection</code> has to come from the caller.</p>
 
         <h3>Programmatic navigation</h3>
-        <p><code>navigateTo(pageName)</code> holds a page map used by the command server (<span class="file-path">src/dev/coreactions.cpp</span> / <code>backend/command_server.py</code>, enabled with <code>--profile</code> on either backend) and the screenshot sweeper:</p>
+        <p><code>navigateTo(pageName)</code> holds a page map used by the command server (<span class="file-path">src/dev/coreactions.cpp</span>, enabled with <code>--profile</code>) and the screenshot sweeper:</p>
 
         <pre><code><span class="kw">function</span> <span class="fn">navigateTo</span>(pageName) {
     <span class="kw">var</span> pageMap = {
@@ -272,7 +272,7 @@
         <!-- IMU gating -->
         <h2 id="imu-gating">IMU Rate Gating from the StackView</h2>
 
-        <p>The BerryIMU worker samples the I&sup2;C sensors at a ~200&nbsp;Hz target on its own thread and <em>emits</em> seven signals per tick into QML at 60&nbsp;Hz (<code>EMIT_INTERVAL = 0.016</code> in both backends). Pushing ~440 queued signals per second into pages that do not display them pegged the QML thread (the comment in <span class="file-path">OBDParameterModel.qml</span> records 100&nbsp;% CPU while idle on the Orange Pi), so Main.qml decides from the current page whether the full-rate stream is needed and calls <code>berryIMU.setActive(bool)</code>. Sampling and Madgwick fusion continue at full rate; only the emission into QML drops to <code>IDLE_EMIT_INTERVAL = 0.2</code> (5&nbsp;Hz) so the settings status stays fresh (commit <code>94d61be</code>). The rule, in a <code>Connections</code> block on <code>stackView</code>:</p>
+        <p>The BerryIMU worker samples the I&sup2;C sensors at a ~200&nbsp;Hz target on its own thread and <em>emits</em> seven signals per tick into QML at 60&nbsp;Hz (<code>EMIT_INTERVAL = 0.016</code> in <span class="file-path">src/managers/berryimumanager.cpp</span>). Pushing ~440 queued signals per second into pages that do not display them pegged the QML thread (the comment in <span class="file-path">OBDParameterModel.qml</span> records 100&nbsp;% CPU while idle on the Orange Pi), so Main.qml decides from the current page whether the full-rate stream is needed and calls <code>berryIMU.setActive(bool)</code>. Sampling and Madgwick fusion continue at full rate; only the emission into QML drops to <code>IDLE_EMIT_INTERVAL = 0.2</code> (5&nbsp;Hz) so the settings status stays fresh (commit <code>94d61be</code>). The rule, in a <code>Connections</code> block on <code>stackView</code>:</p>
 
         <pre><code><span class="kw">function</span> <span class="fn">updateSensorConsumers</span>() {
     <span class="kw">if</span> (<span class="kw">typeof</span> berryIMU === <span class="str">"undefined"</span> || !berryIMU || !stackView.currentItem)
@@ -287,18 +287,14 @@
         <!-- Import Path -->
         <h2 id="import-path">Import Path and Singletons</h2>
 
-        <p>Desktop launchers add <span class="file-path">frontend/</span> to the QML import path and load <span class="file-path">frontend/Main.qml</span> from disk. Android loads the same tree from packaged assets:</p>
+        <p>On desktop <span class="file-path">src/main.cpp</span> adds <span class="file-path">frontend/</span> to the QML import path and loads <span class="file-path">frontend/Main.qml</span> from disk. Android loads the same tree from packaged assets:</p>
 
         <pre><code><span class="cmt">// src/main.cpp — desktop: frontend/ next to the binary or one level up (build/ -&gt; repo root)</span>
 engine.<span class="fn">addImportPath</span>(frontendDir.<span class="fn">absolutePath</span>());
 engine.<span class="fn">load</span>(QUrl::<span class="fn">fromLocalFile</span>(frontendDir.<span class="fn">absoluteFilePath</span>(<span class="str">"Main.qml"</span>)));
 <span class="cmt">// src/main.cpp — Android: frontend/ is bundled as assets</span>
 engine.<span class="fn">addImportPath</span>(QStringLiteral(<span class="str">"assets:/frontend"</span>));
-engine.<span class="fn">load</span>(QUrl(QStringLiteral(<span class="str">"assets:/frontend/Main.qml"</span>)));
-
-<span class="cmt"># main.py</span>
-engine.<span class="fn">addImportPath</span>(os.path.<span class="fn">join</span>(os.path.<span class="fn">dirname</span>(os.path.<span class="fn">abspath</span>(__file__)), <span class="str">"frontend"</span>))
-engine.<span class="fn">load</span>(QUrl.<span class="fn">fromLocalFile</span>(qml_file))   <span class="cmt"># in load_main_qml()</span></code></pre>
+engine.<span class="fn">load</span>(QUrl(QStringLiteral(<span class="str">"assets:/frontend/Main.qml"</span>)));</code></pre>
 
         <p><span class="file-path">CMakeLists.txt</span> sets <code>QT_QML_IMPORT_PATH</code> to the same directory for tooling (qmllint) and, on Android, <code>QT_QML_ROOT_PATH</code> so the frontend is packed into the APK. Because the directory is on the import path, any QML file in it is importable by type name, and <span class="file-path">frontend/qmldir</span> declares the singletons:</p>
 
@@ -314,12 +310,12 @@ singleton MusicDevicePreference 1.0 MusicDevicePreference.qml</code></pre>
         <!-- Controls style -->
         <h2 id="controls-style">Qt Quick Controls "Basic" Style</h2>
 
-        <p>Both backends force the Qt Quick Controls style to <strong>Basic</strong> before the engine is created &mdash; <code>QQuickStyle::setStyle("Basic")</code> in <span class="file-path">src/main.cpp</span>, <code>os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"</code> at the very top of <span class="file-path">main.py</span>. Both comments give the same reason &mdash; "required for full Slider customization" (C++) / "allows Slider customization" (Python): the app replaces the <code>background</code>, <code>handle</code> and <code>contentItem</code> of its sliders, toggles and popups, which platform styles do not allow. Five files also import <code>QtQuick.Controls.Basic</code> explicitly (<span class="file-path">MainMenu.qml</span>, <span class="file-path">MediaRoom.qml</span>, <span class="file-path">BottomBar.qml</span>, <span class="file-path">AndroidAutoView.qml</span>, <span class="file-path">PhoneMirrorView.qml</span>) so their customised controls resolve to the Basic implementations regardless of the platform default.</p>
+        <p><span class="file-path">src/main.cpp</span> forces the Qt Quick Controls style to <strong>Basic</strong> with <code>QQuickStyle::setStyle("Basic")</code> before the engine is created. The comment gives the reason &mdash; "required for full Slider customization": the app replaces the <code>background</code>, <code>handle</code> and <code>contentItem</code> of its sliders, toggles and popups, which platform styles do not allow. Five files also import <code>QtQuick.Controls.Basic</code> explicitly (<span class="file-path">MainMenu.qml</span>, <span class="file-path">MediaRoom.qml</span>, <span class="file-path">BottomBar.qml</span>, <span class="file-path">AndroidAutoView.qml</span>, <span class="file-path">PhoneMirrorView.qml</span>) so their customised controls resolve to the Basic implementations regardless of the platform default.</p>
 
         <!-- Context Properties -->
         <h2 id="context-properties">Accessing Backend Managers (Context Properties)</h2>
 
-        <p>Backend managers are registered as QML context properties before <code>Main.qml</code> loads &mdash; in <span class="file-path">src/main.cpp</span> via <code>ctx-&gt;setContextProperty(...)</code> and in <span class="file-path">main.py</span> via <code>engine.rootContext().setContextProperty(...)</code>. They appear as globals in every QML file:</p>
+        <p>Backend managers are registered as QML context properties before <code>Main.qml</code> loads &mdash; in <span class="file-path">src/main.cpp</span> via <code>ctx-&gt;setContextProperty(...)</code>. They appear as globals in every QML file:</p>
 
         <pre><code><span class="cmt">// Call slots / invokables</span>
 mediaManager.<span class="fn">next_track</span>()
@@ -334,7 +330,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
     <span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) { ... }
 }</code></pre>
 
-        <p>Context properties used by the frontend are listed below. Desktop backends share the manager names; platform and build guards determine availability.</p>
+        <p>Context properties used by the frontend are listed below. Platform and build options decide which implementation sits behind a name (mobile and app-store builds register stub classes under the same names).</p>
 
         <table>
           <thead><tr><th>Context Property</th><th>Class</th><th>Purpose</th></tr></thead>
@@ -346,27 +342,27 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
             <tr><td><code>volumeController</code></td><td>VolumeController</td><td>Quadratic volume curve + dispatch to every output</td></tr>
             <tr><td><code>mediaManager</code></td><td>MediaManager</td><td>Local playback, library, playlists, metadata, album art</td></tr>
             <tr><td><code>audioAnalyzer</code></td><td>AudioAnalyzer</td><td>FFT waveform visualization</td></tr>
-            <tr><td><code>obdManager</code></td><td>OBDManager</td><td>OBD-II live data and DTCs (Python installs it via <code>install_obd_manager()</code> so <code>dev/</code> can inject a mock)</td></tr>
+            <tr><td><code>obdManager</code></td><td>OBDManager</td><td>OBD-II live data and DTCs</td></tr>
             <tr><td><code>esp32VolumeManager</code></td><td>ESP32VolumeManager</td><td>Wireless rotary encoder</td></tr>
             <tr><td><code>berryIMU</code></td><td>BerryIMUManager</td><td>Accelerometer / gyro / magnetometer / barometer</td></tr>
             <tr><td><code>gestureSensor</code></td><td>GestureManager</td><td>PAJ7620U2 gesture sensor</td></tr>
-            <tr><td><code>androidAutoManager</code></td><td>AndroidAutoManager</td><td>Android Auto via DHU (C++ also registers the <code>dhuframe</code> image provider)</td></tr>
+            <tr><td><code>androidAutoManager</code></td><td>AndroidAutoManager</td><td>Android Auto via DHU (the <code>dhuframe</code> image provider is registered alongside it)</td></tr>
             <tr><td><code>phoneMirrorManager</code></td><td>PhoneMirrorManager</td><td>Built-in scrcpy-protocol client</td></tr>
-            <tr><td><code>downloadManager</code></td><td>DownloadManager</td><td>YouTube Music search / download (compiled out of app-store C++ builds)</td></tr>
+            <tr><td><code>downloadManager</code></td><td>DownloadManager</td><td>YouTube Music search / download (a stub class in app-store builds, <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code>)</td></tr>
             <tr><td><code>obdAdapterFinder</code></td><td>OBDAdapterFinder</td><td>Adapter discovery and pairing for OBDAdapterSheet</td></tr>
             <tr><td><code>assetStore</code></td><td>AssetStore</td><td>Resolves bundled 3D assets to filesystem paths when needed</td></tr>
             <tr><td><code>wikiViewerAvailable</code>, <code>wikiHomeUrl</code></td><td><em>bool / URL</em></td><td>In-app wiki availability and entry URL</td></tr>
             <tr><td><code>dashboardManager</code></td><td>DashboardManager</td><td>Dashboard presets + user JSON dashboards</td></tr>
             <tr><td><code>screenAutoScale</code></td><td><em>real</em></td><td>Screen-detected scale factor (see <a href="#gui-scale">GUI Scale</a>)</td></tr>
-            <tr><td><code>isAndroid</code></td><td><em>bool</em></td><td><code>true</code> only in the Android C++ build; always <code>false</code> from Python</td></tr>
-            <tr><td><code>perfMonitor</code></td><td>PerfMonitor</td><td>Only with <code>--profile</code> (C++ needs an <code>OCTAVE_DEV_TOOLS</code> build)</td></tr>
+            <tr><td><code>isAndroid</code></td><td><em>bool</em></td><td><code>true</code> only in the Android build</td></tr>
+            <tr><td><code>perfMonitor</code></td><td>PerfMonitor</td><td>Only with <code>--profile</code> in an <code>OCTAVE_DEV_TOOLS</code> build</td></tr>
           </tbody>
         </table>
 
-        <p>One custom QML type is registered rather than exposed as a property: <code>qmlRegisterType(EmbeddedDhuItem, "OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem")</code> in both backends (see <a href="pages.html#androidauto">AndroidAutoView</a>). Phone mirroring no longer registers a type: the QML <code>VideoOutput</code> hands its <code>videoSink</code> to <code>phoneMirrorManager.videoSink</code>.</p>
+        <p>One custom QML type is registered rather than exposed as a property: <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;("OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem")</code> in <span class="file-path">src/main.cpp</span> (see <a href="pages.html#androidauto">AndroidAutoView</a>). Phone mirroring no longer registers a type: the QML <code>VideoOutput</code> hands its <code>videoSink</code> to <code>phoneMirrorManager.videoSink</code>.</p>
 
         <!-- typeof -->
-        <h2 id="typeof-guards">Guarding Backend Differences with typeof</h2>
+        <h2 id="typeof-guards">Guarding Optional Globals with typeof</h2>
 
         <p>Context properties that exist in one build but not another are referenced through <code>typeof x !== "undefined"</code> so a missing global is a falsy branch rather than a ReferenceError. The pattern also appears as <code>target: (typeof foo !== "undefined" &amp;&amp; foo) ? foo : null</code> on <code>Connections</code> blocks. Where it is used today:</p>
 
@@ -379,7 +375,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <li><code>typeof obj.method === "function"</code> &mdash; feature probes on items and managers: <code>currentItem.navigateToHub</code>, <code>mainWindow.openNowPlayingStudio</code>, <code>roomLoader.item.previewTrackTransition</code>, and in the OBD settings page <code>obdManager.connect_to_adapter</code> / <code>set_target_address</code> / <code>platform_hint</code>.</li>
         </ul>
 
-        <p>Everything else assumes the manager exists, per the parity rule in <span class="file-path">CLAUDE.md</span>: a QML binding may only reference a symbol both backends expose, unless it is mobile-only.</p>
+        <p>Everything else assumes the manager exists and binds to it directly.</p>
 
         <!-- GUI scale -->
         <h2 id="gui-scale">GUI Scale</h2>
@@ -394,7 +390,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 <span class="kw">function</span> <span class="fn">dp</span>(size)          { <span class="kw">return</span> Math.<span class="fn">round</span>(size * effectiveScale) }
 <span class="kw">function</span> <span class="fn">dpMin</span>(size, floor) { <span class="kw">return</span> Math.<span class="fn">max</span>(floor, Math.<span class="fn">round</span>(size * effectiveScale)) }</code></pre>
 
-        <p><code>screenAutoScale</code> is computed by both launchers as the <strong>shorter</strong> edge of <code>primaryScreen().availableSize()</code> <em>/ 720</em>, clamped to <code>[0.4, 3.0]</code>, so the factor is orientation-independent (Android reports the natural portrait size even when locked landscape, and <span class="file-path">main.py</span> uses <code>min(width, height)</code> to match <span class="file-path">src/main.cpp</span>). Main.qml applies it as <code>Spacing.autoScaleFactor</code> and then sets <code>Spacing.globalScale = settingsManager.uiScale</code>. Percentage-based tokens (<code>overallMargin</code>, <code>overallText</code>, <code>settingsNavWidth</code>, &hellip;) are recomputed from <code>applicationWidth/Height</code> whenever <code>Spacing.updateDimensions(w, h)</code> is called.</p>
+        <p><code>screenAutoScale</code> is computed in <span class="file-path">src/main.cpp</span> as the <strong>shorter</strong> edge of <code>primaryScreen().availableSize()</code> <em>/ 720</em>, clamped to <code>[0.4, 3.0]</code>, so the factor is orientation-independent (Android reports the natural portrait size even when locked landscape). Main.qml applies it as <code>Spacing.autoScaleFactor</code> and then sets <code>Spacing.globalScale = settingsManager.uiScale</code>. Percentage-based tokens (<code>overallMargin</code>, <code>overallText</code>, <code>settingsNavWidth</code>, &hellip;) are recomputed from <code>applicationWidth/Height</code> whenever <code>Spacing.updateDimensions(w, h)</code> is called.</p>
 
         <div class="info-box warning">
           <div class="info-box-title">Why almost every file has its own dp() / dpMin()</div>
@@ -427,7 +423,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 // through mediaManager.extract_colors_from_image(mediaArtUrl) (onMediaArtChanged /
 // onMediaActiveChanged) and its mediaDuration drives the transition speed</span></code></pre>
 
-        <p>At startup, if the saved theme is Album Art Capture and <code>settingsManager.albumArtColors</code> is non-empty, Main.qml primes <code>Style.updateAlbumArtTheme()</code> <em>before</em> <code>setThemeInstant()</code> so the placeholder palette never paints. Manual theme switches are always instant (<code>Style.setThemeInstant</code>); the transition duration only applies to album-art-driven shifts. The comment on the settings handler records why it reads the property instead of the signal argument: signal arguments were observed not to pass reliably through <code>Connections</code> under PySide6.</p>
+        <p>At startup, if the saved theme is Album Art Capture and <code>settingsManager.albumArtColors</code> is non-empty, Main.qml primes <code>Style.updateAlbumArtTheme()</code> <em>before</em> <code>setThemeInstant()</code> so the placeholder palette never paints. Manual theme switches are always instant (<code>Style.setThemeInstant</code>); the transition duration only applies to album-art-driven shifts. The settings handler reads the <code>albumArtColors</code> property instead of using the signal argument.</p>
 
         <!-- Shift Light -->
         <h2 id="shift-light">Shift Light Overlays</h2>
@@ -513,12 +509,12 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <pre><code><span class="prop">fragmentShader</span>: Qt.platform.os === <span class="str">"android"</span>
     ? <span class="str">"qrc:/shaders/dissolve_squares.frag.qsb"</span>
     : <span class="str">"shaders/dissolve_squares.frag.qsb"</span></code></pre>
-        <p>On desktop (both backends) the path resolves relative to the QML file on disk. On Android the QML is served from <code>assets:/</code>, which the RHI ShaderEffect rejects (only <code>qrc:/</code> or local files), so <span class="file-path">CMakeLists.txt</span> compiles the <span class="file-path">.qsb</span> into the executable with <code>qt_add_resources(octave "shaders" PREFIX "/shaders" ...)</code>. <span class="file-path">frontend/shaders/shaders.qrc</span> lists the same file for tooling; Python never touches it.</p>
+        <p>On desktop the path resolves relative to the QML file on disk. On Android the QML is served from <code>assets:/</code>, which the RHI ShaderEffect rejects (only <code>qrc:/</code> or local files), so <span class="file-path">CMakeLists.txt</span> compiles the <span class="file-path">.qsb</span> into the executable with <code>qt_add_resources(octave "shaders" PREFIX "/shaders" ...)</code>. <span class="file-path">frontend/shaders/shaders.qrc</span> lists the same file for tooling.</p>
 
         <!-- objectName -->
         <h2 id="objectnames">objectName Conventions for Dev Scripting</h2>
 
-        <p><code>objectName</code>s exist for two consumers: Main.qml and BottomBar navigation logic (which pages are "OBD" or "sensor" pages, whether Settings is current, IMU gating), and the developer command server (<span class="file-path">src/dev/uidriver.cpp</span> / <span class="file-path">backend/command_server.py</span>, <code>--profile</code> on either backend) that drives the running app for the screenshot sweeper (<code>python -m dev.screenshots</code>) and MCP tools. The server walks <code>window.contentItem()</code> recursively &mdash; so items inside <code>Popup</code>s under <code>Overlay</code> are found too &mdash; and matches on <code>objectName</code> (preferring a visible match); its <code>find_item</code>, <code>list_items</code>, <code>get_prop</code>, <code>set_prop</code>, <code>call</code>, <code>click</code> and <code>drag</code> actions all key on it, <code>"root"</code> resolves to the ApplicationWindow, and <code>get_current_page</code> reads <code>stackView.currentItem.objectName</code> through the <code>"stackView"</code> name (<code>navigate</code>, <code>open_settings</code>, <code>go_back</code> and <code>go_home</code> call the <code>navigateTo</code> / <code>navigateToSettings</code> / <code>navigateBack</code> / <code>navigateHome</code> functions above). Conventions in use:</p>
+        <p><code>objectName</code>s exist for two consumers: Main.qml and BottomBar navigation logic (which pages are "OBD" or "sensor" pages, whether Settings is current, IMU gating), and the developer command server (<span class="file-path">src/dev/uidriver.cpp</span>, enabled with <code>--profile</code>) that drives the running app for the screenshot sweeper (<code>python -m dev.screenshots</code>) and MCP tools. The server walks <code>window.contentItem()</code> recursively &mdash; so items inside <code>Popup</code>s under <code>Overlay</code> are found too &mdash; and matches on <code>objectName</code> (preferring a visible match); its <code>find_item</code>, <code>list_items</code>, <code>get_prop</code>, <code>set_prop</code>, <code>call</code>, <code>click</code> and <code>drag</code> actions all key on it, <code>"root"</code> resolves to the ApplicationWindow, and <code>get_current_page</code> reads <code>stackView.currentItem.objectName</code> through the <code>"stackView"</code> name (<code>navigate</code>, <code>open_settings</code>, <code>go_back</code> and <code>go_home</code> call the <code>navigateTo</code> / <code>navigateToSettings</code> / <code>navigateBack</code> / <code>navigateHome</code> functions above). Conventions in use:</p>
 
         <table>
           <thead><tr><th>Convention</th><th>Examples</th></tr></thead>
@@ -536,7 +532,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <!-- Keyboard -->
         <h2 id="keyboard">Keyboard Handling</h2>
 
-        <p>Main.qml installs no <code>Keys</code> handlers and no <code>Shortcut</code>s; the head unit is touch-first. Keyboard input reaches only focused text fields (search box and playlist-name fields in <span class="file-path">DownloadPage</span> and <span class="file-path">MediaPlayer</span>, which call <code>forceActiveFocus()</code> when opened) and <code>Popup</code>s with <code>closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside</code> (the album-art popup in MediaRoom; the playlist dropdown, song/playlist action menus and new-playlist dialog in MediaPlayer; the playlist dropdown, error and new-playlist popups in DownloadPage; the dashboard chooser, primitives gallery and RPM settings popups in OBDMenu; the volume popups in BottomBar; <code>SettingsChips</code> and the OBD settings adapter popup), so Escape closes them. <span class="file-path">DownloadPage</span> also draws its own on-screen keyboard (<code>onScreenKeyboard</code> Rectangle, toggled by <code>showKeyboard</code>) for touch-only installs. Developer keyboard controls (simulated OBD, etc.) live in the gitignored <span class="file-path">dev/</span> tree (<code>python -m dev.main_dev</code>), not in <span class="file-path">frontend/</span>.</p>
+        <p>Main.qml installs no <code>Keys</code> handlers and no <code>Shortcut</code>s; the head unit is touch-first. Keyboard input reaches only focused text fields (search box and playlist-name fields in <span class="file-path">DownloadPage</span> and <span class="file-path">MediaPlayer</span>, which call <code>forceActiveFocus()</code> when opened) and <code>Popup</code>s with <code>closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside</code> (the album-art popup in MediaRoom; the playlist dropdown, song/playlist action menus and new-playlist dialog in MediaPlayer; the playlist dropdown, error and new-playlist popups in DownloadPage; the dashboard chooser, primitives gallery and RPM settings popups in OBDMenu; the volume popups in BottomBar; <code>SettingsChips</code> and the OBD settings adapter popup), so Escape closes them. <span class="file-path">DownloadPage</span> also draws its own on-screen keyboard (<code>onScreenKeyboard</code> Rectangle, toggled by <code>showKeyboard</code>) for touch-only installs. Developer keyboard controls (simulated OBD, etc.) are part of the dev runtime in <span class="file-path">src/dev/</span> (<code>octave --dev</code> in an <code>OCTAVE_DEV_TOOLS</code> build), not in <span class="file-path">frontend/</span>.</p>
 
         <!-- Initialization -->
         <h2 id="initialization">Initialization Sequence</h2>
@@ -561,7 +557,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 
         <div class="info-box warning">
           <div class="info-box-title">Signal connections made by hand</div>
-          <code>obdManager.rpmChanged</code> and <code>settingsManager.customThemesChanged</code> are connected with <code>.connect()</code> in JavaScript rather than through <code>Connections</code> blocks. The comments cite reliability of PySide6 signal delivery; the pattern predates the C++ backend and works with both.
+          <code>obdManager.rpmChanged</code> and <code>settingsManager.customThemesChanged</code> are connected with <code>.connect()</code> in JavaScript rather than through <code>Connections</code> blocks; the comments give signal-delivery reliability as the reason.
         </div>
 
         <!-- Design decisions -->
@@ -573,13 +569,13 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <p>A single window with a StackView keeps the persistent BottomBar, the shift-light overlays and the Now Playing Studio in one scene graph, so overlays render above every page without secondary windows (the placement comment on <code>globalFullScreenFlash</code> calls this out as the cross-platform requirement). Pages are instantiated with <code>Qt.createComponent()</code> only when navigated to, so an install without the optional QtQuick3D module still boots &mdash; <code>SensorHome</code> probes <code>CarMenu.qml</code> once and greys its card out rather than the app failing at load (CMake comment, commit <code>0c29e64</code>). All six StackView transitions are <code>null</code> ("Disable transitions for better performance"). Most navigation pages use the shared cache. DownloadPage retains its older, separate cache so its search results and queue survive navigation; re-entry refreshes its playlist list.</p>
 
         <h3>Context properties, not a QML module of registered types</h3>
-        <p>Managers are plain <code>QObject</code>s registered by name in both launchers so the identical <span class="file-path">frontend/</span> tree runs against C++ or Python; QML never imports a backend module. The parity rule in <span class="file-path">CLAUDE.md</span> makes the context-property name part of the contract (same class name, same slots/signals/properties in both backends). Registration happens before <code>engine.load()</code> because bindings evaluate on first load (the <code>dashboardManager</code> comment in both launchers). The only registered <em>type</em> is <code>EmbeddedDhuItem</code> in the <code>OCTAVE.AndroidAuto 1.0</code> module, because the DHU window has to be reparented into a real scene item; everything else is a context property.</p>
+        <p>Managers are plain <code>QObject</code>s registered by name in <span class="file-path">src/main.cpp</span>; QML never imports a backend module, and the context-property name plus the slots/signals/properties behind it are the contract. Mobile and app-store builds swap in stub classes under the same names, so the same <span class="file-path">frontend/</span> tree loads everywhere. Registration happens before <code>engine.load()</code> because bindings evaluate on first load (the <code>dashboardManager</code> comment in <span class="file-path">src/main.cpp</span>). The only registered <em>type</em> is <code>EmbeddedDhuItem</code> in the <code>OCTAVE.AndroidAuto 1.0</code> module, because the DHU window has to be reparented into a real scene item; everything else is a context property.</p>
 
         <h3>"Basic" controls style</h3>
-        <p>Set in both launchers with the same comment: Basic allows full Slider customisation. Platform styles (Fusion, Material, native) reserve parts of their delegates; Basic lets every <code>background</code> / <code>handle</code> / <code>contentItem</code> be replaced, which the themed sliders, toggles and popups depend on.</p>
+        <p>Set in <span class="file-path">src/main.cpp</span> with the comment that Basic allows full Slider customisation. Platform styles (Fusion, Material, native) reserve parts of their delegates; Basic lets every <code>background</code> / <code>handle</code> / <code>contentItem</code> be replaced, which the themed sliders, toggles and popups depend on.</p>
 
         <h3>Explicit image decoding and warm caches</h3>
-        <p>The media views control decoding rather than leaving it to the scene graph: <code>MediaRoom</code> pre-decodes prev/next album art in hidden 1&times;1 <code>Image</code>s with <code>cache: true</code> on the next event-loop tick after a track change, using one batched <code>get_neighbor_album_arts()</code> call that the comment says "halves PySide6 bridge crossings" and keeps backend calls off the animation frame; <code>CoverflowCard</code> decodes at <code>2 &times; artSize</code> and turns off <code>smooth</code> while animating; <code>ThemedIcon</code> supersamples SVGs at 2&times; "so edges stay crisp when the tile scales up"; <code>MediaPlayer</code>'s list uses plain <code>Image</code>s with <code>sourceSize</code> 1.5&times; inside a <code>ListView</code> with <code>reuseItems</code>. Heavy work such as FFT analysis is deferred until the carousel's <code>settled</code> signal so it never competes with animation frames.</p>
+        <p>The media views control decoding rather than leaving it to the scene graph: <code>MediaRoom</code> pre-decodes prev/next album art in hidden 1&times;1 <code>Image</code>s with <code>cache: true</code> on the next event-loop tick after a track change, using one batched <code>get_neighbor_album_arts()</code> call that keeps backend calls off the animation frame; <code>CoverflowCard</code> decodes at <code>2 &times; artSize</code> and turns off <code>smooth</code> while animating; <code>ThemedIcon</code> supersamples SVGs at 2&times; "so edges stay crisp when the tile scales up"; <code>MediaPlayer</code>'s list uses plain <code>Image</code>s with <code>sourceSize</code> 1.5&times; inside a <code>ListView</code> with <code>reuseItems</code>. Heavy work such as FFT analysis is deferred until the carousel's <code>settled</code> signal so it never competes with animation frames.</p>
 
         <h3>Quick3D for the car view</h3>
         <p>The vehicle-attitude view needs a real 3D scene: IMU orientation arrives as a quaternion and is applied directly to a <code>Node</code> (no gimbal lock), the rigged Jeep has hinged doors, hood, tailgate, steering linkage and spinning wheels, and reflections come from an HDR light probe. QtQuick3D provides that with GLB loading through <code>RuntimeLoader</code>. It is deliberately optional: CMake links it when found, CI packages the <code>assetimporters</code> plugin so the glb parser ships, and the QML degrades (greyed card, "Requires the QtQuick3D module") when it is absent. See <a href="pages.html#carmenu">CarMenu</a> and <a href="components.html#jeep-rig">the Jeep rig</a>.</p>
@@ -590,8 +586,8 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <h3>Local dp() wrappers and property-only singletons</h3>
         <p>An Android bug makes singleton functions un-callable when QML is served from <code>assets:/</code>. Rather than fork the QML for mobile, many files carry a local <code>dp()</code> wrapper, and anything a singleton must offer to Android is a property (<code>Spacing.effectiveScale</code>, <code>Style.assetBase</code>).</p>
 
-        <h3>typeof guards only where a backend legitimately differs</h3>
-        <p>Because both backends must expose the same API on desktop, QML checks for a manager's existence only for genuinely optional or mobile-absent globals (<code>isAndroid</code>, hardware managers, <code>dashboardManager</code>, <code>diagnosticsManager</code>); everything else binds directly, so a missing symbol surfaces as a loud error during the parity build instead of silently disabling a feature.</p>
+        <h3>typeof guards only for optional globals</h3>
+        <p>QML checks for a manager's existence only for genuinely optional or platform-specific globals (<code>isAndroid</code>, hardware managers, <code>dashboardManager</code>, <code>diagnosticsManager</code>); everything else binds directly, so a missing symbol surfaces as a loud error instead of silently disabling a feature.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>

@@ -35,7 +35,7 @@
             <li><a href="#design-decisions">Design Decisions</a></li>
             <li><a href="#adding-new-setting">How to Add a New Setting</a></li>
             <li><a href="#signal-reference">Signal Reference</a></li>
-            <li><a href="#parity-notes">Backend Parity Notes</a></li>
+            <li><a href="#behaviour-notes">Behaviour Notes</a></li>
             <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
@@ -43,13 +43,11 @@
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
         <p>
-          The <code>SettingsManager</code> class (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span> in C++,
-          <span class="file-path">backend/settings_manager.py</span> in Python) is the central configuration store for
-          all of OCTAVE. It inherits from <code>QObject</code> and exposes typed settings to QML through
-          <code>Q_PROPERTY</code> / <code>@Property</code> getters, change signals, and <code>save_*</code> slots. Both
-          backends define the same 96 default keys, the same 79 properties, the same 83 signals and shared callable methods (plus a Python-only legacy flush alias), and
-          they read and write the same file: <code>settingsConfigure.json</code> in the OS-specific app data directory.
-          The QML frontend never knows which backend is behind <code>settingsManager</code>.
+          The <code>SettingsManager</code> class (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>) is the
+          central configuration store for all of OCTAVE. It inherits from <code>QObject</code> and exposes typed settings to
+          QML through <code>Q_PROPERTY</code> getters, change signals, and <code>save_*</code> slots. It defines 96 default
+          keys, 79 properties, 83 signals, 91 public slots and 51 <code>Q_INVOKABLE</code> methods, and reads and writes one
+          file: <code>settingsConfigure.json</code> in the OS-specific app data directory.
         </p>
         <p>
           Beyond the typed properties, the manager provides a <strong>settings registry</strong> (25 entries) that maps a
@@ -68,9 +66,8 @@
         <!-- File Location -->
         <h2 id="file-location">File Location and Storage Paths</h2>
         <p>
-          The settings file lives in the directory returned by <code>get_app_data_dir()</code> (Python, module-level function)
-          / <code>SettingsManager::getAppDataDir()</code> (C++, static). Both create the directory if it is missing and pick
-          the path by platform:
+          The settings file lives in the directory returned by the static <code>SettingsManager::getAppDataDir()</code>, which
+          creates the directory if it is missing and picks the path by platform:
         </p>
         <table>
           <thead>
@@ -80,22 +77,30 @@
             <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\settingsConfigure.json</code></td><td><code>APPDATA</code> env var; falls back to the home directory if unset</td></tr>
             <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/settingsConfigure.json</code></td><td>hard-coded under the home directory</td></tr>
             <tr><td>Linux / Raspberry Pi / Orange Pi</td><td><code>~/.config/OCTAVE/settingsConfigure.json</code></td><td><code>$XDG_CONFIG_HOME/OCTAVE</code> when the variable is set</td></tr>
-            <tr><td>Android / iOS (C++ only)</td><td><code>&lt;QDir::homePath()&gt;/.config/OCTAVE/settingsConfigure.json</code></td><td>same <code>#else</code> branch as Linux (<code>XDG_CONFIG_HOME</code> honoured if set)</td></tr>
+            <tr><td>Android / iOS</td><td><code>&lt;QDir::homePath()&gt;/.config/OCTAVE/settingsConfigure.json</code></td><td>same <code>#else</code> branch as Linux (<code>XDG_CONFIG_HOME</code> honoured if set)</td></tr>
           </tbody>
         </table>
 
-        <pre><code><span class="kw">def</span> <span class="fn">get_app_data_dir</span>():
-    app_name = <span class="str">"OCTAVE"</span>
-    <span class="kw">if</span> sys.platform == <span class="str">'win32'</span>:
-        base = os.environ.get(<span class="str">'APPDATA'</span>, os.path.expanduser(<span class="str">'~'</span>))
-        data_dir = os.path.join(base, app_name)
-    <span class="kw">elif</span> sys.platform == <span class="str">'darwin'</span>:
-        data_dir = os.path.join(os.path.expanduser(<span class="str">'~'</span>), <span class="str">'Library'</span>, <span class="str">'Application Support'</span>, app_name)
-    <span class="kw">else</span>:
-        base = os.environ.get(<span class="str">'XDG_CONFIG_HOME'</span>, os.path.join(os.path.expanduser(<span class="str">'~'</span>), <span class="str">'.config'</span>))
-        data_dir = os.path.join(base, app_name)
-    os.makedirs(data_dir, exist_ok=<span class="kw">True</span>)
-    <span class="kw">return</span> data_dir</code></pre>
+        <pre><code>QString SettingsManager::<span class="fn">getAppDataDir</span>()
+{
+    <span class="kw">const</span> QString appName = QStringLiteral(<span class="str">"OCTAVE"</span>);
+    QString dataDir;
+<span class="kw">#ifdef</span> Q_OS_WIN
+    QString base = qEnvironmentVariable(<span class="str">"APPDATA"</span>);
+    <span class="kw">if</span> (base.isEmpty())
+        base = QDir::homePath();
+    dataDir = base + QDir::separator() + appName;
+<span class="kw">#elif defined</span>(Q_OS_MACOS)
+    dataDir = QDir::homePath() + QStringLiteral(<span class="str">"/Library/Application Support/"</span>) + appName;
+<span class="kw">#else</span>
+    QString base = qEnvironmentVariable(<span class="str">"XDG_CONFIG_HOME"</span>);
+    <span class="kw">if</span> (base.isEmpty())
+        base = QDir::homePath() + QStringLiteral(<span class="str">"/.config"</span>);
+    dataDir = base + QDir::separator() + appName;
+<span class="kw">#endif</span>
+    QDir().mkpath(dataDir);
+    <span class="kw">return</span> dataDir;
+}</code></pre>
 
         <p>
           The same directory is the root for everything else OCTAVE persists, so the helper is imported by other managers
@@ -108,7 +113,7 @@
           <tbody>
             <tr><td><code>settingsConfigure.json</code></td><td>SettingsManager (this page)</td></tr>
             <tr><td><code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code></td><td>SettingsManager, album art copied or downloaded for a custom theme (<a href="#key-methods">save_custom_theme</a>)</td></tr>
-            <tr><td><code>logs/</code></td><td><span class="file-path">src/util/logger.cpp</span>, <span class="file-path">backend/diagnostics_manager.py</span> / <span class="file-path">src/managers/diagnosticsmanager.cpp</span> (see <a href="development.html">Development</a>)</td></tr>
+            <tr><td><code>logs/</code></td><td><span class="file-path">src/util/logger.cpp</span>, <span class="file-path">src/managers/diagnosticsmanager.cpp</span> (see <a href="development.html">Development</a>)</td></tr>
             <tr><td><code>dashboards/</code></td><td>DashboardManager user dashboards (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>
             <tr><td><code>metadata_cache.json</code>, <code>display_names.json</code></td><td><a href="media-manager.html">MediaManager</a></td></tr>
           </tbody>
@@ -118,39 +123,22 @@
           <div class="info-box-title">Retired keys are deleted at startup</div>
           Files from older builds may carry <code>spotifyClientId</code>, <code>spotifyClientSecret</code>,
           <code>mediaSource</code> (the removed Spotify integration) and <code>scrcpyAudioEnabled</code> (the removed phone
-          audio toggle). Both constructors delete them, save, and log "Removed settings of retired features"; they then
-          delete the old Spotify login token: <code>.spotify_token_cache</code> in the app data dir (both backends), plus
-          <code>backend/.spotify_token_cache</code> and the <code>OCTAVE_Spotify</code> OS keychain entry (Python only).
+          audio toggle). The constructor deletes them, saves, logs "Removed settings of retired features", and then
+          deletes the old Spotify login token, <code>.spotify_token_cache</code> in the app data dir.
         </div>
 
         <!-- Property / Signal / Slot System -->
         <h2 id="property-signal-system">Property / Signal / Slot System</h2>
         <p>
-          Every setting with a dedicated property follows the same three-part pattern in both languages:
+          Every setting with a dedicated property follows the same three-part pattern:
         </p>
         <ol class="steps">
-          <li><strong>Signal declaration</strong> named <code>&lt;key&gt;Changed</code> (e.g. <code>themeSettingChanged</code>), carrying the new value where the value is scalar and no argument for dict/list settings</li>
+          <li><strong>Signal declaration</strong> named <code>&lt;key&gt;Changed</code> (e.g. <code>themeSettingChanged</code>), carrying the new value where the value is scalar and no argument for object/list settings</li>
           <li><strong>Read-only property</strong> with the camelCase JSON key as its name and the signal as <code>notify</code></li>
-          <li><strong>Save slot</strong> named <code>save_&lt;snake_case&gt;</code> that updates the backing member, calls <code>update_setting()</code> / <code>updateSetting()</code>, and emits the signal</li>
+          <li><strong>Save slot</strong> named <code>save_&lt;snake_case&gt;</code> that updates the backing member, calls <code>updateSetting()</code>, and emits the signal</li>
         </ol>
 
-        <p>Python (<span class="file-path">backend/settings_manager.py</span>):</p>
-        <pre><code><span class="cmt"># 1. Signal declaration (class level)</span>
-themeSettingChanged = Signal(<span class="cls">str</span>)
-
-<span class="cmt"># 2. Property with notify signal</span>
-@Property(<span class="cls">str</span>, notify=themeSettingChanged)
-<span class="kw">def</span> <span class="fn">themeSetting</span>(self):
-    <span class="kw">return</span> self._theme_setting
-
-<span class="cmt"># 3. Slot for QML to call</span>
-@Slot(<span class="cls">str</span>)
-<span class="kw">def</span> <span class="fn">save_theme_setting</span>(self, theme):
-    logger.debug(f<span class="str">"Saving theme setting: {theme}"</span>)
-    self._theme_setting = theme
-    self.update_setting(<span class="str">"themeSetting"</span>, theme, self.themeSettingChanged)</code></pre>
-
-        <p>C++ (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>), same three parts:</p>
+        <p>In <span class="file-path">src/managers/settingsmanager.{h,cpp}</span>:</p>
         <pre><code><span class="cmt">// header</span>
 Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
 <span class="kw">signals</span>:
@@ -168,44 +156,42 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
 }</code></pre>
 
         <p>
-          The slot names are deliberately snake_case on both sides (<code>save_theme_setting</code>, not
-          <code>saveThemeSetting</code>): the Python backend came first, the QML was written against it, and the C++ port
-          kept the names so no QML had to change. The camelCase exceptions include <code>setCurrentVolume()</code> and the shutdown flush,
-          <code>flushPendingSave()</code> on both sides (Python also keeps a <code>flush_pending_save()</code> alias),
-          which only the two <code>main</code> entry points call.
+          The slot names are snake_case (<code>save_theme_setting</code>, not <code>saveThemeSetting</code>), and the QML is
+          written against those names. The camelCase exceptions are <code>setCurrentVolume()</code>, which only <code>VolumeController</code> calls,
+          and the shutdown flush <code>flushPendingSave()</code>, which only <span class="file-path">src/main.cpp</span> calls.
         </p>
 
         <p>
-          <code>update_setting()</code> / <code>updateSetting()</code> is the single funnel every simple setter goes through:
+          <code>updateSetting()</code> is the single funnel every simple setter goes through:
         </p>
-        <pre><code><span class="kw">def</span> <span class="fn">update_setting</span>(self, key, value, signal=<span class="kw">None</span>):
-    settings = self.load_settings()      <span class="cmt"># copy of the in-memory dict</span>
-    settings[key] = value
-    self.save_settings(settings)         <span class="cmt"># validate into the cache, arm the 500 ms timer</span>
-    <span class="kw">if</span> signal:
-        signal.emit(value)</code></pre>
+        <pre><code><span class="kw">void</span> SettingsManager::<span class="fn">updateSetting</span>(<span class="kw">const</span> QString &amp;key, <span class="kw">const</span> QVariant &amp;value)
+{
+    QJsonObject settings = loadSettings();          <span class="cmt">// copy of the in-memory object</span>
+    settings[key] = QJsonValue::fromVariant(value);
+    saveSettings(settings);                         <span class="cmt">// validate into the cache, arm the 500 ms timer</span>
+}</code></pre>
 
         <p>
           Setters that touch several keys at once (<code>save_playback_state</code>,
-          the gesture-mapping and section-visibility slots) call <code>load_settings()</code> / <code>save_settings()</code>
+          the gesture-mapping and section-visibility slots) call <code>loadSettings()</code> / <code>saveSettings()</code>
           directly so the burst becomes one write, and setters with an enumerated or bounded domain validate before
           saving: <code>save_settings_layout_style</code>, <code>save_window_state</code>,
           <code>save_music_button_default_page</code>, <code>save_album_art_transition</code>,
           <code>save_esp32_led_color_mode</code> and
           <code>set_last_settings_section</code> silently ignore unknown values, while the numeric sliders clamp
-          (<code>qBound</code> / <code>max(min())</code>) to the ranges listed in the
+          (<code>qBound</code>) to the ranges listed in the
           <a href="settings-reference.html">Settings Reference</a>.
         </p>
 
         <div class="info-box info">
           <div class="info-box-title">Property types used</div>
-          Properties are <code>str</code>/<code>QString</code>, <code>bool</code>, <code>int</code>,
-          <code>float</code> (C++ <code>float</code> for <code>uiScale</code>, <code>startUpVolume</code>,
-          <code>fuelTankCapacity</code>; <code>double</code> for the others) and <code>'QVariantList'</code> /
-          <code>QVariantList</code> for <code>homeOBDParameters</code>, <code>directoryHistory</code>,
+          Properties are <code>QString</code>, <code>bool</code>, <code>int</code>, <code>float</code>
+          (<code>uiScale</code>, <code>startUpVolume</code>, <code>fuelTankCapacity</code>), <code>double</code>
+          (<code>sideCardOpacity</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckLevel</code>,
+          <code>esp32VolumeStepSize</code>) and <code>QVariantList</code> for <code>homeOBDParameters</code>, <code>directoryHistory</code>,
           <code>customThemes</code> (a list of theme <em>names</em>) and <code>pinnedSettings</code>. Three properties are
           JSON <em>strings</em> rather than maps or lists so QML parses them with <code>JSON.parse</code>:
-          <code>settingsMenuVisibility</code>, <code>albumArtColors</code> and <code>obdSavedAdapters</code>. Dict-valued settings
+          <code>settingsMenuVisibility</code>, <code>albumArtColors</code> and <code>obdSavedAdapters</code>. Object-valued settings
           (<code>obdParameters</code>, <code>gestureMapping</code>, <code>expandedCards</code>,
           <code>customThemes</code> contents) have no property at all; QML reads them through dedicated getters or
           <code>get_setting_with_default()</code>.
@@ -215,47 +201,47 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <h2 id="lifecycle">Startup, In-Memory Cache and Coalesced Writes</h2>
         <p>The constructor performs the only unconditional disk read of the manager's lifetime:</p>
         <ol class="steps">
-          <li>Build <code>_default_settings</code> / <code>buildDefaultSettings()</code> (96 keys) and the registry.</li>
-          <li><code>load_settings()</code>: the file is opened with a <em>shared</em> lock, parsed and passed through <code>_validate_settings()</code>. A missing file is created from the defaults immediately; a corrupt file (JSON parse error) is moved aside to <code>.corrupt</code> and restored from <code>.bak</code> (see <a href="#json-persistence">Backup and Corruption Recovery</a>).</li>
-          <li><strong>Migrations</strong>, applied in memory (the first two and the retired-key removal write back):
+          <li>Build <code>m_defaultSettings</code> with <code>buildDefaultSettings()</code> (96 keys) and the registry.</li>
+          <li><code>loadSettings()</code>: the file is opened with a <em>shared</em> lock, parsed and passed through <code>validateSettings()</code>. A missing file is created from the defaults immediately; a corrupt file (JSON parse error) is moved aside to <code>.corrupt</code> and restored from <code>.bak</code> (see <a href="#json-persistence">Backup and Corruption Recovery</a>).</li>
+          <li><strong>Migrations</strong>. The first two and the retired-key removal rewrite the file; the rest are applied to the cached members in <code>populateMembers()</code> and reach disk only with the next save of that key:
             <ul>
               <li><code>uiScale == 0.6</code> (an old default) becomes <code>1.0</code> and is saved straight away.</li>
               <li><code>fontSetting == "Google Sans"</code> (the pre-0.9 default, which <code>Style.setFont()</code> rejects because <code>Main.qml</code> derives the display name <code>"GoogleSans Regular"</code> from the bundled <code>GoogleSans-Regular.ttf</code>, silently leaving the app in the system font) becomes <code>"GoogleSans Regular"</code> and is saved straight away.</li>
               <li><code>obdBluetoothPort == "/dev/rfcomm0"</code> (the former desktop placeholder, meaningless on Android where the field holds a MAC address) is cleared to <code>""</code>.</li>
               <li><code>lastSettingsSection == "clockSettings"</code> (a removed page) becomes <code>"displaySettings"</code>.</li>
               <li><code>obdParameters</code>: every PID present in the defaults but missing from the file is added, so new PIDs appear after an upgrade without discarding the user's toggles.</li>
-              <li><code>settingsMenuVisibility</code>: sections missing from the stored dict are filled in as <code>true</code> (visible) in both backends, matching <code>is_settings_section_visible()</code>.</li>
+              <li><code>settingsMenuVisibility</code>: sections missing from the stored object are filled in as <code>true</code> (visible), matching <code>is_settings_section_visible()</code>.</li>
               <li>Retired keys (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are removed and saved straight away, and the old Spotify login token is deleted (see the "Retired keys" note above).</li>
             </ul>
           </li>
-          <li>Every backing member is populated from the loaded dict with the default as fallback (<code>_load_members_from_settings()</code> / <code>populateMembers()</code>, which <code>reset_to_defaults()</code> reuses).</li>
-          <li><code>mediaFolder</code> defaults to <code>""</code> on disk and is resolved at load: C++ uses <code>QStandardPaths::MusicLocation</code> (falling back to <code>~/Music</code>) and creates the directory on desktop only; Python uses <code>~/Music</code> and always creates it.</li>
+          <li>Every backing member is populated from the loaded object with the default as fallback (<code>populateMembers()</code>, which <code>reset_to_defaults()</code> reuses).</li>
+          <li><code>mediaFolder</code> defaults to <code>""</code> on disk and is resolved at load to <code>QStandardPaths::MusicLocation</code> (falling back to <code>~/Music</code>); the directory is created on desktop only, never on Android.</li>
           <li><code>currentVolume</code> (never persisted) is derived from <code>startUpVolume</code> by inverting the volume curve: <code>round(sqrt(startUpVolume) * 100)</code>, e.g. the default 0.1 gives 32&nbsp;%. See <a href="architecture.html">Architecture</a> for the quadratic curve.</li>
           <li>Two single-shot timers are created: the 500&nbsp;ms settings write timer and the 800&nbsp;ms OBD-parameter debounce timer.</li>
         </ol>
 
-        <p>After that, <code>_settings_loaded</code> / <code>m_settingsLoaded</code> is true and the manager works entirely from memory:</p>
+        <p>After that, <code>m_settingsLoaded</code> is true and the manager works entirely from memory:</p>
         <pre class="diagram">QML slot call ──► save_xxx()
                     │  update member, validate domain / clamp
                     ▼
-              update_setting()  ──► load_settings()   (returns the in-memory copy, no I/O)
+              updateSetting()   ──► loadSettings()    (returns the in-memory copy, no I/O)
                     │              settings[key] = value
                     ▼
-              save_settings()   ──► _validate_settings()  (types checked against defaults)
-                    │              self._settings = validated
-                    │              _save_pending = True ; _save_timer.start()   (500 ms, restarted on every call)
+              saveSettings()    ──► validateSettings()  (types checked against defaults)
+                    │              m_settings = validated
+                    │              m_savePending = true ; m_saveTimer.start()   (500 ms, restarted on every call)
                     ▼
-              signal.emit(value) ──► QML bindings update immediately
+              emit xxxChanged(value) ──► QML bindings update immediately
                     ⋮
-        500 ms of quiet  ──► flushPendingSave() ──► _write_settings_to_disk()   (atomic temp + rename)
-        aboutToQuit      ──► flushPendingSave()      (main.py / main.cpp, after MediaManager saves playback state)</pre>
+        500 ms of quiet  ──► flushPendingSave() ──► writeSettingsToDisk()   (QSaveFile: temp + rename)
+        aboutToQuit      ──► flushPendingSave()      (src/main.cpp, after MediaManager saves playback state)</pre>
 
         <p>
           Consequences worth knowing: a slider drag that fires twenty <code>save_*</code> calls costs one write;
           album-art colours pushed on every track change cost one write per track at most; and if the process is killed
           (not quit) within 500&nbsp;ms of a change, that change is lost. The OBD parameter toggles add their own layer:
           <code>save_obd_parameter_enabled()</code> only updates the in-memory map and restarts the 800&nbsp;ms timer;
-          when it fires, <code>_flush_obd_parameters()</code> copies the map into the settings dict (which arms the
+          when it fires, <code>flushObdParameters()</code> copies the map into the settings object (which arms the
           500&nbsp;ms timer) and emits <code>obdParametersChanged</code> once for the whole batch. The shutdown flush only handles the general save timer; a legacy OBD change still waiting for its 800&nbsp;ms timer is not explicitly flushed.
         </p>
 
@@ -263,64 +249,69 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <h2 id="json-persistence">JSON Persistence and Validation</h2>
 
         <h3>Atomic Write</h3>
-        <p><code>_write_settings_to_disk()</code> / <code>writeSettingsToDisk()</code> receives an already validated object and never re-validates (commit <code>037f753</code> aligned the C++ side with Python on this):</p>
+        <p><code>writeSettingsToDisk()</code> receives an already validated object and never re-validates. It hands the bytes to <code>atomicWrite()</code>:</p>
         <ol class="steps">
-          <li>Write to a temporary file in the same directory, so the final rename is on one filesystem: <code>tempfile.mkstemp(dir=..., suffix='.json')</code> in Python (under an exclusive, non-blocking <code>fcntl.flock</code> / <code>msvcrt.locking</code>), <code>QSaveFile</code> in C++</li>
-          <li>Write the JSON with 4-space indentation (<code>json.dumps(indent=4)</code> / <code>QJsonDocument::Indented</code>)</li>
-          <li>Flush and <code>fsync</code> the temp file (<code>QSaveFile::commit()</code> does this in C++), before replacement; actual durability also depends on the filesystem and storage hardware</li>
-          <li>Replace <code>settingsConfigure.json</code> in one step (<code>os.replace</code> / <code>QSaveFile::commit()</code>; both overwrite on every platform), then Python also attempts to fsync the directory on Unix</li>
-          <li>Set permissions to owner read/write only (<code>chmod 600</code>; Python does this on the temporary file before replacement, C++ on the destination after commit; skipped on Windows)</li>
+          <li>Open a <code>QSaveFile</code> on the target, which writes to a temporary file in the same directory so the final rename is on one filesystem</li>
+          <li>Write the JSON with 4-space indentation (<code>QJsonDocument::Indented</code>)</li>
+          <li><code>QSaveFile::commit()</code> flushes and fsyncs the temp file, then renames it over <code>settingsConfigure.json</code> in one step; actual durability also depends on the filesystem and storage hardware</li>
+          <li>Set permissions on the destination to owner read/write only (<code>chmod 600</code>; skipped on Windows)</li>
           <li>If any step fails, the temp file is removed and the existing file is left untouched; the next save tries again. There is no direct (truncating) fallback write</li>
         </ol>
 
         <h3>Backup and Corruption Recovery</h3>
-        <p>The first time a session reads a settings file that parses cleanly, it copies it to <code>settingsConfigure.json.bak</code> (same atomic write). If a later boot finds the file unparseable (typically an ignition cut mid-write on an SD card), the bad file is moved to <code>settingsConfigure.json.corrupt</code> for inspection, the <code>.bak</code> copy is loaded and written back as the live file, and only if the backup is also unusable are the defaults used. Both backends use the same file names. Covered by <code>tests/test_settings_persistence.py</code>.</p>
+        <p>The first time a session reads a settings file that parses cleanly, it copies it to <code>settingsConfigure.json.bak</code> (same atomic write). If a later boot finds the file unparseable (typically an ignition cut mid-write on an SD card), the bad file is moved to <code>settingsConfigure.json.corrupt</code> for inspection, the <code>.bak</code> copy is loaded and written back as the live file, and only if the backup is also unusable are the defaults used.</p>
 
         <h3>Validation</h3>
         <p>
-          <code>_validate_settings()</code> / <code>validateSettings()</code> runs at exactly two points: once on the
-          initial read and once inside every <code>save_settings()</code> (i.e. on the in-memory copy, before the timer
+          <code>validateSettings()</code> runs at exactly two points: once on the
+          initial read and once inside every <code>saveSettings()</code> (i.e. on the in-memory copy, before the timer
           is armed). It starts from a copy of the defaults and accepts a stored value only if its type matches the
           default's type; anything else keeps the default. Keys that have no default are copied through untouched so
           newer builds and QML-only keys survive older builds.
         </p>
         <table>
           <thead>
-            <tr><th>Default type</th><th>Python rule</th><th>C++ rule</th></tr>
+            <tr><th>Default type</th><th>Rule</th></tr>
           </thead>
           <tbody>
-            <tr><td>bool</td><td>accepted only if <code>isinstance(val, bool)</code>; checked first because <code>bool</code> is a subclass of <code>int</code></td><td><code>QJsonValue::isBool()</code></td></tr>
-            <tr><td>int</td><td>bool rejected; int kept; float truncated with <code>int(val)</code></td><td rowspan="2">any JSON number (<code>isDouble()</code>); ints and floats are not distinguished</td></tr>
-            <tr><td>float</td><td>bool rejected; int or float coerced with <code>float(val)</code></td></tr>
-            <tr><td>str</td><td><code>isinstance(val, str)</code></td><td><code>isString()</code></td></tr>
-            <tr><td>dict / list</td><td><code>isinstance</code> of the default's type; contents are not inspected</td><td><code>isObject()</code> / <code>isArray()</code>; contents are not inspected</td></tr>
-            <tr><td>not a dict at top level</td><td>defaults returned</td><td>non-object JSON is treated as a corrupt file and triggers backup recovery; an empty object receives defaults</td></tr>
+            <tr><td>bool</td><td><code>QJsonValue::isBool()</code></td></tr>
+            <tr><td>int / float</td><td>any JSON number (<code>isDouble()</code>); ints and floats are not distinguished, so a float stored under an int default is kept and truncated by the member's <code>toInt()</code></td></tr>
+            <tr><td>string</td><td><code>isString()</code></td></tr>
+            <tr><td>object / array</td><td><code>isObject()</code> / <code>isArray()</code>; contents are not inspected</td></tr>
+            <tr><td>not an object at top level</td><td>non-object JSON is treated as a corrupt file and triggers backup recovery; an empty object receives defaults</td></tr>
           </tbody>
         </table>
 
         <div class="info-box info">
           <div class="info-box-title">Float settings need float defaults</div>
-          Under the Python rule above an integer default truncates every stored float. <code>esp32VolumeStepSize</code>
-          used to default to the integer <code>1</code>, so a 0.25 / 0.5 / 0.75 knob step became <code>0</code> on disk
-          under the Python backend; its default is now the float literal <code>1.0</code> in both backends. Keep new
-          float settings' defaults as float literals (<code>1.0</code>, not <code>1</code>).
+          Validation does not distinguish ints from floats, so the member's type decides what survives: a setting read
+          with <code>toInt()</code> truncates a stored 0.5. Give float settings a <code>double</code> member, a
+          <code>toDouble()</code> read and a float-literal default (<code>1.0</code>, not <code>1</code>), as
+          <code>esp32VolumeStepSize</code> does so that 0.25 / 0.5 / 0.75 knob steps round-trip.
         </div>
 
         <h3>File Locking</h3>
-        <pre><code><span class="kw">def</span> <span class="fn">_lock_file</span>(self, f, exclusive=<span class="kw">True</span>):
-    <span class="kw">if</span> sys.platform == <span class="str">'win32'</span>:
-        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK <span class="kw">if</span> exclusive <span class="kw">else</span> msvcrt.LK_NBRLCK, <span class="num">1</span>)
-    <span class="kw">else</span>:
-        fcntl.flock(f.fileno(), (fcntl.LOCK_EX <span class="kw">if</span> exclusive <span class="kw">else</span> fcntl.LOCK_SH) | fcntl.LOCK_NB)</code></pre>
+        <pre><code><span class="kw">static void</span> <span class="fn">lockFile</span>(QFile &amp;f, <span class="kw">bool</span> exclusive)
+{
+<span class="kw">#ifdef</span> Q_OS_WIN
+    HANDLE hFile = <span class="kw">reinterpret_cast</span>&lt;HANDLE&gt;(_get_osfhandle(f.handle()));
+    OVERLAPPED ov = {};
+    DWORD flags = LOCKFILE_FAIL_IMMEDIATELY;
+    <span class="kw">if</span> (exclusive)
+        flags |= LOCKFILE_EXCLUSIVE_LOCK;
+    LockFileEx(hFile, flags, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>, &amp;ov);
+<span class="kw">#else</span>
+    flock(f.handle(), exclusive ? (LOCK_EX | LOCK_NB) : (LOCK_SH | LOCK_NB));
+<span class="kw">#endif</span>
+}</code></pre>
         <p>
-          Reads attempt a shared lock. The locks are advisory and non-blocking. Python attempts an exclusive lock on its temporary write file; C++ writes through <code>QSaveFile</code> without that lock. Both continue reading if the read lock cannot be acquired. Atomic replacement prevents partial documents, but there is no shared cross-process write lock or merge: two running instances can overwrite each other’s changes.
+          Reads attempt a shared lock (<code>parseSettingsFile()</code> calls <code>lockFile(f, false)</code>). The lock is advisory and non-blocking, and reading continues if it cannot be acquired. Writes go through <code>QSaveFile</code> without a lock. Atomic replacement prevents partial documents, but there is no shared cross-process write lock or merge: two running instances can overwrite each other’s changes.
         </p>
 
         <!-- Settings Registry -->
         <h2 id="settings-registry">Settings Registry Metadata System</h2>
         <p>
-          <code>SETTINGS_REGISTRY</code> (module-level dict in Python; <code>buildSettingsRegistry()</code> filling the
-          static <code>s_settingsRegistry</code> in C++) maps 25 setting IDs to metadata. QML fetches it once with
+          <code>buildSettingsRegistry()</code> fills the static <code>s_settingsRegistry</code> once; it maps 25 setting IDs to metadata. QML fetches it once with
           <code>get_settings_registry()</code> (JSON string) and renders a control per entry; the same metadata plus a
           <code>currentValue</code> comes back from <code>get_pinned_settings_metadata()</code> for the Quick Panel.
         </p>
@@ -331,13 +322,13 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
             <tr><th>Field</th><th>Type</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>key</code></td><td>str</td><td>The camelCase key in <code>settingsConfigure.json</code>, which is also the QML property name</td></tr>
-            <tr><td><code>label</code></td><td>str</td><td>Human-readable label displayed in the UI</td></tr>
-            <tr><td><code>category</code></td><td>str</td><td>Settings section ID: <code>mediaSettings</code>, <code>displaySettings</code>, <code>obdSettings</code>, <code>gestureSensorSettings</code> or <code>imuSettings</code></td></tr>
-            <tr><td><code>controlType</code></td><td>str</td><td><code>"toggle"</code>, <code>"slider"</code> or <code>"chips"</code></td></tr>
-            <tr><td><code>saveSlot</code></td><td>str</td><td>Name of the slot QML calls with the new value (e.g. <code>save_ui_scale</code>)</td></tr>
-            <tr><td><code>params</code></td><td>dict</td><td>Optional. Sliders: <code>from</code>, <code>to</code>, <code>stepSize</code>, optional <code>logarithmic</code>. Chips: <code>options</code> (fixed list) or <code>optionsSource</code> (a QML-side list name)</td></tr>
-            <tr><td><code>id</code></td><td>str</td><td>Added only by <code>get_pinned_settings_metadata()</code>: the registry key itself</td></tr>
+            <tr><td><code>key</code></td><td>string</td><td>The camelCase key in <code>settingsConfigure.json</code>, which is also the QML property name</td></tr>
+            <tr><td><code>label</code></td><td>string</td><td>Human-readable label displayed in the UI</td></tr>
+            <tr><td><code>category</code></td><td>string</td><td>Settings section ID: <code>mediaSettings</code>, <code>displaySettings</code>, <code>obdSettings</code>, <code>gestureSensorSettings</code> or <code>imuSettings</code></td></tr>
+            <tr><td><code>controlType</code></td><td>string</td><td><code>"toggle"</code>, <code>"slider"</code> or <code>"chips"</code></td></tr>
+            <tr><td><code>saveSlot</code></td><td>string</td><td>Name of the slot QML calls with the new value (e.g. <code>save_ui_scale</code>)</td></tr>
+            <tr><td><code>params</code></td><td>object</td><td>Optional. Sliders: <code>from</code>, <code>to</code>, <code>stepSize</code>, optional <code>logarithmic</code>. Chips: <code>options</code> (fixed list) or <code>optionsSource</code> (a QML-side list name)</td></tr>
+            <tr><td><code>id</code></td><td>string</td><td>Added only by <code>get_pinned_settings_metadata()</code>: the registry key itself</td></tr>
             <tr><td><code>currentValue</code></td><td>any</td><td>Added only by <code>get_pinned_settings_metadata()</code>: the live value</td></tr>
           </tbody>
         </table>
@@ -377,26 +368,15 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         </table>
 
         <h3>Example Registry Entries</h3>
-        <pre><code>SETTINGS_REGISTRY = {
-    <span class="str">"startup_volume"</span>: {
-        <span class="str">"key"</span>: <span class="str">"startUpVolume"</span>, <span class="str">"label"</span>: <span class="str">"Startup Volume"</span>,
-        <span class="str">"category"</span>: <span class="str">"mediaSettings"</span>,
-        <span class="str">"controlType"</span>: <span class="str">"slider"</span>, <span class="str">"saveSlot"</span>: <span class="str">"save_start_volume"</span>,
-        <span class="str">"params"</span>: {<span class="str">"from"</span>: <span class="num">0</span>, <span class="str">"to"</span>: <span class="num">1</span>, <span class="str">"stepSize"</span>: <span class="num">0.01</span>, <span class="str">"logarithmic"</span>: <span class="kw">True</span>}
-    },
-    <span class="str">"album_art_transition"</span>: {
-        <span class="str">"key"</span>: <span class="str">"albumArtTransition"</span>, <span class="str">"label"</span>: <span class="str">"Track Transition"</span>,
-        <span class="str">"category"</span>: <span class="str">"mediaSettings"</span>,
-        <span class="str">"controlType"</span>: <span class="str">"chips"</span>, <span class="str">"saveSlot"</span>: <span class="str">"save_album_art_transition"</span>,
-        <span class="str">"params"</span>: {<span class="str">"options"</span>: [<span class="str">"Crossfade"</span>, <span class="str">"Slide"</span>, <span class="str">"Vinyl Lift"</span>, <span class="str">"Dissolve"</span>, <span class="str">"Flip"</span>,
-                               <span class="str">"Coverflow"</span>, <span class="str">"Conveyor"</span>, <span class="str">"Stack"</span>, <span class="str">"Depth"</span>, <span class="str">"Swing"</span>]}
-    },
-    <span class="str">"theme_setting"</span>: {
-        <span class="str">"key"</span>: <span class="str">"themeSetting"</span>, <span class="str">"label"</span>: <span class="str">"Theme"</span>, <span class="str">"category"</span>: <span class="str">"displaySettings"</span>,
-        <span class="str">"controlType"</span>: <span class="str">"chips"</span>, <span class="str">"saveSlot"</span>: <span class="str">"save_theme_setting"</span>,
-        <span class="str">"params"</span>: {<span class="str">"optionsSource"</span>: <span class="str">"themeList"</span>}
-    },
-}</code></pre>
+        <pre><code>reg[QStringLiteral(<span class="str">"startup_volume"</span>)] = entry(<span class="str">"startUpVolume"</span>, <span class="str">"Startup Volume"</span>, <span class="str">"mediaSettings"</span>,
+    <span class="str">"slider"</span>, <span class="str">"save_start_volume"</span>, sliderParams(<span class="num">0</span>, <span class="num">1</span>, <span class="num">0.01</span>, <span class="kw">true</span>));
+reg[QStringLiteral(<span class="str">"album_art_transition"</span>)] = entry(<span class="str">"albumArtTransition"</span>, <span class="str">"Track Transition"</span>, <span class="str">"mediaSettings"</span>,
+    <span class="str">"chips"</span>, <span class="str">"save_album_art_transition"</span>,
+    chipParams({<span class="str">"Crossfade"</span>, <span class="str">"Slide"</span>, <span class="str">"Vinyl Lift"</span>, <span class="str">"Dissolve"</span>, <span class="str">"Flip"</span>,
+                <span class="str">"Coverflow"</span>, <span class="str">"Conveyor"</span>, <span class="str">"Stack"</span>, <span class="str">"Depth"</span>, <span class="str">"Swing"</span>}));
+reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span class="str">"themeSetting"</span>, <span class="str">"Theme"</span>, <span class="str">"displaySettings"</span>,
+    <span class="str">"chips"</span>, <span class="str">"save_theme_setting"</span>, chipSource(<span class="str">"themeList"</span>));</code></pre>
+<p><code>entry()</code>, <code>sliderParams()</code>, <code>chipParams()</code> and <code>chipSource()</code> are local lambdas that build the JSON objects described above (shown here with the <code>QStringLiteral</code> wrappers on the option names dropped).</p>
 
         <h3>Control Types</h3>
         <table>
@@ -406,23 +386,23 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           <tbody>
             <tr><td><code>toggle</code></td><td>none</td><td>Boolean on/off switch</td></tr>
             <tr><td><code>slider</code></td><td><code>from</code>, <code>to</code>, <code>stepSize</code>, optional <code>logarithmic</code></td><td>Numeric range slider; <code>logarithmic</code> is only set on <code>startup_volume</code>, whose 0 – 1 value is the linear gain (the quadratic curve makes the slider feel logarithmic)</td></tr>
-            <tr><td><code>chips</code></td><td><code>options</code> (array of strings) or <code>optionsSource</code> (name of a QML-side list)</td><td>Selectable chip/pill buttons; <code>optionsSource: "themeList"</code> lets the theme chips include custom themes that the backend does not know about</td></tr>
+            <tr><td><code>chips</code></td><td><code>options</code> (array of strings) or <code>optionsSource</code> (name of a QML-side list)</td><td>Selectable chip/pill buttons; <code>optionsSource: "themeList"</code> lets the theme chips include custom themes that the static registry cannot list</td></tr>
           </tbody>
         </table>
 
         <p>The registry is exposed to QML via:</p>
-        <pre><code>@Slot(result=<span class="cls">str</span>)
-<span class="kw">def</span> <span class="fn">get_settings_registry</span>(self):
-    <span class="kw">return</span> json.dumps(SETTINGS_REGISTRY)</code></pre>
+        <pre><code>QString SettingsManager::<span class="fn">get_settings_registry</span>()
+{
+    <span class="kw">return</span> QString::fromUtf8(QJsonDocument(s_settingsRegistry).toJson(QJsonDocument::Compact));
+}</code></pre>
 
         <!-- Default Settings -->
         <h2 id="default-settings">Default Settings</h2>
         <p>
-          All defaults live in <code>self._default_settings</code> (Python <code>__init__</code>) and
-          <code>buildDefaultSettings()</code> (C++). The dict is the schema: any key absent from the loaded JSON gets
-          its default, and top-level values with an incompatible type are replaced by defaults. Both backends define the same
-          <strong>96 top-level keys</strong> with identical literal values (verified against both sources on 2026-10-13).
-          The nested <code>obdParameters</code> dict holds <strong>123 parameter IDs, 20 enabled by default</strong>. The exhaustive
+          All defaults live in <code>buildDefaultSettings()</code>. The object it returns is the schema: any key absent from
+          the loaded JSON gets its default, and top-level values with an incompatible type are replaced by defaults. It
+          defines <strong>96 top-level keys</strong>.
+          The nested <code>obdParameters</code> object holds <strong>123 parameter IDs, 20 enabled by default</strong>. The exhaustive
           per-key table, including ranges and the UI page that owns each key, is the
           <a href="settings-reference.html">Settings Reference</a>; the summary:
         </p>
@@ -447,7 +427,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
 
         <!-- Key Methods -->
         <h2 id="key-methods">Key Methods and Slots</h2>
-        <p>The C++ header exposes 142 callable methods (91 setters/slots and 51 <code>Q_INVOKABLE</code> methods). Python decorates the same methods plus the legacy <code>flush_pending_save()</code> alias with <code>@Slot</code>. The groups below cover everything that is not a plain <code>save_&lt;key&gt;</code> setter.</p>
+        <p>The header exposes 142 callable methods (91 public slots and 51 <code>Q_INVOKABLE</code> methods). The groups below cover everything that is not a plain <code>save_&lt;key&gt;</code> setter.</p>
 
         <h3>Core Persistence</h3>
         <table>
@@ -455,14 +435,14 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>load_settings()</code> / <code>loadSettings()</code></td><td>Returns a copy of the in-memory dict once loaded. Before that (constructor only), it attempts a shared lock and reads the file. A missing file is initialized with defaults; a corrupt file triggers backup recovery, falling back to defaults if recovery fails.</td></tr>
-            <tr><td><code>save_settings(settings)</code> / <code>saveSettings()</code></td><td>Validates into the in-memory copy and arms the 500&nbsp;ms timer. On the constructor path (migration, first run) it writes immediately.</td></tr>
-            <tr><td><code>flushPendingSave()</code> (Python alias <code>flush_pending_save()</code>)</td><td>Writes now if a save is pending and stops the timer. Called from <code>aboutToQuit</code> in <span class="file-path">main.py</span> / <span class="file-path">src/main.cpp</span>, after <code>MediaManager</code> has saved playback state so that write is included.</td></tr>
-            <tr><td><code>_write_settings_to_disk(settings)</code> / <code>writeSettingsToDisk()</code></td><td>The atomic temp+rename write; takes an already validated object.</td></tr>
-            <tr><td><code>update_setting(key, value, signal)</code> / <code>updateSetting(key, value)</code></td><td>Convenience funnel: copy, set key, <code>save_settings</code>, emit (Python emits inside; C++ setters emit themselves).</td></tr>
-            <tr><td><code>get_setting(key)</code>, <code>get_setting_with_default(key, default)</code></td><td>Read any key from memory. <code>get_setting</code> returns <code>None</code> / an invalid <code>QVariant</code> for unknown keys.</td></tr>
+            <tr><td><code>loadSettings()</code> (private)</td><td>Returns a copy of the in-memory object once loaded. Before that (constructor only), it attempts a shared lock and reads the file. A missing file is initialized with defaults; a corrupt file triggers backup recovery, falling back to defaults if recovery fails.</td></tr>
+            <tr><td><code>saveSettings(settings)</code> (private)</td><td>Validates into the in-memory copy and arms the 500&nbsp;ms timer. On the constructor path (migration, first run) it writes immediately.</td></tr>
+            <tr><td><code>flushPendingSave()</code></td><td>Invokable. Writes now if a save is pending and stops the timer. Called from <code>aboutToQuit</code> in <span class="file-path">src/main.cpp</span>, after <code>MediaManager</code> has saved playback state so that write is included.</td></tr>
+            <tr><td><code>writeSettingsToDisk(settings)</code> (private)</td><td>The atomic temp+rename write; takes an already validated object.</td></tr>
+            <tr><td><code>updateSetting(key, value)</code> (private)</td><td>Convenience funnel: copy, set key, <code>saveSettings</code>. The calling setter emits its own signal.</td></tr>
+            <tr><td><code>get_setting(key)</code>, <code>get_setting_with_default(key, default)</code></td><td>Read any key from memory. <code>get_setting</code> returns an invalid <code>QVariant</code> (<code>undefined</code> in QML) for unknown keys.</td></tr>
             <tr><td><code>save_setting(key, value)</code></td><td>Write any key and emit <code>genericSettingChanged(key)</code>. No type validation for keys without a default.</td></tr>
-            <tr><td><code>reset_to_defaults()</code></td><td>Slot. Saves the default dict (Python deep-copies it so no cached nested dict aliases the defaults), reloads <em>every</em> backing member through the constructor's <code>_load_members_from_settings()</code> / <code>populateMembers()</code> and emits every property signal. Not wired to any UI or backend caller at present.</td></tr>
+            <tr><td><code>reset_to_defaults()</code></td><td>Slot. Saves the default object, reloads <em>every</em> backing member through the constructor's <code>populateMembers()</code> and emits every property signal. Not wired to any UI or C++ caller at present.</td></tr>
           </tbody>
         </table>
 
@@ -473,8 +453,8 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           </thead>
           <tbody>
             <tr><td><code>save_obd_parameter_enabled(parameter, enabled)</code></td><td>Slot. Updates the in-memory map immediately and restarts the 800&nbsp;ms debounce timer. Retained for compatibility and <code>enable_all_supported()</code>; the current UI does not use it to select polled parameters.</td></tr>
-            <tr><td><code>_flush_obd_parameters()</code> / <code>flushObdParameters()</code></td><td>Timer target. Copies the map into the settings dict (one write) and emits <code>obdParametersChanged</code> once. It no longer drives polling: the managers refresh their poll lists from <code>setParameterDemand()</code> and the current vehicle scan.</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(parameter, default=True)</code></td><td>Invokable. Returns the state from memory; an unknown PID is cached with <code>default</code> as a side effect (so the next flush persists it).</td></tr>
+            <tr><td><code>flushObdParameters()</code> (private)</td><td>Timer target. Copies the map into the settings object (one write) and emits <code>obdParametersChanged</code> once. It no longer drives polling: the managers refresh their poll lists from <code>setParameterDemand()</code> and the current vehicle scan.</td></tr>
+            <tr><td><code>get_obd_parameter_enabled(parameter, defaultVal = true)</code></td><td>Invokable. Returns the state from memory; an unknown PID is cached with <code>default</code> as a side effect (so the next flush persists it).</td></tr>
             <tr><td><code>save_supported_obd_parameters(list)</code> / <code>get_supported_obd_parameters()</code></td><td>Persist and read the last vehicle-scan result; <code>OBDManager</code> writes it as a historical scan result; live polling uses the new connection’s scan rather than trusting this persisted list. Emits <code>supportedOBDParametersChanged</code>.</td></tr>
             <tr><td><code>save_home_obd_parameters(list)</code> / <code>get_home_obd_parameters()</code></td><td>The PIDs shown on the home screen cards. Emits <code>homeOBDParametersChanged</code>.</td></tr>
             <tr><td><code>save_obd_saved_adapters(json)</code>, <code>add_obd_saved_adapter(name, mac)</code>, <code>remove_obd_saved_adapter(mac)</code></td><td>Maintain <code>obdSavedAdapters</code>, a JSON-array <em>string</em> of <code>{"name", "mac"}</code> records. <code>add</code> upper-cases and trims the MAC, removes any duplicate, prepends the entry (most recent first) and caps the list at 8. <code>OBDManager::connect_to_adapter()</code> calls <code>add</code> whenever the identifier it is asked to connect to is a MAC address ("persist the choice so reconnects + restarts use it"); the OBD settings page calls <code>remove</code>.</td></tr>
@@ -500,8 +480,8 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>save_custom_theme(name, theme_json, album_art_source="")</code></td><td>Slot. Parses the theme JSON, stores it under <code>customThemes[name]</code> and emits <code>customThemesChanged</code> immediately. A local <code>album_art_source</code> (path or <code>file://</code> URL) is copied synchronously to <code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code> and recorded as <code>theme["albumArt"]</code>; an <code>http(s)://</code> source is downloaded on a background thread and patched in afterwards. The safe name replaces every character outside <code>[\w-]</code> with <code>_</code>.</td></tr>
-            <tr><td><code>_download_theme_art_async()</code> / <code>downloadThemeArtAsync()</code></td><td>Python uses <code>urllib.request.urlretrieve</code> in a daemon thread; C++ runs <code>curl -sL -o</code> in a <code>QThread</code>. Both hand the result back through a 100&nbsp;ms <code>QTimer</code> poll on the GUI thread rather than a cross-thread signal, then save and emit <code>customThemesChanged</code> again.</td></tr>
+            <tr><td><code>save_custom_theme(name, themeJson, albumArtSource = QString())</code></td><td>Slot. Parses the theme JSON, stores it under <code>customThemes[name]</code> and emits <code>customThemesChanged</code> immediately. A local <code>albumArtSource</code> (path or <code>file://</code> URL) is copied synchronously to <code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code> and recorded as <code>theme["albumArt"]</code>; an <code>http(s)://</code> source is downloaded on a background thread and patched in afterwards. The safe name replaces every character outside <code>[\w-]</code> with <code>_</code>.</td></tr>
+            <tr><td><code>downloadThemeArtAsync()</code> (private)</td><td>Runs the external <code>curl -sL -o</code> through <code>QProcess</code> (30&nbsp;s timeout) in a <code>QThread</code>, saving to <code>theme_art/theme_&lt;safe name&gt;.jpg</code>. The result is handed back through a 100&nbsp;ms <code>QTimer</code> poll on the GUI thread rather than a cross-thread signal, then save and emit <code>customThemesChanged</code> again.</td></tr>
             <tr><td><code>delete_custom_theme(name)</code></td><td>Slot. Removes the entry and deletes its art file if the stored URL resolves to a local file.</td></tr>
             <tr><td><code>get_custom_theme(name)</code></td><td>Invokable returning the theme as a JSON string (<code>"{}"</code> if unknown). The <code>customThemes</code> property only lists names.</td></tr>
           </tbody>
@@ -514,7 +494,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           </thead>
           <tbody>
             <tr><td><code>save_to_directory_history(path)</code></td><td>Slot. Prepends a folder (no duplicates) and trims the list to 10, then emits <code>directoryHistoryChanged</code>.</td></tr>
-            <tr><td><code>remove_from_directory_history(path)</code>, <code>get_directory_history()</code></td><td>Remove one entry / read the list (also exposed as the <code>directoryHistory</code> property). No current QML or backend caller writes to the history; the API is retained for the media-folder picker.</td></tr>
+            <tr><td><code>remove_from_directory_history(path)</code>, <code>get_directory_history()</code></td><td>Remove one entry / read the list (also exposed as the <code>directoryHistory</code> property). No current QML or C++ caller writes to the history; the API is retained for the media-folder picker.</td></tr>
           </tbody>
         </table>
 
@@ -536,22 +516,21 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>get_git_commit_hash()</code></td><td>Runs <code>git rev-parse --short HEAD</code> in the repo root with a 5&nbsp;s timeout; <code>"unknown"</code> if no runtime or build-time value is available. Packaged C++ builds (APK, installers, AppImage) have no <code>.git</code> and no <code>git</code> binary, so when the process fails the C++ backend returns the hash CMake baked in at configure time (<code>OCTAVE_GIT_COMMIT</code>, likewise <code>OCTAVE_GIT_DATE</code> for <code>get_git_commit_date()</code>); the About page on the phone showed "unknown" for both until v0.9.2. The Python backend always runs from a checkout and keeps the git-only path.</td></tr>
+            <tr><td><code>get_git_commit_hash()</code></td><td>Runs <code>git rev-parse --short HEAD</code> in the repo root with a 5&nbsp;s timeout; <code>"unknown"</code> if no runtime or build-time value is available. Packaged builds (APK, installers, AppImage) have no <code>.git</code> and no <code>git</code> binary, so when the process fails the method returns the hash CMake baked in at configure time (<code>OCTAVE_GIT_COMMIT</code>, likewise <code>OCTAVE_GIT_DATE</code> for <code>get_git_commit_date()</code>).</td></tr>
             <tr><td><code>get_git_commit_date()</code></td><td><code>git log -1 --format=%ci</code>, reformatted to <code>YYYY-MM-DD at HH:MM</code>.</td></tr>
             <tr><td><code>get_git_commit_message()</code></td><td><code>git log -1 --format=%s</code>; empty string on failure.</td></tr>
           </tbody>
         </table>
         <p>
-          The repo root is derived as the parent of <code>backend_dir</code> (Python: the directory of
-          <span class="file-path">backend/settings_manager.py</span>; C++: <code>QCoreApplication::applicationDirPath()</code>,
-          i.e. the parent of the <code>build/</code> directory for a source build). C++ falls back to the commit hash and date baked in by CMake when runtime git lookup fails; the commit message has no build-time fallback. Checking whether an update is available, and the ahead/behind/diverged ancestry logic that
+          The repo root is derived as the parent of <code>QCoreApplication::applicationDirPath()</code>
+          (<code>getGitRepoDir()</code>), i.e. the parent of the <code>build/</code> directory for a source build. The hash and date fall back to the commit hash and date baked in by CMake when runtime git lookup fails; the commit message has no build-time fallback. Checking whether an update is available, and the ahead/behind/diverged ancestry logic that
           guards self-update, live in <a href="network-manager.html">NetworkManager</a>, not here.
         </p>
 
         <!-- Section Visibility -->
         <h2 id="section-visibility">Section Visibility System</h2>
         <p>
-          Settings-menu sections can be hidden. Visibility state is the nested <code>settingsMenuVisibility</code> dict,
+          Settings-menu sections can be hidden. Visibility state is the nested <code>settingsMenuVisibility</code> object,
           exposed to QML as a JSON string (property and <code>get_settings_menu_visibility()</code>) plus a per-section
           boolean query:
         </p>
@@ -565,9 +544,9 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
 }</code></pre>
 
         <ul>
-          <li><code>is_settings_section_visible(section)</code> returns the stored flag, or <code>true</code> for a section that is not in the dict</li>
+          <li><code>is_settings_section_visible(section)</code> returns the stored flag, or <code>true</code> for a section that is not in the object</li>
           <li><code>save_settings_section_visibility(section, visible)</code> stores the flag and emits <code>settingsMenuVisibilityChanged</code> (no arguments)</li>
-          <li><code>get_settings_menu_visibility()</code> returns the whole dict as JSON</li>
+          <li><code>get_settings_menu_visibility()</code> returns the whole object as JSON</li>
         </ul>
         <p>
           The toggles live in the <code>settingsVisibilityPopup</code> defined in
@@ -579,7 +558,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           <code>deviceSettings</code> and <code>about</code>, all <code>true</code>. A file written by an older build
           may still carry the retired per-feature keys (<code>androidAutoSettings</code>, <code>phoneMirrorSettings</code>,
           <code>volumeKnobSettings</code>, <code>gestureSensorSettings</code>); they are kept but nothing reads them, and any
-          current section missing from the file reads as visible in both backends. See <a href="settings-ui.html">Settings UI</a> for the layouts.
+          current section missing from the file reads as visible. See <a href="settings-ui.html">Settings UI</a> for the layouts.
         </p>
 
         <!-- Pinned Settings -->
@@ -589,24 +568,30 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           list (property, <code>is_setting_pinned(id)</code>, <code>toggle_pin_setting(id)</code>). Only IDs present in
           the registry can be pinned:
         </p>
-        <pre><code>@Slot(<span class="cls">str</span>)
-<span class="kw">def</span> <span class="fn">toggle_pin_setting</span>(self, setting_id):
-    <span class="kw">if</span> setting_id <span class="kw">in</span> self._pinned_settings:
-        self._pinned_settings.remove(setting_id)
-    <span class="kw">else</span>:
-        <span class="kw">if</span> setting_id <span class="kw">in</span> SETTINGS_REGISTRY:
-            self._pinned_settings.append(setting_id)
-    settings = self.load_settings()
-    settings[<span class="str">"pinnedSettings"</span>] = self._pinned_settings
-    self.save_settings(settings)
-    self.pinnedSettingsChanged.emit()</code></pre>
+        <pre><code><span class="kw">void</span> SettingsManager::<span class="fn">toggle_pin_setting</span>(<span class="kw">const</span> QString &amp;settingId)
+{
+    <span class="kw">int</span> idx = m_pinnedSettings.indexOf(settingId);
+    <span class="kw">if</span> (idx &gt;= <span class="num">0</span>) {
+        m_pinnedSettings.removeAt(idx);
+    } <span class="kw">else</span> {
+        <span class="kw">if</span> (s_settingsRegistry.contains(settingId))
+            m_pinnedSettings.append(settingId);
+    }
+    QJsonObject settings = loadSettings();
+    QJsonArray arr;
+    <span class="kw">for</span> (<span class="kw">const auto</span> &amp;v : m_pinnedSettings)
+        arr.append(v.toString());
+    settings[QStringLiteral(<span class="str">"pinnedSettings"</span>)] = arr;
+    saveSettings(settings);
+    <span class="kw">emit</span> pinnedSettingsChanged();
+}</code></pre>
 
         <p>
           <code>get_pinned_settings_metadata()</code> returns a JSON array of the pinned registry entries, each extended
-          with <code>id</code> and <code>currentValue</code>. The value is resolved through <code>_key_to_attr()</code> /
-          <code>keyToAttr()</code>, a 13-entry map from camelCase key to backing-member name (Python then
-          <code>getattr</code>s <code>_&lt;attr&gt;</code>; C++ switches on the attr name); any key not in that map falls
-          back to the in-memory settings dict, which is equally current, so the map is an optimisation, not a
+          with <code>id</code> and <code>currentValue</code>. The value is resolved through
+          <code>keyToAttr()</code>, a 13-entry map from camelCase key to a snake_case member name that
+          <code>get_pinned_settings_metadata()</code> switches on; any key not in that map falls
+          back to the in-memory settings object, which is equally current, so the map is an optimisation, not a
           requirement.
         </p>
 
@@ -614,35 +599,44 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <h2 id="generic-access">Generic Setting Access</h2>
         <p>
           For values that do not warrant a dedicated property, QML uses the generic accessors. They read and write the
-          same in-memory dict, so a generic key and a property-backed key are persisted identically; the differences are
+          same in-memory object, so a generic key and a property-backed key are persisted identically; the differences are
           that generic keys have no type validation unless they also appear in the defaults, and that change notification
           is the single <code>genericSettingChanged(key)</code> signal instead of a per-key signal.
         </p>
-        <pre><code>@Slot(<span class="cls">str</span>, result=<span class="str">'QVariant'</span>)
-<span class="kw">def</span> <span class="fn">get_setting</span>(self, key, default_value=<span class="kw">None</span>):
-    <span class="kw">return</span> self._settings.get(key, default_value)
+        <pre><code>QVariant SettingsManager::<span class="fn">get_setting</span>(<span class="kw">const</span> QString &amp;key)
+{
+    QJsonObject settings = loadSettings();
+    <span class="kw">if</span> (settings.contains(key))
+        <span class="kw">return</span> settings.value(key).toVariant();
+    <span class="kw">return</span> QVariant();
+}
 
-@Slot(<span class="cls">str</span>, <span class="str">'QVariant'</span>, result=<span class="str">'QVariant'</span>)
-<span class="kw">def</span> <span class="fn">get_setting_with_default</span>(self, key, default_value):
-    <span class="kw">return</span> self._settings.get(key, default_value)
+QVariant SettingsManager::<span class="fn">get_setting_with_default</span>(<span class="kw">const</span> QString &amp;key, <span class="kw">const</span> QVariant &amp;defaultValue)
+{
+    QJsonObject settings = loadSettings();
+    <span class="kw">if</span> (settings.contains(key))
+        <span class="kw">return</span> settings.value(key).toVariant();
+    <span class="kw">return</span> defaultValue;
+}
 
-@Slot(<span class="cls">str</span>, <span class="str">'QVariant'</span>)
-<span class="kw">def</span> <span class="fn">save_setting</span>(self, key, value):
-    settings = self.load_settings()
-    settings[key] = value
-    self.save_settings(settings)
-    self.genericSettingChanged.emit(key)</code></pre>
+<span class="kw">void</span> SettingsManager::<span class="fn">save_setting</span>(<span class="kw">const</span> QString &amp;key, <span class="kw">const</span> QVariant &amp;value)
+{
+    QJsonObject settings = loadSettings();
+    settings[key] = QJsonValue::fromVariant(value);
+    saveSettings(settings);
+    <span class="kw">emit</span> genericSettingChanged(key);
+}</code></pre>
 
         <p>Two families of keys use this path today:</p>
         <ul>
           <li><strong>Keys with a default but no property</strong>: the IMU display keys (<code>sensorEmitRate</code>, <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code>, <code>sensorAltitudeUnit</code>, <code>sensorShow*</code>), <code>expandedCards</code>, and <code>musicDeviceModel</code>, and the three download keys, which <code>DownloadManager</code> reads with <code>get_setting()</code>. These are type-validated like any other default.</li>
-          <li><strong>QML-only keys with no backend default</strong>: the RPM shift-light configuration (<code>rpm_*</code>), <code>obdCardStyleCircular</code>, <code>lastOBDPage</code>, <code>lastSensorPage</code>, <code>activeDashboard</code> and <code>dashboardEditorDraft</code>. Their defaults live in the QML call sites and they survive validation through the forward-compatibility copy. The full list with defaults is in the <a href="settings-reference.html#generic">Settings Reference</a>.</li>
+          <li><strong>QML-only keys with no C++ default</strong>: the RPM shift-light configuration (<code>rpm_*</code>), <code>obdCardStyleCircular</code>, <code>lastOBDPage</code>, <code>lastSensorPage</code>, <code>activeDashboard</code> and <code>dashboardEditorDraft</code>. Their defaults live in the QML call sites and they survive validation through the forward-compatibility copy. The full list with defaults is in the <a href="settings-reference.html#generic">Settings Reference</a>.</li>
         </ul>
 
         <div class="info-box info">
-          <div class="info-box-title">Both backends must still know a key</div>
-          A QML-only key needs no backend code, but it also gets no validation: a corrupted value is passed to QML as-is.
-          Add a default in <em>both</em> backends when a key needs a type check. Add a dedicated validating setter when it also needs range or allowed-value checks.
+          <div class="info-box-title">QML-only keys are unvalidated</div>
+          A QML-only key needs no C++ code, but it also gets no validation: a corrupted value is passed to QML as-is.
+          Add a default in <code>buildDefaultSettings()</code> when a key needs a type check. Add a dedicated validating setter when it also needs range or allowed-value checks.
         </div>
 
         <!-- Album Art Colors -->
@@ -652,17 +646,13 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           pushed to SettingsManager as a JSON string. This is the single distribution point: <code>MediaManager</code>
           calls <code>set_album_art_colors()</code>, QML binds
           <code>settingsManager.albumArtColors</code> (see <a href="theme-system.html">Theme System</a>), and
-          <span class="file-path">main.py</span> forwards the same signal to the ESP32 knob's LEDs when
+          <span class="file-path">src/main.cpp</span> forwards the same signal to the ESP32 knob's LEDs when
           <code>esp32LedColorMode</code> is <code>"theme"</code>.
         </p>
-        <pre><code>@Property(<span class="cls">str</span>, notify=albumArtColorsChanged)
-<span class="kw">def</span> <span class="fn">albumArtColors</span>(self):
-    <span class="kw">return</span> self._album_art_colors
+        <pre><code>Q_PROPERTY(QString albumArtColors READ albumArtColors NOTIFY albumArtColorsChanged)
 
-@Slot(<span class="cls">str</span>)
-<span class="kw">def</span> <span class="fn">set_album_art_colors</span>(self, colors_json):
-    self._album_art_colors = colors_json
-    self.update_setting(<span class="str">"albumArtColors"</span>, colors_json, self.albumArtColorsChanged)</code></pre>
+<span class="kw">public slots</span>:
+    <span class="kw">void</span> <span class="fn">set_album_art_colors</span>(<span class="kw">const</span> QString &amp;colorsJson);</code></pre>
         <p>
           The JSON is persisted under the <code>albumArtColors</code> key so the last palette is reapplied at the next
           startup before a fresh extraction finishes, which avoids flashing the placeholder theme. Because extraction runs
@@ -673,14 +663,12 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <h2 id="qml-connection">Connection to QML and Other Managers</h2>
         <p>
           SettingsManager is constructed first and registered as the QML context property <code>settingsManager</code>
-          in <span class="file-path">main.py</span> and <span class="file-path">src/main.cpp</span>:
+          in <span class="file-path">src/main.cpp</span>:
         </p>
-        <pre><code>settings_manager = SettingsManager()
-engine.rootContext().setContextProperty(<span class="str">"settingsManager"</span>, settings_manager)</code></pre>
         <pre><code>SettingsManager settingsManager;
 ctx-&gt;setContextProperty(<span class="str">"settingsManager"</span>, &amp;settingsManager);</code></pre>
 
-        <p>It is then handed to nearly every other manager, either through the constructor (<code>Clock</code>, <code>VolumeController</code>, <code>OBDManager</code>) or a <code>connect_settings_manager()</code> / <code>setSettingsManager()</code> call (<code>MediaManager</code>, <code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>, <code>DownloadManager</code>). <code>PhoneMirrorManager</code> is primed from the <code>get_scrcpy_*</code> getters and its <code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code> and <code>scrcpyAutoWifiChanged</code> signals are wired straight into the manager's setters, so those Accessories-page sliders apply live. <code>scrcpyWirelessAddress</code> runs the other way: the manager owns the remembered Wi-Fi phone and its <code>wirelessAddressChanged</code> signal is wired to <code>save_scrcpy_wireless_address</code>.</p>
+        <p>It is then handed to nearly every other manager, either through the constructor (<code>Clock</code>, <code>VolumeController</code>, <code>OBDManager</code>) or a <code>setSettingsManager()</code> (<code>MediaManager</code>) or <code>connect_settings_manager()</code> call (<code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>, <code>DownloadManager</code>); <code>OBDAdapterFinder</code> takes it in its constructor too. <code>PhoneMirrorManager</code> is primed from the <code>get_scrcpy_*</code> getters and its <code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code> and <code>scrcpyAutoWifiChanged</code> signals are wired straight into the manager's setters, so those Accessories-page sliders apply live. <code>scrcpyWirelessAddress</code> runs the other way: the manager owns the remembered Wi-Fi phone and its <code>wirelessAddressChanged</code> signal is wired to <code>save_scrcpy_wireless_address</code>.</p>
 
         <p>QML accesses settings directly:</p>
         <pre><code><span class="cmt">// Read a property (binding updates on the notify signal)</span>
@@ -699,29 +687,27 @@ Connections {
 <span class="cmt">// Generic key with a QML-side default</span>
 property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span class="str">"rpm_shift_light_enabled"</span>, <span class="kw">true</span>)</code></pre>
 
-        <p>Both entry points save playback before their final settings flush: C++ calls <code>mediaManager._save_playback_state()</code>; Python calls <code>media_manager._save_playback_state_now()</code>. Python flushes settings before manager cleanup and once more afterwards, using the <code>flush_pending_save()</code> alias. These explicit calls ensure the pending general settings write includes playback state.</p>
+        <p>On <code>aboutToQuit</code>, <span class="file-path">src/main.cpp</span> calls <code>mediaManager._save_playback_state()</code> before <code>settingsManager.flushPendingSave()</code>, so the final settings write includes playback state.</p>
 
         <!-- Design Decisions -->
         <h2 id="design-decisions">Design Decisions</h2>
 
         <h3>One JSON file, not QSettings or a database</h3>
         <p>
-          A single human-readable JSON document is the format both backends can read and write compatibly
-          (both use 4-space indentation, though key ordering and escaping can differ), which is
-          what makes the CLAUDE.md rule "JSON persistence formats are shared on disk" enforceable: a Jeep head unit on the
-          Python backend and a laptop on the C++ build can swap the file. <code>QSettings</code> would have put the data
-          in the Windows registry, macOS plists and INI files with Qt-specific escaping, with platform-specific storage conventions. JSON also carries nested dicts (<code>obdParameters</code> with 123 parameter IDs,
-          <code>gestureMapping</code>, <code>customThemes</code> with embedded theme objects) without flattening keys,
-          and a tinkerer can edit it in a text editor on the Pi, which is one of the reasons the Python backend exists.
+          A single human-readable JSON document is identical on every platform, so a settings file can be copied between
+          the head unit, a laptop and a phone. <code>QSettings</code> would have put the data in the Windows registry,
+          macOS plists and INI files with Qt-specific escaping. JSON also carries nested objects (<code>obdParameters</code>
+          with 123 parameter IDs, <code>gestureMapping</code>, <code>customThemes</code> with embedded theme objects)
+          without flattening keys, and it can be edited in a text editor on the Pi.
         </p>
 
-        <h3>Defaults dict as the schema, validation by type</h3>
+        <h3>Defaults object as the schema, validation by type</h3>
         <p>
-          Rather than a separate schema file, the defaults dict <em>is</em> the schema: a key's presence declares it,
+          Rather than a separate schema file, the defaults object <em>is</em> the schema: a key's presence declares it,
           its default value declares its type, and adding a setting is one line. Validation compares stored values
           against that type and falls back to the default rather than refusing to load, because a head unit that boots
           into defaults after a bad write is usable and one that shows an error dialog at 60&nbsp;mph is not. Unknown
-          keys are kept ("for forward compatibility", per the comment in both validators) so an older build never
+          keys are kept ("forward compatibility", per the comment in <code>validateSettings()</code>) so an older build never
           destroys a newer build's settings, or the QML-only keys, when both touch the same file.
         </p>
 
@@ -730,8 +716,8 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
           Before the 2026-09 sweep every getter re-read and re-validated the file and every setter wrote it. On the
           Orange Pi that meant a parse+validate+write on every slider release and on every track change (album colours),
           all on the GUI thread, and a steady stream of small writes to an SD card. The commit that changed this
-          (<code>ee5a23e</code>) states the rationale in the code comments: after the constructor the in-memory dict is
-          authoritative because every setter goes through <code>save_settings()</code>, so re-reading "always returned
+          (<code>ee5a23e</code>) states the rationale in the code comments: after the constructor the in-memory object is
+          authoritative because every setter goes through <code>saveSettings()</code>, so re-reading "always returned
           what we had just written". The 500&nbsp;ms single-shot timer is restarted on every call, which turns a burst of
           any length into one atomic write and also spares the SD card. The trade-off, accepted deliberately, is that a
           hard kill within the window loses the last change; a normal quit flushes.
@@ -739,8 +725,8 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
 
         <h3>Validation at save time, not write time</h3>
         <p>
-          <code>save_settings()</code> validates into the cache and the disk writer takes the object as given
-          (<code>2605d93</code> in Python, <code>037f753</code> for C++ parity). Validating once at the boundary where
+          <code>saveSettings()</code> validates into the cache and the disk writer takes the object as given
+          (<code>037f753</code>). Validating once at the boundary where
           data enters the cache checks the top-level types of keys with defaults. Unknown keys and nested values remain unvalidated, and <code>save_setting()</code> does not update the backing member or notify signal of a typed property, so use its dedicated setter. The deferred write does not pay
           for a second pass over 96 keys plus 123 parameter IDs. Per-setter domain checks (enumerated strings, clamped sliders)
           sit even earlier, in the slot, because the type check cannot express "one of four layout names" or
@@ -760,17 +746,16 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
         <h3>Registry metadata instead of per-setting QML</h3>
         <p>
           The Quick Panel, the pin system and the dashboard widgets all need "render this setting as a control". Putting
-          label, control type and slot name in one dict per backend means a new pinnable setting is a registry entry plus
+          label, control type and slot name in one registry means a new pinnable setting is a registry entry plus
           the normal property/slot triple, and QML renders it generically from <code>get_settings_registry()</code>. The
-          registry lives in the backend rather than QML so both backends stay the source of truth for what is pinnable and
+          registry lives in C++ rather than QML so the manager stays the source of truth for what is pinnable and
           <code>toggle_pin_setting()</code> can refuse unknown IDs.
         </p>
 
         <h3>Snake_case slots, camelCase properties, string-typed JSON properties</h3>
         <p>
-          The API shape is the Python original's: properties use the JSON key name so QML bindings read like the file,
-          slots use Python naming, and the C++ port copied both verbatim so that not a single QML file changed when the
-          C++ backend became the shipped one. Structured state (<code>settingsMenuVisibility</code>,
+          Properties use the JSON key name so QML bindings read like the file, and slots are snake_case
+          <code>save_*</code> verbs, which keeps the two easy to tell apart at a QML call site. Structured state (<code>settingsMenuVisibility</code>,
           <code>albumArtColors</code>, <code>obdSavedAdapters</code>) crosses to QML as JSON strings. On disk,
           <code>settingsMenuVisibility</code> is an object, while the palette and adapter list remain string values;
           QML parses their property values with <code>JSON.parse</code>.
@@ -778,52 +763,46 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
 
         <!-- How to Add a New Setting -->
         <h2 id="adding-new-setting">How to Add a New Setting</h2>
-        <p>Do every step in <strong>both</strong> backends in the same commit (CLAUDE.md parity rule), then add the key to
-          <a href="settings-reference.html">Settings Reference</a> and, if it is user-facing, to
-          <a href="signals-slots-reference.html">Signals &amp; Slots Reference</a>. Python steps shown; the C++ equivalents are
-          the default in <code>buildDefaultSettings()</code>, a <code>Q_PROPERTY</code>, a signal, a member initialised in the
-          constructor, a getter, and the <code>save_*</code> slot.</p>
+        <p>Then add the key to <a href="settings-reference.html">Settings Reference</a> and, if it is user-facing, to
+          <a href="signals-slots-reference.html">Signals &amp; Slots Reference</a>.</p>
 
         <ol class="steps">
           <li>
-            <strong>Add the default value</strong> to <code>self._default_settings</code> in <code>__init__</code>. Use a float literal for float settings:
-            <pre><code><span class="str">"myNewFeature"</span>: <span class="kw">False</span>,</code></pre>
+            <strong>Add the default value</strong> in <code>buildDefaultSettings()</code>. Use a float literal for float settings:
+            <pre><code>d[QStringLiteral(<span class="str">"myNewFeature"</span>)] = <span class="kw">false</span>;</code></pre>
           </li>
           <li>
-            <strong>Declare the change signal</strong> at the class level:
-            <pre><code>myNewFeatureChanged = Signal(<span class="cls">bool</span>)</code></pre>
+            <strong>Declare the property, getter and change signal</strong> in <span class="file-path">settingsmanager.h</span>, plus a backing member:
+            <pre><code>Q_PROPERTY(<span class="kw">bool</span> myNewFeature READ myNewFeature NOTIFY myNewFeatureChanged)
+<span class="kw">bool</span> myNewFeature() <span class="kw">const</span>;
+<span class="kw">signals</span>:
+    <span class="kw">void</span> myNewFeatureChanged(<span class="kw">bool</span> value);
+<span class="kw">private</span>:
+    <span class="kw">bool</span> m_myNewFeature = <span class="kw">false</span>;</code></pre>
           </li>
           <li>
-            <strong>Initialize the backing attribute</strong> in <code>_load_members_from_settings()</code> (C++: <code>populateMembers()</code>), so construction and reset both load it:
-            <pre><code>self._my_new_feature = self._settings.get(<span class="str">"myNewFeature"</span>, self._default_settings[<span class="str">"myNewFeature"</span>])</code></pre>
+            <strong>Initialize the member</strong> in <code>populateMembers()</code>, so construction and reset both load it:
+            <pre><code>m_myNewFeature = s(QStringLiteral(<span class="str">"myNewFeature"</span>)).toBool();</code></pre>
           </li>
           <li>
-            <strong>Add the Property</strong>:
-            <pre><code>@Property(<span class="cls">bool</span>, notify=myNewFeatureChanged)
-<span class="kw">def</span> <span class="fn">myNewFeature</span>(self):
-    <span class="kw">return</span> self._my_new_feature</code></pre>
+            <strong>Add the save slot</strong> (clamp or whitelist here if the value has a domain):
+            <pre><code><span class="kw">void</span> SettingsManager::<span class="fn">save_my_new_feature</span>(<span class="kw">bool</span> enabled)
+{
+    m_myNewFeature = enabled;
+    updateSetting(QStringLiteral(<span class="str">"myNewFeature"</span>), enabled);
+    <span class="kw">emit</span> myNewFeatureChanged(enabled);
+}</code></pre>
           </li>
           <li>
-            <strong>Add the save Slot</strong> (clamp or whitelist here if the value has a domain):
-            <pre><code>@Slot(<span class="cls">bool</span>)
-<span class="kw">def</span> <span class="fn">save_my_new_feature</span>(self, enabled):
-    self._my_new_feature = enabled
-    self.update_setting(<span class="str">"myNewFeature"</span>, enabled, self.myNewFeatureChanged)</code></pre>
+            <strong>(Optional) Add to <code>buildSettingsRegistry()</code></strong> if the setting should be pinnable / appear in the Quick Panel:
+            <pre><code>reg[QStringLiteral(<span class="str">"my_new_feature"</span>)] = entry(<span class="str">"myNewFeature"</span>, <span class="str">"My New Feature"</span>, <span class="str">"mediaSettings"</span>,
+    <span class="str">"toggle"</span>, <span class="str">"save_my_new_feature"</span>);</code></pre>
           </li>
           <li>
-            <strong>(Optional) Add to SETTINGS_REGISTRY</strong> if the setting should be pinnable / appear in the Quick Panel:
-            <pre><code><span class="str">"my_new_feature"</span>: {
-    <span class="str">"key"</span>: <span class="str">"myNewFeature"</span>, <span class="str">"label"</span>: <span class="str">"My New Feature"</span>,
-    <span class="str">"category"</span>: <span class="str">"mediaSettings"</span>,
-    <span class="str">"controlType"</span>: <span class="str">"toggle"</span>, <span class="str">"saveSlot"</span>: <span class="str">"save_my_new_feature"</span>
-},</code></pre>
+            <strong>(Optional) Add to <code>keyToAttr()</code></strong> and the matching branch in <code>get_pinned_settings_metadata()</code> so <code>currentValue</code> resolves from the member (the settings-object fallback works without it).
           </li>
           <li>
-            <strong>(Optional) Add to <code>_key_to_attr</code> / <code>keyToAttr()</code></strong> so <code>currentValue</code> resolves from the member (the settings-dict fallback works without it):
-            <pre><code><span class="str">"myNewFeature"</span>: <span class="str">"my_new_feature"</span>,</code></pre>
-          </li>
-          <li>
-            <strong>Emit its signal from <code>reset_to_defaults()</code></strong> &mdash; the member itself is reloaded by <code>_load_members_from_settings()</code> / <code>populateMembers()</code>, but the signal list in <code>reset_to_defaults()</code> is explicit.
+            <strong>Emit its signal from <code>reset_to_defaults()</code></strong> &mdash; the member itself is reloaded by <code>populateMembers()</code>, but the signal list in <code>reset_to_defaults()</code> is explicit.
           </li>
           <li>
             <strong>Wire the UI</strong> on the owning page under <span class="file-path">frontend/settings/</span> and, if it is a Now Playing visual, in <span class="file-path">frontend/NowPlayingStudio.qml</span> (which carries a commented template for exactly this).
@@ -833,50 +812,47 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
         <div class="info-box tip">
           <div class="info-box-title">Tip</div>
           If the setting is only read by one QML component and has no meaningful validation, the generic
-          <code>save_setting(key, value)</code> / <code>get_setting_with_default(key, default)</code> pair needs no backend
-          change at all; <code>genericSettingChanged(key)</code> notifies listeners. Still add a default to both backends
-          when the value has a type worth protecting.
+          <code>save_setting(key, value)</code> / <code>get_setting_with_default(key, default)</code> pair needs no C++
+          change at all; <code>genericSettingChanged(key)</code> notifies listeners. Still add a default to
+          <code>buildDefaultSettings()</code> when the value has a type worth protecting.
         </div>
 
         <!-- Signal Reference -->
         <h2 id="signal-reference">Signal Reference</h2>
-        <p>Both backends declare 83 signals. Every property-backed setting has a <code>&lt;key&gt;Changed</code> signal carrying the new value; the ones below differ from that pattern or matter beyond QML bindings:</p>
+        <p>The header declares 83 signals. Every property-backed setting has a <code>&lt;key&gt;Changed</code> signal carrying the new value; the ones below differ from that pattern or matter beyond QML bindings:</p>
         <table>
           <thead>
             <tr><th>Signal</th><th>Payload</th><th>Emitted when</th></tr>
           </thead>
           <tbody>
             <tr><td><code>clockFormatChanged</code></td><td>bool</td><td><code>clockFormat24Hour</code> changes (the signal name does not follow the key)</td></tr>
-            <tr><td><code>startUpVolumeChanged</code></td><td>str</td><td>Declared <code>Signal(str)</code> in Python and emitted with <code>str(volume)</code>; C++ emits <code>QString::number(volume)</code>. Read the <code>startUpVolume</code> property rather than the payload</td></tr>
+            <tr><td><code>startUpVolumeChanged</code></td><td>QString</td><td>Declared with a <code>const QString &amp;</code> argument and emitted with <code>QString::number(volume)</code>, although the property is a <code>float</code>. Read the <code>startUpVolume</code> property rather than the payload</td></tr>
             <tr><td><code>currentVolumeChanged</code></td><td>int</td><td>Unified 0–100 volume changed by any source; not persisted</td></tr>
             <tr><td><code>obdParametersChanged</code></td><td>none</td><td>After the 800&nbsp;ms OBD debounce flush, or on reset</td></tr>
             <tr><td><code>homeOBDParametersChanged</code>, <code>supportedOBDParametersChanged</code></td><td>none</td><td>Home-card list / scan result saved</td></tr>
-            <tr><td><code>obdSavedAdaptersChanged</code></td><td>str (JSON)</td><td>Adapter list changed</td></tr>
-            <tr><td><code>directoryHistoryChanged</code>, <code>customThemesChanged</code>, <code>gestureMappingChanged</code>, <code>pinnedSettingsChanged</code>, <code>settingsMenuVisibilityChanged</code></td><td>none</td><td>Their dict/list changed; QML re-queries the getter</td></tr>
-            <tr><td><code>genericSettingChanged</code></td><td>str (key)</td><td><code>save_setting()</code> called</td></tr>
-            <tr><td><code>albumArtColorsChanged</code></td><td>str (JSON)</td><td>New palette pushed by MediaManager</td></tr>
+            <tr><td><code>obdSavedAdaptersChanged</code></td><td>QString (JSON)</td><td>Adapter list changed</td></tr>
+            <tr><td><code>directoryHistoryChanged</code>, <code>customThemesChanged</code>, <code>gestureMappingChanged</code>, <code>pinnedSettingsChanged</code>, <code>settingsMenuVisibilityChanged</code></td><td>none</td><td>Their object/list changed; QML re-queries the getter</td></tr>
+            <tr><td><code>genericSettingChanged</code></td><td>QString (key)</td><td><code>save_setting()</code> called</td></tr>
+            <tr><td><code>albumArtColorsChanged</code></td><td>QString (JSON)</td><td>New palette pushed by MediaManager; also drives the ESP32 LEDs in theme mode</td></tr>
             <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyAutoWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code></td><td>double / bool / double / bool / int / int / int / bool / bool</td><td>Connected directly to <code>PhoneMirrorManager</code> setters at startup</td></tr>
-            <tr><td><code>esp32LedColorModeChanged</code>, <code>esp32LedStaticColorChanged</code></td><td>str</td><td>Python <span class="file-path">main.py</span> connects these to the ESP32 LED sync helpers</td></tr>
+            <tr><td><code>esp32LedColorModeChanged</code>, <code>esp32LedStaticColorChanged</code></td><td>QString</td><td><span class="file-path">src/main.cpp</span> connects these to the ESP32 LED sync lambdas</td></tr>
           </tbody>
         </table>
 
-        <!-- Parity notes -->
-        <h2 id="parity-notes">Backend Parity Notes</h2>
-        <p>Verified against both sources on 2026-09-10. Names, defaults and signal signatures match; these are the behavioural differences and shared quirks a maintainer should know:</p>
+        <!-- Behaviour notes -->
+        <h2 id="behaviour-notes">Behaviour Notes</h2>
+        <p>Quirks a maintainer should know:</p>
         <table>
           <thead>
-            <tr><th>Topic</th><th>Python</th><th>C++</th></tr>
+            <tr><th>Topic</th><th>Behaviour</th></tr>
           </thead>
           <tbody>
-            <tr><td>Shutdown flush name</td><td><code>flushPendingSave()</code> (<code>@Slot()</code>), plus a <code>flush_pending_save()</code> alias for older callers</td><td><code>flushPendingSave()</code> (<code>Q_INVOKABLE</code>)</td></tr>
-            <tr><td>Numeric validation</td><td>int defaults truncate floats; float defaults coerce ints</td><td>any number accepted for either</td></tr>
-            <tr><td>Missing <code>settingsMenuVisibility</code> sections at load</td><td colspan="2">filled with <code>true</code> (visible) in both backends</td></tr>
-            <tr><td><code>mediaFolder</code> fallback</td><td><code>~/Music</code>, directory always created</td><td><code>QStandardPaths::MusicLocation</code>; directory created on desktop only</td></tr>
-            <tr><td>Remote theme-art download</td><td><code>urllib</code> in a daemon thread</td><td>external <code>curl</code> via <code>QProcess</code> (30&nbsp;s timeout)</td></tr>
-            <tr><td><code>save_obd_saved_adapters</code></td><td>re-parses and re-serialises; non-list input becomes <code>[]</code></td><td>stores the string as given; only empty becomes <code>"[]"</code></td></tr>
-            <tr><td><code>reset_to_defaults()</code> (both)</td><td colspan="2">Writes the full default dict, reloads every cached member (<code>_load_members_from_settings()</code> / <code>populateMembers()</code>) and emits every property signal. No caller exists today</td></tr>
-            <tr><td><code>set_last_settings_section()</code> (both)</td><td colspan="2">Whitelists the six current section IDs (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the four legacy per-feature IDs an older file may carry</td></tr>
-            <tr><td><code>fuelTankCapacity</code> (both)</td><td colspan="2">Property and slot exist in both backends but nothing reads or writes them (no QML, no OBD manager use)</td></tr>
+            <tr><td>Numeric validation</td><td>any JSON number is accepted for an int or float default; the member's <code>toInt()</code> / <code>toDouble()</code> decides the precision</td></tr>
+            <tr><td><code>save_obd_saved_adapters</code></td><td>stores the string as given; only an empty string becomes <code>"[]"</code></td></tr>
+            <tr><td><code>add_obd_saved_adapter</code></td><td>keeps an <code>rfcomm://</code> scheme lower-case while upper-casing the MAC; a missing name defaults to the MAC</td></tr>
+            <tr><td><code>reset_to_defaults()</code></td><td>Writes the full default object, reloads every cached member (<code>populateMembers()</code>) and emits every property signal. No caller exists today</td></tr>
+            <tr><td><code>set_last_settings_section()</code></td><td>Whitelists the six current section IDs (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the four legacy per-feature IDs an older file may carry; saves and emits only when the section changes</td></tr>
+            <tr><td><code>fuelTankCapacity</code></td><td>Property and slot exist but nothing reads or writes them (no QML, no OBD manager use)</td></tr>
           </tbody>
         </table>
 

@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Theme System</div>
           <h1 class="page-title">Theme System</h1>
-          <p class="page-subtitle">Style.qml colour themes and fonts, Album Art Capture (k-means palettes from cover art in both backends), colour transitions, the single-preset EnvironmentTheme, Spacing.qml layout scaling and the GUI scale slider, and the ThemedIcon SVG tinting pipeline</p>
+          <p class="page-subtitle">Style.qml colour themes and fonts, Album Art Capture (k-means palettes from cover art), colour transitions, the single-preset EnvironmentTheme, Spacing.qml layout scaling and the GUI scale slider, and the ThemedIcon SVG tinting pipeline</p>
         </div>
 
         <nav class="toc">
@@ -65,7 +65,7 @@
                  (themeSetting, fontSetting, uiScale, colorTransitionMs, ...)
         </pre>
 
-        <p>The backends own persistence only. <code>SettingsManager</code> (both C++ and Python) stores <code>themeSetting</code>, <code>fontSetting</code>, <code>uiScale</code>, <code>colorTransitionMs</code>, <code>songLengthTransition</code>, <code>customThemes</code> and <code>albumArtColors</code>; <code>MediaManager</code> produces Album Art Capture palettes. Everything else is QML.</p>
+        <p>The backend owns persistence only. <code>SettingsManager</code> stores <code>themeSetting</code>, <code>fontSetting</code>, <code>uiScale</code>, <code>colorTransitionMs</code>, <code>songLengthTransition</code>, <code>customThemes</code> and <code>albumArtColors</code>; <code>MediaManager</code> produces Album Art Capture palettes. Everything else is QML.</p>
 
         <!-- Style.qml -->
         <h2 id="style-qml">Style.qml &mdash; Theme Resolution</h2>
@@ -90,7 +90,7 @@
         <!-- Built-in Themes -->
         <h2 id="builtin-themes">Built-in Themes</h2>
 
-        <p>Seventeen palettes are defined in the <code>themes</code> map: eight light, eight dark, plus the "Album Art Capture" placeholder. The picker order below is hand-tuned in <code>lightThemeNames</code> / <code>darkThemeNames</code> ("so the swatch palette flows nicely"). The default on a fresh install is <code>CosmicVoyager</code> in both backends (<code>themeSetting</code> default in <span class="file-path">src/managers/settingsmanager.cpp</span> and <span class="file-path">backend/settings_manager.py</span>).</p>
+        <p>Seventeen palettes are defined in the <code>themes</code> map: eight light, eight dark, plus the "Album Art Capture" placeholder. The picker order below is hand-tuned in <code>lightThemeNames</code> / <code>darkThemeNames</code> ("so the swatch palette flows nicely"). The default on a fresh install is <code>CosmicVoyager</code> (<code>themeSetting</code> default in <span class="file-path">src/managers/settingsmanager.cpp</span>).</p>
 
         <h3>Light</h3>
         <table>
@@ -135,7 +135,7 @@
         <!-- Theme object -->
         <h2 id="theme-object">Theme Object Structure</h2>
 
-        <p>Every theme &mdash; built-in, custom, or extracted &mdash; is a plain object with the same core top-level keys. <code>MediaManager::_generate_theme_from_colors()</code> in both backends emits exactly this shape as JSON, which is why an extracted palette can be dropped straight into <code>activeTheme</code>:</p>
+        <p>Every theme &mdash; built-in, custom, or extracted &mdash; is a plain object with the same core top-level keys. <code>MediaManager::_generate_theme_from_colors()</code> emits exactly this shape as JSON, which is why an extracted palette can be dropped straight into <code>activeTheme</code>:</p>
 
         <pre><code>{
     <span class="str">"base"</span>: <span class="str">"#0C0C0C"</span>,            <span class="cmt">// backgroundColor, sidebarColor, rowBackgroundColor</span>
@@ -155,7 +155,7 @@
     <span class="cmt">// optional: "obd.labelColor", "obd.valueColor", "status": { connected, disconnected, ... }, "albumArt"</span>
 }</code></pre>
 
-        <p>No shipped theme defines <code>status</code>, <code>obd.labelColor</code> or <code>obd.valueColor</code>; the tokens that read them fall back to fixed colours or to the text colours. <code>bottombar.sensorButton</code> was added in commit <code>6735de5</code> ("sensor button now affected by theme colors") to every built-in theme and to both backends' palette generators; <code>Style.bottomBarSensorButton</code> falls back to <code>homeButton</code> so older persisted album-art JSON without the key still tints the icon.</p>
+        <p>No shipped theme defines <code>status</code>, <code>obd.labelColor</code> or <code>obd.valueColor</code>; the tokens that read them fall back to fixed colours or to the text colours. <code>bottombar.sensorButton</code> was added in commit <code>6735de5</code> ("sensor button now affected by theme colors") to every built-in theme and to the palette generator; <code>Style.bottomBarSensorButton</code> falls back to <code>homeButton</code> so older persisted album-art JSON without the key still tints the icon.</p>
 
         <!-- Picker -->
         <h2 id="theme-picker">Theme Picker and Swatch Chips</h2>
@@ -178,7 +178,7 @@
 
         <pre><code>settingsManager.<span class="fn">save_custom_theme</span>(themeName, JSON.<span class="fn">stringify</span>(App.Style.albumArtTheme), mediaRoom.currentAlbumArt)</code></pre>
 
-        <p>using the album name (or the track name, or "Custom Theme") as the key. Both backends copy the cover image into the app data directory, add its <code>file://</code> URL as the theme's <code>albumArt</code> key, and store the object under <code>customThemes</code> in <span class="file-path">settingsConfigure.json</span>. <code>get_custom_theme(name)</code> returns the JSON and <code>delete_custom_theme(name)</code> removes it (and its copied art).</p>
+        <p>using the album name (or the track name, or "Custom Theme") as the key. <code>SettingsManager::save_custom_theme()</code> copies the cover image into the app data directory, add its <code>file://</code> URL as the theme's <code>albumArt</code> key, and store the object under <code>customThemes</code> in <span class="file-path">settingsConfigure.json</span>. <code>get_custom_theme(name)</code> returns the JSON and <code>delete_custom_theme(name)</code> removes it (and its copied art).</p>
 
         <p>Main.qml loads them <em>before</em> applying the saved theme so that a custom theme selected last session passes the <code>setTheme</code> guard:</p>
 
@@ -193,28 +193,28 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
         <!-- Album Art Capture -->
         <h2 id="album-art-capture">Album Art Capture</h2>
 
-        <p>"Album Art Capture" turns the current cover into a full theme. The work is split between the backends (image analysis, palette generation, persistence) and QML (applying and animating the result).</p>
+        <p>"Album Art Capture" turns the current cover into a full theme. The work is split between the C++ managers (image analysis, palette generation, persistence) and QML (applying and animating the result).</p>
 
         <h3>Triggers</h3>
         <ul>
-          <li>Selecting the mode: <code>Main.qml onThemeSettingChanged</code> and the Display-page toggle both call <code>mediaManager.extract_colors_from_album_art(mediaManager.get_current_file())</code>. Inside the backend, <code>_on_theme_changed()</code> also sets <code>m_albumArtCaptureActive</code> / <code>_album_art_capture_active</code>.</li>
+          <li>Selecting the mode: <code>Main.qml onThemeSettingChanged</code> and the Display-page toggle both call <code>mediaManager.extract_colors_from_album_art(mediaManager.get_current_file())</code>. Inside the backend, <code>_on_theme_changed()</code> also sets <code>m_albumArtCaptureActive</code>.</li>
           <li>Track change while active: <code>_on_media_changed_for_theme(filename)</code> re-extracts for the new local file.</li>
           <li>Startup: a one-second timer (<code>_extract_colors_on_startup</code>) re-extracts for the restored track if the mode is active.</li>
         </ul>
 
-        <h3>Extraction Algorithm (shared design)</h3>
+        <h3>Extraction Algorithm</h3>
         <ol class="steps">
           <li>Load the cover with <code>QImage</code>, convert to <code>Format_RGBA8888</code>, scale to 50&times;50 ignoring aspect ratio &mdash; 2500 RGB samples.</li>
-          <li>Run k-means with <code>k = 5</code>, at most 10 iterations, centroids seeded from a random generator fixed at seed 42, stopping early when no centroid moves by more than 1 per channel. (The Python version uses a local <code>random.Random(42)</code>; a comment notes that seeding the global module had made every later <code>random.shuffle()</code> in the process deterministic.)</li>
+          <li>Run k-means with <code>k = 5</code>, at most 10 iterations, initial centroids picked by shuffling with a local <code>std::mt19937</code> fixed at seed 42, stopping early when no centroid moves by more than 1 per channel.</li>
           <li>Sort the five centroids by vibrancy (HSV saturation &times; value), most vibrant first.</li>
           <li>Average the luminance (<code>0.299R + 0.587G + 0.114B</code>) of the first 1000 pixels; below 0.5 the image is "dark" and the generated theme uses dark bases.</li>
           <li><code>_generate_theme_from_colors(colors, isDark)</code> derives the accents (primary: saturation &times;1.4, brightness &times;1.2; secondary &times;1.3/&times;1.15; tertiary &times;1.25/&times;1.1; quaternary &times;1.2/&times;1.05), dimmer nav variants (&times;0.7 and &times;0.75 brightness), picks white or near-black text with WCAG relative-luminance contrast checks, and assembles the ten-key theme object above. Distinct accents are assigned per bottom-bar button (OBD = quaternary, media = secondary, settings = tertiary, sensor = primary) so the bar stays legible.</li>
         </ol>
 
         <h3>Threading and Delivery</h3>
-        <p>The C++ manager runs the extraction with <code>QtConcurrent::run</code> and a <code>QFutureWatcher</code>; Python uses a daemon <code>threading.Thread</code> and a queued <code>_colorsReady</code> signal. Both keep a job counter so that a fast skip through several tracks applies only the last palette, and both ignore a repeat request for the same file within 2&nbsp;s (the restore-playback path and the startup timer ask for the same track). The comment in the Python code gives the cost: about 0.3&nbsp;s on a desktop, closer to a second on a Raspberry Pi &mdash; hence the worker thread.</p>
+        <p><code>MediaManager</code> runs the extraction off the GUI thread with <code>QtConcurrent::run</code> and a <code>QFutureWatcher</code>. A job counter (<code>m_colorJob</code>) makes a newer request supersede an older one, so a fast skip through several tracks applies only the last palette, and a repeat request for the same file within 2&nbsp;s is ignored (the restore-playback path and the 1&nbsp;s startup timer ask for the same track).</p>
 
-        <p>When the manager has a settings manager attached (always, in both entry points) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as <code>albumArtColors</code> and emits <code>albumArtColorsChanged</code>. Main.qml's handler reads the <code>albumArtColors</code> property (the comment notes PySide6 signal arguments did not reliably pass through <code>Connections</code>) and calls <code>App.Style.updateAlbumArtTheme(json)</code>. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> is the fallback when no settings manager is connected; Main.qml handles it too.</p>
+        <p>When the manager has a settings manager attached (Main.qml calls <code>mediaManager.connect_settings_manager(settingsManager)</code> at startup) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as <code>albumArtColors</code> and emits <code>albumArtColorsChanged</code>. Main.qml's handler reads the <code>albumArtColors</code> property rather than the signal argument and calls <code>App.Style.updateAlbumArtTheme(json)</code>. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> is the fallback when no settings manager is connected; Main.qml handles it too.</p>
 
         <h3>Applying in Style.qml</h3>
         <pre><code><span class="kw">function</span> <span class="fn">updateAlbumArtTheme</span>(themeJson) {
@@ -342,7 +342,7 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
 
         <div class="info-box info">
           <div class="info-box-title">Default Font Name and Migration</div>
-          Both backends default <code>fontSetting</code> to <code>"GoogleSans Regular"</code>, the display name Main.qml derives from <code>GoogleSans-Regular.ttf</code>, and migrate the legacy value <code>"Google Sans"</code> to it when loading <span class="file-path">settingsConfigure.json</span> (the old name failed the <code>availableFonts</code> check and left the UI in the system font).
+          <code>SettingsManager</code> defaults <code>fontSetting</code> to <code>"GoogleSans Regular"</code>, the display name Main.qml derives from <code>GoogleSans-Regular.ttf</code>, and migrate the legacy value <code>"Google Sans"</code> to it when loading <span class="file-path">settingsConfigure.json</span> (the old name failed the <code>availableFonts</code> check and left the UI in the system font).
         </div>
 
         <!-- EnvironmentTheme -->
@@ -429,9 +429,9 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
         <!-- GUI scale -->
         <h2 id="gui-scale">GUI Scale Slider and Auto-Scale</h2>
 
-        <p><strong>Auto-scale.</strong> Both entry points compute <code>screenAutoScale</code> before QML loads and expose it as a context property; Main.qml copies it into <code>App.Spacing.autoScaleFactor</code>. <span class="file-path">src/main.cpp</span> divides the <em>shorter</em> edge of <code>primaryScreen()->availableSize()</code> by 720 and clamps to [0.4, 3.0]; the comment explains that Android reports the natural portrait size even when the app is locked landscape, and using the height alone produced a roughly 3&times; factor there. <span class="file-path">main.py</span> uses <code>min(available.width(), available.height()) / 720.0</code> with the same clamp, so both backends produce the same factor for a given display.</p>
+        <p><strong>Auto-scale.</strong> <span class="file-path">src/main.cpp</span> computes <code>screenAutoScale</code> before QML loads and expose it as a context property; Main.qml copies it into <code>App.Spacing.autoScaleFactor</code>. It divides the <em>shorter</em> edge of <code>primaryScreen()->availableSize()</code> by 720 and clamps to [0.4, 3.0]; the comment explains that Android reports the natural portrait size even when the app is locked landscape, and using the height alone produced a roughly 3&times; factor there.</p>
 
-        <p><strong>User scale.</strong> <code>settingsManager.uiScale</code> (default 1.0) is loaded into <code>App.Spacing.globalScale</code> at startup. Both backends migrate a stored value of exactly 0.6 (the old design factor that used to be persisted) to 1.0. The slider lives in Display &rarr; Layout &rarr; "UI Scaling":</p>
+        <p><strong>User scale.</strong> <code>settingsManager.uiScale</code> (default 1.0) is loaded into <code>App.Spacing.globalScale</code> at startup. <code>SettingsManager</code> migrates a stored value of exactly 0.6 (the old design factor that used to be persisted) to 1.0. The slider lives in Display &rarr; Layout &rarr; "UI Scaling":</p>
 
         <pre><code><span class="cls">SettingsSlider</span> {
     <span class="prop">from</span>: <span class="num">0.5</span>; <span class="prop">to</span>: <span class="num">2.0</span>; <span class="prop">stepSize</span>: <span class="num">0.05</span>
@@ -540,7 +540,7 @@ App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span c
             </tr>
             <tr>
               <td>Persist the last extracted palette (<code>albumArtColors</code>)</td>
-              <td>Main.qml primes <code>albumArtTheme</code> from it before switching, "so the placeholder Album Art colors never paint". Both backends store the JSON with the comment "persisted for instant restore on startup".</td>
+              <td>Main.qml primes <code>albumArtTheme</code> from it before switching, "so the placeholder Album Art colors never paint". <code>SettingsManager::set_album_art_colors()</code> writes the JSON to <span class="file-path">settingsConfigure.json</span> on every extraction.</td>
             </tr>
             <tr>
               <td>Album Art Capture is a toggle, not a chip</td>
@@ -548,7 +548,7 @@ App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span c
             </tr>
             <tr>
               <td>Deterministic k-means (seed 42, 50&times;50 downscale, k = 5, 10 iterations)</td>
-              <td>Each backend deterministically seeds its clustering, so repeated extraction is stable within that implementation; C++ shuffles with <code>std::mt19937</code> and Python samples with <code>random.Random</code>, so exact cross-backend palette equality is not guaranteed, and 2500 samples keep the pure-Python path to about 0.3&nbsp;s on desktop and about a second on a Pi &mdash; run on a worker with job supersession so skipping tracks applies only the last result.</td>
+              <td>The clustering is seeded with a fixed <code>std::mt19937</code>, so repeated extraction of the same cover gives the same palette; the 50&times;50 downscale caps the work at 2500 samples, and it runs on a worker with job supersession so skipping tracks applies only the last result.</td>
             </tr>
             <tr>
               <td>Per-button accents in generated palettes</td>
@@ -556,7 +556,7 @@ App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span c
             </tr>
             <tr>
               <td>Delivery through <code>settingsManager.albumArtColors</code> rather than a signal argument</td>
-              <td>Main.qml comment: "In PySide6, signal arguments may not pass through Connections properly, so we read directly from the property as a workaround". The <code>albumColorsExtracted</code> signal remains as a fallback.</td>
+              <td>Main.qml's <code>onAlbumArtColorsChanged</code> handler reads the persisted <code>albumArtColors</code> property instead of the signal argument, so the palette it applies is always the stored one. The <code>albumColorsExtracted</code> signal remains as a fallback.</td>
             </tr>
             <tr>
               <td>Rebuild the custom-theme map atomically</td>

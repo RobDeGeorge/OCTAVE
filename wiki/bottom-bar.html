@@ -241,29 +241,15 @@
 }</code></pre>
 
         <h3>Volume Routing: VolumeController</h3>
-        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly (except for a fallback when <code>settingsManager</code> is missing). Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered by both backends. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
+        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly (except for a fallback when <code>settingsManager</code> is missing). Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered in <span class="file-path">src/main.cpp</span>. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
 
-        <table>
-          <thead><tr><th>Backend</th><th>Implementation</th><th>What <code>applyVolume(percent)</code> does</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>C++</td>
-              <td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td>
-              <td>Clamps to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out as the Python controller.</td>
-            </tr>
-            <tr>
-              <td>Python</td>
-              <td><span class="file-path">backend/volume_utils.py</span></td>
-              <td>Clamps, calls <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>.</td>
-            </tr>
-          </tbody>
-        </table>
+        <p><code>VolumeController</code> (<span class="file-path">src/managers/volumecontroller.{h,cpp}</span>) clamps the percent to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code>, so the ESP32 LED ring gets the raw percent and the audio outputs get the curved value.</p>
 
-        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (both entry points also apply it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). The vertical layout's handler does the same for <code>volumeControlVertical</code> / <code>volumeSliderVertical</code>, guarded by <code>!volumeSliderVertical.pressed</code>.</p>
+        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (<span class="file-path">src/main.cpp</span> also applies it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). The vertical layout's handler does the same for <code>volumeControlVertical</code> / <code>volumeSliderVertical</code>, guarded by <code>!volumeSliderVertical.pressed</code>.</p>
 
         <div class="info-box info">
           <div class="info-box-title">One Curve, One Entry Point</div>
-          The docstring in <span class="file-path">backend/volume_utils.py</span> records why this exists: the curve used to be hard-coded in about nine call sites across <code>main.py</code> and QML, so any change had to be made everywhere in lockstep. See the <a href="frontend-overview.html">Frontend Overview</a> and <a href="media-manager.html">Media Manager</a> pages for the consumers.
+          The header comment in <span class="file-path">src/managers/volumecontroller.h</span> records why this exists: every audio output must use the same curve or they drift out of sync when the user moves the slider, so the curve lives in one place (<code>VolumeController::toLinear()</code>) and every source &mdash; QML sliders, the gesture sensor, the ESP32 knob &mdash; funnels through <code>applyVolume()</code>. See the <a href="frontend-overview.html">Frontend Overview</a> and <a href="media-manager.html">Media Manager</a> pages for the consumers.
         </div>
 
         <h3>Touch-Friendly Slider</h3>
@@ -378,12 +364,12 @@
     }
 }</code></pre>
 
-        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (carousel tab, hub card, dashboard card; the default grid's About tile shows a static dot) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is produced by <code>NetworkManager</code> in both backends (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
+        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (carousel tab, hub card, dashboard card; the default grid's About tile shows a static dot) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is produced by <code>NetworkManager</code> (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
 
         <!-- Clock -->
         <h2 id="clock">Clock Section</h2>
 
-        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>), fitted to the available clock slot. With Auto off, it uses <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px). Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
+        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>), fitted to the available clock slot. With Auto off, it uses <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px). Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
 
         <p>Both layouts bind their clock <code>Text</code> to one bar-level property, <code>bottomBar.clockTimeText</code>, which a single <code>Connections</code> on <code>clock.timeChanged</code> (also at bar level, outside both layout components) keeps current:</p>
 
@@ -406,14 +392,14 @@
         <!-- External Volume -->
         <h2 id="external-volume">External Volume Sources</h2>
 
-        <p>Volume can change without the slider being touched. All of these end in <code>volumeController.applyVolume()</code> in one of the backends, so the bar simply reacts to <code>mediaManager.volumeChanged</code>:</p>
+        <p>Volume can change without the slider being touched. All of these end in <code>volumeController.applyVolume()</code> on the C++ side, so the bar simply reacts to <code>mediaManager.volumeChanged</code>:</p>
 
         <table>
           <thead><tr><th>Source</th><th>Path</th></tr></thead>
           <tbody>
-            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>). The knob's mute button toggles <code>mediaManager</code> mute and the bar's icon follows via <code>muteChanged</code>.</td></tr>
+            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span>). The knob's mute button toggles <code>mediaManager</code> mute and the bar's icon follows via <code>muteChanged</code>.</td></tr>
             <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
-            <tr><td>Startup</td><td>Persisted <code>currentVolume</code> is applied by the entry point and again by the bar's <code>Component.onCompleted</code>.</td></tr>
+            <tr><td>Startup</td><td>Persisted <code>currentVolume</code> is applied by <span class="file-path">src/main.cpp</span> and again by the bar's <code>Component.onCompleted</code>.</td></tr>
           </tbody>
         </table>
 
@@ -429,7 +415,7 @@
           <li><code>mediaToggleShuffle()</code> &rarr; nothing while the phone has the controls, else <code>mediaManager.toggle_shuffle()</code></li>
         </ul>
 
-        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>), <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered under the same names by <span class="file-path">src/main.cpp</span> and <span class="file-path">main.py</span>.</p>
+        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>), <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered by <span class="file-path">src/main.cpp</span>.</p>
 
         <!-- Visibility popup -->
         <h2 id="visibility-popup">Toggle View Popup</h2>

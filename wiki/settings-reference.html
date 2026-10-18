@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Settings Reference</div>
           <h1 class="page-title">Settings Reference</h1>
-          <p class="page-subtitle">Every key in settingsConfigure.json for both backends: type, default, allowed values, the UI page that owns it, and what it affects.</p>
+          <p class="page-subtitle">Every key in settingsConfigure.json: type, default, allowed values, the UI page that owns it, and what it affects.</p>
         </div>
 
         <nav class="toc">
@@ -32,29 +32,26 @@
             <li><a href="#phone">Android Auto and Phone Mirror</a></li>
             <li><a href="#download">Downloads</a></li>
             <li><a href="#ui-state">Settings UI State</a></li>
-            <li><a href="#generic">QML-Only Keys (no backend default)</a></li>
+            <li><a href="#generic">QML-Only Keys (no C++ default)</a></li>
             <li><a href="#in-memory">In-Memory Only</a></li>
             <li><a href="#persistence">Persistence and File Format</a></li>
-            <li><a href="#parity">C++ / Python Parity Check</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
         <p>
-          Settings are owned by <code>SettingsManager</code> (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>
-          in the shipped C++ build, <span class="file-path">backend/settings_manager.py</span> in the Python developer backend)
+          Settings are owned by <code>SettingsManager</code> (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>)
           and persisted to <code>settingsConfigure.json</code> in the OS-specific config directory:
         </p>
         <ul>
           <li><strong>Windows:</strong> <code>%APPDATA%/OCTAVE/settingsConfigure.json</code></li>
           <li><strong>macOS:</strong> <code>~/Library/Application Support/OCTAVE/settingsConfigure.json</code></li>
           <li><strong>Linux / Raspberry Pi / Orange Pi:</strong> <code>~/.config/OCTAVE/settingsConfigure.json</code> (or <code>$XDG_CONFIG_HOME/OCTAVE/</code>)</li>
-          <li><strong>Android / iOS (C++ only):</strong> the Linux rule applied to <code>QDir::homePath()</code></li>
+          <li><strong>Android / iOS:</strong> the Linux rule applied to <code>QDir::homePath()</code></li>
         </ul>
         <p>
-          Both backends define the same <strong>96 top-level default keys</strong> with identical literal defaults
-          (verified key by key against both sources on 2026-10-13). Settings are read once at startup, validated against
+          <code>buildDefaultSettings()</code> defines <strong>96 top-level default keys</strong>. Settings are read once at startup, validated against
           the defaults, served from memory, and written back atomically 500&nbsp;ms after the last change. The mechanics
           are on the <a href="settings-manager.html">Settings Manager</a> page; this page is the key catalogue.
         </p>
@@ -62,15 +59,15 @@
         <p>How to read the tables:</p>
         <ul>
           <li><strong>Property</strong>: the QML-visible property name (same as the JSON key) or how QML reaches a key that has no property.</li>
-          <li><strong>Type</strong>: JSON type; the C++ property type is noted where it differs from the Python one.</li>
-          <li><strong>Default</strong>: the literal in both backends' default dicts.</li>
+          <li><strong>Type</strong>: the C++ property type, or for keys without a property the JSON type (string, object, list) as stored.</li>
+          <li><strong>Default</strong>: the literal in <code>buildDefaultSettings()</code>.</li>
           <li><strong>Range / Values</strong>: what the save slot enforces (clamp or whitelist), and in parentheses the range the UI control offers when it is narrower. A dash means the slot stores whatever it is given.</li>
           <li><strong>UI</strong>: the page under <span class="file-path">frontend/settings/</span> (Display, Media, OBD, Accessories, Device, About) or the other QML file that writes the key. See <a href="settings-ui.html">Settings UI</a>.</li>
         </ul>
 
         <div class="info-box tip">
           <div class="info-box-title">Pinnable settings</div>
-          25 of these keys are also registered in <code>SETTINGS_REGISTRY</code> and can be pinned to the Quick Panel. They
+          25 of these keys are also registered in the settings registry (<code>buildSettingsRegistry()</code>) and can be pinned to the Quick Panel. They
           are marked <em>pinnable</em> in the description; the registry itself is documented on the
           <a href="settings-manager.html#settings-registry">Settings Manager</a> page.
         </div>
@@ -82,9 +79,9 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>deviceName</code></td><td>deviceName</td><td>str</td><td>"Default Device"</td><td>–</td><td>Device page (via <code>Main.updateDeviceName()</code>, which rejects blank names)</td><td>Display name for this OCTAVE installation</td></tr>
-            <tr><td><code>fontSetting</code></td><td>fontSetting</td><td>str</td><td>"GoogleSans Regular"</td><td>–</td><td>Display page</td><td>UI font family; <code>Style.setFont()</code> is called on change. The default is the display name <code>Main.qml</code> derives from the bundled <code>GoogleSans-Regular.ttf</code>; a stored legacy <code>"Google Sans"</code> (which <code>Style.setFont()</code> rejected, leaving the system font) is migrated to it at load and written back</td></tr>
-            <tr><td><code>windowState</code></td><td>windowState</td><td>str</td><td>"windowed"</td><td>"windowed", "fullscreen", "maximized" (others ignored)</td><td>Display page (Window)</td><td>Window mode applied at startup</td></tr>
+            <tr><td><code>deviceName</code></td><td>deviceName</td><td>QString</td><td>"Default Device"</td><td>–</td><td>Device page (via <code>Main.updateDeviceName()</code>, which rejects blank names)</td><td>Display name for this OCTAVE installation</td></tr>
+            <tr><td><code>fontSetting</code></td><td>fontSetting</td><td>QString</td><td>"GoogleSans Regular"</td><td>–</td><td>Display page</td><td>UI font family; <code>Style.setFont()</code> is called on change. The default is the display name <code>Main.qml</code> derives from the bundled <code>GoogleSans-Regular.ttf</code>; a stored legacy <code>"Google Sans"</code> (which <code>Style.setFont()</code> rejected, leaving the system font) is migrated to it at load and written back</td></tr>
+            <tr><td><code>windowState</code></td><td>windowState</td><td>QString</td><td>"windowed"</td><td>"windowed", "fullscreen", "maximized" (others ignored)</td><td>Display page (Window)</td><td>Window mode applied at startup</td></tr>
             <tr><td><code>screenWidth</code></td><td>screenWidth</td><td>int</td><td>1280</td><td>–</td><td>Display page; <code>Main.qml</code> also saves the size on window resize</td><td>Window width in pixels when windowed</td></tr>
             <tr><td><code>screenHeight</code></td><td>screenHeight</td><td>int</td><td>720</td><td>–</td><td>Display page; <code>Main.qml</code> on resize</td><td>Window height in pixels when windowed</td></tr>
           </tbody>
@@ -97,9 +94,9 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>uiScale</code></td><td>uiScale</td><td>float (C++ <code>float</code>)</td><td>1.0</td><td>– (UI 0.5 – 2.0, step 0.05)</td><td>Display page</td><td>Global UI scale factor (<code>Spacing.globalScale</code>). A stored 0.6 (an old default) is migrated to 1.0 at load. Pinnable</td></tr>
-            <tr><td><code>themeSetting</code></td><td>themeSetting</td><td>str</td><td>"CosmicVoyager"</td><td>Any built-in or custom theme name; "Album Art Capture" enables palette extraction</td><td>Display page; <code>Main.updateTheme()</code></td><td>Active colour theme (<a href="theme-system.html">Theme System</a>). Pinnable (chips from <code>themeList</code>)</td></tr>
-            <tr><td><code>customThemes</code></td><td>customThemes</td><td>dict (property is a list of names)</td><td>{}</td><td>name → theme object with colour keys and optional <code>albumArt</code> file URL</td><td>Saved from MediaRoom (<code>save_custom_theme</code>), deleted from the Display page</td><td>User-created themes captured from album art; art files live in <code>theme_art/</code></td></tr>
+            <tr><td><code>uiScale</code></td><td>uiScale</td><td>float</td><td>1.0</td><td>– (UI 0.5 – 2.0, step 0.05)</td><td>Display page</td><td>Global UI scale factor (<code>Spacing.globalScale</code>). A stored 0.6 (an old default) is migrated to 1.0 at load. Pinnable</td></tr>
+            <tr><td><code>themeSetting</code></td><td>themeSetting</td><td>QString</td><td>"CosmicVoyager"</td><td>Any built-in or custom theme name; "Album Art Capture" enables palette extraction</td><td>Display page; <code>Main.updateTheme()</code></td><td>Active colour theme (<a href="theme-system.html">Theme System</a>). Pinnable (chips from <code>themeList</code>)</td></tr>
+            <tr><td><code>customThemes</code></td><td>customThemes</td><td>object (property is a QVariantList of names)</td><td>{}</td><td>name → theme object with colour keys and optional <code>albumArt</code> file URL</td><td>Saved from MediaRoom (<code>save_custom_theme</code>), deleted from the Display page</td><td>User-created themes captured from album art; art files live in <code>theme_art/</code></td></tr>
             <tr><td><code>colorTransitionMs</code></td><td>colorTransitionMs</td><td>int</td><td>1000</td><td>– (UI and registry 0 – 2000, step 50)</td><td>Display page</td><td>Duration of theme colour transitions in ms. Pinnable</td></tr>
             <tr><td><code>songLengthTransition</code></td><td>songLengthTransition</td><td>bool</td><td>false</td><td>true/false</td><td>Display page</td><td>Animate the theme colour transition over the whole song length instead of <code>colorTransitionMs</code></td></tr>
             <tr><td><code>showClock</code></td><td>showClock</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Clock); Display widget</td><td>Show the clock in the bottom bar. Pinnable</td></tr>
@@ -107,10 +104,10 @@
             <tr><td><code>clockShowSeconds</code></td><td>clockShowSeconds</td><td>bool</td><td>false</td><td>true/false</td><td>Display page (Clock)</td><td>Show seconds in the bottom-bar clock</td></tr>
             <tr><td><code>clockSize</code></td><td>clockSize</td><td>int</td><td>18</td><td>– (UI 10 – 85, step 1)</td><td>Display page (Clock)</td><td>Manual clock font size in pixels</td></tr>
             <tr><td><code>clockSizeAuto</code></td><td>clockSizeAuto</td><td>bool</td><td>true</td><td>–</td><td>Display page (Clock)</td><td>Fit the clock to its slot in the nav bar (either orientation); when on, <code>clockSize</code> is ignored</td></tr>
-            <tr><td><code>bottomBarOrientation</code></td><td>bottomBarOrientation</td><td>str</td><td>"bottom"</td><td>"bottom", "side" (UI chips; slot does not validate)</td><td>Display page (Layout)</td><td>Navigation bar along the bottom edge or the side</td></tr>
+            <tr><td><code>bottomBarOrientation</code></td><td>bottomBarOrientation</td><td>QString</td><td>"bottom"</td><td>"bottom", "side" (UI chips; slot does not validate)</td><td>Display page (Layout)</td><td>Navigation bar along the bottom edge or the side</td></tr>
             <tr><td><code>showBottomBarMediaControls</code></td><td>showBottomBarMediaControls</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Layout)</td><td>Play/skip controls inside the navigation bar. Pinnable</td></tr>
-            <tr><td><code>settingsLayoutStyle</code></td><td>settingsLayoutStyle</td><td>str</td><td>"Sidebar"</td><td>"Carousel", "Sidebar", "Hub", "Dashboard" (others ignored)</td><td>Display page (Layout)</td><td>Which <code>Settings*Layout.qml</code> renders the settings menu; <code>"Sidebar"</code> is the tile grid, shown as "Grid" in the UI</td></tr>
-            <tr><td><code>albumArtColors</code></td><td>albumArtColors</td><td>str (JSON)</td><td>""</td><td>Palette JSON produced by the extractor</td><td>Not user-editable: written by MediaManager via <code>set_album_art_colors()</code></td><td>Last extracted Album Art Capture palette, restored at startup so the placeholder theme does not flash</td></tr>
+            <tr><td><code>settingsLayoutStyle</code></td><td>settingsLayoutStyle</td><td>QString</td><td>"Sidebar"</td><td>"Carousel", "Sidebar", "Hub", "Dashboard" (others ignored)</td><td>Display page (Layout)</td><td>Which <code>Settings*Layout.qml</code> renders the settings menu; <code>"Sidebar"</code> is the tile grid, shown as "Grid" in the UI</td></tr>
+            <tr><td><code>albumArtColors</code></td><td>albumArtColors</td><td>QString (JSON)</td><td>""</td><td>Palette JSON produced by the extractor</td><td>Not user-editable: written by MediaManager via <code>set_album_art_colors()</code></td><td>Last extracted Album Art Capture palette, restored at startup so the placeholder theme does not flash</td></tr>
           </tbody>
         </table>
 
@@ -126,11 +123,11 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float (C++ <code>float</code>)</td><td>0.1</td><td>– (registry 0 – 1, step 0.01, logarithmic)</td><td>Media page; <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default. Pinnable</td></tr>
-            <tr><td><code>mediaFolder</code></td><td>mediaFolder</td><td>str</td><td>"" (resolved at load to <code>QStandardPaths::MusicLocation</code> in C++, <code>~/Music</code> in Python)</td><td>Any directory; saving the current value is a no-op</td><td>Media page (Library)</td><td>Root of the local music library; MediaManager connects <code>mediaFolderChanged</code> to <code>set_library_root</code></td></tr>
+            <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float</td><td>0.1</td><td>– (registry 0 – 1, step 0.01, logarithmic)</td><td>Media page; <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default. Pinnable</td></tr>
+            <tr><td><code>mediaFolder</code></td><td>mediaFolder</td><td>QString</td><td>"" (resolved at load to <code>QStandardPaths::MusicLocation</code>, falling back to <code>~/Music</code>)</td><td>Any directory; saving the current value is a no-op</td><td>Media page (Library)</td><td>Root of the local music library; MediaManager connects <code>mediaFolderChanged</code> to <code>set_library_root</code></td></tr>
             <tr><td><code>autoPlayOnStartup</code></td><td>autoPlayOnStartup</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback); Media widget</td><td>Resume the last song at launch. Pinnable</td></tr>
             <tr><td><code>persistShuffleState</code></td><td>persistShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback)</td><td>Restore <code>lastShuffleState</code> at launch. Pinnable</td></tr>
-            <tr><td><code>musicButtonDefaultPage</code></td><td>musicButtonDefaultPage</td><td>str</td><td>"mediaRoom"</td><td>"mediaRoom", "mediaPlayer" (others ignored)</td><td>Media page (Playback)</td><td>Which view the music nav button opens</td></tr>
+            <tr><td><code>musicButtonDefaultPage</code></td><td>musicButtonDefaultPage</td><td>QString</td><td>"mediaRoom"</td><td>"mediaRoom", "mediaPlayer" (others ignored)</td><td>Media page (Playback)</td><td>Which view the music nav button opens</td></tr>
             <tr><td><code>returnToLibraryAfterSelection</code></td><td>returnToLibraryAfterSelection</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback)</td><td>Keep the library open after selecting a track when true; false opens the Now Playing view</td></tr>
             <tr><td><code>showWaveformVisualizer</code></td><td>showWaveformVisualizer</td><td>bool</td><td>true</td><td>true/false</td><td>Media page; NowPlayingStudio; Media widget</td><td>FFT waveform in MediaRoom (<a href="audio-analyzer.html">Audio Analyzer</a>). Pinnable</td></tr>
             <tr><td><code>show3DButtonTilt</code></td><td>show3DButtonTilt</td><td>bool</td><td>false</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>3D tilt on prev/play/next press. Pinnable</td></tr>
@@ -138,17 +135,17 @@
             <tr><td><code>roundedAlbumArt</code></td><td>roundedAlbumArt</td><td>bool</td><td>true</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>Rounded corners on album art. Pinnable</td></tr>
             <tr><td><code>albumArtCornerRadius</code></td><td>albumArtCornerRadius</td><td>int</td><td>16</td><td>clamped 2 – 32</td><td>Media page; NowPlayingStudio</td><td>Corner radius in dp when rounded. Pinnable</td></tr>
             <tr><td><code>showAlbumArtShadow</code></td><td>showAlbumArtShadow</td><td>bool</td><td>true</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>Drop shadow behind album art. Pinnable</td></tr>
-            <tr><td><code>get_setting_with_default()</code> / <code>save_setting()</code></td><td>musicDeviceModel</td><td>str</td><td>"Album art"</td><td>"Album art", "Record player", "MP3 player", "CD player", "Cassette player", "iPod" (validated by <code>MusicDevicePreference</code>; backend checks only the string type)</td><td>Media page; NowPlayingStudio</td><td>Now Playing artwork or 3D music-device model. The 3D choices require the Quick3D scene to load; unknown stored choices display as "Album art"</td></tr>
+            <tr><td><code>get_setting_with_default()</code> / <code>save_setting()</code></td><td>musicDeviceModel</td><td>string</td><td>"Album art"</td><td>"Album art", "Record player", "MP3 player", "CD player", "Cassette player", "iPod" (validated by <code>MusicDevicePreference</code>; SettingsManager checks only the string type)</td><td>Media page; NowPlayingStudio</td><td>Now Playing artwork or 3D music-device model. The 3D choices require the Quick3D scene to load; unknown stored choices display as "Album art"</td></tr>
             <tr><td><code>vinylRecordMode</code></td><td>vinylRecordMode</td><td>bool</td><td>false</td><td>true/false</td><td>Media page; NowPlayingStudio</td><td>Spin the album art like a record while playing. Pinnable</td></tr>
-            <tr><td><code>albumArtTransition</code></td><td>albumArtTransition</td><td>str</td><td>"Crossfade"</td><td>"Crossfade", "Slide", "Vinyl Lift", "Dissolve", "Flip", "Coverflow", "Conveyor", "Stack", "Depth", "Swing" (others ignored)</td><td>Media page; NowPlayingStudio</td><td>Track-change animation. With 3D preview on, the side cards animate along; off, only the centre card animates. Pinnable</td></tr>
+            <tr><td><code>albumArtTransition</code></td><td>albumArtTransition</td><td>QString</td><td>"Crossfade"</td><td>"Crossfade", "Slide", "Vinyl Lift", "Dissolve", "Flip", "Coverflow", "Conveyor", "Stack", "Depth", "Swing" (others ignored)</td><td>Media page; NowPlayingStudio</td><td>Track-change animation. With 3D preview on, the side cards animate along; off, only the centre card animates. Pinnable</td></tr>
             <tr><td><code>backgroundOverlayOpacity</code></td><td>backgroundOverlayOpacity</td><td>int</td><td>80</td><td>clamped 0 – 100</td><td>Media page; NowPlayingStudio</td><td>Dark overlay percentage over the blurred background. Pinnable</td></tr>
             <tr><td><code>backgroundBlurRadius</code></td><td>backgroundBlurRadius</td><td>int</td><td>40</td><td>– (registry 0 – 100, step 1)</td><td>Media page; NowPlayingStudio</td><td>Blur radius of the album-art background. Pinnable</td></tr>
-            <tr><td><code>backgroundGrid</code></td><td>backgroundGrid</td><td>str</td><td>"4x4"</td><td>"Normal", "2x2", "4x4" (UI chips; slot does not validate)</td><td>Media page; NowPlayingStudio</td><td>Tiling of the album-art background</td></tr>
-            <tr><td><code>sideCardOpacity</code></td><td>sideCardOpacity</td><td>float (C++ <code>double</code>)</td><td>0.4</td><td>clamped 0.1 – 1.0</td><td>Media page; NowPlayingStudio</td><td>Opacity of the 3D preview side cards. Pinnable</td></tr>
+            <tr><td><code>backgroundGrid</code></td><td>backgroundGrid</td><td>QString</td><td>"4x4"</td><td>"Normal", "2x2", "4x4" (UI chips; slot does not validate)</td><td>Media page; NowPlayingStudio</td><td>Tiling of the album-art background</td></tr>
+            <tr><td><code>sideCardOpacity</code></td><td>sideCardOpacity</td><td>double</td><td>0.4</td><td>clamped 0.1 – 1.0</td><td>Media page; NowPlayingStudio</td><td>Opacity of the 3D preview side cards. Pinnable</td></tr>
             <tr><td><code>sideCardAngle</code></td><td>sideCardAngle</td><td>int</td><td>30</td><td>clamped 5 – 60</td><td>Media page; NowPlayingStudio</td><td>Rotation of the side cards in degrees. Pinnable</td></tr>
             <tr><td><code>buttonTiltDuration</code></td><td>buttonTiltDuration</td><td>int</td><td>200</td><td>clamped 50 – 500</td><td>Media page; NowPlayingStudio</td><td>Button tilt animation length in ms. Pinnable</td></tr>
             <tr><td><code>textScrollSpeed</code></td><td>textScrollSpeed</td><td>int</td><td>5000</td><td>clamped 1000 – 10000</td><td>Media page; NowPlayingStudio</td><td>Marquee scroll duration in ms. Pinnable</td></tr>
-            <tr><td><code>directoryHistory</code></td><td>directoryHistory</td><td>list of str</td><td>[]</td><td>Most recent first, max 10, no duplicates</td><td>No current writer (API kept for the folder picker)</td><td>Recently used media folders</td></tr>
+            <tr><td><code>directoryHistory</code></td><td>directoryHistory</td><td>QVariantList (strings)</td><td>[]</td><td>Most recent first, max 10, no duplicates</td><td>No current writer (API kept for the folder picker)</td><td>Recently used media folders</td></tr>
           </tbody>
         </table>
 
@@ -161,9 +158,9 @@
           </thead>
           <tbody>
             <tr><td><code>lastShuffleState</code></td><td>lastShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Shuffle state at last change; restored only when <code>persistShuffleState</code> is on</td></tr>
-            <tr><td><code>lastPlayedSong</code></td><td>lastPlayedSong</td><td>str</td><td>""</td><td>Filename</td><td>Track to resume</td></tr>
+            <tr><td><code>lastPlayedSong</code></td><td>lastPlayedSong</td><td>QString</td><td>""</td><td>Filename</td><td>Track to resume</td></tr>
             <tr><td><code>lastPlayedPosition</code></td><td>lastPlayedPosition</td><td>int</td><td>0</td><td>Milliseconds</td><td>Position to resume from</td></tr>
-            <tr><td><code>lastPlayedPlaylist</code></td><td>lastPlayedPlaylist</td><td>str</td><td>""</td><td>Playlist name</td><td>Playlist active at last save</td></tr>
+            <tr><td><code>lastPlayedPlaylist</code></td><td>lastPlayedPlaylist</td><td>QString</td><td>""</td><td>Playlist name</td><td>Playlist active at last save</td></tr>
           </tbody>
         </table>
 
@@ -174,19 +171,19 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>obdBluetoothPort</code></td><td>obdBluetoothPort</td><td>str</td><td>"" (a stored "/dev/rfcomm0" is cleared at load)</td><td>Serial device path on desktop, or <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> for a direct Bluetooth socket (Linux); BLE MAC address on Android</td><td>OBD page (Connection); also written by OBDManager when connecting</td><td>Adapter to connect to; OBDManager reconnects on change (<a href="obd-manager.html">OBD Manager</a>)</td></tr>
-            <tr><td><code>obdSavedAdapters</code></td><td>obdSavedAdapters</td><td>str (JSON array)</td><td>"[]"</td><td>Array of <code>{"name": str, "mac": str}</code>; MAC upper-cased, most recent first, max 8</td><td>OBD page (Adapters) removes; <code>OBDManager::connect_to_adapter()</code> adds</td><td>Remembered adapters shown as quick-connect chips</td></tr>
+            <tr><td><code>obdBluetoothPort</code></td><td>obdBluetoothPort</td><td>QString</td><td>"" (a stored "/dev/rfcomm0" is cleared at load)</td><td>Serial device path on desktop, or <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> for a direct Bluetooth socket (Linux); BLE MAC address on Android</td><td>OBD page (Connection); also written by OBDManager when connecting</td><td>Adapter to connect to; OBDManager reconnects on change (<a href="obd-manager.html">OBD Manager</a>)</td></tr>
+            <tr><td><code>obdSavedAdapters</code></td><td>obdSavedAdapters</td><td>QString (JSON array)</td><td>"[]"</td><td>Array of <code>{"name": string, "mac": string}</code>; MAC upper-cased, most recent first, max 8</td><td>OBD page (Adapters) removes; <code>OBDManager::connect_to_adapter()</code> adds</td><td>Remembered adapters shown as quick-connect chips</td></tr>
             <tr><td><code>obdFastMode</code></td><td>obdFastMode</td><td>bool</td><td>true</td><td>true/false</td><td>OBD page (Tuning); OBD widget</td><td>Fast polling mode, applied on the next connection. Pinnable</td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td>obdAutoReconnectAttempts</td><td>int</td><td>0</td><td>clamped 0 – 10 (0 = disabled)</td><td>OBD page (Connection)</td><td>Automatic reconnect attempts after a drop</td></tr>
-            <tr><td><code>fuelTankCapacity</code></td><td>fuelTankCapacity</td><td>float (C++ <code>float</code>)</td><td>15.0</td><td>–</td><td>None</td><td>Tank size in gallons. Property and slot exist in both backends but nothing reads or writes them today</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(pid)</code> / <code>save_obd_parameter_enabled(pid, on)</code></td><td>obdParameters</td><td>dict of bool</td><td>123 parameter IDs, 20 enabled (<a href="#obd-parameters">list</a>)</td><td>PID name → enabled</td><td>Legacy; nothing in the UI writes it any more (<code>enable_all_supported()</code> still can)</td><td>Formerly chose which PIDs are polled. Polling is now demand-driven (<a href="obd-manager.html#watcher-system">what is on screen</a>), so this dict is kept only for settings-file compatibility. Writes are debounced 800&nbsp;ms; PIDs missing from the file are merged in from the defaults at load</td></tr>
-            <tr><td><code>homeOBDParameters</code></td><td>homeOBDParameters</td><td>list of str</td><td>["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"]</td><td>PID names</td><td>OBD page</td><td>PIDs shown on the home-screen cards</td></tr>
-            <tr><td><code>get_supported_obd_parameters()</code></td><td>supportedOBDParameters</td><td>list of str</td><td>[]</td><td>PID names</td><td>Written by OBDManager after a vehicle scan</td><td>PIDs the last scanned vehicle answered; lists the OBD settings page's parameters while offline. The live gate uses <code>obdManager.vehicleSupportedParameters</code> (this session only) instead</td></tr>
+            <tr><td><code>fuelTankCapacity</code></td><td>fuelTankCapacity</td><td>float</td><td>15.0</td><td>–</td><td>None</td><td>Tank size in gallons. Property and slot exist but nothing reads or writes them today</td></tr>
+            <tr><td><code>get_obd_parameter_enabled(pid)</code> / <code>save_obd_parameter_enabled(pid, on)</code></td><td>obdParameters</td><td>object of bool</td><td>123 parameter IDs, 20 enabled (<a href="#obd-parameters">list</a>)</td><td>PID name → enabled</td><td>Legacy; nothing in the UI writes it any more (<code>enable_all_supported()</code> still can)</td><td>Formerly chose which PIDs are polled. Polling is now demand-driven (<a href="obd-manager.html#watcher-system">what is on screen</a>), so this object is kept only for settings-file compatibility. Writes are debounced 800&nbsp;ms; PIDs missing from the file are merged in from the defaults at load</td></tr>
+            <tr><td><code>homeOBDParameters</code></td><td>homeOBDParameters</td><td>QVariantList (strings)</td><td>["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"]</td><td>PID names</td><td>OBD page</td><td>PIDs shown on the home-screen cards</td></tr>
+            <tr><td><code>get_supported_obd_parameters()</code></td><td>supportedOBDParameters</td><td>list of strings</td><td>[]</td><td>PID names</td><td>Written by OBDManager after a vehicle scan</td><td>PIDs the last scanned vehicle answered; lists the OBD settings page's parameters while offline. The live gate uses <code>obdManager.vehicleSupportedParameters</code> (this session only) instead</td></tr>
           </tbody>
         </table>
 
         <h2 id="obd-parameters">OBD Parameter PIDs</h2>
-        <p>The <code>obdParameters</code> default dict holds these 123 keys. The full gauge/PID catalogue with units is in <a href="obd-manager.html">OBD Manager</a> and <span class="file-path">docs/GAUGE_AUTHORING.md</span>.</p>
+        <p>The <code>obdParameters</code> default object holds these 123 keys. The full gauge/PID catalogue with units is in <a href="obd-manager.html">OBD Manager</a> and <span class="file-path">docs/GAUGE_AUTHORING.md</span>.</p>
         <p><strong>Enabled by default (20):</strong></p>
         <pre><code>COOLANT_TEMP  CONTROL_MODULE_VOLTAGE  ENGINE_LOAD  THROTTLE_POS  INTAKE_TEMP
 TIMING_ADVANCE  MAF  SPEED  RPM  COMMANDED_EQUIV_RATIO  FUEL_LEVEL  INTAKE_PRESSURE
@@ -225,26 +222,26 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- ESP32 -->
         <h2 id="esp32">ESP32 Volume Knob</h2>
-        <p>All on the <strong>Accessories</strong> page, Volume Knob sub-section (desktop only). Consumed by <a href="hardware-managers.html">ESP32VolumeManager</a>; the LED keys are also read by <span class="file-path">main.py</span> to sync the knob's LEDs with the theme.</p>
+        <p>All on the <strong>Accessories</strong> page, Volume Knob sub-section (desktop only). Consumed by <a href="hardware-managers.html">ESP32VolumeManager</a>; the LED keys are also read by <span class="file-path">src/main.cpp</span> to sync the knob's LEDs with the theme.</p>
         <table>
           <thead>
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
           </thead>
           <tbody>
             <tr><td><code>esp32VolumeEnabled</code></td><td>esp32VolumeEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the wireless rotary encoder</td></tr>
-            <tr><td><code>esp32VolumePort</code></td><td>esp32VolumePort</td><td>str</td><td>""</td><td>Serial port name, or empty</td><td>USB serial port of the ESP32-S3 receiver dongle; empty means auto-select the ESP32-S3 at startup</td></tr>
-            <tr><td><code>esp32VolumeStepSize</code></td><td>esp32VolumeStepSize</td><td>float (C++ <code>double</code>)</td><td>1.0</td><td>clamped 0.25 – 10, rounded to the nearest 0.25 (UI slider and chips)</td><td>Volume change per encoder tick in percent. The default is a float literal so fractional steps (0.25 / 0.5 / 0.75) survive the Python validator</td></tr>
+            <tr><td><code>esp32VolumePort</code></td><td>esp32VolumePort</td><td>QString</td><td>""</td><td>Serial port name, or empty</td><td>USB serial port of the ESP32-S3 receiver dongle; empty means auto-select the ESP32-S3 at startup</td></tr>
+            <tr><td><code>esp32VolumeStepSize</code></td><td>esp32VolumeStepSize</td><td>double</td><td>1.0</td><td>clamped 0.25 – 10, rounded to the nearest 0.25 (UI slider and chips)</td><td>Volume change per encoder tick in percent. Stored as a double (float-literal default) so fractional steps (0.25 / 0.5 / 0.75) round-trip</td></tr>
             <tr><td><code>esp32AutoReconnect</code></td><td>esp32AutoReconnect</td><td>bool</td><td>true</td><td>true/false</td><td>Reconnect automatically after the dongle disappears</td></tr>
             <tr><td><code>esp32LedSleepEnabled</code></td><td>esp32LedSleepEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Let the knob's LEDs turn off (code comment: "LEDs turn off when OCTAVE closes")</td></tr>
-            <tr><td><code>esp32LedColorMode</code></td><td>esp32LedColorMode</td><td>str</td><td>"theme"</td><td>"theme", "static" (others ignored)</td><td>LEDs follow the album-art / theme palette or a fixed colour</td></tr>
-            <tr><td><code>esp32LedStaticColor</code></td><td>esp32LedStaticColor</td><td>str</td><td>"#00FFFF"</td><td>Hex colour</td><td>Colour used when the mode is "static"</td></tr>
+            <tr><td><code>esp32LedColorMode</code></td><td>esp32LedColorMode</td><td>QString</td><td>"theme"</td><td>"theme", "static" (others ignored)</td><td>LEDs follow the album-art / theme palette or a fixed colour</td></tr>
+            <tr><td><code>esp32LedStaticColor</code></td><td>esp32LedStaticColor</td><td>QString</td><td>"#00FFFF"</td><td>Hex colour</td><td>Colour used when the mode is "static"</td></tr>
           </tbody>
         </table>
 
         <!-- IMU -->
         <h2 id="imu">IMU Sensor</h2>
         <p>
-          Only <code>imuEnabled</code> has a property and slot. The other ten keys have backend defaults (so they are
+          Only <code>imuEnabled</code> has a property and slot. The other ten keys have defaults in <code>buildDefaultSettings()</code> (so they are
           type-validated) but are read and written through <code>get_setting_with_default()</code> /
           <code>save_setting()</code> from the Accessories page (IMU Sensor sub-section) and
           <span class="file-path">frontend/SensorMenu.qml</span>; the <a href="hardware-managers.html">BerryIMU manager</a> only reads
@@ -258,8 +255,8 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td><code>imuEnabled</code> property</td><td>imuEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the BerryIMU v3 I²C sensor. Pinnable; also on the Accessories widget</td></tr>
             <tr><td>generic</td><td>sensorEmitRate</td><td>int</td><td>60</td><td>UI 10 – 120 Hz, step 5</td><td>Sensor sampling / emit rate in Hz</td></tr>
             <tr><td>generic</td><td>sensorDecimalPlaces</td><td>int</td><td>1</td><td>UI 0 – 4</td><td>Decimal places on the Sensors page readouts</td></tr>
-            <tr><td>generic</td><td>sensorTempUnit</td><td>str</td><td>"F"</td><td>"F", "C" (toggle)</td><td>Barometer temperature unit</td></tr>
-            <tr><td>generic</td><td>sensorAltitudeUnit</td><td>str</td><td>"m"</td><td>"m", "ft" (toggle)</td><td>Barometric altitude unit</td></tr>
+            <tr><td>generic</td><td>sensorTempUnit</td><td>string</td><td>"F"</td><td>"F", "C" (toggle)</td><td>Barometer temperature unit</td></tr>
+            <tr><td>generic</td><td>sensorAltitudeUnit</td><td>string</td><td>"m"</td><td>"m", "ft" (toggle)</td><td>Barometric altitude unit</td></tr>
             <tr><td>generic</td><td>sensorShowPitch</td><td>bool</td><td>true</td><td>true/false</td><td>Show the pitch readout on the Sensors page</td></tr>
             <tr><td>generic</td><td>sensorShowRoll</td><td>bool</td><td>true</td><td>true/false</td><td>Show the roll readout</td></tr>
             <tr><td>generic</td><td>sensorShowHeading</td><td>bool</td><td>true</td><td>true/false</td><td>Show the heading / compass readout</td></tr>
@@ -271,14 +268,14 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- Gesture -->
         <h2 id="gesture">Gesture Sensor</h2>
-        <p>Accessories page, Gesture Sensor sub-section. Consumed by the <a href="hardware-managers.html">GestureManager</a>; the volume actions are executed by <span class="file-path">main.py</span> / <span class="file-path">main.cpp</span> through <code>VolumeController</code>.</p>
+        <p>Accessories page, Gesture Sensor sub-section. Consumed by the <a href="hardware-managers.html">GestureManager</a>; the volume actions are executed by <span class="file-path">src/main.cpp</span> through <code>VolumeController</code>.</p>
         <table>
           <thead>
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
           </thead>
           <tbody>
             <tr><td><code>gestureSensorEnabled</code></td><td>gestureSensorEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the PAJ7620U2 I²C gesture sensor. Pinnable; also on the Accessories widget</td></tr>
-            <tr><td><code>get_gesture_mapping()</code> / <code>save_gesture_action()</code></td><td>gestureMapping</td><td>dict</td><td>(below)</td><td>Gesture name → action name</td><td>Nine gestures mapped to app actions; <code>reset_gesture_mapping()</code> restores the defaults</td></tr>
+            <tr><td><code>get_gesture_mapping()</code> / <code>save_gesture_action()</code></td><td>gestureMapping</td><td>object</td><td>(below)</td><td>Gesture name → action name</td><td>Nine gestures mapped to app actions; <code>reset_gesture_mapping()</code> restores the defaults</td></tr>
             <tr><td><code>gestureVolumeStep</code></td><td>gestureVolumeStep</td><td>int</td><td>5</td><td>clamped 1 – 100 (UI slider 1 – 100 or chips 1/2/5/10/15/25/50)</td><td>Percent change per volume gesture</td></tr>
             <tr><td><code>gestureCooldown</code></td><td>gestureCooldown</td><td>int</td><td>300</td><td>clamped 100 – 2000 ms (UI slider step 50 or chips 100/200/300/500/1000)</td><td>Minimum time between recognised gestures</td></tr>
           </tbody>
@@ -307,12 +304,12 @@ EV_BATTERY_HEALTH</code></pre>
           <tbody>
             <tr><td><code>androidAutoEnabled</code></td><td>androidAutoEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Show the Android Auto button in the navigation bar</td></tr>
             <tr><td><code>phoneMirrorEnabled</code></td><td>phoneMirrorEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Show the Phone Mirror button in the navigation bar</td></tr>
-            <tr><td><code>scrcpyAudioGain</code></td><td>scrcpyAudioGain</td><td>float (C++ <code>double</code>)</td><td>2.0 (+6 dB)</td><td>clamped 0.25 – 8.0 (UI slider −12 … +18 dB, stored as 10^(dB/20))</td><td>Linear gain applied to phone audio before OCTAVE's volume; the phone's own volume is never changed</td></tr>
+            <tr><td><code>scrcpyAudioGain</code></td><td>scrcpyAudioGain</td><td>double</td><td>2.0 (+6 dB)</td><td>clamped 0.25 – 8.0 (UI slider −12 … +18 dB, stored as 10^(dB/20))</td><td>Linear gain applied to phone audio before OCTAVE's volume; the phone's own volume is never changed</td></tr>
             <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>scrcpyAudioDuckEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Duck local music while the phone is producing sound (navigation prompts, calls). The manager's <code>duckingChanged</code> is routed to <code>MediaManager::setDucking</code></td></tr>
-            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>scrcpyAudioDuckLevel</td><td>float (C++ <code>double</code>)</td><td>0.1 (−20 dB)</td><td>clamped 0.0 – 1.0 (UI slider −40 … −6 dB)</td><td>Linear factor applied to local music while ducked</td></tr>
-            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>scrcpyPhoneScreenOff</td><td>bool</td><td>false</td><td>true/false</td><td>Opt-in: keep the phone's own panel dark while mirroring (off by default because some phones, e.g. Galaxy S22, only dim the panel instead of blanking it); stream and touch keep working and the panel is restored when the session ends. A power-button press wakes the panel for an 8 s grace window (<code>kWakeGraceMs</code> / <code>WAKE_GRACE_MS</code>); a second press inside it hands the phone back to the user, and the MirrorKeeper forces a relight after a wake from the lock screen</td></tr>
-            <tr><td><code>scrcpyWirelessAddress</code></td><td>scrcpyWirelessAddress</td><td>string</td><td>""</td><td>"ip:port" or ""</td><td>Phone last connected over Wi-Fi (QR pairing from Phone Mirror or the Phone Dock card). Written by <code>PhoneMirrorManager</code> through <code>wirelessAddressChanged</code>: when the phone is paired, when Wireless debugging comes back on a new port (found over mDNS), and cleared by Forget. While no phone is usable OCTAVE retries it in the background at most every 5 s</td></tr>
-            <tr><td><code>scrcpyDisplaySize</code></td><td>scrcpyDisplaySize</td><td>str</td><td>"auto"</td><td>"auto", "WxH" or "" (slot does not validate; the page hands the text to <code>PhoneMirrorManager.setDisplaySize()</code>, which may snap dimensions to multiples of 8, and saves the snapped value back). The "Display Mode" segmented control writes "" (Mirror Phone) or "auto" (Desktop (DeX)); in desktop mode the "Fit to screen" toggle writes "auto" (on) or "1280x800" (off), and the Fit toggle, size field and Text Size slider are hidden in Mirror Phone mode</td><td>Virtual display created on the phone (<code>--new-display</code>, Android 11+). "auto" sizes it to the mirror view's pixel size (longest side capped at 1920), so the picture fills the view; empty mirrors the phone's own screen</td></tr>
+            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>scrcpyAudioDuckLevel</td><td>double</td><td>0.1 (−20 dB)</td><td>clamped 0.0 – 1.0 (UI slider −40 … −6 dB)</td><td>Linear factor applied to local music while ducked</td></tr>
+            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>scrcpyPhoneScreenOff</td><td>bool</td><td>false</td><td>true/false</td><td>Opt-in: keep the phone's own panel dark while mirroring (off by default because some phones, e.g. Galaxy S22, only dim the panel instead of blanking it); stream and touch keep working and the panel is restored when the session ends. A power-button press wakes the panel for an 8 s grace window (<code>kWakeGraceMs</code>); a second press inside it hands the phone back to the user, and the MirrorKeeper forces a relight after a wake from the lock screen</td></tr>
+            <tr><td><code>scrcpyWirelessAddress</code></td><td>scrcpyWirelessAddress</td><td>QString</td><td>""</td><td>"ip:port" or ""</td><td>Phone last connected over Wi-Fi (QR pairing from Phone Mirror or the Phone Dock card). Written by <code>PhoneMirrorManager</code> through <code>wirelessAddressChanged</code>: when the phone is paired, when Wireless debugging comes back on a new port (found over mDNS), and cleared by Forget. While no phone is usable OCTAVE retries it in the background at most every 5 s</td></tr>
+            <tr><td><code>scrcpyDisplaySize</code></td><td>scrcpyDisplaySize</td><td>QString</td><td>"auto"</td><td>"auto", "WxH" or "" (slot does not validate; the page hands the text to <code>PhoneMirrorManager.setDisplaySize()</code>, which may snap dimensions to multiples of 8, and saves the snapped value back). The "Display Mode" segmented control writes "" (Mirror Phone) or "auto" (Desktop (DeX)); in desktop mode the "Fit to screen" toggle writes "auto" (on) or "1280x800" (off), and the Fit toggle, size field and Text Size slider are hidden in Mirror Phone mode</td><td>Virtual display created on the phone (<code>--new-display</code>, Android 11+). "auto" sizes it to the mirror view's pixel size (longest side capped at 1920), so the picture fills the view; empty mirrors the phone's own screen</td></tr>
             <tr><td><code>scrcpyDisplayDpi</code></td><td>scrcpyDisplayDpi</td><td>int</td><td>0</td><td>0 or 80 – 640 (UI slider Auto, 120 … 400 in steps of 20)</td><td>Density of the virtual display ("Text Size"); 0 lets the server scale the phone's own density. Restarts a running session</td></tr>
             <tr><td><code>scrcpyBitRateUsb</code></td><td>scrcpyBitRateUsb</td><td>int (Mbps)</td><td>16</td><td>clamped 2 – 40 (UI slider 4 … 32)</td><td>Video bit rate for USB sessions. Restarts a running USB session</td></tr>
             <tr><td><code>scrcpyBitRateWifi</code></td><td>scrcpyBitRateWifi</td><td>int (Mbps)</td><td>8</td><td>clamped 2 – 40 (UI slider 2 … 20)</td><td>Video bit rate for Wi-Fi sessions. Restarts a running Wi-Fi session</td></tr>
@@ -329,9 +326,9 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td>generic</td><td>downloadSubfolder</td><td>str</td><td>"Downloads"</td><td>Folder name</td><td>Sub-folder of <code>mediaFolder</code> that downloaded songs are written to</td></tr>
-            <tr><td>generic</td><td>downloadFormat</td><td>str</td><td>"mp3"</td><td>"mp3", "flac", "ogg", "opus", "m4a" (per the code comment; not validated)</td><td>Audio container / codec passed to yt-dlp</td></tr>
-            <tr><td>generic</td><td>downloadBitrate</td><td>str</td><td>"auto"</td><td>"auto", "128k", "192k", "320k" (per the code comment; not validated)</td><td>Target bitrate for downloads</td></tr>
+            <tr><td>generic</td><td>downloadSubfolder</td><td>string</td><td>"Downloads"</td><td>Folder name</td><td>Sub-folder of <code>mediaFolder</code> that downloaded songs are written to</td></tr>
+            <tr><td>generic</td><td>downloadFormat</td><td>string</td><td>"mp3"</td><td>"mp3", "flac", "ogg", "opus", "m4a" (per the code comment; not validated)</td><td>Audio container / codec passed to yt-dlp</td></tr>
+            <tr><td>generic</td><td>downloadBitrate</td><td>string</td><td>"auto"</td><td>"auto", "128k", "192k", "320k" (per the code comment; not validated)</td><td>Target bitrate for downloads</td></tr>
           </tbody>
         </table>
 
@@ -343,18 +340,18 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>lastSettingsSection</code> / <code>set_last_settings_section()</code></td><td>lastSettingsSection</td><td>str</td><td>"deviceSettings"</td><td>the six current sections "displaySettings", "mediaSettings", "obdSettings", "accessoriesSettings", "deviceSettings", "about", plus the legacy IDs "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings" an older file may carry (others ignored; "clockSettings" migrated to "displaySettings")</td><td>Section reopened when the settings menu is entered</td></tr>
-            <tr><td><code>settingsMenuVisibility</code> (JSON str) / <code>is_settings_section_visible()</code> / <code>save_settings_section_visibility()</code></td><td>settingsMenuVisibility</td><td>dict of bool</td><td><code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>: all true</td><td>section ID → visible; a section missing from the file (or unknown) reads as visible in both backends</td><td>Which sections the settings menu shows</td></tr>
-            <tr><td><code>pinnedSettings</code> / <code>toggle_pin_setting()</code></td><td>pinnedSettings</td><td>list of str</td><td>[]</td><td>Registry IDs only</td><td>Quick Panel pins, in pin order</td></tr>
-            <tr><td>generic (<span class="file-path">frontend/settings/ExpandedCards.js</span>)</td><td>expandedCards</td><td>dict of bool</td><td>{}</td><td>card ID → expanded</td><td>Expanded / collapsed state of collapsible settings cards</td></tr>
+            <tr><td><code>lastSettingsSection</code> / <code>set_last_settings_section()</code></td><td>lastSettingsSection</td><td>QString</td><td>"deviceSettings"</td><td>the six current sections "displaySettings", "mediaSettings", "obdSettings", "accessoriesSettings", "deviceSettings", "about", plus the legacy IDs "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings" an older file may carry (others ignored; "clockSettings" migrated to "displaySettings")</td><td>Section reopened when the settings menu is entered</td></tr>
+            <tr><td><code>settingsMenuVisibility</code> (JSON string) / <code>is_settings_section_visible()</code> / <code>save_settings_section_visibility()</code></td><td>settingsMenuVisibility</td><td>object of bool</td><td><code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>: all true</td><td>section ID → visible; a section missing from the file (or unknown) reads as visible</td><td>Which sections the settings menu shows</td></tr>
+            <tr><td><code>pinnedSettings</code> / <code>toggle_pin_setting()</code></td><td>pinnedSettings</td><td>QVariantList (strings)</td><td>[]</td><td>Registry IDs only</td><td>Quick Panel pins, in pin order</td></tr>
+            <tr><td>generic (<span class="file-path">frontend/settings/ExpandedCards.js</span>)</td><td>expandedCards</td><td>object of bool</td><td>{}</td><td>card ID → expanded</td><td>Expanded / collapsed state of collapsible settings cards</td></tr>
           </tbody>
         </table>
 
         <!-- Generic / QML-only -->
-        <h2 id="generic">QML-Only Keys (no backend default)</h2>
+        <h2 id="generic">QML-Only Keys (no C++ default)</h2>
         <p>
-          These keys exist only because QML writes them with <code>save_setting()</code>; neither backend lists them in
-          its defaults, so they pass through validation untouched (and unvalidated) via the forward-compatibility copy.
+          These keys exist only because QML writes them with <code>save_setting()</code>; <code>buildDefaultSettings()</code> does not list them,
+          so they pass through validation untouched (and unvalidated) via the forward-compatibility copy.
           The default shown is the one passed to <code>get_setting_with_default()</code> at the reading call site.
         </p>
         <table>
@@ -365,7 +362,7 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td>rpm_shift_light_enabled</td><td>bool</td><td>true</td><td>OBDMenu RPM popup</td><td>Main.qml, HomeOBDView</td><td>Shift light on/off</td></tr>
             <tr><td>rpm_show_on_home_card</td><td>bool</td><td>true</td><td>OBDMenu RPM popup</td><td>HomeOBDView, OBDMenu</td><td>Show the shift light on the home RPM card</td></tr>
             <tr><td>rpm_max_rpm</td><td>int</td><td>8000</td><td>OBDMenu RPM popup</td><td>OBDMenu</td><td>Redline used by the shift-light stages</td></tr>
-            <tr><td>rpm_flags</td><td>str (JSON array)</td><td>"[]"</td><td>OBDMenu (<code>JSON.stringify(flags)</code>)</td><td>Main.qml, HomeOBDView</td><td>Shift-light stage thresholds and colours</td></tr>
+            <tr><td>rpm_flags</td><td>string (JSON array)</td><td>"[]"</td><td>OBDMenu (<code>JSON.stringify(flags)</code>)</td><td>Main.qml, HomeOBDView</td><td>Shift-light stage thresholds and colours</td></tr>
             <tr><td>rpm_fullscreen_flash_opacity</td><td>real</td><td>0.5</td><td>none (read only)</td><td>Main.qml, HomeOBDView</td><td>Opacity of the full-screen shift flash</td></tr>
             <tr><td>rpm_shift_light_size</td><td>real</td><td>0.5</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Shift-light size factor</td></tr>
             <tr><td>rpm_glow_size</td><td>real</td><td>0.6</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Glow radius factor</td></tr>
@@ -373,10 +370,10 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td>rpm_color_transition_speed</td><td>int</td><td>100</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Colour transition speed in ms</td></tr>
             <tr><td>rpm_pulse_enabled</td><td>bool</td><td>false</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Pulse the shift light at redline</td></tr>
             <tr><td>obdCardStyleCircular</td><td>bool</td><td>false</td><td>OBD page; OBD widget</td><td>OBDMenu, OBD widget</td><td>Circular gauges instead of cards on the OBD grid</td></tr>
-            <tr><td>lastOBDPage</td><td>str</td><td>""</td><td><code>OBDHome.pushSubpage()</code></td><td>BottomBar, OBDHome</td><td>OBD sub-page the nav button reopens</td></tr>
-            <tr><td>lastSensorPage</td><td>str</td><td>""</td><td>SensorHome (after a successful push); BottomBar clears it when the page fails to load</td><td>BottomBar, SensorHome</td><td>Sensor sub-page the nav button reopens</td></tr>
-            <tr><td>activeDashboard</td><td>str</td><td>"grid"</td><td>OBDMenu</td><td>OBDMenu</td><td>Dashboard ID shown in the OBD view (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>
-            <tr><td>dashboardEditorDraft</td><td>str (JSON)</td><td>""</td><td>DashboardEditor (saved on exit when there are unsaved changes; <code>_clearStoredDraft()</code> blanks it)</td><td>OBDMenu</td><td>Unsaved dashboard-editor state</td></tr>
+            <tr><td>lastOBDPage</td><td>string</td><td>""</td><td><code>OBDHome.pushSubpage()</code></td><td>BottomBar, OBDHome</td><td>OBD sub-page the nav button reopens</td></tr>
+            <tr><td>lastSensorPage</td><td>string</td><td>""</td><td>SensorHome (after a successful push); BottomBar clears it when the page fails to load</td><td>BottomBar, SensorHome</td><td>Sensor sub-page the nav button reopens</td></tr>
+            <tr><td>activeDashboard</td><td>string</td><td>"grid"</td><td>OBDMenu</td><td>OBDMenu</td><td>Dashboard ID shown in the OBD view (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>
+            <tr><td>dashboardEditorDraft</td><td>string (JSON)</td><td>""</td><td>DashboardEditor (saved on exit when there are unsaved changes; <code>_clearStoredDraft()</code> blanks it)</td><td>OBDMenu</td><td>Unsaved dashboard-editor state</td></tr>
           </tbody>
         </table>
         <p>The seven "read only" <code>rpm_*</code> keys have no writer in the current QML; they take effect only if added to the JSON by hand.</p>
@@ -394,30 +391,14 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- Persistence -->
         <h2 id="persistence">Persistence and File Format</h2>
-        <p>One JSON object, 4-space indented, containing the 96 default keys (nested dicts for <code>obdParameters</code>, <code>gestureMapping</code>, <code>customThemes</code>, <code>settingsMenuVisibility</code>, <code>expandedCards</code>) plus any QML-only keys. Writes are:</p>
+        <p>One JSON object, 4-space indented, containing the 96 default keys (nested objects for <code>obdParameters</code>, <code>gestureMapping</code>, <code>customThemes</code>, <code>settingsMenuVisibility</code>, <code>expandedCards</code>) plus any QML-only keys. Writes are:</p>
         <ol class="steps">
           <li>Validated once into the in-memory copy (types checked against the defaults; unknown keys kept)</li>
           <li>Coalesced behind a 500&nbsp;ms single-shot timer, flushed at quit</li>
-          <li>Written to a temp file in the same directory and fsynced (<code>tempfile.mkstemp</code> under an advisory lock in Python, <code>QSaveFile</code> in C++)</li>
+          <li>Written through <code>QSaveFile</code> to a temp file in the same directory, fsynced and renamed over the real file in one step by <code>QSaveFile::commit()</code>; on failure the existing file is left untouched</li>
           <li><code>chmod 600</code> on Unix</li>
-          <li>Replaced over the real file in one step (<code>os.replace</code> / <code>QSaveFile::commit()</code>); on failure the existing file is left untouched</li>
         </ol>
         <p>On load, a missing file is created from the defaults, a corrupt file is moved to <code>settingsConfigure.json.corrupt</code> and restored from the last known-good <code>settingsConfigure.json.bak</code> (defaults only if that fails too), and wrong-typed values are replaced individually. Keys of removed features (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are deleted from the file at startup, together with the old Spotify login token. Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
-
-        <!-- Parity -->
-        <h2 id="parity">C++ / Python Parity Check</h2>
-        <p>Result of comparing <code>buildDefaultSettings()</code> with <code>_default_settings</code> and both slot sets on 2026-10-13:</p>
-        <ul>
-          <li><strong>Keys:</strong> 96 in both; no key exists in only one backend.</li>
-          <li><strong>Default values:</strong> identical for every key, including all 123 parameter flags and the nine gesture bindings.</li>
-          <li><strong>Properties / signals:</strong> the same 79 properties and 83 signals. The shared callable methods also match, apart from the Python-only legacy flush alias. The shutdown flush is <code>flushPendingSave()</code> on both sides; Python keeps a <code>flush_pending_save()</code> alias for older callers.</li>
-        </ul>
-        <div class="info-box warning">
-          <div class="info-box-title">Differences that affect stored values</div>
-          <ul>
-            <li><code>mediaFolder</code> resolves an empty value to <code>QStandardPaths::MusicLocation</code> in C++ and to <code>~/Music</code> in Python. The effective paths can differ with the platform or user configuration; Python is desktop-only.</li>
-          </ul>
-        </div>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
