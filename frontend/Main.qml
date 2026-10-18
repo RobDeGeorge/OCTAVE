@@ -1298,6 +1298,34 @@ ApplicationWindow {
         }
     }
 
+    // ── App-wide error notice (frontend/ErrorToast.qml) ──────────────
+    // Only for errors the driver should hear about while on another page;
+    // the pages that already show them handle their own.
+    function _currentPageName() {
+        var item = stackView.currentItem
+        return item ? (item.objectName || "") : ""
+    }
+    function _pageShowsObdStatus() {
+        var item = stackView.currentItem
+        var name = _currentPageName()
+        return name === "obdMenu" || name === "obdHome" || name === "obdDiagnostics"
+            || (name === "settingsMenu" && item.currentSection === "obdSettings")
+    }
+    Connections {
+        target: typeof obdManager !== "undefined" ? obdManager : null
+        function onConnectionLostUnexpectedly(reason) {
+            if (!mainWindow._pageShowsObdStatus())
+                errorToast.show("OBD connection lost" + (reason ? ": " + reason : ""))
+        }
+    }
+    Connections {
+        target: typeof downloadManager !== "undefined" ? downloadManager : null
+        function onDownloadError(songId, displayName, errorMsg) {
+            if (mainWindow._currentPageName() !== "downloadPage")
+                errorToast.show("Download failed" + (displayName ? ": " + displayName : ""))
+        }
+    }
+
     // Reset flash visibility when flag changes
     onActiveShiftFlagChanged: {
         shiftLightFlashVisible = true
@@ -1307,4 +1335,9 @@ ApplicationWindow {
         }
     }
 
+    // Last child of the content item: draws over every page (popups still
+    // draw above it, which is fine for something this short-lived)
+    ErrorToast {
+        id: errorToast
+    }
 }

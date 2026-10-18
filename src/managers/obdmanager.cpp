@@ -1046,10 +1046,13 @@ void OBDManager::onWorkerFreezeFrame(const QStringList &codes)
 void OBDManager::onWorkerConnectionLost(const QString &reason)
 {
     qDebug() << "[OBD] Connection lost:" << reason;
+    const bool wasConnected = m_connected;
     m_connected = false;
     setVehicleSupport({}, false);
     emit connectionStatusChanged(QStringLiteral("Disconnected"));
     emit connectionStatusDetailChanged(reason);
+    if (wasConnected)
+        emit connectionLostUnexpectedly(reason);
     emit connectionProgressChanged(0);
     m_dataWatchdogTimer.stop();
     m_deviceScannerTimer.start();
@@ -2740,6 +2743,10 @@ void OBDManager::onAndroidBlePoll()
         setVehicleSupport({}, false);
         emit connectionStatusChanged(QStringLiteral("Disconnected"));
         emit connectionProgressChanged(0);
+        // A user disconnect clears m_connected in cleanupConnection() before
+        // the bridge reports DISCONNECTED, so wasConnected means a real drop
+        if (wasConnected)
+            emit connectionLostUnexpectedly(ev.isEmpty() ? QStringLiteral("Bluetooth link lost") : ev);
         if (wasConnected && m_androidReconnectAttempts < m_androidMaxReconnect) {
             ++m_androidReconnectAttempts;
             int delay = qMin(2000 * m_androidReconnectAttempts, 10000);

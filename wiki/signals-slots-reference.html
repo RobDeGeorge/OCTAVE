@@ -831,6 +831,7 @@
             <tr><td><code>elmVoltageChanged(float value)</code></td><td>ELM327 adapter supply voltage (V) from the adapter's own <code>ATRV</code> command (text reply such as <code>12.6V</code>); polled like a PID</td></tr>
             <tr><td><code>connectionStatusChanged(QString status)</code></td><td>Status text changed</td></tr>
             <tr><td><code>connectionStatusDetailChanged(QString detail)</code></td><td>Detailed status message</td></tr>
+            <tr><td><code>connectionLostUnexpectedly(QString reason)</code></td><td>A live link dropped on its own (not a user disconnect, port change, diagnostic-mode switch or shutdown); shown as the app-wide ErrorToast</td></tr>
             <tr><td><code>connectionProgressChanged(int progress)</code></td><td>Connection progress percent</td></tr>
             <tr><td><code>devicePresenceChanged(bool present)</code></td><td>Configured adapter detected / lost on the port scan</td></tr>
             <tr><td><code>availablePortsChanged(QVariantList ports)</code></td><td>Plain port-name list from the discovery sweep</td></tr>

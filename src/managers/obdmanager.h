@@ -175,6 +175,11 @@ signals:
     // Connection status signals
     // ======================================================================
     void connectionStatusChanged(const QString &status);
+    // A live link dropped on its own (adapter unplugged or out of range, port
+    // error, BLE drop). Not emitted for disconnect(), port changes,
+    // diagnostic-mode switches or shutdown, which tear the worker down first.
+    // Main.qml turns it into the "OBD connection lost" notice.
+    void connectionLostUnexpectedly(const QString &reason);
     void connectionStatusDetailChanged(const QString &detail);
     void connectionProgressChanged(int progress);
     void devicePresenceChanged(bool present);

@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Components</div>
           <h1 class="page-title">Components</h1>
-          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, SensorCard, GForceDisplay, HomeOBDView, OBDAdapterSheet, the OBDParameterModel singleton and the rigged Jeep TJ</p>
+          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, SensorCard, GForceDisplay, HomeOBDView, ErrorToast, OBDAdapterSheet, the OBDParameterModel singleton and the rigged Jeep TJ</p>
         </div>
 
         <nav class="toc">
@@ -30,6 +30,7 @@
             <li><a href="#gforce-display">GForceDisplay</a></li>
             <li><a href="#phone-qr-pairing-panel">PhoneQrPairingPanel</a></li>
             <li><a href="#home-obd-view">HomeOBDView</a></li>
+            <li><a href="#error-toast">ErrorToast</a></li>
             <li><a href="#obd-adapter-sheet">OBDAdapterSheet</a></li>
             <li><a href="#obd-parameter-model">OBDParameterModel</a></li>
             <li><a href="#jeep-rig">The Jeep TJ Rig</a></li>
@@ -54,6 +55,7 @@
             <tr><td><code>CornerBrackets</code></td><td><code>Item</code></td><td><code>TerminalFeedback</code>, <code>SettingsCard</code>, <code>SettingsTile</code>, <code>SettingsDashboardCard</code>, <code>SettingsHubCard</code>, <code>SettingsHubGridCard</code> (always hidden, see below)</td></tr>
             <tr><td><code>SensorCard</code>, <code>GForceDisplay</code></td><td><code>Rectangle</code></td><td><span class="file-path">SensorMenu.qml</span></td></tr>
             <tr><td><code>HomeOBDView</code></td><td><code>Item</code></td><td><span class="file-path">MainMenu.qml</span></td></tr>
+            <tr><td><code>ErrorToast</code></td><td><code>Item</code></td><td><span class="file-path">Main.qml</span> (once, last child of the window)</td></tr>
             <tr><td><code>OBDAdapterSheet</code></td><td><code>Popup</code></td><td><span class="file-path">OBDMenu.qml</span> (empty-state Connect button), <span class="file-path">settings/OBDSettingsPage.qml</span> (Adapters card)</td></tr>
             <tr><td><code>OBDParameterModel</code></td><td><code>QtObject</code> singleton</td><td>every OBD view, the gauges, the dashboard editor, Main.qml's IMU gating</td></tr>
             <tr><td><code>JeepVehicle</code>, <code>JeepHinge</code>, <code>JeepLamp</code>, <code>JeepLink</code></td><td>Quick3D <code>Node</code></td><td><span class="file-path">CarMenu.qml</span></td></tr>
@@ -318,6 +320,18 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
         </ul>
 
         <p>The window-wide full-screen and aura flashes for the same flags live in <span class="file-path">Main.qml</span> (see <a href="frontend-overview.html#shift-light">Shift Light Overlays</a>); the flags are edited in the RPM popup on <a href="pages.html#obdmenu">OBDMenu</a>.</p>
+
+        <!-- ErrorToast -->
+        <h2 id="error-toast">ErrorToast</h2>
+
+        <p><span class="file-path">frontend/ErrorToast.qml</span> (<code>objectName: "errorToast"</code>) is the one app-wide error notice, for the few errors the driver should hear about while on another page. <span class="file-path">Main.qml</span> instantiates it once as the window's last child (it draws over every page; popups draw above it). It sits top centre, since the bottom belongs to the BottomBar, in <code>Style.statusDanger</code> with bold white text, fades in and out (no slide), dismisses on a tap or after <code>durationMs</code> (8 s). <code>show(message)</code> shows a message or queues it; a message equal to the one showing, or to the last one queued, is dropped. <code>currentMessage</code> and <code>queuedCount</code> are read by <span class="file-path">tests/cpp/tst_errortoast.cpp</span> and the dev command server.</p>
+
+        <p>Wired in <span class="file-path">Main.qml</span>:</p>
+        <ul>
+          <li><code>obdManager.connectionLostUnexpectedly(reason)</code> &rarr; "OBD connection lost: &lt;reason&gt;", unless the current page already shows OBD status (OBDMenu, OBDHome, OBDDiagnostics, or Settings on the OBD section).</li>
+          <li><code>downloadManager.downloadError(songId, displayName, error)</code> &rarr; "Download failed: &lt;name&gt;", unless the Download page is current.</li>
+        </ul>
+        <p>Everything else stays on its own page and in the logs (no chime, one severity). Phone-mirror errors off-page are still open in <span class="file-path">TODO/error-notification-ui.md</span>.</p>
 
         <!-- OBDAdapterSheet -->
         <h2 id="obd-adapter-sheet">OBDAdapterSheet</h2>
