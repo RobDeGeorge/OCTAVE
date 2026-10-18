@@ -1,10 +1,12 @@
 # God Object Splits (Parked)
 
+**Goal:** break the three 2–3k-line managers (settings, media, OBD) into smaller helper files without changing any behaviour or the API QML sees.
+
 **Status:** Deferred. This is item #4 from the original cleanup punch list — a refactor, not a bug fix. Not urgent. Should ideally come AFTER `future-tests.md` lands enough safety nets to make the refactor safe.
 
 **Last updated:** 2026-10-18
 
-> This plan was first written against the Python backend (`backend/settings_manager.py`, `media_manager.py`, `obd_manager.py`). The Python backend has since been removed (last version on the `python-final` branch), so the plan now covers the C++ managers that replaced them.
+> **Re-verify line ranges before starting.** The line counts and `lines ~N–M` ranges below were checked on 2026-10-18; any later edit to these files shifts them. Re-run `wc -l` and grep for the function names before each extraction.
 
 ---
 
@@ -33,6 +35,8 @@ Three C++ manager files are well over 2000 lines and handle multiple distinct re
 
 ### 1. settingsmanager.cpp (do first)
 
+**Effort:** M–L (one session per one or two helpers)
+
 Clearest seams, lowest risk of breaking runtime behavior. `SettingsManager` is the only class QML references, so the public API stays identical — behind the facade, code just moves to helper files.
 
 **Proposed split:**
@@ -46,6 +50,8 @@ Clearest seams, lowest risk of breaking runtime behavior. `SettingsManager` is t
 
 ### 2. mediamanager.cpp (do second)
 
+**Effort:** L
+
 Medium risk. More state than `SettingsManager`. The mute toggle guard, playback-state debounce, recovery/skip logic and playlist transitions have subtle interactions that need care.
 
 **Proposed split:**
@@ -58,6 +64,8 @@ Medium risk. More state than `SettingsManager`. The mute toggle guard, playback-
 **Prerequisite:** the `VolumeController` dispatch test and a metadata sanitization test (both in `future-tests.md`) should go in BEFORE this split. They validate the two most fragile parts of this subsystem. `tests/cpp/tst_mediamanager.cpp` already covers missing-track skipping, shuffle reselection and zero-byte covers.
 
 ### 3. obdmanager.cpp (do last)
+
+**Effort:** L–XL (the Android BLE extraction can only be verified on the phone)
 
 Highest risk. Concurrent code with a worker thread, timers, queued invokes and the diagnostic-mode enter/exit handshake (`enter_diagnostic_mode`, `exit_diagnostic_mode`, `delayedReconnectAfterDiagnostic`). That is exactly the kind of subtle thing that breaks when code moves.
 

@@ -1,64 +1,30 @@
+# In-app import for the YouTube cookies file
+
 **Status:** deferred (post-v0.9)
 **Last updated:** 2026-10-18
 
-# In-app file picker for YouTube cookies
+**Goal:** Let users import, check, test and clear their YouTube cookies file from the app, instead of putting a file with an exact name in Downloads by hand.
 
-## Background
+## Where it stands
 
-As of 2026, YouTube's bot detection (`Sign in to confirm you're not a bot`) walls off most yt-dlp downloads on a fresh install. The reliable bypass is to pass a Netscape-format `cookies.txt` exported from a logged-in YouTube session via `yt-dlp --cookies <file>`.
+`DownloadManager` already passes `--cookies` to yt-dlp when `<DownloadLocation>/youtube_cookies.txt` exists (`_getYoutubeCookiesPath()`, `src/managers/downloadmanager.cpp:312`; used at `:924-937`). The instructions are in README.md (~line 239) and `wiki/download-manager.html#bot-wall`. What's missing is UI: the user has to know the exact filename and folder, gets no confirmation the file was found, and extensions export it as `cookies.txt` or `youtube.com_cookies.txt`, so it has to be renamed.
 
-v0.9 ships a **zero-UI auto-detection** of this file at a single canonical path:
+## Steps
 
-| Platform | Path |
-|----------|------|
-| Android  | `/storage/emulated/0/Download/youtube_cookies.txt` |
-| Linux    | `~/Downloads/youtube_cookies.txt` |
-| macOS    | `~/Downloads/youtube_cookies.txt` |
-| Windows  | `%USERPROFILE%/Downloads/youtube_cookies.txt` |
+1. **C++ (`src/managers/downloadmanager.{h,cpp}`):**
+   - `Q_INVOKABLE bool importCookiesFile(const QString &fileOrUrl)`. Copy the same pattern as `DashboardManager::importDashboard()` (`src/managers/dashboardmanager.cpp:496-511`): `QUrl::isLocalFile()` gives a local path, and anything else (Android `content://`) goes to `QFile` as-is, since Qt's Android file engine opens content URIs. Read it (size cap, e.g. 1 MB), check for a Netscape header or tab-separated lines with a `.youtube.com` domain, then write it to `_getYoutubeCookiesPath()`. Copy it rather than keeping a reference, because yt-dlp can't read a content URI.
+   - `Q_PROPERTY bool cookiesPresent` / `QDateTime cookiesModified` (file mtime), refreshed after import or clear.
+   - `Q_INVOKABLE void clearCookies()` (deletes the file).
+   - `Q_INVOKABLE void testCookies()` runs `yt-dlp --cookies <path> --simulate <known-walled-videoId>` on the existing yt-dlp process path, and emits `cookiesTestFinished(bool ok, QString message)`.
+2. **QML:** add a "YouTube cookies" section to the download UI. There is no download settings page today: either add a card to `frontend/settings/MediaSettingsPage.qml` or put it in `frontend/DownloadPage.qml`.
+   - Status row: "Cookies imported (updated <date>)" or "No YouTube cookies imported".
+   - "Import cookies file" opens a `QtQuick.Dialogs` `FileDialog`, exactly like the dashboard import in `frontend/OBDMenu.qml:189-194` (`onAccepted: downloadManager.importCookiesFile(selectedFile.toString())`, `nameFilters: ["Cookies (*.txt)", "All files (*)"]`). On Android this is the system picker, so no JNI or Java is needed.
+   - Buttons for Test (with a result line) and Clear.
+   - A "How to export cookies" help popup (the steps from the README).
+3. Wrap all of it in `#ifdef`/`OCTAVE_ENABLE_DOWNLOADS` like the rest of the downloads feature. App-store builds have no `downloadManager`.
+4. Add a QtTest in `tests/cpp/` for `importCookiesFile` (valid file, junk file, too big), using a temp download location.
+5. Wiki: `download-manager.html` (cookies section), `signals-slots-reference.html`.
 
-This is `QStandardPaths::DownloadLocation + "/youtube_cookies.txt"` — universal, user-accessible, no permissions needed beyond what's already granted for downloaded music.
+**Effort:** M (about 2–3 h). **Needs:** desktop for the main pass, plus the Galaxy S22 to confirm the Android picker's `content://` copy and that yt-dlp then uses the cookies.
 
-If the file is present, `DownloadManager` appends `--cookies <path>` to every yt-dlp invocation. If absent, downloads proceed without it (and most will hit the bot wall).
-
-User instructions for v0.9 (to be added to README):
-1. Install **Get cookies.txt LOCALLY** in any Chromium browser (Chrome / Brave / Kiwi on Android).
-2. Log into <https://youtube.com> in that browser.
-3. Click the extension → **Export → cookies.txt**.
-4. Save it as `youtube_cookies.txt` in the **Downloads** folder.
-5. Restart OCTAVE — downloads will use the cookies on every attempt.
-
-## Why a follow-up TODO
-
-The auto-detect approach gets us 100% of the *functional* value with zero new UI surface, but the UX has rough edges:
-
-- User has to know the exact filename (`youtube_cookies.txt`) and exact location.
-- No in-app confirmation that the file was found.
-- No visible status when the file is present-but-malformed (e.g. cookies expired).
-- Renaming the exported file is a manual step — extensions usually export it as `cookies.txt` or `youtube.com_cookies.txt`.
-
-## What "done" looks like
-
-A new section in `frontend/settings/DownloadSettingsPage.qml` (or wherever download settings live) with:
-
-1. **Status row** — shows `Cookies imported (Last refreshed: <date>)` in green when present, or `No YouTube cookies imported` in muted text when absent.
-2. **"Import cookies file" button** — opens an Android Storage Access Framework file picker (`ACTION_OPEN_DOCUMENT`, `application/octet-stream` or `*/*`). On Linux/macOS/Windows: native `QFileDialog`.
-3. On pick, the file is **copied** (not just referenced — Storage Access Framework URIs aren't readable to subprocesses) into the canonical path: `<DownloadLocation>/youtube_cookies.txt`. The current implementation auto-picks it up from there.
-4. **"Test cookies" button** — runs a quick `yt-dlp --cookies <path> --simulate <known-walled-videoId>` to confirm the cookies actually bypass the wall. Display result in a status line.
-5. **"Clear cookies" button** — deletes the file. Useful if cookies expired and the user wants to re-import.
-6. **"How to export cookies" link** — pops a help dialog with step-by-step extension instructions and a one-line Chromium extension store search hint.
-
-## Where the code lives
-
-- C++: `src/managers/downloadmanager.{h,cpp}` — `_getYoutubeCookiesPath()` already in place. Add `Q_INVOKABLE void importCookiesFile()` that triggers the SAF picker via JNI on Android, native `QFileDialog::getOpenFileName` elsewhere.
-- Android: `android/src/org/octave/app/OctaveMediaBridge.java` — add a static `pickCookiesFile(Activity)` helper using `QtAndroidPrivate::startActivity` with a result callback that copies the picked file to `<DownloadLocation>/youtube_cookies.txt`.
-- QML: `frontend/settings/DownloadSettingsPage.qml` (or equivalent) — UI section described above.
-
-## Cross-references
-
-- `TODO/android-cpp-port.md` — broad Android feature work; this fits in there.
-
-## Estimated effort
-
-~2-3 hours focused work (file picker JNI + QML UI + cookies validity check + help dialog).
-
-## Delete this file when done.
+Related: `TODO/android-cpp-port.md`. Delete this file when done.

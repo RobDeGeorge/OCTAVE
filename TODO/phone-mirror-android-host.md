@@ -1,5 +1,6 @@
 # Phone mirror with an Android tablet as the host
 
+**Goal:** let OCTAVE's Android build, running on a tablet in the dash, mirror a phone the way the Orange Pi does today.
 **Status:** deferred — scoped, no work started. Bigger than it looks: OCTAVE would need its own adb client.
 **Last updated:** 2026-10-18
 
@@ -7,12 +8,14 @@
 
 Running OCTAVE's Android build on a tablet and mirroring a phone onto it is a natural setup: a cheap tablet in the dash instead of a Pi. Today it can't work, for two independent reasons:
 
-1. **No decoder.** `CMakeLists.txt:84` only looks for FFmpeg under `if(NOT ANDROID)`, so the APK has no `OCTAVE_HAVE_FFMPEG`, and `ScrcpyClient::available()` is false.
-2. **No adb.** The client drives everything by running the `adb` binary through `QProcess`: `devices`, `push`, `forward`, `shell app_process`, `pair`, `connect` (`phonemirrormanager.cpp:44` onward, `findAdb()` at line 113). An Android app can't ship and run adb this way, and wouldn't have the host side's USB or pairing state if it did.
+1. **No decoder.** `CMakeLists.txt:87` only looks for FFmpeg under `if(NOT ANDROID)`, so the APK has no `OCTAVE_HAVE_FFMPEG`, and `ScrcpyClient::available()` is false.
+2. **No adb.** The client drives everything by running the `adb` binary through `QProcess`: `devices`, `push`, `forward`, `shell app_process`, `pair`, `connect` (`phonemirrormanager.cpp:42` onward, `findAdb()` at line 117). An Android app can't ship and run adb this way, and wouldn't have the host side's USB or pairing state if it did.
 
-Because of that, `phonemirrormanager` is a mobile stub (`phonemirrormanager.h:406-503`) and its `nativeAvailable` is false, which hides the bottom-bar button. Everything above the transport carries over unchanged: the scrcpy protocol client, the `phone_server/` jar, touch mapping, MirrorKeeper, media/queue messages and the QML view.
+Because of that, `phonemirrormanager` is a mobile stub (`phonemirrormanager.h:481` onward) and its `nativeAvailable` is false (`:545`), which hides the bottom-bar button. Everything above the transport carries over unchanged: the scrcpy protocol client, the `phone_server/` jar, touch mapping, MirrorKeeper, media/queue messages and the QML view.
 
-It's parked because the adb client is a protocol implementation in its own right, and the Jeep runs the Orange Pi, not a tablet.
+It's parked because the adb client is a protocol implementation in its own right, and the Jeep runs the Orange Pi 5 Plus, not a tablet.
+
+**Common prerequisite:** an extracted shared H.264 decoder class (pulled out of `src/phone_mirror/scrcpyclient.cpp:740` onward, where libavcodec decode and `pushFrame` (`scrcpyclient.h:169`) live today) is needed here, by `TODO/android-auto-native-receiver.md` and by `TODO/carlinkit-dongle-port.md`; whichever starts first extracts it.
 
 ## What has to be built
 
@@ -49,19 +52,21 @@ Wireless debugging needs the phone on Wi-Fi, and Android turns it off while the 
 
 ## Risks
 
-- Android keeps tightening wireless debugging: it turns off on network change and needs re-pairing after some updates. Auto-reconnect has to rediscover the connect port over mDNS every session. The desktop code already handles this (`phonemirrormanager.cpp:1281`); port that logic.
+- Android keeps tightening wireless debugging: it turns off on network change and needs re-pairing after some updates. Auto-reconnect has to rediscover the connect port over mDNS every session. The desktop code already handles this (mDNS lookup in `phonemirrormanager.cpp:1218-1274`, `adb connect` at `:1281`); port that logic.
 - Background limits: if the tablet app goes to the background, Android may kill the sockets. That's acceptable for a head unit running in the foreground, but say so.
 - Play Store policy on apps that act as adb hosts is unclear. Sideload first, as with the rest of the APK.
 
 ## Recommended order
 
-1. Done in 0.9.5: async adb (probe thread, `deviceStateChanged`), error messages and `nativeAvailable` gating. Write the Android client against that async API.
-2. **Spike (1–2 sessions)** on desktop Linux: built-in adb client over TCP, pairing + TLS + `shell:` + `sync:` + a `localabstract:` stream to a running phone server. This proves the protocol without Android packaging in the way.
-3. Introduce `AdbTransport` on desktop. Keep `QProcess` adb as the default, with the built-in client behind an env var, so the Pi can soak-test it.
-4. Android: NSD + pairing UI, MediaCodec decode, un-stub the manager. Test on the tablet and the S22 (never inject adb taps unless OCTAVE is the foreground app).
-5. USB host transport.
-6. Optional: make the built-in client the default on desktop too, which drops the bundled adb and the arm64 adb gap.
+Already done (0.9.5): async adb (probe thread, `deviceStateChanged`) and `nativeAvailable` gating; write the Android client against that async API.
 
-Update `wiki/phone-mirror-android-auto.html`, `wiki/hardware-setup.html` (tablet setup, hotspot) and `TODO/android-cpp-port.md`'s manager table (`phonemirrormanager` row) as phases land.
+1. **Shared decoder interface.** **Effort:** M. **Device:** none (desktop; regression-check on the Orange Pi + S22). Extract the libavcodec path from `scrcpyclient.cpp` behind a small interface so a MediaCodec backend can slot in.
+2. **Spike (1–2 sessions).** **Effort:** L. **Device:** desktop Linux + S22/S26 with Wireless debugging. Built-in adb client over TCP, pairing + TLS + `shell:` + `sync:` + a `localabstract:` stream to a running phone server. This proves the protocol without Android packaging in the way.
+3. **`AdbTransport` on desktop.** **Effort:** M. **Device:** Orange Pi 5 Plus + S22/S26 for a soak test. Keep `QProcess` adb as the default, with the built-in client behind an env var, so the Pi can soak-test it.
+4. **Android build.** **Effort:** L. **Device:** an Android tablet + S22/S26. NSD + pairing UI, MediaCodec decode, un-stub the manager. Test on the tablet and the S22 (never inject adb taps unless OCTAVE is the foreground app).
+5. **USB host transport.** **Effort:** L. **Device:** tablet + phone + USB-C OTG adapter.
+6. **Optional.** **Effort:** S–M. **Device:** Orange Pi 5 Plus. Make the built-in client the default on desktop too, which drops the bundled adb and the arm64 adb gap.
+
+Update `wiki/phone-mirror-android-auto.html`, `wiki/hardware-setup.html` (tablet setup, hotspot) and the "Hardware managers on Android" section of `TODO/android-cpp-port.md` (`phonemirrormanager`) as phases land.
 
 **Delete this file when** a phone mirrors onto the Android build over Wi-Fi, and USB has either shipped or moved to its own TODO.

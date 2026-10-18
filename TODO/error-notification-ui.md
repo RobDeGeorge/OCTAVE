@@ -1,112 +1,60 @@
 # Error Notification UI (Parked)
 
-**Status:** Deferred. OCTAVE currently routes all errors to logs + terminal output only, by design. This document captures the plan for adding an in-app notification layer later, if and when that decision changes.
+**Goal:** one small app-wide notice that tells the driver when the OBD link drops mid-drive (and, later, when phone mirror or a download fails) while they're on a different page.
 
-**Last updated:** 2026-10-10
+**Status:** deferred. Errors go to the logs plus per-page notices by design (car UX: nothing chatty in the driver's peripheral vision). This is the plan for the one gap those don't cover.
 
----
-
-## Why this was deferred
-
-Car infotainment UX is not desktop UX. Anything that flickers into the driver's peripheral vision while they're driving is a distraction risk, and most automotive HMI guidelines discourage chatty notifications. Routing errors to logs keeps the UI clean and puts the errors where the person who actually needs to see them (the developer debugging after the fact) will look for them. Tesla, Toyota, and Ford all do essentially this.
-
-The backend is already set up to support an in-app layer later without any further backend work — see "What's already done" below.
+**Last updated:** 2026-10-18
 
 ---
 
-## Terminology refresher: toast vs modal
+## What already exists (don't rebuild)
 
-- **Toast** — small transient notification that appears, auto-dismisses after a few seconds, non-blocking. Named after Android's `Toast` class (pops up like toast from a toaster). Material Design calls these "Snackbars"; iOS calls them "banners." Used for FYI messages.
-- **Modal** — popup with an explicit "OK" / "Cancel" that blocks the UI until acknowledged. Used only when the user MUST decide something right now.
+| Error | Where the user sees it today |
+|---|---|
+| Phone mirror error / dropped link | `PhoneMirrorView.qml`: dismissable notice banner (`phoneMirrorManager.mirrorNotice`, `dismissNotice()`), and on a dropped link it holds the last frame and reconnects quietly (`onScrcpyError`) |
+| Download failed | `DownloadPage.qml` `onDownloadError`: status text + queue row |
+| Dashboard editor / share errors | `DashboardEditor.qml` `errorBanner`, `OBDMenu.qml` `shareStatusBanner` |
+| Update available | Pulsing dot on the Settings About card (`SettingsMenu.qml` `updateAvailable`, `AboutPage.qml`) |
+| "What went wrong earlier?" | Settings > About > Diagnostics: recent log lines, copy, export (`DiagnosticsManager`) |
+| OBD status | `OBDHome.qml`, `OBDSettingsPage.qml`, `OBDMenu.qml`: only visible on those pages |
 
-For car UX, both should be used sparingly. Modals almost never. Toasts only for driver-actionable errors, not chatty info.
+**The gap:** if the OBD adapter drops while you're on the media player or the home screen, nothing tells you. Same for a mirror or download failure when you're not on that page.
 
----
+## Plan
 
-## The recommended approach (if we ever do this)
+### 1. `frontend/ErrorToast.qml` component
 
-Do NOT wire every `errorOccurred` signal from every manager to a toast. That's the desktop-style "show everything" pattern and it's wrong for a car.
+**Effort:** S–M
 
-Instead, curate a short list of driver-actionable errors — things the driver can and should respond to while seated in the car — and only wire those. Everything else stays in logs.
+1. Top-centre rectangle (the bottom belongs to `BottomBar.qml`), fade in/out only (no slide-in), auto-dismiss (~5 s; ~8 s for errors the driver should act on).
+2. API `show(message, severity)`; an internal queue, consecutive-duplicate dedupe, tap to dismiss.
+3. Style from `Style.qml` / `Spacing.qml` tokens, text ~1.5× normal size via `dp()`.
+4. Instantiate once in `Main.qml` as the last child of the root, so it paints over everything; give it an `objectName` so the dev command server / tests can find it.
+5. Add a `tests/fixtures/ErrorToastSmoke.qml` for `tst_qmlfixtures` (show, dedupe, auto-dismiss).
 
-### Curated driver-actionable error list
+### 2. OBD lost mid-drive (the first and most important wiring)
 
-Target: ~4–6 errors total. Initial list:
+**Effort:** S–M
 
-1. **OBD adapter disconnected mid-trip** — driver might want to know their vehicle diagnostics just went offline
-2. **Phone mirror disconnected unexpectedly** — driver may want to reconnect
-3. **Download failed** (only if the user just initiated one — not background retries)
-4. **Update available** — informational, but driver-relevant
+Signals: `obdManager.connectionStatusChanged(status)` with the reason in `obdManager.connectionDetail` (`src/managers/obdmanager.h:44,47,177`); the worker's `connectionLost(reason)` reaches the manager as `onWorkerConnectionLost`, which emits `"Disconnected"` plus the reason (`obdmanager.cpp:~1051`).
 
-Everything else — the ~100 `logger.error(...)` call sites we added in Phase 2 — stays logs-only.
+1. In a `Connections { target: obdManager }` block in `Main.qml`, show the toast when the status goes from `"Connected"` to `"Disconnected"`.
+2. Only on an *unexpected* loss: skip user-initiated disconnects, diagnostic-mode enter/exit and app shutdown. If QML can't tell these apart, add a C++ signal such as `connectionLostUnexpectedly(reason)` to `OBDManager` emitted from `onWorkerConnectionLost`.
+3. Skip it when the current page already shows OBD status (`stackView.currentItem.objectName` is `"obdMenu"` or the OBD settings page).
+4. Check with `./build/octave --dev --profile`: on the media page, unplug the simulated adapter with the `sim_link` command (`{"up": false}`) or `sim_dropout_now` (`src/dev/devruntime.cpp:204-206`).
 
----
+### 3. Phone mirror and download failures off-page
 
-## Implementation sketch
+**Effort:** S
 
-### New QML components
+1. `phoneMirrorManager.scrcpyError(message)`: toast only when `PhoneMirrorView` isn't the current page, and only for unexpected disconnects (reuse the view's `deviceErrorPattern` filtering, not every error).
+2. `downloadManager.downloadError(songId, displayName, errorMsg)`: toast only when `DownloadPage` isn't current and the download was user-started.
 
-1. **`frontend/ErrorToast.qml`** — top-anchored rectangle, auto-dismiss timer, severity levels (`"error"` / `"warning"` / `"info"`), internal message queue, consecutive-duplicate dedupe. API: `function show(message, severity)`.
+## Open decisions
 
-   Style it to match `Style.qml` / `Spacing.qml` tokens so it picks up theme colors automatically. Size text larger than typical desktop toasts (automotive readability rule of thumb: ~1.5× desktop).
+1. **Audible chime** for the OBD-lost toast: yes/no, and how to avoid clashing with music.
+2. **Severity tiers:** probably just one (error) to start.
+3. **Top-centre vs top-right** placement on the 1280x800 Pi screen.
 
-2. **`frontend/LoadingOverlay.qml`** (optional — not strictly part of error UI but pairs naturally) — semi-transparent full-screen overlay with `BusyIndicator` + optional status label. `show(text)` / `hide()` slots. Only useful for operations where you want to block the view (OBD diagnostic mode entry, library scan).
-
-### Wiring
-
-Instantiate both components **once** in `Main.qml` as the last children of the root item, so they paint on top of everything. Connect the curated list via `Connections` blocks in the same file:
-
-```qml
-Connections {
-    target: phoneMirrorManager
-    function onScrcpyError(msg) {
-        // Filter to unexpected disconnects only, skip the noisy ones
-        errorToast.show(msg, "error")
-    }
-}
-```
-
-This is the "global error bus" approach — all wiring in one place in `Main.qml`, easy to audit, easy to reason about. Alternative is per-view `Connections`, which fragments the wiring across the codebase.
-
-### Automotive UX decisions
-
-- **Position:** top-center, not bottom. The bottom has `BottomBar.qml` with persistent volume/navigation controls and we don't want errors fighting with those.
-- **Duration:** ~5 seconds default, longer for errors that need driver action (~8s).
-- **Font size:** 1.5× typical desktop toast (use `App.Spacing.dp()` so it scales with screen).
-- **Audible cue:** consider a subtle chime for high-severity errors. Most car software does this.
-- **Do NOT** animate slide-in from the side — it's a known distraction. Fade in/out only.
-
----
-
-## What's already done (Phase 2 legacy)
-
-The backend side is already wired up. Every silent-failure fix from Phase 2 emits through an `errorOccurred` signal on the relevant manager, with rate-limiting where appropriate. These signals currently fire into the void (nothing listens), but the plumbing exists:
-
-| Manager | Signal | Notes |
-|---|---|---|
-| `obd_manager` | `connectionError(str)` | Already fires on connection failures. |
-| `download_manager` | `downloadError(song_id, name, msg)` | Per-download; needs the song name to be useful in a toast. |
-| `phone_mirror.manager` | `scrcpyError(str)` | Fires on scrcpy start/stop failures. |
-| `android_auto.manager` | `error(str)` | Fires on DHU process errors. |
-| `network_manager` | `updateStatusChanged(str)` | Not strictly an error — but used for update notifications. |
-
-To enable the full toast UI, no backend changes needed. Just build the two QML components and wire the `Connections` blocks in `Main.qml`.
-
----
-
-## Open decisions (for whenever this resumes)
-
-1. **Full curated list or smaller subset?** Start with 2–3 errors (OBD disconnect + phone mirror disconnect + download failed) and expand based on user feedback?
-2. **Toast position:** top-center vs top-right? Top-center is more noticeable but covers more screen real estate.
-3. **Persistent error indicator:** should there be a small badge somewhere (e.g. on `BottomBar`) that shows "there are recent errors in the log" so the driver can check later without interrupting driving?
-4. **Audible chime:** yes/no? If yes, how to avoid it conflicting with music playback?
-5. **Severity levels:** do we need three tiers (info/warning/error) or just one (error)?
-6. **Dismiss gesture:** auto-dismiss only, or allow swipe-to-dismiss? Swipe adds complexity but gives driver control.
-
----
-
-## Why not just rip out the `errorOccurred` emissions since nothing listens?
-
-They cost nothing. Qt signals with no connected slots compile to a check "any listeners?" → no → return. No allocation, no queue, no CPU. Meanwhile they preserve optionality: if we ever want in-app notifications, we don't have to go back through every error path in the backend and re-thread signal emission.
-
-The "dead code is dead code" principle applies when dead code costs maintenance, confusion, or test burden. These emissions cost zero on all three fronts, and the intent is obvious (there's a `logger.error(...)` right above every emission). Leave them.
+Delete this file when the toast and steps 2–3 have landed.

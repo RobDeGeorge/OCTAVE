@@ -1,56 +1,23 @@
 # Consolidate the duplicated dp() / dpMin() QML helper
 
-**Status:** deferred — blocked on an Android on-device verification
-**Last updated:** 2026-05-24
+**Status:** deferred (blocked only on a ~10-minute Android check)
+**Last updated:** 2026-10-18
+
+**Goal:** Replace the 63 private copies of `dp()` / `dpMin()` in QML files with the single shared one in `Spacing.qml`.
 
 ## Why it's parked
 
-**59 QML files** each define a private copy of:
+63 QML files under `frontend/` define their own `function dp(size)` / `dpMin(size, floor)` (43 of them carry the comment "work around Qt Android singleton-function bug"). The `pragma Singleton` `frontend/Spacing.qml` already has both (`:165-171`). The copies exist only to dodge an old Qt bug where JS functions on a QML singleton returned undefined on Android. If that bug still bit, removing them would break scaling on every Android screen.
 
-```qml
-// Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
-function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
-function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
-```
+The bug looks fixed: 17 files already call `App.Spacing.dp(...)` directly, including in bindings evaluated at component init. They have shipped in every APK since Android started working (0.9.3): all gauges in `frontend/gauges/`, `dashboards/DashboardRenderer.qml`, `dashboards/widgets/{NowPlaying,MediaControls}Widget.qml`, and `settings/widgets/{About,Device,OBD}Widget.qml`, `WidgetPill.qml`, `WidgetChip.qml`.
 
-…instead of calling the canonical helper. `frontend/Spacing.qml` (a
-`pragma Singleton`) **already exposes** `dp()` and `dpMin()` (L165–170), so the
-duplication exists purely to dodge a historical **Qt bug where JS functions on a
-QML singleton failed/returned undefined on Android**.
+## Steps
 
-It's a real maintainability win to collapse 59 copies into one call site — but the
-bug is **Android-specific and can't be verified from a desktop checkout**, and OCTAVE
-ships an Android APK. If the bug still bites and we consolidate, **every screen's
-pixel scaling breaks on Android**. So this must not be done blind.
+1. **Check (about 10 min, Galaxy S22):** install the current APK and open an OBD dashboard (CircularGauge / LinearGauge) and the Settings widgets page. Confirm the gauges, text and pills are scaled, not tiny or zero-sized. If they look right, the blocker is cleared.
+2. List the files: `rg -l "function dp\((size|s)\)" frontend` (63).
+3. Remove each local `dp()` / `dpMin()` and change the calls to `App.Spacing.dp(x)` / `App.Spacing.dpMin(x, f)`. Check that each file imports the `App` qualifier, and add `import "." as App` (or the right relative path) where it's missing.
+4. Run `qmllint` (the CI pass), then a desktop smoke pass (`./build/octave --dev` and the screenshot tooling over every page) and an Android smoke pass on the S22.
 
-## Evidence the bug may already be fixed (Qt 6.7.3)
+**Effort:** M (mechanical, 63 files). **Needs:** the Galaxy S22 for steps 1 and 4.
 
-`frontend/gauges/LinearGauge.qml` already calls `App.Spacing.dp(...)` directly
-(many times) rather than using a local copy — and ships. If LinearGauge scales
-correctly on an Android device, that's strong evidence the singleton-function bug
-is fixed in the Qt version OCTAVE builds against.
-
-## Verification prerequisite (do this first)
-
-1. Build + install the Android APK on a real device.
-2. Open a screen that calls `App.Spacing.dp()` directly — the OBD dashboard
-   renders `LinearGauge`, which already does. Confirm gauges/text scale correctly.
-3. Pay special attention to function calls inside **property bindings evaluated at
-   component init** (the classic trigger for the old bug), not just post-load calls.
-
-If scaling is correct → the bug is fixed → safe to consolidate.
-
-## Work (once verified)
-
-- Identify the files: `rg -l "work around Qt Android singleton-function bug|function dp\(s\)|function dp\(size\)" frontend` (~59).
-- Remove each local `dp()` / `dpMin()` definition.
-- Replace local `dp(x)` / `dpMin(x,f)` calls with `App.Spacing.dp(x)` / `App.Spacing.dpMin(x,f)`
-  (or add a terse module-level alias if the verbosity is unwanted).
-- Re-run `qmllint` and do a desktop + Android smoke pass.
-
-## Cross-references
-
-- Same 2026-05-24 cohesion pass as the (since finished) wiki purge of the removed Python-on-Android docs; the settings-icon conversion from that pass shipped 2026-08-08.
-- Touches the same god-files as `TODO/god-object-splits.md`; either can go first.
-
-Delete this file when all local copies are gone.
+Touches the same large files as `TODO/god-object-splits.md`; either can go first. Delete this file when all local copies are gone.

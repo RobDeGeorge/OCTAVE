@@ -1,6 +1,8 @@
 # Run the backend as a headless service so any frontend can connect
 
-**Status:** deferred: an idea scoped on 2026-10-17, after v1.0. No work started. (The Python backend it once waited on was removed on 2026-10-18.)
+**Goal:** run the C++ managers in a headless core process that the QML UI (or any other frontend) connects to, so a UI crash never stops music, OBD or the volume knob.
+
+**Status:** deferred until after v1.0. Only the starting point exists (the dev command server).
 **Last updated:** 2026-10-18
 
 ## What it is
@@ -18,8 +20,7 @@ Today OCTAVE is one process. The C++ managers (`src/managers/`) are registered a
 
 ## Why it's parked
 
-- **v1.0 comes first.** Splitting the process is a big structural change. (It no longer has to be done twice: the Python backend was removed on 2026-10-18, so only the C++ managers move.)
-- **Starting point:** the C++ command server exists since 2026-10-18 (`src/dev/commandserver.cpp`, JSON lines on `localhost:9876`, `--profile` only, compiled in with `OCTAVE_DEV_TOOLS`). Grow the service API from it rather than starting over; it would need to leave the dev-only build option first.
+- **v1.0 comes first.** Splitting the process is a big structural change.
 - The car needs road time on v1.0 before the process model changes under it.
 
 ## Design decisions to make
@@ -61,22 +62,24 @@ On the Pi, run the core as a systemd user unit (or under Hyprland's exec-once, s
 
 Some logic that acts like backend code lives in QML today. A second frontend would have to reimplement it, so move the **data** parts into the core first and leave only presentation in QML:
 
-- `frontend/OBDParameterModel.qml` (476 lines): per-PID metadata (title, unit, min, max, `kind`) and the vehicle support gate. Move it to a core-side model and expose it as data.
+- `frontend/OBDParameterModel.qml` (489 lines): per-PID metadata (title, unit, min, max, `kind`) and the vehicle support gate. Move it to a core-side model and expose it as data.
 - `frontend/dashboards/WidgetCatalog.qml` (257 lines): widget types, default spans, `supportedKinds`, `editableProps`. Make it a data file both the core and the clients read (the validation logic belongs in `DashboardManager`).
 - `frontend/dashboards/DashboardRenderer.qml` (231 lines): spec → grid rendering. Rendering stays per-frontend, but the core should hand out **validated** specs, so each client doesn't re-implement the "bad cells are skipped" rules.
-- `frontend/EnvironmentTheme.qml` (105 lines): album-art colour extraction. Compute the palette in the core and publish it as a property.
 - Volume and navigation glue in `BottomBar.qml` and the page files: audit them for state that should belong to the core.
+
+Album colours are already computed in C++ (`MediaManager::_extract_album_colors`, `albumColorsExtracted`), and `EnvironmentTheme.qml` is now fixed style tokens, so neither needs to move.
 
 Update `docs/GAUGE_AUTHORING.md` when the PID metadata and catalog move.
 
 ## Recommended order of operations
 
-1. (Prerequisite, done 2026-10-18) the C++ command server (`src/dev/commandserver.cpp`); grow it into the service API.
-2. Move the data logic out of QML (the list above). This helps even with a single process.
-3. Refactor `src/main.cpp` so the managers live in a core library, with an in-process transport for mobile.
-4. Split the process on desktop/Pi with QtRO for the QML UI. Keep video decode in the UI. Road-test in the Jeep.
-5. Add the WebSocket/JSON gateway. Build a first small non-QML client (an OBD gauges web page or a media remote) to prove the API.
-6. Fold the companion app's data link (`TODO/octave-companion-app.md`) onto the same gateway.
-7. Update the wiki (`architecture.html`, `signals-slots-reference.html`, `development.html`, `building.html`) and `CLAUDE.md`.
+Done: the C++ command server (`src/dev/commandserver.cpp`, JSON lines on `localhost:9876`, `--profile` only, behind `OCTAVE_DEV_TOOLS`) is the seed of the service API; it has to leave the dev-only build option first.
 
-Delete this file when step 5 lands and the remaining steps have their own plans.
+1. Move the data logic out of QML (the list above): `OBDParameterModel` and `WidgetCatalog` become core-side data, `DashboardManager` validates loaded specs (today it only sanitizes imports, `sanitizeImportedSpec`). Helps even with a single process. **Effort:** M–L
+2. Refactor `src/main.cpp` so the managers live in a core library, with an in-process transport for mobile. **Effort:** L
+3. Split the process on desktop/Pi with QtRO for the QML UI. Keep video decode in the UI. Road-test in the Jeep. **Effort:** XL
+4. Add the WebSocket/JSON gateway, grown from the command-server protocol. Build a first small non-QML client (an OBD gauges web page or a media remote) to prove the API. **Effort:** L
+5. Fold the companion app's data link (`TODO/octave-companion-app.md`) onto the same gateway. **Effort:** M
+6. Update the wiki (`architecture.html`, `signals-slots-reference.html`, `development.html`, `building.html`) and `CLAUDE.md`. **Effort:** S
+
+Delete this file when step 4 lands and the remaining steps have their own plans.

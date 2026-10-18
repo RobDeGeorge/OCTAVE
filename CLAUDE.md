@@ -86,7 +86,7 @@ QML files using Qt Quick 2.15. Entry point is `Main.qml`.
 
 - Top-level QML files are full views/pages (e.g., `MediaPlayer.qml`, `CarMenu.qml`, `OBDMenu.qml`)
 - `BottomBar.qml` — Persistent navigation and volume control
-- `EnvironmentTheme.qml` — Dynamic theming system (colors adapt to album art)
+- `EnvironmentTheme.qml` — fixed style tokens; album-art colours are computed in C++ (`MediaManager`) and applied by `Style.qml`
 - `Style.qml` / `Spacing.qml` — Design tokens
 - `settings/` — Settings pages and reusable settings UI components (cards, toggles, sliders, etc.)
 
@@ -181,7 +181,7 @@ Entry point: the square "Dashboards" button at the top-right of `OBDMenu.qml` op
 
 ## TODO folder
 
-The `TODO/` directory at the repo root holds standalone plans for work that has been **intentionally deferred** — things we know we want to do eventually but aren't committing to right now. Each plan is a single markdown file that can be picked up cold by a future session (yours, mine, or a collaborator's) without needing conversation history.
+The `TODO/` directory at the repo root (indexed, easiest to hardest, in `TODO/README.md`) holds standalone plans for work that has been **intentionally deferred** — things we know we want to do eventually but aren't committing to right now. Each plan is a single markdown file that can be picked up cold by a future session (yours, mine, or a collaborator's) without needing conversation history.
 
 **What belongs in `TODO/`:**
 - Refactors that are risky, scoped, and require setup before they're safe to do (e.g. splitting oversized manager files)
@@ -203,4 +203,4 @@ The `TODO/` directory at the repo root holds standalone plans for work that has 
 - Call out prerequisites and dependencies between TODO items (e.g. "don't split `obd_manager.py` until the ELM327 test suite exists")
 - End with a recommended order of operations and a "delete this file when done" reminder
 
-**When the user parks something:** offer to write it up as a TODO file. When you write a TODO file, mention any cross-references to other TODO items so the folder stays internally consistent. When a TODO item is completed, **delete the file** — stale TODOs rot faster than stale code.
+**When the user parks something:** offer to write it up as a TODO file. When you write a TODO file, mention any cross-references to other TODO items so the folder stays internally consistent. New and trimmed files open with a one-sentence **Goal:** and give each step an **Effort:** (S/M/L/XL) and the device it needs; add a row to `TODO/README.md`. When a TODO item is completed, **delete the file** (and its README row) — stale TODOs rot faster than stale code.

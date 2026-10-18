@@ -1,82 +1,52 @@
 # OBD adapter discovery: scan, pair, trust, connect on every platform
 
-**Status:** active. Phase 1 (desktop Linux / Pi) is done; phases 2–4 are deferred.
+**Goal:** anyone can plug in a Bluetooth OBD-II dongle, tap "Connect Bluetooth OBD2", pick it from a list and have OCTAVE pair and connect, on every platform, without touching OS Bluetooth settings or typing a MAC.
+**Status:** active. Desktop Linux / Pi code is done but not yet proven in the car; Android, Windows/macOS and BLE-on-desktop are not started.
 **Last updated:** 2026-10-18
 
-## Why
+Done (desktop Linux, `78558d9`, `da94533`): `OBDAdapterFinder` (`src/managers/obdadapterfinder.{h,cpp}`, QML `obdAdapterFinder`), `BluezPairer` / PIN agent (`src/platform/bluezpairer.{h,cpp}`, `OCTAVE_BLUEZ` only), `frontend/OBDAdapterSheet.qml`, `tests/cpp/tst_obdadapterfinder.cpp`. On success it saves an `rfcomm://MAC/channel` adapter (`RfcommSocket`). The sheet is platform-agnostic; on unsupported platforms it lists `obdManager.availableAdapters`.
 
-Connecting an OBD-II adapter used to mean knowing its MAC and pairing it in the OS first (`bluetoothctl`, Android
-Settings, Windows "Add a device", then typing the MAC or COM port into Settings → OBD). The goal is for anyone to
-plug in a dongle, tap "Connect Bluetooth OBD2", pick it from a list, and have OCTAVE do the rest.
+## 1. Verify desktop Linux in the Jeep (do first)
 
-## What phase 1 shipped (desktop Linux, incl. Raspberry Pi / Orange Pi)
+The scan has found the NEXAS (Classic + LE) on the dev machine, but scan → pair → trust → connect through the sheet has never been run against a real adapter.
 
-- `OBDAdapterFinder` — `src/managers/obdadapterfinder.{h,cpp}`, QML
-  `obdAdapterFinder`. API: `supported`, `bluetoothOn`, `scanning`, `devices`, `busyAddress`, `status`,
-  `statusIsError`; `startScan()`, `stopScan()`, `connectAdapter(address)`, `cancel()`, `powerOn()`.
-- `BluezPairer` + `BluezPinAgent` — `src/platform/bluezpairer.{h,cpp}` (compiled only when `OCTAVE_BLUEZ`, i.e.
-  Linux and not Android; links Qt6::DBus). Registers its
-  own `org.bluez.Agent1`, answers PINs 1234 / 0000 / 6789 / 1111, sets `Trusted`. When pairing fails but the
-  adapter answered, it still trusts it and tries to connect (the NEXAS accepts RFCOMM from a trusted host).
-- SDP lookup for the SPP channel (fallback 1), then `OBDManager::connect_direct(mac, channel)`.
-- `frontend/OBDAdapterSheet.qml` — opened from `obdConnectButton` on the empty OBD page and from Settings → OBD →
-  Adapters ("Find Bluetooth Adapters"). When `supported` is false it lists `obdManager.availableAdapters`.
-- Tests: `tests/cpp/tst_obdadapterfinder.cpp`. Wiki: `obd-manager.html#adapter-finder`,
-  `signals-slots-reference.html#obdAdapterFinder`, `components.html#obd-adapter-sheet`.
+1. On the Orange Pi, remove the NEXAS from BlueZ (`bluetoothctl remove <MAC>`) so the test starts from scratch.
+2. Settings → OBD → Adapters → "Find Bluetooth Adapters", pick the NEXAS, connect.
+3. Watch `octave-cpp.log` for the `[OBD-BT]` lines: PIN answer (or the "pair failed, trusting anyway" path), `Trusted`, SDP channel, `connect_direct`. Confirm live PIDs and that the saved `rfcomm://` adapter reconnects after a restart.
+4. Fix whatever breaks.
 
-**Still unverified in the car:** the scan was tested on the dev machine (it finds the Jeep's NEXAS23082749 at
-88:1B:99:66:DD:5F as Classic + LE), but the pair → trust → connect path hasn't been run against a real adapter
-yet. Do that on the Orange Pi before calling phase 1 done. Watch the `[OBD-BT]` lines in the log.
+**Effort:** S (M if it breaks). **Needs:** Orange Pi 5 Plus in the Jeep + NEXAS adapter, engine on.
 
-## Phase 2 — Android
+## 2. Android: Classic SPP dongles and in-app scan/pair
 
-Today Android lists only already-bonded devices (`OctaveOBDBridge.bondedDevices`,
-`OBDManager::listAndroidPairedDevices()` at `src/managers/obdmanager.cpp:2577`) and connects **only over BLE GATT**
-(`OctaveOBDBridge.connect`). Classic SPP dongles (the cheap blue "OBDII" v1.5/v2.1 clones, OBDLink LX/MX+, BAFX,
-Veepeak Mini) cannot connect on Android at all.
+Today Android lists only already-bonded devices (`OctaveOBDBridge.bondedDevices`, `android/src/org/octave/app/OctaveOBDBridge.java:225`; `OBDManager::listAndroidPairedDevices()`, `src/managers/obdmanager.cpp:2572`) and connects only over BLE GATT. Classic SPP dongles (cheap "OBDII" v1.5/v2.1 clones, OBDLink LX/MX+, BAFX, Veepeak Mini) can't connect at all.
 
-1. **Discovery in Java**, not `QBluetoothDeviceDiscoveryAgent` (it has crashed with NullPointerException on
-   Android, see the comment at `obdmanager.cpp:525`): `BluetoothAdapter.startDiscovery()` with an
-   `ACTION_FOUND` receiver for Classic, plus `BluetoothLeScanner.startScan()` for BLE. Queue results like
-   `pollLog()` and drain them from C++ on a timer. Needs `BLUETOOTH_SCAN` (already in the manifest,
-   `neverForLocation`) requested at runtime alongside `BLUETOOTH_CONNECT`.
-2. **Pairing**: `device.createBond()`; register for `ACTION_PAIRING_REQUEST`, call `device.setPin("1234")` and
-   `abortBroadcast()` (it's an ordered broadcast); fall back to 0000. The system dialog may still show on some
-   OEM skins — accept that.
-3. **Classic SPP transport**: new path in the bridge,
-   `device.createRfcommSocketToServiceRecord(SPP_UUID 00001101-0000-1000-8000-00805F9B34FB)` with the
-   `createInsecureRfcommSocketToServiceRecord` / reflection `createRfcommSocket(1)` fallbacks the ELM327 apps
-   use. Feed bytes into the same `pendingResponses` queue the BLE path uses so `processAndroidResponse()` is
-   unchanged. `OBDManager::startAndroidConnection()` picks BLE vs Classic from what the scan saw.
-4. Flip `OBDAdapterFinder::supported()` to true under `Q_OS_ANDROID` and implement the scan/pair calls through
-   JNI. Keep the QML untouched — the sheet is already platform-agnostic.
-5. Test on the Galaxy S22 (see the Android phone loop memory / `BUILD.md`).
+1. **Discovery in Java**, not `QBluetoothDeviceDiscoveryAgent` (it has crashed with NullPointerException on Android, see `obdmanager.cpp:528`): `BluetoothAdapter.startDiscovery()` with an `ACTION_FOUND` receiver for Classic, plus `BluetoothLeScanner.startScan()` for BLE. Queue results like `pollLog()` and drain them from C++ on a timer. Needs `BLUETOOTH_SCAN` (already in the manifest, `neverForLocation`) at runtime alongside `BLUETOOTH_CONNECT`.
+2. **Pairing:** `device.createBond()`; register for `ACTION_PAIRING_REQUEST`, call `device.setPin("1234")` and `abortBroadcast()` (ordered broadcast); fall back to 0000. Some OEM skins still show the system dialog; accept that.
+3. **Classic SPP transport** in the bridge: `createRfcommSocketToServiceRecord(00001101-0000-1000-8000-00805F9B34FB)`, with `createInsecureRfcommSocketToServiceRecord` and reflection `createRfcommSocket(1)` fallbacks. Feed bytes into the same `pendingResponses` queue as BLE so `processAndroidResponse()` is unchanged. `OBDManager::startAndroidConnection()` picks BLE vs Classic from the scan result.
+4. Make `OBDAdapterFinder::supported()` (`obdadapterfinder.cpp:136`) true under `Q_OS_ANDROID` and route scan/pair through JNI. Leave the QML alone.
 
-## Phase 3 — Windows and macOS
+**Effort:** L. **Needs:** Galaxy S22 + a Classic SPP dongle (the NEXAS works as one) and a BLE dongle for regression.
 
-Both can use Qt Bluetooth for discovery and `QBluetoothSocket` (RFCOMM) for Classic connections, which removes the
-need for a COM port / `/dev/tty.*` entirely.
+## 3. Windows and macOS
 
-1. **Transport**: add a `QBluetoothSocket` path to `OBDConnectionWorker` for `rfcomm://` URLs on non-Linux
-   (Linux keeps the raw-socket `RfcommSocket`).
-2. **Pairing**:
-   - macOS: `QBluetoothLocalDevice::requestPairing()` works (IOBluetooth); legacy-PIN adapters may show the OS
-     PIN prompt. Needs `NSBluetoothAlwaysUsageDescription` in the bundle's Info.plist.
-   - Windows: Qt can't pair. Use WinRT `DeviceInformation.Pairing.Custom.PairAsync` with a `PairingRequested`
-     handler that calls `args.Accept("1234")` (C++/WinRT).
-3. Flip `supported` for those platforms.
+1. **Transport:** a `QBluetoothSocket` (RFCOMM) path in `OBDConnectionWorker` for `rfcomm://` URLs on non-Linux (Linux keeps `RfcommSocket`). Removes the need for a COM port / `/dev/tty.*`.
+2. **Pairing:**
+   - macOS: `QBluetoothLocalDevice::requestPairing()`; legacy-PIN adapters may show the OS prompt. Add `NSBluetoothAlwaysUsageDescription` to the bundle Info.plist.
+   - Windows: Qt can't pair. Use WinRT `DeviceInformation.Pairing.Custom.PairAsync` with a `PairingRequested` handler calling `args.Accept("1234")` (C++/WinRT).
+3. Make `supported()` true on both.
 
-## Phase 4 — BLE adapters on desktop, then iOS
+**Effort:** L. **Needs:** a Windows PC and a Mac with Bluetooth, plus a Classic dongle (NEXAS) and ideally an ECU simulator or the Jeep.
 
-- Desktop BLE: a `QLowEnergyController` transport in `OBDConnectionWorker` speaking the same three GATT profiles
-  as `OctaveOBDBridge.java` (ISSC, FFF0/FFF1/FFF2, FFE0/FFE1).
-  Then set `connectable` true for `ble` rows and route them to the new transport.
-- iOS (once the iOS build is enabled): BLE only. Classic SPP is impossible without Apple's MFi programme, so
-  Classic rows must say "not supported on iPhone".
+## 4. BLE adapters on desktop, then iOS
 
-## Recommended order
+1. A `QLowEnergyController` transport in `OBDConnectionWorker` speaking the same three GATT profiles as `OctaveOBDBridge.java` (ISSC, FFF0/FFF1/FFF2, FFE0/FFE1); mark `ble` rows `connectable` and route them to it.
+2. iOS (once the iOS build exists): BLE only. Classic SPP needs Apple's MFi programme, so Classic rows say "not supported on iPhone".
 
-Verify phase 1 in the Jeep → phase 2 (Android Classic SPP is the biggest gap for real users) → phase 3 → phase 4.
-Update `obd-manager.html#adapter-finder` and `signals-slots-reference.html` with each phase.
+**Effort:** L (desktop BLE), XL with iOS. **Needs:** a BLE OBD dongle on a desktop; an iPhone and a working iOS build for the second step.
 
-Delete this file when all four phases are done.
+## Order
+
+1 → 2 (Android Classic is the biggest gap for real users) → 3 → 4. Update `wiki/obd-manager.html#adapter-finder` and `wiki/signals-slots-reference.html` with each phase.
+
+Delete this file when all four sections are done.

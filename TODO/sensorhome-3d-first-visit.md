@@ -1,23 +1,20 @@
-# First 3D View visit from the Sensor Home tile freezes ~1.2 s
+# Pre-build the 3D Jeep page from Sensor Home
 
 **Status:** deferred (found in 0.9.4 phone testing, not a regression)
-**Last updated:** 2026-09-27
+**Last updated:** 2026-10-18
+
+**Goal:** Pre-build the 3D Jeep page (CarMenu) once Sensor Home is on screen, so the first tap on "3D View" doesn't freeze for about 1.2 s.
 
 ## Problem
 
-On the Galaxy S22 (0.9.4 rc2), the first time the 3D Jeep (CarMenu) is opened from the "3D View" tile on Sensor Home, the screen stops updating for ~1.2 s, then there's another ~0.37 s gap before the Jeep appears. The second visit is smooth (max frame gap 21 ms).
+On a fresh install `lastSensorPage` is empty, so the startup pre-build queue (`frontend/Main.qml:650-668`, `pagePrewarmTimer`) builds SensorHome but not CarMenu. The "3D View" tile (`frontend/SensorHome.qml:183`, `pushSubpage()` at `:43`) then builds CarMenu cold: on the Galaxy S22, a 1.2 s freeze plus a 0.37 s gap. Later visits and later launches (when CarMenu has become `lastSensorPage`) are smooth. Pre-building CarMenu unconditionally at startup would cost time and memory for people who never open it.
 
-Page pre-building (`pagePrewarmTimer` in `frontend/Main.qml`) pre-builds and warm-renders the Sensor button's target: `lastSensorPage`, or SensorHome when that's empty. On a fresh install `lastSensorPage` is empty, so SensorHome is pre-built but CarMenu isn't. The tile then builds CarMenu cold through `stackView.openPage()` (`SensorHome.qml` `pushSubpage()`), paying the Quick3D scene build plus its first GPU draw on the tap. Once CarMenu has been visited it becomes `lastSensorPage` and is pre-built on later launches, so this only hits until then.
+## Steps
 
-## Why it's parked
+1. In `SensorHome.qml`, on its first `StackView.onActivated` (or the first time it becomes visible), when Quick3D is available (the existing probe `Qt.createComponent("CarMenu.qml", Component.PreferSynchronous)` at `:56`), call `stackView.prewarmPage("CarMenu.qml", {}, cb)`. Use the `prewarmPage()` helper from `Main.qml:526`, then `pageWarmRenderer.warm(page)`. Delay it about 500 ms and skip it while a finger is down (same `inputActivity` check as the queue at `Main.qml:645`).
+2. Make sure `pushSubpage("CarMenu.qml")` then reuses the pre-built page. A tap while the build is in progress should finish that build rather than start a second one (see the "Pressed while prewarmPage() is still building it" path, `Main.qml:468`).
+3. Guard it so it runs once per session.
 
-It's a one-off per install, predates 0.9.4, and pre-building fixes it for returning users. Pre-building CarMenu unconditionally would cost startup time and memory on devices where nobody opens the 3D view.
-
-## Options
-
-1. When SensorHome is the pre-build target and Quick3D is available (SensorHome already probes it via `Qt.createComponent("CarMenu.qml", PreferSynchronous)`), also queue CarMenu last in the pre-build queue.
-2. Or pre-build CarMenu lazily the first time SensorHome becomes active (`StackView.onActivated`), since the user is then one tap away.
-
-Option 2 is cheaper for users who never open Sensors. Either needs a Pi CPU check (roxy session): a hidden CarMenu has been measured at ~+1 point idle, which is fine.
+**Effort:** S–M. **Needs:** the Galaxy S22 (fresh install, then the first tap on 3D View with the frame gaps measured) and the Orange Pi under the roxy session (idle CPU with a hidden CarMenu; about +1 point was measured before, which is fine).
 
 Delete this file when done.

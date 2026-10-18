@@ -1,73 +1,39 @@
-# OCTAVE Companion app (Android)
+# OCTAVE Companion: phone data and setup walkthrough
 
+**Goal:** get the phone's notifications, calls and battery onto OCTAVE, and walk new users through turning on debugging instead of showing a block of text.
 **Status:** deferred — scoped, not started
 **Last updated:** 2026-10-18
 
-## What it is
-
-A small Android app that pairs a phone with OCTAVE and streams the things adb
-cannot see. It is **not** a replacement for the phone-side mirror server:
-screen capture without a per-session consent dialog, creating a virtual
-display, and injecting touch into other apps all require shell privileges,
-which only an adb-launched process gets. The mirror stays on
-`phone_server/` (our fork of the scrcpy server, launched over adb).
+Already shipped: the wireless half of the original plan (adb pairing and connect over Wi-Fi) landed in the phone mirror via QR pairing (`f100f60`), with mDNS discovery (`phonemirrormanager.cpp:1218-1274`) and a remembered phone (`wirelessAddress`). Now-playing metadata also ships, through `phone_server`'s `PhoneMedia.java`. No separate app was needed for either.
 
 ## Why it's parked
 
-The mirror itself just landed (built-in client, forked server) and needs road
-time first. The companion app is a separate product surface (Play Store or
-sideload, its own release cycle, Android permission model) and should not be
-bundled into the mirror work. Revisit once the mirror has been used in the car
-for a few weeks and the wireless-connection pain is real rather than assumed.
+Neither item blocks daily use in the Jeep. A separate app is its own product surface (Play Store or sideload, its own release cycle, Android permission model), so it should only be built if extending `phone_server/` can't do the job.
 
-## Scope, in priority order
+## Constraints (don't re-litigate)
 
-1. **Wireless mirroring without a cable.** Android 11+ wireless debugging can
-   replace USB after a one-time pairing. The app can show the pairing code,
-   advertise the phone on the car's Wi-Fi (mDNS `_adb-tls-connect._tcp`), and
-   OCTAVE's `PhoneMirrorManager` gains `adb pair` / `adb connect` handling and a
-   "known phones" list. Needs: mDNS discovery on the OCTAVE side (Qt has
-   `QMdnsEngine`-style options or use avahi on Linux), pairing UI on both ends.
-2. **Phone data over the same link:** notifications (NotificationListener),
-   calls and SMS (with the user's consent), now-playing metadata
-   (MediaSession), battery, phone GPS as a fallback for the car's own. Simple
-   JSON over one TCP socket or WebSocket; OCTAVE side is a new C++
-   `CompanionManager`.
-3. **Setup UX:** a first-run flow that walks the user through enabling USB /
-   wireless debugging instead of the text block in `PhoneMirrorView.qml`.
+- The mirror stays on `phone_server/` (our scrcpy fork, launched over adb). Screen capture without a per-session consent dialog, virtual displays and touch injection need shell privileges, which only an adb-launched process gets. MediaProjection is not worth using: consent dialog every session on Android 14+, no virtual display, FLAG_SECURE blackout.
+- Wireless debugging must be re-enabled by the user after a phone reboot on most devices. An app can detect that and prompt; it cannot toggle it.
 
-## Constraints and gotchas
+## Remaining work, easiest first
 
-- MediaProjection is not worth using: consent dialog every session on Android
-  14+, no virtual display, FLAG_SECURE blackout. Do not re-litigate this.
-- Accessibility-service gesture injection works when sideloaded but Play Store
-  policy restricts it; the mirror's control socket already covers touch.
-- Background execution: a foreground service with a persistent notification
-  is required for anything that streams while the screen is off.
-- Wireless debugging must be re-enabled by the user after every phone reboot
-  on most devices (it is a developer option, not a persistent state). The app
-  can detect that and prompt; it cannot toggle it.
+1. **First-run setup walkthrough.** **Effort:** M. **Device:** S22 or S26, starting from developer options off.
+   - Replace the text block in `frontend/PhoneMirrorView.qml` (around line 498) with a step-by-step flow: enable developer options, USB debugging, then optionally Wireless debugging + QR pairing. Drive each step from `phoneMirrorManager.deviceState` / `deviceHint` so it advances on its own when the phone is seen.
+   - Can be pure QML over the existing manager API; no app needed.
+   - Overlaps with `TODO/phone-mirror-robustness.md` item 3 (the "no adb" wording); do them together.
+2. **Phone data channel: notifications, calls, battery (optionally SMS, phone GPS).** **Effort:** L. **Device:** S22 or S26.
+   - **Decide first: extend `phone_server/` or build a separate app.**
+     - *Extend `phone_server/`* (shell-privileged, already running during a mirror session, already has a device-message channel: `DeviceMessage.java` types 100–104 and a bulk lane in `DeviceMessageSender.java`). Battery and call state are easy from the shell; notifications need a `NotificationListener`, which a shell process may not be able to register. Only works while a mirror session runs.
+     - *Separate app* (`companion/`, Kotlin, minSdk 30): a real `NotificationListenerService`, `TelephonyCallback` and a foreground service with a persistent notification, so it works with no mirror session. Costs a second build, signing and release cycle (the permanent APK key from `build.yml`'s Sign APK step can be reused) and its own pairing (JSON over one TCP socket or WebSocket).
+     - Spike: try `NotificationListener` access from the shell process in `phone_server` first. If it works, extend `phone_server`; if not, build the app.
+   - OCTAVE side either way: new device-message types on the existing client (`scrcpyclient.cpp`, next to `kDevMsgOctave*`) or a new `src/managers/companionmanager.{h,cpp}`; a card in `frontend/settings/AccessoriesSettingsPage.qml`; a notification / incoming-call overlay in QML.
+   - Calls and SMS need explicit user consent on the phone; say so in the UI.
 
-## Where the code would live
+## Recommended order
 
-- `companion/` — Android app (Kotlin, Gradle, minSdk 30 for wireless debugging).
-- `src/managers/companionmanager.{h,cpp}`.
-- `frontend/settings/AccessoriesSettingsPage.qml` — pairing card.
-- Wiki: new `companion-app.html`, plus `phone-mirror-android-auto.html` for the
-  wireless path.
+1. Setup walkthrough (independent, no new phone-side code).
+2. Spike the shell-`NotificationListener` question, decide, then build the data channel.
 
-## Prerequisites
+Update `wiki/phone-mirror-android-auto.html` (and a new `wiki/companion-app.html` if a separate app is built) as each lands.
 
-- `phone_server/` fork building in CI and validated on the Pi (in progress).
-- A decision on distribution (Play Store vs sideload) — Play Store implies
-  signing keys (done: the APK is signed with a permanent key from repo secrets, see the Sign APK step in `build.yml`) and review.
-
-## Order of operations
-
-1. Wireless adb on the OCTAVE side alone (no app yet): `adb connect <ip>` with a
-   manual pairing — proves the mirror works over Wi-Fi and measures latency.
-2. Companion app v0: pairing helper + mDNS advertisement.
-3. Phone data channel.
-4. Setup UX.
-
-Delete this file when the companion app ships (or when the decision is not to build it).
+**Delete this file when** both items ship, or when the decision is not to build the data channel (then move the walkthrough to `TODO/phone-mirror-robustness.md` if it isn't done).

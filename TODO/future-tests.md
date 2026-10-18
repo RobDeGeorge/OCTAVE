@@ -1,149 +1,94 @@
 # Future Tests (Parked)
 
-**Status:** Not committed to. This is a menu of things we could add to the test suite over time, organized by effort and value. Pick from it when you have the headspace for testing work.
+**Goal:** add the tests that make the god-object splits safe and catch the silent failures the current suite misses.
+
+**Status:** deferred. A menu, not a commitment; each item is also a prerequisite for a step in `god-object-splits.md`, so it gets picked up when that work starts.
 
 **Last updated:** 2026-10-18
 
-**Why parked:** the C++ QtTest suite now covers the subsystems that broke most often (ELM327 parsing, OBD demand polling, the simulated car, phone mirror, downloads, dashboards). What is left below is useful but not urgent, and each item is also a prerequisite for a step in `god-object-splits.md`, so it gets picked up when that work starts.
+**Why parked:** the C++ QtTest suite (`tests/cpp/`, 17 tests via `octave_add_test()` in `tests/cpp/CMakeLists.txt`, run by `ctest --test-dir build --output-on-failure` in CI) already covers the subsystems that broke most often: ELM327 parsing, OBD demand polling, the simulated car, phone mirror, downloads, dashboards, settings backup/atomic write. What's left is useful but not urgent.
+
+Items are ordered easiest first.
 
 ---
 
-## Current state (baseline)
+## 1. VolumeController dispatch test
 
-The suite lives in `tests/cpp/` (QtTest, one executable per `tst_*.cpp`, registered with `octave_add_test()` in `tests/cpp/CMakeLists.txt`). `ctest --test-dir build --output-on-failure` runs 17 tests, headless on the offscreen platform, and CI runs them on every push / PR:
+**Effort:** S (~30 min)
+**Unblocks:** the `mediamanager.cpp` split
 
-- **Protocol and parsing:** `tst_elm327protocol` (DTC / freeze frame / VIN parsing, extended PIDs, multi-frame replies, every extended parameter wired), `tst_esp32readbuffer`, `tst_downloadutil`, `tst_adaptivebitrate`, `tst_scrcpyclient` (fake scrcpy server)
-- **Managers:** `tst_settingsmanager` (backup restore after a truncated file, failed write leaves the file intact), `tst_dashboardmanager` (import sanitizer, export/import round trip), `tst_mediamanager` (missing tracks, shuffle, zero-byte covers), `tst_obdmanager` (demand-driven poll list, RFCOMM bind failure), `tst_obdadapterfinder`, `tst_phonemirror`, `tst_vehiclegate`
-- **Integration:** `tst_obdsim` (the real `OBDManager` against `src/dev/simelm327`), `tst_boot` (the app boots, and `--dev --profile` answers on the command server)
-- **QML:** `tst_qmlfixtures` (runs `tests/fixtures/*Smoke.qml` through `tests/cpp/qmlfixturehost`), `tst_phonemirrorview`, `tst_musicdeviceassets`
+`VolumeController` (`src/managers/volumecontroller.{h,cpp}`) persists the percent to `SettingsManager` and emits `volumeApplied(percent, linear)`; `main.cpp` connects the outputs to that signal.
 
-CI also runs a `qmllint` error pass over `frontend/` in the `cpp-compile-check` job, so the old "qmllint in CI" item is done and dropped from this list. So is the old ELM327 parser suite (`tst_elm327protocol`) and the Android stub-interface check (the C++ build uses `#ifdef Q_OS_ANDROID` inside the real managers, not separate stub classes, so there is nothing to drift).
+Steps:
+1. New `tests/cpp/tst_volumecontroller.cpp`; register with `octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)`.
+2. Give it a temp `XDG_CONFIG_HOME` / `HOME` / `APPDATA` like `tst_settingsmanager::init()`.
+3. With a `QSignalSpy`: `applyVolume(75)` emits once with `(75, 0.5625)` and `settingsManager.currentVolume()` becomes 75.
+4. Clamping: `applyVolume(-5)` → 0, `applyVolume(150)` → 100.
+5. `toLinear()` and `toLinearStatic()` agree and follow `(percent/100)^2`.
 
-That's the floor. Everything below is optional additions, ordered by value-to-effort ratio.
+## 2. Metadata sanitization tests
 
----
+**Effort:** S (~1 h)
+**Unblocks:** the `mediamanager.cpp` split (with item 1)
 
-## Tier 1: Cheap wins (start here)
+`MediaManager::_sanitize_metadata(text, maxLength)` (`src/managers/mediamanager.cpp:301`) is static and `TstMediaManager` is already a friend (`mediamanager.h:178`).
 
-### 1. Settings round-trip test
+Steps:
+1. Add a data-driven case to `tests/cpp/tst_mediamanager.cpp` covering: control characters (`\x00`, `\x1f`), emoji, UTF-8 bytes mis-decoded as Latin-1, empty strings, combining characters / NFC vs NFD, and over-long strings (the `maxLength` cap).
+2. Assert the cleaned output.
+3. Optional: feed a few small tagged files through `_read_tags()` (`mediamanager.cpp:737`).
 
-**File:** extend `tests/cpp/tst_settingsmanager.cpp`
-**Effort:** ~1 hour
-**Value:** High — catches JSON schema drift
+## 3. Settings round-trip and upgrade test
 
-The existing tests prove one value survives a truncated file. Add a test that sets a broad spread of settings through the real setters (`setCurrentVolume`, `save_theme_setting`, `save_media_folder`, `save_obd_saved_adapters`, `save_home_obd_parameters`, a custom theme, a pinned setting, ...), calls `flushPendingSave()`, destroys the manager, constructs a new one in the same temp config dir and checks every property. The existing `init()` already gives each test its own `XDG_CONFIG_HOME` / `HOME` / `APPDATA`.
+**Effort:** S–M (1–2 h)
+**Unblocks:** the `settingsmanager.cpp` split
 
-Catches: someone renames a JSON key, someone removes a default, someone breaks validation when adding a new field. Users would otherwise only find this when they update OCTAVE and discover their saved settings got cleared — which is terrible.
+Today `tst_settingsmanager.cpp` only proves one value survives a truncated file and that a failed write leaves the file intact.
 
-**Bonus:** also test the upgrade path. Write an "old format" `settingsConfigure.json` (missing newer keys, a key with the wrong type) into the temp dir first, construct `SettingsManager`, and assert it reads cleanly, fills in defaults and keeps the valid old values. This catches schema-evolution bugs in `validateSettings()`.
+Steps:
+1. Set a broad spread of settings through the real setters (`setCurrentVolume`, `save_theme_setting`, `save_media_folder`, `save_obd_saved_adapters`, `save_home_obd_parameters`, a custom theme, a pinned setting, ...).
+2. `flushPendingSave()`, destroy the manager, construct a new one in the same temp config dir, check every property.
+3. Upgrade path: write an "old format" `settingsConfigure.json` (missing newer keys, one key with the wrong type), construct `SettingsManager`, assert it loads cleanly, fills defaults and keeps the valid old values (exercises `validateSettings()`).
 
-### 2. VolumeController dispatch test
+## 4. Signal wiring tests
 
-**File:** new `tests/cpp/tst_volumecontroller.cpp`, `octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)`
-**Effort:** ~30 minutes
-**Value:** High — guards the single volume entry point
+**Effort:** M (~3 h, including the `main.cpp` refactor)
 
-`VolumeController` (`src/managers/volumecontroller.{h,cpp}`) persists the percent to `SettingsManager` and emits `volumeApplied(percent, linear)`; `main.cpp` connects the outputs to that signal. Test it with a `QSignalSpy`:
+The ~27 cross-manager `connect()` calls live inline in `src/main.cpp`; only `tst_boot` exercises them, and it asserts nothing about them.
 
-- `applyVolume(75)` emits once with `(75, 0.5625)` and `settingsManager.currentVolume()` becomes 75
-- Clamping: `applyVolume(-5)` → 0, `applyVolume(150)` → 100
-- `toLinear()` and `toLinearStatic()` agree and follow `(percent/100)^2`
+Steps:
+1. Move the cross-manager `connect()` calls into a function (e.g. `wireManagers(...)`) that both `main.cpp` and a test can call.
+2. New `tests/cpp/tst_signalwiring.cpp`; with `QSignalSpy` / `QTRY_COMPARE`, check:
+   - `volumeController.applyVolume(75)` reaches `MediaManager::setVolume` with the curved value
+   - a track change in `MediaManager` updates the playback state saved through `SettingsManager`
+   - changing `obdBluetoothPort` in settings triggers `OBDManager`'s debounced reconnect
 
-Give it a temp `XDG_CONFIG_HOME` like `tst_settingsmanager`. Tiny test, good coverage on a subsystem that has drifted before.
+## 5. Headless QML integration tests
 
----
+**Effort:** L (~1 day to get the first one reliably green, then ongoing)
 
-## Tier 2: Medium effort, good payoff
+The setup exists: `tests/cpp/qmlfixturehost.cpp`, `tst_qmlfixtures` (runs `tests/fixtures/*Smoke.qml`) and the fake-manager-behind-a-real-view pattern in `tst_phonemirrorview.cpp`.
 
-### 3. Music metadata sanitization tests
+Steps:
+1. Pick ONE cross-cutting path, e.g. "the volume slider follows a volume change from the gesture sensor / ESP32 knob".
+2. Load that view with real or fake managers as context properties, drive it with `QTest::mouseClick()` or property writes, assert the state.
+3. Get it reliably green in CI before adding a second (headless timing and platform-plugin flakiness is the main risk).
 
-**File:** extend `tests/cpp/tst_mediamanager.cpp`
-**Effort:** ~1 hour
-**Value:** Medium
+## 6. OBD protocol replay suite
 
-`MediaManager::_sanitize_metadata(text, maxLength)` (`src/managers/mediamanager.cpp`, around line 302) is static and the test class is already a friend (`friend class TstMediaManager` in `mediamanager.h`). Pass in strings with:
+**Effort:** L–XL (~2 days initial, plus recording time in the car; ongoing as cars are added)
+**Unblocks:** the `obdmanager.cpp` split. Without it that split is "refactor and pray."
 
-- Control characters (`\x00`, `\x1f`)
-- Emoji (`🎵`, `🎸`)
-- Mis-decoded text (UTF-8 bytes read as Latin-1)
-- Empty strings
-- Unicode normalization quirks (combining characters, NFC vs NFD)
-- Extremely long strings (the `maxLength` cap, for malformed tags)
+`tst_obdsim` drives the real `OBDManager` through `OBDConnectionWorker::setCustomTransport()` with `src/dev/simelm327`, but the simulator only speaks the dialect we wrote.
 
-Assert the cleaned output. Prevents regressions in how OCTAVE displays song titles from badly-tagged files — which is a surprisingly large fraction of real-world music libraries. If it is worth the effort, also feed a few small tagged files through `_read_tags()`.
-
-### 4. Signal wiring tests
-
-**File:** new `tests/cpp/tst_signalwiring.cpp`, or cases added to the manager tests that already exist
-**Effort:** ~3 hours
-**Value:** Medium-high
-
-The per-manager tests check each manager on its own. The connections between managers are made in `src/main.cpp` and only `tst_boot` exercises them, without asserting anything about them. Pull the cross-manager `connect()` calls into a function the test can call (or build the same graph in the test), then use `QSignalSpy` / `QTRY_COMPARE` for each critical path:
-
-- `volumeController.applyVolume(75)` reaches `MediaManager::setVolume` with the curved value
-- A track change in `MediaManager` updates the playback state saved through `SettingsManager`
-- Changing `obdBluetoothPort` in settings triggers `OBDManager`'s debounced reconnect
-
-Catches signal/slot wiring regressions — the kind of thing that silently breaks when someone renames a signal and forgets to update a `connect()` in `main.cpp`.
+Steps:
+1. Add a capture mode (or a logging transport) that records adapter request/response pairs with timing.
+2. Record traffic from the Jeep first, then other cars and ELM327 clones; check in as JSON under `tests/fixtures/obd/{make}/{model}/`.
+3. New `tests/cpp/tst_obdreplay.cpp`: a `QIODevice` that answers from a fixture, plugged in via `setCustomTransport()`.
+4. Cover echo/prompt handling, `SEARCHING...`, `NO DATA`, `CAN ERROR`, slow clones, multi-frame replies, protocol negotiation, diagnostic mode and reconnects.
 
 ---
 
-## Tier 3: High effort, worth it eventually
-
-### 5. Headless QML integration tests
-
-**File:** new fixtures in `tests/fixtures/`, run by `tests/cpp/tst_qmlfixtures.cpp`
-**Effort:** ~1 day initial, ongoing maintenance
-**Value:** High — but only once the tests are reliably green
-
-The fixture host exists (`tests/cpp/qmlfixturehost.cpp`, used for the music-device and wiki smokes), and `tst_phonemirrorview.cpp` shows the pattern of a fake manager behind a real view. Extend that to the cross-cutting UI paths: load one view with real or fake managers as context properties, drive it with `QTest::mouseClick()` or property writes, assert the resulting state.
-
-Catches bugs only a full integration test can see:
-- "The volume slider doesn't update when the gesture sensor changes volume"
-- "The settings page doesn't reflect changes made via the ESP32 knob"
-
-**Warning:** these tests are notoriously flaky on headless runners if you're not careful — timing issues, missing platform plugins, subpixel rendering differences. Start with ONE test that you can get reliably green in CI, then expand slowly.
-
-### 6. OBD protocol replay suite
-
-**File:** new `tests/cpp/tst_obdreplay.cpp`, fixtures under `tests/fixtures/obd/{make}/{model}/`
-**Effort:** ~2 days initial, ongoing as new cars are added
-**Value:** Very high — the simulated car only speaks the dialect we wrote
-
-`tst_obdsim` already drives the real `OBDManager` through `OBDConnectionWorker::setCustomTransport()` with `src/dev/simelm327`. The replay suite uses the same hook with a `QIODevice` that answers from recorded traffic: capture real adapter request/response pairs from several cars and ELM327 clones (different makes, firmware versions, the Jeep first), check them in as JSON fixtures, and replay them.
-
-Tests the OBD subsystem against real-world quirks — echo and prompt handling, `SEARCHING...`, `NO DATA`, `CAN ERROR`, slow clones, multi-frame replies, protocol negotiation, diagnostic mode and reconnects — all without a car.
-
-**This is the prerequisite for safely splitting `obdmanager.cpp`** (see `god-object-splits.md`). Without this, the split is "refactor and pray."
-
----
-
-## Things to skip
-
-### Snapshot testing QML visuals
-
-Flaky on headless runners (subpixel AA differences, driver-specific color variations, timing). Rewards churn (every theme tweak breaks 50 snapshots) over substance. There are exceptions if you only snapshot a few critical pages, but in general: not worth it for this project. The dev screenshot tooling is for humans, not assertions.
-
-### Mocking every manager in every test
-
-Brittle — every time you add a method or rename a signal, dozens of fakes need updating. Fake ONLY at the seam you're testing. Testing `VolumeController::applyVolume()`? Use a real `SettingsManager` in a temp dir and a `QSignalSpy`. Don't reach for a universal mock framework.
-
-### 100% coverage as a goal
-
-Coverage percentage is a vanity metric. It rewards writing trivial tests that pass through getters and setters, and it doesn't distinguish a test that catches real bugs from a test that exists just to hit lines.
-
-**Better target:** every silent failure mode has a regression test. Every time a bug ships that "should have been caught," write the test that would have caught it before fixing the bug. Over time, the suite organically covers the failure modes that actually matter.
-
----
-
-## Recommended next batch (if we ever do this)
-
-If you want the maximum bang for buck in one day of testing work, do these together:
-
-1. **VolumeController dispatch test** (~30 minutes) — protects the single volume entry point
-2. **Settings round-trip test** (~1 hour) — unblocks the `settingsmanager.cpp` split
-3. **Metadata sanitization tests** (~1 hour) — with item 2, unblocks the `mediamanager.cpp` split
-
-That leaves most of the day for the signal wiring tests. The OBD replay suite is its own project; start it when there is time to record traffic in the Jeep.
+**Skip:** QML snapshot tests, mock-every-manager frameworks and coverage-percentage targets; instead write a regression test for each bug that ships.
 
 Delete this file when every item above is either done or explicitly dropped.

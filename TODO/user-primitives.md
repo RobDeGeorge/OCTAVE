@@ -1,5 +1,6 @@
 # User-Created, Shareable Dashboard Primitives
 
+**Goal:** let people save and share their own dashboard building blocks (styled gauges and small gauge groups) as safely as they already share whole dashboards.
 **Status:** parked (design agreed in principle, not started)
 **Last updated:** 2026-10-18
 
@@ -24,8 +25,8 @@ A primitive is different. The obvious implementation — drop a `.qml` file into
 user `primitives/` folder and add it to the catalog — means **running someone
 else's code inside the head unit**. A QML file loaded into the main engine can:
 
-- call every context property: `obdManager.clear_dtc()`, `settingsManager.save_setting(...)`,
-  `downloadManager`, `phoneMirrorManager`, the ESP32 / I²C managers;
+- call every context property: `obdManager.clear_dtc()`, `settingsManager.save_setting(key, value)`
+  (a public slot, `src/managers/settingsmanager.h:484`), `downloadManager`, `phoneMirrorManager`, the ESP32 / I²C managers;
 - `import` any app file by absolute path, reach singletons, and walk the object tree;
 - use `XMLHttpRequest` / `Qt.openUrlExternally` for network access or to open URLs.
 
@@ -64,6 +65,8 @@ Work items:
   section; the PID picker / panel treat a preset as its base type.
 - Composites: renderer + editor canvas expand them; moving and resizing act on the group.
 
+**Effort:** widget presets L, composites L. **Needs:** desktop for the build (QtTest for the JSON I/O in `tests/cpp/`); a touch check of the palette and grouping on the Galaxy S22.
+
 ### Tier 2 — code primitives (QML), opt-in only
 
 For genuinely new visuals (e.g. a bar-graph tach, a boost "staircase"). Only consider
@@ -87,12 +90,14 @@ this after Tier 1 ships, and only with all of these:
 - Treat it as best effort, not a sandbox. QML has no real security boundary, so the
   trust prompt is the actual control. Document that plainly.
 
+**Effort:** XL. **Needs:** desktop only (mobile is out of scope).
+
 ## Prerequisites / cross-references
 
 - Builds on the 2026-10-04 dashboard pass: `WidgetCatalog` capability fields
   (`labelProps`, `rangeProps`, `colorProps`, typed `editableProps`) are what a preset
   or code widget must declare. See `docs/GAUGE_AUTHORING.md` §7.
-- `TODO/dashboards-roadmap.md`: the remaining on-device checks there should land first.
+- `TODO/dashboards-roadmap.md`: its Primitives Gallery removal and on-device checks should land first.
 - `TODO/god-object-splits.md`: if `OBDMenu.qml`'s chooser is split out, do that before
   adding a "Mine" palette section and a widget-library UI.
 

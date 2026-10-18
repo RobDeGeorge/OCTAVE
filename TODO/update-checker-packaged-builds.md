@@ -3,26 +3,24 @@
 **Status:** deferred (found in 0.9.4 pre-release testing, not a regression)
 **Last updated:** 2026-10-18
 
+**Goal:** Packaged builds should compare themselves against the latest GitHub release and offer a download link, instead of showing "Could not determine local version".
+
 ## Problem
 
-Settings > About > Software Updates shows **"Could not determine local version"** with a red dot on every packaged build: the AppImage, the Windows installer and the Android APK. The same page's header shows the correct version (0.9.4), so users see a contradiction.
+On every packaged build, Settings > About > Software Updates shows "Could not determine local version" with a red dot, while the page header shows the right version. `NetworkManager::checkForUpdates()` (`src/managers/networkmanager.cpp`) gets the local version from `git rev-parse --short HEAD` (`:274`) and compares it with `commits/main` (`:180`). Packaged builds have no `.git`, so the check stops at "Could not determine local version" (`:170-176` and `:278-280`). This only affects the About page: the bottom-bar dot pulses for `update-available` only. Comparing a release binary with `main` would be wrong anyway, so packaged builds need a release check.
 
-`NetworkManager::checkForUpdates()` (`src/managers/networkmanager.cpp`, around line 140) gets the local version by running `git rev-parse --short HEAD` in `repoDir()`, then compares it with `https://api.github.com/repos/<GITHUB_REPO>/commits/main`. That only works in a git checkout: the Orange Pi, and anyone running from source. Packaged builds have no `.git`, so git fails and the check stops at "Could not determine local version" (lines 169 and 263).
+The About page already shows the Update button only when `canSelfUpdate` is true (`frontend/settings/AboutPage.qml:347, 369`).
 
-It's cosmetic in the About page only. The bottom-bar Settings dot pulses only for `update-available`, never for `error`. 0.9.3 behaves the same way.
+## Steps
 
-## Why it's parked
+1. **C++ (`networkmanager.cpp`):** when `git rev-parse` fails or `repoDir()` has no `.git`, call `GET https://api.github.com/repos/<GITHUB_REPO>/releases/latest` instead. Parse `tag_name` (e.g. `v0.9.5`), strip the `v`, and compare it numerically with the compiled-in `OCTAVE_VERSION` (split on `.` and `-rc`).
+   - Newer: status `update-available`, message "Version X.Y.Z is available", and expose the release `html_url` (a new `Q_PROPERTY QString releaseUrl` or similar). `canSelfUpdate` stays false.
+   - Equal or older: `up-to-date`.
+   - Network or HTTP error: the existing offline message.
+   - Pull the version comparison out as a pure function and add a QtTest in `tests/cpp/`.
+2. **About page (`AboutPage.qml:520-528`):** replace the "Pull the latest changes from GitHub to update." text (and its stale "PyInstaller builds" comment) with a "Download" link that opens `releaseUrl` when an update is available, and nothing extra when the build is up to date.
+3. **Wiki:** `network-manager.html` (update checker section), plus `signals-slots-reference.html` for the new property.
 
-The proper fix is new behaviour, not a bug fix: packaged builds should be compared against the latest **release**, not `main` HEAD. Comparing a release binary against `main` would report "update available" as soon as anyone pushed to main. It touches `NetworkManager` and the About page's messaging, and it needs its own round of testing. That was too much to add while cutting 0.9.4.
-
-## Plan
-
-1. C++: if `git rev-parse` fails (or `repoDir()` has no `.git`), fall back to the release check. `GET https://api.github.com/repos/<GITHUB_REPO>/releases/latest`, parse `tag_name` (e.g. `v0.9.5`), and compare it numerically with the compiled-in `OCTAVE_VERSION`.
-   - Newer → `update-available`, with the message "Version X.Y.Z is available", and link to the release page. `canSelfUpdate` stays false: packaged builds can't `git pull`.
-   - Equal or older → `up-to-date`.
-   - Network error → the existing offline message, not "Could not determine local version".
-2. About page (`frontend/settings/AboutPage.qml`): check the Update button only appears when `canSelfUpdate`, and that packaged builds get a "Download" link to the release instead.
-3. Wiki: `network-manager.html` (update checker section), plus `signals-slots-reference.html` if any property or signal changes.
-4. Test on the clean VMs (kora): AppImage and Windows. On a machine with a checkout, confirm the git path is unchanged.
+**Effort:** M. **Needs:** the kora VMs (AppImage and Windows installer), the Galaxy S22 (APK), and a machine with a checkout (e.g. the Orange Pi) to confirm the git path is unchanged.
 
 Delete this file when done.
