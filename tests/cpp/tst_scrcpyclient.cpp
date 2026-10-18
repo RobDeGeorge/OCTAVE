@@ -342,6 +342,44 @@ private slots:
         QCOMPARE(int(quint8(srv.controlBytes().at(0))), 2);   // inject touch event
     }
 
+    void attachFollowsTheRunningServer()
+    {
+        // A persisted server (link dropped, virtual display kept): the client
+        // reconnects to its socket and follows its logcat, with no push and no
+        // second app_process
+        requireDecoder();
+        const Stream first = loadStream("grey_64x48.h264");
+        FakeServer srv(script(first), kW, kH);
+        Session c(srv.port(), "2cac176c");
+        QVERIFY(c.started);
+        QVERIFY2(waitUntil([&] { return c.client.frameCount() >= quint64(first.packets.size() - 1); }),
+                 qPrintable(QString::number(c.client.frameCount())));
+        QCOMPARE(c.client.scid(), QStringLiteral("2cac176c"));
+        QVERIFY(c.reasons().isEmpty());
+        const QString calls = adbCalls().join('\n');
+        QVERIFY2(calls.contains("logcat"), qPrintable(calls));
+        QVERIFY2(!calls.contains("push") && !calls.contains("app_process"), qPrintable(calls));
+    }
+
+    void attachToAGoneServerFailsWithinTheDeadline()
+    {
+        // The persisted server died with the link: give up after the 4 s attach
+        // deadline (the manager then starts a fresh session), not the 20 s one
+        requireDecoder();
+        int port = 0;
+        {
+            QTcpServer probe;
+            QVERIFY(probe.listen(QHostAddress::LocalHost, 0));
+            port = probe.serverPort();
+        }   // closed: nothing listens there now
+        QElapsedTimer t;
+        t.start();
+        Session c(port, "2cac176c");
+        QVERIFY2(waitUntil([&] { return !c.reasons().isEmpty(); }, 10000), "no failure reported");
+        QVERIFY2(t.elapsed() < 8000, qPrintable(QString::number(t.elapsed())));
+        QVERIFY2(c.reasons().first().contains("could not attach"), qPrintable(c.reasons().first()));
+    }
+
     void midStreamSpsChangeResizes()
     {
         requireDecoder();
@@ -408,7 +446,8 @@ private:
     // A client started against the fake server, recording what its session
     // thread emits (direct connections: no event loop runs here)
     struct Session {
-        explicit Session(int port) : client(kFakeAdb, "/nonexistent.jar")
+        explicit Session(int port, const QString &attachScid = QString())
+            : client(kFakeAdb, "/nonexistent.jar")
         {
             qputenv("OCTAVE_SCRCPY_PORT", QByteArray::number(port));
             QObject::connect(&client, &ScrcpyClient::disconnected, &client, [this](const QString &r) {
@@ -419,7 +458,8 @@ private:
                 QMutexLocker l(&lock);
                 m_sizes << QSize(w, h);
             }, Qt::DirectConnection);
-            started = client.start("SERIAL");
+            started = client.start("SERIAL", attachScid.isEmpty() ? QString() : QStringLiteral("1280x720/160"),
+                                   60, 8000000, false, true, attachScid);
         }
         ~Session() { client.stop(); }
         QStringList reasons() const { QMutexLocker l(&lock); return m_reasons; }

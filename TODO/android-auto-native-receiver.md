@@ -82,7 +82,7 @@ Update `wiki/settings-reference.html`, `wiki/settings-manager.html` and `wiki/ph
 - **Wireless is getting harder.** Android Auto 17.4+ blocks the older ways of starting a wireless session (Open Headunit's README warns about it; rooted phones have a workaround). Wireless needs a Bluetooth RFCOMM handshake that hands Wi-Fi credentials to the phone, then TCP. Treat it as Phase 5 at best. The Carlinkit dongle is the dependable wireless answer.
 - **Protocol churn.** Google changes the phone side without notice. Pin a known-good Android Auto version in the docs and log the version the phone reports, so breakage is diagnosable from the Diagnostics export.
 - **USB permissions.** Linux needs a udev rule for the phone before and after the AOA switch (both VIDs). Ship it in `packaging/linux/` and the AppImage docs. Windows may need WinUSB bound to the accessory interface (Zadig-style). macOS should just work with libusb.
-- **Head-unit performance.** 1080p60 decode on the Orange Pi 5 Plus needs hardware decode (RK3588 `h264_rkmpp` / v4l2m2m, also wanted by `TODO/phone-mirror-robustness.md` item 11). Start at 800x480/1280x720 at 30 fps, then measure against the phone-mirror numbers.
+- **Head-unit performance.** 1080p60 decode on the Orange Pi 5 Plus needs hardware decode (RK3588 `h264_rkmpp` / v4l2m2m, also wanted by `TODO/phone-mirror-robustness.md` item 6). Start at 800x480/1280x720 at 30 fps, then measure against the phone-mirror numbers.
 
 ## Recommended order
 

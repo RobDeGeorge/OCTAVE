@@ -444,12 +444,14 @@ private slots:
             QSKIP("built without libavcodec");
         m.m_serial = USB;
         m.m_persistScid = "2cac176c";
+        m.m_persistPhoneId = "R5CT1";
         m.m_persistUntilMs = QDateTime::currentMSecsSinceEpoch() + 30000;
         m.m_startGeneration = 7;
         PhoneMirrorManager::StartPrep prep;
         prep.probe = {{{TCP, "device"}}, "device", "", {}};
         prep.serial = TCP;
         prep.sdk = 36;
+        prep.phoneId = "R5CT1";   // same phone, other transport
         m.continueStart(prep, 7);
         QVERIFY(m.m_attaching);
         QVERIFY(m.m_client);
@@ -459,6 +461,32 @@ private slots:
         // Picking another phone never reattaches to this one's session
         m.selectDevice(USB2);
         QCOMPARE(m.m_persistScid, QString());
+        m.stopScrcpy();
+    }
+
+    void anotherPhoneInThePersistWindowStartsFresh()
+    {
+        // Phone A dropped; phone B is picked automatically before A's session
+        // expires. Reattaching would try A's scid on B and burn the 4 s attach
+        // deadline, so B gets a fresh server straight away.
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        if (!m.nativeAvailable())
+            QSKIP("built without libavcodec");
+        m.m_persistScid = "2cac176c";
+        m.m_persistPhoneId = "PHONE_A";
+        m.m_persistUntilMs = QDateTime::currentMSecsSinceEpoch() + 30000;
+        m.m_startGeneration = 7;
+        PhoneMirrorManager::StartPrep prep;
+        prep.probe = {{{USB2, "device"}}, "device", "", {}};
+        prep.serial = USB2;
+        prep.sdk = 36;
+        prep.phoneId = "PHONE_B";
+        m.continueStart(prep, 7);
+        QVERIFY(!m.m_attaching);
+        QCOMPARE(m.m_persistScid, QString());
+        QTRY_VERIFY_WITH_TIMEOUT(adbCalls("app_process") == 1, 5000);   // a new server
+        QCOMPARE(adbCalls("logcat"), 0);
         m.stopScrcpy();
     }
 

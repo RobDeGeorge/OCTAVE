@@ -571,8 +571,12 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         opts << QStringLiteral("video_codec_options=") + codecOptions;
     if (!m_videoEncoder.isEmpty())
         opts << QStringLiteral("video_encoder=") + m_videoEncoder;
-    if (!displaySize.isEmpty())
-        opts << QStringLiteral("new_display=") + displaySize;
+    if (!displaySize.isEmpty()) {
+        // The keyboard opens on the mirrored display, not on the phone's own
+        // screen (Android's default for a virtual display), where the driver
+        // can't see it.
+        opts << QStringLiteral("new_display=") + displaySize << QStringLiteral("display_ime_policy=local");
+    }
     if (attach) {
         qCInfo(lcScrcpyClient) << "attaching to the running server (scid" << m_scid << ")";
         args << QStringLiteral("logcat") << QStringLiteral("-v") << QStringLiteral("raw")

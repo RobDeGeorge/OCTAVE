@@ -341,7 +341,14 @@ private:
         Probe probe;
         QString serial;
         int sdk = 0;
+        QString phoneId;   // getprop ro.serialno: the phone, whatever the transport
     };
+    // Reattach only to the phone whose session was persisted. Unknown ids
+    // (an older adbd, a getprop timeout) keep the old time-only rule.
+    static bool samePhone(const QString &a, const QString &b)
+    {
+        return a.isEmpty() || b.isEmpty() || a == b;
+    }
     void continueStart(const StartPrep &prep, int generation);
     void runProbeJob(std::function<void()> job);
     void addNotice(const QString &notice);
@@ -429,6 +436,8 @@ private:
     // virtual display with the user's apps) alive on the phone for
     // ScrcpyClient::kPersistMs; the next start attaches to it.
     QString m_persistScid;
+    QString m_persistPhoneId;   // ro.serialno of the phone that owns m_persistScid
+    QString m_sessionPhoneId;   // ro.serialno of the phone being mirrored
     qint64 m_persistUntilMs = 0;
     bool m_attaching = false;
 

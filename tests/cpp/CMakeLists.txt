@@ -91,7 +91,7 @@ octave_add_test(tst_mediamanager
 octave_add_test(tst_musicdeviceassets)
 octave_add_test(tst_vehiclegate LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 
-octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
 
 # QML fixtures (tests/fixtures/), each run in its own qmlfixturehost process
 add_executable(qmlfixturehost qmlfixturehost.cpp

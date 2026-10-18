@@ -3,6 +3,11 @@
 // which errors are retried, and the phone picker with two phones.
 
 #include <QJSValue>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QVideoFrame>
+#include <QVideoFrameFormat>
+#include <QVideoSink>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -38,6 +43,7 @@ public:
     bool qrActive = false;
     QObject *sink = nullptr;
     int starts = 0;
+    QList<int> touchActions;   // injectTouch actions in order (0 down, 1 up, 2 move)
 
     bool yes() const { return true; }
     bool no() const { return false; }
@@ -57,7 +63,7 @@ public:
     Q_INVOKABLE void setViewSize(int, int) {}
     Q_INVOKABLE void startQrPairing() { qrActive = true; emit qrPairingChanged(); }
     Q_INVOKABLE void cancelQrPairing() { qrActive = false; emit qrPairingChanged(); }
-    Q_INVOKABLE void injectTouch(int, int, float, float) {}
+    Q_INVOKABLE void injectTouch(int, int action, float, float) { touchActions << action; }
     Q_INVOKABLE void wakePhone() {}
 
     // Test drivers
@@ -185,6 +191,40 @@ private slots:
         m_fake->probe("device");
         QCoreApplication::processEvents();
         QCOMPARE(m_fake->starts, 1);   // no restart loop
+    }
+
+    void touchThatStartsInTheLetterboxIsIgnored()
+    {
+        QQuickWindow window;
+        window.resize(1280, 720);
+        qobject_cast<QQuickItem *>(m_root.get())->setParentItem(window.contentItem());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        m_fake->goLive();
+        // A portrait phone in a landscape view: bars left and right of the picture
+        auto *sink = qobject_cast<QVideoSink *>(m_fake->sink);
+        QVERIFY(sink);
+        QVideoFrame frame(QVideoFrameFormat(QSize(360, 720), QVideoFrameFormat::Format_RGBA8888));
+        QVERIFY(frame.map(QVideoFrame::WriteOnly));
+        frame.unmap();
+        sink->setVideoFrame(frame);
+        QTest::qWait(50);
+
+        // Press in the left bar, drag onto the picture, release: nothing reaches the phone
+        QTest::mousePress(&window, Qt::LeftButton, {}, QPoint(100, 360));
+        QTest::mouseMove(&window, QPoint(640, 360));
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, QPoint(640, 360));
+        QCOMPARE(m_fake->touchActions, QList<int>());
+
+        // Press on the picture, drag into the bar: down, move (clamped), up
+        QTest::mousePress(&window, Qt::LeftButton, {}, QPoint(640, 360));
+        QTest::mouseMove(&window, QPoint(100, 360));
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, QPoint(100, 360));
+        QCOMPARE(m_fake->touchActions.first(), 0);
+        QCOMPARE(m_fake->touchActions.last(), 1);
+
+        qobject_cast<QQuickItem *>(m_root.get())->setParentItem(nullptr);
     }
 
     void pickerNeedsTwoUsablePhones()

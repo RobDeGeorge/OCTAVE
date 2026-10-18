@@ -8,6 +8,7 @@
 #   FAKE_ADB_SLOW       "push" or "shell": that step takes 0.5 s
 #   FAKE_ADB_SHELL_PID  the server shell writes its pid here, then waits to be killed
 #   FAKE_ADB_SDK        what getprop ro.build.version.sdk answers (default 34)
+#   FAKE_ADB_SERIALNO   what getprop ro.serialno answers (default R5CTFAKE)
 
 [ -n "$FAKE_ADB_LOG" ] && echo "$*" >> "$FAKE_ADB_LOG"
 if [ "$1" = "-s" ]; then shift 2; fi
@@ -27,6 +28,10 @@ devices)
 push)
     [ "$FAKE_ADB_SLOW" = push ] && sleep 0.5
     ;;
+logcat)
+    # Following a reattached server's log: stays open like the real one
+    exec sleep 600
+    ;;
 shell)
     case "$*" in
     *app_process*)
@@ -36,6 +41,7 @@ shell)
         ;;
     *ro.build.version.sdk*) echo "${FAKE_ADB_SDK:-34}" ;;
     *ro.product.model*) echo "SM-TEST" ;;
+    *ro.serialno*) echo "${FAKE_ADB_SERIALNO:-R5CTFAKE}" ;;
     esac
     ;;
 esac

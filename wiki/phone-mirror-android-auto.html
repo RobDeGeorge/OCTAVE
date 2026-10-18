@@ -229,8 +229,9 @@
           <ol class="steps">
             <li><strong>Preflight</strong>: <code>nativeAvailable</code> on the GUI thread; then, on the probe thread (so a dead
               Wi-Fi link or an adb restart never freezes the dash), <code>adb devices</code>, the phone to use (the one picked with
-              <code>selectDevice()</code>, else USB first), and unless attaching to a persisted session a stale-server kill
-              (<code>adb shell pkill -f org.octave.phoneserver</code>) and <code>getprop ro.build.version.sdk</code>. The result is handed
+              <code>selectDevice()</code>, else USB first), <code>getprop ro.serialno</code> (the phone's identity, whatever the transport), a
+              stale-server kill (<code>adb shell pkill -f org.octave.phoneserver</code>) unless reattaching to this same phone's persisted
+              session, and <code>getprop ro.build.version.sdk</code>. The result is handed
               back to the GUI thread, which drops it if <code>stopScrcpy()</code> ran meanwhile (a generation counter). <code>ScrcpyClient::bundledServerJar()</code>
               extracts the embedded jar to <code>&lt;temp&gt;/octave-phone-server-3.3.4-octave</code> (reused when the size matches).</li>
             <li><strong>Push</strong> the jar to <code>/data/local/tmp/octave-phone-server.jar</code> -- every session, because
@@ -245,7 +246,7 @@
   scid=SCID tunnel_forward=true video=true audio=true|false control=true clipboard_autosync=false \
   video_codec=h264 audio_codec=raw max_size=0 video_bit_rate=8000000 max_fps=60 stay_awake=true cleanup=true \
   send_device_meta=true send_frame_meta=true send_codec_meta=true send_dummy_byte=true log_level=info \
-  octave_persist_ms=60000|0 [video_codec_options=...] [new_display=WxH] 2&gt;&amp;1 &amp; wait"</code></pre>
+  octave_persist_ms=60000|0 [video_codec_options=...] [new_display=WxH display_ime_policy=local] 2&gt;&amp;1 &amp; wait"</code></pre>
               The <code>CLASSPATH=</code> assignment must come <em>before</em> <code>nohup</code> (an assignment after it is exec'd as a
               literal command; commit <code>bba3de6</code>). <code>nohup ... &amp; wait</code> keeps the adb shell relaying stdout for
               as long as the server lives, while the server survives adbd killing that shell on a USB dropout (it is reparented
@@ -515,7 +516,10 @@
             the socket with a connection of its own (commit <code>0a26f8e</code>). No reconnect within the window: "No client reconnected
             within N ms; exiting", the display is destroyed and <code>MirrorKeeper.shutdown()</code> runs.</p>
           <p><strong>Client</strong>: on a mid-stream disconnect of a ready virtual-display session the manager remembers the scid and a
-            deadline of now + 60 s − 5 s. The next <code>startScrcpy()</code> inside that window <em>attaches</em>: no push, no pkill,
+            deadline of now + 60 s − 5 s. The next <code>startScrcpy()</code> inside that window <em>attaches</em>, but only to the same phone: the session's
+            <code>ro.serialno</code> is kept with the scid, and a different phone picked inside the window starts fresh instead of
+            spending the 4 s attach deadline on a session that isn't there (an unknown serial keeps the time-only rule). Attaching
+            means no push, no pkill,
             re-forward the same scid, connect with a 4 s deadline, and follow the server log with
             <code>adb logcat -v raw -T 1 -s scrcpy:I</code> (its stdout went with the old shell). The reattached stream uses the lenient
             black test for its first 3 s so the handover never shows black. If the attach fails, the manager starts fresh on the
@@ -630,7 +634,8 @@
           <p><code>PhoneMirrorView.qml</code> uses a <code>MultiPointTouchArea</code> (<code>mouseEnabled</code>, 1–10 points; mouse arrives as one
             point) and forwards every point's pressed/updated/released (and canceled, as a release) through
             <code>injectTouch(pointId, action, relX, relY)</code>, mapped through <code>VideoOutput.contentRect</code> so letterboxing is
-            accounted for and clamped to 0..1. Tap, drag, scroll and long-press are verified on hardware; multi-finger gestures are
+            accounted for. A touch that starts in the letterbox (phone-screen mode) is ignored for its whole life, so a thumb resting
+            on the bars can't tap the phone's edge; one that starts on the picture is clamped to 0..1 if it drags off it. Tap, drag, scroll and long-press are verified on hardware; multi-finger gestures are
             implemented but untested (the test rig has no touchscreen).</p>
           <p><strong>Navigation row</strong> (◁ ○ ▢ &rarr; <code>pressBack</code> / <code>pressHome</code> / <code>pressAppSwitch</code>) sits on the bottom
             edge of the picture (not the letterbox band, where a translucent button on black is invisible) and is shown
@@ -759,7 +764,7 @@
             phone's own screen free (and dark) for the passenger, and on Samsung draws DeX with a taskbar that replaces the nav row.
             Coordinates are relative to the mirrored display so touch needs no display-id routing. The costs are documented rather
             than hidden: HOME/APP_SWITCH do nothing there (hence <code>am start --display</code>), the display shares the phone's power
-            group, and Android 11+ is required (the manager falls back to the phone screen below SDK 30).</p>
+            group, and Android 11+ is required (the manager falls back to the phone screen below SDK 30). With it the client sends <code>display_ime_policy=local</code>, so the on-screen keyboard opens on the mirrored display rather than on the phone's own screen, where the driver can't see it.</p>
           <h4>Why the keeper logic lives on the phone</h4>
           <p>From the dash the reaction is an adb round trip on a 1 s poll: ~1 s of black frames and a visible relight per press,
             plus adb processes spawned while a session is up. Inside the device a <code>DisplayListener</code> and a 250 ms poll react

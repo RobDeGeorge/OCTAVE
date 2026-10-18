@@ -113,24 +113,38 @@ Item {
 
         // Real multitouch over the control socket. Mouse input arrives as a
         // single touch point. Coordinates map through the letterboxed
-        // content rect to 0..1 of the mirrored display.
+        // content rect to 0..1 of the mirrored display. A touch that starts
+        // in the letterbox (phone-screen mode) is ignored for its whole life,
+        // so a thumb resting on the bars can't tap the phone's edge; a touch
+        // that starts on the picture is clamped if it drags off it.
         MultiPointTouchArea {
+            objectName: "mirrorTouchArea"
             anchors.fill: parent
             enabled: mirrorRunning
             mouseEnabled: true
             minimumTouchPoints: 1
             maximumTouchPoints: 10
 
-            function relPos(p) {
+            property var _ignored: ({})   // pointId -> true for letterbox presses
+
+            function rawPos(p) {
                 var r = video.contentRect
                 if (r.width <= 0 || r.height <= 0) return null
-                var x = (p.x - r.x) / r.width, y = (p.y - r.y) / r.height
-                return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) }
+                return { x: (p.x - r.x) / r.width, y: (p.y - r.y) / r.height }
             }
             function send(points, action) {
                 for (var i = 0; i < points.length; ++i) {
-                    var p = points[i], rp = relPos(p)
-                    if (rp && phoneMirrorManager) phoneMirrorManager.injectTouch(p.pointId, action, rp.x, rp.y)
+                    var p = points[i], rp = rawPos(p)
+                    if (action === 0 && rp && (rp.x < 0 || rp.x > 1 || rp.y < 0 || rp.y > 1))
+                        _ignored[p.pointId] = true
+                    if (_ignored[p.pointId]) {
+                        if (action === 1) delete _ignored[p.pointId]
+                        continue
+                    }
+                    if (rp && phoneMirrorManager)
+                        phoneMirrorManager.injectTouch(p.pointId, action,
+                                                       Math.max(0, Math.min(1, rp.x)),
+                                                       Math.max(0, Math.min(1, rp.y)))
                 }
             }
             onPressed: function(points) { send(points, 0) }

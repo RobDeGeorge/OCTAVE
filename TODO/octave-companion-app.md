@@ -20,7 +20,7 @@ Neither item blocks daily use in the Jeep. A separate app is its own product sur
 1. **First-run setup walkthrough.** **Effort:** M. **Device:** S22 or S26, starting from developer options off.
    - Replace the text block in `frontend/PhoneMirrorView.qml` (around line 498) with a step-by-step flow: enable developer options, USB debugging, then optionally Wireless debugging + QR pairing. Drive each step from `phoneMirrorManager.deviceState` / `deviceHint` so it advances on its own when the phone is seen.
    - Can be pure QML over the existing manager API; no app needed.
-   - Overlaps with `TODO/phone-mirror-robustness.md` item 3 (the "no adb" wording); do them together.
+   - The "no adb" wording in the app was already fixed (2026-10-18), so the walkthrough can reuse it.
 2. **Phone data channel: notifications, calls, battery (optionally SMS, phone GPS).** **Effort:** L. **Device:** S22 or S26.
    - **Decide first: extend `phone_server/` or build a separate app.**
      - *Extend `phone_server/`* (shell-privileged, already running during a mirror session, already has a device-message channel: `DeviceMessage.java` types 100–104 and a bulk lane in `DeviceMessageSender.java`). Battery and call state are easy from the shell; notifications need a `NotificationListener`, which a shell process may not be able to register. Only works while a mirror session runs.

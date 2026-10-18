@@ -98,13 +98,31 @@ bool PhoneMirrorManager::environmentOk()
     return nativeAvailable();
 }
 
+// How to get adb, for the person who actually hit the error: a source
+// checkout has the fetch script, a Linux install wants the distro package
+// (Debian / Raspberry Pi OS call it "adb"), and on Windows / macOS a release
+// bundles adb, so a missing one means a broken install.
+static QString adbInstallHint()
+{
+    const QString script = QDir::cleanPath(QCoreApplication::applicationDirPath()
+                                           + QStringLiteral("/../scripts/fetch_platform_tools.py"));
+    if (QFile::exists(script))
+        return QStringLiteral("run python3 scripts/fetch_platform_tools.py in the OCTAVE checkout");
+#if defined(Q_OS_LINUX)
+    return QStringLiteral("install it: sudo apt install adb on Raspberry Pi OS / Debian / Ubuntu, "
+                          "sudo pacman -S android-tools on Arch");
+#else
+    return QStringLiteral("reinstall OCTAVE, which bundles it, or install Google's Android platform-tools");
+#endif
+}
+
 QString PhoneMirrorManager::getInstallInstructions()
 {
     QStringList missing;
     if (!ScrcpyClient::available())
         missing << QStringLiteral("a build with libavcodec (the H.264 decoder) and the bundled phone server");
     if (m_adbPath.isEmpty())
-        missing << QStringLiteral("adb (run scripts/fetch_platform_tools.py or install android-tools)");
+        missing << QStringLiteral("adb (") + adbInstallHint() + QLatin1Char(')');
     if (!missing.isEmpty())
         return QStringLiteral("Phone mirroring needs ") + missing.join(QStringLiteral(" and ")) + QLatin1Char('.');
     return QStringLiteral("Enable USB debugging on the phone (Settings > Developer options), connect it "
@@ -433,7 +451,7 @@ QString PhoneMirrorManager::getDeviceState()
 QString PhoneMirrorManager::describeDeviceState(const QString &state)
 {
     if (state == QLatin1String("no-adb"))
-        return QStringLiteral("adb not found. Run scripts/fetch_platform_tools.py or install android-tools.");
+        return QStringLiteral("adb not found: ") + adbInstallHint() + QLatin1Char('.');
     if (state == QLatin1String("unauthorized"))
         return QStringLiteral("Phone is connected but USB debugging is not authorized. "
                               "Unlock the phone and tap 'Allow' on the USB debugging prompt.");
@@ -733,13 +751,18 @@ void PhoneMirrorManager::startScrcpy()
     if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
         attachScid = m_persistScid;
     const QString preferred = m_preferredSerial;
-    runProbeJob([this, gen, attachScid, preferred]() {
+    const QString persistPhoneId = m_persistPhoneId;
+    runProbeJob([this, gen, attachScid, persistPhoneId, preferred]() {
         StartPrep prep;
         prep.probe = probeDevices();
         prep.serial = pickSerial(prep.probe.rows, preferred);
         if (!prep.serial.isEmpty()) {
             const QStringList shell{QStringLiteral("-s"), prep.serial, QStringLiteral("shell")};
-            if (attachScid.isEmpty())   // clear a stale server first
+            prep.phoneId = runAdbFull(shell + QStringList{QStringLiteral("getprop"),
+                                                          QStringLiteral("ro.serialno")}, 5000).trimmed();
+            // Clear a stale server first, unless this is the phone whose
+            // session we are about to reattach to
+            if (attachScid.isEmpty() || !samePhone(prep.phoneId, persistPhoneId))
                 runAdbFull(shell + QStringList{QStringLiteral("pkill"), QStringLiteral("-f"),
                                                QLatin1String(ScrcpyClient::kServerProcessPattern)}, 5000);
             bool ok = false;
@@ -808,9 +831,15 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
     QString attachScid;
     // Any transport to the same phone may reattach: a cable pull fails over to
     // Wi-Fi (a different serial) and keeps the virtual display and its apps.
-    // Picking another phone clears m_persistScid (selectDevice).
-    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
-        attachScid = m_persistScid;
+    // Picking another phone clears m_persistScid (selectDevice), and a
+    // different phone picked automatically is caught by its ro.serialno.
+    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs) {
+        if (samePhone(prep.phoneId, m_persistPhoneId))
+            attachScid = m_persistScid;
+        else
+            qCInfo(lcPhoneMirror) << "Not reattaching: the persisted session belongs to another phone";
+    }
+    m_sessionPhoneId = prep.phoneId;
     m_attaching = !attachScid.isEmpty();
     if (!m_attaching)
         m_persistScid.clear();
@@ -1018,6 +1047,7 @@ void PhoneMirrorManager::onDisconnected(const QString &disconnectReason)
     if (wasReady && !m_activeDisplaySize.isEmpty() && m_client && !m_client->scid().isEmpty()) {
         // Link drop mid-stream: the server keeps the virtual display for kPersistMs
         m_persistScid = m_client->scid();
+        m_persistPhoneId = m_sessionPhoneId;
         m_persistUntilMs = QDateTime::currentMSecsSinceEpoch() + ScrcpyClient::kPersistMs - 5000;
     }
     setConnectionType(QString());

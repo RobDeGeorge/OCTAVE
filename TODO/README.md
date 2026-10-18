@@ -11,7 +11,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | File | Goal | Effort | Needs |
 |---|---|---|---|
 | [windows-adb-firewall.md](windows-adb-firewall.md) | Verify the new adb firewall rule in the Windows installer (code done) | S | Win11 VM, a phone |
-| [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror starts fast, recovers cleanly, works beyond Samsung (items 1–6 are S) | S … L | desktop first, then phones |
+| [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror recovers fast from network and USB changes, works beyond Samsung | S … L | phone on the Pi, then other phones |
 | [dashboards-roadmap.md](dashboards-roadmap.md) | Remove the Primitives Gallery, placeholder for too-new dashboards, then on-device checks | S, then checks | S22, Jeep |
 | [future-tests.md](future-tests.md) | Tests for volume routing, metadata sanitizing, settings round-trip, then bigger suites | S … L–XL | desktop |
 | [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, version from CMake, log check, then permissions / audio focus | S … L | S22 |
@@ -48,4 +48,4 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [android-auto-native-receiver.md](android-auto-native-receiver.md) | Android Auto straight into OCTAVE over USB, no DHU | XL | AA phone, Pi |
 | [carlinkit-dongle-port.md](carlinkit-dongle-port.md) | CarPlay / wireless Android Auto through a Carlinkit dongle | XL | $60 dongle, iPhone |
 
-Shared prerequisite for the last three and for phone-mirror item 11 (hardware decode): pull the H.264 decoder out of `src/phone_mirror/scrcpyclient.cpp` into its own class.
+Shared prerequisite for the last three and for phone-mirror item 6 (hardware decode): pull the H.264 decoder out of `src/phone_mirror/scrcpyclient.cpp` into its own class.
