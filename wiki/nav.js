@@ -1,6 +1,7 @@
 /**
- * OCTAVE Wiki — Sidebar Navigation
- * Injects the navigation into every page and highlights the current page.
+ * OCTAVE Python Wiki — Sidebar Navigation
+ * Injects the navigation and the frozen-snapshot banner into every page and
+ * highlights the current page.
  */
 (function () {
   const sections = [
@@ -44,7 +45,7 @@
         { href: "settings-reference.html", label: "Settings Reference" },
         { href: "signals-slots-reference.html", label: "Signals & Slots API" },
         { href: "hardware-setup.html", label: "Hardware Setup" },
-        { href: "building.html", label: "Building & CI/CD" },
+        { href: "building.html", label: "Running from Source" },
         { href: "development.html", label: "Development" },
         { href: "troubleshooting.html", label: "Troubleshooting" },
       ],
@@ -62,7 +63,7 @@
   let html = `
     <div class="sidebar-header">
       <a href="index.html" class="sidebar-logo">
-        OCTAVE <span class="logo-accent">wiki</span>
+        OCTAVE <span class="logo-accent">python wiki</span>
       </a>
     </div>
   `;
@@ -99,4 +100,28 @@
   // Insert into DOM
   document.body.insertBefore(sidebar, document.body.firstChild);
   document.body.insertBefore(toggle, document.body.firstChild);
+
+  // Frozen-snapshot banner at the top of every page
+  function addBanner() {
+    const inner = document.querySelector(".content-inner");
+    if (!inner || document.getElementById("frozen-banner")) return;
+    // index.html carries its own frozen-snapshot notice
+    for (const t of inner.querySelectorAll(".info-box-title")) {
+      if (t.textContent.startsWith("Frozen snapshot")) return;
+    }
+    const banner = document.createElement("div");
+    banner.className = "info-box warning";
+    banner.id = "frozen-banner";
+    banner.innerHTML =
+      '<div class="info-box-title">Frozen snapshot: Python / PySide6 backend</div>' +
+      'This wiki documents the Python backend exactly as it stood when it was frozen on the ' +
+      '<code>python-final</code> branch. It is not maintained and gets no fixes. Current OCTAVE ' +
+      'is C++ / Qt 6 only, on the <code>main</code> branch, with its own wiki in <code>wiki/</code> there.';
+    inner.insertBefore(banner, inner.firstChild);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", addBanner);
+  } else {
+    addBanner();
+  }
 })();

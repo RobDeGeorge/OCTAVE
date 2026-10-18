@@ -95,7 +95,7 @@
     }
 }</code></pre>
 
-        <p>Like every other QML file in the project, the bar defines local <code>dp()</code> / <code>dpMin()</code> wrappers (<code>Math.round(size * (App.Spacing.effectiveScale || 1.0))</code>) instead of calling <code>App.Spacing.dp()</code>. The comment at the top of the file explains why: calling functions on a QML singleton is unreliable on Android, so every file re-implements the two-line helper locally.</p>
+        <p>Like every other QML file in the project, the bar defines local <code>dp()</code> / <code>dpMin()</code> wrappers (<code>Math.round(size * (App.Spacing.effectiveScale || 1.0))</code>) instead of calling <code>App.Spacing.dp()</code>. The comment at the top of the file explains why: calling functions on a QML singleton is unreliable on Android, so every file re-implements the two-line helper locally. Under <span class="file-path">main.py</span> the wrapper and <code>App.Spacing.dp()</code> give the same result.</p>
 
         <h3>Section 1: Media Controls</h3>
         <p>In the horizontal layout this <code>Item</code> takes <code>parent.width * 0.4</code> when <code>settingsManager.showBottomBarMediaControls</code> is true. When the user hides the media controls the item stays in the layout but its width is bound to <code>clockSection.width</code>, so the navigation row still sits at the true horizontal centre. The vertical layout uses the same trick with heights (40&nbsp;% shown, 10&nbsp;% hidden).</p>
@@ -241,25 +241,23 @@
 }</code></pre>
 
         <h3>Volume Routing: VolumeController</h3>
-        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly (except for a fallback when <code>settingsManager</code> is missing). Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered by both backends. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
+        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly (except for a fallback when <code>settingsManager</code> is missing). Every change goes through <code>volumeController.applyVolume(percent)</code>, the <code>VolumeController</code> context property from <span class="file-path">backend/volume_utils.py</span>. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code> (<code>to_linear()</code>).</p>
 
         <table>
-          <thead><tr><th>Backend</th><th>Implementation</th><th>What <code>applyVolume(percent)</code> does</th></tr></thead>
+          <thead><tr><th>Member</th><th>What it does</th></tr></thead>
           <tbody>
             <tr>
-              <td>C++</td>
-              <td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td>
-              <td>Clamps to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code> &mdash; the same fan-out as the Python controller.</td>
+              <td><code>applyVolume(percent)</code> (<code>@Slot(int)</code>)</td>
+              <td>Clamps to 0&ndash;100, then calls, in order and skipping any output passed as <code>None</code>: <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>. <span class="file-path">main.py</span> constructs it with all four.</td>
             </tr>
             <tr>
-              <td>Python</td>
-              <td><span class="file-path">backend/volume_utils.py</span></td>
-              <td>Clamps, calls <code>settings_manager.setCurrentVolume(percent)</code>, <code>media_manager.setVolume(linear)</code>, <code>phone_mirror_manager.setVolume(linear)</code>, <code>esp32_manager.send_volume_update(percent)</code>.</td>
+              <td><code>toLinear(percent)</code> (<code>@Slot(float, result=float)</code>)</td>
+              <td>The curve alone, for QML, without dispatching.</td>
             </tr>
           </tbody>
         </table>
 
-        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (both entry points also apply it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). The vertical layout's handler does the same for <code>volumeControlVertical</code> / <code>volumeSliderVertical</code>, guarded by <code>!volumeSliderVertical.pressed</code>.</p>
+        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (<span class="file-path">main.py</span> also applies it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). The vertical layout's handler does the same for <code>volumeControlVertical</code> / <code>volumeSliderVertical</code>, guarded by <code>!volumeSliderVertical.pressed</code>.</p>
 
         <div class="info-box info">
           <div class="info-box-title">One Curve, One Entry Point</div>
@@ -345,11 +343,11 @@
             </tr>
             <tr>
               <td>Android Auto</td><td><code>android_auto_button.svg</code> / <code>bottomBarAndroidAutoButton</code></td>
-              <td>Pushes <code>AndroidAutoView.qml</code>. Visible only when <code>settingsManager.androidAutoEnabled</code> and not on Android (<code>typeof isAndroid === "undefined" || !isAndroid</code>).</td>
+              <td>Would open <code>AndroidAutoView.qml</code> through <code>openAndroidAutoSection()</code> (<code>stackView.openPage()</code>), but the button is hard-coded <code>visible: false</code> in both layouts ("Android Auto shelved in favour of phone mirroring"), so it never shows.</td>
             </tr>
             <tr>
               <td>Phone Mirror</td><td><code>phone_mirror_button.svg</code> / <code>bottomBarPhoneMirrorButton</code></td>
-              <td><code>openPhoneMirrorSection()</code> &rarr; <code>stackView.openPage("PhoneMirrorView.qml")</code>: pops back to the cached view if it is on the stack (so the running mirror session is reused) or pushes it. Pressed while the mirror view is already showing and <code>mirrorRunning</code>, it calls <code>phoneMirrorManager.pressHome()</code> instead, so the button doubles as the phone's Home button. Same visibility rule as Android Auto, keyed on <code>phoneMirrorEnabled</code>.</td>
+              <td><code>openPhoneMirrorSection()</code> &rarr; <code>stackView.openPage("PhoneMirrorView.qml")</code>: pops back to the cached view if it is on the stack (so the running mirror session is reused) or pushes it. Pressed while the mirror view is already showing and <code>mirrorRunning</code>, it calls <code>phoneMirrorManager.pressHome()</code> instead, so the button doubles as the phone's Home button. Visible only when <code>phoneMirrorManager.nativeAvailable</code> (PyAV importable, the bundled phone-server jar found and adb found) and <code>settingsManager.phoneMirrorEnabled</code>.</td>
             </tr>
           </tbody>
         </table>
@@ -378,12 +376,12 @@
     }
 }</code></pre>
 
-        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (carousel tab, hub card, dashboard card; the default grid's About tile shows a static dot) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is produced by <code>NetworkManager</code> in both backends (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
+        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (carousel tab, hub card, dashboard card; the default grid's About tile shows a static dot) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is a property of <code>NetworkManager</code> in <span class="file-path">backend/network_manager.py</span> (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
 
         <!-- Clock -->
         <h2 id="clock">Clock Section</h2>
 
-        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in both backends emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>), fitted to the available clock slot. With Auto off, it uses <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px). Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
+        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> in <span class="file-path">backend/clock.py</span> emits <code>timeChanged(str)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>), fitted to the available clock slot. With Auto off, it uses <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px). Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
 
         <p>Both layouts bind their clock <code>Text</code> to one bar-level property, <code>bottomBar.clockTimeText</code>, which a single <code>Connections</code> on <code>clock.timeChanged</code> (also at bar level, outside both layout components) keeps current:</p>
 
@@ -406,14 +404,14 @@
         <!-- External Volume -->
         <h2 id="external-volume">External Volume Sources</h2>
 
-        <p>Volume can change without the slider being touched. All of these end in <code>volumeController.applyVolume()</code> in one of the backends, so the bar simply reacts to <code>mediaManager.volumeChanged</code>:</p>
+        <p>Volume can change without the slider being touched. All of these end in <code>VolumeController.applyVolume()</code> on the Python side, so the bar simply reacts to <code>mediaManager.volumeChanged</code>:</p>
 
         <table>
           <thead><tr><th>Source</th><th>Path</th></tr></thead>
           <tbody>
-            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span> / <span class="file-path">main.py</span>). The knob's mute button toggles <code>mediaManager</code> mute and the bar's icon follows via <code>muteChanged</code>.</td></tr>
-            <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
-            <tr><td>Startup</td><td>Persisted <code>currentVolume</code> is applied by the entry point and again by the bar's <code>Component.onCompleted</code>.</td></tr>
+            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">main.py</span>'s <code>handle_esp32_volume_change()</code>, which accumulates fractional deltas and applies whole steps). The knob's mute button toggles <code>mediaManager</code> mute and the bar's icon follows via <code>muteChanged</code>.</td></tr>
+            <tr><td>PAJ7620U2 gesture sensor</td><td><code>gestureSensor.actionTriggered("volume_up" / "volume_down")</code> &rarr; <span class="file-path">main.py</span>'s <code>handle_gesture_action()</code> calls <code>applyVolume(currentVolume &plusmn; step)</code> with <code>settingsManager.gestureVolumeStep</code>.</td></tr>
+            <tr><td>Startup</td><td>Persisted <code>currentVolume</code> is applied by <span class="file-path">main.py</span> and again by the bar's <code>Component.onCompleted</code>.</td></tr>
           </tbody>
         </table>
 
@@ -429,7 +427,7 @@
           <li><code>mediaToggleShuffle()</code> &rarr; nothing while the phone has the controls, else <code>mediaManager.toggle_shuffle()</code></li>
         </ul>
 
-        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>), <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered under the same names by <span class="file-path">src/main.cpp</span> and <span class="file-path">main.py</span>.</p>
+        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>), <code>volumeController</code>, <code>networkManager</code>, and <code>clock</code> &mdash; are all registered by <span class="file-path">main.py</span> before <span class="file-path">Main.qml</span> loads.</p>
 
         <!-- Visibility popup -->
         <h2 id="visibility-popup">Toggle View Popup</h2>
@@ -520,7 +518,7 @@
             </tr>
             <tr>
               <td>Nav row shrinks its spacing and sits at <code>z: 1</code></td>
-              <td>Comments: "Shrink the gap between buttons when they would not fit, instead of overflowing under the clock / media controls" and "keep it above the neighbouring sections so the outermost buttons (e.g. Phone Mirror) still receive clicks". Enabling Android Auto and Phone Mirror adds two buttons to a row sized for five.</td>
+              <td>Comments: "Shrink the gap between buttons when they would not fit, instead of overflowing under the clock / media controls" and "keep it above the neighbouring sections so the outermost buttons (e.g. Phone Mirror) still receive clicks". Enabling Phone Mirror adds a sixth button to a row sized for five.</td>
             </tr>
             <tr>
               <td>Nine circular touch areas on the popup slider</td>

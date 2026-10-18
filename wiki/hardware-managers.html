@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Hardware Managers</div>
           <h1 class="page-title">Hardware Managers</h1>
-          <p class="page-subtitle">ESP32 Volume Knob, BerryIMU v3 Sensor Fusion, PAJ7620U2 Gesture Sensor, and the VolumeController they all feed &mdash; C++ and Python backends side by side</p>
+          <p class="page-subtitle">ESP32 Volume Knob, BerryIMU v3 Sensor Fusion, PAJ7620U2 Gesture Sensor, and the VolumeController they all feed</p>
         </div>
 
         <nav class="toc">
@@ -42,7 +42,6 @@
                 <li><a href="#imu-quaternion">Quaternion Output</a></li>
                 <li><a href="#imu-calibration">Gyro Calibration, Zero &amp; Reset</a></li>
                 <li><a href="#imu-consumers">QML Consumers</a></li>
-                <li><a href="#imu-android">Android: QtSensors Implementation</a></li>
                 <li><a href="#imu-api">Signals, Properties &amp; Slots</a></li>
               </ul>
             </li>
@@ -55,8 +54,8 @@
                 <li><a href="#gesture-api">Signals, Properties &amp; Slots</a></li>
               </ul>
             </li>
+            <li><a href="#dev-mode">Dev Mode Simulation</a></li>
             <li><a href="#design-decisions">Design Decisions</a></li>
-            <li><a href="#parity">C++ / Python Differences</a></li>
           </ul>
         </nav>
 
@@ -64,21 +63,25 @@
         <section id="overview">
           <h2>Overview &amp; Platform Availability</h2>
           <p>
-            Three managers talk to physical peripherals. Each exists twice &mdash; a C++ class in
-            <span class="file-path">src/managers/</span> and a PySide6 class in <span class="file-path">backend/</span> &mdash;
-            with the same class name, the same QML context-property name and the same public Slots / Signals / Properties.
-            Both are instantiated and registered in <span class="file-path">src/main.cpp</span> ("Phase 4: Vehicle &amp; Hardware")
-            and <span class="file-path">main.py</span>.
+            Three managers talk to physical peripherals, and a fourth object routes volume to every output. Each is a PySide6
+            <code>QObject</code> in <span class="file-path">backend/</span>, created in <span class="file-path">main.py</span>,
+            given the settings manager through <code>connect_settings_manager()</code>, and registered as a QML context property.
           </p>
           <table>
-            <thead><tr><th>Manager</th><th>QML name</th><th>C++</th><th>Python</th><th>Log category / logger</th><th>Transport</th></tr></thead>
+            <thead><tr><th>Class</th><th>QML name</th><th>File</th><th>Logger</th><th>Transport</th></tr></thead>
             <tbody>
-              <tr><td><code>ESP32VolumeManager</code></td><td><code>esp32VolumeManager</code></td><td><span class="file-path">src/managers/esp32volumemanager.{h,cpp}</span></td><td><span class="file-path">backend/esp32_volume_manager.py</span></td><td><code>octave.esp32volume</code> / <code>backend.esp32_volume_manager</code></td><td>USB serial (QSerialPort / pyserial)</td></tr>
-              <tr><td><code>BerryIMUManager</code></td><td><code>berryIMU</code></td><td><span class="file-path">src/managers/berryimumanager.{h,cpp}</span></td><td><span class="file-path">backend/berryimu_manager.py</span></td><td><code>octave.berryimu</code> (<code>octave.imu.mobile</code> on Android) / <code>backend.berryimu_manager</code></td><td>I2C bus 2 (<code>/dev/i2c-2</code>)</td></tr>
-              <tr><td><code>GestureManager</code></td><td><code>gestureSensor</code></td><td><span class="file-path">src/managers/gesturemanager.{h,cpp}</span></td><td><span class="file-path">backend/gesture_manager.py</span></td><td><code>octave.gesture</code> / <code>backend.gesture_manager</code></td><td>I2C bus 2 (<code>/dev/i2c-2</code>)</td></tr>
-              <tr><td><code>VolumeController</code></td><td><code>volumeController</code></td><td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td><td><span class="file-path">backend/volume_utils.py</span></td><td>&mdash;</td><td>&mdash; (routes 0&ndash;100 % to every audio output)</td></tr>
+              <tr><td><code>ESP32VolumeManager</code></td><td><code>esp32VolumeManager</code></td><td><span class="file-path">backend/esp32_volume_manager.py</span></td><td><code>octave.esp32_volume_manager</code></td><td>USB serial (pyserial)</td></tr>
+              <tr><td><code>BerryIMUManager</code></td><td><code>berryIMU</code></td><td><span class="file-path">backend/berryimu_manager.py</span></td><td><code>octave.berryimu_manager</code></td><td>I2C bus 2 (<code>/dev/i2c-2</code>) via <code>smbus2</code></td></tr>
+              <tr><td><code>GestureManager</code></td><td><code>gestureSensor</code></td><td><span class="file-path">backend/gesture_manager.py</span></td><td><code>octave.gesture_manager</code></td><td>I2C bus 2 (<code>/dev/i2c-2</code>) via <code>smbus2</code> (or legacy <code>smbus</code>)</td></tr>
+              <tr><td><code>VolumeController</code></td><td><code>volumeController</code></td><td><span class="file-path">backend/volume_utils.py</span></td><td>&mdash;</td><td>&mdash; (routes 0&ndash;100 % to every audio output)</td></tr>
             </tbody>
           </table>
+          <p>
+            Logger names come from <code>get_logger(__name__)</code> in <span class="file-path">backend/logging_config.py</span>,
+            which turns <code>backend.foo</code> into <code>octave.foo</code>. Each manager's <code>cleanup()</code> runs from
+            <code>cleanup_on_quit()</code> in <span class="file-path">main.py</span>, connected to <code>aboutToQuit</code>; SIGTERM
+            and SIGINT call <code>app.quit()</code>, so they reach it too.
+          </p>
 
           <h3>What runs where</h3>
           <table>
@@ -86,36 +89,37 @@
             <tbody>
               <tr>
                 <td><span class="platform-badge linux">Linux / Raspberry Pi / Orange Pi</span></td>
-                <td>Full (both backends)</td>
-                <td>Full (both backends)</td>
-                <td>Full (both backends)</td>
+                <td>Yes</td>
+                <td>Yes</td>
+                <td>Yes</td>
               </tr>
               <tr>
                 <td><span class="platform-badge desktop">Windows / macOS</span></td>
-                <td>Full (both backends)</td>
+                <td>Yes</td>
                 <td colspan="2">
-                  Compiled but inert. C++: <code>startSensor()</code> is wrapped in <code>#ifndef Q_OS_LINUX</code>, logs
-                  "I2C sensors not available on this platform", emits <code>connectionStatusChanged("Disconnected")</code>
-                  and never retries. Python: <code>smbus2</code> is only installed on Linux
-                  (<span class="file-path">requirements.txt</span>: <code>smbus2&gt;=0.4.3; sys_platform == "linux"</code>), so
-                  the <code>import</code> fails, the manager emits "Disconnected" and never retries.
+                  Inert. <code>smbus2</code> is only installed on Linux
+                  (<span class="file-path">requirements.txt</span>: <code>smbus2&gt;=0.4.3; sys_platform == "linux"</code>), so the
+                  import in <code>_start()</code> fails, the manager emits "Disconnected" and never retries. (The gesture manager
+                  also tries the legacy <code>smbus</code> module before giving up.)
                 </td>
-              </tr>
-              <tr>
-                <td><span class="platform-badge android">Android (C++ only)</span></td>
-                <td>Stub: never emits, <code>is_connected()</code> is <code>false</code>, detail "Not available on mobile"</td>
-                <td>Replaced by a QtSensors implementation (<a href="#imu-android">below</a>)</td>
-                <td>Stub: <code>connectionStatus</code> = "Disabled on mobile", never emits</td>
               </tr>
             </tbody>
           </table>
+
+          <h3>Threads</h3>
+          <table>
+            <thead><tr><th>Manager</th><th>Background thread</th><th>What stays on the GUI thread</th></tr></thead>
+            <tbody>
+              <tr><td><code>ESP32VolumeManager</code></td><td>A daemon <code>threading.Thread</code> running <code>_read_loop</code>, blocking in <code>readline()</code>; started on every successful connect</td><td>Opening the port, all five timers, every write (volume, mute, colour, keepalive)</td></tr>
+              <tr><td><code>BerryIMUManager</code></td><td>A daemon <code>threading.Thread</code> running <code>_read_loop</code> (gyro calibration, then the paced loop)</td><td>Opening the bus and initialising the three chips in <code>_start()</code>, retries (scheduled with <code>run_on_main</code>)</td></tr>
+              <tr><td><code>GestureManager</code></td><td>A daemon <code>threading.Thread</code> running <code>_read_loop</code></td><td>Opening the bus, wake-up, chip-ID check and the 219-entry init table in <code>_start()</code>, retries</td></tr>
+            </tbody>
+          </table>
           <p>
-            The mobile split is a compile-time switch: every hardware header has an <code>#ifndef Q_OS_MOBILE</code> desktop
-            branch and an <code>#else</code> stub, and <span class="file-path">CMakeLists.txt</span> defines
-            <code>Q_OS_MOBILE</code> only for Android builds (<code>$&lt;$&lt;BOOL:${ANDROID}&gt;:Q_OS_MOBILE&gt;</code>; iOS is
-            noted as "later"). The stubs exist so QML <code>Connections</code> handlers and
-            <code>typeof esp32VolumeManager !== "undefined"</code> guards resolve on mobile without per-platform QML
-            (see commit <code>78ab72c</code>).
+            Signals emitted on a read thread (knob ticks, IMU values, gestures, the "Error" status after a failed read) reach QML
+            and the <span class="file-path">main.py</span> handlers as queued connections, because the managers live on the GUI
+            thread. State changes that must happen on the GUI thread are handed back with <code>run_on_main()</code>
+            (<span class="file-path">backend/qt_threading.py</span>).
           </p>
         </section>
 
@@ -123,9 +127,9 @@
         <section id="esp32-overview">
           <h2>ESP32 Volume Manager</h2>
           <p>
-            <strong>ESP32VolumeManager</strong> provides wireless rotary-encoder volume control. Two ESP32 boards are involved:
-            an encoder unit with the knob, and an ESP32-S3 "receiver dongle" that plugs into the computer over USB and forwards
-            the encoder's commands as newline-terminated text. OCTAVE only ever talks to the dongle.
+            <strong>ESP32VolumeManager</strong> provides wireless rotary-encoder volume control. Per the module docstring two ESP32
+            boards are involved: an encoder unit with the knob, and an ESP32-S3 "receiver dongle" that plugs into the computer over
+            USB and forwards the encoder's commands as newline-terminated text. OCTAVE only ever talks to the dongle.
           </p>
           <span class="platform-badge linux">Linux</span>
           <span class="platform-badge desktop">Windows</span>
@@ -133,8 +137,8 @@
           <div class="info-box warning">
             <div class="info-box-title">Firmware is not in this repository</div>
             The ESP32 sketches are not part of the OCTAVE tree (there are no <code>.ino</code> / PlatformIO sources here). What
-            this page documents is the <em>contract</em> both backends implement: the serial parameters, the incoming command
-            grammar and the outgoing LED commands. Firmware must implement this serial protocol; the wireless link and LED behaviour are outside this repository.
+            this page documents is the <em>contract</em> the manager implements: the serial parameters, the incoming command
+            grammar and the outgoing LED commands. The wireless link and LED behaviour are up to the firmware.
           </div>
         </section>
 
@@ -144,12 +148,12 @@
 +-------------------+         ESP-NOW         +-------------------+
 |  ESP32 Encoder    | ~~~~~~~~~~~~~~~~~~~~~~&gt; |  ESP32-S3 Dongle  |
 |  (Rotary Knob)    |      (Wireless)         |  (USB Receiver)   |
-|  - Rotary encoder |                         |  - USB CDC serial |
+|  - Rotary encoder |                         |  - USB serial     |
 |  - Button press   |                         |  - LED ring       |
 +-------------------+                         +--------+----------+
                                                        |
                                                   USB Serial
-                                                  115200 8N1
+                                                   115200
                                                        |
                                               +--------v----------+
                                               |      OCTAVE       |
@@ -157,112 +161,96 @@
                                               +-------------------+
           </pre>
           <p>
-            ESP-NOW is Espressif's connectionless peer-to-peer link; the encoder unit sends
-            <code>+</code> / <code>-</code> / <code>M</code> style commands to the dongle, which forwards them over USB.
-            The link between the two ESP32s is invisible to OCTAVE.
+            ESP-NOW is Espressif's connectionless peer-to-peer link; the encoder unit sends <code>+</code> / <code>-</code> /
+            <code>M</code> style commands to the dongle, which forwards them over USB. The link between the two ESP32s is
+            invisible to OCTAVE.
           </p>
         </section>
 
         <section id="esp32-serial">
           <h3>Serial Communication</h3>
           <p>
-            Both backends open the port at <strong>115200 baud</strong>. C++ sets 8 data bits, no parity, one stop bit, no
-            flow control explicitly (<code>QSerialPort::Data8 / NoParity / OneStop / NoFlowControl</code>); Python relies on
-            pyserial's defaults (also 8N1) and adds a <strong>1 s read and write timeout</strong>. Incoming bytes are buffered
-            and split on <code>\n</code>; each non-empty line is trimmed, upper-cased and handed to the command parser.
+            The port is opened with <code>serial.Serial(port, baudrate=115200, timeout=1, write_timeout=1)</code>; everything else
+            is pyserial's default (8 data bits, no parity, one stop bit, no flow control). A daemon thread runs
+            <code>_read_loop</code>:
           </p>
-          <p>The two backends read the port very differently:</p>
-          <table>
-            <thead><tr><th></th><th>Python</th><th>C++</th></tr></thead>
-            <tbody>
-              <tr>
-                <td>Reader</td>
-                <td>Dedicated daemon thread <code>_read_loop</code>, started on connect</td>
-                <td>No thread: <code>QSerialPort::readyRead</code> is delivered on the main event loop and handled by <code>onSerialReadyRead()</code></td>
-              </tr>
-              <tr>
-                <td>Waiting</td>
-                <td><code>readline()</code> <em>blocks</em> for up to the 1 s port timeout (GIL released); a timeout returns <code>b""</code> and the loop re-checks <code>_stop_thread</code>. Before commit <code>94d61be</code> it polled <code>in_waiting</code> at 100 Hz.</td>
-                <td>Event-driven; <code>readAll()</code> appends to <code>m_readBuffer</code></td>
-              </tr>
-              <tr>
-                <td>Partial lines</td>
-                <td>Kept in <code>buffer</code> across reads (a <code>readline()</code> that times out mid-line returns the partial bytes)</td>
-                <td>Kept in <code>m_readBuffer</code> until a <code>\n</code> arrives</td>
-              </tr>
-              <tr>
-                <td>Overlong lines</td>
-                <td colspan="2">Both backends: a partial line longer than <code>ESP32_MAX_LINE_BYTES</code> (256) without a newline is line noise; it is dropped with one warning per connection and the reader resyncs by discarding everything up to the next <code>\n</code></td>
-              </tr>
-              <tr>
-                <td>Signal delivery</td>
-                <td><code>volumeChangeRequested</code> / <code>muteToggleRequested</code> are emitted from the read thread (queued to the main thread by Qt)</td>
-                <td>Emitted directly on the main thread</td>
-              </tr>
-            </tbody>
-          </table>
+          <ul>
+            <li><code>readline()</code> <em>blocks</em> for up to the 1 s port timeout (the GIL is released while it waits); a
+              timeout returns <code>b""</code> and the loop re-checks <code>_stop_thread</code>.</li>
+            <li>Bytes are decoded as UTF-8 (errors ignored) into a buffer and split on <code>\n</code>; a <code>readline()</code>
+              that times out mid-line returns the partial bytes, which stay in the buffer until the newline arrives. Each
+              non-empty line is stripped, upper-cased and handed to <code>_process_command()</code>.</li>
+            <li>If the buffer still holds more than <code>ESP32_MAX_LINE_BYTES</code> (256) with no newline, it is line noise:
+              it is dropped with one warning per connection, and the reader resyncs by discarding everything up to the next
+              <code>\n</code>. Covered by <span class="file-path">tests/test_esp32_read_buffer.py</span>.</li>
+            <li>A <code>serial.SerialException</code> logs <em>serial read error</em>, queues <code>_handle_disconnect</code> on
+              the GUI thread with <code>run_on_main()</code> and ends the thread. Any other exception is logged and the loop
+              continues after 100 ms.</li>
+          </ul>
           <pre><code><span class="kw">def</span> <span class="fn">_read_loop</span>(<span class="prop">self</span>):
     buffer = <span class="str">""</span>
     <span class="kw">while not</span> <span class="prop">self</span>._stop_thread <span class="kw">and</span> <span class="prop">self</span>._serial_connection:
         <span class="kw">try</span>:
-            <span class="cmt"># Block in readline() (1 s port timeout, GIL released) instead of</span>
-            <span class="cmt"># polling in_waiting at 100 Hz for a knob that sends a few bytes a second.</span>
             data = <span class="prop">self</span>._serial_connection.readline()
             <span class="kw">if not</span> data:
                 <span class="kw">continue</span>
-            buffer += data.decode(<span class="str">'utf-8'</span>, errors=<span class="str">'ignore'</span>)
+            buffer += data.decode(<span class="str">'utf-8'</span>, errors=<span class="str">'ignore'</span>)   <span class="cmt"># (overflow resync omitted)</span>
             <span class="kw">while</span> <span class="str">'\n'</span> <span class="kw">in</span> buffer:
                 line, buffer = buffer.split(<span class="str">'\n'</span>, <span class="num">1</span>)
                 line = line.strip()
                 <span class="kw">if</span> line:
                     <span class="prop">self</span>._process_command(line)
         <span class="kw">except</span> serial.SerialException <span class="kw">as</span> e:
-            run_on_main(self._handle_disconnect)  <span class="cmt"># hop to the main thread</span>
+            run_on_main(<span class="prop">self</span>._handle_disconnect)   <span class="cmt"># hop to the GUI thread</span>
             <span class="kw">break</span></code></pre>
+          <p>
+            <code>volumeChangeRequested</code> and <code>muteToggleRequested</code> are emitted from the read thread and delivered to
+            the <span class="file-path">main.py</span> handlers on the GUI thread.
+          </p>
         </section>
 
         <section id="esp32-discovery">
           <h3>Device Discovery &amp; Startup</h3>
           <p>
-            ESP32-S3 boards enumerate with Espressif's USB Vendor ID <strong>0x303A</strong>. Both backends put a port whose
-            VID matches (or whose description contains <code>jtag</code>, <code>esp32-s3</code> or <code>esp32s3</code>) at the
-            front of the list and remember it as <code>_esp32_s3_port</code> / <code>m_esp32S3Port</code>. The OBD serial port
-            (<code>settingsManager.obdBluetoothPort</code>) is always excluded so the two features cannot fight over one device.
-            Results are de-duplicated and sorted; <code>availablePortsChanged</code> fires only when the list actually changes.
+            ESP32-S3 boards enumerate with Espressif's USB Vendor ID <strong>0x303A</strong>. <code>_scan_for_devices()</code>
+            remembers a matching port as <code>_esp32_s3_port</code> (used for auto-selection below). The OBD port
+            (<code>settingsManager.obdBluetoothPort</code>) is always removed so the two features cannot fight over one device.
+            The final list is de-duplicated and sorted; <code>availablePortsChanged</code> fires only when it actually changes.
           </p>
           <table>
-            <thead><tr><th>Platform</th><th>Python (<code>pyserial list_ports</code> + <code>glob</code>)</th><th>C++ (<code>QSerialPortInfo::availablePorts()</code>)</th></tr></thead>
+            <thead><tr><th>Platform</th><th>ESP32-S3 test (<code>serial.tools.list_ports.comports()</code>)</th><th>Other ports listed</th></tr></thead>
             <tbody>
               <tr>
                 <td><span class="platform-badge desktop">Windows</span></td>
-                <td>Every COM port; ESP32-S3 by <code>303a</code> in hwid or keyword in description; other ports accepted if the description contains <code>cp210</code>, <code>ch340</code>, <code>ch910</code>, <code>ftdi</code>, <code>usb serial</code>, <code>silicon labs</code>, <code>prolific</code>, or the device name starts with <code>COM</code></td>
-                <td rowspan="3">Same VID / keyword test on every platform via <code>vendorIdentifier() == 0x303A</code>. Non-ESP32 ports are accepted if they match the same USB-serial keyword list <em>or</em> simply have a non-empty <code>systemLocation()</code> &mdash; in practice every enumerated port is listed. No glob patterns are used.</td>
+                <td><code>303a</code> in the hwid, or <code>jtag</code>, <code>esp32-s3</code> or <code>esp32s3</code> in the description</td>
+                <td>A description containing <code>cp210</code>, <code>ch340</code>, <code>ch910</code>, <code>ftdi</code>, <code>usb serial</code>, <code>silicon labs</code> or <code>prolific</code>, or any device whose name starts with <code>COM</code> (so in practice every COM port)</td>
               </tr>
               <tr>
                 <td><span class="platform-badge desktop">macOS</span></td>
-                <td>VID / <code>jtag</code> test, then globs <code>/dev/tty.usbserial*</code>, <code>/dev/cu.usbserial*</code>, <code>/dev/tty.usbmodem*</code>, <code>/dev/cu.usbmodem*</code>, <code>/dev/tty.SLAB*</code>, <code>/dev/cu.SLAB*</code>, <code>/dev/tty.wchusbserial*</code>, <code>/dev/cu.wchusbserial*</code></td>
+                <td><code>303a</code> in the hwid or <code>jtag</code> in the description</td>
+                <td>Globs <code>/dev/tty.usbserial*</code>, <code>/dev/cu.usbserial*</code>, <code>/dev/tty.usbmodem*</code>, <code>/dev/cu.usbmodem*</code>, <code>/dev/tty.SLAB*</code>, <code>/dev/cu.SLAB*</code>, <code>/dev/tty.wchusbserial*</code>, <code>/dev/cu.wchusbserial*</code></td>
               </tr>
               <tr>
                 <td><span class="platform-badge linux">Linux</span></td>
-                <td>VID test only (no description keywords), then globs <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code></td>
+                <td><code>303a</code> in the hwid only</td>
+                <td>Globs <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code></td>
               </tr>
             </tbody>
           </table>
 
           <h4>Startup sequence</h4>
           <ol class="steps">
-            <li><code>connect_settings_manager()</code> wires the five <code>esp32*Changed</code> settings signals, reads <code>esp32VolumeStepSize</code>, and starts a <strong>3 s one-shot startup timer</strong>.</li>
-            <li><code>_initial_connect()</code> / <code>initialConnect()</code> runs a scan. If <code>esp32VolumeEnabled</code> is false it stops here.</li>
-            <li>The port comes from <code>esp32VolumePort</code>. <strong>Only if that setting is empty</strong> does auto-selection happen: the detected ESP32-S3 port is saved via <code>save_esp32_volume_port()</code>; failing that, the first non-OBD port in the scan list is saved and used.</li>
+            <li><code>connect_settings_manager()</code> wires the five <code>esp32*Changed</code> settings signals (port, enabled, step size, auto-reconnect, LED sleep), reads <code>esp32VolumeStepSize</code>, and starts a <strong>3 s one-shot startup timer</strong>.</li>
+            <li><code>_initial_connect()</code> runs a scan. If <code>esp32VolumeEnabled</code> is false it stops here.</li>
+            <li>The port comes from <code>esp32VolumePort</code>. <strong>Only if that setting is empty</strong> does auto-selection happen: the detected ESP32-S3 port is saved via <code>save_esp32_volume_port()</code>; failing that, the first scanned port that is not the OBD port is saved and used.</li>
             <li>With a port, <code>connect_device()</code> is called; without one the detail becomes "No port configured - select one above".</li>
           </ol>
           <div class="info-box info">
             <div class="info-box-title">Default port is empty = auto-select</div>
-            Both settings managers default <code>esp32VolumePort</code> to <code>""</code>, so a fresh install runs the
-            auto-selection above and connects to the detected ESP32-S3 on the first start (older files that still carry the
-            former <code>"COM7"</code> default keep trying that port until it is changed). Picking a port in
-            Settings &rarr; Accessories &rarr; Volume Knob (the list marks the ESP32-S3 "(Recommended)") calls
-            <code>save_esp32_volume_port()</code> and triggers a reconnect 500 ms later.
+            The settings manager defaults <code>esp32VolumePort</code> to <code>""</code>, so a fresh install runs the
+            auto-selection above and connects to the detected ESP32-S3 on the first start. Picking a port in
+            Settings &rarr; Accessories &rarr; Volume Knob (the list marks the ESP32-S3 "(Recommended)") saves it, which
+            disconnects and reconnects 500 ms later.
           </div>
 
           <h4><code>connect_device()</code></h4>
@@ -270,13 +258,14 @@
             <li>Returns early if already connected, if there is no settings manager, or if <code>esp32VolumeEnabled</code> is false.</li>
             <li>Empty port &rarr; status <strong>"Not Configured"</strong>, detail "No port configured", and the 10 s background scan timer starts.</li>
             <li>Otherwise status <strong>"Connecting"</strong> ("Connecting to &lt;port&gt;...") and the port is opened.</li>
-            <li>Success &rarr; <strong>"Connected"</strong> ("Connected to ESP32 on &lt;port&gt;"), reconnect counter reset, read thread started (Python) / read buffer cleared (C++), keepalive timer started <em>only if</em> <code>esp32LedSleepEnabled</code> is false, background scan stopped.</li>
-            <li>Failure &rarr; <strong>"Error"</strong> ("Connection failed: &hellip;") and <code>scheduleReconnect()</code>.</li>
+            <li>Success &rarr; <strong>"Connected"</strong> ("Connected to ESP32 on &lt;port&gt;"), reconnect counter reset, read thread started, keepalive timer started <em>only if</em> <code>esp32LedSleepEnabled</code> is false, background scan stopped.</li>
+            <li><code>serial.SerialException</code> &rarr; <strong>"Error"</strong> ("Connection failed: &hellip;") and <code>_schedule_reconnect()</code>.</li>
           </ol>
           <p>
             Background scanning (<code>_scan_timer</code>, 10 s) runs only while disconnected: it is started when there is no
             port, when auto-reconnect is disabled, or when the retry budget is exhausted, and stopped on connect or when the
-            feature is disabled.
+            feature is disabled. Turning <code>esp32VolumeEnabled</code> on calls <code>connect_device()</code>; turning it off
+            disconnects and stops the scan.
           </p>
         </section>
 
@@ -292,13 +281,13 @@
               <tr><td><code>-N</code></td><td>N ticks counter-clockwise</td><td><code>volumeChangeRequested(-step &times; N)</code></td></tr>
               <tr><td><code>M</code></td><td>Encoder button press</td><td><code>muteToggleRequested()</code></td></tr>
               <tr><td><code>P</code></td><td>Play/pause (reserved for a double-click)</td><td>Nothing &mdash; logged at debug level as "not implemented"</td></tr>
-              <tr><td>anything else</td><td>&mdash;</td><td>Nothing &mdash; logged as "unknown command"</td></tr>
+              <tr><td>anything else</td><td>&mdash;</td><td>Nothing &mdash; logged at debug level as "unknown command"</td></tr>
             </tbody>
           </table>
           <p>
-            <code>step</code> is the <code>esp32VolumeStepSize</code> setting (default 1.0, UI range 0.25&ndash;10.0 in 0.25 steps),
-            so the delta is a <em>float</em>. The handler in <span class="file-path">main.py</span> /
-            <span class="file-path">src/main.cpp</span> accumulates deltas and only applies whole percent:
+            <code>step</code> is the <code>esp32VolumeStepSize</code> setting (default 1.0; the settings slider covers 0.25&ndash;10.0
+            in 0.25 steps), so the delta is a <em>float</em>. The handler in <span class="file-path">main.py</span> accumulates
+            deltas and only applies whole percent:
           </p>
           <pre><code>_volume_accumulator = <span class="num">0.0</span>
 
@@ -313,20 +302,22 @@
 <span class="kw">def</span> <span class="fn">handle_esp32_mute_toggle</span>():
     media_manager.toggle_mute()
     esp32_volume_manager.send_mute_state(media_manager.is_muted())</code></pre>
-          <p>The C++ lambda in <span class="file-path">src/main.cpp</span> is identical, with a <code>static float accumulator</code>.</p>
 
           <h4>Outgoing (OCTAVE &rarr; ESP32)</h4>
           <table>
             <thead><tr><th>Purpose</th><th>Format</th><th>Method</th><th>Notes</th></tr></thead>
             <tbody>
-              <tr><td>Volume level for the LED ring</td><td><code>V&lt;0-100&gt;\n</code></td><td><code>send_volume_update(int)</code></td><td>Debounced 50 ms; also used as the keepalive</td></tr>
+              <tr><td>Volume level for the LED ring</td><td><code>V&lt;0-100&gt;\n</code></td><td><code>send_volume_update(int)</code></td><td>Debounced 50 ms; the same line is the keepalive</td></tr>
               <tr><td>Mute indicator</td><td><code>M0\n</code> / <code>M1\n</code></td><td><code>send_mute_state(bool)</code></td><td>Sent immediately</td></tr>
               <tr><td>LED colour</td><td><code>C&lt;r&gt;,&lt;g&gt;,&lt;b&gt;\n</code> (e.g. <code>C255,128,0</code>)</td><td><code>send_theme_color(r, g, b)</code></td><td>Sent immediately</td></tr>
             </tbody>
           </table>
           <p>
-            These three are plain methods, not QML slots &mdash; they are called from the application wiring, never from QML.
-            All of them silently return (with an info log) while not connected.
+            These three are plain methods, not QML slots &mdash; they are called from <span class="file-path">main.py</span> and
+            <code>VolumeController</code>, never from QML. While not connected they return without writing:
+            <code>send_mute_state</code> and <code>send_theme_color</code> log an info line ("not connected, skipping"),
+            <code>send_volume_update</code> returns silently. A failed write is logged; only a failed keepalive counts as a
+            disconnect.
           </p>
         </section>
 
@@ -335,47 +326,46 @@
           <h4>Volume debounce</h4>
           <p>
             <code>send_volume_update()</code> stores the value as <em>pending</em> and starts a 50 ms single-shot timer if one is
-            not already running; when it fires, the most recent pending value is written. This caps LED traffic at 20 updates/s
-            during a fast knob spin or slider drag ("to prevent LED flickering" per the source comment) while guaranteeing the
-            final value is always sent.
+            not already running; when it fires, the most recent pending value is written (and logged at info). This caps LED
+            traffic at 20 updates/s during a fast knob spin or slider drag ("to prevent LED flickering" per the source comment)
+            while guaranteeing the final value is always sent.
           </p>
 
           <h4>Keepalive and LED sleep</h4>
           <p>
-            The manager assumes firmware that turns its LEDs off after a 5 s silence (source comment: "ESP32 timeout is 5s"). With
-            <code>esp32LedSleepEnabled</code> <strong>off</strong>, a 2 s keepalive timer re-sends <code>V&lt;currentVolume&gt;</code>
-            so the ring stays lit; with it <strong>on</strong> (the default &mdash; "LEDs turn off when OCTAVE closes"), no
-            keepalives are sent and the ring sleeps. Toggling the setting while connected starts or stops the timer
-            immediately. Keepalives are not logged. C++ falls back to volume 50 if the <code>currentVolume</code> property is
-            unreadable.
+            The manager assumes firmware that turns its LEDs off after a 5 s silence (source comment: "ESP32 timeout is 5s").
+            With <code>esp32LedSleepEnabled</code> <strong>off</strong>, a 2 s keepalive timer re-sends
+            <code>V&lt;currentVolume&gt;</code> so the ring stays lit; with it <strong>on</strong> (the default &mdash; "LEDs turn
+            off when OCTAVE closes"), no keepalives are sent and the ring sleeps. Toggling the setting while connected starts or
+            stops the timer immediately. Keepalives are not logged.
           </p>
 
-          <h4>Colour source (application wiring in <span class="file-path">main.py</span> and <span class="file-path">src/main.cpp</span>)</h4>
+          <h4>Colour source (wiring in <span class="file-path">main.py</span>)</h4>
           <ul>
-            <li><code>esp32LedColorMode == "theme"</code> (default): <code>settingsManager.albumArtColorsChanged</code> &rarr; <code>sync_theme_to_esp32()</code> (a lambda of the same shape in C++) parses the album-art colour JSON and sends its <code>accent</code> colour.</li>
+            <li><code>esp32LedColorMode == "theme"</code> (default): <code>settingsManager.albumArtColorsChanged</code> &rarr; <code>sync_theme_to_esp32()</code> parses the album-art colour JSON and sends its <code>accent</code> colour (<code>#00FFFF</code> when the key is missing; nothing on a parse error).</li>
             <li><code>esp32LedColorMode == "static"</code>: <code>esp32LedStaticColorChanged</code> &rarr; the chosen hex colour (default <code>#00FFFF</code>).</li>
-            <li>Switching modes (<code>esp32LedColorModeChanged</code>) re-sends the current colour; a missing or unparsable colour falls back to cyan <code>(0, 255, 255)</code>.</li>
-            <li>On every transition to "Connected", a 500 ms single-shot timer sends the current volume (<code>settingsManager.currentVolume</code>), mute state (<code>mediaManager.is_muted()</code>) and colour so a freshly plugged dongle matches the app; the delay gives the firmware time to finish booting after the port opens.</li>
+            <li>Switching modes (<code>esp32LedColorModeChanged</code>) runs <code>send_current_led_color()</code>, which re-sends the colour for the new mode; a missing or unparsable colour falls back to cyan <code>(0, 255, 255)</code>.</li>
+            <li>On every transition to "Connected", a 500 ms single-shot timer sends the current volume (<code>settingsManager.currentVolume</code>), mute state (<code>mediaManager.is_muted()</code>) and colour so a freshly plugged dongle matches the app; the delay gives the firmware time after the port opens.</li>
           </ul>
           <p>
-            The whole block is identical in both mains; in C++ it sits inside <code>#ifndef Q_OS_MOBILE</code> because the
-            mobile build compiles the ESP32 manager as a stub. The volume itself reaches the ring through
-            <code>VolumeController</code> (<a href="#volume-controller">below</a>), so a slider drag, a gesture and the knob all
-            light the ring the same way on either backend.
+            The volume itself reaches the ring through <code>VolumeController</code> (<a href="#volume-controller">below</a>), so a
+            slider drag, a gesture and the knob all light the ring the same way.
           </p>
         </section>
 
         <section id="esp32-reconnect">
           <h3>Disconnect Detection &amp; Auto-Reconnect</h3>
           <table>
-            <thead><tr><th>Event</th><th>Python</th><th>C++</th></tr></thead>
+            <thead><tr><th>Event</th><th>Handling</th></tr></thead>
             <tbody>
-              <tr><td>Read error</td><td><code>serial.SerialException</code> in the read thread &rarr; <code>run_on_main(_handle_disconnect)</code> so the state change happens on the main thread</td><td><code>QSerialPort::errorOccurred</code> with <code>ResourceError</code> (device unplugged), <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code> or <code>WriteError</code> &mdash; the failures pyserial raises as <code>SerialException</code> &mdash; &rarr; <code>handleDisconnect()</code> (a no-op while not connected, e.g. a failed <code>open()</code>, which schedules its own reconnect); every other error code is only logged</td></tr>
-              <tr><td>Write error</td><td>Keepalive <code>SerialException</code> &rarr; <code>_handle_disconnect()</code>; other writes only log</td><td>Every command goes through <code>writeCommand()</code>, which checks the byte count and logs "failed to send &lt;what&gt;"; a rejected <em>keepalive</em> write &rarr; <code>handleDisconnect()</code>, other writes only log</td></tr>
+              <tr><td>Read error</td><td><code>serial.SerialException</code> in the read thread &rarr; <code>run_on_main(_handle_disconnect)</code>, so the state change happens on the GUI thread</td></tr>
+              <tr><td>Write error</td><td>A keepalive <code>SerialException</code> &rarr; <code>_handle_disconnect()</code>; failed volume, mute and colour writes are only logged</td></tr>
             </tbody>
           </table>
           <p>
-            <code>_handle_disconnect()</code> flips to "Disconnected" / "Connection lost" and calls <code>scheduleReconnect()</code>:
+            <code>_handle_disconnect()</code> (a no-op if already disconnected) flips to "Disconnected" / "Connection lost" and calls
+            <code>_schedule_reconnect()</code>. It does not close the port or stop the keepalive timer; the next
+            <code>connect_device()</code> opens a fresh <code>serial.Serial</code>.
           </p>
           <pre><code><span class="kw">if not</span> settings.esp32AutoReconnect:      <span class="cmt"># just keep scanning for the dongle</span>
     scan_timer.start(); <span class="kw">return</span>
@@ -386,8 +376,8 @@ delay = <span class="fn">min</span>(<span class="num">10000</span>, <span class=
 detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"</span></code></pre>
           <p>
             The counter resets on a successful open, when the port setting changes, or via the
-            <code>reset_reconnect_attempts()</code> slot (the settings page calls it before a manual
-            <code>connect_device()</code>). Turning <code>esp32AutoReconnect</code> off stops a pending reconnect timer.
+            <code>reset_reconnect_attempts()</code> slot (the settings page calls it before a manual <code>connect_device()</code>).
+            Turning <code>esp32AutoReconnect</code> off stops a pending reconnect timer.
           </p>
         </section>
 
@@ -399,7 +389,7 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
             <tbody>
               <tr><td><code>connectionStatusChanged</code></td><td><code>str</code></td><td>"Connected", "Connecting", "Disconnected", "Error", "Not Configured"</td></tr>
               <tr><td><code>connectionDetailChanged</code></td><td><code>str</code></td><td>Human-readable detail shown on the Accessories page</td></tr>
-              <tr><td><code>availablePortsChanged</code></td><td><code>list</code> / <code>QVariantList</code></td><td>Scan produced a different port list</td></tr>
+              <tr><td><code>availablePortsChanged</code></td><td><code>list</code></td><td>Scan produced a different port list</td></tr>
               <tr><td><code>volumeChangeRequested</code></td><td><code>float</code></td><td>Relative delta = step &times; ticks (may be fractional)</td></tr>
               <tr><td><code>muteToggleRequested</code></td><td>&mdash;</td><td>Encoder button pressed</td></tr>
             </tbody>
@@ -419,29 +409,29 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
             <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td><code>connect_device()</code></td><td>&mdash;</td><td>Open the configured port (see sequence above)</td></tr>
-              <tr><td><code>disconnect_device()</code></td><td>&mdash;</td><td>Stop reconnect + keepalive timers, stop the read thread / close the port, emit "Disconnected"</td></tr>
+              <tr><td><code>disconnect_device()</code></td><td>&mdash;</td><td>Stop the reconnect and keepalive timers, stop the read thread (2 s join), close the port, emit "Disconnected" / "Disconnected from ESP32"</td></tr>
               <tr><td><code>get_available_ports()</code></td><td><code>list</code></td><td>Scan now and return the port list</td></tr>
-              <tr><td><code>get_ports_with_descriptions()</code></td><td><code>str</code> (JSON)</td><td><code>[{port, label, description, isEsp32S3}]</code>, ESP32-S3 first; label "&lt;port&gt; - ESP32-S3 (Recommended)"; OBD port omitted. Parsed by <span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td></tr>
-              <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Read by <span class="file-path">AccessoriesWidget.qml</span> and the settings page status dot</td></tr>
+              <tr><td><code>get_ports_with_descriptions()</code></td><td><code>str</code> (JSON)</td><td><code>[{port, label, description, isEsp32S3}]</code> from <code>comports()</code>, ESP32-S3 first then by port name; label "&lt;port&gt; - ESP32-S3 (Recommended)" or "&lt;port&gt; - &lt;description&gt;"; OBD port omitted. Parsed by <span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td></tr>
+              <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Read by <span class="file-path">AccessoriesWidget.qml</span> and the settings page</td></tr>
               <tr><td><code>get_connection_status()</code></td><td><code>str</code></td><td>Same as <code>connectionStatus</code></td></tr>
               <tr><td><code>get_connection_detail()</code></td><td><code>str</code></td><td>Same as <code>connectionDetail</code></td></tr>
               <tr><td><code>refresh_ports()</code></td><td>&mdash;</td><td>Scan now (no return value)</td></tr>
               <tr><td><code>reset_reconnect_attempts()</code></td><td>&mdash;</td><td>Zero the retry counter</td></tr>
-              <tr><td><code>cleanup()</code></td><td>&mdash;</td><td>Stop all five timers, then <code>disconnect_device()</code>; called from the app's quit handler</td></tr>
+              <tr><td><code>cleanup()</code></td><td>&mdash;</td><td>Stop all five timers, then <code>disconnect_device()</code>; called from the quit handler</td></tr>
             </tbody>
           </table>
-          <h4>Non-slot methods (called from <span class="file-path">main.py</span> / <span class="file-path">main.cpp</span>)</h4>
+          <h4>Non-slot methods (called from <span class="file-path">main.py</span> / <code>VolumeController</code>)</h4>
           <p><code>send_volume_update(int)</code>, <code>send_mute_state(bool)</code>, <code>send_theme_color(r, g, b)</code> &mdash; see <a href="#esp32-commands">Command Protocol</a>.</p>
 
           <h4>Timers</h4>
           <table>
             <thead><tr><th>Timer</th><th>Interval</th><th>Purpose</th></tr></thead>
             <tbody>
-              <tr><td><code>_startup_timer</code> / <code>m_startupTimer</code></td><td>3 000 ms, one-shot</td><td>Delay the first scan + connect after app start</td></tr>
-              <tr><td><code>_scan_timer</code> / <code>m_scanTimer</code></td><td>10 000 ms</td><td>Background port scan while disconnected</td></tr>
-              <tr><td><code>_reconnect_timer</code> / <code>m_reconnectTimer</code></td><td>3&ndash;10 s, one-shot</td><td>Auto-reconnect attempt</td></tr>
-              <tr><td><code>_volume_send_timer</code> / <code>m_volumeSendTimer</code></td><td>50 ms, one-shot</td><td>Debounce <code>V</code> commands</td></tr>
-              <tr><td><code>_keepalive_timer</code> / <code>m_keepaliveTimer</code></td><td>2 000 ms</td><td>Keep the LED ring awake when LED sleep is off</td></tr>
+              <tr><td><code>_startup_timer</code></td><td>3 000 ms, one-shot</td><td>Delay the first scan + connect after app start</td></tr>
+              <tr><td><code>_scan_timer</code></td><td>10 000 ms</td><td>Background port scan while disconnected</td></tr>
+              <tr><td><code>_reconnect_timer</code></td><td>3&ndash;10 s, one-shot</td><td>Auto-reconnect attempt</td></tr>
+              <tr><td><code>_volume_send_timer</code></td><td>50 ms, one-shot</td><td>Debounce <code>V</code> commands</td></tr>
+              <tr><td><code>_keepalive_timer</code></td><td>2 000 ms</td><td>Keep the LED ring awake when LED sleep is off</td></tr>
             </tbody>
           </table>
         </section>
@@ -450,24 +440,28 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
         <section id="volume-controller">
           <h2>VolumeController</h2>
           <p>
-            Every hardware input (knob ticks, gesture <code>volume_up</code>/<code>volume_down</code>) and every QML slider ends
-            in <code>volumeController.applyVolume(percent)</code>. It clamps to 0&ndash;100, persists
-            <code>currentVolume</code> through the SettingsManager, converts the percent through the quadratic curve
-            <code>linear = (percent / 100)&sup2;</code>, and pushes the result to every audio output. <code>toLinear(percent)</code>
-            exposes the bare curve to QML for previews without dispatching.
+            <span class="file-path">backend/volume_utils.py</span> holds the volume curve and the <code>VolumeController</code>
+            QObject. Every hardware input (knob ticks, gesture <code>volume_up</code>/<code>volume_down</code>) and the QML volume
+            sliders (<span class="file-path">BottomBar.qml</span>, <span class="file-path">MediaRoom.qml</span>) end in
+            <code>volumeController.applyVolume(percent)</code>:
           </p>
-          <table>
-            <thead><tr><th></th><th>Python (<span class="file-path">backend/volume_utils.py</span>)</th><th>C++ (<span class="file-path">src/managers/volumecontroller.cpp</span>)</th></tr></thead>
-            <tbody>
-              <tr>
-                <td>Dispatch</td>
-                <td>Constructor takes the managers; <code>applyVolume</code> calls <code>media.setVolume(linear)</code>, <code>phone_mirror.setVolume(linear)</code>, <code>esp32.send_volume_update(percent)</code> directly. Any of them may be <code>None</code>.</td>
-                <td>Emits <code>volumeApplied(int percent, float linear)</code>; <span class="file-path">src/main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop only).</td>
-              </tr>
-              <tr><td>Startup</td><td colspan="2">Both call <code>applyVolume(settingsManager.currentVolume)</code> once after every manager is constructed so all outputs start in sync.</td></tr>
-              <tr><td>Static helper</td><td><code>to_linear(percent)</code> module function</td><td><code>VolumeController::toLinearStatic(float)</code></td></tr>
-            </tbody>
-          </table>
+          <pre><code><span class="kw">def</span> <span class="fn">to_linear</span>(percent) -&gt; float:
+    pct = max(<span class="num">0.0</span>, min(<span class="num">100.0</span>, float(percent)))
+    <span class="kw">return</span> (pct / <span class="num">100.0</span>) ** <span class="num">2.0</span>
+
+<span class="kw">@Slot</span>(int)
+<span class="kw">def</span> <span class="fn">applyVolume</span>(self, percent):
+    percent = max(<span class="num">0</span>, min(<span class="num">100</span>, int(percent)))
+    linear = to_linear(percent)
+    self._settings.setCurrentVolume(percent)     <span class="cmt"># persists currentVolume</span>
+    self._media.setVolume(linear)
+    self._phone_mirror.setVolume(linear)
+    self._esp32.send_volume_update(percent)     <span class="cmt"># raw percent for the LED ring</span></code></pre>
+          <ul>
+            <li>The constructor takes the settings, media, phone-mirror and ESP32 managers; any of them may be <code>None</code>, and a <code>None</code> output is skipped.</li>
+            <li><span class="file-path">main.py</span> calls <code>applyVolume(settings_manager.currentVolume)</code> once after the managers are constructed so all outputs start in sync; <span class="file-path">BottomBar.qml</span> also applies the saved volume on completion.</li>
+            <li><code>toLinear(percent)</code> exposes the bare curve as a QML slot without dispatching; no QML file calls it today.</li>
+          </ul>
         </section>
 
         <!-- ===================== BERRYIMU MANAGER ===================== -->
@@ -475,26 +469,23 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
           <h2>BerryIMU v3 Manager</h2>
           <p>
             <strong>BerryIMUManager</strong> reads the accelerometer, gyroscope, magnetometer and barometer on the BerryIMU v3
-            over I2C in a worker thread, fuses accelerometer + gyroscope with a Madgwick AHRS filter into a quaternion, strips
-            yaw, applies a user-set tare, and emits orientation plus gauge values to QML. The quaternion drives the rigged
-            Jeep TJ on <code>CarMenu</code>; the scalar values feed <code>SensorMenu</code>, OBD dashboards and the home cards
-            through <code>OBDParameterModel</code>.
+            over I2C in a background thread, fuses accelerometer + gyroscope with a Madgwick AHRS filter into a quaternion,
+            strips yaw, applies a user-set tare, and emits orientation plus gauge values to QML. The quaternion drives the
+            rigged Jeep TJ on <code>CarMenu</code>; the scalar values feed <code>SensorMenu</code>, OBD dashboards and the home
+            cards through <code>OBDParameterModel</code>.
           </p>
           <span class="platform-badge linux">Linux (Raspberry Pi / Orange Pi)</span>
-          <span class="platform-badge android">Android (QtSensors variant)</span>
         </section>
 
         <section id="imu-sensors">
           <h3>I2C Sensor Chips &amp; Register Map</h3>
           <p>
-            The bus number and the three addresses are constants in both backends (<code>I2C_BUS = 2</code>; there is no
-            setting to change them). Python uses <code>smbus2.SMBus(2)</code>; C++ opens <code>/dev/i2c-2</code> with
-            <code>O_RDWR</code> and selects each chip with <code>ioctl(I2C_SLAVE, addr)</code>, then does raw
-            <code>write(reg)</code> / <code>read(n)</code> pairs (<code>readBlockData</code>). Python reads the corresponding
-            register blocks with <code>read_i2c_block_data</code>.
+            The bus number and the three addresses are module constants (<code>I2C_BUS = 2</code>; there is no setting to change
+            them). The manager opens <code>smbus2.SMBus(2)</code>, configures each chip with <code>write_byte_data</code>, and
+            reads register blocks with <code>read_i2c_block_data</code>.
           </p>
           <table>
-            <thead><tr><th>Chip</th><th>Address</th><th>Function</th><th>Init writes (reg &larr; value; source settings)</th><th>Data read</th><th>Scale</th></tr></thead>
+            <thead><tr><th>Chip</th><th>Address</th><th>Function</th><th>Init writes (reg &larr; value; source comments)</th><th>Data read</th><th>Scale</th></tr></thead>
             <tbody>
               <tr>
                 <td><strong>LSM6DSL</strong></td>
@@ -523,18 +514,17 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
             </tbody>
           </table>
 
-          <p>The chip set and default I2C addresses are documented by the <a href="https://ozzmaker.com/berryimu-quick-start-guide/">BerryIMU manufacturer</a>; OCTAVE's constants and register writes above are in both drivers. The LSM6DSL scale and rate constants also match <a href="https://github.com/STMicroelectronics/stm32-lsm6dsl/blob/main/lsm6dsl.h">ST's driver header</a>.</p>
+          <p>The chip set and default I2C addresses are documented by the <a href="https://ozzmaker.com/berryimu-quick-start-guide/">BerryIMU manufacturer</a>. The LSM6DSL scale and rate constants also match <a href="https://github.com/STMicroelectronics/stm32-lsm6dsl/blob/main/lsm6dsl.h">ST's driver header</a>.</p>
 
           <h4>BMP388 calibration and compensation</h4>
           <p>
-            The 21 calibration bytes unpack to 14 coefficients in this order and width:
-            <code>T1</code> u16, <code>T2</code> u16, <code>T3</code> i8, <code>P1</code> i16, <code>P2</code> i16,
-            <code>P3</code> i8, <code>P4</code> i8, <code>P5</code> u16, <code>P6</code> u16, <code>P7</code> i8,
-            <code>P8</code> i8, <code>P9</code> i16, <code>P10</code> i8, <code>P11</code> i8 (C++ <code>BMP388Calib</code>
-            struct, Python <code>struct.unpack</code>). <code>_read_baro()</code> / <code>readBaro()</code> runs the
-            floating-point temperature compensation (three <code>partial</code> terms) and then the pressure polynomial
-            (<code>out1 + out2 + out3</code> with the eleven <code>pp</code> terms). Pressure is converted to hPa and altitude
-            uses the barometric formula with <code>SEA_LEVEL_PRESSURE = 1013.25</code>:
+            <code>_init_bmp388()</code> unpacks the 21 calibration bytes with <code>struct.unpack</code> into 14 coefficients in this
+            order and width: <code>T1</code> u16, <code>T2</code> u16, <code>T3</code> i8, <code>P1</code> i16, <code>P2</code> i16,
+            <code>P3</code> i8, <code>P4</code> i8, <code>P5</code> u16, <code>P6</code> u16, <code>P7</code> i8, <code>P8</code> i8,
+            <code>P9</code> i16, <code>P10</code> i8, <code>P11</code> i8. <code>_read_baro()</code> runs the floating-point
+            temperature compensation (the <code>partial</code> terms) and then the pressure polynomial
+            (<code>out1 + out2 + out3</code> with the eleven <code>pp</code> terms). Pressure is converted to hPa and altitude uses
+            the barometric formula with <code>SEA_LEVEL_PRESSURE = 1013.25</code>:
           </p>
           <pre><code>altitude = <span class="num">44330.0</span> * (<span class="num">1.0</span> - (pressure_hpa / <span class="num">1013.25</span>) ** (<span class="num">1.0</span> / <span class="num">5.255</span>))</code></pre>
           <p>Altitude is therefore relative to standard sea-level pressure, not a locally corrected QNH.</p>
@@ -543,53 +533,48 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
         <section id="imu-startup">
           <h3>Startup &amp; Reconnection</h3>
           <ol class="steps">
-            <li>The constructor schedules <code>_start()</code> / <code>startSensor()</code> with a 1 s single-shot timer; <code>connect_settings_manager()</code> reads <code>imuEnabled</code> first.</li>
+            <li>The constructor schedules <code>_start()</code> with a 1 s single-shot timer; <code>connect_settings_manager()</code>, called right after construction in <span class="file-path">main.py</span>, reads <code>imuEnabled</code> first.</li>
             <li>If disabled: log "disabled in settings, skipping start", emit <code>connectionStatusChanged("Disabled")</code>, stop.</li>
-            <li>Any previous thread is joined (2 s timeout) and the bus closed before a (re)connect.</li>
-            <li>Open the bus, initialise LSM6DSL, LIS3MDL, BMP388 in that order.</li>
-            <li>Success: log "all sensors initialized successfully", emit <strong>"Connected"</strong>, reset the retry counter, start the read loop. Note that "Connected" is emitted <em>before</em> gyro calibration, which is the first thing the loop does (~1 s).</li>
+            <li>Any previous read thread is joined (2 s timeout) and the bus closed before a (re)connect.</li>
+            <li>Import <code>smbus2</code>, open the bus, initialise LSM6DSL, LIS3MDL, BMP388 in that order &mdash; all on the GUI thread.</li>
+            <li>Success: log "all sensors initialized successfully", reset the retry counter, emit <strong>"Connected"</strong>, start the read thread. "Connected" is emitted <em>before</em> gyro calibration, which is the first thing the thread does (~1 s).</li>
           </ol>
           <table>
-            <thead><tr><th>Failure</th><th>Python</th><th>C++</th></tr></thead>
+            <thead><tr><th>Failure</th><th>Result</th></tr></thead>
             <tbody>
-              <tr><td><code>smbus2</code> missing</td><td>"Disconnected", no retry</td><td>n/a</td></tr>
-              <tr><td>Bus cannot be opened (<code>/dev/i2c-2</code> absent)</td><td><code>FileNotFoundError</code> &rarr; "Disconnected" + retry</td><td><code>openBus()</code> fails &rarr; "Disconnected", worker emits <code>stopped(retryable = true)</code> &rarr; <code>scheduleRetry()</code></td></tr>
-              <tr><td>Permission denied</td><td><code>PermissionError</code> &rarr; logs "permission denied on /dev/i2c-2", "Disconnected", <strong>no retry</strong> (fix the <code>i2c</code> group and restart)</td><td><code>open()</code> fails with <code>EACCES</code> / <code>EPERM</code> &rarr; logs "permission denied on /dev/i2c-2 - add the user to the i2c group; not retrying", "Disconnected", worker emits <code>stopped(retryable = false)</code> so the manager schedules <strong>no retry</strong></td></tr>
-              <tr><td>A chip fails to initialise</td><td>Any other exception &rarr; "Error" + retry</td><td>"Error" (which chip is logged) + retry</td></tr>
-              <tr><td>I2C error inside the loop</td><td>Loop exits, "Error", bus closed, retry</td><td>A failed accel / gyro / mag block read zeroes that sample and skips the filter step (zeros are never fed to Madgwick); after <code>MAX_CONSECUTIVE_READ_FAILURES</code> = 5 in a row the loop logs "read loop error: 5 consecutive I2C read failures", exits, closes the bus, emits "Error" and retries like Python. A single NACK therefore rides through without dropping the connection.</td></tr>
+              <tr><td><code>smbus2</code> missing (<code>ImportError</code>)</td><td>Logs "smbus2 not installed, IMU disabled", "Disconnected", no retry</td></tr>
+              <tr><td>Bus cannot be opened (<code>/dev/i2c-2</code> absent)</td><td><code>FileNotFoundError</code> &rarr; logs "/dev/i2c-2 not found, IMU disabled", "Disconnected", retry</td></tr>
+              <tr><td>Permission denied</td><td><code>PermissionError</code> &rarr; logs "permission denied on /dev/i2c-2", "Disconnected", <strong>no retry</strong> (fix the <code>i2c</code> group and restart or re-enable)</td></tr>
+              <tr><td>A chip fails to initialise</td><td>Any other exception &rarr; logs "sensor init failed: &hellip;", "Error", retry</td></tr>
+              <tr><td>I2C error inside the loop</td><td>An exception from an accel / gyro / mag read (or the filter) ends the loop: "read loop error: &hellip;", "Error" (emitted from the read thread), bus closed, retry. A barometer read error is caught separately, logged at debug, and the loop continues.</td></tr>
             </tbody>
           </table>
           <p>
-            Retry policy (same in both, and identical to the gesture manager): up to <strong>5 attempts</strong> with linear
-            backoff <code>5000 ms &times; attempt</code> = 5 s, 10 s, 15 s, 20 s, 25 s, then "max retries reached, giving up".
-            The status stays at whatever was last emitted; nothing marks the sensor "unavailable". <code>setEnabled(true)</code>
-            from the settings toggle resets the counter and starts over.
-          </p>
-          <p>
-            <strong>Threading model.</strong> Python opens and initialises the sensors in <code>_start()</code> on the GUI thread, then runs <code>_read_loop</code> in a daemon <code>threading.Thread</code>.
-            C++ moves a <code>BerryIMUWorker</code> QObject to a <code>QThread</code>; <code>QThread::started</code> triggers
-            <code>run()</code>, and the worker's signals are forwarded 1:1 to the manager's public signals (queued connections,
-            so QML always receives them on the GUI thread). <code>stopWorker()</code> sets the atomic <code>m_running</code>
-            false, quits the thread, waits up to 2 s and deletes both objects.
+            Retry policy (identical in the gesture manager): up to <strong>5 attempts</strong> with linear backoff
+            <code>5000 ms &times; attempt</code> = 5 s, 10 s, 15 s, 20 s, 25 s, scheduled with <code>run_on_main(self._start, delay)</code>
+            so it works from the read thread too; then "max retries reached, giving up". The status stays at whatever was last
+            emitted. <code>setEnabled(true)</code> from the settings toggle resets the counter and starts over; <code>cleanup()</code>
+            sets <code>_shutting_down</code>, which suppresses further retries.
           </p>
         </section>
 
         <section id="imu-madgwick">
           <h3>Madgwick AHRS Filter</h3>
           <p>
-            <code>MadgwickAHRS</code> (a class in the same file in both backends) implements Sebastian Madgwick's
-            gradient-descent orientation filter. It integrates the gyro rate into a quaternion and applies a
-            <code>beta</code>-scaled corrective step towards the accelerometer's gravity vector (and, when magnetometer data is
-            supplied, the magnetic field).
+            <code>MadgwickAHRS</code> (a class in the same file) implements Sebastian Madgwick's gradient-descent orientation
+            filter. It integrates the gyro rate into a quaternion and applies a <code>beta</code>-scaled corrective step towards
+            the accelerometer's gravity vector (and, when magnetometer data is supplied, the magnetic field).
           </p>
           <div class="info-box warning">
             <div class="info-box-title">The filter runs in 6DOF mode &mdash; the magnetometer is not fused</div>
-            Both read loops call <code>update(gx, gy, gz, ax, ay, az, 0.0, 0.0, 0.0, dt)</code>. With a zero magnetic vector
+            The read loop calls <code>update(gx, gy, gz, ax, ay, az, 0.0, 0.0, 0.0, dt)</code>. With a zero magnetic vector
             <code>m_norm &lt; 0.001</code>, so the filter always takes its "6DOF fallback &mdash; accel only correction (no
-            heading)" branch. The full 9DOF (MARG) code path is present but never exercised. The magnetometer is read every
-            iteration and used <em>only</em> for the compass heading, computed directly as <code>atan2(my, mx)</code>
-            ("not from the filter &mdash; avoids drift"). Because yaw is stripped from the output quaternion anyway (see
-            <a href="#imu-quaternion">Quaternion Output</a>), the model never depended on magnetic heading.
+            heading)" branch; the full 9DOF (MARG) code path is present but never exercised. The source comment gives the reason:
+            in-car magnetic interference (alternator, speakers, steel body) would pull the quaternion around, and enabling 9DOF
+            fusion "needs on-vehicle testing first". The magnetometer is read every iteration and used <em>only</em> for the
+            compass heading, computed directly as <code>atan2(my, mx)</code> ("not from filter &mdash; avoids drift"). Because yaw
+            is stripped from the output quaternion anyway (see <a href="#imu-quaternion">Quaternion Output</a>), the model never
+            depends on magnetic heading.
           </div>
           <table>
             <thead><tr><th>Constant</th><th>Value</th><th>Purpose</th></tr></thead>
@@ -611,35 +596,35 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
     <span class="cmt"># 5. qdot -= beta * s</span>
     <span class="cmt"># 6. q += qdot * dt; normalise</span></code></pre>
           <p>
-            <code>get_euler()</code> / <code>getEuler()</code> exist on the filter but the read loop derives pitch and roll from
-            the <em>tared</em> output quaternion instead (below), so the helper is unused in production.
+            <code>get_euler()</code> exists on the filter but the read loop derives pitch and roll from the <em>tared</em> output
+            quaternion instead (below), so the helper is unused.
           </p>
         </section>
 
         <section id="imu-readloop">
           <h3>The 200 Hz Paced Read Loop</h3>
           <p>
-            Introduced in commit <code>ed826ed</code> and re-measured in <code>f1eb526</code>. Each iteration:
+            The thread first runs the gyro calibration (<a href="#imu-calibration">below</a>), then each iteration:
           </p>
           <ol class="steps">
-            <li><code>now = monotonic()</code>; <code>dt = now - last</code> (floored at 1 ms). The filter integrates with the <em>measured</em> dt, so its tuning is independent of the loop rate.</li>
-            <li>Service a pending tare / reset-tare request (C++: atomic flags &rarr; mutex-protected <code>m_tareQ</code>; Python: <code>threading.Event</code>s &rarr; <code>_apply_tare()</code> / <code>_apply_tare_reset()</code>).</li>
+            <li><code>now = time.monotonic()</code>; <code>dt = now - last</code> (1 ms if not positive). The filter integrates with the <em>measured</em> dt, so its tuning is independent of the loop rate.</li>
+            <li>Service a pending tare / reset-tare request (<code>threading.Event</code>s &rarr; <code>_apply_tare()</code> / <code>_apply_tare_reset()</code>).</li>
             <li>Three I2C block reads: accel, gyro, mag.</li>
             <li>Subtract the gyro bias; apply the deadband per axis; convert to rad/s.</li>
             <li><strong>Only if at least one gyro axis is non-zero</strong> call <code>ahrs.update(&hellip;)</code>. When the vehicle is still the quaternion is frozen "so the accel correction doesn't cause visible settling".</li>
             <li>Remember <code>ax, ay</code> for tare capture; compute <code>|a|</code>.</li>
-            <li>If the emit interval has elapsed, emit the seven orientation/gauge signals (see <a href="#imu-emission">emission gating</a>). The very first emission is logged once: <code>first emit - pitch=&hellip; roll=&hellip; heading=&hellip; g=&hellip; q=[&hellip;]</code>.</li>
-            <li>If <code>BARO_INTERVAL</code> has elapsed (it has on the first iteration, because <code>last_baro</code> starts at 0), read the BMP388 and emit <code>altitudeChanged</code> + <code>baroTempChanged</code>. The first successful read is logged once: <code>baro - alt=&hellip;m temp=&hellip;C</code> (a <code>baro_logged</code> flag; the older <code>readCount &lt;= 80</code> guard fired three times after the loop was re-paced). C++ skips the emit when the compensated pressure is 0 (failed read); Python logs a debug message on exception.</li>
-            <li><code>remaining = SAMPLE_INTERVAL - (monotonic() - now)</code>; sleep it if positive.</li>
+            <li>If the emit interval has elapsed, emit the seven orientation/gauge signals (see <a href="#imu-emission">emission gating</a>). The first emission is logged once: <code>first emit — pitch=&hellip; roll=&hellip; heading=&hellip; g=&hellip; q=[&hellip;]</code> (the <code>q</code> shown is the yaw-stripped quaternion before the tare).</li>
+            <li>If <code>BARO_INTERVAL</code> has elapsed (it has on the first iteration, because <code>last_baro</code> starts at 0), read the BMP388 and emit <code>altitudeChanged</code> + <code>baroTempChanged</code>. The first successful read is logged once: <code>baro — alt=&hellip;m temp=&hellip;C</code>.</li>
+            <li><code>remaining = SAMPLE_INTERVAL - (time.monotonic() - now)</code>; sleep it if positive.</li>
           </ol>
           <div class="info-box info">
-            <div class="info-box-title">What was measured (Orange Pi 5 Plus, <code>strace -T</code>)</div>
-            The three block reads cost about <strong>4.3 ms</strong> per iteration, so the loop is I2C-bound: it settles around
-            <strong>172 Hz</strong> with ~1.5 ms of sleep, and the worker thread's ~8 % CPU "is the cost of reading the sensor,
-            not a spin". The earlier fixed 1 ms sleep kept the bus saturated for no benefit: the LSM6DSL output data rate is
-            416 Hz and emission is 60 Hz. The 200 Hz target stays below the configured output data rate and still gives the filter 3+
-            samples per emit. Setting <code>SAMPLE_INTERVAL</code> below the I2C read cost skips the explicit sleep and continuously requests bus reads.
-            A longer interval reduces bus work but also gives the filter fewer samples per emitted value; actual rates depend on hardware and bus timing.
+            <div class="info-box-title">What the source records (Orange Pi 5 Plus)</div>
+            The comment above <code>SAMPLE_INTERVAL</code>: the three I2C block reads cost about <strong>4.3 ms</strong> per
+            iteration, so the loop is bus-bound and settles around <strong>172 Hz</strong> with about 8 % CPU on the worker thread
+            &mdash; "that CPU is the cost of reading the sensor, not a bug". Setting <code>SAMPLE_INTERVAL</code> below the read
+            cost makes <code>remaining</code> negative, so the sleep is skipped and the loop reads continuously. Raising it to 0.01
+            (100 Hz) roughly halves bus traffic and CPU while still giving the filter about 1.7 samples per 60 Hz emit; below
+            about 100 Hz "the filter starts to starve". Actual rates depend on the board and bus.
           </div>
           <p>The loop exit is logged as <code>read loop exited after N reads</code>.</p>
         </section>
@@ -647,13 +632,12 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
         <section id="imu-emission">
           <h3>Emission Gating (60 Hz vs 5 Hz)</h3>
           <p>
-            Every emit tick sends <strong>seven queued cross-thread signals</strong> into QML bindings
-            (<code>orientationChanged</code>, <code>pitchChanged</code>, <code>rollChanged</code>, <code>headingChanged</code>,
-            <code>accelMagnitudeChanged</code>, <code>lateralGChanged</code>, <code>longitudinalGChanged</code>). Commit
-            <code>94d61be</code> added <code>setActive(bool)</code>: sampling and fusion continue at full rate, but while no page
-            consumes the stream the effective interval becomes <code>max(emit_interval, IDLE_EMIT_INTERVAL)</code> &mdash;
-            5 Hz, enough to keep the status line in Settings fresh. In C++ the flag is an <code>std::atomic&lt;bool&gt; m_idle</code>
-            on the worker, also applied when the worker is (re)created.
+            Every emit tick sends <strong>seven cross-thread signals</strong> into QML bindings (<code>orientationChanged</code>,
+            <code>pitchChanged</code>, <code>rollChanged</code>, <code>headingChanged</code>, <code>accelMagnitudeChanged</code>,
+            <code>lateralGChanged</code>, <code>longitudinalGChanged</code>). <code>setActive(bool)</code> keeps sampling and
+            fusion at full rate, but while no page consumes the stream the effective interval becomes
+            <code>max(emit_interval, IDLE_EMIT_INTERVAL)</code> &mdash; 5 Hz. The flag is a plain attribute read by the loop on each
+            iteration.
           </p>
           <p>
             <span class="file-path">frontend/Main.qml</span> drives it from the <code>StackView</code>: a
@@ -668,29 +652,28 @@ detail = <span class="str">f"Reconnecting in {delay // 1000}s... ({attempts}/5)"
                        || n === <span class="str">"obdMenu"</span> || (n === <span class="str">"mainMenu"</span> &amp;&amp; _homeShowsImuParam()))
 }</code></pre>
           <p>
-            Commit <code>2fef514</code> extended the full-rate set from the three sensor pages to <strong>OBDMenu</strong>
-            (dashboards can contain compass / G-force gauges that read the IMU through <code>OBDParameterModel</code>) and to
-            the <strong>main menu whenever one of the home OBD cards</strong>
-            (<code>settingsManager.get_home_obd_parameters()</code>) is one of the eight IMU parameter IDs;
-            <code>MainMenu.qml</code> received <code>objectName: "mainMenu"</code> for that check. Pages need no code of their own.
+            The full-rate set covers the three sensor pages, <strong>OBDMenu</strong> (dashboards can contain compass / G-force
+            gauges that read the IMU through <code>OBDParameterModel</code>) and the <strong>main menu whenever one of the home OBD
+            cards</strong> (<code>settingsManager.get_home_obd_parameters()</code>) is one of the eight IMU parameter IDs. Pages need
+            no code of their own.
           </p>
           <p>
             <code>setEmitRate(hz)</code> clamps to 10&ndash;120 Hz and sets the active interval to <code>1 / hz</code>.
             <code>SensorMenu.qml</code> calls it on load with the <code>sensorEmitRate</code> setting (default 60), and the
-            Accessories settings slider (10&ndash;120, step 5) saves the setting and calls it live. In both backends the
-            interval is stored on the manager (<code>_emit_interval</code> / <code>m_emitInterval</code>) and applied to every
-            worker that is created, so a call before the sensor starts or across a retry is not lost.
+            Accessories settings slider (10&ndash;120, step 5) saves the setting and calls it live. The interval is stored on the
+            manager (<code>_emit_interval</code>) and read by the loop, so a call before the sensor starts or across a retry is not
+            lost.
           </p>
         </section>
 
         <section id="imu-quaternion">
           <h3>Quaternion Output</h3>
-          <p>At each emit tick the filter quaternion goes through two transforms before leaving the worker:</p>
+          <p>At each emit tick the filter quaternion goes through two transforms before leaving the thread:</p>
           <ol class="steps">
             <li>
               <strong>Yaw stripping.</strong> Decompose <code>q = q_yaw &times; q_tilt</code> (yaw = rotation about the sensor Z
               axis) and keep only the tilt, so heading drift can never rotate the car model:
-              <pre><code>yaw_norm = sqrt(qw&sup2; + qz&sup2;)          <span class="cmt"># if &lt; 0.001 use yw=1, yz=0</span>
+              <pre><code>yaw_norm = sqrt(qw&sup2; + qz&sup2;)          <span class="cmt"># if &lt;= 0.001 use yw=1, yz=0</span>
 yw, yz   = qw / yaw_norm, qz / yaw_norm
 <span class="cmt"># q_tilt = [yw, 0, 0, -yz] * q</span>
 tw = yw*qw + yz*qz
@@ -704,10 +687,10 @@ tz = yw*qz - yz*qw</code></pre>
             </li>
           </ol>
           <p>
-            <code>orientationChanged(ow, ox, oy, oz)</code> carries the tared tilt. Pitch and roll for the gauges are extracted
-            from that same tared quaternion (<code>pitch = asin(2(w&middot;y &minus; z&middot;x))</code> clamped to &plusmn;90&deg;,
-            <code>roll = atan2(2(w&middot;x + y&middot;z), 1 &minus; 2(x&sup2; + y&sup2;))</code>), so the numbers on screen always agree
-            with the model. Heading is <code>atan2(my, mx)</code> in degrees, normalised to 0&ndash;360. Lateral G is
+            <code>orientationChanged(ow, ox, oy, oz)</code> carries the tared tilt. Pitch and roll for the gauges are extracted from
+            that same tared quaternion (<code>pitch = asin(2(w&middot;y &minus; z&middot;x))</code>, &plusmn;90&deg; when the argument
+            reaches &plusmn;1; <code>roll = atan2(2(w&middot;x + y&middot;z), 1 &minus; 2(x&sup2; + y&sup2;))</code>), so the numbers on
+            screen agree with the model. Heading is <code>atan2(my, mx)</code> in degrees, normalised to 0&ndash;360. Lateral G is
             <code>ay &minus; accel_bias_y</code>, longitudinal G is <code>ax &minus; accel_bias_x</code>; accel magnitude is the raw
             <code>|a|</code> (about 1.0 g at rest, not bias-corrected).
           </p>
@@ -717,30 +700,29 @@ tz = yw*qz - yz*qw</code></pre>
           <h3>Gyro Calibration, Zero &amp; Reset</h3>
           <h4>Gyro bias (automatic, every start)</h4>
           <p>
-            The first thing the read loop does is <code>_calibrate_gyro()</code>: 200 gyro samples 5 ms apart (~1 s) while the
+            The first thing the read thread does is <code>_calibrate_gyro()</code>: 200 gyro samples 5 ms apart (~1 s) while the
             vehicle should be stationary; the mean of each axis becomes the bias subtracted from all later samples. The result is
-            logged as <code>gyro calibrated - bias x=&hellip; y=&hellip; z=&hellip; dps</code>. Because "Connected" was already
+            logged as <code>gyro calibrated — bias x=&hellip; y=&hellip; z=&hellip; dps</code>. Because "Connected" was already
             emitted, the UI shows the sensor connected while this runs.
           </p>
           <h4>ZERO (<code>calibrateTare()</code>) &mdash; "level the vehicle"</h4>
           <p>
             Captures the current yaw-stripped tilt, stores its conjugate <code>(w, -x, -y, -z)</code> as the tare quaternion, and
-            captures the current <code>ax, ay</code> as the G-force zero so lateral / longitudinal G read 0 on the mounting
-            slope. Logged as <code>tare set - q=[&hellip;] accel_bias=[&hellip;]</code>. The tare is <strong>not persisted</strong>;
-            it resets to identity on every app start.
+            captures the current <code>ax, ay</code> as the G-force zero so lateral / longitudinal G read 0 on the mounting slope.
+            Logged as <code>tare set — q=[&hellip;] accel_bias=[&hellip;]</code>. The slot only sets a <code>threading.Event</code>
+            (<code>_tare_requested</code>); the read loop services it at the top of its next iteration in <code>_apply_tare()</code>,
+            so the quaternion and accel snapshot are read on the thread that writes them. While the loop is not running the
+            request is ignored with the log line "tare requested while not running, ignored". The tare is
+            <strong>not persisted</strong>; it resets to identity on every app start.
           </p>
-          <table>
-            <thead><tr><th></th><th>Python</th><th>C++</th></tr></thead>
-            <tbody>
-              <tr><td>Where it runs</td><td>Sets a <code>threading.Event</code> (<code>_tare_requested</code>); the read loop services it at the top of its next iteration in <code>_apply_tare()</code>, so the quaternion and accel snapshot are read on the thread that writes them. While the loop is not running the request is ignored with the log line "tare requested while not running, ignored".</td><td>Sets <code>m_tareRequested</code> (atomic); the worker services it at the top of its next iteration and writes <code>m_tareQ</code> under <code>m_tareMutex</code>, which the emit path also locks</td></tr>
-            </tbody>
-          </table>
           <h4>RESET (<code>resetTare()</code>)</h4>
-          <p>Restores the identity tare and zero accel biases (same threading as above; Python applies it directly when the loop is not running, since there is nothing to race). Logged as <code>tare reset to identity</code>.</p>
+          <p>
+            Restores the identity tare and zero accel biases: through <code>_tare_reset_requested</code> while the loop runs, or
+            directly when it does not (there is nothing to race). Logged as <code>tare reset to identity</code>.
+          </p>
           <p>
             Both buttons appear on <code>CarMenu</code> (rectangles with <code>objectName: "imuZero"</code> /
-            <code>"imuReset"</code>, added in commit <code>19d8904</code> so scripted captures can level the model) and on
-            <code>SensorMenu</code> (visible only while connected).
+            <code>"imuReset"</code>) and on <code>SensorMenu</code>.
           </p>
         </section>
 
@@ -754,23 +736,25 @@ tz = yw*qz - yz*qw</code></pre>
                 <td>
                   <code>onOrientationChanged(w, x, y, z)</code> &rarr; <code>carModel.rotation = Qt.quaternion(w, y, z, x)</code>
                   &mdash; the sensor's Z-up frame is remapped to Qt Quick 3D's Y-up frame by rotating the vector components.
-                  Pitch, roll, heading (with a cardinal lookup <code>dirs[Math.round(h/45) % 8]</code>), altitude, G magnitude and
-                  baro temperature are shown as text. <code>imuConnected</code> is seeded from <code>berryIMU.connected</code> on
-                  completion and updated by <code>connectionStatusChanged === "Connected"</code>. While <em>not</em> connected a
-                  50 ms timer animates a demo attitude with sine/cosine pitch and roll. ZERO / RESET buttons as above.
+                  Pitch, roll, heading (with a cardinal lookup), altitude, G magnitude and baro temperature are shown as text.
+                  <code>imuConnected</code> is seeded from <code>berryIMU.connected</code> on completion and updated by
+                  <code>connectionStatusChanged === "Connected"</code>. While <em>not</em> connected, a "Start Sim" button runs a
+                  50 ms timer that animates a demo attitude. ZERO / RESET buttons as above.
                   <br><strong>Steering is not an IMU input:</strong> the Jeep's front wheels follow a manual slider
                   (<code>objectName: "jeepSteering"</code>, &minus;1&hellip;1 &rarr; <code>jeep.steeringInput</code>), with
-                  "Center wheels" and "Spin wheels" controls; doors, hood, tailgate and lights are likewise manual toggles on
-                  <code>JeepVehicle.qml</code>. The IMU supplies whole-body rotation; when OBD is connected, RPM and SPEED also drive the engine and wheels. Those two controls are manual when live OBD drive is inactive.
+                  "Center wheels" and "Spin wheels" controls. Engine and wheel speed follow live RPM / SPEED only while
+                  <code>liveDrive</code> is true, which tests <code>obdManager.connected</code>; this backend's OBD manager has
+                  no such property, so with real OBD data they stay manual (see
+                  <a href="obd-manager.html#known-gaps">OBD Manager &rarr; Known Gaps</a>).
                 </td>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/SensorMenu.qml</span></td>
-                <td>3&times;2 grid: <code>SensorCard</code>s for PITCH, ROLL, HEADING, ALTITUDE, TEMPERATURE plus a <code>GForceDisplay</code> (lateral / longitudinal dot with a trail, <code>maxG</code> 1.5). Reads <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code> (F/C), <code>sensorAltitudeUnit</code> (m/ft), the six <code>sensorShow*</code> flags and <code>sensorEmitRate</code>; calls <code>berryIMU.setEmitRate(emitRate)</code> on load. The temperature card is additionally gated on <code>berryIMU.hasTemperature !== false</code>. ZERO / RESET buttons.</td>
+                <td>Grid of <code>SensorCard</code>s for pitch, roll, heading, altitude and temperature plus a <code>GForceDisplay</code> (lateral / longitudinal). Reads <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code> (F/C), <code>sensorAltitudeUnit</code> (m/ft), the six <code>sensorShow*</code> flags and <code>sensorEmitRate</code>; calls <code>berryIMU.setEmitRate(emitRate)</code> on load. The temperature card is additionally gated on <code>berryIMU.hasTemperature !== false</code>. ZERO / RESET buttons.</td>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/SensorHome.qml</span></td>
-                <td>Hub page: an "IMU Connected" / "IMU Disconnected" indicator driven by <code>berryIMU.connected</code> and <code>connectionStatusChanged</code>, plus tiles for SensorMenu and CarMenu. The CarMenu tile is dimmed and disabled only when the optional Qt Quick 3D module is missing (<code>has3DView</code>), not by IMU state; a "Calibration" tile is a "Coming soon" placeholder.</td>
+                <td>Hub page: an "IMU Connected" / "IMU Disconnected" indicator driven by <code>berryIMU.connected</code> and <code>connectionStatusChanged</code>, plus tiles for the sensor page and the 3D view. The 3D tile depends on <code>has3DView</code> (the optional Qt Quick 3D module), not on IMU state.</td>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/OBDParameterModel.qml</span></td>
@@ -791,32 +775,15 @@ tz = yw*qz - yz*qw</code></pre>
                       <tr><td><code>BARO_TEMP</code></td><td>Cabin Baro Temp</td><td>&deg;C</td><td>&minus;20 &hellip; 60</td><td>temperature</td></tr>
                     </tbody>
                   </table>
-                  <span class="file-path">frontend/gauges/GForceGauge.qml</span> self-binds to <code>LATERAL_G</code> / <code>LONGITUDINAL_G</code> from this store. See <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.
+                  <span class="file-path">frontend/gauges/GForceGauge.qml</span> self-binds to <code>LATERAL_G</code> / <code>LONGITUDINAL_G</code> from this store. The OBD manager drops these ids from its poll set. See <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.
                 </td>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td>
-                <td>"IMU Sensor" tile: status dot + text from <code>getConnectionStatus()</code> / <code>connectionStatusChanged</code>; enable toggle calls <code>save_imu_enabled()</code> and <code>berryIMU.setEnabled()</code>; display settings; emit-rate slider.</td>
+                <td>"IMU Sensor" card: status from <code>getConnectionStatus()</code> / <code>connectionStatusChanged</code>; the enable toggle calls <code>save_imu_enabled()</code> and <code>berryIMU.setEnabled()</code> (which saves the setting as well); display settings; emit-rate slider.</td>
               </tr>
             </tbody>
           </table>
-        </section>
-
-        <section id="imu-android">
-          <h3>Android: QtSensors Implementation</h3>
-          <p>
-            Under <code>Q_OS_MOBILE</code> the same header declares a different <code>BerryIMUManager</code> backed by
-            <code>QAccelerometer</code>, <code>QCompass</code> and <code>QPressureSensor</code> (the <code>Sensors</code> Qt module
-            is added to the build only for Android). Same QML name, same signals and slots, but:
-          </p>
-          <ul>
-            <li>No Madgwick: pitch = <code>atan2(ay, &radic;(ax&sup2;+az&sup2;))</code>, roll = <code>atan2(&minus;ax, az)</code> from the accelerometer alone; the tare is a pair of angle offsets subtracted from them. <code>orientationChanged</code> is then built from the tared angles as <code>q = q_pitch(Y) &times; q_roll(X)</code> with yaw = 0 &mdash; the same yaw-stripped, tared convention desktop emits, so <code>CarMenu</code> rotates the model identically on both.</li>
-            <li>Lateral G = <code>ax / 9.81</code>, longitudinal G = <code>ay / 9.81</code>, magnitude = <code>|a| / 9.81</code> (QtSensors reports m/s&sup2;).</li>
-            <li>Heading = compass azimuth, normalised to &ge; 0 because some Android devices report &minus;180&hellip;180.</li>
-            <li>Altitude from the pressure sensor (Pa, against 101 325 Pa) at 10 Hz; <code>baroTempChanged</code> and <code>hasTemperature</code> only turn on once a non-zero temperature arrives (most phones report 0).</li>
-            <li>Rates: accelerometer and compass run at <code>setEmitRate()</code> (default 60, clamped 10&ndash;120 like desktop) and drop to 5 Hz when <code>setActive(false)</code> &mdash; the requested sensor rate drops to 5 Hz, and <code>idleThrottled()</code> separately caps accelerometer and compass emission at once per 200 ms because Android may treat the requested rate as a hint. Pressure remains requested at 10 Hz.</li>
-            <li>Status is "Connected" if the accelerometer starts, otherwise <strong>"Unavailable"</strong>. <code>setEnabled()</code> persists <code>imuEnabled</code> through <code>save_imu_enabled</code> exactly like desktop, starts/stops the sensors and emits "Connected" / "Unavailable" / "Disabled"; because the phone sensors are started in the constructor, <code>connect_settings_manager()</code> stops them again when the persisted value is <code>false</code>.</li>
-          </ul>
         </section>
 
         <section id="imu-api">
@@ -825,7 +792,7 @@ tz = yw*qz - yz*qw</code></pre>
           <table>
             <thead><tr><th>Signal</th><th>Parameters</th><th>Rate</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>orientationChanged</code></td><td><code>float w, x, y, z</code></td><td>emit rate</td><td>Tared, yaw-stripped quaternion for the 3D model (on Android rebuilt from the tared pitch / roll)</td></tr>
+              <tr><td><code>orientationChanged</code></td><td><code>float w, x, y, z</code></td><td>emit rate</td><td>Tared, yaw-stripped quaternion for the 3D model</td></tr>
               <tr><td><code>pitchChanged</code></td><td><code>float</code> deg</td><td>emit rate</td><td>From the tared quaternion, &plusmn;90</td></tr>
               <tr><td><code>rollChanged</code></td><td><code>float</code> deg</td><td>emit rate</td><td>From the tared quaternion, &plusmn;180</td></tr>
               <tr><td><code>headingChanged</code></td><td><code>float</code> 0&ndash;360</td><td>emit rate</td><td>Raw magnetometer <code>atan2(my, mx)</code></td></tr>
@@ -834,8 +801,8 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td><code>longitudinalGChanged</code></td><td><code>float</code> g</td><td>emit rate</td><td><code>ax</code> minus tare bias</td></tr>
               <tr><td><code>altitudeChanged</code></td><td><code>float</code> m</td><td>5 Hz</td><td>Barometric altitude vs 1013.25 hPa</td></tr>
               <tr><td><code>baroTempChanged</code></td><td><code>float</code> &deg;C</td><td>5 Hz</td><td>BMP388 die temperature</td></tr>
-              <tr><td><code>connectionStatusChanged</code></td><td><code>str</code></td><td>&mdash;</td><td>"Connected", "Disconnected", "Error", "Disabled" (Android also "Unavailable")</td></tr>
-              <tr><td><code>hasTemperatureChanged</code></td><td><code>bool</code></td><td>&mdash;</td><td>Only ever emitted by the Android variant</td></tr>
+              <tr><td><code>connectionStatusChanged</code></td><td><code>str</code></td><td>&mdash;</td><td>"Connected", "Disconnected", "Error", "Disabled"</td></tr>
+              <tr><td><code>hasTemperatureChanged</code></td><td><code>bool</code></td><td>&mdash;</td><td>Declared (notify signal of <code>hasTemperature</code>) but never emitted</td></tr>
             </tbody>
           </table>
           <h4>Properties</h4>
@@ -843,21 +810,21 @@ tz = yw*qz - yz*qw</code></pre>
             <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td><code>connected</code></td><td><code>bool</code></td><td>Read loop running (notify: <code>connectionStatusChanged</code>)</td></tr>
-              <tr><td><code>hasTemperature</code></td><td><code>bool</code></td><td>Always <code>true</code> on desktop (the BMP388 always reports temperature); Android flips it on the first non-zero reading. Gates the TEMPERATURE card in <code>SensorMenu</code>.</td></tr>
+              <tr><td><code>hasTemperature</code></td><td><code>bool</code></td><td>Always <code>true</code> (the BMP388 always reports temperature). Gates the temperature card in <code>SensorMenu</code>.</td></tr>
             </tbody>
           </table>
           <h4>Slots</h4>
           <table>
             <thead><tr><th>Slot</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>setEnabled(bool)</code></td><td>Persists <code>imuEnabled</code> (<code>save_imu_enabled</code>), then starts (retry counter reset) or stops the worker and emits "Disabled"</td></tr>
+              <tr><td><code>setEnabled(bool)</code></td><td>No-op if unchanged. Persists <code>imuEnabled</code> (<code>save_imu_enabled</code>), then starts (retry counter reset) if not running, or stops a running loop, closes the bus and emits "Disabled"</td></tr>
               <tr><td><code>isEnabled()</code></td><td>Current enabled flag</td></tr>
-              <tr><td><code>setEmitRate(int hz)</code></td><td>Clamp 10&ndash;120, interval = 1/hz; stored on the manager and applied to every worker</td></tr>
+              <tr><td><code>setEmitRate(int hz)</code></td><td>Clamp 10&ndash;120, interval = 1/hz</td></tr>
               <tr><td><code>setActive(bool)</code></td><td>Called by <code>Main.qml</code> on every page change; <code>false</code> drops emission to 5 Hz</td></tr>
               <tr><td><code>calibrateTare()</code></td><td>ZERO &mdash; request the read loop to capture the current tilt and accel bias (ignored with a log while the loop is not running)</td></tr>
               <tr><td><code>resetTare()</code></td><td>RESET &mdash; identity tare, zero biases</td></tr>
-              <tr><td><code>getConnectionStatus()</code></td><td>"Connected" or "Disconnected" (Android: "Connected" / "Unavailable")</td></tr>
-              <tr><td><code>cleanup()</code></td><td>Sets the shutting-down flag (suppresses retries), stops the thread, closes the bus</td></tr>
+              <tr><td><code>getConnectionStatus()</code></td><td>"Connected" while the loop runs, otherwise "Disconnected"</td></tr>
+              <tr><td><code>cleanup()</code></td><td>Sets the shutting-down flag (suppresses retries), stops the loop (2 s join), closes the bus</td></tr>
             </tbody>
           </table>
         </section>
@@ -866,9 +833,9 @@ tz = yw*qz - yz*qw</code></pre>
         <section id="gesture-overview">
           <h2>Gesture Manager</h2>
           <p>
-            <strong>GestureManager</strong> drives a PixArt PAJ7620U2 gesture sensor over I2C for touchless control. A worker
-            thread polls the sensor's two gesture-flag registers, resolves nine gestures, maps each to an action string and
-            emits it; the application wiring turns actions into media / volume calls.
+            <strong>GestureManager</strong> drives a PixArt PAJ7620U2 gesture sensor over I2C for touchless control. A background
+            thread polls the sensor's two gesture-flag registers, resolves nine gestures, maps each to an action string and emits
+            it; <span class="file-path">main.py</span> turns actions into media / volume calls.
           </p>
           <span class="platform-badge linux">Linux (Raspberry Pi / Orange Pi)</span>
         </section>
@@ -876,9 +843,8 @@ tz = yw*qz - yz*qw</code></pre>
         <section id="gesture-sensor">
           <h3>PAJ7620U2 Sensor</h3>
           <p>
-            Same bus as the IMU (<code>I2C_BUS = 2</code>), address <strong><code>0x73</code></strong>. Python prefers
-            <code>smbus2</code> and falls back to the legacy <code>smbus</code> module (the IMU manager does not); C++ uses the same
-            raw <code>ioctl</code>/<code>read</code>/<code>write</code> helpers as the IMU worker.
+            Same bus as the IMU (<code>I2C_BUS = 2</code>), address <strong><code>0x73</code></strong>. The manager prefers
+            <code>smbus2</code> and falls back to the legacy <code>smbus</code> module (the IMU manager does not).
           </p>
           <table>
             <thead><tr><th>Register</th><th>Address</th><th>Purpose</th></tr></thead>
@@ -889,16 +855,15 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td><code>REG_GESTURE_1</code></td><td><code>0x44</code></td><td>Wave flag (bit 0)</td></tr>
             </tbody>
           </table>
-          <h4>Initialisation (after the 1 s start delay)</h4>
+          <h4>Initialisation (after the 1 s start delay, on the GUI thread)</h4>
           <ol class="steps">
-            <li>Open the bus (Python sleeps 50 ms first).</li>
-            <li><strong>Wake up</strong>: write <code>0xEF &larr; 0x00</code>, sleep 10 ms. If the first write raises <code>OSError</code> / fails, wait 50 ms and try once more (the chip is asleep until addressed).</li>
-            <li><strong>Verify chip ID</strong>: select bank 0, read <code>0x00</code> and <code>0x01</code>; anything but <code>0x7620</code> is an init error ("Expected chip ID 0x7620, got 0x&hellip;").</li>
-            <li><strong>Write the init table</strong>: <code>INIT_REGISTER_ARRAY</code>, the DFRobot reference configuration &mdash; 219 register/value pairs starting with a bank-0 select, switching to bank 1 midway. It sets the sensor's gain, thresholds and gesture-engine parameters.</li>
-            <li>Select bank 0 again for gesture reading; log <code>PAJ7620U2 initialized (chip ID: 0x7620)</code>; emit "Connected".</li>
+            <li>Open the bus, sleep 50 ms.</li>
+            <li><strong>Wake up</strong>: write <code>0xEF &larr; 0x00</code>, sleep 10 ms. If the first write raises <code>OSError</code>, wait 50 ms and try once more.</li>
+            <li><strong>Verify chip ID</strong>: select bank 0, read <code>0x00</code> and <code>0x01</code>; anything but <code>0x7620</code> raises "Expected chip ID 0x7620, got 0x&hellip;".</li>
+            <li><strong>Write the init table</strong>: <code>INIT_REGISTER_ARRAY</code>, the DFRobot reference configuration &mdash; 219 register/value pairs starting with a bank-0 select and switching to bank 1 midway.</li>
+            <li>Select bank 0 again for gesture reading; log <code>PAJ7620U2 initialized (chip ID: 0x7620)</code>; emit "Connected"; start the read thread.</li>
           </ol>
-          <p>C++ initialises the sensor on its worker thread. Python opens and initialises the bus in <code>_start()</code> on the GUI thread, then starts the read-loop thread.</p>
-          <p>Failure handling, retries (5 &times; linear 5 s), the no-retry on a permission error and the C++ dead-bus threshold (5 consecutive failed reads of the flag registers &rarr; "Error" &rarr; retry) are identical to the <a href="#imu-startup">IMU manager</a>.</p>
+          <p>Failure handling and retries (5 &times; linear 5 s, none on a permission error or a missing I2C module) are the same as the <a href="#imu-startup">IMU manager</a>; the log prefix is <code>GestureSensor:</code>.</p>
         </section>
 
         <section id="gesture-types">
@@ -938,25 +903,23 @@ tz = yw*qz - yz*qw</code></pre>
           <p>Each iteration reads both flag registers in one 2-byte block read from <code>0x43</code>, then:</p>
           <ol class="steps">
             <li>No flag set &rarr; sleep <code>POLL_INTERVAL</code>, continue.</li>
-            <li><strong>Cooldown gate</strong>: if less than the cooldown has passed since the last accepted gesture, ignore and sleep.</li>
+            <li><strong>Cooldown gate</strong>: if no more than the cooldown has passed since the last accepted gesture, ignore and sleep.</li>
             <li><strong>FORWARD flag</strong>: sleep 300 ms, re-read. If the re-read decodes to a gesture other than FORWARD/BACKWARD, use it (the approach was really the start of a swipe); otherwise it is a FORWARD.</li>
             <li><strong>BACKWARD flag</strong>: same with a 400 ms wait.</li>
-            <li><strong>Anything else</strong> (directional, rotation, wave): sleep 20 ms and read again as a "confirmation". The PAJ7620 clears <code>0x43</code>/<code>0x44</code> on read, so a clean gesture re-reads as the same flag or as nothing &mdash; both accept <code>first</code>. A <em>different</em> non-empty gesture on the re-read means the sensor is still settling on some other motion, so the sample is discarded (logged at debug level as "discarding &lt;first&gt; - confirmation read saw &lt;second&gt;"). Same rule in both backends.</li>
+            <li><strong>Anything else</strong> (directional, rotation, wave): sleep 20 ms and read again as a confirmation. Per the source comment the PAJ7620 clears <code>0x43</code>/<code>0x44</code> on read, so a clean gesture re-reads as the same flag or as nothing &mdash; both accept the first reading. A <em>different</em> gesture on the re-read means the sensor is still settling on some other motion, so the sample is discarded (logged at debug level as "discarding &lt;first&gt; — confirmation read saw &lt;second&gt;").</li>
             <li>Accept: bump the count, stamp <code>last_gesture_time</code>, emit <code>gestureDetected(name)</code>; look up the action; if it is not <code>"none"</code> emit <code>actionTriggered(action)</code> and log <code>&lt;gesture&gt; -&gt; &lt;action&gt; (#n)</code>.</li>
             <li><strong>Post-flush</strong>: for 100 ms read and discard the flag registers every 10 ms so the tail of the same hand motion cannot fire twice.</li>
             <li>Sleep <code>POLL_INTERVAL</code>.</li>
           </ol>
           <p>
-            Python: an exception in the loop emits "Error", closes the bus and schedules a retry. C++: a failed block read
-            zeroes the flags and is skipped; after 5 consecutive failures (<code>MAX_CONSECUTIVE_READ_FAILURES</code>) the loop
-            logs "read loop error: 5 consecutive I2C read failures", exits, emits "Error" and retries &mdash; the same outcome
-            as Python, after tolerating four consecutive failures.
+            Any exception in the loop logs "read loop error", emits "Error" (from the read thread), closes the bus and schedules a
+            retry. The loop exit is logged as <code>read loop exited after N gestures</code>.
           </p>
         </section>
 
         <section id="gesture-mapping">
           <h3>Action Mapping &amp; Settings</h3>
-          <p>Each gesture maps to an action string. The default, duplicated in both settings managers' default tables:</p>
+          <p>Each gesture maps to an action string. The default, in both <code>DEFAULT_GESTURE_MAPPING</code> and the settings manager's defaults:</p>
           <pre><code>DEFAULT_GESTURE_MAPPING = {
     <span class="str">"RIGHT"</span>:             <span class="str">"next_track"</span>,
     <span class="str">"LEFT"</span>:              <span class="str">"previous_track"</span>,
@@ -969,17 +932,18 @@ tz = yw*qz - yz*qw</code></pre>
     <span class="str">"WAVE"</span>:              <span class="str">"play_pause"</span>,
 }</code></pre>
           <p>
-            The action handler lives in <span class="file-path">main.py</span> (<code>handle_gesture_action</code>) and
-            <span class="file-path">src/main.cpp</span> (a lambda on <code>actionTriggered</code>):
+            The action handler is <code>handle_gesture_action()</code> in <span class="file-path">main.py</span>, connected to
+            <code>actionTriggered</code>. Track actions go to the phone while phone mirroring holds OCTAVE's media controls
+            (<code>phone_mirror_manager.mediaActive</code>):
           </p>
           <table>
             <thead><tr><th>Action</th><th>Effect</th></tr></thead>
             <tbody>
-              <tr><td><code>next_track</code></td><td><code>mediaManager.next_track()</code></td></tr>
-              <tr><td><code>previous_track</code></td><td><code>mediaManager.previous_track()</code></td></tr>
-              <tr><td><code>play_pause</code></td><td><code>mediaManager.toggle_play()</code></td></tr>
-              <tr><td><code>mute_toggle</code></td><td><code>mediaManager.toggle_mute()</code></td></tr>
-              <tr><td><code>volume_up</code> / <code>volume_down</code></td><td><code>volumeController.applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></td></tr>
+              <tr><td><code>next_track</code></td><td><code>phone_mirror_manager.mediaNext()</code> if the phone has the media controls, else <code>media_manager.next_track()</code></td></tr>
+              <tr><td><code>previous_track</code></td><td><code>mediaPrevious()</code> / <code>media_manager.previous_track()</code></td></tr>
+              <tr><td><code>play_pause</code></td><td><code>mediaPlayPause()</code> / <code>media_manager.toggle_play()</code></td></tr>
+              <tr><td><code>mute_toggle</code></td><td><code>media_manager.toggle_mute()</code></td></tr>
+              <tr><td><code>volume_up</code> / <code>volume_down</code></td><td><code>volume_controller.applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></td></tr>
               <tr><td><code>none</code></td><td>Gesture disabled (the settings UI labels it "Disabled")</td></tr>
             </tbody>
           </table>
@@ -987,16 +951,15 @@ tz = yw*qz - yz*qw</code></pre>
           <table>
             <thead><tr><th>Key</th><th>Default</th><th>UI range</th><th>Read by</th></tr></thead>
             <tbody>
-              <tr><td><code>gestureSensorEnabled</code></td><td><code>true</code></td><td>toggle</td><td><code>connect_settings_manager()</code>; toggle calls <code>save_gesture_sensor_enabled()</code> + <code>setEnabled()</code></td></tr>
-              <tr><td><code>gestureMapping</code></td><td>table above</td><td>chip picker per gesture</td><td><code>get_gesture_mapping_dict()</code> at startup; <code>setGestureAction()</code> / <code>resetMappingToDefaults()</code> write back through <code>save_gesture_mapping()</code></td></tr>
-              <tr><td><code>gestureVolumeStep</code></td><td><code>5</code></td><td>1&ndash;100</td><td>The action handler in main</td></tr>
-              <tr><td><code>gestureCooldown</code></td><td><code>300</code> ms</td><td>100&ndash;2000, step 50</td><td><code>connect_settings_manager()</code>; slider calls <code>save_gesture_cooldown()</code> + <code>setCooldown(ms)</code></td></tr>
+              <tr><td><code>gestureSensorEnabled</code></td><td><code>true</code></td><td>toggle</td><td><code>connect_settings_manager()</code>; the toggle calls <code>save_gesture_sensor_enabled()</code> + <code>setEnabled()</code></td></tr>
+              <tr><td><code>gestureMapping</code></td><td>table above</td><td>chip picker per gesture</td><td><code>get_gesture_mapping_dict()</code> in <code>connect_settings_manager()</code>; <code>setGestureAction()</code> / <code>resetMappingToDefaults()</code> write back through <code>save_gesture_mapping()</code></td></tr>
+              <tr><td><code>gestureVolumeStep</code></td><td><code>5</code></td><td>1&ndash;100</td><td><code>handle_gesture_action()</code> in <span class="file-path">main.py</span></td></tr>
+              <tr><td><code>gestureCooldown</code></td><td><code>300</code> ms</td><td>100&ndash;2000, step 50</td><td><code>connect_settings_manager()</code>; the slider calls <code>save_gesture_cooldown()</code> + <code>setCooldown(ms)</code></td></tr>
             </tbody>
           </table>
           <p>
-            In C++ the mapping and cooldown live on the manager <em>and</em> are pushed to the worker under
-            <code>m_configMutex</code> whenever they change (or when a worker is created), because the worker thread reads them
-            on every gesture. In Python the thread reads the manager's dict directly.
+            The read thread reads the manager's <code>_gesture_mapping</code> dict and <code>_cooldown</code> directly; slots on the
+            GUI thread replace or update them.
           </p>
         </section>
 
@@ -1015,7 +978,7 @@ tz = yw*qz - yz*qw</code></pre>
           <table>
             <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>connectionStatus</code></td><td><code>str</code></td><td>Bindable form of <code>getConnectionStatus()</code>; read by <span class="file-path">frontend/settings/widgets/AccessoriesWidget.qml</span>. Added to the desktop C++ class and to Python in commit <code>78ab72c</code> (it had been mobile-stub-only).</td></tr>
+              <tr><td><code>connectionStatus</code></td><td><code>str</code></td><td>Bindable form of <code>getConnectionStatus()</code> (notify: <code>connectionStatusChanged</code>); read by <span class="file-path">frontend/settings/widgets/AccessoriesWidget.qml</span>.</td></tr>
             </tbody>
           </table>
           <h4>Slots</h4>
@@ -1025,149 +988,117 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td><code>setGestureAction(gesture, action)</code></td><td>Remap one gesture and persist the whole mapping</td></tr>
               <tr><td><code>getGestureAction(gesture)</code></td><td>Current action, <code>"none"</code> if unmapped</td></tr>
               <tr><td><code>resetMappingToDefaults()</code></td><td>Restore the default table and persist it</td></tr>
-              <tr><td><code>setEnabled(bool)</code></td><td>Persist <code>gestureSensorEnabled</code>; start (retry counter reset) or stop the worker and emit "Disabled"</td></tr>
+              <tr><td><code>setEnabled(bool)</code></td><td>No-op if unchanged. Persist <code>gestureSensorEnabled</code>; start (retry counter reset) if not running, or stop a running loop and emit "Disabled"</td></tr>
               <tr><td><code>setCooldown(int ms)</code></td><td>Runtime cooldown (not persisted here; the slider saves the setting separately)</td></tr>
               <tr><td><code>isEnabled()</code></td><td>Current enabled flag</td></tr>
-              <tr><td><code>getConnectionStatus()</code></td><td>"Connected" / "Disconnected" ("Disabled on mobile" from the Android stub)</td></tr>
-              <tr><td><code>cleanup()</code></td><td>Set shutting-down, stop the worker, close the bus</td></tr>
+              <tr><td><code>getConnectionStatus()</code></td><td>"Connected" while the loop runs, otherwise "Disconnected"</td></tr>
+              <tr><td><code>cleanup()</code></td><td>Set shutting-down, stop the loop (2 s join), close the bus</td></tr>
             </tbody>
           </table>
+        </section>
+
+        <!-- ===================== DEV MODE ===================== -->
+        <section id="dev-mode">
+          <h2>Dev Mode Simulation</h2>
+          <p>
+            <code>python -m dev.main_dev</code> runs the app with developer tooling from the <span class="file-path">dev/</span>
+            directory, which is gitignored: it exists in the author's working tree, not in a fresh clone. For the hardware
+            managers it provides <span class="file-path">dev/mock_imu.py</span>: <code>MockIMUFeed</code> drives the <em>real</em>
+            <code>berryIMU</code> manager's signals from a 30 Hz GUI-thread timer (a synthetic drive tied to the mock OBD speed:
+            winding heading, lateral and longitudinal G, body roll and pitch, altitude, and a tilt-only quaternion like the real
+            manager emits), and emits "Connected" / "Disconnected" on it. It is off until the command server receives
+            <code>sim_imu {"on": true}</code>, so a dev-mode run on a board with a real IMU is not masked. There is no simulator
+            for the ESP32 knob or the gesture sensor. See <a href="development.html">Development</a>.
+          </p>
         </section>
 
         <!-- ===================== DESIGN DECISIONS ===================== -->
         <section id="design-decisions">
           <h2>Design Decisions</h2>
-          <p>Each rationale below is taken from source comments or commit messages, not inferred.</p>
+          <p>Each rationale below is taken from source comments, not inferred.</p>
 
-          <h3>Worker threads for I2C, an event loop for serial</h3>
+          <h3>Background threads for I2C, a blocking read for serial</h3>
           <p>
-            The IMU and gesture drivers run their loops on dedicated threads (Python <code>threading.Thread</code>, C++
-            <code>QThread</code> + worker QObject) rather than <code>QTimer</code> ticks on the GUI thread. The measurement in
-            <code>f1eb526</code> is the reason it has to be that way: one IMU iteration blocks on the bus for ~4.3 ms
-            (80 %+ of the period), and the gesture loop deliberately sleeps 300&ndash;400 ms mid-detection. The continuous loops therefore run away from the
-            thread that paints QML. Python still performs initialisation on the GUI thread. The price is that every emitted value crosses threads as a queued signal, which
-            is exactly what the emission gating below manages. The ESP32 knob, by contrast, sends a few bytes per second: C++
-            lets <code>QSerialPort</code> integrate with the event loop (<code>readyRead</code>), and Python
-            (<code>94d61be</code>) blocks in <code>readline()</code> with the GIL released "instead of polling
-            <code>in_waiting</code> at 100 Hz for a knob that sends a few bytes a second".
+            The IMU and gesture loops run on dedicated daemon threads rather than <code>QTimer</code> ticks on the GUI thread: one
+            IMU iteration blocks on the bus for about 4.3 ms (the measurement in the <code>SAMPLE_INTERVAL</code> comment), and the
+            gesture loop deliberately sleeps 300&ndash;400 ms mid-detection. Initialisation still runs on the GUI thread. The
+            price is that every emitted value crosses threads as a queued signal, which is what the emission gating below manages.
+            The ESP32 knob sends a few bytes per second, so its thread blocks in <code>readline()</code> with the GIL released
+            "instead of polling <code>in_waiting</code> at 100 Hz for a knob that sends a few bytes a second".
           </p>
 
           <h3>A paced loop instead of "read as fast as you can"</h3>
           <p>
-            <code>ed826ed</code>: the loops used to sleep a fixed 1 ms, which "with three I2C reads per iteration kept the bus
-            saturated and left the worker thread in D-state at ~9 % CPU on the Orange Pi. The LSM6DSL ODR is 416 Hz and the emit
-            rate is 60 Hz, so reading that fast bought nothing." The 5 ms period is chosen to stay under the configured sensor output data rate while giving the filter 3+ samples per emit, and sleeping out the remainder makes the cadence
-            independent of bus speed. Moving the barometer from "every 80th iteration" to a time-based interval removed a
-            cadence that only approximated 5 Hz at the old loop rate. <code>f1eb526</code> then corrected the record: the old
-            loop was not spinning, it was bus-bound, so the CPU shown is the cost of reading the sensor; the explicit period is
-            kept for its predictability and the 100 Hz option is documented for anyone who wants the CPU back.
+            The IMU loop sleeps out the rest of a 5 ms period after its reads, so it never busy-spins; the barometer is read on a
+            time-based interval "so it doesn't drift with loop rate". The source comment documents the trade-off of the period in
+            both directions (below the read cost the sleep disappears; 100 Hz halves bus traffic but approaches the point where
+            the filter starves).
           </p>
 
           <h3>Emission gating rather than stopping the sensor</h3>
           <p>
-            <code>94d61be</code> keeps "sampling and Madgwick fusion at full rate, but the seven queued signals per tick into
-            QML drop from 60 Hz to 5 Hz" when nothing consumes them. Stopping the loop instead would lose the gyro-integrated
-            attitude and the tare context, and would make the first frame after opening CarMenu wrong; 5 Hz still keeps the
-            Settings status line and hub tiles honest. Driving it from <code>Main.qml</code>'s <code>StackView</code> means
-            pages "need no changes". <code>2fef514</code> widened the full-rate set once dashboards and home cards started
-            reading the IMU through <code>OBDParameterModel</code>, so the consumer list is a property of what is on screen,
-            not of which page type it is.
+            "Sampling and fusion continue at full rate; only the emission into QML slows down while nothing on screen consumes
+            it." Stopping the loop instead would lose the gyro-integrated attitude and the tare context; 5 Hz keeps the settings
+            status fresh "without seven queued signals per frame into idle bindings" (the <span class="file-path">Main.qml</span>
+            comment). Driving it from <code>Main.qml</code>'s <code>StackView</code> keeps the consumer list a property of what is
+            on screen.
           </p>
 
           <h3>One quaternion, yaw stripped, heading from the raw magnetometer</h3>
           <p>
-            The module docstring states the goal: "outputs a quaternion directly to the 3D model, completely avoiding gimbal
-            lock. No Euler angle clamping, no cascaded EMA stages. One filter, one quaternion, 1:1 mapping." Yaw is removed
-            because the model only needs pitch and roll and heading drift must never rotate it; the compass value is computed
-            from the magnetometer directly because that "avoids drift". Freezing the filter when the deadbanded gyro is zero
-            stops the accelerometer correction from producing visible settling on a parked vehicle. The magnetometer is left
-            out of the fusion entirely (zeros are passed), which is consistent with those two choices even though it leaves the
-            9DOF code idle.
+            The module docstring states the goal: "outputs a quaternion directly to the 3D model, completely avoiding gimbal lock.
+            No Euler angle clamping, no cascaded EMA stages. One filter, one quaternion, 1:1 mapping." Yaw is removed so heading
+            drift can never rotate the model; the compass value comes from the magnetometer directly because that "avoids drift";
+            and the magnetometer stays out of the fusion because of in-car magnetic interference. Freezing the filter when the
+            deadbanded gyro is zero stops the accelerometer correction from producing visible settling on a parked vehicle.
           </p>
 
           <h3>Tare over persistent mounting calibration</h3>
           <p>
-            Rather than a mounting-angle setting, the user presses ZERO on a level surface. The tare is a quaternion captured
-            in the same yaw-stripped domain as the output "so the tare operates in the same domain as the values it's applied
-            to", and it captures the accelerometer bias at the same moment so the G displays zero with it. Gyro bias is
-            re-measured on every start because it is temperature-dependent; the tare is not persisted.
+            Rather than a mounting-angle setting, the user presses ZERO on a level surface. The tare is a quaternion captured in
+            the same yaw-stripped domain as the output "so the tare operates in the same domain as the values it's applied to",
+            and it captures the accelerometer bias at the same moment so the G displays zero with it. Gyro bias is re-measured on
+            every start; the tare is not persisted.
           </p>
 
           <h3>A single volume entry point</h3>
           <p>
-            <span class="file-path">backend/volume_utils.py</span> explains it: "Before this module existed, the curve was
-            hardcoded in ~9 call sites across main.py and QML. If the curve ever changed, every site had to change in lockstep.
-            This module centralizes both the math and the dispatch" (commit <code>d2b047b</code>, "volume curve
-            de-duplication"). Hardware handlers therefore never call a manager's <code>setVolume</code>; they call
-            <code>applyVolume(currentVolume + delta)</code>. The C++ header adds the reason for the signal-based fan-out:
-            "VolumeController doesn't need pointers to managers that may not exist yet." The delta accumulator exists because
-            the knob step can be as small as 0.25 %, and <code>applyVolume</code> takes an integer percent.
+            <span class="file-path">backend/volume_utils.py</span> explains it: "Before this module existed, the curve was hardcoded
+            in ~9 call sites across main.py and QML. If the curve ever changed, every site had to change in lockstep. This module
+            centralizes both the math and the dispatch." Hardware handlers therefore never call a manager's
+            <code>setVolume</code>; they call <code>applyVolume(currentVolume + delta)</code>. The delta accumulator in
+            <span class="file-path">main.py</span> exists because the knob step can be as small as 0.25 %, and
+            <code>applyVolume</code> takes an integer percent.
           </p>
 
           <h3>LED debounce, keepalive and sleep</h3>
           <p>
-            The 50 ms trailing debounce ("max 20 updates/sec") exists "to prevent LED flickering during rapid slider drags"
-            while always delivering the final value. The 2 s keepalive is sized against the dongle's 5 s LED timeout, and LED
-            sleep is implemented by simply <em>not</em> sending keepalives, so the firmware needs no extra command and the ring
-            goes dark on its own when OCTAVE exits ("LEDs turn off when OCTAVE closes" is the default's rationale).
+            The 50 ms trailing debounce ("max 20 updates/sec") exists to prevent LED flickering while always delivering the final
+            value. The 2 s keepalive is sized against the dongle's 5 s LED timeout, and LED sleep is implemented by simply
+            <em>not</em> sending keepalives, so the firmware needs no extra command and the ring goes dark on its own when OCTAVE
+            exits ("LEDs turn off when OCTAVE closes" is the default's comment).
           </p>
 
           <h3>Two-pass gesture disambiguation and post-flush</h3>
           <p>
             From the source: forward/backward "are compound gestures (hand approaching/leaving) that the sensor often initially
-            reports as directional. Wait and re-read to let the sensor settle on the final gesture." The waits (300 / 400 ms)
-            and the init table follow the DFRobot reference driver. The 100 ms flush after a confirmed gesture keeps "the same
+            reports as directional. Wait and re-read to let the sensor settle on the final gesture." The waits (300 / 400 ms) and
+            the init table follow the DFRobot reference driver. The 100 ms flush after a confirmed gesture keeps "the same
             motion" from firing twice, and the user-tunable cooldown is the coarse guard above that.
           </p>
 
           <h3>Linear retries, permission errors excluded</h3>
           <p>
-            Both I2C managers retry five times at 5 s &times; n. A missing <code>/dev/i2c-2</code> may appear later (overlay
-            loading, hot-plug), so it is retried; a permission error is not, because only the user can fix group membership
-            &mdash; Python catches <code>PermissionError</code>, C++ checks <code>errno</code> for <code>EACCES</code> /
-            <code>EPERM</code> after <code>open()</code> and has the worker report <code>stopped(retryable = false)</code>.
-            Inside the loop C++ tolerates up to five consecutive failed block reads before it declares the bus dead, because
-            a single NACK on a long cable is not worth a reconnect cycle; Python's <code>smbus2</code> raises on the first one.
+            Both I2C managers retry five times at 5 s &times; n. A missing <code>/dev/i2c-2</code> may appear later, so it is
+            retried; a <code>PermissionError</code> is not, because only the user can fix group membership. Inside the loop the
+            first failed read ends it and starts the retry cycle, since <code>smbus2</code> raises on any I2C error.
           </p>
-
-          <h3>Compile-time stubs for mobile</h3>
-          <p>
-            Rather than <code>#ifdef</code>-ing every QML binding, each hardware header carries a mobile stub with the same
-            names; <code>78ab72c</code> added the signals "QML <code>Connections</code> handlers reference" to those stubs so
-            the shared frontend loads unchanged on Android. The stubs now carry the exact desktop signatures: the ESP32 stub
-            declares the four properties (<code>connected</code>, <code>connectionStatus</code>, <code>connectionDetail</code>,
-            <code>availablePorts</code>), every desktop slot (<code>get_ports_with_descriptions()</code> returns the JSON string
-            <code>"[]"</code> so the Accessories page can parse it) and the desktop signal set (the former stub-only
-            <code>connectionStateChanged</code> is gone); the gesture stub declares <code>gestureDetected</code>,
-            <code>actionTriggered</code>, <code>connectionStatusChanged(QString)</code>, <code>setCooldown(int)</code>,
-            <code>isEnabled()</code> and <code>getConnectionStatus()</code>. The IMU is the one manager with a real mobile
-            implementation because a phone has the sensors on board.
-          </p>
-        </section>
-
-        <!-- ===================== PARITY ===================== -->
-        <section id="parity">
-          <h2>C++ / Python Differences</h2>
-          <p>Observed differences between the two desktop backends as of this revision. None change the QML API.</p>
-          <table>
-            <thead><tr><th>Area</th><th>Python</th><th>C++</th></tr></thead>
-            <tbody>
-              <tr><td>ESP32 reading</td><td>Blocking <code>readline()</code> on a daemon thread</td><td><code>QSerialPort::readyRead</code> on the main thread</td></tr>
-              <tr><td>ESP32 disconnect detection</td><td>Any <code>SerialException</code> on read or keepalive</td><td><code>ResourceError</code> / <code>DeviceNotFoundError</code> / <code>PermissionError</code> / <code>ReadError</code> / <code>WriteError</code>, or a rejected keepalive write</td></tr>
-              <tr><td>ESP32 port scan</td><td>Per-platform VID + glob lists</td><td><code>QSerialPortInfo</code> everywhere; effectively every port listed</td></tr>
-              <tr><td>VolumeController fan-out</td><td>Direct calls (media, phone mirror, ESP32)</td><td><code>volumeApplied</code> &rarr; the same three outputs, wired in <span class="file-path">main.cpp</span></td></tr>
-              <tr><td>I2C read error inside the loop</td><td>Loop exits on the first exception</td><td>Loop exits after 5 consecutive failed block reads</td></tr>
-              <tr><td>IMU tare</td><td><code>threading.Event</code> serviced by the read loop</td><td>Atomic request serviced by the worker</td></tr>
-              <tr><td>I2C library</td><td><code>smbus2</code> (gesture also accepts <code>smbus</code>)</td><td>Raw <code>ioctl(I2C_SLAVE)</code> + <code>read</code>/<code>write</code></td></tr>
-              <tr><td>Gesture config to worker</td><td>Thread reads the manager's dict</td><td>Copied under <code>m_configMutex</code></td></tr>
-              <tr><td>Mobile</td><td>Not applicable (desktop-only backend)</td><td>Stubs / QtSensors variant</td></tr>
-            </tbody>
-          </table>
         </section>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a class="related-link" href="hardware-setup.html">Hardware Setup</a>
+          <a class="related-link" href="obd-manager.html">OBD Manager</a>
           <a class="related-link" href="architecture.html">Architecture Overview</a>
           <a class="related-link" href="signals-slots-reference.html">Signals &amp; Slots Reference</a>
           <a class="related-link" href="settings-reference.html">Settings Reference</a>

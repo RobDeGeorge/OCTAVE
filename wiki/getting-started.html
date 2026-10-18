@@ -15,29 +15,25 @@
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Getting Started</div>
           <h1 class="page-title">Getting Started</h1>
           <p class="page-subtitle">
-            Three ways in: install a pre-built release (C++), run the Python developer backend from a checkout,
-            or build the C++ tree yourself. First run and directory layout for all of them.
+            Installing and running the Python / PySide6 backend from a checkout: setup.py, the virtual environment,
+            per-platform notes, command-line flags, dev mode, and the directory layout.
           </p>
         </div>
 
         <nav class="toc">
           <div class="toc-title">On This Page</div>
           <ul class="toc-list">
-            <li><a href="#which-path">Which Path Do I Want?</a></li>
             <li><a href="#requirements">System Requirements</a></li>
-            <li><a href="#install-release">Installing a Pre-built Release</a></li>
-            <li><a href="#quick-start">Python Quick Start</a></li>
+            <li><a href="#quick-start">Quick Start</a></li>
             <li><a href="#setup-script">What setup.py Does</a></li>
-            <li><a href="#platform-linux">Linux (Python backend)</a></li>
+            <li><a href="#platform-linux">Linux</a></li>
             <li class="toc-h3"><a href="#linux-arch">Arch Linux / Manjaro</a></li>
             <li class="toc-h3"><a href="#linux-debian">Debian / Ubuntu</a></li>
             <li class="toc-h3"><a href="#linux-fedora">Fedora / RHEL</a></li>
             <li class="toc-h3"><a href="#linux-rpi">Raspberry Pi</a></li>
-            <li><a href="#platform-windows">Windows (Python backend)</a></li>
-            <li><a href="#platform-macos">macOS (Python backend)</a></li>
+            <li><a href="#platform-windows">Windows</a></li>
+            <li><a href="#platform-macos">macOS</a></li>
             <li><a href="#platform-wsl">WSL Notes</a></li>
-            <li><a href="#cpp-build">Building the C++ Backend</a></li>
-            <li><a href="#platform-android">Android Build</a></li>
             <li><a href="#running">Running OCTAVE</a></li>
             <li><a href="#dev-mode">Developer Mode</a></li>
             <li><a href="#dependencies">Python Dependencies</a></li>
@@ -45,23 +41,6 @@
             <li><a href="#first-steps">First Steps After Install</a></li>
           </ul>
         </nav>
-
-        <!-- Which path -->
-        <h2 id="which-path">Which Path Do I Want?</h2>
-        <table>
-          <thead>
-            <tr><th>I want to&hellip;</th><th>Use</th><th>Section</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>put OCTAVE in a car or just run it</td><td>a pre-built release binary (C++ / Qt 6)</td><td><a href="#install-release">Installing a Pre-built Release</a></td></tr>
-            <tr><td>hack on it, prototype a feature, poke a sensor from a REPL</td><td>the Python / PySide6 backend from a checkout</td><td><a href="#quick-start">Python Quick Start</a></td></tr>
-            <tr><td>change the shipped code, or build for Android</td><td>the C++ tree with CMake</td><td><a href="#cpp-build">Building the C++ Backend</a> / <a href="#platform-android">Android Build</a></td></tr>
-          </tbody>
-        </table>
-        <p>
-          Whichever backend you run, the QML frontend in <code>frontend/</code> is the same and the settings file is
-          shared, so you can switch between them on one machine.
-        </p>
 
         <!-- System Requirements -->
         <h2 id="requirements">System Requirements</h2>
@@ -72,59 +51,40 @@
           <tbody>
             <tr>
               <td><strong>OS</strong></td>
-              <td>Windows 10+, macOS, Linux (x86_64 or aarch64), Android 11+</td>
-              <td>Raspberry Pi OS / Orange Pi (Debian-based) supported. macOS releases are built on macOS 14 against Qt 6.7.3.</td>
+              <td>Linux, Windows, macOS</td>
+              <td>Desktop only. <code>setup.py</code> recognises Raspberry Pi from the device-tree model string; other Debian-based boards (e.g. Orange Pi) take the normal Linux path.</td>
             </tr>
             <tr>
-              <td><strong>Python</strong> (dev backend only)</td>
+              <td><strong>Python</strong></td>
               <td>3.10+</td>
-              <td><code>pyproject.toml</code> declares <code>requires-python = "&gt;=3.10"</code> with no upper cap and <code>setup.py</code> exits below 3.10; CI tests Python 3.11. Not needed for release binaries or Android.</td>
+              <td><code>pyproject.toml</code> declares <code>requires-python = "&gt;=3.10"</code> with no upper bound and <code>setup.py</code> exits below 3.10; CI tests Python 3.11.</td>
             </tr>
             <tr>
-              <td><strong>C++ toolchain</strong> (source builds only)</td>
-              <td>CMake 3.21+, Qt 6.7.3, a C++17 compiler</td>
-              <td>GCC 11+ / Clang 14+ / MSVC 2022. Qt modules: Multimedia, SerialPort, Bluetooth/Connectivity, Qt5Compat, ShaderTools, optionally Quick3D. See <a href="building.html">Building</a>.</td>
+              <td><strong>Qt</strong></td>
+              <td>PySide6 6.8.0+</td>
+              <td>Installed from PyPI by <code>requirements.txt</code>; the wheel brings its own Qt libraries.</td>
             </tr>
             <tr>
               <td><strong>Display</strong></td>
-              <td>Responsive layout</td>
-              <td>Both backends divide the shorter available screen edge by 720, clamped to 0.4&ndash;3.0; the user scale is applied on top.</td>
+              <td>Any size</td>
+              <td><code>main.py</code> divides the shorter edge of the primary screen's available size by 720 and clamps the result to 0.4&ndash;3.0 (<code>screenAutoScale</code>); the user's UI scale setting is applied on top. Without a primary screen it uses 1.0.</td>
             </tr>
             <tr>
               <td><strong>Audio</strong></td>
               <td>Working system audio output</td>
-              <td>Playback is provided by Qt Multimedia; available codecs and outputs depend on the installed Qt backend.</td>
+              <td>Playback uses Qt Multimedia from PySide6; available codecs depend on that build.</td>
             </tr>
             <tr>
               <td><strong>Network</strong></td>
               <td>Optional</td>
-              <td>Needed for music download and update checks. Local playback, OBD and phone mirroring work offline.</td>
+              <td>Needed for music search / download and update checks. Local playback, OBD and USB phone mirroring work offline.</td>
             </tr>
           </tbody>
         </table>
 
-        <!-- Release install -->
-        <h2 id="install-release">Installing a Pre-built Release</h2>
-        <p>
-          The current CI release workflow builds the packages on the <a href="https://github.com/RobDeGeorge/OCTAVE/releases">GitHub Releases</a>
-          page from the C++ tree. No toolchain, no Python.
-        </p>
-        <table>
-          <thead>
-            <tr><th>Platform</th><th>File</th><th>Install</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Windows</td><td><code>OCTAVE-&lt;version&gt;-windows-x86_64.exe</code></td><td>Run the Inno Setup installer. Bundles Qt, TagLib, FFmpeg DLLs and <code>adb</code>.</td></tr>
-            <tr><td>macOS</td><td><code>OCTAVE-&lt;version&gt;-macos.dmg</code></td><td>Open, drag to Applications. <code>adb</code> is inside the bundle.</td></tr>
-            <tr><td>Linux x86_64</td><td><code>OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code></td><td><code>chmod +x</code> and run. CI builds on Ubuntu 22.04; runtime compatibility also depends on the host graphics, audio, and system libraries. Arch may need <code>fuse2</code>, or use <code>--appimage-extract-and-run</code>.</td></tr>
-            <tr><td>Linux aarch64 (Pi / Orange Pi)</td><td><code>OCTAVE-&lt;version&gt;-linux-aarch64.AppImage</code></td><td>Same as above. Install the distro's <code>adb</code> (<code>sudo apt install adb</code>) if you want phone mirroring &mdash; Google ships no aarch64 platform-tools.</td></tr>
-            <tr><td>Android</td><td><code>OCTAVE-&lt;version&gt;-android-arm64-v8a.apk</code></td><td>Sideload. The workflow uses a persistent release key when signing secrets are available. An update must use the same key as the installed app; older releases and builds without the secrets can have different keys. Back up app data before any required uninstall.</td></tr>
-          </tbody>
-        </table>
-
         <!-- Quick Start -->
-        <h2 id="quick-start">Python Quick Start</h2>
-        <p>The fastest development loop, from zero to a running app:</p>
+        <h2 id="quick-start">Quick Start</h2>
+        <p>From zero to a running app:</p>
 
         <pre><code><span class="cmt"># Clone the repository</span>
 git clone https://github.com/RobDeGeorge/OCTAVE.git
@@ -133,7 +93,7 @@ cd OCTAVE
 <span class="cmt"># Setup and run (creates venv, installs deps, launches app)</span>
 python setup.py</code></pre>
 
-        <p>If you only want to install without launching:</p>
+        <p>To install without launching:</p>
 
         <pre><code>python setup.py --no-run</code></pre>
 
@@ -148,58 +108,65 @@ venv\Scripts\activate
 python main.py</code></pre>
 
         <div class="info-box info">
-          <div class="info-box-title">Python is desktop-only</div>
-          The Python backend runs on Linux, Windows, macOS and Raspberry Pi / Orange Pi. It is never packaged (there
-          is no PyInstaller pipeline) and never runs on Android or iOS &mdash; mobile is C++-only.
+          <div class="info-box-title">Runs from a checkout</div>
+          The Python backend is not packaged: there is no installer or frozen executable. It always runs as
+          <code>python main.py</code> inside the checkout's virtual environment, and it reads the QML from
+          <code>frontend/</code> on disk, so a QML change shows on the next launch.
         </div>
 
         <!-- What setup.py Does -->
         <h2 id="setup-script">What <code>setup.py</code> Does</h2>
         <span class="file-path">setup.py</span>
-        <p>The setup script performs these steps in order:</p>
+        <p>The script changes to its own directory and performs these steps in order:</p>
 
         <ol class="steps">
           <li>
-            <strong>Detects your platform</strong> &mdash; Windows, macOS, Linux, or Raspberry Pi (by reading
-            <code>/sys/firmware/devicetree/base/model</code>). On Linux it detects the distro family (Arch, Debian,
-            Fedora) from <code>/etc/os-release</code>, falling back to whichever of <code>pacman</code>, <code>apt</code>,
-            <code>dnf</code>/<code>yum</code> is on <code>PATH</code>. It also notes WSL ("microsoft" in <code>/proc/version</code>).
+            <strong>Detects your platform</strong> &mdash; Windows, macOS, Linux, or Raspberry Pi (if
+            <code>/sys/firmware/devicetree/base/model</code> contains "raspberry"), and WSL ("microsoft" in
+            <code>/proc/version</code>).
           </li>
           <li>
-            <strong>Checks the Python version</strong> &mdash; exits with "Python 3.10+ required" if below 3.10 (the same
-            floor <code>pyproject.toml</code> declares; see requirements above).
+            <strong>Checks the Python version</strong> &mdash; exits with "Python 3.10+ required" below 3.10.
           </li>
           <li>
-            <strong>Installs system dependencies</strong> (Linux only, via <code>sudo</code>) &mdash; audio
-            (PulseAudio/ALSA), OpenGL/EGL, the XCB platform-plugin libraries, X11, fonts, D-Bus, and on Arch/Fedora
-            the Qt 6 base + multimedia packages. The script continues after a package-manager failure, so check its output if dependencies remain missing.
+            <strong>Installs system dependencies</strong> (Linux and Raspberry Pi only, via <code>sudo</code>) &mdash;
+            the distro family (Arch, Debian, Fedora) comes from <code>/etc/os-release</code>, falling back to whichever
+            of <code>pacman</code>, <code>apt</code>, <code>dnf</code>/<code>yum</code> is on <code>PATH</code>; anything
+            unrecognised takes the Debian list. The packages are audio (PulseAudio/ALSA), OpenGL/EGL, the XCB
+            platform-plugin libraries, X11 and input, fonts, D-Bus, and on Arch/Fedora the Qt 6 base + multimedia
+            packages. Package-manager failures do not stop the script, so read its output if something is still
+            missing. On macOS and Windows this step only prints a note.
           </li>
           <li>
             <strong>Creates a virtual environment</strong> at <code>./venv/</code> with the built-in <code>venv</code>
-            module. An existing venv from the other OS family (a Dropbox-synced Windows venv on Linux, say) or one
-            whose <code>pip</code> no longer runs is removed and recreated.
+            module. An existing venv is kept if its <code>pyvenv.cfg</code> matches the OS family (a
+            <code>C:\</code> path marks a Windows venv) and its <code>pip --version</code> runs; otherwise it is
+            deleted and recreated. If the deletion fails it is renamed to <code>venv_old_&lt;timestamp&gt;</code>
+            (the deletion passes <code>shutil.rmtree(onexc=...)</code>, which needs Python 3.12, so on 3.10 and 3.11
+            the rename is what happens).
           </li>
           <li>
             <strong>Installs Python dependencies</strong> &mdash; upgrades <code>pip</code>, then
-            <code>pip install -r requirements.txt</code>.
+            <code>pip install -r requirements.txt</code>; a failure exits the script.
           </li>
           <li>
-            <strong>Launches the application</strong> &mdash; unless <code>--no-run</code> is passed (or WSL has no
-            display), it replaces itself with <code>venv/bin/python main.py</code> via <code>os.execv()</code>.
+            <strong>Launches the application</strong> &mdash; unless <code>--no-run</code> is passed (it then prints
+            the activate-and-run commands) or WSL has no display, it replaces itself with the venv's
+            <code>python main.py</code> via <code>os.execv()</code>.
           </li>
         </ol>
 
         <!-- Linux Installation -->
-        <h2 id="platform-linux">Linux (Python backend)</h2>
+        <h2 id="platform-linux">Linux</h2>
         <p>
-          Linux is the primary development and deployment platform. The setup script installs the system-level
-          dependencies below through your distro's package manager; they are what PySide6's <code>xcb</code> platform
-          plugin and Qt Multimedia need at runtime.
+          Linux is the main development platform. The setup script installs the system-level dependencies below
+          through your distro's package manager; they are what PySide6's <code>xcb</code> platform plugin and Qt
+          Multimedia need at runtime.
         </p>
 
         <h3 id="linux-arch">Arch Linux / Manjaro / EndeavourOS</h3>
         <p>System packages installed via <code>pacman</code>:</p>
-        <pre><code>sudo pacman -S --needed python python-pip libpulse alsa-lib mesa libglvnd \
+        <pre><code>sudo pacman -S --needed --noconfirm python python-pip libpulse alsa-lib mesa libglvnd \
   libxcb xcb-util xcb-util-cursor xcb-util-image xcb-util-keysyms \
   xcb-util-renderutil xcb-util-wm libx11 libxkbcommon libxkbcommon-x11 \
   libxi libsm libice fontconfig freetype2 harfbuzz dbus libxrender \
@@ -212,9 +179,8 @@ python main.py</code></pre>
         </div>
 
         <h3 id="linux-debian">Debian / Ubuntu / Mint / Pop!_OS</h3>
-        <p>System packages installed via <code>apt</code>:</p>
-        <pre><code>sudo apt update
-sudo apt install -y python3 python3-venv python3-pip libpulse0 libasound2 \
+        <p>System packages installed via <code>apt</code> (after <code>sudo apt update</code>):</p>
+        <pre><code>sudo apt install -y python3 python3-venv python3-pip libpulse0 libasound2 \
   libegl1 libgl1 libopengl0 libglx-mesa0 libgl1-mesa-dri libegl1-mesa \
   libgles2 libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
   libxcb-keysyms1 libxcb-randr0 libxcb-render0 libxcb-render-util0 \
@@ -223,6 +189,7 @@ sudo apt install -y python3 python3-venv python3-pip libpulse0 libasound2 \
   libxkbcommon-x11-0 libxi6 libsm6 libice6 libfontconfig1 libfreetype6 \
   libharfbuzz0b libdbus-1-3 libxrender1 libxext6 libxrandr2 libxfixes3 \
   libxcomposite1 libxdamage1 libxtst6 libxss1</code></pre>
+        <p>The list is installed in one <code>apt install</code>; a package name that a release does not have makes apt refuse the whole command, and the script carries on regardless, so check the output and install the rest by hand if needed.</p>
 
         <h3 id="linux-fedora">Fedora / RHEL / CentOS / Rocky</h3>
         <p>System packages installed via <code>dnf</code>:</p>
@@ -236,10 +203,12 @@ sudo apt install -y python3 python3-venv python3-pip libpulse0 libasound2 \
 
         <h3 id="linux-rpi">Raspberry Pi / Orange Pi</h3>
         <p>
-          Raspberry Pi OS (Debian-based) uses the same <code>apt</code> packages as Debian. The setup script
-          detects a Raspberry Pi from the device-tree model string. For an Orange Pi or any other aarch64 board the
-          same Debian path applies; the author's Jeep runs an Orange Pi 5 Plus. <code>smbus2</code> (I²C for BerryIMU
-          and the gesture sensor) is installed automatically on Linux.
+          Raspberry Pi OS is Debian-based, so the script installs the Debian list above. An Orange Pi or another
+          aarch64 board is detected as plain Linux and takes the same path through its distro. <code>smbus2</code>
+          (I&sup2;C for the BerryIMU and the gesture sensor) has the marker <code>sys_platform == "linux"</code> in
+          <span class="file-path">requirements.txt</span>, so it is installed on every Linux machine. PySide6 must have
+          a wheel for the board's architecture and Python version; see <a href="hardware-setup.html">Hardware Setup</a>
+          for the sensors.
         </p>
 
         <div class="info-box tip">
@@ -251,7 +220,7 @@ sudo apt install -y python3 python3-venv python3-pip libpulse0 libasound2 \
         </div>
 
         <!-- Windows -->
-        <h2 id="platform-windows">Windows (Python backend)</h2>
+        <h2 id="platform-windows">Windows</h2>
         <ol class="steps">
           <li>
             <strong>Install Python 3.10 or newer</strong> from <a href="https://python.org">python.org</a>.
@@ -265,12 +234,14 @@ python setup.py</code></pre>
           </li>
         </ol>
         <p>
-          The PySide6 wheel bundles Qt on Windows. Optional features can need additional tools, such as <code>adb</code> for phone mirroring. The venv activation
-          command is <code>venv\Scripts\activate</code>. <code>smbus2</code> is skipped (no I²C on Windows).
+          <code>setup.py</code> installs no system packages on Windows; the PySide6 wheel bundles Qt. It reconfigures
+          stdout to UTF-8 when the console encoding is not, so its check marks print. The venv activation command is
+          <code>venv\Scripts\activate</code>. <code>smbus2</code> is skipped (Linux only). Optional features need their
+          own tools, such as <code>adb</code> for phone mirroring.
         </p>
 
         <!-- macOS -->
-        <h2 id="platform-macos">macOS (Python backend)</h2>
+        <h2 id="platform-macos">macOS</h2>
         <ol class="steps">
           <li>
             <strong>Install Python 3.10 or newer</strong> via <a href="https://brew.sh">Homebrew</a>
@@ -284,211 +255,81 @@ python3 setup.py</code></pre>
           </li>
         </ol>
         <p>
-          On macOS, <code>setup.py</code> does not install system packages; it proceeds to the venv. Optional integrations can still require tools such as <code>adb</code>.
+          On macOS <code>setup.py</code> prints "system dependencies should be available" and proceeds to the venv.
+          Optional integrations can still require tools such as <code>adb</code>.
         </p>
 
         <!-- WSL -->
         <h2 id="platform-wsl">WSL Notes</h2>
         <p>
-          OCTAVE can run under WSL (Windows Subsystem for Linux) but requires a display server.
-          The setup script detects WSL by checking for "microsoft" in <code>/proc/version</code>.
+          OCTAVE can run under WSL (Windows Subsystem for Linux) but needs a display server. The setup script detects
+          WSL from "microsoft" in <code>/proc/version</code> and treats it as Linux for the package install.
         </p>
         <ul>
-          <li><strong>WSLg (WSL 2)</strong> &mdash; Available on Windows 10 build 19044+ and Windows 11. Follow <a href="https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps">Microsoft's GUI-app setup guide</a>; use <code>wsl --update</code> and restart WSL if needed.</li>
-          <li><strong>External X server</strong> &mdash; If you use one instead of WSLg, configure <code>DISPLAY</code> for that server and the WSL network mode; <code>:0</code> is not a universal value.</li>
+          <li><strong>WSLg</strong> &mdash; follow <a href="https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps">Microsoft's GUI-app setup guide</a>; the script suggests <code>wsl --update</code>.</li>
+          <li><strong>External X server</strong> &mdash; if you use one instead of WSLg, set <code>DISPLAY</code> for that server and the WSL network mode (the script's hint mentions <code>export DISPLAY=:0</code>, which is not right for every setup).</li>
         </ul>
-        <p>If no display is detected (<code>DISPLAY</code> and <code>WAYLAND_DISPLAY</code> both unset),
-          the setup script installs dependencies but skips launching.</p>
-
-        <!-- C++ build -->
-        <h2 id="cpp-build">Building the C++ Backend</h2>
-        <p>
-          The C++ tree is what ships. A desktop build needs CMake 3.21+, Qt 6.7.3 (the CI-pinned version) with the Multimedia, SerialPort,
-          Connectivity, Qt5Compat and ShaderTools modules, TagLib, and optionally FFmpeg (libavcodec/libavutil, for
-          the built-in phone-mirror decoder) and Qt Quick 3D (for the 3D vehicle view).
-        </p>
-
-        <pre><code><span class="cmt"># Configure + build (Debug, current platform)</span>
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
-
-<span class="cmt"># Run — the binary finds frontend/ one directory up from build/</span>
-./build/octave            <span class="cmt"># Linux</span>
-<span class="cmt"># macOS: stage the frontend, then run</span>
-cp -R frontend build/octave.app/Contents/MacOS/
-./build/octave.app/Contents/MacOS/octave <span class="cmt"># macOS</span>
-<span class="cmt"># Windows PowerShell: stage the frontend, then run</span>
-Copy-Item -Recurse -Force frontend build/Debug/
-./build/Debug/octave.exe  <span class="cmt"># Windows (MSVC multi-config)</span>
-
-<span class="cmt"># App-store variant: music download feature compiled out</span>
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_ENABLE_DOWNLOADS=OFF
-cmake --build build -j</code></pre>
-        <p>For the Windows multi-config and macOS bundle layouts, stage the runtime frontend before launching. In PowerShell, run <code>Copy-Item -Recurse -Force frontend build/Debug/</code> for the Debug executable (use <code>build/Release/</code> for Release). On macOS, run <code>cp -R frontend build/octave.app/Contents/MacOS/</code>. Refresh these copies after QML or asset changes. Linux's <code>build/octave</code> finds the checkout's frontend one level up.</p>
-
-        <p>
-          CMake reports <code>Built-in phone mirror decoder (libavcodec): ON/OFF</code> and whether
-          <code>QtQuick3D</code> was found at configure time; both are optional and the app degrades gracefully
-          without them (phone mirroring unavailable without FFmpeg, greyed-out "3D View" card without Quick3D). Per-platform package lists, the
-          AppImage / DMG / Inno Setup packaging that CI runs, and the pinned tool versions are in
-          <span class="file-path">BUILD.md</span> and on the <a href="building.html">Building &amp; CI/CD</a> page.
-        </p>
-
-        <div class="info-box info">
-          <div class="info-box-title">The C++ binary also runs the Python backend's QML</div>
-          Both backends load <code>frontend/Main.qml</code> from disk at runtime rather than compiling it in, so a
-          QML change is visible on the next launch when the app loads that checkout directly; refresh staged Windows/macOS frontend copies first. Android bundles
-          the directory as <code>assets:/frontend</code>, so QML changes there require a new APK.
-        </div>
-
-        <!-- Android -->
-        <h2 id="platform-android">Android Build</h2>
-        <p>
-          The Android app is built from the <strong>C++ / Qt 6</strong> tree in <code>src/</code> as a native
-          <code>.apk</code> for arm64-v8a (Android 11+, <code>minSdk 30</code>, package <code>org.octave.app</code>)
-          &mdash; <em>not</em> from Python. The old Buildozer / python-for-android path has been removed and will
-          not be reintroduced.
-        </p>
-
-        <div class="info-box info">
-          <div class="info-box-title">Full toolchain lives in BUILD.md</div>
-          The complete step-by-step Android setup &mdash; Qt for Android 6.7.3 via <code>aqtinstall</code>, OpenJDK 17,
-          the Android SDK + NDK <code>26.1.10909125</code>, environment variables (<code>QT_HOST_PATH</code> is
-          required), and APK signing &mdash; is documented in <span class="file-path">BUILD.md</span> under
-          <em>Android build</em>. The summary here is orientation only.
-        </div>
-
-        <h3>Prerequisites</h3>
-        <ul>
-          <li><strong>Linux host</strong> with roughly 40&ndash;60 GB free on the <code>$HOME</code> disk</li>
-          <li><strong>Qt for Android 6.7.3</strong> (<code>android_arm64_v8a</code>) plus the matching host Qt (<code>gcc_64</code>) for <code>androiddeployqt</code></li>
-          <li><strong>OpenJDK 17</strong> &mdash; the version used by OCTAVE's APK CI job; this checkout pins Android Gradle Plugin 7.4.1</li>
-          <li><strong>Android SDK</strong> (platform <code>android-33</code>, Build-Tools 33.0.2) and <strong>NDK</strong> <code>26.1.10909125</code></li>
-        </ul>
-
-        <h3>Build the APK</h3>
-        <p>
-          With the toolchain environment variables set (see <span class="file-path">BUILD.md</span>), configure
-          with Qt's <code>qt-cmake</code> cross-compile wrapper and build the <code>apk</code> target. OpenSSL for
-          Android is bundled from <code>android/openssl/&lt;abi&gt;/</code> through <code>QT_ANDROID_EXTRA_LIBS</code>:
-        </p>
-        <pre><code>qt-cmake -S . -B build-android \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DANDROID_ABI=arm64-v8a \
-    -DANDROID_PLATFORM=android-30 \
-    -DOCTAVE_ENABLE_DOWNLOADS=OFF \
-    -DQT_ANDROID_SIGN_APK=OFF
-
-cmake --build build-android --target apk -j
-adb install build-android/android-build/build/outputs/apk/debug/android-build-debug.apk</code></pre>
-        <p>
-          CI builds Release with downloads left <em>on</em> (the default for sideload APKs; the youtubedl-android AAR
-          bundles Python, yt-dlp and ffmpeg). It uses the persistent release key when signing secrets are available,
-          otherwise a temporary key. <code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code> means the installed app uses
-          a different key. Use a build signed with the same key, or back up settings before uninstalling the old app.
-        </p>
-
-        <h3>Android Feature Differences</h3>
-        <p>
-          On Android everything runs through the C++ backend; desktop-only managers are compiled as stub classes
-          behind <code>Q_OS_MOBILE</code> so the QML keeps working, and Android-specific code sits behind
-          <code>#ifdef Q_OS_ANDROID</code>. The desktop &harr; Android split:
-        </p>
-        <table>
-          <thead>
-            <tr><th>Feature</th><th>Desktop</th><th>Android</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>OBD-II</td>
-              <td>USB or Bluetooth-SPP ELM327 through a serial port (<code>/dev/ttyUSB*</code>, <code>/dev/rfcomm0</code>, <code>COMn</code>)</td>
-              <td>BLE ELM327 through a native <code>BluetoothGatt</code> JNI bridge (<code>android/src/org/octave/app/OctaveOBDBridge.java</code>)</td>
-            </tr>
-            <tr>
-              <td>IMU</td>
-              <td>BerryIMU v3 over I²C</td>
-              <td>Device's own sensors via QtSensors (accelerometer, compass, pressure)</td>
-            </tr>
-            <tr>
-              <td>Gesture sensor, ESP32 knob</td>
-              <td>PAJ7620U2 over I²C; ESP32 over USB serial</td>
-              <td>Not applicable (stubs)</td>
-            </tr>
-            <tr>
-              <td>Phone mirror, Android Auto</td>
-              <td>Built-in scrcpy-protocol client; experimental DHU integration (see <a href="phone-mirror-android-auto.html#android-auto">limitations</a>)</td>
-              <td>Not applicable (stubs)</td>
-            </tr>
-            <tr>
-              <td>Music download</td>
-              <td>yt-dlp as a subprocess</td>
-              <td>youtubedl-android AAR + bundled ytmusic script; off with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td>
-            </tr>
-            <tr>
-              <td>Local media, dashboards, theming, diagnostics</td>
-              <td colspan="2">Same on both (runtime permissions <code>READ_MEDIA_AUDIO</code> / <code>BLUETOOTH_*</code> are requested at first launch on Android)</td>
-            </tr>
-          </tbody>
-        </table>
+        <p>If <code>DISPLAY</code> and <code>WAYLAND_DISPLAY</code> are both unset, the script installs everything, prints these options, and skips launching.</p>
 
         <!-- Running -->
         <h2 id="running">Running OCTAVE</h2>
 
         <h3>Standard Mode</h3>
-        <pre><code><span class="cmt"># Python</span>
-<span class="kw">source</span> venv/bin/activate
-python main.py
-
-<span class="cmt"># C++</span>
-./build/octave</code></pre>
-
-        <h3>Debug Logging</h3>
-        <p>Both backends accept <code>--debug</code>. It enables DEBUG-level output and creates the extra rotating
-          debug log (<code>octave-debug.log</code> / <code>octave-cpp-debug.log</code>) in the config directory's
-          <code>logs/</code> folder; without it, debug messages are filtered at the source.</p>
-        <pre><code>python main.py --debug
-./build/octave --debug</code></pre>
-
-        <h3>Performance Profiling</h3>
-        <pre><code>./build/octave --profile     <span class="cmt"># C++ (Debug builds; see Developer Mode below)</span>
-python main.py --profile     <span class="cmt"># Python (developer machines only)</span></code></pre>
+        <pre><code><span class="kw">source</span> venv/bin/activate
+python main.py</code></pre>
         <p>
-          Starts the <code>PerfMonitor</code> (CSV + log under <code>dev/perf/logs/</code>, exposed to QML as
-          <code>perfMonitor</code>), a <strong>command server</strong> on <code>127.0.0.1:9876</code> for remote control
-          and the MCP tools, and times the hot paths. In C++ this is <code>src/dev/</code>, compiled in by the
-          <code>OCTAVE_DEV_TOOLS</code> CMake option (on by default only for <code>-DCMAKE_BUILD_TYPE=Debug</code>; other
-          builds ignore the flag with a warning). In Python the modules (<code>backend/perf_monitor.py</code>,
-          <code>backend/command_server.py</code>, <code>backend/perf_patches.py</code>) are gitignored developer files:
-          on a checkout without them <code>setup_perf_profiling()</code> logs a warning for each missing module
-          (<code>--profile: backend/perf_monitor.py not present (gitignored dev tooling), skipping ...</code>)
-          and the app starts normally instead of raising <code>ImportError</code>.
+          <code>main.py</code> forces the Qt Quick Controls style to <code>Basic</code>, sets up logging, creates the
+          <code>QApplication</code> and every manager, registers them as QML context properties, adds
+          <code>frontend/</code> to the QML import path and loads <span class="file-path">frontend/Main.qml</span>. If
+          <code>PySide6.QtWebEngineQuick</code> imports, it is initialised for the in-app wiki browser
+          (<code>wikiViewerAvailable</code>), and on Linux <code>--disable-gpu</code> is appended to
+          <code>QTWEBENGINE_CHROMIUM_FLAGS</code> for that browser only. <code>SIGTERM</code> and <code>SIGINT</code>
+          quit the app through Qt (a 500&nbsp;ms no-op timer lets Python see the signal inside <code>app.exec()</code>),
+          so <code>cleanup_on_quit()</code> still stops child processes and flushes the settings.
+        </p>
+
+        <h3>Command-line flags</h3>
+        <p>Parsed with <code>argparse.parse_known_args()</code>, so unknown arguments are ignored.</p>
+        <table>
+          <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>--debug</code></td><td>DEBUG-level console and file logging, plus the extra rotating <code>octave-debug.log</code> (10&nbsp;MB, 2 backups). Without it the level is INFO.</td></tr>
+            <tr><td><code>--profile</code></td><td>After the QML loads, runs <code>setup_perf_profiling()</code>: the perf monitor (<code>perfMonitor</code>, CSV + log under <code>dev/perf/logs/</code>), the command server on <code>127.0.0.1:9876</code> and method timing. These modules are gitignored developer files; on a fresh clone each missing one is logged as a warning (<code>--profile: backend/perf_monitor.py not present (gitignored dev tooling), skipping ...</code>) and the app starts normally. See <a href="development.html#profiling">Development</a>.</td></tr>
+            <tr><td><code>--smoke</code></td><td>Loads <code>Main.qml</code>, then exits with code 0 after 5&nbsp;s (a launch check)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Logs</h3>
+        <p>
+          <span class="file-path">backend/logging_config.py</span> writes rotating logs to the <code>logs/</code>
+          folder of the app-data directory (Linux <code>~/.config/OCTAVE/logs/</code>, macOS
+          <code>~/Library/Application Support/OCTAVE/logs/</code>, Windows <code>%APPDATA%\OCTAVE\logs\</code>):
+          <code>octave.log</code> (INFO and above, 5&nbsp;MB, 3 backups), <code>octave-error.log</code> (ERROR and
+          above, 2&nbsp;MB, 5 backups) and, with <code>--debug</code>, <code>octave-debug.log</code>.
         </p>
 
         <!-- Dev Mode -->
         <h2 id="dev-mode">Developer Mode</h2>
         <p>
-          Developer mode provides a simulated car and keyboard controls for testing without hardware or a vehicle.
-          In C++ it is a flag on a Debug build: the real <code>OBDManager</code> talks to a simulated ELM327 adapter, so
-          the shipped OBD code runs against the simulation. In Python, <span class="file-path">dev/main_dev.py</span>
-          imports <code>main.py</code>, installs a <code>MockOBDManager</code> through <code>install_obd_manager()</code>
-          before the QML loads, and adds the same dev overlay. The <code>dev/</code> directory (Python dev mode and the
-          screenshot / MCP / perf clients) is <strong>gitignored</strong>: it exists on the maintainers' machines but is
-          not part of a fresh clone. The C++ half (<code>src/dev/</code>) is committed.
+          Developer mode adds a simulated car and keyboard controls for testing without hardware or a vehicle.
+          <span class="file-path">dev/main_dev.py</span> imports <code>main</code>, installs a <code>MockOBDManager</code>
+          through <code>install_obd_manager()</code> before the QML loads, and adds the dev overlay. The
+          <code>dev/</code> directory (dev mode and the screenshot / MCP / perf clients) and the <code>--profile</code>
+          modules in <code>backend/</code> are <strong>gitignored</strong>: they exist on the maintainers' machines but
+          are not part of a fresh clone.
         </p>
-        <pre><code>./build/octave --dev
-./build/octave --dev --profile     <span class="cmt"># + command server: what the screenshot / MCP tooling launches</span>
-
-<span class="kw">source</span> venv/bin/activate
+        <pre><code><span class="kw">source</span> venv/bin/activate
 python -m dev.main_dev
-python -m dev.main_dev --profile</code></pre>
+python -m dev.main_dev --profile     <span class="cmt"># + command server: what the screenshot / MCP tooling drives</span></code></pre>
+        <p>The tools in <code>dev/</code> that launch the app start the Python backend when <code>OCTAVE_BACKEND=python</code> is set (the screenshot and story tools also take <code>--backend python</code>).</p>
 
         <div class="info-box info">
           <div class="info-box-title">Dev Mode Features</div>
           <ul>
-            <li>Simulated OBD data: RPM, speed, temperatures, throttle, trouble codes, VIN; optional simulated IMU motion</li>
-            <li>Development tools panel and overlay</li>
-            <li>Keyboard driving (W/S throttle and brake, Q/R shift, F1&ndash;F4 scenarios)</li>
-            <li>Screenshot and story-driven clip recording (<code>python -m dev.screenshots</code>), MCP server for agents</li>
+            <li>Simulated OBD data: RPM, speed, temperatures, throttle, load, trouble codes, VIN; optional simulated IMU motion</li>
+            <li>Dev overlay with a HUD and the DevToolsPanel</li>
+            <li>Keyboard driving (W/S throttle and brake, Q/R shift, F1&ndash;F4 scenarios, Tab for the HUD)</li>
+            <li>Screenshot sweeps and story clips (<code>python -m dev.screenshots</code>), MCP servers for agents</li>
           </ul>
           See <a href="development.html">Development</a>.
         </div>
@@ -502,99 +343,93 @@ python -m dev.main_dev --profile</code></pre>
             <tr><th>Package</th><th>Version</th><th>Purpose</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>PySide6</code></td><td>&ge;6.8.0</td><td>Qt 6 Python bindings (QML engine, QMediaPlayer, QVideoSink, QAudioSink)</td></tr>
-            <tr><td><code>mutagen</code></td><td>1.47.0</td><td>Audio file metadata (ID3 tags, album art)</td></tr>
-            <tr><td><code>numpy</code></td><td>&ge;1.26.0</td><td>FFT for the waveform visualiser; phone-mirror audio buffers (imported lazily)</td></tr>
-            <tr><td><code>obd</code></td><td>&ge;0.7.3</td><td>python-obd: ELM327 communication (imported lazily)</td></tr>
-            <tr><td><code>av</code></td><td>&ge;12.0.0</td><td>PyAV: audio decoding for FFT and H.264 decoding for phone mirroring</td></tr>
-            <tr><td><code>requests</code></td><td>&ge;2.25.0</td><td>HTTP client for API calls and update checking</td></tr>
-            <tr><td><code>pyserial</code></td><td>&ge;3.5</td><td>USB serial for the ESP32 volume knob; port discovery for OBD</td></tr>
-            <tr><td><code>smbus2</code></td><td>&ge;0.4.3</td><td>I²C for BerryIMU and gesture sensor (<code>sys_platform == "linux"</code> only)</td></tr>
-            <tr><td><code>yt-dlp</code></td><td>2026.8.19</td><td>YouTube audio extraction for music download</td></tr>
-            <tr><td><code>ytmusicapi</code></td><td>1.11.5</td><td>YouTube Music search</td></tr>
-            <tr><td><code>rapidfuzz</code></td><td>&ge;3.0.0</td><td>Fuzzy matching of YouTube Music search results in the downloader</td></tr>
+            <tr><td><code>PySide6</code></td><td>&ge;6.8.0</td><td>Qt 6 bindings: QML engine, Qt Multimedia, Qt Quick</td></tr>
+            <tr><td><code>mutagen</code></td><td>==1.47.0</td><td>Audio tags and embedded album art (<a href="media-manager.html">Media Manager</a>)</td></tr>
+            <tr><td><code>numpy</code></td><td>&ge;1.26.0</td><td>FFT for the waveform visualizer (imported lazily) and phone-mirror audio buffers</td></tr>
+            <tr><td><code>obd</code></td><td>&ge;0.7.3</td><td>python-obd for ELM327 communication (imported lazily)</td></tr>
+            <tr><td><code>av</code></td><td>&ge;12.0.0</td><td>PyAV: audio decoding for the visualizer and H.264 decoding for phone mirroring</td></tr>
+            <tr><td><code>requests</code></td><td>&ge;2.25.0</td><td>HTTP client</td></tr>
+            <tr><td><code>pyserial</code></td><td>&ge;3.5</td><td>USB serial for the ESP32 volume knob; serial port discovery for OBD</td></tr>
+            <tr><td><code>smbus2</code></td><td>&ge;0.4.3</td><td>I&sup2;C for the BerryIMU and gesture sensor (<code>sys_platform == "linux"</code> only)</td></tr>
+            <tr><td><code>yt-dlp</code></td><td>==2026.8.19</td><td>YouTube audio extraction for music download</td></tr>
+            <tr><td><code>ytmusicapi</code></td><td>==1.11.5</td><td>YouTube Music search</td></tr>
+            <tr><td><code>rapidfuzz</code></td><td>&ge;3.0.0</td><td>Fuzzy matching of search results in the downloader</td></tr>
           </tbody>
         </table>
 
         <p>
-          Developer tooling not in <code>requirements.txt</code>: <code>pytest</code> for the smoke tests
-          (<code>QT_QPA_PLATFORM=offscreen pytest tests/</code>), <code>ruff</code> for linting (CI pins 0.15.10), and
-          optionally <code>psutil</code> for CPU/memory figures in the perf monitor.
+          <code>pyproject.toml</code> lists a shorter <code>dependencies</code> set (and <code>yt-dlp&gt;=2026.8.19</code>
+          instead of the exact pin); <code>setup.py</code> and CI install from <code>requirements.txt</code>. Developer
+          tools not in either file: <code>pytest</code> for the test suite (<code>QT_QPA_PLATFORM=offscreen pytest tests/</code>),
+          <code>ruff</code> for linting (CI pins 0.15.10), <code>mcp</code> for the MCP servers, and optionally
+          <code>psutil</code> for CPU/memory figures in the perf monitor.
         </p>
 
         <!-- Directory Structure -->
         <h2 id="directory-structure">Directory Structure</h2>
         <pre><code>octave/
-├── <span class="prop">src/</span>                 <span class="cmt"># C++ backend (shipped)</span>
-│   ├── main.cpp                       <span class="cmt"># entry point, manager wiring</span>
-│   ├── managers/                      <span class="cmt"># one *manager.{h,cpp} per feature + elm327protocol</span>
-│   ├── util/                          <span class="cmt"># logger.cpp (rotating logs, crash handlers), uiwatchdog.cpp</span>
-│   ├── phone_mirror/scrcpyclient.*    <span class="cmt"># built-in scrcpy-protocol client</span>
-│   ├── items/embeddeddhuitem.*        <span class="cmt"># QQuickItem for Android Auto frames</span>
-│   ├── platform/                      <span class="cmt"># Android JNI bridges (media, process)</span>
-│   └── dev/                           <span class="cmt"># --dev / --profile tooling (Debug builds only), qml/ dev overlay</span>
-├── <span class="prop">backend/</span>             <span class="cmt"># Python backend (developer peer)</span>
-│   ├── settings_manager.py  media_manager.py  obd_manager.py
-│   ├── network_manager.py  download_manager.py  dashboard_manager.py
-│   ├── esp32_volume_manager.py  berryimu_manager.py  gesture_manager.py
-│   ├── audio_analyzer.py  clock.py  diagnostics_manager.py  volume_utils.py
-│   ├── logging_config.py  ui_watchdog.py  lazy_import.py  version.py
-│   ├── android_auto/    <span class="cmt"># DHU launch + capture, EmbeddedDhuItem</span>
-│   ├── phone_mirror/    <span class="cmt"># manager + scrcpy_client.py</span>
-│   ├── music_dl/        <span class="cmt"># vendored download engine</span>
-│   └── (perf_monitor.py, command_server.py, perf_patches.py — gitignored Python dev tools)
-├── <span class="prop">frontend/</span>            <span class="cmt"># Shared QML UI</span>
-│   ├── Main.qml  MainMenu.qml  MediaRoom.qml  MediaPlayer.qml  OBDMenu.qml  CarMenu.qml ...
-│   ├── JeepVehicle.qml  JeepHinge.qml  JeepLamp.qml  JeepLink.qml  JeepSteering.js
-│   ├── gauges/          <span class="cmt"># gauge primitives</span>
-│   ├── dashboards/      <span class="cmt"># DashboardRenderer, WidgetCatalog, presets/*.json, editor/, widgets/</span>
-│   ├── settings/        <span class="cmt"># settings pages and components (DeviceSettingsPage has Diagnostics)</span>
-│   ├── shaders/         <span class="cmt"># .qsb shaders (compiled into the C++ binary as resources)</span>
-│   └── assets/          <span class="cmt"># icons, fonts, jeep_tj_2003.glb + jeep_tj/ part GLBs, readme media</span>
-├── <span class="prop">phone_server/</span>        <span class="cmt"># OCTAVE's fork of the scrcpy server (Java) + build_without_gradle.sh</span>
-├── <span class="prop">tools/</span>
-│   ├── phone-server/    <span class="cmt"># prebuilt jar + LICENSE/NOTICE (tracked)</span>
-│   ├── platform-tools/  <span class="cmt"># adb fetched by scripts/fetch_platform_tools.py (gitignored)</span>
-│   └── vehicle/         <span class="cmt"># Blender scripts that build the Jeep model</span>
-├── <span class="prop">android/</span>             <span class="cmt"># AndroidManifest, gradle, JNI bridges (OctaveMediaBridge, OctaveOBDBridge; src-downloads/ OctaveDownloadBridge)</span>
-├── <span class="prop">packaging/linux/</span>     <span class="cmt"># build-appimage.sh</span>
-├── <span class="prop">build_scripts/</span>       <span class="cmt"># installer_windows.iss (Inno Setup)</span>
-├── <span class="prop">scripts/</span>             <span class="cmt"># fetch_platform_tools.py, Pi launcher/update scripts, Android bundle builder</span>
-├── <span class="prop">tests/</span>               <span class="cmt"># pytest smoke + headless boot tests (CI)</span>
-├── <span class="prop">docs/</span>                <span class="cmt"># GAUGE_AUTHORING.md, PHONE_MIRROR_NATIVE_PLAN.md, vehicle/ references</span>
-├── <span class="prop">wiki/</span>                <span class="cmt"># this wiki (static HTML)</span>
-├── <span class="prop">TODO/</span>                <span class="cmt"># parked plans, one markdown file each</span>
-├── <span class="prop">hardware/</span>            <span class="cmt"># 3D-printed mount CAD/STL (2003 Jeep TJ media console)</span>
-├── <span class="prop">dev/</span>                 <span class="cmt"># developer tools (gitignored, not in a clone)</span>
-├── main.py              <span class="cmt"># Python entry point</span>
-├── setup.py             <span class="cmt"># Python cross-platform installer</span>
+├── main.py              <span class="cmt"># entry point: managers, context properties, Main.qml, cleanup</span>
+├── setup.py             <span class="cmt"># cross-platform installer (system packages, venv, requirements)</span>
 ├── requirements.txt     <span class="cmt"># Python dependencies</span>
 ├── pyproject.toml       <span class="cmt"># project metadata, ruff config</span>
-├── CMakeLists.txt       <span class="cmt"># C++ build</span>
-├── BUILD.md             <span class="cmt"># full C++ / Android build guide</span>
-└── CLAUDE.md            <span class="cmt"># contributor rules (dual-backend parity, wiki upkeep)</span></code></pre>
+├── <span class="prop">backend/</span>             <span class="cmt"># the managers, one module each</span>
+│   ├── settings_manager.py  media_manager.py  audio_analyzer.py  obd_manager.py
+│   ├── obd_adapter_finder.py  elm327_protocol.py  obd_transports/
+│   ├── network_manager.py  download_manager.py  dashboard_manager.py  diagnostics_manager.py
+│   ├── esp32_volume_manager.py  berryimu_manager.py  gesture_manager.py
+│   ├── clock.py  asset_store.py  volume_utils.py  ui_watchdog.py
+│   ├── logging_config.py  atomic_io.py  lazy_import.py  qt_threading.py  version.py
+│   ├── android_auto/    <span class="cmt"># DHU launch + capture, EmbeddedDhuItem</span>
+│   ├── phone_mirror/    <span class="cmt"># PhoneMirrorManager, scrcpy_client.py, adaptive_bitrate.py</span>
+│   ├── music_dl/        <span class="cmt"># vendored download engine</span>
+│   ├── temp/            <span class="cmt"># extracted album covers (gitignored)</span>
+│   └── (perf_monitor.py, command_server.py, perf_patches.py: gitignored dev tools)
+├── <span class="prop">frontend/</span>            <span class="cmt"># QML UI, loaded from disk at runtime</span>
+│   ├── Main.qml  MainMenu.qml  MediaRoom.qml  MediaPlayer.qml  OBDMenu.qml  CarMenu.qml ...
+│   ├── Style.qml  Spacing.qml  EnvironmentTheme.qml  OBDParameterModel.qml
+│   ├── gauges/          <span class="cmt"># gauge primitives</span>
+│   ├── dashboards/      <span class="cmt"># DashboardRenderer, WidgetCatalog, presets/*.json, editor/, widgets/</span>
+│   ├── settings/        <span class="cmt"># settings pages and components</span>
+│   ├── shaders/         <span class="cmt"># .frag sources and compiled .qsb</span>
+│   └── assets/          <span class="cmt"># icons, fonts, jeep_tj_2003.glb + jeep_tj/, music_devices/</span>
+├── <span class="prop">tests/</span>               <span class="cmt"># pytest suite, fake_scrcpy_server.py, QML fixtures/</span>
+├── <span class="prop">phone_server/</span>        <span class="cmt"># OCTAVE's fork of the scrcpy server (Java)</span>
+├── <span class="prop">tools/</span>
+│   ├── phone-server/    <span class="cmt"># prebuilt jar pushed to the phone (tracked)</span>
+│   ├── platform-tools/  <span class="cmt"># adb fetched by scripts/fetch_platform_tools.py (gitignored)</span>
+│   ├── vehicle/         <span class="cmt"># Blender scripts that build the Jeep model</span>
+│   └── music_devices/   <span class="cmt"># generator for the music-device models</span>
+├── <span class="prop">scripts/</span>             <span class="cmt"># fetch_platform_tools.py and other helper scripts</span>
+├── <span class="prop">docs/</span>                <span class="cmt"># GAUGE_AUTHORING.md, PHONE_MIRROR_NATIVE_PLAN.md, vehicle/ references</span>
+├── <span class="prop">hardware/</span>            <span class="cmt"># 3D-printed mount CAD/STL</span>
+├── <span class="prop">wiki/</span>                <span class="cmt"># this wiki (static HTML)</span>
+├── <span class="prop">TODO/</span>                <span class="cmt"># parked plans, one markdown file each</span>
+├── <span class="prop">dev/</span>                 <span class="cmt"># developer tools (gitignored, not in a clone)</span>
+└── <span class="prop">venv/</span>                <span class="cmt"># created by setup.py (gitignored)</span></code></pre>
 
         <!-- First Steps -->
         <h2 id="first-steps">First Steps After Install</h2>
         <ol class="steps">
           <li>
-            <strong>Set your music directory</strong> &mdash; Open Settings and point the media library at a folder of
-            MP3 / M4A / FLAC / OGG / Opus / WAV files. OCTAVE scans it, extracts album art and caches tags in
-            <code>metadata_cache.json</code> to reduce repeated metadata work on later launches.
+            <strong>Set your music directory</strong> &mdash; the default library is <code>~/Music</code>. Point the
+            media folder setting at a folder of MP3 / M4A / MP4 / FLAC / OGG / Opus / WAV files; each sub-folder becomes
+            a playlist. OCTAVE scans it, extracts album art and caches tags in <code>metadata_cache.json</code> so
+            later launches do not re-read every file.
           </li>
           <li>
-            <strong>Connect OBD-II</strong> (optional) &mdash; Plug in an ELM327 adapter (USB, or pair a Bluetooth one
-            and select its port in Settings &gt; OBD). On Linux make sure you are in the <code>dialout</code> group. Then
-            open the OBD page, pick a dashboard from the chooser, or build your own in the editor.
+            <strong>Connect OBD-II</strong> (optional) &mdash; plug in a USB ELM327 adapter or pair a Bluetooth one and
+            select its port in Settings &gt; OBD. On Linux make sure you are in the <code>dialout</code> group. Then open
+            the OBD page and pick a dashboard from the chooser, or build your own in the editor.
           </li>
           <li>
-            <strong>Try the 3D view</strong> &mdash; Sensors &gt; 3D View shows the Jeep model; with a BerryIMU attached it
-            follows the vehicle's attitude (use ZERO on level ground).
+            <strong>Try the 3D view</strong> &mdash; Sensors &gt; 3D View shows the Jeep model; with a BerryIMU attached
+            it follows the vehicle's attitude.
           </li>
           <li>
-            <strong>Explore Settings</strong> &mdash; OCTAVE provides settings across display, media, OBD,
-            accessories and device, all persisted to <code>settingsConfigure.json</code>. Settings &gt; Device &gt;
-            Diagnostics shows the running backend, its version, and lets you export the logs.
+            <strong>Explore Settings</strong> &mdash; display, media, OBD, accessories and device settings are all
+            persisted to <code>settingsConfigure.json</code> in the app-data directory, with a backup copy that is used
+            if the file is found damaged. Settings &gt; Device &gt; Diagnostics shows the version and the backend
+            ("Python") and can export the logs.
           </li>
         </ol>
 
@@ -603,7 +438,6 @@ python -m dev.main_dev --profile</code></pre>
           <h3>Related Pages</h3>
           <div class="related-links">
             <a href="architecture.html" class="related-link">Architecture Overview</a>
-            <a href="building.html" class="related-link">Building &amp; CI/CD</a>
             <a href="settings-reference.html" class="related-link">Settings Reference</a>
             <a href="hardware-setup.html" class="related-link">Hardware Setup</a>
             <a href="development.html" class="related-link">Development Guide</a>

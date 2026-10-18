@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Phone Mirror &amp; Android Auto</div>
           <h1 class="page-title">Phone Mirror &amp; Android Auto</h1>
-          <p class="page-subtitle">OCTAVE's built-in scrcpy-protocol client with its forked phone server, and the Google DHU-based Android Auto path</p>
+          <p class="page-subtitle">The Python scrcpy-protocol client (PyAV decode, QVideoSink frames) with OCTAVE's forked phone server, and the Google DHU-based Android Auto path</p>
         </div>
 
         <nav class="toc">
@@ -32,11 +32,12 @@
                 <li><a href="#pm-media">Phone media: OCTAVE's controls drive the phone</a></li>
                 <li><a href="#pm-persist">Persistent sessions and USB drops</a></li>
                 <li><a href="#pm-wifi">Mirroring over Wi-Fi</a></li>
+                <li><a href="#pm-adaptive">Adaptive quality</a></li>
                 <li><a href="#pm-input">Touch and navigation</a></li>
                 <li><a href="#pm-recovery">Errors and recovery</a></li>
+                <li><a href="#pm-threads">Threads and tests</a></li>
                 <li><a href="#pm-server">The phone server fork and the version invariant</a></li>
                 <li><a href="#pm-settings">Settings and wiring</a></li>
-                <li><a href="#pm-differences">Where C++ and Python differ</a></li>
               </ul>
             </li>
             <li><a href="#design-decisions">Design decisions</a></li>
@@ -63,33 +64,33 @@
             OCTAVE has two ways of putting a connected Android phone on the dash:
           </p>
           <ul>
-            <li><strong>Phone Mirror</strong> -- OCTAVE is its own scrcpy-protocol client. It pushes OCTAVE's forked
-              scrcpy server to the phone over <code>adb</code>, decodes the H.264 stream itself, plays the phone's audio,
-              and injects real multitouch over the control socket. The server jar is bundled; adb and a decoder must also be available (see prerequisites below). Both backends
-              implement it in full; it is desktop-only (mobile builds register a stub).</li>
+            <li><strong>Phone Mirror</strong> -- OCTAVE is its own scrcpy-protocol client
+              (<span class="file-path">backend/phone_mirror/</span>). It pushes OCTAVE's forked scrcpy server to the phone over
+              <code>adb</code>, decodes the H.264 stream with PyAV, plays the phone's audio, and injects real multitouch over the
+              control socket. The server jar is in the checkout; adb and the <code>av</code> package must also be available (see
+              <code>nativeAvailable</code> below).</li>
             <li><strong>Android Auto</strong> -- Runs Google's Desktop Head Unit (DHU) as a separate process and embeds
-              its window. In practice this works only with the Python backend on Windows; see
-              <a href="#aa-status">What actually works</a>.</li>
+              its window. In practice this works only on Windows; see <a href="#aa-status">What actually works</a>.</li>
           </ul>
           <p>
-            The two paths share one thing: <code>adb</code>, found once by <code>PhoneMirrorManager::findAdb()</code> /
-            <code>_find_adb()</code> and reused by Android Auto. Phone Mirror pushes decoded frames into a
-            <code>QVideoSink</code> bound to a QML <code>VideoOutput</code>; Android Auto embeds a native window
-            (Python/Windows) and additionally registers a <code>QQuickImageProvider</code> (<code>image://dhuframe/</code>)
-            that no QML currently reads.
+            The two paths share one thing: <code>adb</code>, found once by the module-level <code>_find_adb()</code> in
+            <span class="file-path">backend/phone_mirror/manager.py</span> and reused by Android Auto. Phone Mirror pushes decoded
+            frames into a <code>QVideoSink</code> bound to a QML <code>VideoOutput</code>; Android Auto embeds a native window
+            (Windows) and additionally registers a <code>QQuickImageProvider</code> (<code>image://dhuframe/</code>) that no QML
+            currently reads.
           </p>
           <span class="platform-badge desktop">Desktop only</span>
 
           <div class="diagram">
 +-------------------------------+ USB/Wi-Fi adb  +--------------------------------------+
-|  Android phone                | &lt;-----------&gt;  |  OCTAVE (C++ or Python backend)      |
+|  Android phone                | &lt;-----------&gt;  |  OCTAVE (Python backend)             |
 |                               |                |                                      |
-|  octave-phone-server (jar)    |  video socket  |  ScrcpyClient                        |
-|   org.octave.phoneserver      | -------------&gt; |   demux -&gt; libavcodec / PyAV         |
+|  octave-phone-server (jar)    |  video socket  |  ScrcpyClient (scrcpy_client.py)     |
+|   org.octave.phoneserver      | -------------&gt; |   demux -&gt; PyAV H.264 decode         |
 |   virtual display = view size |  audio socket  |   -&gt; QVideoFrame -&gt; QVideoSink       |
 |   MediaCodec H.264 encoder    | -------------&gt; |   PCM -&gt; gain -&gt; QAudioSink          |
 |   MirrorKeeper (sleep/panel)  | control socket |   touch / keys / keeper policy       |
-|                               | &lt;------------&gt; |   PHONE_STATE device messages        |
+|   PhoneMedia (media session)  | &lt;------------&gt; |   PHONE_STATE / MEDIA_* messages     |
 |                               |                |          |                           |
 |  Google DHU (Android Auto)    |  tcp:5277      |  PhoneMirrorManager -&gt; PhoneMirrorView|
 |   head unit server on phone   | &lt;-----------&gt;  |  AndroidAutoManager -&gt; AndroidAutoView|
@@ -102,53 +103,60 @@
           <h2>Phone Mirror</h2>
           <p>
             Phone Mirror shows an Android phone inside OCTAVE and lets the user drive it from the dash with real
-            multitouch. OCTAVE is a <strong>scrcpy-protocol client</strong>: it pushes the bundled phone
+            multitouch. OCTAVE is a <strong>scrcpy-protocol client</strong>: it pushes the phone
             <em>server</em> jar (<span class="file-path">tools/phone-server/octave-phone-server</span>) to
             <code>/data/local/tmp/octave-phone-server.jar</code> with <code>adb</code>, starts it with
             <code>app_process</code>, decodes the H.264 stream and injects input over the control socket. The server is
             <strong>OCTAVE's fork of the scrcpy server</strong> (<span class="file-path">phone_server/</span>,
             Apache-2.0, forked at v3.3.4, Java package <code>org.octave.phoneserver</code>, version string
             <code>3.3.4-octave</code>). It needs shell privileges, which only an adb-launched process gets, so it cannot
-            be an installed app. There is no external scrcpy binary, v4l2loopback or ffmpeg subprocess in the mirroring path. Touch uses the control socket; <code>wakePhone()</code> still uses <code>adb shell input keyevent 224</code> as a wake-up fallback.
+            be an installed app. There is no external scrcpy binary, v4l2loopback or ffmpeg subprocess in the mirroring path.
+            Touch uses the control socket; <code>wakePhone()</code> and <code>pressHome()</code> on a virtual display still run
+            one-off <code>adb shell</code> commands.
           </p>
           <table>
             <thead><tr><th>File</th><th>Class</th><th>Role</th></tr></thead>
             <tbody>
-              <tr><td><span class="file-path">src/managers/phonemirrormanager.{h,cpp}</span> / <span class="file-path">backend/phone_mirror/manager.py</span></td>
-                  <td><code>PhoneMirrorManager</code></td><td>adb discovery, device probes, settings, session lifecycle, keeper policy, ducking; QML context property <code>phoneMirrorManager</code></td></tr>
-              <tr><td><span class="file-path">src/phone_mirror/scrcpyclient.{h,cpp}</span> / <span class="file-path">backend/phone_mirror/scrcpy_client.py</span></td>
-                  <td><code>ScrcpyClient</code></td><td>One session: server push/launch or attach, sockets, demux, decode, black-frame hold, audio playback, control and device messages</td></tr>
+              <tr><td><span class="file-path">backend/phone_mirror/manager.py</span></td>
+                  <td><code>PhoneMirrorManager</code></td><td>adb discovery, device probes, settings, session lifecycle, keeper policy, ducking, phone media, Wi-Fi / QR pairing; QML context property <code>phoneMirrorManager</code></td></tr>
+              <tr><td><span class="file-path">backend/phone_mirror/scrcpy_client.py</span></td>
+                  <td><code>ScrcpyClient</code></td><td>One session: server push/launch or attach, sockets, demux, PyAV decode, black-frame hold, audio playback, control and device messages</td></tr>
+              <tr><td><span class="file-path">backend/phone_mirror/adaptive_bitrate.py</span></td>
+                  <td><code>AdaptiveBitRate</code></td><td>Pure logic for adaptive video bit rate, see <a href="#pm-adaptive">Adaptive quality</a></td></tr>
+              <tr><td><span class="file-path">backend/phone_mirror/qrcodegen.py</span></td>
+                  <td><code>QrCode</code></td><td>Project Nayuki's QR Code generator (MIT, credited in <span class="file-path">NOTICE</span>) for Wi-Fi pairing</td></tr>
               <tr><td><span class="file-path">phone_server/src/main/java/org/octave/phoneserver/</span></td>
-                  <td><code>Server</code>, <code>DesktopConnection</code>, <code>Streamer</code>, <code>Controller</code>, <code>MirrorKeeper</code>, <code>NewDisplayCapture</code>, <code>CleanUp</code></td><td>The program running on the phone</td></tr>
-              <tr><td><span class="file-path">frontend/PhoneMirrorView.qml</span></td><td>--</td><td><code>VideoOutput</code> + <code>MultiPointTouchArea</code> + nav row, reconnect and asleep overlays, notice banner, phone picker, error/retry screen</td></tr>
-              <tr><td><span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td><td>--</td><td>Phone mirror settings card (Wi-Fi QR pairing, display size, phone screen, audio, gain, ducking, status line)</td></tr>
+                  <td><code>Server</code>, <code>DesktopConnection</code>, <code>Streamer</code>, <code>Controller</code>, <code>MirrorKeeper</code>, <code>PhoneMedia</code>, <code>NewDisplayCapture</code>, <code>CleanUp</code></td><td>The program running on the phone</td></tr>
+              <tr><td><span class="file-path">frontend/PhoneMirrorView.qml</span></td><td>--</td><td><code>VideoOutput</code> + <code>MultiPointTouchArea</code> + nav row, reconnect and asleep overlays, notice banner, phone picker, QR / error / retry screen</td></tr>
+              <tr><td><span class="file-path">frontend/PhoneQrPairingPanel.qml</span></td><td>--</td><td>The QR code and pairing steps, used by the view and the settings modal</td></tr>
+              <tr><td><span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td><td>--</td><td>Phone mirror settings card (Wi-Fi QR pairing, display mode and size, phone screen, audio, gain, ducking, status line)</td></tr>
             </tbody>
           </table>
-          <p>Logging: C++ categories <code>octave.phonemirror</code> (manager) and <code>octave.phonemirror.client</code>;
-            Python loggers <code>octave.phone_mirror</code> and <code>octave.phone_mirror.scrcpy_client</code>.
-            Server log lines are relayed at INFO (WARN/ERROR lines at warning level) with a <code>server:</code> prefix.</p>
-          <p>Measured on the Orange Pi 5 Plus with a Galaxy S22 Ultra (Android 16), from the click on the button:
-            handshake at +0.34 s (Python) / +0.51 s (C++), first decoded frame at +0.65–0.83 s regardless of how long the
-            phone has been idle, a tap visible in the stream after ~0.4 s, 23–28 % of one core while scrolling in Python and
-            the same order in C++. Numbers and history: <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>.</p>
+          <p>Logging: loggers <code>octave.phone_mirror</code> (manager) and <code>octave.phone_mirror.scrcpy_client</code>
+            (client). Server log lines are relayed at INFO (lines containing WARN or ERROR at warning level) with a
+            <code>scrcpy server:</code> prefix.</p>
+          <p>Measured with the Python client on the Orange Pi 5 Plus (<span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>,
+            "Phase 1 hardware results"): handshake at +0.34 s, first decoded frame at +0.72–0.76 s and the picture at +1.13 s from
+            the click, the same with the phone idle for 70 s; a touch reacts in 0.45 s; 23–28 % of one core while scrolling.
+            Software H.264 decode at 1280x800 costs 12–15 % of one RK3588 core (PyAV's bundled ffmpeg).</p>
         </section>
 
         <section id="pm-manager">
           <h3>PhoneMirrorManager</h3>
           <p>Owns the single session (one phone at a time), the adb probes the UI needs, and the settings that shape a
-            session. The desktop backends share the QML-facing session API. Mobile C++ builds compile a reduced compatibility stub that reports <code>nativeAvailable = false</code> and "Phone mirroring is desktop-only".</p>
+            session. Every adb call it makes runs off the GUI thread (see <a href="#pm-threads">Threads</a>).</p>
           <h4>Properties</h4>
           <table>
             <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>adbPath</code></td><td><code>str</code></td><td>adb in use. Search order: bundled platform-tools (C++: <code>&lt;app dir&gt;/platform-tools/</code>, <code>&lt;app dir&gt;/../tools/platform-tools/&lt;os&gt;/</code>, <code>&lt;app dir&gt;/../Resources/platform-tools/</code>; Python: <code>&lt;repo&gt;/tools/platform-tools/&lt;os&gt;/</code>, <code>&lt;repo&gt;/platform-tools/</code>), then PATH, then common locations (<code>~/Android/Sdk/platform-tools/adb</code> before <code>/usr/bin/adb</code> on Linux/macOS). The first candidate whose <code>adb version</code> reports platform-tools 30 or newer wins (<code>adbToolsMajor()</code> / <code>adb_tools_major()</code>, cached; <code>kAdbWirelessMinTools</code> / <code>ADB_WIRELESS_MIN_TOOLS</code>), since older builds have no <code>pair</code> / <code>mdns</code>; with none that new, the first one found is used for USB. The chosen path and version are logged at INFO on startup. The lookup is <code>PhoneMirrorManager::findAdb()</code> (public static) / module-level <code>_find_adb()</code> in <span class="file-path">backend/phone_mirror/manager.py</span>, which <code>AndroidAutoManager</code> reuses so both features drive the same binary</td></tr>
-              <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>Decoder present (C++: built with <code>OCTAVE_HAVE_FFMPEG</code>; Python: <code>import av</code> succeeded), server jar found (C++: Qt resource <code>:/phone-server/octave-phone-server</code>; Python: <code>tools/phone-server/</code> or <code>phone-server/</code> next to a deployed tree), adb found</td></tr>
+              <tr><td><code>adbPath</code></td><td><code>str</code></td><td>adb in use (constant). <code>_find_adb()</code> tries, in order: bundled platform-tools (<span class="file-path">&lt;repo&gt;/tools/platform-tools/&lt;linux|windows|darwin&gt;/adb</span>, then <span class="file-path">&lt;repo&gt;/platform-tools/adb</span>), <code>PATH</code>, then common locations (Windows: <span class="file-path">C:\Program Files\Android\platform-tools</span>, the x86 variant and <span class="file-path">%LOCALAPPDATA%\Android\Sdk\platform-tools</span>; elsewhere <span class="file-path">~/Android/Sdk/platform-tools/adb</span> before <span class="file-path">/usr/bin/adb</span> and <span class="file-path">/usr/local/bin/adb</span>). The first candidate whose <code>adb version</code> reports platform-tools 30 or newer wins (<code>adb_tools_major()</code>, cached; <code>ADB_WIRELESS_MIN_TOOLS</code>), since older builds have no <code>pair</code> / <code>mdns</code>; with none that new, the first one found is used for USB. The chosen path and version are logged at INFO on startup, with a warning when it is too old to pair</td></tr>
+              <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>Constant: <code>import av</code> succeeded (<code>HAVE_AV</code>), the server jar was found (<span class="file-path">tools/phone-server/octave-phone-server</span>, or <span class="file-path">phone-server/octave-phone-server</span> at the repository root), and adb was found</td></tr>
               <tr><td><code>serverVersion</code></td><td><code>str</code></td><td><code>"3.3.4-octave"</code> -- the string the client sends on launch; the server refuses anything else</td></tr>
-              <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>A client thread is up (true from <code>start()</code>, not only after the handshake)</td></tr>
-              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> (setting <code>scrcpyDisplaySize</code>, default <code>"auto"</code>, each dimension snapped down to a multiple of 8, minimum 8, because scrcpy rounds a <code>--new-display</code> size the same way); <code>"auto"</code> uses the view's pixel size reported through <code>setViewSize()</code> (longest side capped at 1920, <code>kAutoMaxSide</code> / <code>AUTO_MAX_SIDE</code>; 1280x800 until the view has reported); <code>""</code> mirrors the phone's own screen</td></tr>
-              <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td>Size actually in use once connected; <code>""</code> when mirroring the phone screen (also when the phone's SDK is below 30 / Android 11, in which case the virtual display is skipped with a warning)</td></tr>
-              <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>QML assigns <code>VideoOutput.videoSink</code> in <code>Component.onCompleted</code>; decoded frames go straight to it</td></tr>
-              <tr><td><code>frameWidth</code>, <code>frameHeight</code></td><td><code>int</code></td><td>Decoded frame size (from the codec meta, updated if the decoder reports a different size)</td></tr>
+              <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>The client has finished its handshake and has not stopped (it reads <code>ScrcpyClient.is_running</code>). <code>isRunningChanged</code> fires when a start is launched, on stop and on failure, but not at the handshake itself; the view relies on <code>scrcpyStarted</code> for that</td></tr>
+              <tr><td><code>displaySize</code></td><td><code>str</code></td><td>Requested virtual display <code>"WxH"</code> (setting <code>scrcpyDisplaySize</code>, default <code>"auto"</code>; <code>normalize_display_size()</code> snaps each dimension down to a multiple of 8, minimum 8, because scrcpy rounds a <code>new_display</code> size the same way); <code>"auto"</code> uses the view's pixel size reported through <code>setViewSize()</code> (scaled so the longest side is at most 1920, <code>AUTO_MAX_SIDE</code>; 1280x800 until the view has reported a size of at least 64x64); <code>""</code> mirrors the phone's own screen</td></tr>
+              <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td>Size actually in use once connected (the decoded frame size); <code>""</code> when mirroring the phone screen, also when the phone's SDK is below 30 / Android 11, in which case the virtual display is skipped with a warning. Notify <code>frameSizeChanged</code></td></tr>
+              <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>Writable. QML assigns <code>VideoOutput.videoSink</code> in <code>Component.onCompleted</code>; decoded frames go straight to it</td></tr>
+              <tr><td><code>frameWidth</code>, <code>frameHeight</code></td><td><code>int</code></td><td>Decoded frame size (from the codec meta, updated when a decoded frame has a different size)</td></tr>
               <tr><td><code>audioActive</code></td><td><code>bool</code></td><td>The audio socket delivered codec id <code>"raw"</code> and PCM is being played through OCTAVE</td></tr>
               <tr><td><code>audioPlaying</code></td><td><code>bool</code></td><td>The phone is producing sound right now (peak above the threshold within the last 1.5 s); drives ducking</td></tr>
               <tr><td><code>phoneAsleep</code></td><td><code>bool</code></td><td>The keeper reports the phone dozing (power button / lock); the virtual display stops compositing and drops touch until it is awake again</td></tr>
@@ -158,13 +166,13 @@
               <tr><td><code>wirelessBusy</code></td><td><code>bool</code></td><td>A QR pairing started from the UI is in progress</td></tr>
               <tr><td><code>qrPairingRows</code>, <code>qrPairingActive</code></td><td><code>list</code>, <code>bool</code></td><td>The QR code being shown (one <code>'0'</code>/<code>'1'</code> string per row) and whether one is waiting</td></tr>
               <tr><td><code>currentBitRate</code></td><td><code>int</code></td><td>Video bit rate of the running session in bps, following adaptive changes; 0 when idle</td></tr>
-              <tr><td><code>mediaAvailable</code>, <code>mediaPlaying</code>, <code>mediaTitle</code>, <code>mediaArtist</code>, <code>mediaAlbum</code>, <code>mediaApp</code>, <code>mediaDuration</code>, <code>mediaCanSeek</code></td><td>various</td><td>The phone's active media session as <code>PhoneMedia</code> reports it (<code>mediaApp</code> is the package name, <code>mediaDuration</code> ms); notify <code>mediaChanged</code>. See <a href="#pm-media">Phone media</a></td></tr>
-              <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<code>&lt;app data&gt;/temp/phone_media_art_{0,1}.jpg</code>, alternating so QML reloads), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
-              <tr><td><code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td><td><code>list</code>, <code>qint64</code>, <code>str</code></td><td>Phone app’s published play queue, current item ID (<code>-1</code> for none), and queue title; notify <code>mediaQueueChanged</code>. Each entry has <code>id</code>, <code>title</code>, <code>artist</code>, <code>art_uri</code> and a local <code>art</code> URL</td></tr>
+              <tr><td><code>mediaAvailable</code>, <code>mediaPlaying</code>, <code>mediaTitle</code>, <code>mediaArtist</code>, <code>mediaAlbum</code>, <code>mediaApp</code>, <code>mediaDuration</code>, <code>mediaCanSeek</code></td><td>various</td><td>The phone's active media session as <code>PhoneMedia</code> reports it (<code>mediaApp</code> is the package name, <code>mediaDuration</code> ms, 0 = unknown); notify <code>mediaChanged</code>. See <a href="#pm-media">Phone media</a></td></tr>
+              <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<span class="file-path">&lt;app data&gt;/temp/phone_media_art_{0,1}.jpg</span>, alternating so QML reloads), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
+              <tr><td><code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td><td><code>list</code>, <code>qint64</code>, <code>str</code></td><td>The phone app's published play queue, current item ID (<code>-1</code> for none), and queue title; notify <code>mediaQueueChanged</code>. Each entry has <code>id</code>, <code>title</code>, <code>artist</code>, <code>art_uri</code> and a local <code>art</code> URL (<code>""</code> until it arrives)</td></tr>
               <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>The phone is the source OCTAVE's media controls drive; notify <code>mediaActiveChanged(bool)</code></td></tr>
-              <tr><td><code>deviceState</code></td><td><code>str</code></td><td>Last <code>adb devices</code> probe: <code>"device"</code> / <code>"unauthorized"</code> / <code>"no-permissions"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code> (best usable state wins when several phones are listed). Probes run on a one-thread probe pool, never on the GUI thread; notify <code>deviceStateChanged</code></td></tr>
-              <tr><td><code>deviceHint</code></td><td><code>str</code></td><td>Extra context the probe found: an iPhone on USB (Linux sysfs, Apple vendor <code>05ac</code>, product <code>0x1290</code>&ndash;<code>0x12af</code>), or another adb server fighting this one (<code>"doesn't match this client"</code>). <code>""</code> otherwise; shown under the QR screen and the error text</td></tr>
-              <tr><td><code>devices</code></td><td><code>list</code></td><td><code>[{serial, state, wireless, model, selected}]</code> for every phone adb lists. <code>model</code> (<code>ro.product.model</code>) is fetched only when more than one is usable; <code>selected</code> marks the running session's phone. Drives the phone picker</td></tr>
+              <tr><td><code>deviceState</code></td><td><code>str</code></td><td>Last <code>adb devices</code> probe: <code>"device"</code> / <code>"unauthorized"</code> / <code>"no-permissions"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code> (best usable state wins when several phones are listed, <code>summarizeState()</code>). Probes run on the probe thread, never on the GUI thread; notify <code>deviceStateChanged</code></td></tr>
+              <tr><td><code>deviceHint</code></td><td><code>str</code></td><td>Extra context the probe found: another adb server fighting this one (<code>"doesn't match this client"</code> in the output), or, when no phone is listed, an iPhone on USB (Linux sysfs, Apple vendor <code>05ac</code>, product <code>0x1290</code>&ndash;<code>0x12af</code>). <code>""</code> otherwise</td></tr>
+              <tr><td><code>devices</code></td><td><code>list</code></td><td><code>[{serial, state, wireless, model, selected}]</code> for every phone adb lists. <code>model</code> (<code>ro.product.model</code>) is fetched only when more than one is usable and is remembered afterwards; <code>selected</code> marks the running session's phone. Drives the phone picker</td></tr>
               <tr><td><code>mirrorNotice</code></td><td><code>str</code></td><td>Notices for the running session that do not stop it, joined by newlines: touch blocked by the phone (server <code>INJECT_EVENTS</code> error, Xiaomi), no audio before Android 11, software-encoder fallback. Cleared at every start and by <code>dismissNotice()</code>; notify <code>mirrorNoticeChanged</code></td></tr>
             </tbody>
           </table>
@@ -173,18 +181,18 @@
             <thead><tr><th>Signal</th><th>Parameters</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td><code>scrcpyStarted</code></td><td><code>int</code></td><td>Handshake done, stream is up (handle is always 1; the name predates the built-in client and <code>PhoneMirrorView.qml</code> depends on it)</td></tr>
-              <tr><td><code>scrcpyStopped</code></td><td>--</td><td>Session ended by request</td></tr>
-              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>The only error channel (a never-emitted <code>error</code> signal was removed from both backends). Specific failure text: <code>describeDeviceState()</code> for unauthorized / offline / no device / no adb, <code>getInstallInstructions()</code> for a missing prerequisite, or the client's own reason ("Phone disconnected. Reconnect the USB cable." / its Wi-Fi variant, "scrcpy server did not answer within 20 s", "handshake failed", ...)</td></tr>
+              <tr><td><code>scrcpyStopped</code></td><td>--</td><td>Session ended by request (<code>stopScrcpy()</code>), or the client reported a stop with an empty reason</td></tr>
+              <tr><td><code>scrcpyError</code></td><td><code>str</code></td><td>The only error channel. Text from <code>getInstallInstructions()</code> for a missing prerequisite, <code>_describe_problem()</code> (built on <code>describeDeviceState()</code>) for unauthorized / offline / no permissions / no device, or the client's own reason ("Phone disconnected. Reconnect the USB cable." / its Wi-Fi variant, "scrcpy server did not answer within 20 s", "handshake failed: …", the encoder failure text, ...)</td></tr>
               <tr><td><code>isRunningChanged</code>, <code>displaySizeChanged</code>, <code>videoSinkChanged</code></td><td>--</td><td>Property notifications</td></tr>
               <tr><td><code>frameSizeChanged</code></td><td><code>int, int</code></td><td>Frame size; also notifies <code>activeDisplaySize</code>, <code>frameWidth</code>, <code>frameHeight</code></td></tr>
-              <tr><td><code>frameReady</code></td><td>--</td><td>A frame reached the sink (the view counts these as proof of life; "Connecting..." shows until the first one)</td></tr>
+              <tr><td><code>frameReady</code></td><td>--</td><td>A decoded frame was queued for the sink (the view counts these as proof of life; "Connecting..." shows until the first one)</td></tr>
               <tr><td><code>audioActiveChanged</code>, <code>audioPlayingChanged</code>, <code>phoneAsleepChanged</code>, <code>phoneInUseChanged</code></td><td><code>bool</code></td><td>Property notifications</td></tr>
-              <tr><td><code>duckingChanged</code></td><td><code>float</code></td><td>Factor other sources should apply: the duck level while <code>audioPlaying</code> and ducking is on, 1.0 otherwise. <code>main</code> routes it to <code>MediaManager.setDucking()</code></td></tr>
-              <tr><td><code>wirelessAddressChanged</code></td><td><code>str</code></td><td>Remembered Wi-Fi phone changed; <code>main</code> saves it to <code>scrcpyWirelessAddress</code></td></tr>
+              <tr><td><code>duckingChanged</code></td><td><code>float</code></td><td>Factor other sources should apply: the duck level while <code>audioPlaying</code> and ducking is on, 1.0 otherwise. <span class="file-path">main.py</span> routes it to <code>MediaManager.setDucking()</code></td></tr>
+              <tr><td><code>wirelessAddressChanged</code></td><td><code>str</code></td><td>Remembered Wi-Fi phone changed; <span class="file-path">main.py</span> saves it with <code>save_scrcpy_wireless_address</code></td></tr>
               <tr><td><code>connectionTypeChanged</code>, <code>wirelessBusyChanged</code>, <code>qrPairingChanged</code></td><td>--</td><td>Property notifications</td></tr>
-              <tr><td><code>audioPlayed</code></td><td><code>QByteArray, int</code> / Python <code>bytes, int</code></td><td>PCM handed to the audio sink and buffered delay in ms; connected to <code>AudioAnalyzer.feed_live_pcm()</code> for the phone waveform</td></tr>
+              <tr><td><code>audioPlayed</code></td><td><code>bytes, int</code></td><td>PCM handed to the audio sink and buffered delay in ms; connected to <code>AudioAnalyzer.feed_live_pcm()</code> for the phone waveform</td></tr>
               <tr><td><code>currentBitRateChanged</code>, <code>mediaChanged</code>, <code>mediaArtChanged</code>, <code>mediaQueueChanged</code></td><td>--</td><td>Property notifications</td></tr>
-              <tr><td><code>mediaActiveChanged</code></td><td><code>bool</code></td><td>The phone takes or releases OCTAVE’s media controls</td></tr>
+              <tr><td><code>mediaActiveChanged</code></td><td><code>bool</code></td><td>The phone takes or releases OCTAVE's media controls</td></tr>
               <tr><td><code>wirelessResult</code></td><td><code>bool, str</code></td><td>Outcome of QR pairing, message ready to show</td></tr>
               <tr><td><code>deviceStateChanged</code>, <code>mirrorNoticeChanged</code></td><td>--</td><td>Property notifications (<code>deviceStateChanged</code> covers <code>deviceState</code>, <code>deviceHint</code> and <code>devices</code>)</td></tr>
             </tbody>
@@ -193,119 +201,128 @@
           <table>
             <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>cleanup()</code></td><td>--</td><td>Session lifecycle (singleton). <code>startScrcpy()</code> re-emits <code>scrcpyStarted(1)</code> if a session is already ready; a deliberate stop also runs <code>adb shell pkill -f org.octave.phoneserver</code></td></tr>
-              <tr><td><code>refreshDeviceState()</code></td><td>--</td><td>Probe <code>adb devices</code> on the probe thread; <code>deviceStateChanged</code> follows. A request while a probe runs re-runs it once afterwards</td></tr>
-              <tr><td><code>getDeviceState()</code>, <code>hasConnectedDevice()</code></td><td><code>str</code>, <code>bool</code></td><td>The cached <code>deviceState</code> (they also schedule a refresh). Never block; the blocking <code>getDeviceSerial()</code> / <code>getDeviceName()</code> / <code>getDeviceResolution()</code> / <code>getDeviceSdk()</code> probes were removed in 0.9.5</td></tr>
-              <tr><td><code>selectDevice(serial)</code></td><td>--</td><td>Mirror this phone from now on (the picker); a running session on another phone restarts. Otherwise the pick is USB first, then Wi-Fi</td></tr>
+              <tr><td><code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>cleanup()</code></td><td>--</td><td>Session lifecycle (singleton). <code>startScrcpy()</code> re-emits <code>scrcpyStarted(1)</code> if a session is already up and ignores a call while a start is in progress; <code>stopScrcpy()</code> also fires <code>adb shell pkill -f org.octave.phoneserver</code> (not waited for); <code>cleanup()</code> also cancels a QR wait</td></tr>
+              <tr><td><code>refreshDeviceState()</code></td><td>--</td><td>Probe <code>adb devices</code> on the probe thread; <code>deviceStateChanged</code> follows if anything changed. A request while a probe runs re-runs it once afterwards</td></tr>
+              <tr><td><code>getDeviceState()</code>, <code>hasConnectedDevice()</code></td><td><code>str</code>, <code>bool</code></td><td>The cached <code>deviceState</code> (they also schedule a refresh). Never block</td></tr>
+              <tr><td><code>selectDevice(serial)</code></td><td>--</td><td>Mirror this phone from now on (the picker); a running session on another phone restarts and never reattaches to the old phone's session. Otherwise the pick is USB first, then Wi-Fi (<code>pickSerial()</code>)</td></tr>
               <tr><td><code>dismissNotice()</code></td><td>--</td><td>Hide the current <code>mirrorNotice</code></td></tr>
               <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>Same as <code>nativeAvailable</code>; the view shows setup text only when false</td></tr>
-              <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing (decoder / jar / adb), or the USB-debugging steps</td></tr>
-              <tr><td><code>setDisplaySize(str)</code>, <code>setDisplayDpi(int)</code>, <code>setBitRateUsb(int)</code>, <code>setBitRateWifi(int)</code></td><td>--</td><td>Restart a running session (stop, then start 300 ms later); a bit-rate change only restarts a session on that link</td></tr>
-              <tr><td><code>setViewSize(int, int)</code></td><td>--</td><td>The mirror view's size in device pixels (<code>PhoneMirrorView</code> reports it on activation and on every resize). With <code>"auto"</code> a running session whose size no longer matches is restarted once the size has been stable for 1.5 s</td></tr>
+              <tr><td><code>getInstallInstructions()</code></td><td><code>str</code></td><td>Names exactly which prerequisite is missing ("the Python package 'av' (pip install av)", the bundled phone server, adb), or the USB-debugging and QR steps</td></tr>
+              <tr><td><code>setDisplaySize(str)</code>, <code>setDisplayDpi(int)</code>, <code>setBitRateUsb(int)</code>, <code>setBitRateWifi(int)</code></td><td>--</td><td>Restart a running session (stop, then start 300 ms later). A DPI change restarts only when a virtual display is configured; a bit-rate change (clamped 2..40 Mbps) only restarts a session on that link</td></tr>
+              <tr><td><code>setViewSize(int, int)</code></td><td>--</td><td>The mirror view's size in device pixels (<code>PhoneMirrorView</code> reports it on activation and on resize). With <code>"auto"</code> a running session whose size no longer matches is restarted once the size has been stable for 1.5 s (<code>RESIZE_RESTART_MS</code>)</td></tr>
               <tr><td><code>setAutoWifi(bool)</code></td><td>--</td><td>Setting <code>scrcpyAutoWifi</code>; read at the next USB start</td></tr>
               <tr><td><code>setBitRateAuto(bool)</code></td><td>--</td><td>Setting <code>scrcpyBitRateAuto</code>; restarts a running session</td></tr>
               <tr><td><code>setAudioGain(float)</code>, <code>setAudioDuckEnabled(bool)</code>, <code>setAudioDuckLevel(float)</code>, <code>setPhoneScreenOff(bool)</code></td><td>--</td><td>Applied live. Gain is clamped 0.25..8 (−12..+18 dB), duck level 0..1</td></tr>
-              <tr><td><code>setVolume(float)</code></td><td>--</td><td>Called by <code>VolumeController</code> on every volume change with the 0..1 linear value; the phone-audio <code>QAudioSink</code> follows it. Mute is applied separately through <code>setMuted(bool)</code></td></tr>
-              <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>--</td><td>Touch on the mirrored display: action 0 down / 1 up / 2 move, coordinates 0..1 of the frame (scaled to frame pixels here)</td></tr>
+              <tr><td><code>setVolume(float)</code>, <code>setMuted(bool)</code></td><td>--</td><td><code>VolumeController</code> calls <code>setVolume</code> on every volume change with the 0..1 linear value; <span class="file-path">main.py</span> connects <code>MediaManager.muteChanged</code> to <code>setMuted</code>. The phone-audio <code>QAudioSink</code> volume follows both (0 while muted)</td></tr>
+              <tr><td><code>injectTouch(pointerId, action, relX, relY)</code></td><td>--</td><td>Touch on the mirrored display: action 0 down / 1 up / 2 move, coordinates 0..1 of the frame (scaled to frame pixels here, clamped in the client)</td></tr>
               <tr><td><code>injectKey(keycode)</code>, <code>pressBack()</code>, <code>pressHome()</code>, <code>pressAppSwitch()</code></td><td>--</td><td>Android key events (down + up). <code>pressHome()</code> on a virtual display runs <code>am start --display &lt;id&gt;</code> instead, see <a href="#pm-input">Touch and navigation</a></td></tr>
-              <tr><td><code>wakePhone()</code></td><td>--</td><td><code>adb shell input keyevent 224</code> (<code>KEYCODE_WAKEUP</code>) from OCTAVE's side; the keeper normally wakes the phone itself, this is the asleep overlay's tap-to-retry</td></tr>
-              <tr><td><code>resumeMirroring()</code></td><td>--</td><td>Sends <code>OCTAVE_TAKE_BACK</code>: the keeper leaves the in-use state, wakes the phone if needed and re-applies the panel policy. Implemented in both backends, not exposed in the view</td></tr>
+              <tr><td><code>wakePhone()</code></td><td>--</td><td><code>adb -s &lt;serial&gt; shell input keyevent 224</code> (<code>KEYCODE_WAKEUP</code>) on a one-shot thread; the keeper normally wakes the phone itself, this is the asleep overlay's tap-to-retry</td></tr>
+              <tr><td><code>resumeMirroring()</code></td><td>--</td><td>Sends <code>OCTAVE_TAKE_BACK</code>: the keeper leaves the in-use state, wakes the phone if needed and re-applies the panel policy. Not exposed in the view</td></tr>
               <tr><td><code>forgetWireless()</code>, <code>setWirelessAddress(address)</code>, <code>startQrPairing()</code>, <code>cancelQrPairing()</code></td><td>--</td><td>Wi-Fi, see <a href="#pm-wifi">Mirroring over Wi-Fi</a></td></tr>
-              <tr><td><code>mediaPlayPause()</code>, <code>mediaPlay()</code>, <code>mediaPause()</code>, <code>mediaNext()</code>, <code>mediaPrevious()</code>, <code>mediaSeek(ms)</code></td><td>--</td><td>Drive the phone's media session (<code>OCTAVE_MEDIA</code>)</td></tr>
+              <tr><td><code>mediaPlayPause()</code>, <code>mediaPlay()</code>, <code>mediaPause()</code>, <code>mediaNext()</code>, <code>mediaPrevious()</code>, <code>mediaSeek(ms)</code></td><td>--</td><td>Drive the phone's media session (<code>OCTAVE_MEDIA</code>); ignored until the session is up. <code>mediaSeek</code> shows the new position before the phone confirms it</td></tr>
               <tr><td><code>mediaSkipToQueueItem(qint64 id)</code></td><td>--</td><td>Ask the phone app to play an item from <code>mediaQueue</code></td></tr>
-              <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>Position in ms, extrapolated from the last report while playing (the phone reports only on changes)</td></tr>
-              <tr><td><code>releaseMedia(pausePhone)</code></td><td>--</td><td>An OCTAVE source took over: clear <code>mediaActive</code>, optionally pausing the phone</td></tr>
+              <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>Position in ms, extrapolated from the last report while playing (the phone reports only on changes), capped at the duration</td></tr>
+              <tr><td><code>releaseMedia(pausePhone)</code></td><td>--</td><td>An OCTAVE source took over: clear <code>mediaActive</code>, pausing the phone first if asked and it is playing</td></tr>
             </tbody>
           </table>
+          <p>Static helpers, also used by the tests: <code>parseDevices()</code>, <code>summarizeState()</code>,
+            <code>pickSerial()</code>, <code>classifyServerLine()</code>, <code>softwareEncoderFor()</code>, <code>noticeText()</code>,
+            <code>describeDeviceState()</code>, and the module functions <code>normalize_display_size()</code>,
+            <code>auto_display_size()</code>, <code>wifi_address_from_ip_addr()</code>, <code>host_of()</code>,
+            <code>qr_pairing_payload()</code>.</p>
         </section>
 
         <section id="pm-session">
           <h3>Session lifecycle</h3>
-          <p>After manager preflight, session setup and video decoding run on the client's worker thread (C++ <code>std::thread</code> named <code>scrcpy-client</code>;
-            Python daemon thread of the same name). The sequence and the launch arguments are identical in both backends.</p>
           <ol class="steps">
-            <li><strong>Preflight</strong>: <code>nativeAvailable</code> on the GUI thread; then, on the probe thread (so a dead
-              Wi-Fi link or an adb restart never freezes the dash), <code>adb devices</code>, the phone to use (the one picked with
-              <code>selectDevice()</code>, else USB first), and unless attaching to a persisted session a stale-server kill
-              (<code>adb shell pkill -f org.octave.phoneserver</code>) and <code>getprop ro.build.version.sdk</code>. The result is handed
-              back to the GUI thread, which drops it if <code>stopScrcpy()</code> ran meanwhile (a generation counter). C++ additionally
-              extracts the embedded jar to <code>&lt;temp&gt;/octave-phone-server-3.3.4-octave</code> (reused when the size matches).</li>
-            <li><strong>Push</strong> the jar to <code>/data/local/tmp/octave-phone-server.jar</code> -- every session, because
-              <code>cleanup=true</code> starts a CleanUp helper that unlinks the pushed jar as soon as the server is up.</li>
-            <li><strong>Tunnel</strong>: pick a random 31-bit scid (C++ <code>QRandomGenerator::system()</code>, Python
-              <code>secrets.randbits(31)</code> -- not the global <code>random</code> module, which other modules seed and which
-              once made every session's scid identical), formatted as 8 hex digits. Reap stale forwards first
-              (<code>adb forward --list</code>, remove every <code>localabstract:scrcpy_*</code> entry for this serial -- forwards live in the adb
-              server, so a hard-killed OCTAVE strands one listening port per session), then
-              <code>adb forward tcp:PORT localabstract:scrcpy_SCID</code> with an ephemeral local port (<code>OCTAVE_SCRCPY_PORT</code>
-              overrides it for the fake-server tests; C++ falls back to 27183 if the probe listen fails).</li>
+            <li><strong>Preflight</strong> (<code>startScrcpy()</code>): <code>nativeAvailable</code> on the GUI thread (else
+              <code>scrcpyError(getInstallInstructions())</code>); then, on the probe thread so a dead Wi-Fi link or an adb restart
+              never freezes the dash, <code>adb devices</code>, the phone to use (the one picked with <code>selectDevice()</code>, else
+              USB first), and -- unless attaching to a persisted session -- a stale-server kill
+              (<code>adb -s SERIAL shell pkill -f org.octave.phoneserver</code>), plus <code>getprop ro.build.version.sdk</code>. The
+              result is posted back to the GUI thread (<code>_continue_start()</code>), which drops it if <code>stopScrcpy()</code> ran
+              meanwhile (a generation counter). No usable phone ends here with the <code>_describe_problem()</code> text. A USB phone
+              with <code>scrcpyAutoWifi</code> on first goes through the <a href="#pm-wifi">adb-over-TCP step</a>.</li>
+            <li><strong>Client</strong>: a new <code>ScrcpyClient</code> is created and wired, gain and volume are set, the bit rate
+              is chosen (<a href="#pm-adaptive">Adaptive quality</a>) and <code>client.start()</code> launches the
+              <code>scrcpy-client</code> daemon thread, which runs every following step.</li>
+            <li><strong>Push</strong> the jar to <code>/data/local/tmp/octave-phone-server.jar</code> (30 s timeout) -- every new
+              session, because <code>cleanup=true</code> starts a CleanUp helper that unlinks the pushed jar as soon as the server is up.</li>
+            <li><strong>Tunnel</strong>: pick a random 31-bit scid with <code>secrets.randbits(31)</code> (not the global
+              <code>random</code> module, which other modules seed and which once made every session's scid identical), formatted as
+              8 hex digits. Reap stale forwards first (<code>adb forward --list</code>, remove every
+              <code>localabstract:scrcpy_*</code> entry for this serial -- forwards live in the adb server, so a hard-killed OCTAVE
+              strands one listening port per session), then <code>adb forward tcp:PORT localabstract:scrcpy_SCID</code> with an
+              ephemeral local port (<code>OCTAVE_SCRCPY_PORT</code> overrides it for the fake-server tests).</li>
             <li><strong>Launch</strong>:
               <pre><code>adb -s SERIAL shell "CLASSPATH=/data/local/tmp/octave-phone-server.jar nohup app_process / org.octave.phoneserver.Server 3.3.4-octave \
-  scid=SCID tunnel_forward=true video=true audio=true|false control=true clipboard_autosync=false \
-  video_codec=h264 audio_codec=raw max_size=0 video_bit_rate=8000000 max_fps=60 stay_awake=true cleanup=true \
+  scid=SCID tunnel_forward=true video=true audio=true control=true clipboard_autosync=false \
+  video_codec=h264 max_size=0 video_bit_rate=BPS audio_codec=raw max_fps=60 stay_awake=true cleanup=true \
   send_device_meta=true send_frame_meta=true send_codec_meta=true send_dummy_byte=true log_level=info \
-  octave_persist_ms=60000|0 [video_codec_options=...] [new_display=WxH] 2&gt;&amp;1 &amp; wait"</code></pre>
+  octave_persist_ms=60000|0 [video_codec_options=...] [video_encoder=...] [new_display=WxH[/dpi]] 2&gt;&amp;1 &amp; wait"</code></pre>
               The <code>CLASSPATH=</code> assignment must come <em>before</em> <code>nohup</code> (an assignment after it is exec'd as a
               literal command; commit <code>bba3de6</code>). <code>nohup ... &amp; wait</code> keeps the adb shell relaying stdout for
               as long as the server lives, while the server survives adbd killing that shell on a USB dropout (it is reparented
-              to init). <code>octave_persist_ms</code> is 60000 for a virtual-display session and 0 (exit like scrcpy) when mirroring
-              the phone screen. On Linux the adb child gets <code>PR_SET_PDEATHSIG=SIGTERM</code> (C++ <code>setChildProcessModifier</code>,
-              Python <code>preexec_fn</code>) so it dies with OCTAVE. The child's merged stdout/stderr is the server log; a
+              to init). <code>octave_persist_ms</code> is 60000 (<code>PERSIST_MS</code>) for a virtual-display session and 0 (exit like
+              scrcpy) when mirroring the phone screen. On Linux the adb child gets <code>PR_SET_PDEATHSIG=SIGTERM</code> through
+              <code>preexec_fn</code> so it dies with OCTAVE; on Windows it is created with <code>CREATE_NO_WINDOW</code>. The
+              child's merged stdout/stderr is the server log, read by the <code>scrcpy-server-log</code> thread; a
               <code>New display: ... (id=N)</code> line yields the virtual display id used by <code>pressHome()</code>.
               <code>video_codec_options</code> defaults to <code>priority:int=0,latency:int=1,vendor.qti-ext-enc-low-latency.enable:int=1</code>
-              (C++ <code>ScrcpyClient::kVideoCodecOptions</code>, Python <code>VIDEO_CODEC_OPTIONS</code>): realtime priority, no
-              frame lookahead and Qualcomm's low-latency mode, which took the lag out of dragging on an S26 Ultra. Encoders ignore keys
-              they do not know. The <code>OCTAVE_VIDEO_CODEC_OPTIONS</code> environment variable replaces the list (empty sends none).</li>
+              (<code>VIDEO_CODEC_OPTIONS</code>): realtime priority, no frame lookahead and Qualcomm's low-latency mode, for
+              touch-to-picture latency. Encoders ignore keys they do not know. The <code>OCTAVE_VIDEO_CODEC_OPTIONS</code> environment
+              variable replaces the list (empty sends none).</li>
             <li><strong>Connect</strong>: with <code>tunnel_forward</code> the local TCP connect succeeds before the server listens and
-              then EOFs, so connect every 100 ms until the dummy byte actually arrives; that socket is the <strong>video</strong>
-              socket. Deadline 20 s from the click (4 s when attaching); if the server process exits meanwhile the failure is
-              "scrcpy server exited during startup (see log)". Then open the <strong>audio</strong> socket (only if audio is on) and
-              the <strong>control</strong> socket (both with <code>TCP_NODELAY</code>). <em>The server sends device and codec meta only
-              once every socket it expects is connected</em> (<code>DesktopConnection.open</code> accepts them in order), so
-              reading before opening control would deadlock. A connection that received no dummy byte is closed, otherwise
-              the server would later hand it out as the audio or control socket.</li>
+              then EOFs, so the client connects (2 s timeouts) and retries every 100 ms until the dummy byte actually arrives; that
+              socket is the <strong>video</strong> socket. Deadline 20 s from the start of the session thread (4 s when attaching);
+              if the server process exits meanwhile the failure is "scrcpy server exited during startup (see log)". Then it opens the
+              <strong>audio</strong> socket and the <strong>control</strong> socket (5 s connect timeouts; video and control get
+              <code>TCP_NODELAY</code>). <em>The server sends device and codec meta only once every socket it expects is connected</em>
+              (<code>DesktopConnection.open</code> accepts them in order), so reading before opening control would deadlock. A
+              connection that received no dummy byte is closed, otherwise the server would later hand it out as the audio or control socket.</li>
             <li><strong>Handshake</strong> on the video socket: 64-byte NUL-padded device name, then codec id (u32 FourCC
-              <code>h264</code>), width and height (u32 each, big-endian). <code>frameSizeChanged</code> and <code>connected</code> fire;
-              the manager emits <code>scrcpyStarted(1)</code> and, 500 ms later, sends the keeper policy (the server powers the
-              device on asynchronously at start).</li>
-            <li><strong>Stream</strong>: the worker thread demuxes and decodes video until stop or EOF; a
-              <code>scrcpy-devmsg</code> thread reads device messages on the control socket; a <code>scrcpy-audio</code> thread reads
-              PCM. Control messages are written to the control socket from any thread under a send mutex (C++ writes the raw
-              descriptor with <code>::send()</code>).</li>
-            <li><strong>Teardown</strong>: close the sockets, terminate the adb child (2 s, then kill), <code>adb forward --remove tcp:PORT</code>
-              (also repeated from <code>stop()</code> so a clean exit never strands a port). <code>stop()</code> never waits out a slow
-              step: C++ adb calls and the connect wait poll <code>m_stopping</code> every 100-200 ms (cleanup calls excepted), and in Python
-              the session thread re-checks <code>_stopping</code> between steps and releases anything it created after <code>stop()</code> ran
-              (forward, adb shell) itself. The audio socket belongs to the audio thread; the session only shuts its descriptor
-              down, under a mutex the audio thread takes before closing it. The server destroys the virtual display
-              itself (<code>cleanup=true</code>) unless it is persisting. A stream that ends without a requested stop surfaces as
-              <em>"Phone disconnected. Reconnect the USB cable."</em>. Both entry points route SIGTERM/SIGINT through the normal
-              quit path (Python <code>signal.signal(..., app.quit)</code>; C++ a self-pipe <code>socketpair</code> handler) so launcher
-              scripts and systemd get this cleanup too.</li>
+              <code>h264</code>), width and height (u32 each, big-endian). The <code>scrcpy-devmsg</code> thread starts, the client
+              marks itself running and emits <code>frameSizeChanged</code> and <code>connected</code>; the manager emits
+              <code>scrcpyStarted(1)</code>, sends <code>OCTAVE_MEDIA(WATCH, 1)</code> and, 500 ms later, the keeper policy (the server
+              powers the device on asynchronously at start).</li>
+            <li><strong>Stream</strong>: the session thread demuxes and decodes video until stop or EOF; <code>scrcpy-devmsg</code>
+              reads device messages on the control socket; <code>scrcpy-audio</code> reads PCM. Control messages are written with
+              <code>sendall()</code> from any thread under a send lock.</li>
+            <li><strong>Teardown</strong> (<code>ScrcpyClient.stop()</code>): sets <code>_stopping</code>, then
+              <code>_release_resources()</code> shuts down and closes the sockets, terminates the adb child (2 s, then kill) and runs
+              <code>adb forward --remove tcp:PORT</code>; the session thread is joined for up to 3 s and the audio sink is stopped.
+              The session thread re-checks <code>_stopping</code> between steps and, on its way out, releases anything it created after
+              <code>stop()</code> ran (forward, adb shell). The server destroys the virtual display itself (<code>cleanup=true</code>)
+              unless it is persisting. A failure (<code>_fail()</code>) emits <code>disconnected(reason)</code> and runs
+              <code>stop()</code> on a helper thread. A stream that ends without a requested stop surfaces as
+              <em>"Phone disconnected. Reconnect the USB cable."</em> (or its Wi-Fi variant); the log thread fails the session the
+              same way when the adb child exits. <span class="file-path">main.py</span> routes SIGTERM/SIGINT through
+              <code>app.quit()</code> (<code>signal.signal</code>) so launcher scripts and systemd get this cleanup too.</li>
           </ol>
         </section>
 
         <section id="pm-protocol">
           <h3>Protocol byte layouts</h3>
-          <p>All integers big-endian. Verified against <span class="file-path">phone_server/src/main/java/org/octave/phoneserver/</span>
+          <p>All integers big-endian, as packed and unpacked with <code>struct</code> in
+            <span class="file-path">scrcpy_client.py</span>; they match <span class="file-path">phone_server/src/main/java/org/octave/phoneserver/</span>
             (<code>device/DesktopConnection</code>, <code>device/Streamer</code>, <code>control/ControlMessageReader</code>,
-            <code>control/DeviceMessageWriter</code>) and both clients; the same table lives in
+            <code>control/DeviceMessageWriter</code>). The same table lives in
             <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>.</p>
           <h4>Sockets (in accept order, all on <code>localabstract:scrcpy_&lt;scid&gt;</code>)</h4>
           <table>
             <thead><tr><th>Socket</th><th>Server &rarr; client</th></tr></thead>
             <tbody>
               <tr><td>video (first)</td><td><code>[u8 dummy]</code> then <code>[64 B device name, NUL-padded]</code> then <code>[u32 codec id "h264"][u32 width][u32 height]</code> then packets</td></tr>
-              <tr><td>audio (only with <code>audio=true</code>)</td><td><code>[u32 codec id]</code>: <code>0x00726177</code> (<code>"raw"</code>) then packets; <code>0</code> = the phone cannot capture; <code>1</code> = configuration error. Both clients log a warning and continue video-only in either case (<code>AUDIO_STREAM_ERROR</code> / <code>kAudioStreamError</code> never ends the session)</td></tr>
+              <tr><td>audio (the client always asks for it)</td><td><code>[u32 codec id]</code>: <code>0x00726177</code> (<code>"raw"</code>) then packets; <code>0</code> = the phone cannot capture; <code>1</code> = configuration error. The client logs a warning and continues video-only in either case, and for any other codec id</td></tr>
               <tr><td>control (last)</td><td>Device messages (below); client &rarr; server control messages</td></tr>
             </tbody>
           </table>
           <h4>Stream packets (video and audio, <code>send_frame_meta=true</code>)</h4>
           <pre><code>[u64 pts_and_flags][u32 size][size bytes]
-  bit 63 = config packet (SPS/PPS for H.264; pts invalid)   <span class="cmt">// Streamer.PACKET_FLAG_CONFIG</span>
-  bit 62 = key frame                                          <span class="cmt">// Streamer.PACKET_FLAG_KEY_FRAME</span>
-  video data: Annex-B H.264; audio data: PCM s16le 48 kHz stereo (AudioConfig, up to 4096 B per read)</code></pre>
-          <p>Both clients treat a <code>size</code> above 32 MiB (video) or 1 MiB (audio) as a desynced stream: video fails the session
+  bit 63 = config packet (SPS/PPS for H.264; pts invalid)   <span class="cmt"># FLAG_CONFIG</span>
+  bit 62 = key frame                                          <span class="cmt"># FLAG_KEY_FRAME</span>
+  video data: Annex-B H.264; audio data: PCM s16le 48 kHz stereo</code></pre>
+          <p>A <code>size</code> above 32 MiB (video) or 1 MiB (audio) is taken as a desynced stream: video fails the session
             ("video stream out of sync"), audio stops and video continues.</p>
           <h4>Control messages (client &rarr; server), first byte = type</h4>
           <table>
@@ -313,8 +330,8 @@
             <tbody>
               <tr><td>0</td><td><code>INJECT_KEYCODE</code></td><td><code>[u8 action][i32 keycode][i32 repeat][i32 metastate]</code></td><td>14 B</td><td>yes (action 0 down / 1 up, repeat 0)</td></tr>
               <tr><td>2</td><td><code>INJECT_TOUCH_EVENT</code></td><td><code>[u8 action][i64 pointer id][i32 x][i32 y][u16 screen w][u16 screen h][u16 pressure][i32 action_button][i32 buttons]</code></td><td>32 B</td><td>yes: x/y in frame pixels (clamped), screen w/h = frame size, pressure 0xFFFF (0 on up), buttons 0</td></tr>
-              <tr><td>10</td><td><code>SET_DISPLAY_POWER</code></td><td><code>[u8 on]</code></td><td>2 B</td><td>no longer sent: the <code>setDisplayPower()</code> / <code>set_display_power()</code> client methods were removed (the keeper owns the panel)</td></tr>
-              <tr><td>100</td><td><code>OCTAVE_SET_KEEPER</code></td><td><code>[u8 enabled][u8 panelDark][i32 graceMs]</code></td><td>7 B</td><td>yes, 500 ms after connect and on every setting change</td></tr>
+              <tr><td>10</td><td><code>SET_DISPLAY_POWER</code></td><td><code>[u8 on]</code></td><td>2 B</td><td>defined, never sent (the keeper owns the panel)</td></tr>
+              <tr><td>100</td><td><code>OCTAVE_SET_KEEPER</code></td><td><code>[u8 enabled][u8 panelDark][i32 graceMs]</code></td><td>7 B</td><td>yes, 500 ms after connect and on every <code>scrcpyPhoneScreenOff</code> change</td></tr>
               <tr><td>101</td><td><code>OCTAVE_TAKE_BACK</code></td><td>none</td><td>1 B</td><td><code>resumeMirroring()</code></td></tr>
               <tr><td>102</td><td><code>OCTAVE_SET_BIT_RATE</code></td><td><code>[i32 bps]</code></td><td>5 B</td><td>Adaptive quality, from the video thread (<code>VideoBitRate.java</code>: <code>MediaCodec.setParameters</code> on the running encoder, and the rate for every encoder created later)</td></tr>
               <tr><td>103</td><td><code>OCTAVE_MEDIA</code></td><td><code>[u8 action][i64 arg]</code></td><td>10 B</td><td><code>PhoneMedia</code>: action 0 WATCH (arg 1 = on, sent on connect), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms), 7 SKIP_TO_QUEUE_ITEM (arg = 64-bit queue ID)</td></tr>
@@ -329,10 +346,10 @@
               <tr><td>1</td><td><code>ACK_CLIPBOARD</code></td><td><code>[u64 sequence]</code></td><td>skipped</td></tr>
               <tr><td>2</td><td><code>UHID_OUTPUT</code></td><td><code>[u16 id][u16 len][data]</code></td><td>skipped</td></tr>
               <tr><td>100</td><td><code>OCTAVE_PHONE_STATE</code></td><td><code>[u8 asleep][u8 inUse][u8 panelDark]</code></td><td><code>phoneStateChanged</code> &rarr; <code>phoneAsleep</code> / <code>phoneInUse</code>, black-frame hold</td></tr>
-              <tr><td>101</td><td><code>OCTAVE_MEDIA_STATE</code></td><td><code>[u8 flags: 1 session, 2 playing, 4 canSeek][i64 positionMs][i64 durationMs]</code> then package, title, artist, album as <code>[u16 len][utf8]</code></td><td><code>mediaStateChanged</code> &rarr; the <code>media*</code> properties, <code>mediaActive</code></td></tr>
+              <tr><td>101</td><td><code>OCTAVE_MEDIA_STATE</code></td><td><code>[u8 flags: 1 session, 2 playing, 4 canSeek][i64 positionMs][i64 durationMs]</code> then package, title, artist, album as <code>[u16 len][utf8]</code></td><td><code>mediaStateChanged(dict)</code> &rarr; the <code>media*</code> properties, <code>mediaActive</code></td></tr>
               <tr><td>102</td><td><code>OCTAVE_MEDIA_ART</code></td><td><code>[u32 len][JPEG]</code>, len 0 = no art</td><td><code>mediaArtChanged</code> &rarr; file &rarr; <code>mediaArtUrl</code></td></tr>
-              <tr><td>103</td><td>OCTAVE_MEDIA_QUEUE</td><td><code>[i64 activeId][u16 titleLen][title][u16 count]</code>, then each item: <code>[i64 id]</code> and title, artist/subtitle, art URI as <code>[u16 len][utf8]</code></td><td>Up to 500 entries → <code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td></tr>
-              <tr><td>104</td><td>OCTAVE_MEDIA_QUEUE_ART</td><td>Art URI as <code>[u16 len][utf8]</code>, then <code>[u32 len][JPEG]</code>; zero bytes means unreadable art</td><td>Cache the art locally and update the queue entries</td></tr>
+              <tr><td>103</td><td><code>OCTAVE_MEDIA_QUEUE</code></td><td><code>[i64 activeId][u16 titleLen][title][u16 count]</code>, then each item: <code>[i64 id]</code> and title, artist/subtitle, art URI as <code>[u16 len][utf8]</code></td><td>&rarr; <code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code> (the server sends at most 500 items)</td></tr>
+              <tr><td>104</td><td><code>OCTAVE_MEDIA_QUEUE_ART</code></td><td>Art URI as <code>[u16 len][utf8]</code>, then <code>[u32 len][JPEG]</code>; zero bytes means unreadable art</td><td>Cache the art locally and update the queue entries</td></tr>
               <tr><td>other</td><td></td><td></td><td>reader logs a warning and stops (the stream keeps running)</td></tr>
             </tbody>
           </table>
@@ -343,76 +360,77 @@
         <section id="pm-video">
           <h3>Video decode and frame delivery</h3>
           <p>A config packet (SPS/PPS) is not decoded on its own; it is prepended to the next packet, as the scrcpy client does.
-            C++ decodes with libavcodec (<code>avcodec_find_decoder(AV_CODEC_ID_H264)</code>, slice threading only, set before <code>avcodec_open2</code>,
-            packets padded with <code>AV_INPUT_BUFFER_PADDING_SIZE</code>); Python with PyAV
-            (<code>av.CodecContext.create("h264", "r")</code>, <code>thread_type = "SLICE"</code>). Frame threading is avoided because it delays
-            every picture by one frame per thread. Both produce YUV420P (Python
-            reformats if the decoder returns anything else; C++ accepts <code>YUV420P</code>/<code>YUVJ420P</code> and drops other
-            formats) and copy the three planes row by row into a <code>QVideoFrame(Format_YUV420P)</code> -- no RGB conversion, the
-            GPU does the colour conversion in <code>VideoOutput</code>. The frame is stored as "latest" under a mutex and
-            <code>frameReady</code> is emitted; a queued slot on the GUI thread pulls the latest frame and calls
-            <code>QVideoSink::setVideoFrame()</code>, so a slow GUI thread coalesces rather than queues frames. Neither client ever
-            clears the sink: the last frame stays on the <code>VideoOutput</code> across a reconnect.</p>
-          <p>Why libavcodec and not <code>QMediaPlayer::setSourceDevice()</code>: Qt's FFmpeg backend refuses a raw Annex-B
-            <code>QIODevice</code> (<code>FormatError "Could not open file"</code> after 1.5 MB fed, Phase 0 spike). C++ therefore links
-            libavcodec/libavutil when CMake finds them (<code>OCTAVE_HAVE_FFMPEG</code>, pkg-config on Linux/macOS, vcpkg on Windows;
-            without them the build still succeeds and <code>nativeAvailable</code> is false); Python gets it for free because
-            <code>av</code> is already in <code>requirements.txt</code>. The measurements in the native-client plan report software H.264 at 1280x800 using 12–15 % of one RK3588 core; this is hardware-specific.</p>
+            <code>_video_loop()</code> decodes with PyAV (<code>av.CodecContext.create("h264", "r")</code>,
+            <code>thread_type = "SLICE"</code>); frame threading is avoided because it delays every picture by one frame per thread.
+            A packet PyAV cannot decode (<code>av.error.FFmpegError</code>, e.g. a corrupt slice after a reconnect) is skipped at
+            debug level; the next key frame recovers. Only <code>yuv420p</code> / <code>yuvj420p</code> frames are shown; any other
+            format is dropped with a single warning, since a per-frame software reformat would stall the decoder.</p>
+          <p><code>_push_frame()</code> copies the three planes into a <code>QVideoFrame(Format_YUV420P)</code> mapped write-only --
+            one block copy per plane when the strides match, otherwise row by row -- with no RGB conversion; the GPU does the colour
+            conversion in <code>VideoOutput</code>. The frame is stored as "latest" under a lock and <code>frameReady</code> is
+            emitted; the queued slot <code>_deliver_frame()</code> on the GUI thread takes the latest frame and calls
+            <code>QVideoSink.setVideoFrame()</code>, so a slow GUI thread coalesces rather than queues frames. A sink destroyed with
+            its <code>VideoOutput</code> is dropped. The client never clears the sink: the last frame stays on the
+            <code>VideoOutput</code> across a reconnect.</p>
+          <p>Why decode in-process instead of <code>QMediaPlayer.setSourceDevice()</code>: Qt's FFmpeg backend refuses a raw
+            Annex-B <code>QIODevice</code> (<code>FormatError "Could not open file"</code> after 1.5 MB fed, Phase 0 spike in the plan
+            doc). PyAV is already in <span class="file-path">requirements.txt</span> (<code>av&gt;=12.0.0</code>).</p>
         </section>
 
         <section id="pm-black">
           <h3>Black-frame holding</h3>
           <p>A dozing phone streams pure black frames (status bar still drawn) until it is woken, and the first composite of a
-            reattached stream is black plus a strip of status icons. Rather than flash the dash black, both clients decide per
+            reattached stream is black plus a strip of status icons. Rather than flash the dash black, the client decides per
             decoded frame whether to hand it to the sink:</p>
           <ul>
-            <li><strong>Test</strong>: maximum luma over every other pixel in both directions of the Y plane (stride 2), early exit on the
-              first sample above <code>20</code>. Point grids (8x8, then 24x24) were tried first and missed a 2 px icon stroke, so a
-              dark app with small bright UI was held as if the phone were dozing (commit <code>7090531</code>). ~256k byte reads on
-              1280x800, under 1 ms. Frames narrower or shorter than 24 px are never "black". Python uses numpy
-              (<code>y[::2, :w:2].max()</code>); without numpy it falls back to a 24x24 point grid.</li>
-            <li><strong>Lenient mode</strong> (attached stream, first 3 s of decode): the frame is black if fewer than <strong>5 %</strong> of
-              samples are bright -- a solid status strip is 3–4 % of samples (commit <code>cfc1d4c</code>). Normal viewing keeps the
-              strict test so a dark app with a bright toolbar is never held.</li>
-            <li><strong>Hold rules</strong>: while the keeper reports the phone asleep, <em>every</em> frame is held (the doze fade is a
-              uniformly dimmed composite, neither black nor content; commit <code>525882f</code>). Otherwise a run of black frames is held
-              for <code>3 s</code> (<code>kBlackHoldMs</code> / <code>BLACK_HOLD_S</code>); a black run that outlives that is real content and
-              is shown. The very first frame of a fresh session is always shown (the test only applies once a frame has been
-              delivered, or when attached).</li>
+            <li><strong>Test</strong> (<code>_is_black()</code>): with numpy, the maximum luma over every other pixel in both
+              directions of the Y plane (<code>y[::2, :w:2].max()</code>) must be at most <code>20</code>
+              (<code>BLACK_LUMA_MAX</code>). Point grids were tried first and missed a 2 px icon stroke, so a dark app with small
+              bright UI was held as if the phone were dozing (commit <code>7090531</code>). Frames narrower or shorter than 24 px are
+              never "black". Without numpy the test falls back to a 24x24 point grid.</li>
+            <li><strong>Lenient mode</strong> (attached stream, first 3 s after the session's sockets came up, numpy only): the frame
+              is black if fewer than <strong>5 %</strong> of samples are bright -- a solid status strip is 3–4 % of samples (commit
+              <code>cfc1d4c</code>). Normal viewing keeps the strict test so a dark app with a bright toolbar is never held.</li>
+            <li><strong>Hold rules</strong>: while the keeper reports the phone asleep (<code>set_hold_black(True)</code>),
+              <em>every</em> frame after the first is held (the doze fade is a uniformly dimmed composite, neither black nor content;
+              commit <code>525882f</code>). Otherwise a run of black frames is held for <code>3 s</code> (<code>BLACK_HOLD_S</code>); a
+              black run that outlives that is real content and is shown. The very first frame of a fresh session is always shown (the
+              test only applies once a frame has been delivered, or when attached).</li>
           </ul>
         </section>
 
         <section id="pm-audio">
           <h3>Audio and ducking</h3>
-          <p>Phone audio always plays through OCTAVE while mirroring (the <code>scrcpyAudioEnabled</code> toggle was removed): the server is started with <code>audio=true audio_codec=raw</code>, and the stream follows OCTAVE's volume (<code>setVolume</code>) and mute (<code>setMuted</code>, wired from <code>MediaManager.muteChanged</code>); the server's
-            default source is <code>AudioSource.OUTPUT</code>, i.e. <code>REMOTE_SUBMIX</code>, which captures every app and mutes playback
-            on the handset. Raw PCM means no decoder on our side. The audio socket is read on its own thread
-            (<code>scrcpy-audio</code>) so video never waits on it:</p>
+          <p>Phone audio always plays through OCTAVE while mirroring: the manager starts every session with <code>audio=True</code>
+            and the server with <code>audio_codec=raw</code>. The server's default source is <code>AudioSource.OUTPUT</code>, i.e.
+            <code>REMOTE_SUBMIX</code>, which captures every app and mutes playback on the handset. Raw PCM means no decoder on
+            our side. The audio socket is read on its own thread (<code>scrcpy-audio</code>) so video never waits on it:</p>
           <ol class="steps">
             <li>Each chunk's <strong>peak before gain</strong> is measured; a peak of <code>164</code> or more (about −46 dBFS; a silent
               remote submix is exact zeros, so this only rejects dither) flags "sound seen".</li>
             <li><strong>Gain</strong> (setting <code>scrcpyAudioGain</code>, default 2.0 = +6 dB, clamped 0.25..8) multiplies the samples
-              through a <code>tanh</code> soft limiter so a hot source cannot clip harshly. Phones capture at their own media level,
-              measured ~10 dB under local music on the Pi; the phone's own volume is deliberately never touched (an earlier
-              attempt used <code>adb shell media volume</code>, which does not exist on the test handset and would leave the phone at
-              maximum after a crash; commit <code>19c3b10</code>).</li>
-            <li>Chunks are <strong>queued</strong> with a cap of 48000 bytes (~250 ms); when the GUI thread falls behind the oldest are dropped
-              so audio stays close to the picture. <code>audioReady</code> wakes a queued slot on the GUI thread.</li>
+              through a <code>tanh</code> soft limiter so a hot source cannot clip harshly (skipped at a gain of 1.0). Phones capture at
+              their own media level, measured ~10 dB under local music on the Pi; the phone's own volume is deliberately never touched
+              (commit <code>19c3b10</code>). Without numpy the gain is skipped and every chunk counts as sound, with a warning logged
+              once; numpy is imported lazily so it costs nothing until audio flows.</li>
+            <li>Chunks are <strong>queued</strong> with a cap of 48000 bytes (~250 ms, <code>AUDIO_QUEUE_MAX_BYTES</code>); when the GUI
+              thread falls behind the oldest are dropped so audio stays close to the picture. <code>audioReady</code> wakes a queued
+              slot on the GUI thread.</li>
             <li>On the GUI thread a <code>QAudioSink</code> (48 kHz, stereo, Int16, default output device, ~200 ms device buffer) is
-              created lazily; chunks are written only while <code>bytesFree()</code> allows, never blocking. <code>setVolume()</code>
-              from <code>VolumeController</code> sets the sink volume, so the knob and mute apply. If the default device is missing or
-              refuses the format, a warning is logged and audio is silently skipped.</li>
+              created lazily; chunks are written only while <code>bytesFree()</code> allows, never blocking, and each written chunk is
+              re-emitted as <code>audioPlayed</code>. The sink volume follows <code>setVolume()</code> / <code>setMuted()</code>. If
+              the default device is missing, refuses the format or cannot start, a warning is logged and audio is skipped.</li>
             <li>The same GUI slot turns "sound seen" into <code>audioPlaying = true</code> and (re)arms a single-shot <strong>1.5 s</strong>
-              release timer; silence longer than that drops it. Long enough to bridge the gaps between navigation sentences,
-              short enough that music comes back promptly after a prompt.</li>
+              release timer (<code>AUDIO_HOLD_MS</code>); silence longer than that drops it. Long enough to bridge the gaps between
+              navigation sentences, short enough that music comes back promptly after a prompt.</li>
           </ol>
           <p><strong>Ducking</strong> (settings <code>scrcpyAudioDuckEnabled</code>, default on; <code>scrcpyAudioDuckLevel</code>, default 0.1 =
-            −20 dB): the manager computes <code>duckingFactor = duckLevel</code> while <code>audioPlaying &amp;&amp; duckEnabled</code>, else 1.0,
-            and emits <code>duckingChanged</code> on change. <code>main.cpp</code> / <code>main.py</code> connect it to
-            <code>MediaManager.setDucking()</code>, which ramps the local output (80 ms attack, 500 ms release) independently of the
-            user's volume and mute. Expect lip-sync to trail the picture
-            slightly. Validated on the Pi by measurement (+6 dB = x1.89 RMS, live slider, clean teardown with zero underruns);
-            whether −20 dB is enough against a loudness-mastered MP3 in the car is still an open question in the plan doc.</p>
+            −20 dB): the manager computes the factor <code>duckLevel</code> while <code>audioPlaying &amp;&amp; duckEnabled</code>, else 1.0,
+            and emits <code>duckingChanged</code> on change. <span class="file-path">main.py</span> connects it to
+            <code>MediaManager.setDucking()</code>, which ramps the local output (80 ms down, 500 ms back) independently of the user's
+            volume and mute. Expect lip-sync to trail the picture slightly. The plan doc records the Pi measurement (+6 dB = x1.89 RMS,
+            live slider, clean teardown with zero underruns); whether −20 dB is enough against a loudness-mastered MP3 in the car is
+            still marked untested there.</p>
         </section>
 
         <section id="pm-keeper">
@@ -423,11 +441,12 @@
             phone again. Doing that from the dash (an adb poll every second, then a keyevent) left ~1 s of black and a visible
             panel relight, so the logic moved <strong>into the phone</strong>:
             <span class="file-path">phone_server/.../control/MirrorKeeper.java</span> (commit <code>67809d1</code>). OCTAVE only sets the
-            policy, can take the phone back, and shows the state; it no longer polls adb to maintain the panel policy. Explicit wake and virtual-display Home actions still launch adb commands.</p>
-          <p><strong>Policy</strong>: <code>OCTAVE_SET_KEEPER(enabled=1, panelDark=scrcpyPhoneScreenOff, graceMs=8000)</code>, sent 500 ms after
-            the handshake and again whenever the setting changes (the server's own default grace is 5000 ms if a client never sets
-            one). The keeper is a <strong>process-wide singleton</strong> on the phone: <code>Controller</code> attaches it on the first
-            <code>OCTAVE_SET_KEEPER</code>, swaps the message sender per client session, and its in-use / panel state survives a reconnect.</p>
+            policy, can take the phone back, and shows the state; it does not poll adb to maintain the panel policy.</p>
+          <p><strong>Policy</strong>: <code>OCTAVE_SET_KEEPER(enabled=1, panelDark=scrcpyPhoneScreenOff, graceMs=8000)</code>
+            (<code>WAKE_GRACE_MS</code>), sent 500 ms after the handshake and again whenever the setting changes (the server's own
+            default grace is 5000 ms if a client never sets one). The keeper is a <strong>process-wide singleton</strong> on the
+            phone: <code>Controller</code> attaches it on the first <code>OCTAVE_SET_KEEPER</code>, swaps the message sender per client
+            session, and its in-use / panel state survives a reconnect.</p>
           <p><strong>Sensing</strong>: a <code>DisplayListener</code> on display 0 plus a 250 ms poll on its own <code>HandlerThread</code>, reading
             <code>PowerManager.isScreenOn(0)</code> (interactive) and <code>IWindowManager.isKeyguardLocked()</code> through the server's wrappers.
             The panel is blanked or lit with <code>Device.setDisplayPower(0, on)</code> (SurfaceControl power mode -- the phone stays awake,
@@ -458,11 +477,12 @@
             <li>In-use is <strong>edge-triggered</strong> on the keyguard transition (locked &rarr; unlocked enters, unlocked &rarr; locked leaves);
               a level check raced Samsung's 5 s lock-after delay and undid <code>resumeMirroring()</code> on the next poll (commit <code>e1fa1c4</code>).</li>
           </ul>
-          <p>Every change is reported as <code>PHONE_STATE(asleep, inUse, panelDark)</code>. Both managers map it to
-            <code>phoneAsleep</code> / <code>phoneInUse</code>, tell the client to hold every frame while asleep, and reset both on disconnect.
-            <code>PhoneMirrorView</code> dims the held frame with a "Phone is asleep -- Waking it up... tap to retry" overlay only if the
-            phone is still asleep after <strong>1.5 s</strong>; a normal press resolves in about a second and dimming the dash for that read
-            as a flash (commit <code>a4aa9a6</code>). Tapping the overlay calls <code>wakePhone()</code>.</p>
+          <p>Every change is reported as <code>PHONE_STATE(asleep, inUse, panelDark)</code>. The manager maps it to
+            <code>phoneAsleep</code> / <code>phoneInUse</code>, tells the client to hold every frame while asleep
+            (<code>set_hold_black()</code>), and resets both when a session stops or drops.
+            <code>PhoneMirrorView</code> dims the held frame with a "Phone is asleep" overlay only if the phone is still asleep after
+            <strong>1.5 s</strong>; a normal press resolves in about a second and dimming the dash for that read as a flash (commit
+            <code>a4aa9a6</code>). Tapping the overlay calls <code>wakePhone()</code>.</p>
           <div class="info-box info">
             <div class="info-box-title">Lock-after delay</div>
             Phones with a lock-after-screen-off delay (Samsung default 5 s) stay unlocked for that long after a power press, so a
@@ -476,7 +496,7 @@
           <p>Music playing on the phone (any app with a media session: Spotify, YouTube Music, podcasts...) shows up in
             OCTAVE's own now-playing UI and is driven by its normal controls: the bottom bar, the Media Room, the home
             screen card, the dashboard <code>NowPlayingWidget</code> / <code>MediaControlsWidget</code>, gesture swipes and
-            Album Art Capture theming. These controls and metadata use the control socket, independently of whether the phone successfully supplies audio.</p>
+            Album Art Capture theming. These controls and metadata use the control socket, independently of whether the phone supplies audio.</p>
           <p><strong>Phone side</strong>: <span class="file-path">phone_server/.../control/PhoneMedia.java</span>, created by
             <code>Controller</code> on the first <code>OCTAVE_MEDIA</code> and stopped with the client session. It lists sessions
             through the <code>media_session</code> binder (<code>ISessionManager.getSessions(null, 0[, null])</code>: the third
@@ -488,17 +508,29 @@
             4&times;4 pixel sample); a "no art" after a track change is held back 1 s because apps send the title first and the art
             a moment later.</p>
           <p><strong>Who has the controls</strong> (<code>mediaActive</code>): the phone is the media source for the whole
-            mirroring session. It takes the controls with the session's first media report (sent right after <code>WATCH</code>,
-            even with no media app), keeps them while paused or with no media app, and loses them when the session ends or
-            <code>releaseMedia()</code> is called; after that it takes them back only when it starts playing again.
-            Pressing play with no media app sends <code>KEYCODE_MEDIA_PLAY</code>, which restarts the last media app. <code>main.cpp</code> / <code>main.py</code> wire the hand-offs: when the phone takes over, local playback
-            pauses; a local track starting calls <code>releaseMedia(true)</code> (the phone pauses). With no media app the views show "Phone" / "Nothing playing". The Media Room shows a "Phone" source pill meanwhile; tapping it hands the controls
-            back to local media and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
-          <p><strong>Queue:</strong> <code>PhoneMedia</code> follows the selected app’s <code>MediaController</code> queue and active queue ID, sending up to 500 entries. Queue artwork is fetched separately, scaled to 160 px and sent once per URI per session. The desktop manager stores it under <code>&lt;app data&gt;/temp/phone_queue_art/</code> and batches artwork notifications for 150 ms. <code>MediaPlayer.qml</code> shows this queue while the phone is active and a queue is available; selecting an entry calls <code>mediaSkipToQueueItem(id)</code>. The available tracks and skip behavior depend on what the phone app publishes. This is its active queue, not a browsable account library.</p>
-          <p><strong>Waveform:</strong> the client emits <code>audioPlayed(pcm, bufferedMs)</code> as audio is handed to the sink. Both entry points route it to <code>AudioAnalyzer.feed_live_pcm()</code>; QML selects live analysis while phone media is active. Without captured phone audio, the controls can still work but there is no live PCM waveform.</p>
+            mirroring session. The manager hands it the controls with the session's first media report (sent right after
+            <code>WATCH</code>, even with no media app); it keeps them while paused or with no media app, and loses them when the
+            session ends or <code>releaseMedia()</code> is called; after that it takes them back only when it starts playing again.
+            Pressing play with no media app sends <code>KEYCODE_MEDIA_PLAY</code>, which restarts the last media app.
+            <span class="file-path">main.py</span> wires the hand-offs: when the phone takes over, local playback pauses if it was
+            playing; a local track starting (<code>MediaManager.playStateChanged(true)</code>) calls <code>releaseMedia(True)</code>
+            (the phone pauses). Gesture track actions (next / previous / play-pause) go to the phone while <code>mediaActive</code>.
+            With no media app the Media Room shows "Nothing playing". The Media Room shows a "Phone" source pill meanwhile; tapping it
+            hands the controls back to local media and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there
+            are no side cards.</p>
+          <p><strong>Queue:</strong> <code>PhoneMedia</code> follows the selected app's <code>MediaController</code> queue and active
+            queue ID, sending up to 500 entries. Queue artwork is fetched separately, scaled to 160 px and sent once per URI per
+            session. The manager stores each image as <span class="file-path">&lt;app data&gt;/temp/phone_queue_art/&lt;sha1 of the URI&gt;.jpg</span>,
+            publishes the queue again at most once per 150 ms batch of artwork, and deletes the folder when the session ends.
+            <code>MediaPlayer.qml</code> shows this queue while the phone is active and a queue is available; selecting an entry calls
+            <code>mediaSkipToQueueItem(id)</code>. The available tracks and skip behaviour depend on what the phone app publishes. This
+            is its active queue, not a browsable account library.</p>
+          <p><strong>Waveform:</strong> the client emits <code>audioPlayed(pcm, bufferedMs)</code> as audio is handed to the sink;
+            <span class="file-path">main.py</span> routes it to <code>AudioAnalyzer.feed_live_pcm()</code>, and QML selects live analysis
+            while phone media is active. Without captured phone audio, the controls still work but there is no live PCM waveform.</p>
           <p><strong>QML</strong> picks the phone first in every source switch (<code>phoneMirrorManager.mediaActive</code>, else
             local). Handlers that can fire while <code>mediaActive</code> is changing read the manager directly
-            (<code>phoneActive()</code>) instead of the <code>usePhone</code> binding. Position is not streamed: views poll
+            (<code>phoneActive()</code>) instead of the <code>usePhone</code> binding. Position is not streamed: the Media Room polls
             <code>mediaPosition()</code> every 500 ms while the phone plays and the view is visible.</p>
         </section>
 
@@ -517,17 +549,20 @@
             <code>LocalServerSocket</code> does not reliably unblock <code>accept()</code> on Android, a watchdog thread sets a flag and pokes
             the socket with a connection of its own (commit <code>0a26f8e</code>). No reconnect within the window: "No client reconnected
             within N ms; exiting", the display is destroyed and <code>MirrorKeeper.shutdown()</code> runs.</p>
-          <p><strong>Client</strong>: on a mid-stream disconnect of a ready virtual-display session the manager remembers the scid and a
-            deadline of now + 60 s − 5 s. The next <code>startScrcpy()</code> inside that window <em>attaches</em>: no push, no pkill,
-            re-forward the same scid, connect with a 4 s deadline, and follow the server log with
-            <code>adb logcat -v raw -T 1 -s scrcpy:I</code> (its stdout went with the old shell). The reattached stream uses the lenient
-            black test for its first 3 s so the handover never shows black. If the attach fails, the manager starts fresh on the
-            next event-loop turn (which kills the old server). A deliberate <code>stopScrcpy()</code> always kills the server.</p>
+          <p><strong>Client</strong>: when a session that had completed its handshake on a virtual display drops, the manager
+            remembers its scid and a deadline of now + 60 s − 5 s (<code>_persist_scid</code> / <code>_persist_until</code>). The next
+            <code>startScrcpy()</code> inside that window <em>attaches</em>, over any transport to the same phone (a cable pull can fail
+            over to the Wi-Fi serial): no pkill, no push, re-forward the same scid, connect with a 4 s deadline, and follow the server
+            log with <code>adb logcat -v raw -T 1 -s scrcpy:I</code> (its stdout went with the old shell). The reattached stream uses the
+            lenient black test for its first 3 s so the handover never shows black. If the attach fails ("could not attach to the
+            running server"), the manager starts fresh on the next event-loop turn, which kills the old server. A deliberate
+            <code>stopScrcpy()</code> or picking another phone clears the remembered scid, and a stop always kills the server.</p>
           <p><strong>View</strong>: <code>PhoneMirrorView</code> treats a device error that arrives mid-stream (regex
-            <code>/disconnected|No Android device|not authorized|offline/i</code>, while a frame has been shown) as a quiet reconnect:
-            the last frame stays up, the view polls <code>getDeviceState()</code> every second and restarts the moment it is
-            <code>"device"</code> again (typically 2 s), shows a "Reconnecting to phone..." badge only after 2 s, and falls back to the
-            error page after 10 s. Because the keeper is process-wide, in-use / panel state survives the reconnect too.</p>
+            <code>/disconnected|No Android device|not authorized|offline|USB permissions/i</code>, while a frame has been shown) as a quiet
+            reconnect: the last frame stays up, a 1 s timer restarts the moment <code>deviceState</code> is <code>"device"</code> again
+            (asking for <code>refreshDeviceState()</code> otherwise), a "Reconnecting to phone..." badge appears only after 2 s, and the
+            view falls back to the error page after 10 s (<code>reconnectGraceMs</code>). Because the keeper is process-wide, in-use /
+            panel state survives the reconnect too.</p>
         </section>
 
         <section id="pm-wifi">
@@ -536,65 +571,73 @@
             <code>adb devices</code> -- as <code>"ip:port"</code> after <code>adb connect</code>, or as an mDNS name
             (<code>adb-&lt;serial&gt;-&lt;id&gt;._adb-tls-connect._tcp</code>) when adb auto-connects a phone it has paired with -- the
             client's <code>adb -s &lt;serial&gt;</code> push, forward and shell work exactly as over USB. The manager only gets the phone
-            into that list and keeps it there. <code>ScrcpyClient::isNetworkSerial()</code> / <code>is_network_serial()</code> tells the
+            into that list and keeps it there. <code>is_network_serial()</code> in <span class="file-path">scrcpy_client.py</span> tells the
             two apart (USB serials never contain <code>:</code>).</p>
-          <p><strong>QR pairing is the wireless setup offered by the UI</strong> (Android 11+); a USB session can also enable the legacy TCP connection described below. Typing a pairing code, an IP:port, or
-            scanning for adb services was removed again in favour of it; USB needs no setup and stays as it was.</p>
+          <p><strong>QR pairing is the wireless setup offered by the UI</strong> (Android 11+); a USB session can also enable the legacy
+            TCP mode described below. USB needs no setup.</p>
           <ul>
             <li><strong>Where the code appears</strong>: <code>PhoneMirrorView</code> becomes the QR screen whenever no phone is connected
-              and none is remembered (<code>noPhone</code>: the error text starts with "No Android device"); it starts pairing on its own
-              and cancels when the view is left or mirroring starts. With a remembered phone the page says "Waiting for your phone" and
-              offers "Connect a different phone". In Settings &rarr; Accessories &rarr; Phone Dock the "Connect phone" button opens the same
-              panel in a centred modal. Both use <span class="file-path">frontend/PhoneQrPairingPanel.qml</span>: the code on a
-              <code>Canvas</code>, black on white with a 4-module quiet zone, sized from the screen height (55 %) so it scans from arm's
-              length, the three steps, the result line and Cancel / "Show QR code".</li>
+              and none is remembered (<code>noPhone</code>: the error text starts with "No Android device"). With a remembered phone the
+              page says "Waiting for your phone" and offers "Connect a different phone". In Settings &rarr; Accessories the
+              "Connect phone" button opens the same panel in a centred modal. Both use
+              <span class="file-path">frontend/PhoneQrPairingPanel.qml</span>, which calls <code>startQrPairing()</code> /
+              <code>cancelQrPairing()</code>; in the view the code is sized from the view height (55 %) so it scans from arm's length.</li>
             <li><strong>Protocol</strong> (Android Studio's): <code>startQrPairing()</code> makes a random service name
-              (<code>octave-&lt;8 chars&gt;</code>) and password (12 chars) and encodes
-              <code>WIFI:T:ADB;S:&lt;name&gt;;P:&lt;password&gt;;;</code> (<code>qrPairingPayload()</code> / <code>qr_pairing_payload()</code>,
-              ECC level M) with Project Nayuki's QR library, vendored in both backends (<span class="file-path">src/phone_mirror/qrcodegen.{hpp,cpp}</span>,
-              <span class="file-path">backend/phone_mirror/qrcodegen.py</span>, MIT, credited in <span class="file-path">NOTICE</span>). The rows reach QML as
-              <code>qrPairingRows</code>. The phone's Wireless debugging &rarr; Pair device with QR code reads it and advertises an
-              <code>_adb-tls-pairing</code> service under that name (if the adb in use is older than platform-tools 30, <code>startQrPairing</code> fails at once with "adb is too old for wireless pairing" instead of waiting); the worker polls <code>adb mdns services</code> every second for up to
-              2 minutes (<code>kQrPairingTimeoutMs</code> / <code>QR_PAIRING_TIMEOUT_S</code>), runs <code>adb pair &lt;ip:port&gt; &lt;password&gt;</code>,
-              then finds the phone's <code>_adb-tls-connect</code> port on the same host over mDNS (polled up to 8 s) and runs
-              <code>adb connect</code> (adb exits 0 on failure, so success is read from the output). Cancel bumps a generation counter the
-              waiting job checks every second; the outcome arrives as <code>wirelessResult</code>.</li>
-            <li><strong>Remembering and reconnecting</strong>: a successful pairing sets <code>wirelessAddress</code>, which <code>main</code>
-              saves to <code>scrcpyWirelessAddress</code>. At startup and whenever <code>getDeviceState()</code> finds no usable phone (the
-              view polls it), the manager tries that address in the background at most every 5 s. Wireless debugging picks a new port each
-              time it is switched on, so when the saved address fails it looks for an <code>_adb-tls-connect</code> service on the same host
-              and, if that connects, remembers the new port; adb itself also auto-connects paired phones it sees over mDNS. adb can keep listing the old <code>ip:port</code> as a device for a while after the phone rejoins Wi-Fi on a new port, so a session that fails to start on an <code>ip:port</code> serial runs <code>adb disconnect</code> on it, re-resolves the port over mDNS, connects and starts once more (<code>m_staleRetried</code> / <code>_stale_retried</code>, one retry per start). Forget
-              (<code>forgetWireless()</code>) stops a Wi-Fi session, runs <code>adb disconnect</code> and clears the address; adb may still
-              auto-connect a paired phone until OCTAVE is removed from the phone's paired devices.</li>
-            <li><strong>USB first</strong>: <code>getDeviceSerial()</code> prefers a USB serial when the phone is on both, and every probe
-              (<code>getDeviceName/Resolution/Sdk</code>, the stale-server pkill) passes <code>-s</code>, since a bare <code>adb shell</code>
-              fails with "more than one device". Unplugging the cable mid-session drops into the normal quiet reconnect, which then finds the
-              Wi-Fi serial and carries on (attaching to the persisted virtual display).</li>
+              (<code>octave-&lt;8 chars&gt;</code>) and password (12 chars, from an alphabet without look-alike characters, drawn with
+              <code>secrets</code>) and encodes <code>WIFI:T:ADB;S:&lt;name&gt;;P:&lt;password&gt;;;</code> (<code>qr_pairing_payload()</code>,
+              ECC level M) with the vendored <span class="file-path">qrcodegen.py</span>. The rows reach QML as <code>qrPairingRows</code>.
+              The phone's Wireless debugging &rarr; Pair device with QR code reads it and advertises an <code>_adb-tls-pairing</code>
+              service under that name. If the adb in use is older than platform-tools 30, <code>startQrPairing</code> fails at once with
+              "adb is too old for wireless pairing" instead of waiting. Otherwise the wireless worker polls
+              <code>adb mdns services</code> about once a second for up to 2 minutes (<code>QR_PAIRING_TIMEOUT_S</code>), runs
+              <code>adb pair &lt;ip:port&gt; &lt;password&gt;</code> (success = "Successfully paired" in the output), then looks for the
+              phone's <code>_adb-tls-connect</code> port on the same host over mDNS (polled up to 8 s) and runs <code>adb connect</code>
+              (adb exits 0 on failure, so success is read from the output: "connected to", and neither "failed" nor "cannot").
+              Cancel bumps a generation counter the waiting job checks every second; the outcome arrives as <code>wirelessResult</code>.</li>
+            <li><strong>Remembering and reconnecting</strong>: a successful pairing calls <code>setWirelessAddress()</code>, whose
+              <code>wirelessAddressChanged</code> <span class="file-path">main.py</span> saves to <code>scrcpyWirelessAddress</code>. At
+              startup (<code>setWirelessAddress()</code> from the setting) and whenever a device probe finds no usable phone (the view keeps
+              probing), the manager tries that address in the background at most every 5 s (<code>AUTO_CONNECT_INTERVAL_S</code>), never
+              while a QR pairing runs. Wireless debugging picks a new port each time it is switched on, so when the saved address fails
+              it looks for an <code>_adb-tls-connect</code> service on the same host and, if that connects, remembers the new port; adb
+              itself also auto-connects paired phones it sees over mDNS. adb can keep listing the old <code>ip:port</code> as a device
+              for a while after the phone rejoins Wi-Fi on a new port, so a start that fails before its handshake on an
+              <code>ip:port</code> serial runs <code>adb disconnect</code> on it, re-resolves the port over mDNS, connects and starts once
+              more (<code>_stale_retried</code>, one retry per start). Forget (<code>forgetWireless()</code>) stops a Wi-Fi session, clears
+              the address and runs <code>adb disconnect</code>; adb may still auto-connect a paired phone until OCTAVE is removed from the
+              phone's paired devices.</li>
+            <li><strong>USB first</strong>: <code>pickSerial()</code> prefers a USB serial when the phone is on both, and the start
+              probes pass <code>-s &lt;serial&gt;</code>, since a bare <code>adb shell</code> fails with "more than one device".
+              Unplugging the cable mid-session drops into the normal quiet reconnect, which then finds the Wi-Fi serial and carries on
+              (attaching to the persisted virtual display).</li>
             <li><strong>Bit rate</strong>: per link from the settings, <code>scrcpyBitRateUsb</code> (default 16 Mbps) and
               <code>scrcpyBitRateWifi</code> (default 8 Mbps). With <code>scrcpyBitRateAuto</code> (default on) those are the ceiling and
               the rate adapts; see <a href="#pm-adaptive">Adaptive quality</a>.</li>
-            <li><strong>Wi-Fi without re-pairing</strong> (<code>scrcpyAutoWifi</code>, off by default since 0.9.5: until the phone reboots, its adbd then accepts connections on whatever network it joins): before a USB session the manager
-              reads the phone's Wi-Fi IPv4 from <code>ip -4 -o addr show</code> (a <code>wlan*</code> interface first, then a phone-run hotspot
-              <code>swlan*</code> / <code>ap*</code>; mobile data and VPNs are skipped). If <code>service.adb.tcp.port</code> is not already 5555
-              it runs <code>adb tcpip 5555</code>, which restarts the phone's adbd, and waits up to 9 s for the USB device to return. It then
-              remembers <code>ip:5555</code> as <code>wirelessAddress</code>. This runs on the wireless worker; the session starts when it
+            <li><strong>Wi-Fi without re-pairing</strong> (<code>scrcpyAutoWifi</code>, off by default: until the phone reboots, its adbd
+              then accepts connections on whatever network it joins): before a USB session <code>_enable_tcpip()</code> reads the phone's
+              Wi-Fi IPv4 from <code>ip -4 -o addr show</code> (a <code>wlan*</code> interface first, then a phone-run hotspot
+              <code>swlan*</code> / <code>ap*</code> / <code>softap*</code>; mobile data and VPNs are skipped). If
+              <code>service.adb.tcp.port</code> is not already 5555 it runs <code>adb tcpip 5555</code>, which restarts the phone's adbd,
+              and waits (1 s, then up to 16 <code>get-state</code> polls 0.5 s apart) for the USB device to return. It then remembers
+              <code>ip:5555</code> as <code>wirelessAddress</code>. This runs on the wireless worker; the session starts when it
               finishes, and a <code>stopScrcpy()</code> in between cancels that start (a generation counter). The legacy TCP mode needs no
               Wireless debugging toggle, works when the phone runs the hotspot, and survives network changes, but ends when the phone
               reboots. Its connections still need the phone's RSA authorization, like USB. When the saved <code>ip:5555</code> fails the
-              existing mDNS fallback still finds a Wireless-debugging port on the same host.</li>
+              mDNS fallback above still finds a Wireless-debugging port on the same host.</li>
             <li><strong>Messages</strong>: a dropped Wi-Fi link reports "Phone disconnected. Check that it is on the same Wi-Fi network and
               Wireless debugging is on." instead of the USB-cable text; offline / unauthorized network devices and "no device while a Wi-Fi
-              phone is remembered" get Wi-Fi wording. All keep the phrases the view's retry regex matches.</li>
+              phone is remembered" get Wi-Fi wording (<code>_describe_problem()</code>). All keep the phrases the view's retry regex matches.</li>
           </ul>
-          <p>When <code>adb mdns services</code> returns no usable services, both backends try <code>avahi-browse</code> on Linux. This supports distro adb builds without working mDNS; the fallback requires <code>avahi-browse</code> to be installed.</p>
-          <p><strong>Threading</strong>: QR waits and reconnects block on adb, so they run on one worker (C++: a <code>QThreadPool</code> with
-            one thread; Python: one daemon thread fed by a queue) and post results back to the GUI thread. One worker serialises them, so a
-            background reconnect never races a pairing; the C++ destructor cancels a QR wait and waits for the worker.</p>
+          <p><strong>mDNS fallback</strong>: when <code>adb mdns services</code> returns no <code>_adb</code> rows,
+            <code>_avahi_mdns_services()</code> runs <code>avahi-browse -rpt</code> for <code>_adb-tls-connect._tcp</code> and
+            <code>_adb-tls-pairing._tcp</code> (4 s each) and keeps resolved IPv4 answers. Debian/Ubuntu's arm64 adb is built without
+            working mDNS and Google ships platform-tools for x86-64 only, so on a Pi the phone is found through the system's Avahi; the
+            fallback needs <code>avahi-browse</code> installed.</p>
           <p><strong>Networking</strong>: no internet is involved; adb, the video, audio and touch all stay on the local link. OCTAVE does not
             create the network. The phone and the OCTAVE machine just have to share one: a home router, or in a car the head unit's own
             access point (e.g. a 5 GHz <code>hostapd</code> / NetworkManager hotspot) that the phone joins. Android reports that network as
-            "no internet" and keeps using mobile data for its apps, which is what you want. A phone-hosted hotspot does not work with
-            Wireless debugging (Android only enables it while the phone is a Wi-Fi client), but it does work with the legacy TCP mode that
+            "no internet" and keeps using mobile data for its apps. A phone-hosted hotspot does not work with Wireless debugging (Android
+            only enables it while the phone is a Wi-Fi client), but it does work with the legacy TCP mode that
             <code>scrcpyAutoWifi</code> turns on over USB.</p>
           <p><strong>What survives what</strong>: USB authorization is kept across plug-ins (Android revokes it after 7 days without a
             connection unless Developer options &rarr; "Disable adb authorization timeout" is on). Wireless debugging is switched off by
@@ -604,28 +647,28 @@
 
         <section id="pm-adaptive">
           <h3>Adaptive quality</h3>
-          <p>With <code>scrcpyBitRateAuto</code> on, the client keeps the video bit rate as high as the link carries. The logic is one small
-            pure class per backend, <span class="file-path">src/phone_mirror/adaptivebitrate.h</span> and
-            <span class="file-path">backend/phone_mirror/adaptive_bitrate.py</span> (identical behaviour, covered by
+          <p>With <code>scrcpyBitRateAuto</code> on, the client keeps the video bit rate as high as the link carries. The logic is the
+            pure class <code>AdaptiveBitRate</code> in <span class="file-path">backend/phone_mirror/adaptive_bitrate.py</span> (covered by
             <span class="file-path">tests/test_adaptive_bitrate.py</span>), fed from the video thread for every media packet.</p>
           <ul>
-            <li><strong>Signal</strong>: each packet's phone presentation time against its arrival on our steady clock. The difference is
-              the one-way delay plus an unknown clock offset; the smallest delay over the last 10 one-second windows stands in for an idle
-              link, so the excess is queueing. It is measured on arrival, before decoding, so a decoder that cannot keep up (large
-              frames on a small board) backs the rate off just like weak Wi-Fi. A jump over 3 s is taken as a clock step and restarts the baseline.</li>
-            <li><strong>Decisions</strong> (per one-second window, after a 2 s warm-up; the window's single worst packet is left out so a key
-              frame is not congestion): mean queueing over 150 ms cuts the rate to 70 % (at most every 2 s); under 40 ms for two windows in
-              a row, 5 s after the last cut, and with the stream actually using at least half the rate (a still screen proves nothing)
-              raises it by 10 %, at least 1 Mbps. The rate stays between 2 Mbps (<code>kAdaptiveMinBps</code> / <code>ADAPTIVE_MIN_BPS</code>)
-              and the link's setting. Changes under 5 % are not sent.</li>
-            <li><strong>Start</strong>: USB at the ceiling, Wi-Fi at 60 % of it (<code>kAdaptiveWifiStart</code> /
-              <code>ADAPTIVE_WIFI_START</code>). The starting rate is sent with the first packet too, since a reattached server may still
-              run an earlier session's rate.</li>
+            <li><strong>Signal</strong>: each packet's phone presentation time against its arrival on our monotonic clock. The difference
+              is the one-way delay plus an unknown clock offset; the smallest delay over the current and last 10 one-second windows stands
+              in for an idle link, so the excess is queueing. It is measured on arrival, before decoding, so a decoder that cannot keep up
+              (large frames on a small board) backs the rate off just like weak Wi-Fi. A jump over 3 s is taken as a clock step and restarts
+              the baseline.</li>
+            <li><strong>Decisions</strong> (per one-second window, after a 2 s warm-up; the window's single worst packet is left out when
+              it has at least 3, so a key frame is not congestion): mean queueing over 150 ms cuts the rate to 70 % (at most every 2 s);
+              under 40 ms for two windows in a row, 5 s after the last cut, and with the stream actually using at least half the rate (a
+              still screen proves nothing) raises it by 10 %, at least 1 Mbps. The rate stays between 2 Mbps
+              (<code>ADAPTIVE_MIN_BPS</code>) and the link's setting. Changes under 5 % are not sent unless the rate hits a bound.</li>
+            <li><strong>Start</strong>: USB at the ceiling, Wi-Fi at 60 % of it (<code>ADAPTIVE_WIFI_START</code>, at least 2 Mbps). The
+              starting rate is sent with the first media packet too, since a reattached server may still run an earlier session's rate.
+              With adaptive quality off, the link's setting is used as a fixed <code>video_bit_rate</code>.</li>
             <li><strong>Phone side</strong>: <code>OCTAVE_SET_BIT_RATE</code> &rarr; <code>VideoBitRate.set()</code> &rarr;
               <code>MediaCodec.setParameters(PARAMETER_KEY_VIDEO_BITRATE)</code> on the running encoder, no restart and no key frame.
               Encoders that ignore live changes keep their rate; the cut still helps once the encoder is recreated.</li>
-            <li><strong>Visible</strong>: <code>currentBitRate</code> (bps, 0 when idle) follows every change; the Phone Dock card shows
-              "Now: … Mbps over USB / Wi-Fi", and each change is logged with its queueing delay.</li>
+            <li><strong>Visible</strong>: <code>currentBitRate</code> (bps, 0 when idle) follows every change; the Accessories card shows
+              "Now: … Mbps over …", and each change is logged with its queueing delay.</li>
           </ul>
         </section>
 
@@ -638,24 +681,26 @@
             implemented but untested (the test rig has no touchscreen).</p>
           <p><strong>Navigation row</strong> (◁ ○ ▢ &rarr; <code>pressBack</code> / <code>pressHome</code> / <code>pressAppSwitch</code>) sits on the bottom
             edge of the picture (not the letterbox band, where a translucent button on black is invisible) and is shown
-            <em>only when mirroring the phone's own screen</em>: a virtual display draws system decorations, i.e. Samsung's DeX taskbar
-            with its own back/home/recents exactly where the row would sit. HOME and APP_SWITCH are system keys that Android routes to
-            the default display, so injecting them does nothing on a virtual one (Back is dispatched to the focused window and works);
-            <code>pressHome()</code> therefore runs <code>adb shell am start --display &lt;id&gt; -a android.intent.action.MAIN -c android.intent.category.HOME</code>
-            when a virtual display id is known (C++ via an async <code>QProcess</code>, Python on a one-shot thread) and falls back to the
-            keycode otherwise. Samsung's recents UI renders empty on a secondary display.</p>
+            <em>only when mirroring the phone's own screen</em> (<code>activeDisplaySize</code> empty): a virtual display draws system
+            decorations, i.e. Samsung's DeX taskbar with its own back/home/recents exactly where the row would sit. HOME and APP_SWITCH are
+            system keys that Android routes to the default display, so injecting them does nothing on a virtual one (Back is dispatched to
+            the focused window and works); <code>pressHome()</code> therefore runs
+            <code>adb shell am start --display &lt;id&gt; -a android.intent.action.MAIN -c android.intent.category.HOME</code> on a one-shot
+            thread when a virtual display id is known and falls back to the keycode otherwise. While a mirror is on screen, the bottom
+            bar's Phone Mirror button also calls <code>pressHome()</code>. Samsung's recents UI renders empty on a secondary display.</p>
         </section>
 
         <section id="pm-recovery">
           <h3>Errors and recovery</h3>
           <p>A missing prerequisite is reported with <code>getInstallInstructions()</code> naming it and the view shows a "Setup" block.
             Phone-side failures (unplugged, offline, USB debugging not authorized, Linux USB "no permissions") get the one-line
-            <code>describeDeviceState()</code> text; the error page then asks for a probe (<code>refreshDeviceState()</code>) every 2 s
-            while it is on screen and restarts on <code>deviceStateChanged</code> when the phone is back -- a nudged cable in a vehicle
+            <code>_describe_problem()</code> text; the error page then asks for a probe (<code>refreshDeviceState()</code>) every 2 s
+            while it is on screen and restarts when <code>deviceState</code> is <code>"device"</code> again -- a nudged cable in a vehicle
             is the normal case. Failures that retrying cannot fix (the video encoder) stop the loop.</p>
-          <p><strong>Encoder fallback</strong>: when the server logs a video encoder error (<code>Capture/encoding error</code>,
-            <code>Video encoding error</code>, <code>Could not create (default) video encoder</code>) and the session drops within 5 s,
-            the manager restarts once with <code>video_encoder=c2.android.avc.encoder</code> (Google's software encoder;
+          <p><strong>Encoder fallback</strong>: when the server logs a video encoder error (<code>classifyServerLine()</code>:
+            <code>Capture/encoding error</code>, <code>Video encoding error</code>, <code>Could not create (default) video encoder</code>,
+            or <code>Video encoder '…' not found</code>) and the session drops within 5 s (<code>FATAL_CAUSE_WINDOW_S</code>), the manager
+            restarts after 300 ms with <code>video_encoder=c2.android.avc.encoder</code> (Google's software encoder;
             <code>OMX.google.h264.encoder</code> before Android 10) and keeps using it for that phone until OCTAVE restarts, with a
             notice. If the software encoder fails too, the view shows the cause and stops retrying.</p>
           <table>
@@ -667,48 +712,70 @@
               <tr><td>"An iPhone is plugged in"</td><td>Mirroring needs adb, i.e. Android</td><td>--</td></tr>
               <tr><td>No sound from the phone; notice about Android 10</td><td>Audio capture arrived in Android 11</td><td>Sound stays on the phone</td></tr>
               <tr><td>"video encoder failed, even in software mode"</td><td>The phone's encoder rejects the size</td><td>A smaller <code>scrcpyDisplaySize</code>, or mirror the phone screen</td></tr>
-              <tr><td>Two phones connected</td><td>USB is picked first</td><td>The &#8644; button (top left of the mirror) switches phones</td></tr>
+              <tr><td>"Phone mirroring needs the Python package 'av'"</td><td>PyAV is not installed in the venv</td><td><code>pip install -r requirements.txt</code></td></tr>
+              <tr><td>Two phones connected</td><td>USB is picked first</td><td>The phone picker in the mirror view switches phones (<code>selectDevice()</code>)</td></tr>
             </tbody>
           </table>
-          <p> The bottom-bar button pops back to an existing
-            <code>PhoneMirrorView</code> (found by <code>objectName</code>) instead of stacking a second one, and the view resumes a session that
-            is already running.</p>
+          <p>The bottom-bar button opens the cached <code>PhoneMirrorView</code> page (popping back to it when it is already in the
+            stack instead of pushing a second one), and the view resumes a session that is already running.</p>
           <p><strong>Why not QtMultimedia's Camera?</strong> The design before the built-in client streamed scrcpy into a v4l2loopback node
-            and read it with <code>QCamera</code>. Qt snapshots the V4L2 device list on first use per process and never refreshes it,
+            and read it as a camera. Qt snapshots the V4L2 device list on first use per process and never refreshes it,
             the loopback only appears while a producer streams, and Qt's V4L2 path sheared frames whose width was not a multiple of
             64. That knowledge still applies to camera enumeration; the path itself is gone.</p>
+        </section>
+
+        <section id="pm-threads">
+          <h3>Threads and tests</h3>
+          <table>
+            <thead><tr><th>Thread</th><th>Owner</th><th>Work</th></tr></thead>
+            <tbody>
+              <tr><td>GUI thread</td><td>Qt</td><td>Slots, properties, frame delivery to the sink, <code>QAudioSink</code> writes, all signal emission seen by QML</td></tr>
+              <tr><td><code>phone-mirror-probe</code></td><td>manager</td><td><code>adb devices</code> probes and start preflight, one job at a time from a queue; results posted to the GUI thread through the private <code>_post</code> signal</td></tr>
+              <tr><td><code>phone-mirror-wifi</code></td><td>manager</td><td>QR waits, background reconnects, <code>adb tcpip</code>, the stale <code>ip:port</code> retry, forget. One worker serialises them, so a reconnect never races a pairing; a 2-minute QR wait never delays a probe</td></tr>
+              <tr><td><code>scrcpy-client</code></td><td>client</td><td>Push, forward, launch, connect, handshake, then demux + decode</td></tr>
+              <tr><td><code>scrcpy-server-log</code></td><td>client</td><td>Reads the adb child's output (server log or logcat), relays it, fails the session when the child exits</td></tr>
+              <tr><td><code>scrcpy-audio</code>, <code>scrcpy-devmsg</code></td><td>client</td><td>Audio socket, device messages on the control socket</td></tr>
+              <tr><td><code>phone-mirror-home</code>, <code>phone-mirror-wake</code></td><td>manager</td><td>One-shot <code>adb shell</code> for <code>pressHome()</code> on a virtual display and <code>wakePhone()</code></td></tr>
+            </tbody>
+          </table>
+          <p>All of these are daemon threads. Every adb subprocess is created with <code>CREATE_NO_WINDOW</code> on Windows so no console
+            window flashes up.</p>
+          <p><strong>Tests</strong> (headless pytest, <code>QT_QPA_PLATFORM=offscreen</code>): <span class="file-path">tests/fake_scrcpy_server.py</span>
+            speaks the scrcpy 3.x tunnel_forward protocol on a local TCP port (dummy byte, device name, codec meta, packets) so the client
+            can be driven without a phone or adb (<code>OCTAVE_SCRCPY_PORT</code>);
+            <span class="file-path">tests/test_scrcpy_fake_server.py</span> and <span class="file-path">tests/test_scrcpy_client_stop.py</span>
+            use it. <span class="file-path">tests/test_phone_mirror_probes.py</span>, <span class="file-path">test_phone_mirror_wireless.py</span>,
+            <span class="file-path">test_phone_mirror_media.py</span>, <span class="file-path">test_phone_mirror_view_qml.py</span> and
+            <span class="file-path">test_adaptive_bitrate.py</span> cover the manager's helpers, Wi-Fi, media, the view and the bit-rate logic.</p>
         </section>
 
         <section id="pm-server">
           <h3>The phone server fork and the version invariant</h3>
           <p><span class="file-path">phone_server/</span> is scrcpy's <code>server/</code> tree at v3.3.4 with the package renamed to
             <code>org.octave.phoneserver</code> (LICENSE and NOTICE kept, <span class="file-path">phone_server/LICENSE.scrcpy</span>). OCTAVE's
-            additions are marked with <code>// OCTAVE</code> comments: <code>control/MirrorKeeper.java</code>, the <code>TYPE_OCTAVE_*</code>
-            control and device messages, <code>Options.octavePersistMs</code>, the session loop in <code>Server.scrcpy</code>,
-            <code>DesktopConnection.open(..., acceptTimeoutMs)</code>, <code>NewDisplayCapture.setPersistent()/destroy()</code>, and the
-            <code>WindowManager.isKeyguardLocked</code> wrapper.</p>
+            additions are marked with <code>// OCTAVE</code> comments: <code>control/MirrorKeeper.java</code>, <code>control/PhoneMedia.java</code>,
+            the <code>TYPE_OCTAVE_*</code> control and device messages, <code>Options.octavePersistMs</code>, the session loop in
+            <code>Server.scrcpy</code>, <code>DesktopConnection.open(..., acceptTimeoutMs)</code>,
+            <code>NewDisplayCapture.setPersistent()/destroy()</code>, and the <code>WindowManager.isKeyguardLocked</code> wrapper.</p>
           <p><strong>Build</strong>: <code>phone_server/build_without_gradle.sh</code> (upstream's no-Gradle script) generates
             <code>BuildConfig.VERSION_NAME = "3.3.4-octave"</code> from <code>SCRCPY_VERSION_NAME</code>, compiles against
             <code>platforms;android-36</code> / <code>build-tools;36.0.0</code> and produces <code>octave-phone-server</code> (a jar of
-            <code>classes.dex</code>). The result is committed at <span class="file-path">tools/phone-server/octave-phone-server</span>;
-            the C++ binary embeds it as the Qt resource <code>:/phone-server/octave-phone-server</code> (CMake
-            <code>qt_add_resources</code>) so no packaging target carries a loose file; Python reads it from the checkout.</p>
+            <code>classes.dex</code>). The result is committed at <span class="file-path">tools/phone-server/octave-phone-server</span>
+            (with the upstream LICENSE and NOTICE beside it), and the Python client pushes that file straight from the checkout.</p>
           <p><strong>Version invariant</strong>: <code>Options.parse</code> throws <em>"The server version (3.3.4-octave) does not match the
             client (...)"</em> unless the first argument equals <code>BuildConfig.VERSION_NAME</code>. So
-            <code>SCRCPY_VERSION_NAME</code> in the build script, <code>kServerVersion</code> in <code>scrcpyclient.h</code> and
-            <code>SERVER_VERSION</code> in <code>scrcpy_client.py</code> must be bumped together. The CI job <code>phone-server</code> rebuilds the
-            jar under JDK 21 on every push and <strong>errors</strong> if either the fresh or the committed jar lacks the
-            <code>org/octave/phoneserver/Server</code> class or the <code>3.3.4-octave</code> string; a byte-level difference between the
-            two is reported as a <strong>warning</strong> only (javac/d8 output can differ across toolchains). Changing the server is a
-            deliberate step: edit <code>phone_server/src</code>, rebuild, commit the jar with the source, bump the version in all three
-            places if the protocol changed, and re-verify the byte layouts above against <code>DesktopConnection</code>,
-            <code>ControlMessageReader</code>, <code>DeviceMessageWriter</code> and <code>Streamer</code>.</p>
+            <code>SCRCPY_VERSION_NAME</code> in the build script and <code>SERVER_VERSION</code> in
+            <span class="file-path">scrcpy_client.py</span> must be bumped together. The CI job <code>phone-server</code> rebuilds the jar on
+            every push and fails if either the fresh or the committed jar lacks the <code>org/octave/phoneserver/Server</code> class or the
+            version string; a byte-level difference between the two is reported as a <strong>warning</strong> only (javac/d8 output can
+            differ across toolchains). Changing the server is a deliberate step: edit <code>phone_server/src</code>, rebuild, commit the jar
+            with the source, bump the version in both places if the protocol changed, and re-verify the byte layouts above against
+            <code>DesktopConnection</code>, <code>ControlMessageReader</code>, <code>DeviceMessageWriter</code> and <code>Streamer</code>.</p>
           <p><strong>Bundled adb</strong>: <code>scripts/fetch_platform_tools.py</code> downloads Google's platform-tools
-            <code>37.0.1</code> (SHA-256 verified), keeps only what adb needs plus Google's NOTICE under
-            <code>tools/platform-tools/&lt;linux|windows|darwin&gt;/</code> (gitignored). The Windows, macOS and Linux x86_64 CI jobs run it
-            and ship the result next to the binary (<code>platform-tools/</code> beside the executable, <code>Contents/Resources/platform-tools</code>
-            in the .app, <code>usr/bin/platform-tools</code> in the AppImage). Google publishes x86_64 only, so the aarch64 AppImage and ARM
-            boards fall back to the distro's <code>adb</code> on PATH.</p>
+            <code>37.0.1</code> (SHA-256 verified) and keeps only what adb needs plus Google's NOTICE under
+            <span class="file-path">tools/platform-tools/&lt;linux|windows|darwin&gt;/</span> (gitignored; <code>--all</code> fetches every
+            OS), which is the first place <code>_find_adb()</code> looks. Google publishes x86_64 only, so ARM boards fall back to the
+            distro's <code>adb</code> on <code>PATH</code>.</p>
         </section>
 
         <section id="pm-settings">
@@ -716,10 +783,10 @@
           <table>
             <thead><tr><th>Setting</th><th>Default</th><th>Effect</th><th>Applied</th></tr></thead>
             <tbody>
-              <tr><td><code>phoneMirrorEnabled</code></td><td>false</td><td>Shows the Phone Mirror button in the bottom bar (hidden on Android regardless)</td><td>live</td></tr>
-              <tr><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code></td><td>Virtual display size (<code>new_display=</code>); <code>"auto"</code> = the view's pixel size, <code>""</code> = phone screen (the "Display Mode" control picks Mirror Phone <code>""</code> or Desktop (DeX) <code>"auto"</code>). The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
-              <tr><td><code>scrcpyDisplayDpi</code></td><td>0</td><td>Appended as <code>new_display=WxH/dpi</code>; 0 = the server scales the phone's own density</td><td>restarts the session</td></tr>
-              <tr><td><code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code></td><td>16 / 8</td><td><code>video_bit_rate</code> in Mbps for that link</td><td>restarts a session on that link</td></tr>
+              <tr><td><code>phoneMirrorEnabled</code></td><td>false</td><td>Shows the Phone Mirror button in the bottom bar</td><td>live</td></tr>
+              <tr><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code></td><td>Virtual display size (<code>new_display=</code>); <code>"auto"</code> = the view's pixel size, <code>""</code> = phone screen (the "Display Mode" control picks Mirror Phone or Desktop (DeX)). The Accessories page saves it and calls <code>setDisplaySize()</code> itself</td><td>restarts the session</td></tr>
+              <tr><td><code>scrcpyDisplayDpi</code></td><td>0</td><td>Appended as <code>new_display=WxH/dpi</code>; 0 = the server scales the phone's own density</td><td>restarts a virtual-display session</td></tr>
+              <tr><td><code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code></td><td>16 / 8</td><td><code>video_bit_rate</code> in Mbps for that link (ceiling when adaptive)</td><td>restarts a session on that link</td></tr>
               <tr><td><code>scrcpyAutoWifi</code></td><td>false</td><td><code>adb tcpip 5555</code> before a USB session; remembers <code>ip:5555</code></td><td>next USB start</td></tr>
               <tr><td><code>scrcpyBitRateAuto</code></td><td>true</td><td>Adaptive quality; the per-link rates become the ceiling</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyPhoneScreenOff</code></td><td>false</td><td>Keeper <code>panelDark</code></td><td>live (<code>OCTAVE_SET_KEEPER</code>)</td></tr>
@@ -729,30 +796,13 @@
               <tr><td><code>scrcpyAudioDuckLevel</code></td><td>0.1</td><td>Linear factor applied to local media while ducked (UI shows dB)</td><td>live</td></tr>
             </tbody>
           </table>
-          <p><code>src/main.cpp</code> and <code>main.py</code> do the same wiring: read each setting into the manager at startup, connect the
-            <code>SettingsManager</code> change signals to the live setters, and connect <code>duckingChanged</code> to
-            <code>MediaManager.setDucking</code>. The Accessories settings page shows a status line: "Built-in mirror client ready
-            (scrcpy server 3.3.4-octave, adb: ...)" or the install instructions. Full schema:
-            <a href="settings-reference.html#phone">Settings Reference</a>.</p>
-        </section>
-
-        <section id="pm-differences">
-          <h3>Where C++ and Python differ</h3>
-          <p>The public surface, launch arguments, byte layouts, thresholds and timings are mirrored one-to-one. The differences
-            are implementation details worth knowing when debugging:</p>
-          <table>
-            <thead><tr><th>Topic</th><th>C++</th><th>Python</th></tr></thead>
-            <tbody>
-              <tr><td>Decoder</td><td>libavcodec linked at build time (<code>OCTAVE_HAVE_FFMPEG</code>); without it <code>nativeAvailable</code> is false</td><td>PyAV (<code>av</code>) imported at module load; missing &rarr; <code>nativeAvailable</code> false, "pip install av" in the instructions</td></tr>
-              <tr><td>Server jar</td><td>Qt resource, extracted to the temp dir once per version</td><td>Read from <code>tools/phone-server/</code> in the checkout</td></tr>
-              <tr><td>Black test / gain without numpy</td><td>n/a</td><td>Falls back to a 24x24 point grid (no lenient mode) and skips the gain; ducking then treats the whole stream as sound (warning logged once). numpy is lazily imported so it costs nothing until audio flows</td></tr>
-              <tr><td>Server process exit mid-stream</td><td>Detected only through the video socket EOF</td><td>The log-drain thread also fails the session when the adb child exits ("Phone disconnected..." if running, else "scrcpy server exited (code N)")</td></tr>
-              <tr><td>Failure path</td><td><code>fail()</code> emits <code>disconnected</code>; the worker tears down on its way out</td><td><code>_fail()</code> emits and spawns <code>stop()</code> on a helper thread; worker join is bounded to 3 s</td></tr>
-              <tr><td>Stale-server kill on stop</td><td><code>QProcess::startDetached()</code> (fire and forget)</td><td>Blocking <code>subprocess.run</code> with a 5 s timeout</td></tr>
-              <tr><td>Console windows on Windows</td><td><code>ScrcpyClient::hideConsoleWindow()</code> sets <code>CREATE_NO_WINDOW</code> on every adb / server <code>QProcess</code> (probes, stale-server kill, <code>pressHome</code>, <code>wakePhone</code>, the session's adb child); no-op elsewhere</td><td><code>CREATE_NO_WINDOW</code> on every adb subprocess</td></tr>
-              <tr><td>Threads</td><td><code>scrcpy-client</code>, <code>scrcpy-audio</code>, <code>scrcpy-devmsg</code> (std::thread); GUI thread delivers</td><td>Same names plus <code>scrcpy-server-log</code>; one-shot <code>phone-mirror-home</code> / <code>phone-mirror-wake</code> threads for adb</td></tr>
-            </tbody>
-          </table>
+          <p><span class="file-path">main.py</span> reads each setting into the manager at startup, connects the <code>SettingsManager</code>
+            change signals (<code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, …) to the live setters, connects
+            <code>duckingChanged</code> to <code>MediaManager.setDucking</code>, <code>MediaManager.muteChanged</code> to
+            <code>setMuted</code> and <code>audioPlayed</code> to <code>AudioAnalyzer.feed_live_pcm</code>, and passes the manager to
+            <code>VolumeController</code>. At quit, <code>cleanup()</code> runs from the ordered <code>aboutToQuit</code> cleanup list. The
+            Accessories settings page shows a status line: "Built-in mirror client ready (scrcpy server 3.3.4-octave, adb: ...)" or the
+            install instructions. Full schema: <a href="settings-reference.html#phone">Settings Reference</a>.</p>
         </section>
 
         <!-- ===================== DESIGN DECISIONS ===================== -->
@@ -767,9 +817,9 @@
             a static display so first paint took 4–60 s, <code>adb shell input</code> costs ~130 ms per event with no multitouch,
             long-press, drag or pinch, and the window grab kept a hidden scrcpy window alive. The scrcpy <em>server</em> is the part
             that is hard to replace and does not need replacing (it creates the virtual display, captures without a consent dialog,
-            encodes on the phone's hardware encoder and injects input); the desktop client is what OCTAVE replaced with code of its
-            own inside each backend. Result: first paint 0.4–0.8 s, touch at socket latency, and the only external pieces are two Apache-2.0 files
-            OCTAVE ships itself.</p>
+            encodes on the phone's hardware encoder and injects input); the desktop client is what OCTAVE replaced with
+            <span class="file-path">scrcpy_client.py</span>. Result: first paint under a second, touch at socket latency, and the only
+            external pieces are adb and an Apache-2.0 jar OCTAVE ships itself.</p>
           <h4>Why fork the server</h4>
           <p>Pinning an upstream jar was enough for the protocol, but the in-car problems (a power press dozing the virtual display,
             USB dropouts destroying the display and its apps) needed behaviour the phone-side program does not have. Forking under
@@ -795,12 +845,16 @@
             the phone's state.</p>
           <h4>Why hold frames instead of clearing the sink</h4>
           <p>Every transition (doze, wake, reconnect, reattach) was measured with a 30 fps capture of the dash and each sub-second
-            artifact fixed at its source: the last good frame is the correct thing to show until real content arrives, so neither
-            client ever clears the <code>VideoOutput</code>, black and doze-fade frames are held, and overlays appear only after a delay
+            artifact fixed at its source: the last good frame is the correct thing to show until real content arrives, so the
+            client never clears the <code>VideoOutput</code>, black and doze-fade frames are held, and overlays appear only after a delay
             (1.5 s asleep, 2 s reconnect badge).</p>
           <h4>Why raw PCM audio</h4>
-          <p><code>audio_codec=raw</code> means PCM s16le 48 kHz stereo on the wire and no audio decoder in either backend (the
-            code comment on the launch option); the 192 KB/s it costs over USB is small next to the 8 Mbit/s video stream.</p>
+          <p><code>audio_codec=raw</code> means PCM s16le 48 kHz stereo on the wire and no audio decoder on OCTAVE's side (the
+            code comment on the launch option); the 192 KB/s it costs is small next to the video stream.</p>
+          <h4>Why every adb call is off the GUI thread</h4>
+          <p>A dead Wi-Fi link, an adb server restart or a slow adb under emulation can block an adb call for seconds. The manager's
+            probes and start preparation therefore run on the probe thread, Wi-Fi work on its own worker, and results come back as
+            posted callables; <code>getDeviceState()</code> returns the cached value instead of running <code>adb devices</code>.</p>
         </section>
 
         <!-- ===================== ANDROID AUTO ===================== -->
@@ -812,36 +866,30 @@
             unit server, and tries to show its window inside the dash. Files:
           </p>
           <table>
-            <thead><tr><th>Python</th><th>C++</th><th>Class</th><th>Purpose</th></tr></thead>
+            <thead><tr><th>File</th><th>Class</th><th>Purpose</th></tr></thead>
             <tbody>
-              <tr><td><span class="file-path">backend/android_auto/manager.py</span></td><td><span class="file-path">src/managers/androidautomanager.{h,cpp}</span></td><td><code>AndroidAutoManager</code></td><td>DHU discovery and process lifecycle, adb setup, window discovery; QML context property <code>androidAutoManager</code></td></tr>
-              <tr><td><span class="file-path">backend/android_auto/dhu_capture.py</span></td><td>same C++ files</td><td><code>DhuCapture</code>, <code>DhuFrameProvider</code></td><td>30 FPS window capture into an image provider, click forwarding</td></tr>
-              <tr><td><span class="file-path">backend/android_auto/embedded_dhu.py</span></td><td><span class="file-path">src/items/embeddeddhuitem.{h,cpp}</span></td><td><code>EmbeddedDhuItem</code></td><td>QML item registered as <code>OCTAVE.AndroidAuto 1.0</code></td></tr>
-              <tr><td colspan="2"><span class="file-path">frontend/AndroidAutoView.qml</span></td><td>--</td><td>Launches the DHU on load, shows the embedded item, an error page with setup instructions and a retry button</td></tr>
+              <tr><td><span class="file-path">backend/android_auto/manager.py</span></td><td><code>AndroidAutoManager</code></td><td>DHU discovery and process lifecycle, adb setup, window discovery; QML context property <code>androidAutoManager</code></td></tr>
+              <tr><td><span class="file-path">backend/android_auto/dhu_capture.py</span></td><td><code>DhuCapture</code>, <code>DhuFrameProvider</code></td><td>30 FPS window capture into an image provider, click forwarding (Windows GDI)</td></tr>
+              <tr><td><span class="file-path">backend/android_auto/embedded_dhu.py</span></td><td><code>EmbeddedDhuItem</code></td><td>QML item registered as <code>OCTAVE.AndroidAuto 1.0</code>; re-parents the DHU window on Windows</td></tr>
+              <tr><td><span class="file-path">frontend/AndroidAutoView.qml</span></td><td>--</td><td>Launches the DHU on load, shows the embedded item, an error page with setup instructions and a retry button</td></tr>
             </tbody>
           </table>
-          <p>Logging: C++ categories <code>octave.androidauto</code> and <code>octave.embeddeddhu</code>; Python loggers
-            <code>backend.android_auto.*</code>. The bottom-bar button is shown when setting <code>androidAutoEnabled</code> is on and the
-            build is not Android.</p>
+          <p>Logging: loggers <code>octave.android_auto</code>, <code>octave.android_auto.capture</code> and
+            <code>octave.android_auto.embedded</code>. The bottom-bar button is shown when setting <code>androidAutoEnabled</code>
+            (default false) is on.</p>
         </section>
 
         <section id="aa-status">
           <h3>What actually works</h3>
           <div class="info-box warning">
             <div class="info-box-title">Platform status</div>
-            <strong>Python on Windows</strong> is the only combination that shows Android Auto inside OCTAVE. The DHU window is found with
+            <strong>Windows</strong> is the only platform that shows Android Auto inside OCTAVE. The DHU window is found with
             <code>EnumWindows</code> and re-parented into the Qt window with <code>SetParent</code>; input reaches it as ordinary mouse input
-            because it is a real child window. On <strong>Python / Linux / macOS</strong>, <code>_find_dhu_window()</code> returns 0 (Windows
-            API only) so <code>_setup_seamless_capture()</code> retries every second for as long as the DHU runs and nothing is embedded;
-            <code>DhuCapture.startCapture()</code> would emit "Screen capture only supported on Windows" anyway. The <strong>C++</strong> port
-            launches and stops the DHU and performs the adb setup, but never locates its window: on Windows the poll times out after
-            5 s and uses the process id as a stand-in handle without starting capture; on other platforms it captures the whole
-            primary screen (<code>QScreen::grabWindow(0)</code>) into the image provider, which no QML reads, and its
-            <code>EmbeddedDhuItem</code> only counts frames. In both C++ cases the view ends up black behind the close button.
-            <code>sendMouseClick()</code> is a stub in C++. The C++ header comments call this out as intentional ("DHU is rarely used").
+            because it is a real child window. On <strong>Linux and macOS</strong>, <code>_find_dhu_window()</code> returns 0 (Windows
+            API only), so <code>_setup_seamless_capture()</code> retries every second for as long as the DHU runs and nothing is embedded;
+            <code>DhuCapture.startCapture()</code> would emit "Screen capture only supported on Windows" anyway, and
+            <code>EmbeddedDhuItem</code> does nothing outside Windows. The DHU then runs in its own window.
           </div>
-          <p>The parity that does hold: property, signal and slot names, the DHU/adb search paths, <code>headunit.ini</code>, the adb
-            sequence, the 100 ms x 50 hide poll on Windows, the 3 s delayed capture setup elsewhere, and <code>cleanup()</code>.</p>
         </section>
 
         <section id="aa-manager">
@@ -851,9 +899,9 @@
             <thead><tr><th>Signal</th><th>Parameters</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td><code>connectionProgress</code></td><td><code>str</code></td><td>Human-readable status updates ("Setting up ADB port forwarding...", "Waiting for head unit server... (Ns)", "Android Auto running")</td></tr>
-              <tr><td><code>error</code></td><td><code>str</code></td><td>Error messages; the view switches to its error page</td></tr>
-              <tr><td><code>dhuWindowReady</code></td><td><code>int</code></td><td>Window handle found (Python/Windows: a real HWND; C++: pid or 0)</td></tr>
-              <tr><td><code>dhuEmbeddedChanged</code></td><td><code>bool</code></td><td>Embedding state changed (false when the DHU process ends)</td></tr>
+              <tr><td><code>error</code></td><td><code>str</code></td><td>Error messages (also capture errors from <code>DhuCapture</code>); the view switches to its error page</td></tr>
+              <tr><td><code>dhuWindowReady</code></td><td><code>int</code></td><td>DHU window handle found (a real HWND; Windows only in practice)</td></tr>
+              <tr><td><code>dhuEmbeddedChanged</code></td><td><code>bool</code></td><td>Embedding state changed: true when the window is ready, false from <code>closeDhu()</code></td></tr>
             </tbody>
           </table>
           <h4>Properties</h4>
@@ -862,8 +910,8 @@
             <tbody>
               <tr><td><code>isDhuInstalled</code></td><td><code>bool</code></td><td>DHU executable found (constant)</td></tr>
               <tr><td><code>dhuPath</code></td><td><code>str</code></td><td>Path to the DHU executable (constant)</td></tr>
-              <tr><td><code>isDhuEmbedded</code></td><td><code>bool</code></td><td>Whether a DHU is considered embedded/running</td></tr>
-              <tr><td><code>dhuWindowHandle</code></td><td><code>int</code></td><td>Native window handle of the DHU (see above for what it really holds)</td></tr>
+              <tr><td><code>isDhuEmbedded</code></td><td><code>bool</code></td><td>Whether a DHU window is considered embedded/running</td></tr>
+              <tr><td><code>dhuWindowHandle</code></td><td><code>int</code></td><td>Native window handle of the DHU, 0 when none</td></tr>
               <tr><td><code>dhuCapture</code></td><td><code>QObject</code></td><td>The <code>DhuCapture</code> instance</td></tr>
             </tbody>
           </table>
@@ -872,9 +920,9 @@
             <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td><code>launchDhuSeamless()</code></td><td><code>bool</code></td><td>Close any running DHU, run the adb preparation (blocking on the GUI thread, up to 60 s while waiting for the head unit server), write <code>headunit.ini</code>, start the DHU</td></tr>
-              <tr><td><code>getDhuInstallInstructions()</code></td><td><code>str</code></td><td>Android Studio &rarr; SDK Manager &rarr; SDK Tools &rarr; "Android Auto Desktop Head Unit Emulator"</td></tr>
+              <tr><td><code>getDhuInstallInstructions()</code></td><td><code>str</code></td><td>Android Studio &rarr; Tools &rarr; SDK Manager &rarr; SDK Tools &rarr; "Android Auto Desktop Head Unit Emulator"</td></tr>
               <tr><td><code>sendDhuClick(x, y)</code></td><td>--</td><td>Forwards to <code>DhuCapture.sendMouseClick</code>; not called by any QML</td></tr>
-              <tr><td><code>closeDhu()</code></td><td>--</td><td>Stop capture, terminate the DHU (5 s, then kill), reset state</td></tr>
+              <tr><td><code>closeDhu()</code></td><td>--</td><td>Stop capture, terminate the DHU (5 s, then kill), reset state, emit <code>dhuEmbeddedChanged(false)</code></td></tr>
               <tr><td><code>cleanup()</code></td><td>--</td><td><code>closeDhu()</code> plus <code>adb forward --remove tcp:5277</code> (only its own forward); called at application quit</td></tr>
             </tbody>
           </table>
@@ -883,35 +931,39 @@
         <section id="aa-dhu">
           <h3>Google DHU Integration</h3>
           <p>
-            The DHU is discovered at the standard SDK location in both backends (a cached lookup in C++):
+            The DHU is discovered at the standard SDK location (<code>_find_dhu_path()</code>, evaluated on every read of
+            <code>isDhuInstalled</code> / <code>dhuPath</code> and at launch):
           </p>
           <pre><code><span class="cmt"># SDK_PATH / extras / google / auto / desktop-head-unit[.exe]</span>
 
 <span class="cmt"># SDK roots checked:</span>
 Windows: %LOCALAPPDATA%\Android\Sdk, %USERPROFILE%\AppData\Local\Android\Sdk, C:\Android\Sdk, C:\Users\%USERNAME%\Android\Sdk
 macOS/Linux: ~/Android/Sdk, ~/Library/Android/sdk, /opt/android-sdk, /usr/local/android-sdk</code></pre>
-          <p>adb comes from the same discovery as the phone mirror: C++ <code>findAdbPath()</code> calls the public static
-            <code>PhoneMirrorManager::findAdb()</code> (cached after the first hit), Python <code>_find_adb_path()</code> calls
-            <code>backend.phone_mirror.manager._find_adb()</code> -- bundled platform-tools, then PATH, then the common SDK
-            locations -- so both features drive the same binary.</p>
+          <p>adb comes from the same discovery as the phone mirror: <code>_find_adb_path()</code> calls
+            <code>backend.phone_mirror.manager._find_adb()</code> -- bundled platform-tools, then <code>PATH</code>, then the common
+            SDK locations -- so both features drive the same binary. Android Auto's adb calls pass no <code>-s</code>, so they expect a
+            single connected phone.</p>
           <h4>DHU Configuration</h4>
           <p>
-            Before launching, a config file is written to <code>~/.android/headunit.ini</code>:
+            Before launching, a config file is written to <code>~/.android/headunit.ini</code> (a write failure is only logged):
           </p>
           <pre><code>[general]
 resolution = 1920 1080
 dpi = 160</code></pre>
+          <p>The DHU is started with its own directory as working directory. On Windows it starts minimized and a 100 ms poll hides
+            its window (below); elsewhere <code>_setup_seamless_capture()</code> runs 3 s after launch.</p>
         </section>
 
         <section id="aa-adb-setup">
           <h3>ADB Connection Setup</h3>
           <p>
-            <code>_prepare_adb_connection()</code> / <code>prepareAdbConnection()</code> runs synchronously on the GUI thread:
+            <code>_prepare_adb_connection()</code> runs synchronously on the GUI thread:
           </p>
           <ol class="steps">
             <li>
               <strong>Check device</strong> -- <code>adb devices</code> must list at least one line containing the substring
-              <code>device</code> (no state parsing like the phone mirror's <code>getDeviceState()</code>).
+              <code>device</code> (no state parsing like the phone mirror's probes). No adb: "ADB not found. Install Android SDK
+              platform-tools."; no phone: "No Android device connected. Connect your phone via USB."
             </li>
             <li>
               <strong>Port forwarding</strong> -- <code>adb forward --remove tcp:5277</code> (a stale DHU forward only), then
@@ -925,7 +977,8 @@ dpi = 160</code></pre>
               <code>am start -n com.google.android.projection.gearhead/.companion.MainActivity -a com.google.android.gms.car.action.START_HEAD_UNIT_SERVER</code>
               (wait 2 s), then <code>am startservice -n ...DeveloperHeadUnitNetworkService</code> (wait 1 s). If neither works it polls once a
               second for up to 60 s for the user to start "Head unit server" in Android Auto's developer settings, reporting the
-              remaining time every 5 s through <code>connectionProgress</code>.
+              remaining time every 5 s through <code>connectionProgress</code>, and fails with "Head unit server not started. Please
+              start it and try again."
             </li>
           </ol>
         </section>
@@ -933,21 +986,20 @@ dpi = 160</code></pre>
         <section id="aa-capture">
           <h3>DhuCapture &amp; Frame Provider</h3>
           <p>
-            <code>DhuCapture</code> captures a window at <strong>30 FPS</strong> on a <code>QTimer</code> into <code>DhuFrameProvider</code>. Python uses
+            <code>DhuCapture</code> captures a window at <strong>30 FPS</strong> on a <code>QTimer</code> into <code>DhuFrameProvider</code>, using
             Windows GDI: <code>GetClientRect</code>, a compatible DC and bitmap, <code>PrintWindow(hwnd, memDC, PW_CLIENTONLY)</code>,
-            <code>GetDIBits</code> into a top-down 32-bit buffer, copied into a <code>QImage(Format_ARGB32)</code>. C++ uses the portable
-            <code>QScreen::grabWindow(WId)</code>. In practice neither capture runs against a real DHU window (see
-            <a href="#aa-status">What actually works</a>): Python's Windows path embeds the window natively instead of capturing it, and
-            its non-Windows path never finds a window.
+            <code>GetDIBits</code> into a top-down 32-bit buffer, copied into a <code>QImage(Format_ARGB32)</code>. In practice it never
+            runs against a real DHU window (see <a href="#aa-status">What actually works</a>): the Windows path embeds the window
+            natively instead of capturing it, and the other platforms never find a window.
           </p>
           <h4>DhuFrameProvider</h4>
           <p>
-            A <code>QQuickImageProvider</code> registered as <code>image://dhuframe/</code> in both entry points. It returns the latest frame
-            under a lock (the timer runs on the GUI thread, QML may request images from a render thread), or an 800x480 placeholder
-            (black in C++, uninitialised in Python) when none is available. No QML file currently references
+            A <code>QQuickImageProvider</code> registered as <code>image://dhuframe/</code> in <span class="file-path">main.py</span>. It
+            returns the latest frame under a lock (the timer runs on the GUI thread, QML may request images from a render thread), or an
+            uninitialised 800x480 <code>Format_RGB32</code> placeholder when none is available. No QML file currently references
             <code>image://dhuframe/</code>.
           </p>
-          <h4>DHU Window Hiding (Python, Windows)</h4>
+          <h4>DHU Window Hiding (Windows)</h4>
           <p>
             The DHU is launched minimized (<code>SW_MINIMIZE</code> via <code>STARTUPINFO</code>). A poll every 100 ms for up to 5 s finds the window
             by process id and title ("Desktop Head Unit" or "Android Auto") and immediately:
@@ -963,15 +1015,15 @@ ShowWindow(hwnd, SW_RESTORE)
 
 <span class="cmt"># 4. Ensure it stays off-screen after restore</span>
 SetWindowPos(hwnd, <span class="num">0</span>, <span class="num">-3000</span>, <span class="num">-3000</span>, ...)</code></pre>
-          <p>Two seconds later <code>dhuWindowReady(hwnd)</code> and <code>dhuEmbeddedChanged(true)</code> are emitted; the embedding itself is
-            done by <code>EmbeddedDhuItem</code>. The C++ port starts the process with <code>CREATE_NO_WINDOW</code> + <code>SW_MINIMIZE</code> but
-            has no <code>EnumWindows</code>, so its poll always times out.</p>
+          <p>Two seconds later <code>dhuEmbeddedChanged(true)</code> and <code>dhuWindowReady(hwnd)</code> are emitted; the embedding itself is
+            done by <code>EmbeddedDhuItem</code>. If the window does not appear within 5 s the manager emits "Could not find DHU window";
+            if the process has exited, "DHU closed unexpectedly".</p>
         </section>
 
         <section id="aa-input">
           <h3>Touch Input Forwarding</h3>
           <p>
-            With the window re-parented into OCTAVE (Python/Windows), touches land on the DHU as normal mouse input and nothing has
+            With the window re-parented into OCTAVE (Windows), touches land on the DHU as normal mouse input and nothing has
             to be forwarded. <code>DhuCapture.sendMouseClick(x, y)</code> exists for the capture-based design and is not called by any QML;
             it synthesises a real click because the DHU ignores <code>SendMessage</code>-style input:
           </p>
@@ -984,45 +1036,38 @@ SetWindowPos(hwnd, <span class="num">0</span>, <span class="num">-3000</span>, <
             <li><strong>Restore</strong> -- alpha 255, move off-screen, restore cursor and foreground window</li>
           </ol>
           <p><code>sendMouseEvent(x, y, pressed)</code> (<code>WM_LBUTTONDOWN</code>/<code>WM_LBUTTONUP</code> via <code>SendMessageW</code>) remains as the
-            simpler alternative. Both are Python-only; the C++ <code>sendMouseClick</code> logs and returns.</p>
+            simpler alternative. Both return immediately outside Windows.</p>
         </section>
 
         <section id="aa-embedded">
           <h3>EmbeddedDhuItem</h3>
           <p>
-            <strong>Python</strong> (<span class="file-path">backend/android_auto/embedded_dhu.py</span>): a <code>QQuickItem</code> that, on
-            <code>dhuWindowReady</code>, hides the DHU window, strips <code>WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_SYSMENU |
-            WS_MINIMIZEBOX | WS_MAXIMIZEBOX</code>, adds <code>WS_CHILD | WS_VISIBLE</code> and <code>WS_EX_TOOLWINDOW</code>, calls
-            <code>SetParent(hwnd, octaveWindow.winId())</code>, and then keeps the child positioned over the item with <code>MoveWindow</code>
-            on a 16 ms timer and on every geometry change. <code>detach()</code> hides the child (<code>SW_HIDE</code>) when the view is not
-            visible; <code>reattach()</code> re-embeds it 50 ms later. <code>isStreaming</code> is true while embedded and not hidden.
+            <span class="file-path">backend/android_auto/embedded_dhu.py</span>: a <code>QQuickItem</code> that, on
+            <code>dhuWindowReady</code>, hides the DHU window and 200 ms later embeds it: strips <code>WS_POPUP | WS_CAPTION | WS_THICKFRAME |
+            WS_BORDER | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX</code>, adds <code>WS_CHILD | WS_VISIBLE</code> and
+            <code>WS_EX_TOOLWINDOW</code> (removing <code>WS_EX_APPWINDOW</code>), calls <code>SetParent(hwnd, octaveWindow.winId())</code>,
+            and then keeps the child positioned over the item with <code>MoveWindow</code> on a 16 ms timer and on every geometry change.
+            <code>detach()</code> hides the child (<code>SW_HIDE</code>) when the view is not visible; <code>reattach()</code> re-embeds it
+            50 ms later. <code>isStreaming</code> is true while embedded and not hidden; <code>streamStarted</code>,
+            <code>streamStopped</code> and <code>errorOccurred</code> report the state. A window that disappears is noticed by the
+            position timer and cleaned up.
           </p>
-          <p>
-            <strong>C++</strong> (<span class="file-path">src/items/embeddeddhuitem.{h,cpp}</span>): no window embedding. It connects to the
-            manager's <code>dhuWindowReady</code> / <code>dhuEmbeddedChanged</code> and to <code>DhuCapture.frameReady</code>, exposes
-            <code>isStreaming</code> and a <code>frameCounter</code> property (<code>frameRefresh</code> signal) intended for an
-            <code>Image { source: "image://dhuframe/" + frameCounter }</code> that <code>AndroidAutoView.qml</code> does not contain.
-          </p>
-          <p>Both connect via <code>connectToManager(androidAutoManager)</code> from the item's <code>Component.onCompleted</code> and pick up a
-            DHU that is already running when the user navigates back to the view.</p>
+          <p>The item connects via <code>connectToManager(androidAutoManager)</code> from its <code>Component.onCompleted</code> (queued
+            connections) and picks up a DHU that is already running when the user navigates back to the view. Every Win32 call is
+            behind a <code>platform.system() == "Windows"</code> check.</p>
         </section>
 
         <!-- Custom QML Types -->
         <section id="qml-types">
           <h2>Custom QML Types</h2>
           <p>
-            One custom type remains. It is registered in both entry points:
+            One custom type remains, registered in <span class="file-path">main.py</span> before the QML loads:
           </p>
-          <pre><code><span class="cmt">// src/main.cpp</span>
-qmlRegisterType&lt;EmbeddedDhuItem&gt;(<span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>);
-
-<span class="cmt"># main.py</span>
-qmlRegisterType(EmbeddedDhuItem, <span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>)</code></pre>
+          <pre><code>qmlRegisterType(EmbeddedDhuItem, <span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>)</code></pre>
           <p>
             QML imports it as <code><span class="kw">import</span> OCTAVE.AndroidAuto <span class="num">1.0</span></code>. The former
-            <code>OCTAVE.PhoneMirror</code> module (<code>EmbeddedScrcpyItem</code>, <code>ScrcpyHostItem</code>, <code>ScrcpyCaptureItem</code>) was removed with
-            the scrcpy-binary path; Phone Mirror uses a plain <code>QtMultimedia</code> <code>VideoOutput</code>. On Android the C++ build registers
-            a stub <code>EmbeddedDhuItem</code> so <code>AndroidAutoView.qml</code> still parses.
+            <code>OCTAVE.PhoneMirror</code> module was removed with the scrcpy-binary path; Phone Mirror uses a plain
+            <code>QtMultimedia</code> <code>VideoOutput</code>.
           </p>
         </section>
 
@@ -1036,7 +1081,7 @@ qmlRegisterType(EmbeddedDhuItem, <span class="str">"OCTAVE.AndroidAuto"</span>, 
                 <td>Android Auto</td>
                 <td><code>image://dhuframe/</code></td>
                 <td><code>DhuFrameProvider</code></td>
-                <td><code>src/main.cpp</code> (<code>androidAutoManager.frameProvider()</code>), <code>main.py</code> (<code>android_auto_manager._dhu_capture.frame_provider</code>)</td>
+                <td><span class="file-path">main.py</span> (<code>android_auto_manager._dhu_capture.frame_provider</code>)</td>
                 <td>800x480</td>
                 <td>30</td>
                 <td>none in the current QML</td>
@@ -1046,13 +1091,9 @@ qmlRegisterType(EmbeddedDhuItem, <span class="str">"OCTAVE.AndroidAuto"</span>, 
           <p>
             Phone Mirror does not use an image provider: decoded frames are pushed as <code>QVideoFrame</code>s into the
             <code>QVideoSink</code> of the view's <code>VideoOutput</code>, which avoids a per-frame RGB conversion and QImage copy.
-            The intended usage pattern for the remaining provider, should a view adopt it:
+            A view that wanted the DHU frames would bind an <code>Image</code> to the provider with <code>cache: false</code> and change
+            its <code>source</code> on every <code>DhuCapture.frameReady</code>.
           </p>
-          <pre><code><span class="cmt">// Refresh the image by changing the source URL</span>
-Image {
-    source: <span class="str">"image://dhuframe/"</span> + embeddedDhu.frameCounter
-    cache: <span class="num">false</span>
-}</code></pre>
         </section>
 
         <div class="related-pages">

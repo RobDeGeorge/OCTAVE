@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Settings Reference</div>
           <h1 class="page-title">Settings Reference</h1>
-          <p class="page-subtitle">Every key in settingsConfigure.json for both backends: type, default, allowed values, the UI page that owns it, and what it affects.</p>
+          <p class="page-subtitle">Every key in settingsConfigure.json as defined by the Python backend: type, default, allowed values, the UI page that owns it, and what it affects.</p>
         </div>
 
         <nav class="toc">
@@ -35,26 +35,24 @@
             <li><a href="#generic">QML-Only Keys (no backend default)</a></li>
             <li><a href="#in-memory">In-Memory Only</a></li>
             <li><a href="#persistence">Persistence and File Format</a></li>
-            <li><a href="#parity">C++ / Python Parity Check</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
         <h2 id="overview">Overview</h2>
         <p>
-          Settings are owned by <code>SettingsManager</code> (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>
-          in the shipped C++ build, <span class="file-path">backend/settings_manager.py</span> in the Python developer backend)
-          and persisted to <code>settingsConfigure.json</code> in the OS-specific config directory:
+          Settings are owned by <code>SettingsManager</code> (<span class="file-path">backend/settings_manager.py</span>,
+          QML context property <code>settingsManager</code>) and persisted to <code>settingsConfigure.json</code> in the
+          directory returned by <code>get_app_data_dir()</code> (created if missing):
         </p>
         <ul>
           <li><strong>Windows:</strong> <code>%APPDATA%/OCTAVE/settingsConfigure.json</code></li>
           <li><strong>macOS:</strong> <code>~/Library/Application Support/OCTAVE/settingsConfigure.json</code></li>
-          <li><strong>Linux / Raspberry Pi / Orange Pi:</strong> <code>~/.config/OCTAVE/settingsConfigure.json</code> (or <code>$XDG_CONFIG_HOME/OCTAVE/</code>)</li>
-          <li><strong>Android / iOS (C++ only):</strong> the Linux rule applied to <code>QDir::homePath()</code></li>
+          <li><strong>Linux / Raspberry Pi / Orange Pi:</strong> <code>$XDG_CONFIG_HOME/OCTAVE/settingsConfigure.json</code>, which is <code>~/.config/OCTAVE/</code> when <code>XDG_CONFIG_HOME</code> is unset</li>
         </ul>
         <p>
-          Both backends define the same <strong>96 top-level default keys</strong> with identical literal defaults
-          (verified key by key against both sources on 2026-10-13). Settings are read once at startup, validated against
+          <code>_default_settings</code> defines <strong>96 top-level keys</strong> (95 in the dict literal plus
+          <code>directoryHistory</code>, added right after it). Settings are read once at startup, validated against
           the defaults, served from memory, and written back atomically 500&nbsp;ms after the last change. The mechanics
           are on the <a href="settings-manager.html">Settings Manager</a> page; this page is the key catalogue.
         </p>
@@ -62,8 +60,8 @@
         <p>How to read the tables:</p>
         <ul>
           <li><strong>Property</strong>: the QML-visible property name (same as the JSON key) or how QML reaches a key that has no property.</li>
-          <li><strong>Type</strong>: JSON type; the C++ property type is noted where it differs from the Python one.</li>
-          <li><strong>Default</strong>: the literal in both backends' default dicts.</li>
+          <li><strong>Type</strong>: the Python type of the default, which is what the loader validates against (see <a href="#persistence">Persistence</a>).</li>
+          <li><strong>Default</strong>: the literal in <code>_default_settings</code>.</li>
           <li><strong>Range / Values</strong>: what the save slot enforces (clamp or whitelist), and in parentheses the range the UI control offers when it is narrower. A dash means the slot stores whatever it is given.</li>
           <li><strong>UI</strong>: the page under <span class="file-path">frontend/settings/</span> (Display, Media, OBD, Accessories, Device, About) or the other QML file that writes the key. See <a href="settings-ui.html">Settings UI</a>.</li>
         </ul>
@@ -97,7 +95,7 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>uiScale</code></td><td>uiScale</td><td>float (C++ <code>float</code>)</td><td>1.0</td><td>– (UI 0.5 – 2.0, step 0.05)</td><td>Display page</td><td>Global UI scale factor (<code>Spacing.globalScale</code>). A stored 0.6 (an old default) is migrated to 1.0 at load. Pinnable</td></tr>
+            <tr><td><code>uiScale</code></td><td>uiScale</td><td>float</td><td>1.0</td><td>– (UI 0.5 – 2.0, step 0.05)</td><td>Display page</td><td>Global UI scale factor (<code>Spacing.globalScale</code>). A stored 0.6 (an old default) is migrated to 1.0 at load. Pinnable</td></tr>
             <tr><td><code>themeSetting</code></td><td>themeSetting</td><td>str</td><td>"CosmicVoyager"</td><td>Any built-in or custom theme name; "Album Art Capture" enables palette extraction</td><td>Display page; <code>Main.updateTheme()</code></td><td>Active colour theme (<a href="theme-system.html">Theme System</a>). Pinnable (chips from <code>themeList</code>)</td></tr>
             <tr><td><code>customThemes</code></td><td>customThemes</td><td>dict (property is a list of names)</td><td>{}</td><td>name → theme object with colour keys and optional <code>albumArt</code> file URL</td><td>Saved from MediaRoom (<code>save_custom_theme</code>), deleted from the Display page</td><td>User-created themes captured from album art; art files live in <code>theme_art/</code></td></tr>
             <tr><td><code>colorTransitionMs</code></td><td>colorTransitionMs</td><td>int</td><td>1000</td><td>– (UI and registry 0 – 2000, step 50)</td><td>Display page</td><td>Duration of theme colour transitions in ms. Pinnable</td></tr>
@@ -126,8 +124,8 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float (C++ <code>float</code>)</td><td>0.1</td><td>– (registry 0 – 1, step 0.01, logarithmic)</td><td>Media page; <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default. Pinnable</td></tr>
-            <tr><td><code>mediaFolder</code></td><td>mediaFolder</td><td>str</td><td>"" (resolved at load to <code>QStandardPaths::MusicLocation</code> in C++, <code>~/Music</code> in Python)</td><td>Any directory; saving the current value is a no-op</td><td>Media page (Library)</td><td>Root of the local music library; MediaManager connects <code>mediaFolderChanged</code> to <code>set_library_root</code></td></tr>
+            <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float</td><td>0.1</td><td>– (registry 0 – 1, step 0.01, logarithmic)</td><td>Media page; <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default. Pinnable</td></tr>
+            <tr><td><code>mediaFolder</code></td><td>mediaFolder</td><td>str</td><td>"" (an empty value resolves at load to <code>~/Music</code>, which is created if missing)</td><td>Any directory; saving the current value is a no-op</td><td>Media page (Library)</td><td>Root of the local music library; MediaManager connects <code>mediaFolderChanged</code> to <code>set_library_root</code></td></tr>
             <tr><td><code>autoPlayOnStartup</code></td><td>autoPlayOnStartup</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback); Media widget</td><td>Resume the last song at launch. Pinnable</td></tr>
             <tr><td><code>persistShuffleState</code></td><td>persistShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Playback)</td><td>Restore <code>lastShuffleState</code> at launch. Pinnable</td></tr>
             <tr><td><code>musicButtonDefaultPage</code></td><td>musicButtonDefaultPage</td><td>str</td><td>"mediaRoom"</td><td>"mediaRoom", "mediaPlayer" (others ignored)</td><td>Media page (Playback)</td><td>Which view the music nav button opens</td></tr>
@@ -144,7 +142,7 @@
             <tr><td><code>backgroundOverlayOpacity</code></td><td>backgroundOverlayOpacity</td><td>int</td><td>80</td><td>clamped 0 – 100</td><td>Media page; NowPlayingStudio</td><td>Dark overlay percentage over the blurred background. Pinnable</td></tr>
             <tr><td><code>backgroundBlurRadius</code></td><td>backgroundBlurRadius</td><td>int</td><td>40</td><td>– (registry 0 – 100, step 1)</td><td>Media page; NowPlayingStudio</td><td>Blur radius of the album-art background. Pinnable</td></tr>
             <tr><td><code>backgroundGrid</code></td><td>backgroundGrid</td><td>str</td><td>"4x4"</td><td>"Normal", "2x2", "4x4" (UI chips; slot does not validate)</td><td>Media page; NowPlayingStudio</td><td>Tiling of the album-art background</td></tr>
-            <tr><td><code>sideCardOpacity</code></td><td>sideCardOpacity</td><td>float (C++ <code>double</code>)</td><td>0.4</td><td>clamped 0.1 – 1.0</td><td>Media page; NowPlayingStudio</td><td>Opacity of the 3D preview side cards. Pinnable</td></tr>
+            <tr><td><code>sideCardOpacity</code></td><td>sideCardOpacity</td><td>float</td><td>0.4</td><td>clamped 0.1 – 1.0</td><td>Media page; NowPlayingStudio</td><td>Opacity of the 3D preview side cards. Pinnable</td></tr>
             <tr><td><code>sideCardAngle</code></td><td>sideCardAngle</td><td>int</td><td>30</td><td>clamped 5 – 60</td><td>Media page; NowPlayingStudio</td><td>Rotation of the side cards in degrees. Pinnable</td></tr>
             <tr><td><code>buttonTiltDuration</code></td><td>buttonTiltDuration</td><td>int</td><td>200</td><td>clamped 50 – 500</td><td>Media page; NowPlayingStudio</td><td>Button tilt animation length in ms. Pinnable</td></tr>
             <tr><td><code>textScrollSpeed</code></td><td>textScrollSpeed</td><td>int</td><td>5000</td><td>clamped 1000 – 10000</td><td>Media page; NowPlayingStudio</td><td>Marquee scroll duration in ms. Pinnable</td></tr>
@@ -174,11 +172,11 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>obdBluetoothPort</code></td><td>obdBluetoothPort</td><td>str</td><td>"" (a stored "/dev/rfcomm0" is cleared at load)</td><td>Serial device path on desktop, or <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> for a direct Bluetooth socket (Linux); BLE MAC address on Android</td><td>OBD page (Connection); also written by OBDManager when connecting</td><td>Adapter to connect to; OBDManager reconnects on change (<a href="obd-manager.html">OBD Manager</a>)</td></tr>
-            <tr><td><code>obdSavedAdapters</code></td><td>obdSavedAdapters</td><td>str (JSON array)</td><td>"[]"</td><td>Array of <code>{"name": str, "mac": str}</code>; MAC upper-cased, most recent first, max 8</td><td>OBD page (Adapters) removes; <code>OBDManager::connect_to_adapter()</code> adds</td><td>Remembered adapters shown as quick-connect chips</td></tr>
-            <tr><td><code>obdFastMode</code></td><td>obdFastMode</td><td>bool</td><td>true</td><td>true/false</td><td>OBD page (Tuning); OBD widget</td><td>Fast polling mode, applied on the next connection. Pinnable</td></tr>
+            <tr><td><code>obdBluetoothPort</code></td><td>obdBluetoothPort</td><td>str</td><td>"" (a stored "/dev/rfcomm0" is cleared at load)</td><td>Serial device path (<code>/dev/rfcommN</code>, <code>/dev/ttyUSB0</code>, <code>COM3</code>, &hellip;), or <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> for a direct Bluetooth socket (Linux)</td><td>OBD page (Connection); also written by OBDManager when connecting</td><td>Adapter to connect to; OBDManager reconnects on change (<a href="obd-manager.html">OBD Manager</a>)</td></tr>
+            <tr><td><code>obdSavedAdapters</code></td><td>obdSavedAdapters</td><td>str (JSON array)</td><td>"[]"</td><td>Array of <code>{"name": str, "mac": str}</code>; MAC upper-cased (except an <code>rfcomm://</code> scheme), most recent first, max 8; a value that is not a JSON array is stored as <code>[]</code></td><td>OBD page (Adapters) removes; <code>obdManager.connect_to_adapter()</code> adds a MAC or <code>rfcomm://</code> URL, and <code>obdAdapterFinder</code> adds the adapter it paired under its Bluetooth name</td><td>Remembered adapters shown as quick-connect chips</td></tr>
+            <tr><td><code>obdFastMode</code></td><td>obdFastMode</td><td>bool</td><td>true</td><td>true/false</td><td>OBD page (Tuning); OBD widget</td><td>python-OBD <code>fast</code> option, read when the next connection starts. Pinnable</td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td>obdAutoReconnectAttempts</td><td>int</td><td>0</td><td>clamped 0 – 10 (0 = disabled)</td><td>OBD page (Connection)</td><td>Automatic reconnect attempts after a drop</td></tr>
-            <tr><td><code>fuelTankCapacity</code></td><td>fuelTankCapacity</td><td>float (C++ <code>float</code>)</td><td>15.0</td><td>–</td><td>None</td><td>Tank size in gallons. Property and slot exist in both backends but nothing reads or writes them today</td></tr>
+            <tr><td><code>fuelTankCapacity</code></td><td>fuelTankCapacity</td><td>float</td><td>15.0</td><td>–</td><td>None</td><td>Tank size in gallons. The property and <code>save_fuel_tank_capacity()</code> exist, but nothing in the backend or QML reads or writes them</td></tr>
             <tr><td><code>get_obd_parameter_enabled(pid)</code> / <code>save_obd_parameter_enabled(pid, on)</code></td><td>obdParameters</td><td>dict of bool</td><td>123 parameter IDs, 20 enabled (<a href="#obd-parameters">list</a>)</td><td>PID name → enabled</td><td>Legacy; nothing in the UI writes it any more (<code>enable_all_supported()</code> still can)</td><td>Formerly chose which PIDs are polled. Polling is now demand-driven (<a href="obd-manager.html#watcher-system">what is on screen</a>), so this dict is kept only for settings-file compatibility. Writes are debounced 800&nbsp;ms; PIDs missing from the file are merged in from the defaults at load</td></tr>
             <tr><td><code>homeOBDParameters</code></td><td>homeOBDParameters</td><td>list of str</td><td>["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"]</td><td>PID names</td><td>OBD page</td><td>PIDs shown on the home-screen cards</td></tr>
             <tr><td><code>get_supported_obd_parameters()</code></td><td>supportedOBDParameters</td><td>list of str</td><td>[]</td><td>PID names</td><td>Written by OBDManager after a vehicle scan</td><td>PIDs the last scanned vehicle answered; lists the OBD settings page's parameters while offline. The live gate uses <code>obdManager.vehicleSupportedParameters</code> (this session only) instead</td></tr>
@@ -225,7 +223,7 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- ESP32 -->
         <h2 id="esp32">ESP32 Volume Knob</h2>
-        <p>All on the <strong>Accessories</strong> page, Volume Knob sub-section (desktop only). Consumed by <a href="hardware-managers.html">ESP32VolumeManager</a>; the LED keys are also read by <span class="file-path">main.py</span> to sync the knob's LEDs with the theme.</p>
+        <p>All on the <strong>Accessories</strong> page, Volume Knob sub-section. Consumed by <a href="hardware-managers.html">ESP32VolumeManager</a>; the LED keys are also read by <span class="file-path">main.py</span> to sync the knob's LEDs with the theme.</p>
         <table>
           <thead>
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
@@ -233,7 +231,7 @@ EV_BATTERY_HEALTH</code></pre>
           <tbody>
             <tr><td><code>esp32VolumeEnabled</code></td><td>esp32VolumeEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the wireless rotary encoder</td></tr>
             <tr><td><code>esp32VolumePort</code></td><td>esp32VolumePort</td><td>str</td><td>""</td><td>Serial port name, or empty</td><td>USB serial port of the ESP32-S3 receiver dongle; empty means auto-select the ESP32-S3 at startup</td></tr>
-            <tr><td><code>esp32VolumeStepSize</code></td><td>esp32VolumeStepSize</td><td>float (C++ <code>double</code>)</td><td>1.0</td><td>clamped 0.25 – 10, rounded to the nearest 0.25 (UI slider and chips)</td><td>Volume change per encoder tick in percent. The default is a float literal so fractional steps (0.25 / 0.5 / 0.75) survive the Python validator</td></tr>
+            <tr><td><code>esp32VolumeStepSize</code></td><td>esp32VolumeStepSize</td><td>float</td><td>1.0</td><td>clamped 0.25 – 10, rounded to the nearest 0.25 (UI slider and chips)</td><td>Volume change per encoder tick in percent. The default is a float literal so fractional steps (0.25 / 0.5 / 0.75) survive the Python validator</td></tr>
             <tr><td><code>esp32AutoReconnect</code></td><td>esp32AutoReconnect</td><td>bool</td><td>true</td><td>true/false</td><td>Reconnect automatically after the dongle disappears</td></tr>
             <tr><td><code>esp32LedSleepEnabled</code></td><td>esp32LedSleepEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Let the knob's LEDs turn off (code comment: "LEDs turn off when OCTAVE closes")</td></tr>
             <tr><td><code>esp32LedColorMode</code></td><td>esp32LedColorMode</td><td>str</td><td>"theme"</td><td>"theme", "static" (others ignored)</td><td>LEDs follow the album-art / theme palette or a fixed colour</td></tr>
@@ -271,7 +269,7 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- Gesture -->
         <h2 id="gesture">Gesture Sensor</h2>
-        <p>Accessories page, Gesture Sensor sub-section. Consumed by the <a href="hardware-managers.html">GestureManager</a>; the volume actions are executed by <span class="file-path">main.py</span> / <span class="file-path">main.cpp</span> through <code>VolumeController</code>.</p>
+        <p>Accessories page, Gesture Sensor sub-section. Consumed by the <a href="hardware-managers.html">GestureManager</a>; the volume actions are executed by <span class="file-path">main.py</span> (<code>handle_gesture_action</code>) through <code>VolumeController</code>, stepping by <code>gestureVolumeStep</code>.</p>
         <table>
           <thead>
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
@@ -299,7 +297,7 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- Phone -->
         <h2 id="phone">Android Auto and Phone Mirror</h2>
-        <p>Accessories page, Phone Dock sub-section. The <code>scrcpy*</code> keys are pushed into <a href="phone-mirror-android-auto.html">PhoneMirrorManager</a> at startup and the gain, duck and screen-off signals are connected to its setters, so they apply to a running session.</p>
+        <p>Accessories page, Phone Dock sub-section. <span class="file-path">main.py</span> pushes the <code>scrcpy*</code> keys into <a href="phone-mirror-android-auto.html">PhoneMirrorManager</a> at startup and connects the change signals of the gain, duck, screen-off, DPI, bit-rate, adaptive and auto-Wi-Fi keys to its setters, so they apply to a running session. <code>scrcpyDisplaySize</code> is handed to <code>setDisplaySize()</code> by the settings page; <code>scrcpyWirelessAddress</code> flows the other way (below).</p>
         <table>
           <thead>
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
@@ -307,11 +305,11 @@ EV_BATTERY_HEALTH</code></pre>
           <tbody>
             <tr><td><code>androidAutoEnabled</code></td><td>androidAutoEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Show the Android Auto button in the navigation bar</td></tr>
             <tr><td><code>phoneMirrorEnabled</code></td><td>phoneMirrorEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Show the Phone Mirror button in the navigation bar</td></tr>
-            <tr><td><code>scrcpyAudioGain</code></td><td>scrcpyAudioGain</td><td>float (C++ <code>double</code>)</td><td>2.0 (+6 dB)</td><td>clamped 0.25 – 8.0 (UI slider −12 … +18 dB, stored as 10^(dB/20))</td><td>Linear gain applied to phone audio before OCTAVE's volume; the phone's own volume is never changed</td></tr>
-            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>scrcpyAudioDuckEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Duck local music while the phone is producing sound (navigation prompts, calls). The manager's <code>duckingChanged</code> is routed to <code>MediaManager::setDucking</code></td></tr>
-            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>scrcpyAudioDuckLevel</td><td>float (C++ <code>double</code>)</td><td>0.1 (−20 dB)</td><td>clamped 0.0 – 1.0 (UI slider −40 … −6 dB)</td><td>Linear factor applied to local music while ducked</td></tr>
-            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>scrcpyPhoneScreenOff</td><td>bool</td><td>false</td><td>true/false</td><td>Opt-in: keep the phone's own panel dark while mirroring (off by default because some phones, e.g. Galaxy S22, only dim the panel instead of blanking it); stream and touch keep working and the panel is restored when the session ends. A power-button press wakes the panel for an 8 s grace window (<code>kWakeGraceMs</code> / <code>WAKE_GRACE_MS</code>); a second press inside it hands the phone back to the user, and the MirrorKeeper forces a relight after a wake from the lock screen</td></tr>
-            <tr><td><code>scrcpyWirelessAddress</code></td><td>scrcpyWirelessAddress</td><td>string</td><td>""</td><td>"ip:port" or ""</td><td>Phone last connected over Wi-Fi (QR pairing from Phone Mirror or the Phone Dock card). Written by <code>PhoneMirrorManager</code> through <code>wirelessAddressChanged</code>: when the phone is paired, when Wireless debugging comes back on a new port (found over mDNS), and cleared by Forget. While no phone is usable OCTAVE retries it in the background at most every 5 s</td></tr>
+            <tr><td><code>scrcpyAudioGain</code></td><td>scrcpyAudioGain</td><td>float</td><td>2.0 (+6 dB)</td><td>clamped 0.25 – 8.0 (UI slider −12 … +18 dB, stored as 10^(dB/20))</td><td>Linear gain applied to phone audio before OCTAVE's volume; the phone's own volume is never changed</td></tr>
+            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>scrcpyAudioDuckEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Duck local music while the phone is producing sound (navigation prompts, calls). The manager's <code>duckingChanged</code> is connected to <code>mediaManager.setDucking</code> in <span class="file-path">main.py</span></td></tr>
+            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>scrcpyAudioDuckLevel</td><td>float</td><td>0.1 (−20 dB)</td><td>clamped 0.0 – 1.0 (UI slider −40 … −6 dB)</td><td>Linear factor applied to local music while ducked</td></tr>
+            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>scrcpyPhoneScreenOff</td><td>bool</td><td>false</td><td>true/false</td><td>Opt-in: keep the phone's own panel dark while mirroring (off by default because some phones, e.g. Galaxy S22, only dim the panel instead of blanking it); stream and touch keep working and the panel is restored when the session ends. After a power press from the locked state the phone-side MirrorKeeper wakes the phone but leaves its panel lit for 8 s (<code>WAKE_GRACE_MS</code>); if the keyguard is dismissed in that window the phone is left to the user, otherwise the panel is blanked again</td></tr>
+            <tr><td><code>scrcpyWirelessAddress</code></td><td>scrcpyWirelessAddress</td><td>str</td><td>""</td><td>"ip:port" or ""</td><td>Phone last connected over Wi-Fi (QR pairing from Phone Mirror or the Phone Dock card). Written by <code>PhoneMirrorManager</code> through <code>wirelessAddressChanged</code>, which <span class="file-path">main.py</span> connects to <code>save_scrcpy_wireless_address()</code> (trimmed; unchanged values are not written): when the phone is paired, when Wireless debugging comes back on a new port (found over mDNS), and cleared by Forget. While no phone is usable OCTAVE retries it in the background at most every 5 s (<code>AUTO_CONNECT_INTERVAL_S</code>)</td></tr>
             <tr><td><code>scrcpyDisplaySize</code></td><td>scrcpyDisplaySize</td><td>str</td><td>"auto"</td><td>"auto", "WxH" or "" (slot does not validate; the page hands the text to <code>PhoneMirrorManager.setDisplaySize()</code>, which may snap dimensions to multiples of 8, and saves the snapped value back). The "Display Mode" segmented control writes "" (Mirror Phone) or "auto" (Desktop (DeX)); in desktop mode the "Fit to screen" toggle writes "auto" (on) or "1280x800" (off), and the Fit toggle, size field and Text Size slider are hidden in Mirror Phone mode</td><td>Virtual display created on the phone (<code>--new-display</code>, Android 11+). "auto" sizes it to the mirror view's pixel size (longest side capped at 1920), so the picture fills the view; empty mirrors the phone's own screen</td></tr>
             <tr><td><code>scrcpyDisplayDpi</code></td><td>scrcpyDisplayDpi</td><td>int</td><td>0</td><td>0 or 80 – 640 (UI slider Auto, 120 … 400 in steps of 20)</td><td>Density of the virtual display ("Text Size"); 0 lets the server scale the phone's own density. Restarts a running session</td></tr>
             <tr><td><code>scrcpyBitRateUsb</code></td><td>scrcpyBitRateUsb</td><td>int (Mbps)</td><td>16</td><td>clamped 2 – 40 (UI slider 4 … 32)</td><td>Video bit rate for USB sessions. Restarts a running USB session</td></tr>
@@ -323,15 +321,15 @@ EV_BATTERY_HEALTH</code></pre>
 
         <!-- Downloads -->
         <h2 id="download">Downloads</h2>
-        <p>No settings-page control writes these; <a href="download-manager.html">DownloadManager</a> reads them with <code>get_setting()</code>, so they can be changed in the JSON while OCTAVE is closed. Their defaults remain in SettingsManager when downloads are disabled (<code>OCTAVE_ENABLE_DOWNLOADS=OFF</code>), but the download implementation is replaced by a stub.</p>
+        <p>No settings-page control writes these; <a href="download-manager.html">DownloadManager</a> reads them with <code>get_setting()</code>, so they can be changed in the JSON while OCTAVE is closed. <code>set_download_playlist()</code> overrides <code>downloadSubfolder</code> for the session without saving it.</p>
         <table>
           <thead>
             <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
           </thead>
           <tbody>
             <tr><td>generic</td><td>downloadSubfolder</td><td>str</td><td>"Downloads"</td><td>Folder name</td><td>Sub-folder of <code>mediaFolder</code> that downloaded songs are written to</td></tr>
-            <tr><td>generic</td><td>downloadFormat</td><td>str</td><td>"mp3"</td><td>"mp3", "flac", "ogg", "opus", "m4a" (per the code comment; not validated)</td><td>Audio container / codec passed to yt-dlp</td></tr>
-            <tr><td>generic</td><td>downloadBitrate</td><td>str</td><td>"auto"</td><td>"auto", "128k", "192k", "320k" (per the code comment; not validated)</td><td>Target bitrate for downloads</td></tr>
+            <tr><td>generic</td><td>downloadFormat</td><td>str</td><td>"mp3"</td><td>"mp3", "flac", "ogg", "opus", "m4a" (per the code comment; not validated)</td><td>Audio format of downloaded files (used by <code>music_dl</code>)</td></tr>
+            <tr><td>generic</td><td>downloadBitrate</td><td>str</td><td>"auto"</td><td>"auto", "128k", "192k", "320k" (per the code comment; not validated)</td><td>Target bitrate for downloads (used by <code>music_dl</code>)</td></tr>
           </tbody>
         </table>
 
@@ -344,8 +342,8 @@ EV_BATTERY_HEALTH</code></pre>
           </thead>
           <tbody>
             <tr><td><code>lastSettingsSection</code> / <code>set_last_settings_section()</code></td><td>lastSettingsSection</td><td>str</td><td>"deviceSettings"</td><td>the six current sections "displaySettings", "mediaSettings", "obdSettings", "accessoriesSettings", "deviceSettings", "about", plus the legacy IDs "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings" an older file may carry (others ignored; "clockSettings" migrated to "displaySettings")</td><td>Section reopened when the settings menu is entered</td></tr>
-            <tr><td><code>settingsMenuVisibility</code> (JSON str) / <code>is_settings_section_visible()</code> / <code>save_settings_section_visibility()</code></td><td>settingsMenuVisibility</td><td>dict of bool</td><td><code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>: all true</td><td>section ID → visible; a section missing from the file (or unknown) reads as visible in both backends</td><td>Which sections the settings menu shows</td></tr>
-            <tr><td><code>pinnedSettings</code> / <code>toggle_pin_setting()</code></td><td>pinnedSettings</td><td>list of str</td><td>[]</td><td>Registry IDs only</td><td>Quick Panel pins, in pin order</td></tr>
+            <tr><td><code>settingsMenuVisibility</code> (JSON str) / <code>is_settings_section_visible()</code> / <code>save_settings_section_visibility()</code></td><td>settingsMenuVisibility</td><td>dict of bool</td><td><code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>: all true</td><td>section ID → visible; a section missing from the file is filled in as visible at load, and <code>is_settings_section_visible()</code> returns true for an unknown id</td><td>Which sections the settings menu shows</td></tr>
+            <tr><td><code>pinnedSettings</code> / <code>toggle_pin_setting()</code></td><td>pinnedSettings</td><td>list of str</td><td>[]</td><td>Registry IDs only (<code>toggle_pin_setting()</code> pins only ids in <code>SETTINGS_REGISTRY</code>)</td><td>Quick Panel pins, in pin order</td></tr>
             <tr><td>generic (<span class="file-path">frontend/settings/ExpandedCards.js</span>)</td><td>expandedCards</td><td>dict of bool</td><td>{}</td><td>card ID → expanded</td><td>Expanded / collapsed state of collapsible settings cards</td></tr>
           </tbody>
         </table>
@@ -353,8 +351,8 @@ EV_BATTERY_HEALTH</code></pre>
         <!-- Generic / QML-only -->
         <h2 id="generic">QML-Only Keys (no backend default)</h2>
         <p>
-          These keys exist only because QML writes them with <code>save_setting()</code>; neither backend lists them in
-          its defaults, so they pass through validation untouched (and unvalidated) via the forward-compatibility copy.
+          These keys exist only because QML writes them with <code>save_setting()</code>; <code>_default_settings</code>
+          does not list them, so they pass through validation untouched (and unvalidated) via the forward-compatibility copy.
           The default shown is the one passed to <code>get_setting_with_default()</code> at the reading call site.
         </p>
         <table>
@@ -388,36 +386,21 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><th>Property</th><th>Type</th><th>Initial value</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. <code>VolumeController.applyVolume()</code> updates it during normal volume changes; it is also initialized on load/reset and is never written to the file</td></tr>
+            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. <code>VolumeController.applyVolume()</code> updates it during normal volume changes (and applies it to every output at startup); it is also initialized on load/reset and is never written to the file</td></tr>
           </tbody>
         </table>
 
         <!-- Persistence -->
         <h2 id="persistence">Persistence and File Format</h2>
-        <p>One JSON object, 4-space indented, containing the 96 default keys (nested dicts for <code>obdParameters</code>, <code>gestureMapping</code>, <code>customThemes</code>, <code>settingsMenuVisibility</code>, <code>expandedCards</code>) plus any QML-only keys. Writes are:</p>
+        <p>One JSON object, 4-space indented (<code>json.dumps(settings, indent=4)</code>), containing the 96 default keys (nested dicts for <code>obdParameters</code>, <code>gestureMapping</code>, <code>customThemes</code>, <code>settingsMenuVisibility</code>, <code>expandedCards</code>) plus any QML-only keys. Writes are:</p>
         <ol class="steps">
-          <li>Validated once into the in-memory copy (types checked against the defaults; unknown keys kept)</li>
-          <li>Coalesced behind a 500&nbsp;ms single-shot timer, flushed at quit</li>
-          <li>Written to a temp file in the same directory and fsynced (<code>tempfile.mkstemp</code> under an advisory lock in Python, <code>QSaveFile</code> in C++)</li>
+          <li>Validated into the in-memory copy by <code>_validate_settings()</code> (types checked against the defaults; unknown keys kept)</li>
+          <li>Coalesced behind a 500&nbsp;ms single-shot timer; <code>flushPendingSave()</code> writes at quit</li>
+          <li>Written to a temp file in the same directory (<code>tempfile.mkstemp</code>, under a non-blocking advisory lock: <code>fcntl.flock</code> on Unix, <code>msvcrt.locking</code> on Windows) and fsynced</li>
           <li><code>chmod 600</code> on Unix</li>
-          <li>Replaced over the real file in one step (<code>os.replace</code> / <code>QSaveFile::commit()</code>); on failure the existing file is left untouched</li>
+          <li>Replaced over the real file in one step (<code>os.replace</code>), then the directory is fsynced on Unix; on failure the temp file is removed, the existing file is left untouched and the error is logged</li>
         </ol>
-        <p>On load, a missing file is created from the defaults, a corrupt file is moved to <code>settingsConfigure.json.corrupt</code> and restored from the last known-good <code>settingsConfigure.json.bak</code> (defaults only if that fails too), and wrong-typed values are replaced individually. Keys of removed features (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are deleted from the file at startup, together with the old Spotify login token. Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
-
-        <!-- Parity -->
-        <h2 id="parity">C++ / Python Parity Check</h2>
-        <p>Result of comparing <code>buildDefaultSettings()</code> with <code>_default_settings</code> and both slot sets on 2026-10-13:</p>
-        <ul>
-          <li><strong>Keys:</strong> 96 in both; no key exists in only one backend.</li>
-          <li><strong>Default values:</strong> identical for every key, including all 123 parameter flags and the nine gesture bindings.</li>
-          <li><strong>Properties / signals:</strong> the same 79 properties and 83 signals. The shared callable methods also match, apart from the Python-only legacy flush alias. The shutdown flush is <code>flushPendingSave()</code> on both sides; Python keeps a <code>flush_pending_save()</code> alias for older callers.</li>
-        </ul>
-        <div class="info-box warning">
-          <div class="info-box-title">Differences that affect stored values</div>
-          <ul>
-            <li><code>mediaFolder</code> resolves an empty value to <code>QStandardPaths::MusicLocation</code> in C++ and to <code>~/Music</code> in Python. The effective paths can differ with the platform or user configuration; Python is desktop-only.</li>
-          </ul>
-        </div>
+        <p>On load, a missing file is created from the defaults, a corrupt file is moved to <code>settingsConfigure.json.corrupt</code> and restored from the last known-good <code>settingsConfigure.json.bak</code> (defaults only if that fails too), and wrong-typed values are replaced individually. Keys of removed features (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are deleted from the file at startup, together with the old Spotify login token (<code>.spotify_token_cache</code> files and the <code>OCTAVE_Spotify</code> keyring entry). The <code>.bak</code> copy is refreshed once per session from a file that parsed cleanly. Two more load-time migrations: <code>uiScale</code> 0.6 &rarr; 1.0 and <code>lastSettingsSection</code> <code>"clockSettings"</code> &rarr; <code>"displaySettings"</code> (the latter in memory only). Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>

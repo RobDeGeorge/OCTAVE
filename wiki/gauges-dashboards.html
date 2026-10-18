@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Gauges &amp; Dashboards</div>
           <h1 class="page-title">Gauges &amp; Dashboards</h1>
-          <p class="page-subtitle">Reusable gauge primitives, the OBDParameterModel binding layer, schema-1 JSON dashboards rendered by DashboardRenderer, DashboardManager (C++ and Python), and the in-app drag-and-tap dashboard editor</p>
+          <p class="page-subtitle">Reusable gauge primitives, the OBDParameterModel binding layer, schema-1 JSON dashboards rendered by DashboardRenderer, DashboardManager (<span class="file-path">backend/dashboard_manager.py</span>), and the in-app drag-and-tap dashboard editor</p>
         </div>
 
         <nav class="toc">
@@ -29,7 +29,7 @@
             <li><a href="#angle-math">Angle and Needle Math</a></li>
             <li><a href="#schema">Dashboard JSON Schema (schema 1)</a></li>
             <li><a href="#presets">Built-in Presets</a></li>
-            <li><a href="#dashboard-manager">DashboardManager (C++ and Python)</a></li>
+            <li><a href="#dashboard-manager">DashboardManager</a></li>
             <li><a href="#sharing">Sharing: Export and Import</a></li>
             <li><a href="#renderer">DashboardRenderer: Spec to QML</a></li>
             <li><a href="#widget-catalog">WidgetCatalog</a></li>
@@ -49,8 +49,8 @@
           <span class="file-path">frontend/OBDMenu.qml</span>, and <strong>dashboards</strong> -- JSON specs that place
           gauge primitives on a grid. Five presets ship in <span class="file-path">frontend/dashboards/presets/</span>;
           users build their own in an in-app editor, or drop a JSON file into the user dashboards directory.
-          <code>DashboardManager</code> (C++ <span class="file-path">src/managers/dashboardmanager.{h,cpp}</span>, Python
-          <span class="file-path">backend/dashboard_manager.py</span>, shared QML API) enumerates both sources, watches the
+          <code>DashboardManager</code> (<span class="file-path">backend/dashboard_manager.py</span>, context property
+          <code>dashboardManager</code>) enumerates both sources, watches the
           user directory, and exposes save / delete / duplicate plus export / import for sharing.
           <span class="file-path">frontend/dashboards/DashboardRenderer.qml</span>
           turns a spec into live widgets; the chooser popup shows every dashboard as a scaled live miniature; the selection
@@ -61,9 +61,10 @@
         <p>
           Every gauge binds to the <code>OBDParameterModel</code> singleton by <code>paramId</code> (<code>"RPM"</code>,
           <code>"SPEED"</code>, <code>"LATERAL_G"</code>...) -- title, unit, min and max are auto-populated from the model
-          and the live value updates reactively. No gauge touches <code>obdManager</code> directly, so the whole system is
-          backend-agnostic and works unchanged with the Python or C++ <a href="obd-manager.html">OBD manager</a>, the dev-mode
-          mock, or the editor's demo data.
+          and the live value updates reactively. No gauge touches <code>obdManager</code> directly, so the same gauges run
+          against the real <a href="obd-manager.html">OBD manager</a> (<span class="file-path">backend/obd_manager.py</span>),
+          the dev-mode mock (<span class="file-path">dev/mock_obd_manager.py</span>, installed by
+          <code>python -m dev.main_dev</code>), or the editor's demo data.
         </p>
         <p>
           The step-by-step authoring spec is <span class="file-path">docs/GAUGE_AUTHORING.md</span>; this page documents
@@ -100,8 +101,7 @@ frontend/
       PalettePopup.qml           widget palette (reads WidgetCatalog)
       PIDPicker.qml              searchable, kind-filtered, vehicle-gated PID list
       PropertiesPanel.qml        PID / position &amp; size / options / label &amp; range / color inspector
-src/managers/dashboardmanager.{h,cpp}   C++ DashboardManager
-backend/dashboard_manager.py            Python DashboardManager
+backend/dashboard_manager.py            DashboardManager (context property dashboardManager)
 docs/GAUGE_AUTHORING.md                 authoring spec (source of truth for the API)
 dev/tests/drive_dashboard_editor.py     end-to-end editor scenario (command server)
 dev/tests/drive_dashboard_features.py   overrides, resize, swipe, sharing scenario (command server)
@@ -112,7 +112,7 @@ tests/test_vehicle_gate_qml.py          headless QML gate test with a fake obdMa
         <h2 id="parameter-model">Data Flow: OBDParameterModel</h2>
         <pre class="diagram">
 obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues[id] -->  gauge bindings
-  (either backend)        (dedicated + generic handlers)         _pendingValues                             _normalized
+  (backend/*.py)          (dedicated + generic handlers)         _pendingValues                             _normalized
                                                 33 ms flush timer                         _animNorm (Behavior)
         </pre>
         <p>
@@ -134,7 +134,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>vehicleKnown</code>, <code>vehicleSupportedParameters</code></td><td>Mirrors of <code>obdManager.vehicleScanComplete</code> / <code>vehicleSupportedParameters</code>: this session's supported-PID scan, cleared on disconnect, never loaded from the saved list. Guarded with <code>typeof obdManager</code>.</td></tr>
             <tr><td><code>isSupported(id)</code></td><td>True for sensor ids, and for OBD ids the scanned vehicle reported. False otherwise, including when no vehicle is known (callers wanting "anything goes offline", like the PID picker, check <code>vehicleKnown</code> first).</td></tr>
             <tr><td><code>vehicleParameters</code></td><td>The supported OBD entries of <code>allParameters</code>, in <code>allParameters</code> order; empty until a vehicle has been scanned. Feeds Parameter Cards.</td></tr>
-            <tr><td><code>_obdConnections</code>, <code>_imuConnections</code></td><td>Two <code>Connections</code> blocks, dedicated handlers plus the generic <code>onObdParameterChanged(paramId, value)</code> handler. The IMU one is guarded with <code>typeof berryIMU !== "undefined"</code> and <code>ignoreUnknownSignals</code> so stripped builds still load.</td></tr>
+            <tr><td><code>_obdConnections</code>, <code>_imuConnections</code></td><td>Two <code>Connections</code> blocks, dedicated handlers plus the generic <code>onObdParameterChanged(paramId, value)</code> handler. The IMU one is guarded with <code>typeof berryIMU !== "undefined"</code> and <code>ignoreUnknownSignals</code> so the model still loads without it (for example in the headless QML tests).</td></tr>
           </tbody>
         </table>
         <p>The eight sensor parameters (fed by <code>berryIMU</code>, not <code>obdManager</code>):</p>
@@ -155,8 +155,8 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
 
         <h2 id="vehicle-gate">Vehicle Gate and Polling Demand</h2>
         <p>
-          Every connect runs a supported-PID scan; both backends publish the result as
-          <code>obdManager.vehicleSupportedParameters</code> + <code>vehicleScanComplete</code>, which
+          Every connect runs a supported-PID scan; <span class="file-path">backend/obd_manager.py</span> publishes the result as
+          the properties <code>obdManager.vehicleSupportedParameters</code> + <code>vehicleScanComplete</code>, which
           <code>OBDParameterModel</code> mirrors (see the table above). The gate only ever describes the vehicle that is
           answering right now:
         </p>
@@ -170,8 +170,8 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
           </tbody>
         </table>
         <p>
-          <strong>Polling is demand-driven.</strong> The backend polls only PIDs that some on-screen consumer asked for through
-          <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list withdraws the consumer). QML consumers:
+          <strong>Polling is demand-driven.</strong> <code>OBDManager</code> polls only PIDs that some on-screen consumer asked for through
+          the slot <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list withdraws the consumer). QML consumers:
         </p>
         <table>
           <thead><tr><th>Consumer</th><th>Registered by</th><th>Ids</th></tr></thead>
@@ -185,7 +185,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
           </tbody>
         </table>
         <p>
-          How the union is filtered, the heartbeat PID, the debounce and live re-apply are backend matters: see
+          How the union is filtered, the heartbeat PID, the debounce and live re-apply happen in <span class="file-path">backend/obd_manager.py</span>: see
           <a href="obd-manager.html">OBD Manager</a>. A new dashboard needs no wiring -- the renderer's <code>paramIds</code>
           is registered automatically. The gate is covered headlessly by <span class="file-path">tests/test_vehicle_gate_qml.py</span>.
         </p>
@@ -433,7 +433,7 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
           <tbody>
             <tr><td><code>id</code></td><td>yes</td><td>DashboardManager, OBDMenu</td><td>Missing id: file skipped (logged). Duplicate of a built-in: user file skipped. <code>"grid"</code> is reserved for the Parameter Cards sentinel (the editor's id generator excludes it; the manager does not). <code>saveDashboard</code> writes <code>&lt;id&gt;.json</code>.</td></tr>
             <tr><td><code>label</code></td><td>yes (for save)</td><td>DashboardManager, OBDMenu</td><td><code>saveDashboard</code> rejects an empty label; a preset with an empty label loads with a blank name.</td></tr>
-            <tr><td><code>schema</code></td><td>by convention</td><td>DashboardManager import</td><td>Written by the editor and every preset. The renderer and the directory scan don't check it; the <a href="#sharing">import sanitizer</a> does: a spec newer than <code>kSupportedSchema</code> / <code>SUPPORTED_SCHEMA</code> (1) is refused with "This dashboard needs a newer version of OCTAVE". A missing <code>schema</code> imports as 1.</td></tr>
+            <tr><td><code>schema</code></td><td>by convention</td><td>DashboardManager import</td><td>Written by the editor and every preset. The renderer and the directory scan don't check it; the <a href="#sharing">import sanitizer</a> does: a spec newer than <code>SUPPORTED_SCHEMA</code> (1) is refused with "This dashboard needs a newer version of OCTAVE". A missing <code>schema</code> imports as 1.</td></tr>
             <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>no</td><td>Renderer, Editor</td><td>Falsy values (0, missing) fall back to 12 / 6.</td></tr>
             <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>Renderer and editor</td><td>Applied through <code>App.Spacing.dp()</code>. The editor keeps a loaded spec's values (<code>specMargins</code> / <code>specSpacing</code>), renders its canvas with them and writes them back into saves and drafts (<code>_withGridGeometry()</code>), but only when the spec had them &mdash; a dashboard without the keys keeps relying on the 20 / 16 defaults and its JSON stays minimal.</td></tr>
             <tr><td><code>cells[].type</code></td><td>yes</td><td>Renderer, Editor, WidgetCatalog</td><td>Unknown type: renderer logs and skips the cell; editor drops it on load.</td></tr>
@@ -456,49 +456,49 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
           </tbody>
         </table>
 
-        <h2 id="dashboard-manager">DashboardManager (C++ and Python)</h2>
+        <h2 id="dashboard-manager">DashboardManager</h2>
         <p>
-          Context property <code>dashboardManager</code>, registered before the QML engine loads. <code>main.cpp</code> /
-          <code>main.py</code> call <code>setPresetsDir(&lt;frontend&gt;/dashboards/presets)</code> then
-          <code>setUserDir(&lt;app data dir&gt;/dashboards)</code>; the second call performs the initial scan and starts the
-          directory watch. The user dir is <code>~/.config/OCTAVE/dashboards/</code> on Linux,
-          <code>~/Library/Application Support/OCTAVE/dashboards/</code> on macOS, <code>%APPDATA%/OCTAVE/dashboards/</code> on
-          Windows (via <code>SettingsManager::getAppDataDir()</code> / <code>get_app_data_dir()</code>), and is created on
-          demand.
+          <span class="file-path">backend/dashboard_manager.py</span>, context property <code>dashboardManager</code>,
+          registered before the QML engine loads. <span class="file-path">main.py</span> calls
+          <code>setPresetsDir(&lt;repo&gt;/frontend/dashboards/presets)</code> then
+          <code>setUserDir(os.path.join(get_app_data_dir(), "dashboards"))</code>; the second call performs the initial scan
+          and starts the directory watch. Both are plain Python methods, not slots. The user dir is
+          <code>~/.config/OCTAVE/dashboards/</code> on Linux, <code>~/Library/Application Support/OCTAVE/dashboards/</code> on
+          macOS, <code>%APPDATA%/OCTAVE/dashboards/</code> on Windows (<code>get_app_data_dir()</code> from
+          <span class="file-path">backend/settings_manager.py</span>), and is created by every rescan if missing.
         </p>
         <table>
-          <thead><tr><th>Member</th><th>Kind</th><th>Shared behavior</th></tr></thead>
+          <thead><tr><th>Member</th><th>Kind</th><th>Behavior</th></tr></thead>
           <tbody>
-            <tr><td><code>dashboards</code></td><td>Property (list), notify <code>dashboardsChanged</code></td><td>Headers <code>{ id, label, builtIn, path }</code>: presets first in file-name order, then user files in file-name order.</td></tr>
-            <tr><td><code>loadDashboard(id)</code></td><td>Invokable -&gt; map</td><td>Full parsed spec, or an empty map for an unknown id / unreadable file (logged).</td></tr>
-            <tr><td><code>isBuiltIn(id)</code></td><td>Invokable -&gt; bool</td><td></td></tr>
+            <tr><td><code>dashboards</code></td><td><code>Property('QVariantList')</code>, notify <code>dashboardsChanged</code></td><td>Headers <code>{ id, label, builtIn, path }</code>: presets first in file-name order, then user files in file-name order.</td></tr>
+            <tr><td><code>loadDashboard(id)</code></td><td>Slot -&gt; <code>QVariant</code> (dict)</td><td>Full parsed spec, or an empty map for an unknown id / unreadable file (logged).</td></tr>
+            <tr><td><code>isBuiltIn(id)</code></td><td>Slot -&gt; bool</td><td>False for unknown ids.</td></tr>
             <tr><td><code>saveDashboard(spec)</code></td><td>Slot -&gt; id or <code>""</code></td><td>Requires non-empty <code>id</code> and <code>label</code> and a configured user dir; refuses an id that belongs to a built-in; otherwise writes <code>&lt;userDir&gt;/&lt;id&gt;.json</code> (overwriting an existing user file with that id) and rescans.</td></tr>
-            <tr><td><code>deleteDashboard(id)</code></td><td>Slot -&gt; bool</td><td>Removes the user file. A built-in is hidden instead: its id is added to <code>&lt;userDir&gt;/.hidden-builtins</code> (a JSON array) and it drops out of <code>dashboards</code>, but its id stays reserved. False for unknown ids.</td></tr>
-            <tr><td><code>hiddenBuiltInCount</code></td><td>Property (int), notify <code>dashboardsChanged</code></td><td>Number of built-ins the user has deleted (hidden).</td></tr>
-            <tr><td><code>restoreBuiltInDashboards()</code></td><td>Slot -&gt; bool</td><td>Clears <code>.hidden-builtins</code> and rescans; false if nothing was hidden.</td></tr>
+            <tr><td><code>deleteDashboard(id)</code></td><td>Slot -&gt; bool</td><td>Removes the user file. A built-in is hidden instead: its id is added to <code>&lt;userDir&gt;/.hidden-builtins</code> (a sorted JSON array) and it drops out of <code>dashboards</code>, but its id stays reserved. False for unknown ids, or when the file cannot be removed / the hidden list cannot be written.</td></tr>
+            <tr><td><code>hiddenBuiltInCount</code></td><td><code>Property(int)</code>, notify <code>dashboardsChanged</code></td><td>Number of built-ins the user has deleted (hidden).</td></tr>
+            <tr><td><code>restoreBuiltInDashboards()</code></td><td>Slot -&gt; bool</td><td>Deletes <code>.hidden-builtins</code> and rescans; false if nothing was hidden.</td></tr>
             <tr><td><code>duplicateDashboard(sourceId, newLabel)</code></td><td>Slot -&gt; id or <code>""</code></td><td>Reads the source spec (built-in or user), sets <code>label</code> to <code>newLabel</code> or <code>"&lt;source label&gt; (Copy)"</code>, generates a unique id, and calls <code>saveDashboard</code>.</td></tr>
             <tr><td><code>refresh()</code></td><td>Slot</td><td>Full rescan of both directories.</td></tr>
-            <tr><td><code>exportDashboard(id)</code></td><td>Slot -&gt; path or <code>""</code></td><td>Writes the spec to <code>&lt;Downloads&gt;/OCTAVE-dashboards/&lt;id&gt;.json</code> (Documents if there is no Downloads location), atomically.</td></tr>
-            <tr><td><code>copyDashboardToClipboard(id)</code></td><td>Slot -&gt; bool</td><td>Puts the spec on the clipboard as compact JSON.</td></tr>
-            <tr><td><code>importDashboard(pathOrUrl)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Accepts a plain path, a <code>file://</code> URL, or an Android <code>content://</code> URL (C++ hands it to <code>QFile</code>). Reads at most 512 KB, then as <code>importDashboardFromText</code>.</td></tr>
+            <tr><td><code>exportDashboard(id)</code></td><td>Slot -&gt; path or <code>""</code></td><td>Writes the spec to <code>&lt;Downloads&gt;/OCTAVE-dashboards/&lt;id&gt;.json</code> (<code>QStandardPaths</code> Documents location if there is no Downloads location), atomically. Errors: "Dashboard not found", "Could not write to &lt;dir&gt;".</td></tr>
+            <tr><td><code>copyDashboardToClipboard(id)</code></td><td>Slot -&gt; bool</td><td>Puts the spec on <code>QGuiApplication.clipboard()</code> as compact JSON (<code>separators=(",", ":")</code>).</td></tr>
+            <tr><td><code>importDashboard(pathOrUrl)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Accepts a plain path or a <code>file://</code> URL (what the QML <code>FileDialog</code> returns). A file over 512 KB is refused ("File is too large to be a dashboard"); an unreadable or non-UTF-8 file gives "Could not open the file". Otherwise as <code>importDashboardFromText</code>.</td></tr>
             <tr><td><code>importDashboardFromClipboard()</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Clipboard text through <code>importDashboardFromText</code>; "The clipboard is empty" otherwise.</td></tr>
-            <tr><td><code>importDashboardFromText(json)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Parse, <a href="#sharing">sanitize</a>, assign a fresh id from the label, <code>saveDashboard</code>.</td></tr>
-            <tr><td><code>lastShareError</code></td><td>Property (string), notify <code>lastShareErrorChanged</code></td><td>Human-readable reason the last export/import failed; <code>""</code> after a success. The chooser's status banner shows it.</td></tr>
+            <tr><td><code>importDashboardFromText(json)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Refuse more than 512 KB ("Text is too large to be a dashboard"), parse ("Not an OCTAVE dashboard (invalid JSON)"), <a href="#sharing">sanitize</a>, assign a fresh id from the label, <code>saveDashboard</code>.</td></tr>
+            <tr><td><code>lastShareError</code></td><td><code>Property(str)</code>, notify <code>lastShareErrorChanged</code></td><td>Human-readable reason the last export/import failed; <code>""</code> after a success. The chooser's status banner shows it.</td></tr>
           </tbody>
         </table>
         <ul>
-          <li><strong>Scanning</strong>: every <code>*.json</code> is fully parsed (there is no lightweight header read; <code>readHeader</code> calls <code>readFullSpec</code>). Non-object roots, parse errors, missing ids, duplicate preset ids and user ids colliding with a built-in are logged (<code>octave.dashboards</code> category / module logger) and skipped.</li>
-          <li><strong>Atomic writes</strong>: pretty-printed JSON is written through <code>QSaveFile</code> in C++ (temporary file committed over the target); Python writes a <code>.dashboard_tmp_*.json</code> temp file in the same directory and <code>os.replace</code>s it. Both replace the destination after writing a temporary file. This prevents readers from seeing a partially written JSON file; it is not a guarantee against every power-loss failure.</li>
-          <li><strong>Id generation</strong>: <code>slugify</code> lowercases, replaces runs of <code>[^a-z0-9]</code> with <code>-</code>, trims dashes, and falls back to <code>"dashboard"</code>; <code>uniqueUserIdFromLabel</code> appends <code>-2</code>, <code>-3</code>, ... up to 999 (then a millisecond timestamp). The editor reimplements the same rule in QML so it can pick an id before calling save.</li>
-          <li><strong>Hot reload</strong> (<code>c754f3d</code>): a <code>QFileSystemWatcher</code> on the user dir, a 300 ms single-shot debounce, and a signature <code>name:mtime:size|...</code> of the JSON files. A directory event only triggers a rescan when the signature differs from the one recorded at the last scan -- the manager's own saves already rescanned, so they do not double-fire. If the directory was recreated the watch is re-armed.</li>
+          <li><strong>Scanning</strong>: every <code>*.json</code> is fully parsed in file-name order (there is no lightweight header read; <code>_read_header</code> calls <code>_read_full_spec</code>). Non-object roots, parse errors, missing ids, duplicate preset ids and user ids colliding with a built-in are logged on the <code>octave.dashboard_manager</code> logger and skipped.</li>
+          <li><strong>Atomic writes</strong>: <code>_write_spec</code> creates the directory, writes pretty-printed JSON (<code>indent=2</code>) to a <code>tempfile.mkstemp</code> file named <code>.dashboard_tmp_*.json</code> in the same directory and <code>os.replace</code>s it over the target (the temp file is removed if that fails). This prevents readers from seeing a partially written JSON file; there is no <code>fsync</code>, so it is not a guarantee against every power-loss failure.</li>
+          <li><strong>Id generation</strong>: <code>_slugify</code> lowercases, replaces runs of <code>[^a-z0-9]</code> with <code>-</code>, trims dashes, and falls back to <code>"dashboard"</code>; <code>_unique_user_id_from_label</code> appends <code>-2</code>, <code>-3</code>, ... up to 999 (then a millisecond timestamp). The editor reimplements the same rule in QML so it can pick an id before calling save.</li>
+          <li><strong>Hot reload</strong> (<code>c754f3d</code>): a <code>QFileSystemWatcher</code> on the user dir, a 300 ms single-shot <code>QTimer</code> debounce, and a signature <code>name:mtime:size|...</code> of the JSON files (<code>int(st.st_mtime)</code>, whole seconds). A directory event only triggers a rescan when the signature differs from the one recorded at the last scan -- the manager's own saves already rescanned, so they do not double-fire. If the directory was recreated the watch is re-armed.</li>
         </ul>
         <div class="info-box info">
-          <div class="info-box-title">Differences between the two implementations</div>
-          The implementations expose the same QML API and JSON format. The C++ side uses <code>QJsonDocument</code>, <code>QTemporaryFile</code>, and
-          <code>QFileInfo::lastModified().toSecsSinceEpoch()</code>; Python uses <code>json</code>, <code>tempfile.mkstemp</code>
-          and <code>int(st.st_mtime)</code>. Both return the user file's absolute path in the header, and both emit
-          <code>dashboardsChanged</code> synchronously at the end of every rescan -- which is why the chooser's delete
-          button must not run code after <code>deleteDashboard()</code> in its own delegate (see below).
+          <div class="info-box-title">Synchronous change signal</div>
+          Each header carries the file's absolute <code>path</code>, and <code>dashboardsChanged</code> is emitted
+          synchronously at the end of every rescan (which save, delete, duplicate, restore and import all trigger) -- which
+          is why the chooser's delete button must not run code after <code>deleteDashboard()</code> in its own delegate (see
+          below).
         </div>
 
         <h2 id="sharing">Sharing: Export and Import</h2>
@@ -512,15 +512,15 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
         <p>
           <strong>Imports never overwrite.</strong> The incoming <code>id</code> is discarded and a new one is generated from the
           label with the same <code>uniqueUserIdFromLabel</code> rule as Duplicate, so importing the same file twice gives
-          <code>name</code> and <code>name-2</code>. Both backends run the same sanitizer
-          (<code>DashboardManager::sanitizeImportedSpec</code> / <code>sanitize_imported_spec</code>) first:
+          <code>name</code> and <code>name-2</code>. The module-level function <code>sanitize_imported_spec(raw)</code> runs
+          first and returns <code>(spec, "")</code> or <code>({}, reason)</code>:
         </p>
         <ul>
-          <li>Root must be a JSON object with a <code>cells</code> array; <code>schema</code> (default 1) must be 1 -- newer is refused with "This dashboard needs a newer version of OCTAVE".</li>
+          <li>Root must be a JSON object ("Not an OCTAVE dashboard (invalid JSON)") with a <code>cells</code> array ("&hellip; (no cells)"); <code>schema</code> (default 1) must be 1 -- newer than <code>SUPPORTED_SCHEMA</code> is refused with "This dashboard needs a newer version of OCTAVE", below 1 (or not a number) with "&hellip; (bad schema)".</li>
           <li>Only <code>schema</code>, <code>label</code>, <code>gridColumns</code>, <code>gridRows</code>, <code>margins</code>, <code>spacing</code>, <code>cells</code> survive; per cell only <code>type</code>, <code>paramId</code>, <code>col</code>, <code>row</code>, <code>colSpan</code>, <code>rowSpan</code>, <code>props</code>. Anything else -- an <code>id</code>, a <code>source</code> field, unknown keys -- is dropped.</li>
-          <li><code>props</code> keeps scalar values only (bool, number, string &le; 200 chars); nested objects and arrays are dropped.</li>
+          <li><code>props</code> keeps scalar values only (bool, number, string truncated to 200 chars) under keys of at most 64 chars; nested objects and arrays are dropped. <code>paramId</code> is truncated to 64 chars and becomes <code>""</code> when it is not a string.</li>
           <li>Numbers must be JSON numbers (no bools, no numeric strings); geometry is clamped into the grid, grid size into 1..48, margins/spacing into 0..200. Label is whitespace-collapsed, capped at 80 chars, default "Imported dashboard".</li>
-          <li>Caps: 512 KB of text, 256 cells. Cells with an empty or over-long <code>type</code> are skipped; unknown types are kept (the renderer skips them, so a newer catalog's widgets survive a round trip).</li>
+          <li>Caps: 512 KB of text, 256 cells ("Dashboard has too many widgets"). Non-object cells and cells with an empty or over-64-char <code>type</code> are skipped; unknown types are kept (the renderer skips them, so a newer catalog's widgets survive a round trip).</li>
         </ul>
         <p>
           Shared dashboards are pure data -- no QML or script is ever loaded from an import. Covered by
@@ -617,8 +617,8 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
 
         <h2 id="editor">Dashboard Editor Internals</h2>
         <p>
-          The editor is pure QML -- it needed nothing new from either backend because <code>DashboardManager</code> already
-          exposed save/delete/duplicate with parity. Interaction model (decided 2026-06-10, "hybrid"): tap an empty cell to
+          The editor is pure QML -- it needed nothing new from the backend because <code>DashboardManager</code> already
+          exposed save/delete/duplicate. Interaction model (decided 2026-06-10, "hybrid"): tap an empty cell to
           place, drag a placed widget to move, drag the selected widget's corner grip to resize, tap to select and edit in a
           floating panel. While open, the editor registers its cells' PIDs as the <code>"editor"</code> polling demand so
           gauges preview live values from a connected car.
@@ -700,10 +700,10 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <table>
           <thead><tr><th>Where</th><th>Check</th><th>Outcome</th></tr></thead>
           <tbody>
-            <tr><td>DashboardManager (both backends)</td><td>JSON parses to an object; <code>id</code> present; unique vs presets</td><td>File skipped with a warning; the rest of the list still loads.</td></tr>
+            <tr><td>DashboardManager scan</td><td>JSON parses to an object; <code>id</code> present; unique vs presets</td><td>File skipped with a warning; the rest of the list still loads.</td></tr>
             <tr><td>DashboardRenderer</td><td><code>WidgetCatalog.isKnownType(type)</code>; <code>OBDParameterModel.hasParameter(paramId)</code></td><td>Unknown type: cell skipped, <code>console.warn</code> with dashboard id. Unknown PID: widget rendered unbound (shows 0 / placeholder), warned.</td></tr>
             <tr><td>DashboardEditor <code>_sanitizeCells</code></td><td>Same two checks plus geometry clamping</td><td>Unknown type dropped; unknown PID cleared; out-of-grid cells pulled inside.</td></tr>
-            <tr><td>DashboardManager import (both backends)</td><td>Schema version, allowed keys, scalar props, number types, geometry, size caps</td><td>Refused with a <code>lastShareError</code> reason, or reduced to the known keys and clamped (see <a href="#sharing">Sharing</a>).</td></tr>
+            <tr><td>DashboardManager import</td><td>Schema version, allowed keys, scalar props, number types, geometry, size caps</td><td>Refused with a <code>lastShareError</code> reason, or reduced to the known keys and clamped (see <a href="#sharing">Sharing</a>).</td></tr>
             <tr><td>OBDMenu</td><td>Active id still exists after <code>dashboardsChanged</code></td><td>Falls back to Parameter Cards.</td></tr>
             <tr><td>Hot reload</td><td>Watcher + 300 ms debounce + signature</td><td>A spec dropped into or removed from the user dir from a terminal or sync client shows up in the chooser within about a second, no restart.</td></tr>
           </tbody>
@@ -711,19 +711,19 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <p>Not validated for presets and hand-dropped files: <code>schema</code> (only imports check it), <code>props</code> types (an invalid value is assigned as-is and the QML property coerces or ignores it), overlapping cells in hand-written specs (rendered overlapping; the editor will refuse to move them onto each other but does not repair them on load).</p>
 
         <h2 id="testing">Testing</h2>
-        <p><strong>Headless (pytest, runs in CI):</strong></p>
+        <p><strong>Headless (pytest; <code>QT_QPA_PLATFORM=offscreen pytest tests/</code>):</strong></p>
         <ul>
-          <li><span class="file-path">tests/test_dashboard_sharing.py</span> -- 8 tests: the import sanitizer keeps only known keys and clamps geometry, rejects newer/bad schema, missing cells, too many cells and non-object JSON; export writes <code>OCTAVE-dashboards/&lt;id&gt;.json</code> (Downloads location stubbed to a temp dir), importing it twice gives two new ids, and failures set <code>lastShareError</code>.</li>
-          <li><span class="file-path">tests/test_vehicle_gate_qml.py</span> -- loads the real <code>OBDParameterModel</code> and <code>DashboardRenderer</code> against a fake <code>obdManager</code> and checks the gate before a scan, after a scan (only the unreported PID shows the placeholder; sensor ids exempt; <code>vehicleParameters</code> order) and after disconnect.</li>
-          <li><span class="file-path">tests/test_obd_poll_demand.py</span> -- the backend side of demand-driven polling (see <a href="obd-manager.html">OBD Manager</a>).</li>
+          <li><span class="file-path">tests/test_dashboard_sharing.py</span> -- 8 test cases (four functions, one parametrised over five rejections): the import sanitizer keeps only known keys and clamps geometry, rejects newer/bad schema, missing cells, too many cells and non-object JSON; export writes <code>OCTAVE-dashboards/&lt;id&gt;.json</code> (Downloads location stubbed to a temp dir), importing it twice gives two new ids, and failures set <code>lastShareError</code>.</li>
+          <li><span class="file-path">tests/test_vehicle_gate_qml.py</span> -- loads the real <code>OBDParameterModel</code> and <code>DashboardRenderer</code> in a <code>QQmlEngine</code> against a fake <code>obdManager</code> (a PySide6 <code>QObject</code> exposing <code>vehicleSupportedParameters</code>, <code>vehicleScanComplete</code> and <code>setParameterDemand</code>) and checks the gate before a scan, after a scan (only the unreported PID shows the placeholder; sensor ids exempt; <code>vehicleParameters</code> order) and after disconnect.</li>
+          <li><span class="file-path">tests/test_obd_poll_demand.py</span> -- the <code>OBDManager</code> side of demand-driven polling (see <a href="obd-manager.html">OBD Manager</a>).</li>
         </ul>
-        <p><strong>End-to-end (gitignored <code>dev/</code> tree, drives the running app through the <code>--profile</code> command server; the C++ build by default, <code>OCTAVE_BACKEND=python</code> for Python; honours <code>XDG_CONFIG_HOME</code> for a sandboxed config):</strong></p>
+        <p><strong>End-to-end (gitignored <code>dev/</code> tree, drives the running app through the <code>--profile</code> command server in <span class="file-path">backend/command_server.py</span>; the scripts launch a C++ build by default, so set <code>OCTAVE_BACKEND=python</code> to run them against <span class="file-path">main.py</span>; they honour <code>XDG_CONFIG_HOME</code> for a sandboxed config):</strong></p>
         <ul>
           <li><span class="file-path">dev/tests/drive_dashboard_editor.py</span> -- opens the chooser, creates a dashboard,
           opens the palette, picks a PID via the searchable picker, moves and resizes with the steppers, drags with a valid
           and a rejected drop, toggles an option switch and edits a numeric field, removes a widget, toggles demo data,
           saves, reopens via Edit, copies, deletes, exercises draft rescue by leaving through <code>go_home</code>, verifies
-          hot reload by writing a JSON file directly, and checks that built-in cards expose only Copy -- 42 <code>step()</code>
+          hot reload by writing a JSON file directly, and checks that the built-in Sport card shows Copy and Delete but not Edit -- 42 <code>step()</code>
           assertions, screenshots under <span class="file-path">dev/screenshots/output/editor/</span>. Taps on canvas cells
           deselect first (the floating panel can cover them, and a finger can't tap through it); card actions and panel
           controls are scrolled into view before tapping.</li>
@@ -736,11 +736,10 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         </ul>
         <p>
           Both exit 1 on any failure. Modes: <code>xvfb</code> (default, deterministic 1280 × 720), <code>visible</code>,
-          <code>offscreen</code>. The command server injects mouse input through <code>QTest</code> (via
-          <code>QWindowSystemInterface</code>), so pointer handlers such as the swipe <code>DragHandler</code> see a real press
+          <code>offscreen</code> (fastest, but <code>ColorOverlay</code> icons render blank). The command server injects mouse input through
+          <code>PySide6.QtTest.QTest</code> (which goes through <code>QWindowSystemInterface</code>), so pointer handlers such as the swipe <code>DragHandler</code> see a real press
           / move / release sequence; hand-built <code>QMouseEvent</code>s sent with <code>sendEvent()</code> looked like a fresh
-          press on every move, which made the handler steal taps. Per <span class="file-path">TODO/dashboards-roadmap.md</span>
-          an on-device pass on the Android tablet (touch drag feel, palette/picker sizing) is still open. See
+          press on every move, which made the handler steal taps. See
           <a href="development.html#command-server">Development → Command Server</a>.
         </p>
 
@@ -752,18 +751,18 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <ul>
           <li><strong>New dashboard</strong>: build it in the editor, or write a schema-1 JSON by hand and drop it into <span class="file-path">frontend/dashboards/presets/</span> (ships as a read-only built-in, picked up at the next start) or the user dashboards directory (picked up live).</li>
           <li><strong>New primitive</strong>: create <span class="file-path">frontend/gauges/MyGauge.qml</span>, paste the shared binding preamble verbatim, animate <code>_animNorm</code> (not <code>value</code>), use <code>Shape</code>/<code>PathAngleArc</code> for curves and rotated <code>Rectangle</code>s for marks, declare <code>octaveSupportedKinds</code>, scale typography with the cell, and register it in <code>WidgetCatalog</code> with a url, display name, glyph, default span, matching <code>supportedKinds</code> and curated <code>editableProps</code> with honest defaults. Without the catalog entry it will neither render nor be placeable. Then document it in §3 of the authoring guide and on this page.</li>
-          <li><strong>New backend parameter</strong>: add the signal to both <code>OBDManager</code>s, the handler in <code>OBDParameterModel._obdConnections</code>, and the <code>allParameters</code> entry with a <code>kind</code>; gauges pick it up with no further work.</li>
+          <li><strong>New backend parameter</strong>: emit it from <code>OBDManager</code> in <span class="file-path">backend/obd_manager.py</span> (a dedicated signal or the generic <code>obdParameterChanged(paramId, value)</code>), add the handler in <code>OBDParameterModel._obdConnections</code>, and the <code>allParameters</code> entry with a <code>kind</code>; gauges pick it up with no further work.</li>
         </ul>
 
         <h2 id="design-decisions">Design Decisions</h2>
         <ul>
-          <li><strong>A singleton aggregator between the backend and the gauges.</strong> <code>OBDParameterModel</code> was introduced (<code>42bbf5f</code>, "centralized OBD parameter definitions into a singleton") so that parameter metadata lives in one QML table and gauges bind by string id. That is what lets the same gauge run against the C++ manager, the Python manager, the dev-mode mock or pure-QML demo data, and what let the IMU parameters join later with zero gauge changes.</li>
+          <li><strong>A singleton aggregator between the backend and the gauges.</strong> <code>OBDParameterModel</code> was introduced (<code>42bbf5f</code>, "centralized OBD parameter definitions into a singleton") so that parameter metadata lives in one QML table and gauges bind by string id. That is what lets the same gauge run against the real <code>OBDManager</code>, the dev-mode mock or pure-QML demo data, and what let the IMU parameters join later with zero gauge changes.</li>
           <li><strong>Coalesced model writes.</strong> Replacing <code>paramValues</code> per signal was correct but cost a full core on the Pi with nothing connected (<code>486a809</code>); a 33 ms flush keeps bindings reactive without allocating per write. The sparkline samples on its own timer, so the change did not alter any time axis.</li>
           <li><strong>Grid over free placement.</strong> Every dashboard anyone had written was grid-shaped, grids are far easier to edit on a touchscreen, and a 12-column grid maps cleanly onto the spans people actually want (<span class="file-path">TODO/dashboards-roadmap.md</span>, "Key design decisions already made").</li>
           <li><strong>JSON before editor.</strong> Phase 2 (data-driven dashboards) was declared the hinge: an editor that emitted QML source would have been a mess, while an editor that emits a JSON object is a GUI over a data format. Hand-written dashboard QML files were retired once all built-ins were JSON.</li>
           <li><strong>Absolute positioning in the renderer.</strong> <code>GridLayout</code> could not give proportional row spans; explicit cell math also gives the editor a deterministic snap grid and makes the miniature previews pixel-consistent with the full view.</li>
           <li><strong>Built-ins read-only, "Copy" to derive.</strong> Presets are authoritative and their ids are reserved (even while hidden by Delete); a user file that reuses one is rejected at load rather than shadowing it, so an update to a preset can never be masked by a stale copy.</li>
-          <li><strong>The editor is pure QML.</strong> The backend already had everything the editor needed; the only missing piece, "unique id from a label", was duplicated in QML rather than adding a slot to two backends. No CMake / <code>main.py</code> churn, no parity work.</li>
+          <li><strong>The editor is pure QML.</strong> The backend already had everything the editor needed; the only missing piece, "unique id from a label", was duplicated in QML rather than adding a slot. No <span class="file-path">main.py</span> or backend change was needed.</li>
           <li><strong>One catalog, three consumers.</strong> The type -&gt; url map used to live inline in the renderer; lifting it into <code>WidgetCatalog</code> means the palette cannot offer a type the renderer cannot draw, and the panel cannot expose a prop the gauge does not declare.</li>
           <li><strong>Curated, honest editable props.</strong> The panel shows a deliberately small set of scalar props with the gauge's real defaults so the in-car UI stays simple; the JSON stays fully expressive for power users (the TJ preset uses min/max and sample-interval overrides, which the current panel also offers).</li>
           <li><strong>Hybrid tap-and-drag.</strong> The original plan was tap-to-place only, because drag fights the chooser's <code>Flickable</code>; the editor canvas is a full-screen non-scrolling page, so drag is safe there and was added for placement. Tap-to-place stays for new widgets, steppers stay for precision.</li>
