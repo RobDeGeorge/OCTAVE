@@ -233,3 +233,42 @@ def test_encoder_failure_retries_once_in_software(qapp, manager, monkeypatch):
     manager._fatal_cause, manager._fatal_cause_at = "encoder", time.monotonic() - 10
     manager._on_disconnected("Phone disconnected. Reconnect the USB cable.")
     assert errors[-1] == "Phone disconnected. Reconnect the USB cable."
+
+
+def test_cable_pull_reattaches_over_wifi_to_the_same_phone(qapp, manager, monkeypatch):
+    # A USB session dropped mid-stream leaves its server (and the virtual
+    # display with the user's apps) alive on the phone; failing over to the
+    # same phone's Wi-Fi serial must reattach to it, not start a second one.
+    import time
+    import backend.phone_mirror.manager as mod
+
+    class _Sig:
+        def connect(self, *a):
+            pass
+
+    started = []
+
+    class FakeClient:
+        def __init__(self, *a):
+            pass
+
+        def __getattr__(self, name):
+            if name == "start":
+                return lambda *a, **k: started.append(k.get("attach_scid", ""))
+            if name.startswith("set_") or name in ("stop", "deleteLater"):
+                return lambda *a, **k: None
+            return _Sig()
+
+    monkeypatch.setattr(mod, "ScrcpyClient", FakeClient)
+    monkeypatch.setattr(mod, "bundled_server_jar", lambda: "/tmp/jar")
+    manager._serial = USB
+    manager._persist_scid, manager._persist_until = "2cac176c", time.monotonic() + 30
+    manager._start_generation = gen = 7
+    prep = {"probe": {"rows": [(TCP, "device")], "state": "device", "hint": "", "models": {}},
+            "serial": TCP, "sdk": 36}
+    manager._continue_start(prep, gen)
+    assert manager._attaching and started and started[-1] == "2cac176c"
+
+    # Picking another phone never reattaches to this one's session
+    manager.selectDevice(USB2)
+    assert manager._persist_scid == ""

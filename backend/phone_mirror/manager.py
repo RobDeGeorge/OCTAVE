@@ -688,8 +688,10 @@ class PhoneMirrorManager(QObject):
             return
         self._preferred_serial = serial
         logger.info(f"Phone mirror: phone picked: {serial}")
-        if self.isRunning and serial != self._serial:
-            self._persist_scid = ""   # never reattach to the other phone's session
+        if serial == self._serial:
+            return
+        self._persist_scid = ""   # never reattach to the other phone's session
+        if self.isRunning:
             self._restart_session()
 
     @Slot()
@@ -1361,7 +1363,10 @@ class PhoneMirrorManager(QObject):
         self._active_display_size = requested.split("/", 1)[0]
         self._started_auto_size = self._active_display_size if self._display_size == AUTO_DISPLAY_SIZE else ""
         attach_scid = ""
-        if self._persist_scid and time.monotonic() < self._persist_until and serial == self._serial:
+        # Any transport to the same phone may reattach: a cable pull fails over
+        # to Wi-Fi (a different serial) and keeps the virtual display and its
+        # apps. Picking another phone clears _persist_scid (selectDevice).
+        if self._persist_scid and time.monotonic() < self._persist_until:
             attach_scid = self._persist_scid
         self._attaching = bool(attach_scid)
         if not attach_scid:

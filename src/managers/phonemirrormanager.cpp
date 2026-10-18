@@ -417,10 +417,11 @@ void PhoneMirrorManager::selectDevice(const QString &serial)
         return;
     m_preferredSerial = serial;
     qCInfo(lcPhoneMirror) << "Phone picked:" << serial;
-    if (isRunning() && serial != m_serial) {
-        m_persistScid.clear();   // never reattach to the other phone's session
+    if (serial == m_serial)
+        return;
+    m_persistScid.clear();   // never reattach to the other phone's session
+    if (isRunning())
         restartSession();
-    }
 }
 
 // ─── Device probes ────────────────────────────────────────────────────
@@ -804,7 +805,10 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
     m_activeDisplaySize = requested.section(QLatin1Char('/'), 0, 0);
     m_startedAutoSize = m_displaySize == kAutoDisplaySize ? m_activeDisplaySize : QString();
     QString attachScid;
-    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs && serial == m_serial)
+    // Any transport to the same phone may reattach: a cable pull fails over to
+    // Wi-Fi (a different serial) and keeps the virtual display and its apps.
+    // Picking another phone clears m_persistScid (selectDevice).
+    if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
         attachScid = m_persistScid;
     m_attaching = !attachScid.isEmpty();
     if (!m_attaching)
