@@ -230,7 +230,9 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         </ul>
         <p>
           Tag strings are sanitized (control characters replaced by spaces, whitespace collapsed, truncated to 200
-          characters with "...") by <code>_sanitize_metadata()</code>; <code>_read_tags()</code> sanitizes every
+          characters with "...") by <code>_sanitize_metadata()</code>. It works per Unicode code point, so emoji
+          (surrogate pairs) and zero-width joiners in joined emoji are kept, a lone surrogate becomes a space, and the
+          cut never splits an emoji; <code>_read_tags()</code> sanitizes every
           format. Missing tags fall back
           to the file's base name for the title and to "Unknown Artist" / "Unknown Album".
         </p>
@@ -457,8 +459,8 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <span class="file-path">src/managers/volumecontroller.{h,cpp}</span> (<code>VolumeController::toLinearStatic()</code>). The <code>VolumeController</code>
           QObject, registered as the QML context property <code>volumeController</code>, is the <em>single entry point</em>
           for changing the volume: the BottomBar and MediaRoom sliders, the gesture sensor and the ESP32 knob all call
-          <code>volumeController.applyVolume(percent)</code>, which clamps, persists the percent as the
-          <code>currentVolume</code> setting, computes the linear value and fans it out. <code>toLinear(percent)</code>
+          <code>volumeController.applyVolume(percent)</code>, which clamps, stores the percent as the
+          in-memory <code>currentVolume</code> (not saved; a restart starts at <code>startUpVolume</code>), computes the linear value and fans it out. <code>toLinear(percent)</code>
           exposes the pure math to QML.
         </p>
         <pre><code><span class="cmt">// src/managers/volumecontroller.cpp</span>

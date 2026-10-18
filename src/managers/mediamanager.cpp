@@ -303,20 +303,37 @@ QString MediaManager::_sanitize_metadata(const QString &text, int maxLength)
     if (text.isEmpty())
         return text;
 
+    // Per code point, not per UTF-16 unit: an emoji is a surrogate pair and
+    // each half on its own counts as unprintable. Zero-width (non-)joiners
+    // stay so joined emoji sequences keep together.
     QString sanitized;
     sanitized.reserve(text.size());
-    for (const QChar &ch : text) {
-        if (ch.isPrint() || ch == QLatin1Char(' '))
+    for (qsizetype i = 0; i < text.size(); ++i) {
+        const QChar ch = text.at(i);
+        if (ch.isHighSurrogate() && i + 1 < text.size() && text.at(i + 1).isLowSurrogate()) {
+            const char32_t ucs4 = QChar::surrogateToUcs4(ch, text.at(i + 1));
+            if (QChar::isPrint(ucs4)) {
+                sanitized.append(ch);
+                sanitized.append(text.at(i + 1));
+            } else {
+                sanitized.append(QLatin1Char(' '));
+            }
+            ++i;
+        } else if (ch.isPrint() || ch == QLatin1Char(' ') || ch.unicode() == 0x200D || ch.unicode() == 0x200C) {
             sanitized.append(ch);
-        else
+        } else {
             sanitized.append(QLatin1Char(' '));
+        }
     }
 
     // Collapse multiple spaces and strip
     sanitized = sanitized.simplified();
 
     if (sanitized.size() > maxLength) {
-        sanitized = sanitized.left(maxLength - 3) + QStringLiteral("...");
+        qsizetype cut = maxLength - 3;
+        if (cut > 0 && sanitized.at(cut - 1).isHighSurrogate())
+            --cut;   // don't split an emoji
+        sanitized = sanitized.left(cut) + QStringLiteral("...");
     }
     return sanitized;
 }

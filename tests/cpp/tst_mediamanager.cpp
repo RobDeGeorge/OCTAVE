@@ -90,6 +90,56 @@ private slots:
         QCOMPARE(mm->get_current_song_list(), (QStringList{"a.mp3", "b.mp3", "c.mp3"}));
     }
 
+    void sanitizeMetadata_data()
+    {
+        QTest::addColumn<QString>("in");
+        QTest::addColumn<QString>("out");
+        QTest::newRow("plain") << QStringLiteral("No One Knows") << QStringLiteral("No One Knows");
+        QTest::newRow("empty") << QString() << QString();
+        QTest::newRow("only spaces") << QStringLiteral("   ") << QString();
+        QTest::newRow("control chars become spaces, collapsed")
+            << (QStringLiteral("Track") + QChar(0x01) + QStringLiteral("Name") + QChar(0x1f) + QChar(0)
+                + QStringLiteral("End"))
+            << QStringLiteral("Track Name End");
+        QTest::newRow("tabs and newlines")
+            << QStringLiteral("  Song\tTitle\r\nPart 2  ") << QStringLiteral("Song Title Part 2");
+        QTest::newRow("accents (NFC)") << QStringLiteral("Beyonc\u00e9") << QStringLiteral("Beyonc\u00e9");
+        QTest::newRow("combining mark kept (NFD)")
+            << QStringLiteral("Beyonce\u0301") << QStringLiteral("Beyonce\u0301");
+        // UTF-8 read as Latin-1 can't be told apart from real Latin-1 text: kept as is
+        QTest::newRow("mojibake kept") << QStringLiteral("Beyonc\u00c3\u00a9") << QStringLiteral("Beyonc\u00c3\u00a9");
+        QTest::newRow("emoji kept") << QString::fromUtf8("\U0001F3B8 Song") << QString::fromUtf8("\U0001F3B8 Song");
+        QTest::newRow("joined emoji kept")
+            << QString::fromUtf8("\U0001F468\u200D\U0001F469\u200D\U0001F467 Family")
+            << QString::fromUtf8("\U0001F468\u200D\U0001F469\u200D\U0001F467 Family");
+        QTest::newRow("lone surrogate dropped")
+            << (QStringLiteral("A") + QChar(0xD83C) + QStringLiteral("B")) << QStringLiteral("A B");
+        QTest::newRow("CJK") << QString::fromUtf8("\u6771\u4eac") << QString::fromUtf8("\u6771\u4eac");
+    }
+
+    void sanitizeMetadata()
+    {
+        QFETCH(QString, in);
+        QFETCH(QString, out);
+        QCOMPARE(MediaManager::_sanitize_metadata(in), out);
+    }
+
+    void sanitizeMetadataCapsLength()
+    {
+        const QString longText(300, QLatin1Char('a'));
+        const QString capped = MediaManager::_sanitize_metadata(longText);
+        QCOMPARE(capped.size(), 200);
+        QVERIFY(capped.endsWith(QStringLiteral("...")));
+        QCOMPARE(MediaManager::_sanitize_metadata(longText, 10), QStringLiteral("aaaaaaa..."));
+        QCOMPARE(MediaManager::_sanitize_metadata(QString(200, QLatin1Char('a'))).size(), 200);   // at the cap: untouched
+
+        // The cut never splits an emoji's surrogate pair
+        const QString guitar = QString::fromUtf8("\U0001F3B8");
+        const QString cut = MediaManager::_sanitize_metadata(QStringLiteral("abcdef") + guitar + QStringLiteral("xyz"), 10);
+        QVERIFY2(!cut.isEmpty() && !cut.at(cut.size() - 4).isHighSurrogate(), qPrintable(cut));
+        QCOMPARE(cut, QStringLiteral("abcdef..."));
+    }
+
     void zeroByteCoverIsNotServed()
     {
         MediaManager mm;
@@ -121,7 +171,8 @@ private:
         QDir().mkpath(road.path());
         for (const QString &name : files) {
             QFile f(road.filePath(name));
-            f.open(QIODevice::WriteOnly);
+            if (!f.open(QIODevice::WriteOnly))
+                qFatal("cannot create %s", qPrintable(f.fileName()));
             f.write(QByteArray(1, '\0'));
         }
         auto mm = std::make_unique<MediaManager>();

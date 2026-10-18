@@ -39,7 +39,7 @@ void VolumeController::applyVolume(int percent)
 
     const float linear = toLinearStatic(static_cast<float>(percent));
 
-    // Persist the raw percent to settings
+    // The live percent other code reads back (in memory, not saved to disk)
     if (m_settings) {
         m_settings->setCurrentVolume(percent);
     }

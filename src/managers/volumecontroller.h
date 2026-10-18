@@ -64,7 +64,8 @@ public slots:
     /**
      * @brief Apply a volume percent (0-100) to every connected audio output.
      *
-     * - Persists the clamped percent to SettingsManager.
+     * - Stores the clamped percent as SettingsManager::currentVolume (in
+     *   memory only; a restart starts at the separate start-up volume).
      * - Computes the quadratic-curve linear value.
      * - Emits volumeApplied(percent, linear) so connected managers can react.
      */

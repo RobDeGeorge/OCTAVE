@@ -12,7 +12,6 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 |---|---|---|---|
 | [windows-adb-firewall.md](windows-adb-firewall.md) | Verify the new adb firewall rule in the Windows installer (code done) | S | Win11 VM, a phone |
 | [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror recovers fast from network and USB changes, works beyond Samsung | S … L | phone on the Pi, then other phones |
-| [future-tests.md](future-tests.md) | Tests for volume routing, metadata sanitizing, settings round-trip, then bigger suites | S … L–XL | desktop |
 | [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, version from CMake, log check, then permissions / audio focus | S … L | S22 |
 | [sensorhome-3d-first-visit.md](sensorhome-3d-first-visit.md) | No 1.2 s freeze on the first 3D View tap | S–M | S22, Pi |
 | [error-notification-ui.md](error-notification-ui.md) | App-wide notice when OBD drops mid-drive while on another page | S–M | desktop (sim) |
@@ -23,6 +22,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | File | Goal | Effort | Needs |
 |---|---|---|---|
 | [dashboards-roadmap.md](dashboards-roadmap.md) | Prove the dashboard editor and demand-driven polling on a touchscreen and in the car | M | S22, Jeep |
+| [future-tests.md](future-tests.md) | Signal wiring test (after moving main.cpp connects into a function), then QML integration and OBD replay suites | M … L–XL | desktop, Jeep for OBD recordings |
 | [yt-cookies-file-picker.md](yt-cookies-file-picker.md) | Import / test / clear the YouTube cookies file in the app | M | desktop, S22 |
 | [update-checker-packaged-builds.md](update-checker-packaged-builds.md) | Packaged builds compare against the latest GitHub release | M | VMs, S22 |
 | [dp-helper-consolidation.md](dp-helper-consolidation.md) | One shared `dp()` instead of 63 private copies | M | 10-min S22 check first |

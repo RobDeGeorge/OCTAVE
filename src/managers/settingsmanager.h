@@ -15,6 +15,7 @@
 class SettingsManager : public QObject
 {
     Q_OBJECT
+    friend class TstSettingsManager;
 
     // ======================================================================
     // Q_PROPERTY declarations  (type, QML name, getter, notify)

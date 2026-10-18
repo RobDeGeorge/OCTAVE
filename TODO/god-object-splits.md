@@ -26,7 +26,7 @@ Three C++ manager files are well over 2000 lines and handle multiple distinct re
 
 1. **It's a refactor, not a bug fix.** Users don't feel this directly. The app works. This is purely developer experience.
 2. **It's high risk.** 2300–3300 lines of tightly-coupled code have load-bearing assumptions we don't fully understand. Breaking any of them is a regression users WILL feel, and Rob daily-drives this build.
-3. **The safety net is only partial.** The C++ QtTest suite in `tests/cpp/` covers ELM327 parsing, OBD demand/poll logic, the simulated car end to end, settings backup/atomic write and a few media edge cases. It does not yet cover a settings value round-trip, the volume dispatch, metadata sanitization or recorded real-car traffic (see `future-tests.md`).
+3. **The safety net is only partial.** The C++ QtTest suite in `tests/cpp/` covers ELM327 parsing, OBD demand/poll logic, the simulated car end to end, settings backup/atomic write and a few media edge cases. Since 2026-10-18 it also covers a settings round-trip and older-file load, the volume dispatch and metadata sanitizing. It does not yet cover recorded real-car traffic (see `future-tests.md`).
 4. **You chose to skip it.** You explicitly said #4 wasn't a priority in the session where we planned Phases 1–3.
 
 ---
@@ -61,7 +61,7 @@ Medium risk. More state than `SettingsManager`. The mute toggle guard, playback-
 - `src/managers/media/library.{h,cpp}` — `_scan_library_inner`, playlist create / move / delete, file-path resolution, display-name stripping, stats (lines ~1951–2960). Filesystem only.
 - `src/managers/mediamanager.{h,cpp}` (shrunk) — facade that owns the `QMediaPlayer`, playback control, recovery, playback-state save/restore and precache, and composes the helpers into the `MediaManager` QObject exposed to QML.
 
-**Prerequisite:** the `VolumeController` dispatch test and a metadata sanitization test (both in `future-tests.md`) should go in BEFORE this split. They validate the two most fragile parts of this subsystem. `tests/cpp/tst_mediamanager.cpp` already covers missing-track skipping, shuffle reselection and zero-byte covers.
+**Prerequisite (met 2026-10-18):** `tst_volumecontroller` and the sanitizing cases in `tst_mediamanager` cover the two most fragile parts, alongside missing-track skipping, shuffle reselection and zero-byte covers.
 
 ### 3. obdmanager.cpp (do last)
 
@@ -102,8 +102,8 @@ Before starting any split, these tests should exist:
 
 | Target | Required tests before split |
 |---|---|
-| `settingsmanager.cpp` | Settings round-trip test (Tier 1); backup and atomic-write tests already exist in `tst_settingsmanager.cpp` |
-| `mediamanager.cpp` | `VolumeController` dispatch test + metadata sanitization tests (Tier 1 + Tier 2) |
+| `settingsmanager.cpp` | Met: round-trip, older-file, backup and atomic-write tests in `tst_settingsmanager.cpp` |
+| `mediamanager.cpp` | Met: `tst_volumecontroller` and the sanitizing cases in `tst_mediamanager.cpp` |
 | `obdmanager.cpp` | OBD protocol replay suite (Tier 3); ELM327 parsing (`tst_elm327protocol`) and the simulated car (`tst_obdsim`) already exist |
 
 **Rule of thumb:** if a subsystem has no test coverage, don't refactor it. Add tests first, then refactor. The tests tell you when the refactor is done.
