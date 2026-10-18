@@ -626,6 +626,8 @@ ApplicationWindow {
             id: pagePrewarmTimer
             interval: gapFloor
             property var queue: null
+            // Pages asked for with enqueue() before the startup list exists
+            property var extra: []
             // Rest after a page = restFactor x the time it took, within these.
             readonly property real restFactor: 2
             readonly property int gapFloor: 150
@@ -659,6 +661,11 @@ ApplicationWindow {
                         { file: "SettingsMenu.qml", props: { initialSection: lastSettingsSection } },
                         { file: mediaDefault === "MediaRoom.qml" ? "MediaPlayer.qml" : "MediaRoom.qml" }
                     ]
+                    for (var e = 0; e < extra.length; e++) {
+                        if (!pages.some(function(p) { return p.file === extra[e] }))
+                            pages.push({ file: extra[e] })
+                    }
+                    extra = []
                     // Cheaper pages first, the Quick3D ones (the heaviest
                     // GPU setup) last. The heavy builds then land as late as possible
                     // after the startup load, each with a long rest before
@@ -682,6 +689,31 @@ ApplicationWindow {
                     else
                         pagePrewarmTimer.continueQueue()
                 })
+            }
+            // Build `file` in the background too, after whatever is queued:
+            // a page another page will probably open next (SensorHome queues
+            // CarMenu, whose cold build froze the first 3D View tap for
+            // ~1.2 s on a phone). Same pacing and warm render as the startup
+            // list; no-op if the page is built or being built.
+            function enqueue(file) {
+                if (stackView._pageCache[file] || stackView._incubating[file])
+                    return
+                if (queue === null) {   // startup list not built yet: join it
+                    if (extra.indexOf(file) === -1)
+                        extra = extra.concat([file])
+                    return
+                }
+                for (var i = 0; i < queue.length; i++)
+                    if (queue[i].file === file)
+                        return
+                queue.push({ file: file })
+                // Mid-run, continueQueue() reaches it; a finished queue is idle
+                if (!running && stepStart === 0 && pageWarmRenderer.framesLeft === 0) {
+                    queueStart = Date.now()   // the "finished" log times this run
+                    pagesBuilt = 0
+                    interval = gapFloor
+                    restart()
+                }
             }
             function continueQueue() {
                 var gap = gapFloor
@@ -1296,6 +1328,12 @@ ApplicationWindow {
         onTriggered: {
             mainWindow.shiftLightFlashVisible = !mainWindow.shiftLightFlashVisible
         }
+    }
+
+    // Pages call this to have a page they lead to built in the background
+    // (see pagePrewarmTimer.enqueue)
+    function prewarmPageSoon(file) {
+        pagePrewarmTimer.enqueue(file)
     }
 
     // ── App-wide error notice (frontend/ErrorToast.qml) ──────────────

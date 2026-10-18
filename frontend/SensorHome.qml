@@ -50,6 +50,18 @@ Item {
         return true
     }
 
+    // The first time this page is really shown, have CarMenu built in the
+    // background: built cold on the first 3D View tap, it froze the phone for
+    // about 1.2 s. Not at startup, which would cost every session that never
+    // opens it.
+    property bool _carMenuQueued: false
+    StackView.onActivated: {
+        if (!_carMenuQueued && has3DView && mainWindow && mainWindow.prewarmPageSoon) {
+            _carMenuQueued = true
+            mainWindow.prewarmPageSoon("CarMenu.qml")
+        }
+    }
+
     // QtQuick3D is an optional runtime dependency; probe it once so the 3D View
     // card can say so instead of looking clickable and doing nothing.
     property bool has3DView: {
