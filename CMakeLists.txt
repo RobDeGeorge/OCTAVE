@@ -396,8 +396,16 @@ if(ANDROID)
     # androiddeployqt packages the app, bundles Qt .so's, generates the APK.
     # Properties must be set before the auto-finalize step that qt_add_executable
     # schedules (via CMake's DEFERRED mechanism).
+    # The APK's version follows project(): versionName is the version string,
+    # versionCode is major*10000 + minor*100 + patch (0.9.5 -> 905). Android
+    # only installs an APK whose code is higher than the installed one, so it
+    # must keep rising; it was hand-edited up to 6 before this.
+    math(EXPR OCTAVE_ANDROID_VERSION_CODE
+         "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH}")
     set_target_properties(octave PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
+        QT_ANDROID_VERSION_CODE ${OCTAVE_ANDROID_VERSION_CODE}
+        QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
         # Capped at 33 by AGP 7.4.1 (Qt 6.7.3's target AGP).
         # Bump to 34+ once upgrading to Qt 6.8+ + AGP 8.5+ (Play Store target).
         QT_ANDROID_TARGET_SDK_VERSION 33

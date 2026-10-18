@@ -12,7 +12,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 |---|---|---|---|
 | [windows-adb-firewall.md](windows-adb-firewall.md) | Verify the new adb firewall rule in the Windows installer (code done) | S | Win11 VM, a phone |
 | [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror recovers fast from network and USB changes, works beyond Samsung | S … L | phone on the Pi, then other phones |
-| [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, version from CMake, log check, then permissions / audio focus | S … L | S22 |
+| [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, log check, licenses, then permissions / audio focus | S … L | S22 |
 | [sensorhome-3d-first-visit.md](sensorhome-3d-first-visit.md) | No 1.2 s freeze on the first 3D View tap | S–M | S22, Pi |
 | [error-notification-ui.md](error-notification-ui.md) | App-wide notice when OBD drops mid-drive while on another page | S–M | desktop (sim) |
 | [sensor-driven-ui-cost.md](sensor-driven-ui-cost.md) | Stop idle phone sensors; stop the OBD grid redrawing every card | S–M, M | S22, Pi |

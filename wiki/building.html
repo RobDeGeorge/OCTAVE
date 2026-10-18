@@ -88,7 +88,7 @@ cmake --build build -j</code></pre>
 
         <!-- CMake options -->
         <h2 id="cmake-options">CMake Options &amp; Layout</h2>
-        <p><span class="file-path">CMakeLists.txt</span> declares <code>project(OCTAVE VERSION 0.9.5)</code>; the version is compiled in as <code>OCTAVE_VERSION</code>. The same <code>0.9.5</code> is carried by <span class="file-path">build_scripts/installer_windows.iss</span> (<code>MyAppVersion</code>) and <span class="file-path">android/AndroidManifest.xml</span> (<code>android:versionName</code>, next to the integer <code>android:versionCode</code>) &mdash; bump them together. Every source file is listed explicitly in the <code>qt_add_executable(octave ...)</code> call &mdash; a new manager means two new lines there.</p>
+        <p><span class="file-path">CMakeLists.txt</span> declares <code>project(OCTAVE VERSION 0.9.5)</code>; the version is compiled in as <code>OCTAVE_VERSION</code>. The APK takes it from there too: <code>QT_ANDROID_VERSION_NAME</code> is the version string and <code>QT_ANDROID_VERSION_CODE</code> is major&times;10000 + minor&times;100 + patch (0.9.5 &rarr; 905; Android only installs a higher code over an installed APK), filled into the manifest's <code>%%INSERT_VERSION_*%%</code> placeholders by androiddeployqt. Only <span class="file-path">build_scripts/installer_windows.iss</span> (<code>MyAppVersion</code>) carries its own copy, which CI patches from the tag; bump it together with <code>project()</code>. Every source file is listed explicitly in the <code>qt_add_executable(octave ...)</code> call &mdash; a new manager means two new lines there.</p>
         <table>
           <thead><tr><th>Option / define</th><th>Default</th><th>Effect</th></tr></thead>
           <tbody>
