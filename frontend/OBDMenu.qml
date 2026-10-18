@@ -46,6 +46,19 @@ Item {
 
     property var dashboardRegistry: _rebuildRegistry()
 
+    // Loaded specs by dashboard id. loadDashboard() returns a new object on
+    // every call, so a spec binding that re-evaluates during page activation
+    // would hand DashboardRenderer a "new" dashboard and tear its async
+    // widget Loaders down mid-incubation. Reading through this cache keeps
+    // the object the same; filling it doesn't notify (only reassigning
+    // _specCache does), so it can be read inside the binding.
+    property var _specCache: ({})
+    function _specFor(id) {
+        if (!_specCache[id])
+            _specCache[id] = dashboardManager.loadDashboard(id)
+        return _specCache[id]
+    }
+
     function _rebuildRegistry() {
         var list = [_gridSentinel]
         if (typeof dashboardManager !== "undefined" && dashboardManager) {
@@ -61,6 +74,7 @@ Item {
         ignoreUnknownSignals: true
         function onDashboardsChanged() {
             obdPage.dashboardRegistry = obdPage._rebuildRegistry()
+            obdPage._specCache = ({})   // a dashboard was saved, edited or removed: reload
             // If the active dashboard vanished (deleted in-app, or its JSON
             // was removed externally and refresh() ran), fall back to the
             // built-in Parameter Cards rather than rendering nothing.
@@ -471,7 +485,7 @@ Item {
             readonly property bool _pageActive: obdPage.StackView.status === StackView.Active
                                                 || obdPage.StackView.status === StackView.Activating
             spec: (visible && _pageActive && typeof dashboardManager !== "undefined" && dashboardManager)
-                  ? dashboardManager.loadDashboard(obdPage.activeDashboardId)
+                  ? obdPage._specFor(obdPage.activeDashboardId)
                   : null
         }
 

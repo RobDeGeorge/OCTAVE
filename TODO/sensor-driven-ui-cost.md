@@ -31,13 +31,13 @@ Then re-measure on the phone and Pi with the grid on screen (pidstat 20 s, `qt.s
 
 **Effort:** M. **Needs:** the Galaxy S22 and the Orange Pi (live OBD, or the simulated car via `--dev`).
 
-## 3. Full Grid: "Object or context destroyed during incubation" warnings
+## 3. Full Grid: "Object or context destroyed during incubation" warnings (check on the S22)
 
-The first visit to OBD with the Full Grid dashboard logs about 8 `CircularGauge.qml: Object or context destroyed during incubation` warnings. They're cosmetic (the gauges appear within about 330 ms). The cause is that `spec` is bound to `(visible && _pageActive && ...) ? dashboardManager.loadDashboard(...)` (`frontend/OBDMenu.qml:474-475`). It gets a new object as `visible` and `_pageActive` flip during Activating→Active, which tears down `DashboardRenderer`'s async Loaders mid-incubation.
+Seen on the first visit to OBD with the Full Grid dashboard (about 8 `CircularGauge.qml` warnings, cosmetic). Not reproducible on desktop (2026-10-18: zero warnings with Full Grid active, both when OBD was pre-built and when it was opened before the pre-build reached it). As a defensive fix, `OBDMenu.qml` now reads the spec through `_specFor(id)`, a per-id cache cleared on `dashboardsChanged`, so a re-evaluation of the `spec` binding during activation hands the renderer the same object instead of a fresh `loadDashboard()` result.
 
-Steps: load the spec once per `activeDashboardId` (or on a dashboard-changed signal) into a plain property, and gate rendering on visibility separately. Confirm the warnings are gone with `./build/octave --dev`.
+Left: on the S22, open OBD for the first time with Full Grid active and check the log for the warning. If it's gone, delete this item; if not, find which dependency of the `spec` binding (`frontend/OBDMenu.qml`, `activeDashboardRenderer`) flips during activation on the phone.
 
-**Effort:** S–M. **Needs:** desktop only.
+**Effort:** S. **Needs:** Galaxy S22.
 
 ## Order
 
