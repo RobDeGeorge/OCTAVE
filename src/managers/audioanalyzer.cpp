@@ -1,4 +1,5 @@
 #include "audioanalyzer.h"
+#include "../util/perfscope.h"
 
 #include <QUrl>
 #include <QFileInfo>
@@ -301,6 +302,7 @@ struct ChunkStream {
 AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
     const QString &filePath, int numBars, double chunkDuration)
 {
+    OCTAVE_PERF_SCOPE("audio._analyze_audio (FFT)");
     AnalysisResult result;
 
     // ── Decode via QAudioDecoder (cross-platform) ────────────────────────

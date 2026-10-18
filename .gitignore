@@ -40,8 +40,9 @@ tools/platform-tools/
 # Generated protobuf files (regenerate with compile_protos.py)
 backend/android_auto/proto/aap_protobuf/**/*_pb2.py
 
-# Developer mode tools (completely isolated from main codebase)
-dev/
+# Developer tool clients and the Python dev runtime (synced via Dropbox, not
+# git). Anchored: src/dev/ is the committed C++ dev tooling (OCTAVE_DEV_TOOLS).
+/dev/
 
 # Old/extra virtual environments
 venv_old_linux/

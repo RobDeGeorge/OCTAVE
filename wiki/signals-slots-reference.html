@@ -39,7 +39,7 @@
             <li><a href="#phoneMirrorManager">PhoneMirrorManager</a></li>
             <li><a href="#downloadManager">DownloadManager</a></li>
             <li><a href="#dashboardManager">DashboardManager</a></li>
-            <li><a href="#perfMonitor">PerfMonitor</a> <span class="platform-badge linux">Python only</span></li>
+            <li><a href="#perfMonitor">PerfMonitor</a> <span class="platform-badge desktop">developer only</span></li>
             <li><a href="#parity-gaps">Known parity gaps</a></li>
           </ul>
         </nav>
@@ -72,7 +72,7 @@
             <tr><td><a href="#phoneMirrorManager"><code>phoneMirrorManager</code></a></td><td><code>PhoneMirrorManager</code> &mdash; <span class="file-path">src/managers/phonemirrormanager.h</span></td><td><code>PhoneMirrorManager</code> &mdash; <span class="file-path">backend/phone_mirror/manager.py</span></td><td>C++ mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#downloadManager"><code>downloadManager</code></a></td><td><code>DownloadManager</code> &mdash; <span class="file-path">src/managers/downloadmanager.h</span></td><td><code>DownloadManager</code> &mdash; <span class="file-path">backend/download_manager.py</span></td><td>C++: stub class when <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
             <tr><td><a href="#dashboardManager"><code>dashboardManager</code></a></td><td><code>DashboardManager</code> &mdash; <span class="file-path">src/managers/dashboardmanager.h</span></td><td><code>DashboardManager</code> &mdash; <span class="file-path">backend/dashboard_manager.py</span></td><td></td></tr>
-            <tr><td><a href="#perfMonitor"><code>perfMonitor</code></a></td><td>&mdash;</td><td><code>PerfMonitor</code> &mdash; <span class="file-path">backend/perf_monitor.py</span></td><td>Python only, and only with <code>python main.py --profile</code></td></tr>
+            <tr><td><a href="#perfMonitor"><code>perfMonitor</code></a></td><td>&mdash;</td><td><code>PerfMonitor</code> &mdash; <span class="file-path">src/dev/perfmonitor.cpp</span> / <span class="file-path">backend/perf_monitor.py</span></td><td>Only with <code>--profile</code> (C++: <code>OCTAVE_DEV_TOOLS</code> builds)</td></tr>
           </tbody>
         </table>
 
@@ -1306,33 +1306,33 @@
 
         <!-- PerfMonitor -->
         <h2 id="perfMonitor">PerfMonitor <span class="cmt">&mdash; <code>perfMonitor</code></span></h2>
-        <p><span class="file-path">backend/perf_monitor.py</span> &mdash; QML context property <code>perfMonitor</code> <span class="platform-badge linux">Python only</span></p>
-        <p>Event-loop / GIL / CPU profiler, registered only when the Python backend is started with <code>--profile</code>.</p>
+        <p><span class="file-path">src/dev/perfmonitor.{h,cpp}</span> / <span class="file-path">backend/perf_monitor.py</span> &mdash; QML context property <code>perfMonitor</code> <span class="platform-badge desktop">developer only</span></p>
+        <p>Event-loop / thread-jitter / CPU profiler, registered only with <code>--profile</code> (the C++ class exists only in <code>OCTAVE_DEV_TOOLS</code> builds; the Python module is gitignored). Production QML never references it.</p>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>loopLatencyMs</code> <span class="platform-badge linux">Python only</span></td><td><code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Rolling average event-loop latency in ms</td></tr>
-            <tr><td><code>loopP99Ms</code> <span class="platform-badge linux">Python only</span></td><td><code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>99th percentile loop latency (stutter indicator)</td></tr>
-            <tr><td><code>gilJitterMs</code> <span class="platform-badge linux">Python only</span></td><td><code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Average GIL acquisition jitter measured by a background probe thread</td></tr>
-            <tr><td><code>cpuPercent</code> <span class="platform-badge linux">Python only</span></td><td><code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Process CPU usage (needs psutil)</td></tr>
-            <tr><td><code>memMb</code> <span class="platform-badge linux">Python only</span></td><td><code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Process RSS in MB</td></tr>
-            <tr><td><code>threadCount</code> <span class="platform-badge linux">Python only</span></td><td><code>int</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Active Python threads</td></tr>
-            <tr><td><code>summaryText</code> <span class="platform-badge linux">Python only</span></td><td><code>str</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>One-line status for the on-screen HUD</td></tr>
+            <tr><td><code>loopLatencyMs</code></td><td><code>double</code> / <code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Rolling average event-loop latency in ms</td></tr>
+            <tr><td><code>loopP99Ms</code></td><td><code>double</code> / <code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>99th percentile loop latency (stutter indicator)</td></tr>
+            <tr><td><code>gilJitterMs</code></td><td><code>double</code> / <code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Average wake-up lateness of a probe thread that sleeps 10 ms (GIL contention in Python, CPU contention in C++)</td></tr>
+            <tr><td><code>cpuPercent</code></td><td><code>double</code> / <code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Process CPU usage, per core (Python needs psutil)</td></tr>
+            <tr><td><code>memMb</code></td><td><code>double</code> / <code>float</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Process RSS in MB</td></tr>
+            <tr><td><code>threadCount</code></td><td><code>int</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>Process threads (C++, Linux) / active Python threads</td></tr>
+            <tr><td><code>summaryText</code></td><td><code>QString</code> / <code>str</code></td><td>read-only</td><td><code>metricsUpdated</code></td><td>One-line status for the on-screen HUD</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>getDetailedReport()</code> <span class="platform-badge linux">Python only</span></td><td><code>str</code></td><td>Multi-line report with loop / GIL / CPU stats and per-slot timings (p95 &gt; 1 ms)</td></tr>
+            <tr><td><code>getDetailedReport()</code></td><td><code>str</code></td><td>Multi-line report with loop / jitter / CPU stats and per-slot timings (p95 &gt; 1 ms)</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>metricsUpdated()</code> <span class="platform-badge linux">Python only</span></td><td>Every 1 s reporting cycle (notify for every property)</td></tr>
+            <tr><td><code>metricsUpdated()</code></td><td>Every 1 s reporting cycle (notify for every property)</td></tr>
           </tbody>
         </table>
 
@@ -1353,7 +1353,6 @@
             <tr><td><code>dhuCapture</code></td><td><code>sendMouseEvent(int, int, bool)</code></td><td>Python only.</td></tr>
             <tr><td><code>downloadManager</code></td><td><code>next_search_page()</code>, <code>download()</code>, <code>cancel_download()</code>, <code>pause_download()</code>, <code>resume_download()</code>, <code>get_download_queue()</code>, <code>clear_download_queue()</code>, <code>connect_settings_manager()</code>, <code>cleanup()</code>, <code>hasStorageAccess()</code>, <code>requestStorageAccess()</code></td><td>C++ only (yt-dlp queue). The Python music_dl backend never grew queue control; <code>connect_settings_manager</code> / <code>cleanup</code> exist there as plain methods.</td></tr>
             <tr><td><code>downloadManager</code></td><td><code>get_song_data_for_download(str)</code></td><td>Python only (looks up the full song data of a search result by URL).</td></tr>
-            <tr><td><code>perfMonitor</code></td><td>whole object</td><td>Python only, <code>--profile</code> flag. No C++ equivalent.</td></tr>
           </tbody>
         </table>
         <p>Members used by QML behind <code>typeof x !== "undefined"</code> guards: <code>esp32VolumeManager</code>, <code>obdManager</code>, <code>berryIMU</code>, <code>dashboardManager</code>, <code>diagnosticsManager</code>, <code>gestureSensor</code>, <code>mediaManager</code> and <code>settingsManager</code> (the last two only inside dashboard widgets, which are also rendered in the editor preview). All of these are registered by both backends today; the guards exist for the mobile stubs and for widgets instantiated outside the app.</p>

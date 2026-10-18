@@ -1,6 +1,7 @@
 #include "obdmanager.h"
 #include "elm327protocol.h"
 #include "rfcommsocket.h"
+#include "../util/perfscope.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -111,6 +112,8 @@ OBDManager::Platform OBDManager::detectPlatform() const
 
 QString OBDManager::getConfiguredPort() const
 {
+    if (!m_portOverride.isEmpty())
+        return m_portOverride;
     if (m_settingsManager) {
         QString port = m_settingsManager->obdBluetoothPort();
         if (!port.isEmpty())
@@ -131,6 +134,8 @@ bool OBDManager::checkPortExists(const QString &port) const
     // known by connecting (RfcommSocket::connectTo reports why it failed)
     if (RfcommSocket::isUrl(port))
         return RfcommSocket::parseUrl(port, nullptr, nullptr);
+    if (OBDConnectionWorker::transportClaims(port))
+        return true;
     if (detectPlatform() == Platform::Android) {
         // On Android, "port" is a Bluetooth MAC address. We don't probe the
         // adapter here -- a real reachability test happens when
@@ -529,6 +534,11 @@ void OBDManager::scanForDevices()
     }
     }
 
+    // A port served by a registered transport (the dev simulator) has no
+    // device node to find; list it so the adapter list shows it
+    if (OBDConnectionWorker::transportClaims(getConfiguredPort()))
+        ports.append(getConfiguredPort());
+
     // Remove duplicates and sort
     ports.removeDuplicates();
     ports.sort();
@@ -564,7 +574,8 @@ void OBDManager::scanForDevices()
     // usually only powered with the ignition on, and connectTo() fails
     // fast with "Host is down" while it is off
     const QString configured = getConfiguredPort();
-    if (RfcommSocket::isUrl(configured) && !m_connected && !m_isConnecting
+    if ((RfcommSocket::isUrl(configured) || OBDConnectionWorker::transportClaims(configured))
+        && !m_connected && !m_isConnecting
         && !m_forceStopReconnect && !m_diagnosticMode) {
         qDebug() << "[OBD] Retrying direct Bluetooth adapter" << configured;
         m_connectionAttempts = 0;
@@ -1081,6 +1092,7 @@ void OBDManager::onWorkerScanOutput(const QString &line)
 
 void OBDManager::onDataWatchdog()
 {
+    OCTAVE_PERF_SCOPE("obd._monitor_connection");
     if (!m_connected)
         return;
     if (!m_hasActiveWatchers)
@@ -1932,6 +1944,29 @@ void OBDConnectionWorker::setFastMode(bool fast) { m_fastMode = fast; }
 void OBDConnectionWorker::setTimeout(int seconds) { m_timeout = seconds; }
 void OBDConnectionWorker::setPidsToWatch(const QList<PidKey> &pids) { m_pidsToWatch = pids; }
 
+namespace {
+struct CustomTransport {
+    std::function<bool(const QString &)> claims;
+    OBDConnectionWorker::TransportCreate create;
+};
+CustomTransport &customTransport()
+{
+    static CustomTransport transport;
+    return transport;
+}
+} // namespace
+
+void OBDConnectionWorker::setCustomTransport(std::function<bool(const QString &)> claims, TransportCreate create)
+{
+    customTransport() = {std::move(claims), std::move(create)};
+}
+
+bool OBDConnectionWorker::transportClaims(const QString &port)
+{
+    const CustomTransport &t = customTransport();
+    return t.claims && t.create && t.claims(port);
+}
+
 void OBDConnectionWorker::updatePidsToWatch(const QList<PidKey> &pids)
 {
     m_pidsToWatch = pids;
@@ -1958,7 +1993,18 @@ void OBDConnectionWorker::doConnect()
 {
     qDebug() << "[OBD Worker] Connecting to" << m_portName;
 
-    if (RfcommSocket::isUrl(m_portName)) {
+    if (transportClaims(m_portName)) {
+        m_custom = customTransport().create(m_portName, this);
+        if (!m_custom || !m_custom->open(QIODevice::ReadWrite)) {
+            const QString err = QStringLiteral("Failed to open %1: %2")
+                                    .arg(m_portName, m_custom ? m_custom->errorString() : QStringLiteral("no device"));
+            releasePort();
+            emit initComplete(false, err);
+            return;
+        }
+        emit logLine(QStringLiteral("Opened %1").arg(m_portName));
+        m_io = m_custom;
+    } else if (RfcommSocket::isUrl(m_portName)) {
         QString mac;
         int channel = 1;
         if (!RfcommSocket::parseUrl(m_portName, &mac, &channel)) {
@@ -2081,6 +2127,11 @@ void OBDConnectionWorker::releasePort()
         m_rfcomm->deleteLater();
         m_rfcomm = nullptr;
     }
+    if (m_custom) {
+        m_custom->close();
+        m_custom->deleteLater();
+        m_custom = nullptr;
+    }
     m_io = nullptr;
     m_responseBuffer.clear();
 }
@@ -2176,7 +2227,17 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
                 emit connectionLost(err);
                 return QString();
             }
-        } else {
+        } else if (m_custom && !m_custom->isOpen()) {
+            // A custom transport closes itself when its link goes away
+            const QString err = m_custom->errorString();
+            qCWarning(lcElm327) << err << "on" << m_portName;
+            emit logLine(err);
+            stopPolling();
+            releasePort();
+            m_initialized = false;
+            emit connectionLost(err);
+            return QString();
+        } else if (m_serial) {
             const auto err = m_serial->error();
             if (err == QSerialPort::ResourceError || err == QSerialPort::DeviceNotFoundError ||
                 err == QSerialPort::PermissionError || err == QSerialPort::NotOpenError)

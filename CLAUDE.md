@@ -38,6 +38,11 @@ cmake --build build -j
 # App store build (downloads feature stripped out)
 cmake -S . -B build -DOCTAVE_ENABLE_DOWNLOADS=OFF
 cmake --build build -j
+
+# Developer tooling (OCTAVE_DEV_TOOLS: default ON only for -DCMAKE_BUILD_TYPE=Debug)
+./build/octave --dev             # simulated car over a fake ELM327 + dev overlay
+./build/octave --profile         # perf monitor + JSON command server on 127.0.0.1:9876
+./build/octave --dev --profile   # both: what the screenshot / MCP / perf tooling launches
 ```
 
 See `BUILD.md` for the full build matrix (9 targets including iOS / Android / Flatpak / app store variants).
@@ -91,6 +96,8 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `androidautomanager`, `phonemirrormanager` — Android Auto / phone mirroring (built-in scrcpy-protocol client in `src/phone_mirror/`, no external scrcpy)
 - `downloadmanager` — yt-dlp wrapper, compiled out for app-store builds via `OCTAVE_ENABLE_DOWNLOADS` CMake option
 - `clock`, `networkmanager`, `volumecontroller` — self-explanatory
+
+Developer tooling lives in `src/dev/` (committed, compiled only with the `OCTAVE_DEV_TOOLS` CMake option, inert without `--dev` / `--profile`): `devruntime` wires it up from `main.cpp`, `commandserver` + `coreactions` + `uidriver` are the TCP command server (same protocol and actions as `backend/command_server.py`), `perfmonitor` the profiler, `carsim` + `simelm327` a simulated car behind the *real* `OBDManager` (registered with `OBDConnectionWorker::setCustomTransport()` for port `sim://elm327`), `devimufeed` simulated IMU motion, `collagebridge` the collage tool's in-app half, `qml/` the dev overlay (shared with Python dev mode). Time hot paths with `OCTAVE_PERF_SCOPE("label")` from `src/util/perfscope.h` (empty in Release). This tooling is not a manager surface and has no parity requirement, but keep the command-server action names, args and result shapes identical to the Python server so the clients work against both. The clients in the gitignored `dev/` tree (MCP servers, screenshot / story / collage / perf scripts, dashboard drivers) launch the C++ binary through `dev/app_launch.py` (`OCTAVE_BIN` to pick one, `OCTAVE_BACKEND=python` for the Python backend).
 
 When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMakeLists.txt`, instantiate in `main.cpp`, register as a QML context property. **Then immediately do the parallel work on the Python side** — see below.
 

@@ -32,6 +32,13 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_ENABLE_DOWNLOADS=OFF
 cmake --build build -j
 ```
 
+Developer tooling (`src/dev/`) is compiled in when `OCTAVE_DEV_TOOLS` is on: the default only
+for `-DCMAKE_BUILD_TYPE=Debug` desktop builds; any other build type, no build type (including
+multi-config generators such as Visual Studio and Xcode), Android and iOS default to off; pass
+`-DOCTAVE_DEV_TOOLS=ON` to force it. It adds `./build/octave --dev` (simulated car, dev overlay)
+and `--profile` (perf monitor + command server on `127.0.0.1:9876` for the MCP / screenshot /
+perf tooling) and links Qt Test. See `wiki/development.html`.
+
 ---
 
 ## Desktop builds (Linux / macOS / Windows)
@@ -337,6 +344,7 @@ Flags:
 ```bash
 python main.py --debug             # debug logging
 python -m dev.main_dev             # developer mode: simulated OBD + keyboard controls
+# (the C++ peer: ./build/octave --dev, see Quick start)
 ```
 
 Lint and headless smoke tests (run by CI):

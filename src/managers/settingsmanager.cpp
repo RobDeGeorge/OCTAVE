@@ -2,6 +2,7 @@
 // OCTAVE Settings Manager
 
 #include "settingsmanager.h"
+#include "../util/perfscope.h"
 
 #include "buildinfo.h"
 
@@ -822,6 +823,7 @@ bool SettingsManager::atomicWrite(const QString &path, const QByteArray &data)
 // ---------------------------------------------------------------------------
 void SettingsManager::saveSettings(const QJsonObject &settings)
 {
+    OCTAVE_PERF_SCOPE("settings.save_settings");
     m_settings = validateSettings(settings);
     if (!m_settingsLoaded) {
         // Constructor path (first run, repair): write straight away.

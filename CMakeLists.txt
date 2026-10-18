@@ -118,6 +118,22 @@ endif()
 #          Store builds, pass `-DOCTAVE_ENABLE_DOWNLOADS=OFF` explicitly.
 option(OCTAVE_ENABLE_DOWNLOADS "Enable music download feature (disable for app store builds)" ON)
 
+# ---- Developer tooling (src/dev/) ----
+# `octave --dev` (simulated car over a fake ELM327, dev overlay) and
+# `octave --profile` (perf monitor + JSON command server on 127.0.0.1:9876,
+# which the dev/ MCP servers and screenshot scripts drive). Both are inactive
+# without their flag. Default ON only for desktop Debug builds; anything else
+# (Release-type, no build type -- the head unit's build dir, multi-config
+# generators -- Android, iOS) gets OFF unless asked for, so shipped binaries
+# never contain it.
+if(NOT ANDROID AND NOT IOS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(_octave_dev_tools_default ON)
+else()
+    set(_octave_dev_tools_default OFF)
+endif()
+option(OCTAVE_DEV_TOOLS "Build the --dev / --profile developer tooling (src/dev/)" ${_octave_dev_tools_default})
+message(STATUS "Developer tooling (--dev / --profile): ${OCTAVE_DEV_TOOLS}")
+
 # ---- Executable ----
 qt_add_executable(octave
     src/main.cpp
@@ -127,6 +143,7 @@ qt_add_executable(octave
     src/util/assetstore.h
     src/util/uiwatchdog.h
     src/util/uiwatchdog.cpp
+    src/util/perfscope.h
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
     src/managers/diagnosticsmanager.h
@@ -275,6 +292,35 @@ elseif(WIN32)
     target_link_libraries(octave PRIVATE TagLib::tag)
 else()
     target_link_libraries(octave PRIVATE PkgConfig::TAGLIB)
+endif()
+
+if(OCTAVE_DEV_TOOLS)
+    # QTest drives synthetic mouse input (the click / drag / long_press commands)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    target_sources(octave PRIVATE
+        src/dev/devruntime.h
+        src/dev/devruntime.cpp
+        src/dev/commandserver.h
+        src/dev/commandserver.cpp
+        src/dev/coreactions.h
+        src/dev/coreactions.cpp
+        src/dev/uidriver.h
+        src/dev/uidriver.cpp
+        src/dev/perfmonitor.h
+        src/dev/perfmonitor.cpp
+        src/dev/carsim.h
+        src/dev/carsim.cpp
+        src/dev/simelm327.h
+        src/dev/simelm327.cpp
+        src/dev/devimufeed.h
+        src/dev/devimufeed.cpp
+        src/dev/devtoolsmanager.h
+        src/dev/devtoolsmanager.cpp
+        src/dev/collagebridge.h
+        src/dev/collagebridge.cpp
+    )
+    target_link_libraries(octave PRIVATE Qt6::Test)
+    target_compile_definitions(octave PRIVATE OCTAVE_DEV_TOOLS)
 endif()
 
 # ---- Shader resources ----

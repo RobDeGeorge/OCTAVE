@@ -449,14 +449,16 @@ python main.py
         <pre><code>python main.py --debug
 ./build/octave --debug</code></pre>
 
-        <h3>Performance Profiling (Python, developer machines only)</h3>
-        <pre><code>python main.py --profile</code></pre>
+        <h3>Performance Profiling</h3>
+        <pre><code>./build/octave --profile     <span class="cmt"># C++ (Debug builds; see Developer Mode below)</span>
+python main.py --profile     <span class="cmt"># Python (developer machines only)</span></code></pre>
         <p>
           Starts the <code>PerfMonitor</code> (CSV + log under <code>dev/perf/logs/</code>, exposed to QML as
           <code>perfMonitor</code>), a <strong>command server</strong> on <code>127.0.0.1:9876</code> for remote control
-          and the MCP tools, and instruments hot paths. The modules behind it
-          (<code>backend/perf_monitor.py</code>, <code>backend/command_server.py</code>, <code>backend/perf_patches.py</code>)
-          are gitignored developer files, so <code>--profile</code> only does something on a machine that has them:
+          and the MCP tools, and times the hot paths. In C++ this is <code>src/dev/</code>, compiled in by the
+          <code>OCTAVE_DEV_TOOLS</code> CMake option (on by default only for <code>-DCMAKE_BUILD_TYPE=Debug</code>; other
+          builds ignore the flag with a warning). In Python the modules (<code>backend/perf_monitor.py</code>,
+          <code>backend/command_server.py</code>, <code>backend/perf_patches.py</code>) are gitignored developer files:
           on a checkout without them <code>setup_perf_profiling()</code> logs a warning for each missing module
           (<code>--profile: backend/perf_monitor.py not present (gitignored dev tooling), skipping ...</code>)
           and the app starts normally instead of raising <code>ImportError</code>.
@@ -464,24 +466,28 @@ python main.py
 
         <!-- Dev Mode -->
         <h2 id="dev-mode">Developer Mode</h2>
-        <span class="file-path">dev/main_dev.py</span>
         <p>
-          Developer mode provides simulated OBD data and keyboard controls for testing without hardware or a
-          vehicle. It imports <code>main.py</code>, installs a <code>MockOBDManager</code> through
-          <code>install_obd_manager()</code> before the QML loads, and adds a dev overlay. The <code>dev/</code>
-          directory is <strong>gitignored</strong> &mdash; it exists on the maintainers' machines and is fully isolated
-          from production code, but is not part of a fresh clone.
+          Developer mode provides a simulated car and keyboard controls for testing without hardware or a vehicle.
+          In C++ it is a flag on a Debug build: the real <code>OBDManager</code> talks to a simulated ELM327 adapter, so
+          the shipped OBD code runs against the simulation. In Python, <span class="file-path">dev/main_dev.py</span>
+          imports <code>main.py</code>, installs a <code>MockOBDManager</code> through <code>install_obd_manager()</code>
+          before the QML loads, and adds the same dev overlay. The <code>dev/</code> directory (Python dev mode and the
+          screenshot / MCP / perf clients) is <strong>gitignored</strong>: it exists on the maintainers' machines but is
+          not part of a fresh clone. The C++ half (<code>src/dev/</code>) is committed.
         </p>
-        <pre><code><span class="kw">source</span> venv/bin/activate
+        <pre><code>./build/octave --dev
+./build/octave --dev --profile     <span class="cmt"># + command server: what the screenshot / MCP tooling launches</span>
+
+<span class="kw">source</span> venv/bin/activate
 python -m dev.main_dev
-python -m dev.main_dev --profile   <span class="cmt"># + command server, used by the screenshot / MCP tooling</span></code></pre>
+python -m dev.main_dev --profile</code></pre>
 
         <div class="info-box info">
           <div class="info-box-title">Dev Mode Features</div>
           <ul>
-            <li>Mock OBD data with simulated RPM, speed, temperatures and throttle</li>
+            <li>Simulated OBD data: RPM, speed, temperatures, throttle, trouble codes, VIN; optional simulated IMU motion</li>
             <li>Development tools panel and overlay</li>
-            <li>Keyboard shortcuts for media control</li>
+            <li>Keyboard driving (W/S throttle and brake, Q/R shift, F1&ndash;F4 scenarios)</li>
             <li>Screenshot and story-driven clip recording (<code>python -m dev.screenshots</code>), MCP server for agents</li>
           </ul>
           See <a href="development.html">Development</a>.
@@ -525,7 +531,8 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
 │   ├── util/                          <span class="cmt"># logger.cpp (rotating logs, crash handlers), uiwatchdog.cpp</span>
 │   ├── phone_mirror/scrcpyclient.*    <span class="cmt"># built-in scrcpy-protocol client</span>
 │   ├── items/embeddeddhuitem.*        <span class="cmt"># QQuickItem for Android Auto frames</span>
-│   └── platform/                      <span class="cmt"># Android JNI bridges (media, process)</span>
+│   ├── platform/                      <span class="cmt"># Android JNI bridges (media, process)</span>
+│   └── dev/                           <span class="cmt"># --dev / --profile tooling (Debug builds only), qml/ dev overlay</span>
 ├── <span class="prop">backend/</span>             <span class="cmt"># Python backend (developer peer)</span>
 │   ├── settings_manager.py  media_manager.py  obd_manager.py
 │   ├── network_manager.py  download_manager.py  dashboard_manager.py
@@ -535,7 +542,7 @@ python -m dev.main_dev --profile   <span class="cmt"># + command server, used by
 │   ├── android_auto/    <span class="cmt"># DHU launch + capture, EmbeddedDhuItem</span>
 │   ├── phone_mirror/    <span class="cmt"># manager + scrcpy_client.py</span>
 │   ├── music_dl/        <span class="cmt"># vendored download engine</span>
-│   └── (perf_monitor.py, command_server.py, perf_patches.py — gitignored dev tools)
+│   └── (perf_monitor.py, command_server.py, perf_patches.py — gitignored Python dev tools)
 ├── <span class="prop">frontend/</span>            <span class="cmt"># Shared QML UI</span>
 │   ├── Main.qml  MainMenu.qml  MediaRoom.qml  MediaPlayer.qml  OBDMenu.qml  CarMenu.qml ...
 │   ├── JeepVehicle.qml  JeepHinge.qml  JeepLamp.qml  JeepLink.qml  JeepSteering.js

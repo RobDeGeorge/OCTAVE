@@ -245,7 +245,7 @@
         <p>Pages declare what they need: <code>MediaPlayer</code>, <code>OBDHome</code>, <code>OBDMenu</code>, <code>OBDDiagnostics</code>, <code>SensorHome</code>, <code>SensorMenu</code> and <code>ClockMenu</code> use <code>required property StackView stackView</code> and <code>required property ApplicationWindow mainWindow</code>; <code>CarMenu</code> requires only <code>stackView</code>; <code>SettingsMenu</code> additionally requires <code>string initialSection</code>; <code>MainMenu</code>, <code>MediaRoom</code>, <code>DownloadPage</code>, <code>PhoneMirrorView</code> and <code>AndroidAutoView</code> use plain (optional) properties. <code>cachedPage()</code> always passes <code>stackView</code> and <code>mainWindow</code>, so only <code>initialSection</code> has to come from the caller.</p>
 
         <h3>Programmatic navigation</h3>
-        <p><code>navigateTo(pageName)</code> holds a page map used by the Python command server (<code>backend/command_server.py</code>, enabled with <code>python main.py --profile</code>) and the screenshot sweeper:</p>
+        <p><code>navigateTo(pageName)</code> holds a page map used by the command server (<span class="file-path">src/dev/coreactions.cpp</span> / <code>backend/command_server.py</code>, enabled with <code>--profile</code> on either backend) and the screenshot sweeper:</p>
 
         <pre><code><span class="kw">function</span> <span class="fn">navigateTo</span>(pageName) {
     <span class="kw">var</span> pageMap = {
@@ -359,7 +359,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
             <tr><td><code>dashboardManager</code></td><td>DashboardManager</td><td>Dashboard presets + user JSON dashboards</td></tr>
             <tr><td><code>screenAutoScale</code></td><td><em>real</em></td><td>Screen-detected scale factor (see <a href="#gui-scale">GUI Scale</a>)</td></tr>
             <tr><td><code>isAndroid</code></td><td><em>bool</em></td><td><code>true</code> only in the Android C++ build; always <code>false</code> from Python</td></tr>
-            <tr><td><code>perfMonitor</code></td><td>PerfMonitor</td><td>Python only, only with <code>--profile</code></td></tr>
+            <tr><td><code>perfMonitor</code></td><td>PerfMonitor</td><td>Only with <code>--profile</code> (C++ needs an <code>OCTAVE_DEV_TOOLS</code> build)</td></tr>
           </tbody>
         </table>
 
@@ -518,7 +518,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <!-- objectName -->
         <h2 id="objectnames">objectName Conventions for Dev Scripting</h2>
 
-        <p><code>objectName</code>s exist for two consumers: Main.qml and BottomBar navigation logic (which pages are "OBD" or "sensor" pages, whether Settings is current, IMU gating), and the developer command server (<span class="file-path">backend/command_server.py</span>, Python <code>--profile</code> builds) that drives the running app for the screenshot sweeper (<code>python -m dev.screenshots</code>) and MCP tools. The server walks <code>window.contentItem()</code> recursively &mdash; so items inside <code>Popup</code>s under <code>Overlay</code> are found too &mdash; and matches on <code>objectName</code> (preferring a visible match); its <code>find_item</code>, <code>list_items</code>, <code>get_prop</code>, <code>set_prop</code>, <code>call</code>, <code>click</code> and <code>drag</code> actions all key on it, <code>"root"</code> resolves to the ApplicationWindow, and <code>get_current_page</code> reads <code>stackView.currentItem.objectName</code> through the <code>"stackView"</code> name (<code>navigate</code>, <code>open_settings</code>, <code>go_back</code> and <code>go_home</code> call the <code>navigateTo</code> / <code>navigateToSettings</code> / <code>navigateBack</code> / <code>navigateHome</code> functions above). Conventions in use:</p>
+        <p><code>objectName</code>s exist for two consumers: Main.qml and BottomBar navigation logic (which pages are "OBD" or "sensor" pages, whether Settings is current, IMU gating), and the developer command server (<span class="file-path">src/dev/uidriver.cpp</span> / <span class="file-path">backend/command_server.py</span>, <code>--profile</code> on either backend) that drives the running app for the screenshot sweeper (<code>python -m dev.screenshots</code>) and MCP tools. The server walks <code>window.contentItem()</code> recursively &mdash; so items inside <code>Popup</code>s under <code>Overlay</code> are found too &mdash; and matches on <code>objectName</code> (preferring a visible match); its <code>find_item</code>, <code>list_items</code>, <code>get_prop</code>, <code>set_prop</code>, <code>call</code>, <code>click</code> and <code>drag</code> actions all key on it, <code>"root"</code> resolves to the ApplicationWindow, and <code>get_current_page</code> reads <code>stackView.currentItem.objectName</code> through the <code>"stackView"</code> name (<code>navigate</code>, <code>open_settings</code>, <code>go_back</code> and <code>go_home</code> call the <code>navigateTo</code> / <code>navigateToSettings</code> / <code>navigateBack</code> / <code>navigateHome</code> functions above). Conventions in use:</p>
 
         <table>
           <thead><tr><th>Convention</th><th>Examples</th></tr></thead>

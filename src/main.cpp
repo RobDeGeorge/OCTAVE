@@ -66,6 +66,11 @@
 // Phase 6 — dashboards feature (see TODO/dashboards-roadmap.md)
 #include "managers/dashboardmanager.h"
 
+#ifdef OCTAVE_DEV_TOOLS
+// --dev / --profile: simulator, command server, perf monitor (src/dev/)
+#include "dev/devruntime.h"
+#endif
+
 // All managers are now real C++ implementations -- no stubs needed.
 
 int main(int argc, char *argv[])
@@ -412,6 +417,16 @@ int main(int argc, char *argv[])
                                 + QStringLiteral("/dashboards"));
     ctx->setContextProperty("dashboardManager", &dashboardManager);
 
+    // ---- Developer tooling (inactive unless --dev / --profile) ----
+#ifdef OCTAVE_DEV_TOOLS
+    OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &mediaManager, &obdManager, &berryIMU,
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
+    devRuntime.beforeLoad();
+#else
+    if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
+        qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON (the default for Debug); ignoring");
+#endif
+
     // ---- Load Main.qml ----
 #ifdef Q_OS_ANDROID
     // On Android, use the "assets:" URL scheme directly — QUrl::fromLocalFile
@@ -428,6 +443,9 @@ int main(int argc, char *argv[])
         qCritical("Failed to load Main.qml from %s", qPrintable(qmlUrl.toString()));
         return -1;
     }
+#ifdef OCTAVE_DEV_TOOLS
+    devRuntime.afterLoad();
+#endif
     if (smokeTest) {
         qInfo("Smoke test: Main.qml loaded, exiting in 5 s");
         // CI greps this line: release builds must ship the phone-mirror decoder + adb
@@ -558,6 +576,9 @@ int main(int argc, char *argv[])
 
     // Cleanup on quit (stubs make all calls no-op on mobile)
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
+#ifdef OCTAVE_DEV_TOOLS
+        devRuntime.shutdown();   // command clients and the perf log go first
+#endif
         uiWatchdog.stop();
         androidAutoManager.cleanup();
         phoneMirrorManager.cleanup();

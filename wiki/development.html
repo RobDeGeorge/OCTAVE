@@ -39,19 +39,21 @@
         <h2 id="design-decisions">Design Decisions</h2>
 
         <h3>Two backends, one frontend</h3>
-        <p>The C++ tree (<span class="file-path">src/</span>) is what ships; the Python tree (<span class="file-path">backend/</span>, <span class="file-path">main.py</span>) is the development and hardware-hacking backend. The desktop parity policy requires matching managers, context-property names, slots, signals, properties and on-disk JSON for the shared QML in <span class="file-path">frontend/</span>. Existing differences are listed in the <a href="signals-slots-reference.html#parity-gaps">API parity notes</a>; new frontend code should work with either backend (the only allowed difference is a <code>typeof fooManager !== "undefined"</code> guard for a feature legitimately absent on one platform). This is the standing policy in <span class="file-path">CLAUDE.md</span>; the rationale and the packaging consequences are on the <a href="building.html#design-decisions">Building</a> page. Practically, it means the Python side is where most tooling lives: the command server, perf monitor, mock OBD and MCP servers are Python, and they exercise the same QML the C++ binary runs.</p>
+        <p>The C++ tree (<span class="file-path">src/</span>) is what ships; the Python tree (<span class="file-path">backend/</span>, <span class="file-path">main.py</span>) is the development and hardware-hacking backend. The desktop parity policy requires matching managers, context-property names, slots, signals, properties and on-disk JSON for the shared QML in <span class="file-path">frontend/</span>. Existing differences are listed in the <a href="signals-slots-reference.html#parity-gaps">API parity notes</a>; new frontend code should work with either backend (the only allowed difference is a <code>typeof fooManager !== "undefined"</code> guard for a feature legitimately absent on one platform). This is the standing policy in <span class="file-path">CLAUDE.md</span>; the rationale and the packaging consequences are on the <a href="building.html#design-decisions">Building</a> page. The developer tooling drives the binary that ships: <code>octave --dev --profile</code> (the in-app half, <span class="file-path">src/dev/</span>) runs the simulator, command server and perf monitor inside the C++ app, and the clients (MCP servers, screenshot and perf scripts in <span class="file-path">dev/</span>) talk to it over TCP. The Python backend keeps its own peers (<code>python -m dev.main_dev --profile</code>) for parity work until the v1.0 freeze (<span class="file-path">TODO/python-sunset-after-v1.md</span>).</p>
 
         <h3>Why dev mode wraps production instead of duplicating it</h3>
-        <p><code>python -m dev.main_dev</code> imports <code>main</code>, which runs the whole production start-up (app, engine, every manager, every signal connection) and stops short of loading the QML because that lives under <code>main.py</code>'s <code>if __name__ == "__main__"</code> guard. Dev mode then swaps in the mock OBD, registers its context properties, calls <code>main.load_main_qml()</code> and reparents an overlay into the real window. The docstring in <span class="file-path">dev/main_dev.py</span> records why: the old <code>dev/dev_main.py</code> "duplicated 85% of main.py and constantly drifted out of parity". Same code path as production, extra layers bolted on afterwards.</p>
+        <p>In C++, dev mode is a flag on the production binary: <code>octave --dev</code> builds every manager exactly as a normal start does, then points the real <code>OBDManager</code> at a simulated ELM327 adapter (a <code>QIODevice</code> registered through <code>OBDConnectionWorker::setCustomTransport()</code>) and reparents the dev overlay into the real window. Nothing in the OBD stack is replaced, so the AT init sequence, PID parsing and decoding, demand-driven polling, the vehicle scan and gate, VIN decode and the DTC paths all run the code that ships.</p>
+        <p>In Python, <code>python -m dev.main_dev</code> imports <code>main</code>, which runs the whole production start-up (app, engine, every manager, every signal connection) and stops short of loading the QML because that lives under <code>main.py</code>'s <code>if __name__ == "__main__"</code> guard. Dev mode then swaps in the mock OBD, registers its context properties, calls <code>main.load_main_qml()</code> and reparents an overlay into the real window. The docstring in <span class="file-path">dev/main_dev.py</span> records why: the old <code>dev/dev_main.py</code> "duplicated 85% of main.py and constantly drifted out of parity". Same code path as production, extra layers bolted on afterwards; the Python mock replaces <code>obdManager</code> wholesale, though.</p>
 
         <h3>Why a TCP command server and MCP servers for performance work</h3>
-        <p>The head unit runs in a Jeep; the problems that matter are stutter, stalls and regressions that only show up when the app is driven the way a driver drives it. A JSON-over-TCP command server (<span class="file-path">backend/command_server.py</span>, only started by <code>--profile</code>) lets a script or an agent navigate pages, toggle every setting, skip tracks, drive the simulator and read the perf counters while the perf monitor measures the event loop, so a test is repeatable and comparable between commits (<span class="file-path">dev/docs/perf_test_plan.md</span>, <span class="file-path">dev/perf/run_perf_loop.py</span>). The two MCP servers expose the same channel to a coding agent so it can reproduce a report, bisect a regression or benchmark a setting without a human clicking. The README makes the same point: "The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips."</p>
+        <p>The head unit runs in a Jeep; the problems that matter are stutter, stalls and regressions that only show up when the app is driven the way a driver drives it. A JSON-over-TCP command server (<span class="file-path">src/dev/commandserver.cpp</span> in C++, <span class="file-path">backend/command_server.py</span> in Python; only started by <code>--profile</code>) lets a script or an agent navigate pages, toggle every setting, skip tracks, drive the simulator and read the perf counters while the perf monitor measures the event loop, so a test is repeatable and comparable between commits (<span class="file-path">dev/docs/perf_test_plan.md</span>, <span class="file-path">dev/perf/run_perf_loop.py</span>). The two MCP servers expose the same channel to a coding agent so it can reproduce a report, bisect a regression or benchmark a setting without a human clicking. The README makes the same point: "The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips."</p>
 
-        <h3>Why the tooling is gitignored</h3>
-        <p><span class="file-path">dev/</span>, <span class="file-path">.mcp.json</span>, <span class="file-path">backend/command_server.py</span>, <span class="file-path">backend/perf_monitor.py</span> and <span class="file-path">backend/perf_patches.py</span> are all in <span class="file-path">.gitignore</span> ("Developer mode tools (completely isolated from main codebase)", "Performance profiling"). They are synced between the developer machines through Dropbox, not git, so the shipped tree carries no simulator, no TCP listener and no monkey-patching; <code>main.py</code> imports them lazily and only under <code>--profile</code>, and every one of those imports is guarded: on a fresh clone <code>--profile</code> logs a warning per missing module and starts without the monitor / command server rather than raising <code>ImportError</code>. Dev mode itself (<span class="file-path">dev/</span>) is simply absent there &mdash; see <a href="troubleshooting.html#dev-tooling">Troubleshooting</a>.</p>
+        <h3>Where the tooling lives, and why the C++ half is committed</h3>
+        <p>The tooling has two halves. The <strong>in-app half</strong> (command server, perf monitor, simulator, overlay) is <span class="file-path">src/dev/</span> in C++. It is committed because CMake must list it, but it is only compiled when the <code>OCTAVE_DEV_TOOLS</code> option is on: the default only for <code>CMAKE_BUILD_TYPE=Debug</code> desktop builds, off for every other or missing build type, Android and iOS, so no shipped binary carries a simulator or a TCP listener. Even when compiled, nothing runs without <code>--dev</code> / <code>--profile</code>. Production code touches it in three small places: <code>OCTAVE_PERF_SCOPE("label")</code> timing scopes (<span class="file-path">src/util/perfscope.h</span>, compiled to nothing without the option), <code>OBDManager::setPortOverride()</code> / <code>OBDConnectionWorker::setCustomTransport()</code> (generic hooks; nothing is registered in a normal run) and a <code>friend</code> declaration on <code>BerryIMUManager</code> for the IMU feed.</p>
+        <p>The <strong>client half</strong> (<span class="file-path">dev/</span>: MCP servers, screenshot / story / collage / perf scripts) and Python's in-app peers (<span class="file-path">backend/command_server.py</span>, <span class="file-path">backend/perf_monitor.py</span>, <span class="file-path">backend/perf_patches.py</span>) stay in <span class="file-path">.gitignore</span> and are synced between the developer machines through Dropbox. <code>main.py</code> imports its peers lazily under <code>--profile</code> and guards every import: on a fresh clone it logs a warning per missing module and starts without them &mdash; see <a href="troubleshooting.html#dev-tooling">Troubleshooting</a>.</p>
 
         <h3>Why screenshots are grabbed from inside Qt</h3>
-        <p>The first screenshot tool used xdotool + mss (X11 input and capture) and broke under Wayland. The current one asks the running app to capture itself: <code>screenshot</code> and <code>record_start</code> run <code>root.grabWindow()</code> on the GUI thread, which works identically on Wayland, X11 and Xvfb, and hides the dev HUD automatically. It also gives deterministic window sizes for README assets (<span class="file-path">dev/docs/SCREENSHOTS.md</span>).</p>
+        <p>The first screenshot tool used xdotool + mss (X11 input and capture) and broke under Wayland. The current one asks the running app to capture itself: <code>screenshot</code> and <code>record_start</code> run <code>grabWindow()</code> on the GUI thread, which works identically on Wayland, X11 and Xvfb, and hides the dev HUD automatically. It also gives deterministic window sizes for README assets (<span class="file-path">dev/docs/SCREENSHOTS.md</span>).</p>
 
         <h3>Why ruff runs warn-only</h3>
         <p>The full ruleset (<code>E F W E722 B UP</code>) is enabled in <span class="file-path">pyproject.toml</span>, but the CI step is <code>ruff check . || true</code> because the legacy tree still has noise (long lines, import ordering, unused re-exports &mdash; already ignored as <code>E501 E402 F401 B008 UP007</code>, with more remaining). CI currently enforces two selected rules, <code>E722</code> (bare except) and <code>F821</code> (undefined name), are blocking. The workflow step is labelled "warn-only &mdash; full ruleset has legacy noise"; The workflow is the reference for which rules currently block CI.</p>
@@ -64,7 +66,8 @@
         <table>
           <thead><tr><th>Path</th><th>Tracked?</th><th>What it is</th></tr></thead>
           <tbody>
-            <tr><td><span class="file-path">src/</span>, <span class="file-path">CMakeLists.txt</span></td><td>yes</td><td>C++ backend: <code>main.cpp</code>, <code>managers/</code>, <code>util/</code> (logger, UI watchdog), <code>phone_mirror/</code>, <code>items/</code>, <code>platform/</code> (Android bridges and Linux BlueZ pairing)</td></tr>
+            <tr><td><span class="file-path">src/</span>, <span class="file-path">CMakeLists.txt</span></td><td>yes</td><td>C++ backend: <code>main.cpp</code>, <code>managers/</code>, <code>util/</code> (logger, UI watchdog, <code>perfscope.h</code>), <code>phone_mirror/</code>, <code>items/</code>, <code>platform/</code> (Android bridges and Linux BlueZ pairing)</td></tr>
+            <tr><td><span class="file-path">src/dev/</span></td><td>yes</td><td>In-app dev tooling, built only with <code>OCTAVE_DEV_TOOLS</code>: <code>devruntime</code> (the <code>--dev</code> / <code>--profile</code> wiring), <code>commandserver</code> + <code>coreactions</code> + <code>uidriver</code>, <code>perfmonitor</code>, <code>carsim</code> + <code>simelm327</code> (simulated car and adapter), <code>devimufeed</code>, <code>devtoolsmanager</code>, <code>collagebridge</code>, and <code>qml/</code> (<code>DevOverlay.qml</code>, <code>DevToolsPanel.qml</code>, shared with Python dev mode)</td></tr>
             <tr><td><span class="file-path">backend/</span>, <span class="file-path">main.py</span>, <span class="file-path">setup.py</span></td><td>yes</td><td>Python backend and its one-shot installer</td></tr>
             <tr><td><span class="file-path">frontend/</span></td><td>yes</td><td>Shared QML, <code>gauges/</code>, <code>dashboards/presets/*.json</code>, <code>shaders/</code>, <code>assets/</code> (incl. <code>assets/readme/</code> for the README media)</td></tr>
             <tr><td><span class="file-path">android/</span></td><td>yes</td><td>Qt Android package source: manifest, <code>build.gradle</code>, <code>res/</code>, Java bridges in <code>src/org/octave/app/</code>, <code>assets/frontend</code> + <code>assets/scripts</code> + <code>assets/wiki</code> symlinks, <code>assets/python-packages/</code> (bundle zip gitignored)</td></tr>
@@ -76,32 +79,47 @@
             <tr><td><span class="file-path">tools/vehicle/</span></td><td>yes</td><td>Blender build scripts for <code>frontend/assets/jeep_tj_2003.glb</code> (<code>build_jeep_tj.py</code>, <code>rig_export.py</code>, check scripts, <code>steering_geometry.json</code>)</td></tr>
             <tr><td><span class="file-path">TODO/</span></td><td>yes</td><td>Deferred work, one plan per file (<a href="#todo">below</a>)</td></tr>
             <tr><td><span class="file-path">wiki/</span></td><td>yes</td><td>This wiki; rebuild the search index with <code>python wiki/build_search_index.py</code> after content changes</td></tr>
-            <tr><td><span class="file-path">dev/</span></td><td><strong>no</strong></td><td>Dev runtime, mock OBD, overlay QML, screenshot/story tools, MCP servers, <code>perf/</code>, <code>tests/</code>, <code>docs/</code>, <code>jeep-tj-reference/</code> (164 reference photos)</td></tr>
-            <tr><td><span class="file-path">backend/command_server.py</span>, <span class="file-path">backend/perf_monitor.py</span>, <span class="file-path">backend/perf_patches.py</span>, <span class="file-path">.mcp.json</span></td><td><strong>no</strong></td><td>Profiling / remote-control infrastructure used by <code>--profile</code></td></tr>
+            <tr><td><span class="file-path">dev/</span></td><td><strong>no</strong></td><td>Python dev runtime and mock OBD, <code>app_launch.py</code> (which binary the tools start), screenshot/story/collage tools, MCP servers, <code>perf/</code>, <code>tests/</code>, <code>docs/</code>, <code>jeep-tj-reference/</code> (164 reference photos)</td></tr>
+            <tr><td><span class="file-path">backend/command_server.py</span>, <span class="file-path">backend/perf_monitor.py</span>, <span class="file-path">backend/perf_patches.py</span>, <span class="file-path">.mcp.json</span></td><td><strong>no</strong></td><td>Python's profiling / remote-control peers used by <code>python main.py --profile</code>; MCP server registrations</td></tr>
             <tr><td><span class="file-path">tools/platform-tools/</span>, <span class="file-path">tools/scrcpy*/</span></td><td>no</td><td>Fetched adb; leftover scrcpy binaries from the removed external-scrcpy path</td></tr>
           </tbody>
         </table>
 
         <!-- Dev Mode -->
         <h2 id="dev-mode">Dev Mode Setup &amp; Usage</h2>
-        <p>Dev mode provides a simulated vehicle and keyboard controls for testing without an OBD-II adapter. Python only; the C++ binary has no simulator.</p>
+        <p>Dev mode provides a simulated vehicle and keyboard controls for testing without an OBD-II adapter. Both backends have it; the C++ one is what the tooling launches by default.</p>
 
-        <pre><code><span class="cmt"># Launch dev mode (from the project root, venv active)</span>
+        <pre><code><span class="cmt"># C++ (needs a build with OCTAVE_DEV_TOOLS=ON, the default for -DCMAKE_BUILD_TYPE=Debug)</span>
+build/octave --dev                       <span class="cmt"># simulated car + overlay</span>
+build/octave --dev --profile             <span class="cmt"># + perf monitor, command server :9876 and the sim_* actions</span>
+build/octave --profile                   <span class="cmt"># production mode, real OBD, perf monitor + command server</span>
+build/octave --dev --profile --command-port 9877
+
+<span class="cmt"># Python (venv active)</span>
 <span class="fn">python</span> -m dev.main_dev
-
-<span class="cmt"># Dev mode + perf monitor + command server, with the simulator exposed as sim_* actions</span>
 <span class="fn">python</span> -m dev.main_dev --profile</code></pre>
+        <p>A build without the option (Release, or no build type) ignores <code>--dev</code> / <code>--profile</code> with a warning. Use a sandboxed config when a run should not touch your settings: <code>XDG_CONFIG_HOME=/tmp/octave-dev build/octave --dev</code> (the story and collage tools do this with their own profile directory).</p>
 
+        <h3>C++: <code>OctaveDev::Runtime</code></h3>
+        <p><span class="file-path">src/main.cpp</span> builds every manager as usual, then hands them to <span class="file-path">src/dev/devruntime.cpp</span>:</p>
+        <ol class="steps">
+          <li><code>beforeLoad()</code> &mdash; with <code>--dev</code>: creates <code>CarSim</code>, registers the simulated adapter for port <code>sim://elm327</code> and calls <code>obdManager.setPortOverride("sim://elm327")</code> (the saved port setting is left alone), and registers <code>devKeyboardController</code>, <code>devToolsManager</code> and <code>devMode = true</code>. With <code>--profile</code>: creates <code>PerfMonitor</code> as the <code>perfMonitor</code> context property.</li>
+          <li><code>engine.load(Main.qml)</code> &mdash; the production QML; there is no separate dev entry.</li>
+          <li><code>afterLoad()</code> &mdash; reparents <span class="file-path">src/dev/qml/DevOverlay.qml</span> into the window (C++ ownership plus a QObject parent so the JS GC cannot reclaim it); with <code>--profile</code>, starts the perf monitor and the command server with the core, collage and (in dev mode) <code>sim_*</code> actions.</li>
+          <li><code>shutdown()</code> &mdash; first thing in <code>aboutToQuit</code>: stops the command server, writes the perf report, finishes a recording.</li>
+        </ol>
+
+        <h3>Python: <code>dev/main_dev.py</code></h3>
         <p><span class="file-path">dev/main_dev.py</span> imports <code>main</code> (production start-up runs at import), then <span class="file-path">dev/dev_runtime.py</span> does the rest:</p>
         <ol class="steps">
           <li><code>install_dev_runtime(main)</code> &mdash; <code>main.install_obd_manager(MockOBDManager(...))</code> replaces the real <code>OBDManager</code> (every QML binding to <code>obdManager</code> now sees the mock), and registers <code>devKeyboardController</code>, <code>devToolsManager</code> and <code>devMode = true</code> as context properties.</li>
-          <li><code>main.load_main_qml()</code> &mdash; the <em>production</em> <code>Main.qml</code> loads; there is no separate dev entry QML.</li>
-          <li><code>install_dev_overlay(main, root_window)</code> &mdash; instantiates <span class="file-path">dev/DevOverlay.qml</span> with the engine's root context, pins it to C++ ownership and gives it both a QObject parent and a visual parent (the window's <code>contentItem</code>) so the JS garbage collector cannot reclaim it, then hands the window to <code>DevToolsManager</code> for <code>grabWindow()</code>.</li>
-          <li>With <code>--profile</code>: <code>main.setup_perf_profiling()</code> then <code>install_sim_commands(main)</code>, which registers the <code>sim_*</code> actions on the command server through a <code>SimBridge</code> that marshals them onto the GUI thread (the mock's timers live there).</li>
+          <li><code>main.load_main_qml()</code> &mdash; the <em>production</em> <code>Main.qml</code> loads.</li>
+          <li><code>install_dev_overlay(main, root_window)</code> &mdash; the same <span class="file-path">src/dev/qml/DevOverlay.qml</span>, attached the same way, then the window goes to <code>DevToolsManager</code> for <code>grabWindow()</code>.</li>
+          <li>With <code>--profile</code>: <code>main.setup_perf_profiling()</code> then <code>install_sim_commands(main)</code>, which registers the <code>sim_*</code> actions through a <code>SimBridge</code> that marshals them onto the GUI thread.</li>
         </ol>
 
         <h3>Keyboard controls</h3>
-        <p>Handled by <code>KeyboardController.handle_key(key, pressed)</code>, fed from <code>Keys.onPressed</code> / <code>onReleased</code> in the overlay:</p>
+        <p>Handled by <code>devKeyboardController.handle_key(key, pressed)</code> (C++ <code>DevKeyboardController</code>, Python <code>KeyboardController</code>), fed from <code>Keys.onPressed</code> / <code>onReleased</code> in the overlay. The overlay's HUD re-reads <code>obdManager.rpm()</code>, <code>speedMPH()</code>, ... every 100 ms; in C++ those getters only change for PIDs that are being polled.</p>
         <table>
           <thead><tr><th>Key</th><th>Action</th><th>Type</th></tr></thead>
           <tbody>
@@ -119,25 +137,39 @@
         <h3>Dev mode architecture</h3>
         <div class="diagram">
 <pre>
-  python -m dev.main_dev
+  build/octave --dev --profile
     |
-    +-- import main            (production start-up: app, engine, all managers, all connections)
-    +-- install_dev_runtime    MockOBDManager replaces OBDManager
-    |                          devKeyboardController / devToolsManager / devMode context props
-    +-- main.load_main_qml()   production frontend/Main.qml
-    +-- install_dev_overlay    dev/DevOverlay.qml reparented into the root window
-    |                            (key handler, simulation HUD, DevToolsPanel.qml)
-    +-- [--profile] setup_perf_profiling + install_sim_commands
-                               perfMonitor context prop, command server :9876, sim_* actions
+    +-- every manager, every connection   (src/main.cpp, unchanged)
+    +-- Runtime::beforeLoad      CarSim (60 Hz physics), SimElm327Device for sim://elm327,
+    |                            obdManager.setPortOverride, devKeyboardController /
+    |                            devToolsManager / devMode, perfMonitor
+    +-- engine.load(Main.qml)    production frontend
+    +-- Runtime::afterLoad       src/dev/qml/DevOverlay.qml reparented into the window,
+                                 command server :9876 (core + collage + sim_* actions)
+
+  OBDManager --worker thread--> OBDConnectionWorker --QIODevice--> SimElm327Device
+                                  (real AT init, PID polling,        |  reads CarState
+                                   scan, VIN, DTC parsing)           v  (mutex, shared_ptr)
+                                                                   CarSim  <-- keyboard, sim_*
 </pre>
         </div>
 
         <!-- Mock OBD -->
-        <h2 id="mock-obd">Mock OBD Manager</h2>
-        <p><span class="file-path">dev/mock_obd_manager.py</span></p>
-        <p><code>MockOBDManager(settings_manager)</code> provides the same signal and slot surface as the real <code>OBDManager</code> but generates data from keyboard / command input and a simple physics model. It also simulates the connection sequence (<code>_begin_connect_sequence</code> / <code>_advance_connect</code>) so the OBD settings card's progress UI can be exercised, and can inject dropouts.</p>
+        <h2 id="mock-obd">Simulated Car and Adapter</h2>
+        <h3>C++: <span class="file-path">src/dev/carsim.cpp</span> + <span class="file-path">src/dev/simelm327.cpp</span></h3>
+        <p><code>CarSim</code> is the physics of the Python mock (throttle drives RPM and speed, automatic gear from speed, load / MAF / MAP / timing / AFR / O2 from throttle and RPM, scenarios that hold temperatures) stepped by a 60 Hz GUI-thread timer into a mutex-guarded <code>CarState</code>. <code>SimElm327Device</code> is a sequential <code>QIODevice</code> on the OBD worker thread that answers what the worker sends:</p>
+        <ul>
+          <li>The AT init sequence (<code>ATZ</code> &rarr; <code>ELM327 v1.5</code>, <code>ATS0</code> turns spaces off, <code>ATRV</code> &rarr; battery voltage, other <code>AT</code> commands &rarr; <code>OK</code>).</li>
+          <li>Mode 01: every PID in <code>ELM327Protocol::pidTable()</code> and <code>extendedPidTable()</code>, encoded with the inverse of the shipped decoders. Modelled PIDs follow the simulation; the rest hold plausible fixed values. The supported-PID bitmaps (<code>0100</code> ... <code>01E0</code>) report all of them, so no widget is gated out in dev mode.</li>
+          <li>Mode 03 / 07 / 0A DTCs (P0300 + P0420 stored, P0300 pending; CAN count byte), Mode 04 clear (codes stay cleared until restart), Mode 02 freeze-frame DTC, PID 01 MIL + count, and the Mode 09 VIN <code>1J4FA49S03P123456</code> (2003 Jeep) as a CAN multi-frame reply.</li>
+          <li>Link behaviour: in realistic mode each reply arrives after a Bluetooth-like 35&ndash;70 ms (700 ms for <code>ATZ</code>) and 2 % of PID polls answer <code>NO DATA</code>; with <code>sim_realistic {"enabled": false}</code> replies take 8 ms and never drop. A dropout (<code>sim_dropout_now</code>, or random ones every 90&ndash;180 s with <code>sim_dropouts {"on": true}</code>) closes the device for 2&ndash;4 s, the worker reports the link lost, and the manager's passive scan reconnects.</li>
+        </ul>
+        <p>Because the poller walks the demanded PIDs one by one at adapter speed, a page that asks for ~120 PIDs (Parameter Cards) takes several seconds to fill, as it does in the car.</p>
+        <p><span class="file-path">src/dev/devimufeed.cpp</span> is the C++ port of <span class="file-path">dev/mock_imu.py</span> (below). Turning it on stops the BerryIMU I&sup2;C worker; turning it off restarts it.</p>
 
-        <h3>Simulation features</h3>
+        <h3>Python: <span class="file-path">dev/mock_obd_manager.py</span></h3>
+        <p><code>MockOBDManager(settings_manager)</code> provides the same signal and slot surface as the real <code>OBDManager</code> but generates data from keyboard / command input and a simple physics model. It also simulates the connection sequence (<code>_begin_connect_sequence</code> / <code>_advance_connect</code>) so the OBD settings card's progress UI can be exercised, and can inject dropouts.</p>
+        <h4>Simulation features (Python mock)</h4>
         <ul>
           <li>Throttle drives RPM, which drives speed through six gear ratios; manual shifting via Q/R or gear 1&ndash;6</li>
           <li>Coolant and oil temperatures rise with load and cool at idle; fuel level falls with load</li>
@@ -147,7 +179,7 @@
           <li>The QML-callable getters of the real manager (<code>coolantTemp()</code>, <code>voltage()</code>, <code>speedMPH()</code>, ...) are mirrored as slots</li>
         </ul>
 
-        <h3>Control methods</h3>
+        <h4>Control methods (Python mock)</h4>
         <pre><code><span class="fn">set_throttle</span>(percent) / <span class="fn">set_brake</span>(percent)   <span class="cmt"># 0-100</span>
 <span class="fn">rev_engine</span>(intensity=50)                       <span class="cmt"># throttle blip</span>
 <span class="fn">toggle_engine</span>()
@@ -155,11 +187,12 @@
 <span class="fn">set_speed</span>(mph) / <span class="fn">set_rpm</span>(rpm)                  <span class="cmt"># direct overrides</span>
 <span class="fn">set_realistic_mode</span>(enabled)
 <span class="fn">simulate_cold_start</span>() / <span class="fn">simulate_overheating</span>() / <span class="fn">simulate_low_fuel</span>() / <span class="fn">reset_to_normal</span>()</code></pre>
-        <p>Over the command server (dev mode with <code>--profile</code>) the same controls are <code>sim_throttle</code> / <code>sim_brake</code> (<code>value</code>), <code>sim_rev</code> (<code>intensity</code>), <code>sim_engine</code> (<code>on</code>), <code>sim_gear</code>, <code>sim_upshift</code>, <code>sim_downshift</code>, <code>sim_speed</code> (<code>mph</code>), <code>sim_rpm</code>, <code>sim_scenario</code> (<code>name</code>: <code>cold</code> | <code>hot</code> | <code>low_fuel</code> | <code>normal</code>), <code>sim_realistic</code> (<code>enabled</code>), <code>sim_imu</code> (<code>on</code>) and <code>sim_status</code>. The scenarios hold while the engine runs: the per-tick update adds noise around the scenario&rsquo;s coolant and oil temperatures instead of resetting them to normal. <code>sim_imu</code> starts <span class="file-path">dev/mock_imu.py</span>, which drives the real <code>berryIMU</code> manager&rsquo;s signals with a synthetic drive tied to the simulated speed (winding road for heading and lateral G, longitudinal G from acceleration, body roll and pitch, hills for altitude), so the sensors page, G-force and compass widgets and the 3D vehicle move without hardware. It is opt-in and pauses the manager&rsquo;s I&sup2;C start/retry path while on.</p>
+        <h3><code>sim_*</code> actions</h3>
+        <p>Over the command server (dev mode with <code>--profile</code>, either backend) the controls are <code>sim_throttle</code> / <code>sim_brake</code> (<code>value</code>), <code>sim_rev</code> (<code>intensity</code>), <code>sim_engine</code> (<code>on</code>), <code>sim_gear</code>, <code>sim_upshift</code>, <code>sim_downshift</code>, <code>sim_speed</code> (<code>mph</code>), <code>sim_rpm</code>, <code>sim_scenario</code> (<code>name</code>: <code>cold</code> | <code>hot</code> | <code>low_fuel</code> | <code>normal</code>), <code>sim_realistic</code> (<code>enabled</code>), <code>sim_imu</code> (<code>on</code>) and <code>sim_status</code>; the C++ build adds <code>sim_dropouts</code> (<code>on</code>), <code>sim_dropout_now</code>, <code>sim_failure_rate</code> (<code>value</code>, default 0.02) and <code>sim_link</code> (<code>up</code>: <code>false</code> unplugs the simulated adapter until it is plugged back in, for testing the no-vehicle states). All but <code>sim_status</code> are queued on the GUI thread and answer <code>{"queued": name}</code>. The scenarios hold while the engine runs: the per-tick update adds noise around the scenario&rsquo;s coolant and oil temperatures instead of resetting them to normal. <code>sim_imu</code> starts the IMU feed (<span class="file-path">src/dev/devimufeed.cpp</span>, <span class="file-path">dev/mock_imu.py</span>), which drives the real <code>berryIMU</code> manager&rsquo;s signals with a synthetic drive tied to the simulated speed (winding road for heading and lateral G, longitudinal G from acceleration, body roll and pitch, hills for altitude), so the sensors page, G-force and compass widgets and the 3D vehicle move without hardware. It is opt-in and pauses the manager&rsquo;s I&sup2;C start/retry path while on.</p>
 
         <!-- Dev Tools -->
         <h2 id="dev-tools">DevToolsPanel</h2>
-        <p><span class="file-path">dev/dev_tools_manager.py</span> &amp; <span class="file-path">dev/DevToolsPanel.qml</span> (embedded in <span class="file-path">dev/DevOverlay.qml</span>)</p>
+        <p><span class="file-path">src/dev/devtoolsmanager.cpp</span> (C++) / <span class="file-path">dev/dev_tools_manager.py</span> (Python) &amp; <span class="file-path">src/dev/qml/DevToolsPanel.qml</span> (embedded in <span class="file-path">src/dev/qml/DevOverlay.qml</span>; both backends load these two files)</p>
         <p><code>DevToolsManager</code> is exposed to QML as <code>devToolsManager</code>. It captures the window with Qt's <code>grabWindow()</code> (Wayland- and X11-safe), saves PNGs to <span class="file-path">dev/screenshots/output/</span>, keeps a <code>manifest.json</code> of every capture with its description, and can generate a <code>GALLERY.md</code>.</p>
         <table>
           <thead><tr><th>Member</th><th>Kind</th><th>Description</th></tr></thead>
@@ -173,8 +206,12 @@
 
         <!-- Command Server -->
         <h2 id="command-server">Command Server (TCP)</h2>
-        <p><span class="file-path">backend/command_server.py</span> (gitignored)</p>
-        <p>A <code>socketserver</code>-based TCP server on <code>127.0.0.1:9876</code> (<code>DEFAULT_PORT</code>) that accepts newline-delimited JSON commands. It is created by <code>main.setup_perf_profiling()</code>, i.e. only when <code>python main.py --profile</code> (or <code>dev.main_dev --profile</code>) is used, receives the media / obd / settings managers, the perf monitor and the QML engine, and is stopped on <code>aboutToQuit</code>. <code>main.cmd_server</code> exposes it as a module attribute so dev tooling can <code>register(action, handler)</code> extra actions (commit <code>b1db87c</code>).</p>
+        <p><span class="file-path">src/dev/commandserver.cpp</span>, <span class="file-path">coreactions.cpp</span>, <span class="file-path">uidriver.cpp</span> (C++) / <span class="file-path">backend/command_server.py</span> (Python, gitignored)</p>
+        <p>A TCP server on <code>127.0.0.1:9876</code> that accepts newline-delimited JSON commands, started only by <code>--profile</code> and stopped on <code>aboutToQuit</code>. Both implementations speak the same protocol with the same action names, arguments and result shapes, so every client works against either backend.</p>
+        <ul>
+          <li><strong>C++:</strong> the listener runs on its own thread and every client connection gets a thread (like Python's <code>ThreadingMixIn</code>), so a slow GUI call on one connection never blocks <code>get_metrics</code> on another. Handlers run on the connection thread and reach Qt objects through <code>CommandServer::onGui(fn, timeoutMs)</code> (blocking, 30 s default; a stuck GUI thread comes back as the error <code>GUI thread did not answer within &hellip; ms</code> instead of a hung client) or <code>postGui(fn)</code> (fire and forget: navigation and the <code>sim_*</code> controls). Extra actions are added with <code>registerAction(name, handler)</code>; <code>invokeByName()</code> calls slots / invokables / QML functions by name with argument conversion. <code>--command-port N</code> picks another port.</li>
+          <li><strong>Python:</strong> <code>socketserver</code>-based, created by <code>main.setup_perf_profiling()</code>; <code>main.cmd_server.register(action, handler)</code> adds actions (commit <code>b1db87c</code>).</li>
+        </ul>
 
         <h3>Protocol</h3>
         <pre><code><span class="cmt">// Client sends JSON + newline:</span>
@@ -199,11 +236,12 @@
           <li><strong>Media:</strong> <code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code>, <code>get_media_status</code>, <code>get_track_info</code>, <code>skip_tracks</code></li>
           <li><strong>OBD:</strong> <code>obd_status</code>, <code>obd_reconnect</code></li>
           <li><strong>Settings:</strong> <code>get_settings</code>, <code>get_all_settings</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>, and the <code>list_toggle_settings</code> / <code>list_numeric_settings</code> / <code>list_string_settings</code> discovery calls</li>
-          <li><strong>Extensions:</strong> whatever was <code>register()</code>ed &mdash; in dev mode the <code>sim_*</code> simulator actions</li>
+          <li><strong>Collage:</strong> <code>collage_list_popups</code>, <code>collage_open_popup</code>, <code>collage_close_popups</code>, <code>collage_mount</code>, <code>collage_grab</code>, <code>collage_unmount</code> (<code>python -m dev.collage</code>; C++ <span class="file-path">src/dev/collagebridge.cpp</span>, always registered; Python only in dev mode)</li>
+          <li><strong>Simulator:</strong> in dev mode the <code>sim_*</code> actions (<a href="#mock-obd">above</a>)</li>
         </ul>
 
         <h3>Navigation bridge and valid pages</h3>
-        <p><code>NavigationBridge</code> lives on the GUI thread; the TCP handler thread reaches it with <code>QMetaObject.invokeMethod</code> (queued for navigation, <code>BlockingQueuedConnection</code> for captures and UI driving so the result can be read back). Because QML <code>function foo(arg)</code> parameters are untyped and register as <code>QVariant</code>, the bridge calls <code>root.navigateTo(page)</code> directly instead of <code>Q_ARG(str, ...)</code>, which would match nothing and fail silently. Page ids map to QML files:</p>
+        <p>The GUI-thread half is <code>UiDriver</code> in C++ and <code>NavigationBridge</code> in Python: navigation is queued, captures and UI driving block so the result can be read back. Mouse input goes through <code>QTest</code> (the C++ build links Qt Test when <code>OCTAVE_DEV_TOOLS</code> is on). Because QML <code>function foo(arg)</code> parameters are untyped and register as <code>QVariant</code>, both bridges call <code>navigateTo(page)</code> with a <code>QVariant</code> argument (C++ <code>invokeByName</code>, Python a direct call) instead of <code>Q_ARG(str, ...)</code>, which would match nothing and fail silently. Page ids map to QML files:</p>
         <pre><code>home, media_room, media_player, obd, obd_home, obd_diagnostics, sensor_home,
 settings, phone_mirror, android_auto, sensors, car, download, clock
 <span class="cmt"># settings sections for open_settings:</span>
@@ -212,11 +250,11 @@ displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings
 
         <!-- MCP -->
         <h2 id="mcp-server">MCP Servers</h2>
-        <p><span class="file-path">dev/mcp_server.py</span> (<code>octave-perf</code>) and <span class="file-path">dev/mcp_benchmark.py</span> (<code>octave-benchmark</code>) are MCP servers (<code>MCPServer</code> on mcp 2.x, falling back to <code>FastMCP</code> on 1.x) that let a coding agent such as Claude Code drive OCTAVE through the command server. Both need <code>pip install mcp</code> in the venv and the app running with <code>--profile</code>; the benchmark script only serves MCP when given <code>--mcp</code> (without it, it runs the suite once as a CLI), so <span class="file-path">.mcp.json</span> passes that flag; every tool just sends a JSON action to <code>127.0.0.1:9876</code>.</p>
+        <p><span class="file-path">dev/mcp_server.py</span> (<code>octave-perf</code>) and <span class="file-path">dev/mcp_benchmark.py</span> (<code>octave-benchmark</code>) are MCP servers (<code>MCPServer</code> on mcp 2.x, falling back to <code>FastMCP</code> on 1.x) that let a coding agent such as Claude Code drive OCTAVE through the command server. Both need <code>pip install mcp</code> in the venv and the app (either backend) running with <code>--profile</code>; the benchmark script only serves MCP when given <code>--mcp</code> (without it, it runs the suite once as a CLI), so <span class="file-path">.mcp.json</span> passes that flag; every tool just sends a JSON action to <code>127.0.0.1:9876</code>.</p>
 
         <h3>Setup</h3>
         <pre><code><span class="fn">pip</span> install mcp                       <span class="cmt"># in the venv; not in requirements.txt</span>
-<span class="fn">python</span> main.py --profile              <span class="cmt"># or: python -m dev.main_dev --profile for the simulator</span>
+build/octave --dev --profile           <span class="cmt"># simulator; drop --dev for real OBD. Python: python -m dev.main_dev --profile</span>
 <span class="fn">python</span> dev/mcp_server.py              <span class="cmt"># stdio MCP server; normally launched by the agent from .mcp.json</span></code></pre>
         <p>The local <span class="file-path">.mcp.json</span> is gitignored. Configure its server commands with the Python interpreter and script paths for your checkout; machine-specific paths copied from another workstation will fail. Pass <code>--mcp</code> to the benchmark server.</p>
 
@@ -228,10 +266,11 @@ displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings
   dev/mcp_server.py  /  dev/mcp_benchmark.py
        |  TCP 127.0.0.1:9876, JSON + newline
        v
-  backend/command_server.py  (thread)  --QMetaObject.invokeMethod--&gt;  NavigationBridge / managers (GUI thread)
+  CommandServer (a thread per client)  --onGui / postGui--&gt;  UiDriver / managers (GUI thread)
+    [Python: backend/command_server.py --invokeMethod--&gt; NavigationBridge]
        |
        v
-  PerfMonitor (metrics, slot timings)   MockOBDManager (sim_*)   root.grabWindow() (screenshot / record)
+  PerfMonitor (metrics, slot timings)   CarSim + SimElm327Device (sim_*)   grabWindow() (screenshot / record)
 </pre>
         </div>
 
@@ -257,18 +296,21 @@ displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings
 
         <!-- Profiling -->
         <h2 id="profiling">Performance Profiling</h2>
-        <p><span class="file-path">backend/perf_monitor.py</span> (gitignored) &mdash; Python backend only.</p>
-        <pre><code><span class="fn">python</span> main.py --profile</code></pre>
-        <p><code>setup_perf_profiling()</code> in <code>main.py</code> creates <code>PerfMonitor(csv_path, log_path)</code> writing <code>dev/perf/logs/perf_&lt;YYYYMMDD_HHMMSS&gt;.csv</code> and <code>.log</code>, registers it as the <code>perfMonitor</code> context property, starts the command server, then applies <span class="file-path">backend/perf_patches.py</span> (method instrumentation for the media, audio-analyzer, OBD, IMU, gesture, ESP32 and settings managers). All three imports are guarded: a missing <span class="file-path">backend/perf_monitor.py</span> logs <code>--profile: backend/perf_monitor.py not present (gitignored dev tooling), skipping performance monitor and command server</code> and returns; a missing <span class="file-path">backend/command_server.py</span> skips only the command server; a missing <span class="file-path">backend/perf_patches.py</span> skips only the instrumentation. The app keeps starting in every case.</p>
+        <p><span class="file-path">src/dev/perfmonitor.cpp</span> (C++) / <span class="file-path">backend/perf_monitor.py</span> (Python, gitignored)</p>
+        <pre><code>build/octave --profile          <span class="cmt"># C++ (OCTAVE_DEV_TOOLS build)</span>
+<span class="fn">python</span> main.py --profile         <span class="cmt"># Python</span></code></pre>
+        <p>Both write <code>dev/perf/logs/perf_&lt;YYYYMMDD_HHMMSS&gt;.csv</code> and <code>.log</code> in the same formats, register the monitor as the <code>perfMonitor</code> context property and start the command server. <code>get_metrics</code> carries the same keys from both (the C++ one adds <code>"backend": "cpp"</code>), so the MCP tools and perf scripts read either; numbers are not comparable across backends, so keep a baseline per backend.</p>
+        <p>In C++, hot paths are timed with <code>OCTAVE_PERF_SCOPE("label")</code> from <span class="file-path">src/util/perfscope.h</span>: compiled to nothing without <code>OCTAVE_DEV_TOOLS</code>, one relaxed atomic load when built but not profiling, safe from any thread. The labels match the Python ones: <code>media.next_track</code>, <code>media.previous_track</code>, <code>media._update_position</code>, <code>media._extract_colors</code>, <code>media._kmeans_colors</code>, <code>audio._analyze_audio (FFT)</code>, <code>obd._monitor_connection</code>, <code>esp32._read_serial</code>, <code>settings.save_settings</code>. Add a scope at the top of any function worth watching.</p>
+        <p>In Python, <code>setup_perf_profiling()</code> also applies <span class="file-path">backend/perf_patches.py</span> (method wrapping for the same hot paths). All three Python imports are guarded: a missing <span class="file-path">backend/perf_monitor.py</span> logs <code>--profile: backend/perf_monitor.py not present (gitignored dev tooling), skipping performance monitor and command server</code> and returns; a missing <span class="file-path">backend/command_server.py</span> skips only the command server; a missing <span class="file-path">backend/perf_patches.py</span> skips only the instrumentation. The app keeps starting in every case.</p>
 
         <h3>What is measured</h3>
         <table>
           <thead><tr><th>Metric</th><th>Method</th><th>Threshold</th></tr></thead>
           <tbody>
-            <tr><td>Event-loop latency</td><td>A zero-interval <code>QTimer</code> probe; samples kept in a 300-entry ring buffer with p50/p95/p99/max</td><td>avg &lt; 5 ms green, &lt; 16 ms yellow (WARN), otherwise red (STUTTER)</td></tr>
-            <tr><td>GIL contention</td><td><code>_GILProbe</code> thread sleeps 10 ms and records how late it wakes</td><td>Higher jitter = a Python thread holding the GIL</td></tr>
-            <tr><td>Per-slot timing</td><td><code>@timed_slot</code> decorator and <code>PerfMonitor.begin()</code> / <code>end(label)</code></td><td>Slots with p95 &gt; 2 ms are reported as slow (detailed report lists p95 &gt; 1 ms)</td></tr>
-            <tr><td>CPU / RSS / threads</td><td><code>psutil</code> (optional import) and <code>threading.active_count()</code></td><td>&mdash;</td></tr>
+            <tr><td>Event-loop latency</td><td>C++: how late a 5 ms precise <code>QTimer</code> fires. Python: the gap between firings of a zero-interval <code>QTimer</code> (which keeps the loop spinning; in C++ that cost a whole core and skewed the CPU figure). p50/p95/p99/max per one-second window</td><td>avg &lt; 5 ms green, &lt; 16 ms yellow (WARN), otherwise red (STUTTER)</td></tr>
+            <tr><td>Thread jitter (<code>gil_avg_ms</code>)</td><td>A thread sleeps 10 ms and records how late it wakes. Python: GIL contention. C++: no GIL; the same probe measures scheduler / CPU contention</td><td>Higher = threads starved</td></tr>
+            <tr><td>Per-slot timing</td><td>C++ <code>OCTAVE_PERF_SCOPE</code>; Python <code>@timed_slot</code> and <code>PerfMonitor.begin()</code> / <code>end(label)</code></td><td>Slots with p95 &gt; 2 ms are reported as slow (detailed report lists p95 &gt; 1 ms)</td></tr>
+            <tr><td>CPU / RSS / threads</td><td>C++: <code>/proc/self</code> on Linux, <code>getrusage</code> on macOS, process times / working set on Windows. Python: <code>psutil</code> (optional) and <code>threading.active_count()</code></td><td>CPU is per core, as psutil reports it (can exceed 100 %)</td></tr>
           </tbody>
         </table>
 
@@ -282,6 +324,13 @@ displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings
         </ul>
 
         <h3>Manual instrumentation</h3>
+        <pre><code><span class="cmt">// C++</span>
+<span class="kw">#include</span> <span class="str">"../util/perfscope.h"</span>
+<span class="kw">void</span> <span class="fn">Foo::bar</span>()
+{
+    OCTAVE_PERF_SCOPE(<span class="str">"foo.bar"</span>);
+    ...
+}</code></pre>
         <pre><code><span class="kw">from</span> backend.perf_monitor <span class="kw">import</span> timed_slot, PerfMonitor
 
 <span class="kw">@timed_slot</span>
@@ -291,19 +340,20 @@ displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings
 t = PerfMonitor.begin()
 ... <span class="cmt"># code to measure</span>
 PerfMonitor.end(t, <span class="str">"my_section"</span>)</code></pre>
-        <p>The C++ build has no profiling flag; use the UI watchdog log lines and a native profiler.</p>
 
         <!-- Screenshots -->
         <h2 id="screenshots">Screenshots &amp; Video Stories</h2>
         <p><span class="file-path">dev/screenshots/</span> (<code>auto.py</code>, <code>stories.py</code>, <code>optimize.py</code>; <code>core.py</code> / <code>scenarios.py</code> / <code>cli.py</code> are the deprecated xdotool tool kept for reference). Full documentation: <span class="file-path">dev/docs/SCREENSHOTS.md</span>.</p>
+        <p>Every launcher (<code>auto.py</code>, <code>stories.py</code>, <code>python -m dev.collage</code>, <span class="file-path">dev/tests/drive_dashboard_editor.py</span>, <span class="file-path">dev/shots_gap/</span>) starts the app through <span class="file-path">dev/app_launch.py</span>: the C++ binary by default (<code>$OCTAVE_BIN</code>, else <span class="file-path">build-desktop-&lt;user&gt;/octave</span>, <span class="file-path">build/octave</span>, then the newest <span class="file-path">build*/octave</span>) with <code>--dev --profile</code>, or the Python backend with <code>OCTAVE_BACKEND=python</code> (<code>auto.py</code> and <code>stories.py</code> also take <code>--backend python</code>).</p>
 
         <h3>Menu sweep</h3>
         <pre><code><span class="fn">python</span> -m dev.screenshots                <span class="cmt"># launch dev mode headless (Xvfb if installed), shoot every page, quit</span>
 <span class="fn">python</span> dev/screenshot_tool.py            <span class="cmt"># identical wrapper</span>
 <span class="fn">python</span> -m dev.screenshots --visible      <span class="cmt"># real window (full GPU; a tiling WM may resize it)</span>
 <span class="fn">python</span> -m dev.screenshots --no-launch    <span class="cmt"># sweep an app you started yourself with --profile</span>
-<span class="fn">python</span> -m dev.screenshots --prod         <span class="cmt"># production backend, no mock OBD</span></code></pre>
-        <p>Options: <code>--size WxH</code> (1280x720), <code>--settle SECS</code> (1.2), <code>--dev-chrome</code>, <code>--keep</code>, <code>--port N</code> (9876), <code>--out DIR</code>, and the mode flags <code>--xvfb</code> / <code>--offscreen</code>. Mode is auto-picked <code>--visible</code> &gt; <code>--offscreen</code> &gt; Xvfb (if <code>xvfb-run</code> exists) &gt; offscreen. Output: <code>dev/screenshots/output/*.png</code>, <code>manifest.json</code>, <code>GALLERY.md</code> for all 11 top-level pages and 6 settings sections. The <code>offscreen</code> platform has no GL, so the <code>ColorOverlay</code> icons and <code>MultiEffect</code> album art render blank there &mdash; Xvfb (<code>xorg-server-xvfb</code>, llvmpipe) is the faithful headless path.</p>
+<span class="fn">python</span> -m dev.screenshots --prod         <span class="cmt"># production mode (no --dev), real OBD</span>
+<span class="fn">python</span> -m dev.screenshots --backend python   <span class="cmt"># the Python backend instead of the C++ build</span></code></pre>
+        <p>Options: <code>--size WxH</code> (1280x720), <code>--settle SECS</code> (1.2), <code>--dev-chrome</code>, <code>--keep</code>, <code>--port N</code> (9876), <code>--out DIR</code>, and the mode flags <code>--xvfb</code> / <code>--offscreen</code>. Mode is auto-picked <code>--visible</code> &gt; <code>--offscreen</code> &gt; Xvfb (if <code>xvfb-run</code> exists) &gt; offscreen. Output: <code>dev/screenshots/output/*.png</code>, <code>manifest.json</code>, <code>GALLERY.md</code> for all 11 top-level pages and 6 settings sections. <code>--out</code> must be an absolute path inside the checkout (the manifest stores repo-relative paths). The <code>offscreen</code> platform has no GL, so the <code>ColorOverlay</code> icons and <code>MultiEffect</code> album art render blank there &mdash; Xvfb (<code>xorg-server-xvfb</code>, llvmpipe) is the faithful headless path.</p>
 
         <h3>Video stories (README / demo clips)</h3>
         <pre><code><span class="fn">python</span> -m dev.screenshots.stories --list
@@ -323,7 +373,7 @@ PerfMonitor.end(t, <span class="str">"my_section"</span>)</code></pre>
           <li><strong>Python manager:</strong> add <code>backend/foo.py</code> with the same class name, mirroring every property / invokable / slot / signal as PySide6 <code>Property</code> / <code>Slot</code> / <code>Signal</code> with the same names and types; <code>get_logger(__name__)</code> for logging; instantiate in <span class="file-path">main.py</span> and register under the <strong>same</strong> context-property name. Use <code>get_app_data_dir()</code> for storage (matches <code>SettingsManager::getAppDataDir()</code>) so JSON files are shared on disk, and write any file that is rewritten while driving with <code>atomic_write_text()</code> / <code>atomic_write_bytes()</code> from <span class="file-path">backend/atomic_io.py</span> (temp file, fsync, <code>os.replace</code>) -- the power-cut-safe peer of C++ <code>QSaveFile</code>.</li>
           <li><strong>Settings:</strong> add the key with its default to <em>both</em> <code>SettingsManager</code>s in the same commit (C++ defaults table + <code>Q_PROPERTY</code> + <code>save_xxx</code>; Python <code>_default_settings</code> + <code>Property</code> + <code>Signal</code> + <code>save_xxx</code> slot), and to the settings registry if it should appear in the Quick Panel.</li>
           <li><strong>QML:</strong> build the view in <span class="file-path">frontend/</span>; every new <code>fooManager.bar()</code> binding must resolve on both backends before it ships (grep the QML for the symbol and check both). Settings pages go under <span class="file-path">frontend/settings/</span>. Gauges and dashboards follow <span class="file-path">docs/GAUGE_AUTHORING.md</span>.</li>
-          <li><strong>Dev mode / tooling:</strong> if the feature depends on hardware, add a mock in <span class="file-path">dev/</span> and register it in <code>dev_runtime.py</code>; add command-server actions and MCP tools if an agent should be able to drive it.</li>
+          <li><strong>Dev mode / tooling:</strong> if the feature depends on hardware, add a simulator in <span class="file-path">src/dev/</span> (wired in <code>devruntime.cpp</code>; the Python peer goes in <span class="file-path">dev/</span> and <code>dev_runtime.py</code>); add command-server actions (<code>registerAction</code> in <span class="file-path">src/dev/</span>, <code>register</code> in Python) and MCP tools if an agent should be able to drive it; put an <code>OCTAVE_PERF_SCOPE</code> on any new hot path.</li>
           <li><strong>Verify both:</strong> <code>cmake --build build -j</code>, <code>QT_QPA_PLATFORM=offscreen pytest tests/</code> (or at least <code>python -c "import main"</code>), then run each backend against the QML.</li>
           <li><strong>Wiki:</strong> update the manager page and <a href="signals-slots-reference.html">Signals &amp; Slots Reference</a>, the <a href="settings-reference.html">Settings Reference</a> for new keys, and rebuild the search index. Stale docs are treated as worse than missing docs.</li>
           <li><strong>If parity genuinely cannot land now</strong> (e.g. a C++-only library), gate the QML with <code>typeof fooManager !== "undefined"</code>, write a <span class="file-path">TODO/</span> file for the missing half and say so in the PR.</li>

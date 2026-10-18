@@ -233,8 +233,9 @@
         <p>
           Other context properties include <code>assetStore</code> (local asset URLs), <code>wikiViewerAvailable</code>, <code>wikiHomeUrl</code>, and <code>screenAutoScale</code> (see
           <a href="#startup">startup</a>) and <code>isAndroid</code> (<code>true</code> only in the Android C++ build;
-          always <code>false</code> from <code>main.py</code>). With <code>--profile</code> the Python backend also
-          registers <code>perfMonitor</code>.
+          always <code>false</code> from <code>main.py</code>). With <code>--profile</code> either backend also
+          registers <code>perfMonitor</code>, and dev mode (<code>octave --dev</code>, <code>python -m dev.main_dev</code>)
+          adds <code>devMode</code>, <code>devKeyboardController</code> and <code>devToolsManager</code>.
         </p>
 
         <!-- Communication -->
@@ -348,7 +349,8 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           <li><strong><code>assetStore</code></strong> (<span class="file-path">src/util/assetstore.{h,cpp}</span> / <span class="file-path">backend/asset_store.py</span>) &mdash; <code>localUrl(relativePath)</code> returns a <code>file://</code> URL for a file under <span class="file-path">frontend/assets/</span>. Needed because Quick3D's <code>RuntimeLoader</code> hands the path to Assimp, which cannot read <code>assets:/</code> files inside an Android APK ("IO Error: File not found" in v0.9.2); on Android the file is extracted once into the app data directory (<code>asset-cache/</code>, re-extracted when its size changes after an update), on desktop the path is simply resolved. <code>MusicDeviceScene.qml</code> (<code>modelUrl()</code>) and <code>JeepHinge.qml</code> load every <code>.glb</code> through it; Qt's own loaders (images, HDR light probes, fonts) keep using <code>assets:/</code> directly.</li>
           <li><strong>Offline wiki</strong> &mdash; registers <code>wikiViewerAvailable</code> and <code>wikiHomeUrl</code>. Desktop WebEngine builds prefer the local wiki, then <code>qrc:/wiki/index.html</code>; Android WebView reads <code>file:///android_asset/wiki/index.html</code>. Without the relevant Qt module the reader is unavailable.</li>
           <li><strong>Phase 6</strong> &mdash; <code>DashboardManager</code> with <code>setPresetsDir(frontend/dashboards/presets)</code> and <code>setUserDir(&lt;appdata&gt;/dashboards)</code>.</li>
-          <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created. Then <code>setQuitOnLastWindowClosed(true)</code>.</li>
+          <li><strong>Developer tooling</strong> (<code>OCTAVE_DEV_TOOLS</code> builds only) &mdash; <code>OctaveDev::Runtime::beforeLoad()</code> reads <code>--dev</code> / <code>--profile</code> / <code>--command-port</code>; without them it does nothing. A build without the option warns and ignores the flags. See <a href="#dev-tooling">Profiling and the Command Server</a>.</li>
+          <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created; then <code>Runtime::afterLoad()</code> (dev overlay, perf monitor, command server) and <code>setQuitOnLastWindowClosed(true)</code>.</li>
           <li><strong>Hardware wiring</strong> &mdash; gesture actions &rarr; media / volume; ESP32 <code>volumeChangeRequested(float)</code> through a fractional accumulator; <code>muteToggleRequested</code>; on desktop the ESP32 LED colour sync (<code>albumArtColorsChanged</code> in theme mode, <code>esp32LedStaticColorChanged</code> in static mode, <code>esp32LedColorModeChanged</code> re-sends the current colour, cyan <code>(0, 255, 255)</code> when a colour is missing or unparsable) and, 500&nbsp;ms after the knob reports "Connected", a push of the current volume, mute state and colour &mdash; mirroring <code>main.py</code>.</li>
           <li><strong>Signals</strong> &mdash; on Unix desktop, <code>SIGTERM</code>/<code>SIGINT</code> are turned into <code>QCoreApplication::quit()</code> with the self-pipe trick (<code>socketpair</code> + <code>QSocketNotifier</code>) so the <code>aboutToQuit</code> cleanup still runs under systemd or Ctrl-C.</li>
           <li><strong><code>app.exec()</code></strong>.</li>
@@ -371,7 +373,8 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
         <div class="info-box info">
           <div class="info-box-title">Why the OBD manager is installed late in Python</div>
           <code>main.py</code> is importable: <code>dev/dev_runtime.py</code> imports it, calls
-          <code>install_obd_manager(MockOBDManager(...))</code> and then <code>load_main_qml()</code>. Keeping the
+          <code>install_obd_manager(MockOBDManager(...))</code> and then <code>load_main_qml()</code>. (C++ dev mode keeps
+          the real <code>OBDManager</code> and swaps the adapter underneath it instead.) Keeping the
           registration behind a function (and the QML load behind another) lets developer mode swap in simulated
           OBD data without patching the production entry point. The headless boot test (<code>tests/test_boot.py</code>)
           runs the real <code>__main__</code> path offscreen.
@@ -743,26 +746,29 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         <!-- Dev tooling -->
         <h2 id="dev-tooling">Profiling and the Command Server</h2>
         <p>
-          <code>python main.py --profile</code> calls <code>setup_perf_profiling()</code> after the QML is loaded. It
-          creates a <code>PerfMonitor</code> (event-loop latency, GIL contention probe, per-slot timings, CPU/memory
-          via <code>psutil</code> when installed) writing CSV and log files to <code>dev/perf/logs/</code>, registers it
-          as the <code>perfMonitor</code> context property, starts a <code>CommandServer</code> &mdash; a threaded TCP
-          server on <code>127.0.0.1:9876</code> that accepts newline-delimited JSON actions and executes UI-driving
-          ones (navigate, click, drag, capture, record) on the GUI thread through a <code>NavigationBridge</code> with
-          <code>BlockingQueuedConnection</code> &mdash; and applies <code>perf_patches.apply_patches()</code> to wrap
-          hot methods with timers. Both are stopped on <code>aboutToQuit</code> and the report is printed.
+          Both backends have the same developer tooling behind the same flags. <code>--profile</code> creates a
+          <code>PerfMonitor</code> (event-loop latency, a thread-wake jitter probe, per-label timings, CPU / memory)
+          writing CSV and log files to <code>dev/perf/logs/</code>, registers it as the <code>perfMonitor</code> context
+          property, and starts a command server: a threaded TCP server on <code>127.0.0.1:9876</code> that accepts
+          newline-delimited JSON actions and runs the UI-driving ones (navigate, click, drag, capture, record) on the
+          GUI thread. Both are stopped on <code>aboutToQuit</code> and the report is written to the log.
+          Dev mode (<code>--dev</code> in C++, <code>python -m dev.main_dev</code> in Python) adds a simulated car.
         </p>
-        <div class="info-box warning">
-          <div class="info-box-title">These modules are developer-local</div>
-          <code>backend/perf_monitor.py</code>, <code>backend/perf_patches.py</code> and
-          <code>backend/command_server.py</code> are listed in <code>.gitignore</code>, as is the whole
-          <code>dev/</code> tree (<code>main_dev.py</code>, the mock OBD manager, MCP server, screenshot tooling).
-          They exist on the maintainers' machines but not in a fresh clone; <code>setup_perf_profiling()</code> guards
-          all three imports, so <code>--profile</code> on a checkout without them logs a warning and skips the
-          performance monitor / command server instead of raising <code>ImportError</code>. The C++ backend has no
-          equivalent of any of them.
-          See <a href="development.html">Development</a> and <a href="utilities.html">Utilities</a>.
-        </div>
+        <ul>
+          <li><strong>C++</strong> (<code>src/dev/</code>): compiled in only with the <code>OCTAVE_DEV_TOOLS</code> CMake
+            option (default on only for Debug desktop builds) and inert without the flags.
+            <code>OctaveDev::Runtime</code> is created in <code>main.cpp</code> after the managers; the simulated car talks
+            to the real <code>OBDManager</code> through a fake ELM327 <code>QIODevice</code>
+            (<code>OBDConnectionWorker::setCustomTransport()</code>, <code>OBDManager::setPortOverride()</code>), and hot
+            paths are timed with <code>OCTAVE_PERF_SCOPE</code> (<code>src/util/perfscope.h</code>, empty without the
+            option).</li>
+          <li><strong>Python</strong>: <code>setup_perf_profiling()</code> imports <code>backend/perf_monitor.py</code>,
+            <code>backend/command_server.py</code> and <code>backend/perf_patches.py</code> (method wrapping) lazily.
+            They and the whole <code>dev/</code> tree are in <code>.gitignore</code>; every import is guarded, so
+            <code>--profile</code> on a fresh clone logs a warning and starts without them.</li>
+        </ul>
+        <p>See <a href="development.html#command-server">Development</a> for the protocol, the action list and the
+          clients (MCP servers, screenshot and perf scripts), which drive either backend.</p>
 
         <!-- Signal Wiring -->
         <h2 id="signal-wiring">Signal Wiring Graph</h2>
@@ -852,8 +858,8 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
         <p>
           <code>SIGTERM</code>/<code>SIGINT</code> reach this handler too (self-pipe in C++, a periodic timer in Python),
           otherwise <code>adb</code> forwards, the DHU and the phone server would be orphaned when a launcher script or
-          systemd stops the app. With <code>--profile</code> the Python side also stops the command server and the
-          perf monitor and prints the report.
+          systemd stops the app. With <code>--profile</code> both backends also stop the command server and the
+          perf monitor and write the report (C++: <code>OctaveDev::Runtime::shutdown()</code>, first in the handler).
         </p>
 
         <!-- Design decisions -->

@@ -16,6 +16,7 @@
 #include <QVector>
 
 #include <cstdint>
+#include <functional>
 
 #include "elm327protocol.h"
 #include "settingsmanager.h"
@@ -232,6 +233,11 @@ public:
     // has no RPM). BerryIMU and unknown ids are ignored. Applied live after a
     // 250 ms debounce. Mirrors Python OBDManager.setParameterDemand.
     Q_INVOKABLE void setParameterDemand(const QString &consumer, const QStringList &paramIds);
+
+    // Use `port` instead of the saved obdBluetoothPort, without writing it
+    // to settings (dev tooling points this at the simulated adapter, see
+    // src/dev/). Takes effect on the next connection attempt.
+    void setPortOverride(const QString &port) { m_portOverride = port; }
 
 public slots:
     // ======================================================================
@@ -594,6 +600,7 @@ private:
 
     // Pending port change
     QString m_pendingPort;
+    QString m_portOverride;   // see setPortOverride()
 
 #ifdef Q_OS_ANDROID
     // Android-only BLE state -- on Android the worker thread is bypassed
@@ -662,6 +669,15 @@ public:
     void setTimeout(int seconds);
     void setPidsToWatch(const QList<PidKey> &pids);
 
+    // Extra transport for ports the serial / RFCOMM paths don't handle:
+    // `claims` says whether it serves a port, `create` returns an unopened
+    // QIODevice for it. Dev tooling registers the simulated ELM327
+    // ("sim://elm327") this way; nothing is registered in a normal run. Set
+    // before the first connection; `create` runs on the worker thread.
+    using TransportCreate = std::function<QIODevice *(const QString &port, QObject *parent)>;
+    static void setCustomTransport(std::function<bool(const QString &port)> claims, TransportCreate create);
+    static bool transportClaims(const QString &port);
+
 signals:
     // Connection
     void initComplete(bool success, const QString &message);
@@ -724,6 +740,7 @@ private:
     // socket. m_io is whichever one is open; everything talks through it.
     QSerialPort *m_serial = nullptr;
     RfcommSocket *m_rfcomm = nullptr;
+    QIODevice *m_custom = nullptr;   // from setCustomTransport()
     QIODevice *m_io = nullptr;
     ResponseBuffer m_responseBuffer;
 

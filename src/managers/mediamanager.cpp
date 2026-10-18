@@ -1,4 +1,5 @@
 #include "mediamanager.h"
+#include "../util/perfscope.h"
 #include "settingsmanager.h"
 
 #include <QDir>
@@ -371,6 +372,7 @@ void MediaManager::clearTempFilesInternal()
 
 void MediaManager::_update_position()
 {
+    OCTAVE_PERF_SCOPE("media._update_position");
     if (m_player->playbackState() == QMediaPlayer::PlayingState) {
         emit positionChanged(m_player->position());
     }
@@ -1011,6 +1013,7 @@ QString MediaManager::get_album_art(const QString &filename)
 
 QString MediaManager::_extract_album_colors(const QString &imagePath)
 {
+    OCTAVE_PERF_SCOPE("media._extract_colors");
     QImage img(imagePath);
     if (img.isNull())
         return {};
@@ -1057,6 +1060,7 @@ QString MediaManager::_extract_album_colors(const QString &imagePath)
 
 QVector<QVector<int>> MediaManager::_kmeans_colors(const QVector<QVector<int>> &pixels, int k, int maxIterations)
 {
+    OCTAVE_PERF_SCOPE("media._kmeans_colors");
     const int n = pixels.size();
     if (n == 0)
         return {};
@@ -1679,6 +1683,7 @@ void MediaManager::play_file(const QString &filename)
 
 void MediaManager::next_track()
 {
+    OCTAVE_PERF_SCOPE("media.next_track");
     if (m_currentPlaylist.isEmpty()) {
         QStringList files = _get_current_playlist_files();
         std::sort(files.begin(), files.end(), [](const QString &a, const QString &b) {
@@ -1699,6 +1704,7 @@ void MediaManager::next_track()
 
 void MediaManager::previous_track()
 {
+    OCTAVE_PERF_SCOPE("media.previous_track");
     if (m_currentPlaylist.isEmpty()) {
         QStringList files = _get_current_playlist_files();
         std::sort(files.begin(), files.end(), [](const QString &a, const QString &b) {

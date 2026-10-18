@@ -15,6 +15,7 @@
  */
 
 #include "esp32volumemanager.h"
+#include "../util/perfscope.h"
 
 #ifndef Q_OS_MOBILE
 
@@ -511,6 +512,7 @@ void ESP32VolumeManager::handleDisconnect()
 
 void ESP32VolumeManager::onSerialReadyRead()
 {
+    OCTAVE_PERF_SCOPE("esp32._read_serial");
     if (!m_serialPort)
         return;
 

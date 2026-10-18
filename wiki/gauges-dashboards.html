@@ -717,7 +717,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <li><span class="file-path">tests/test_vehicle_gate_qml.py</span> -- loads the real <code>OBDParameterModel</code> and <code>DashboardRenderer</code> against a fake <code>obdManager</code> and checks the gate before a scan, after a scan (only the unreported PID shows the placeholder; sensor ids exempt; <code>vehicleParameters</code> order) and after disconnect.</li>
           <li><span class="file-path">tests/test_obd_poll_demand.py</span> -- the backend side of demand-driven polling (see <a href="obd-manager.html">OBD Manager</a>).</li>
         </ul>
-        <p><strong>End-to-end (gitignored <code>dev/</code> tree, drives the running Python app through the <code>--profile</code> command server):</strong></p>
+        <p><strong>End-to-end (gitignored <code>dev/</code> tree, drives the running app through the <code>--profile</code> command server; the C++ build by default, <code>OCTAVE_BACKEND=python</code> for Python; honours <code>XDG_CONFIG_HOME</code> for a sandboxed config):</strong></p>
         <ul>
           <li><span class="file-path">dev/tests/drive_dashboard_editor.py</span> -- opens the chooser, creates a dashboard,
           opens the palette, picks a PID via the searchable picker, moves and resizes with the steppers, drags with a valid

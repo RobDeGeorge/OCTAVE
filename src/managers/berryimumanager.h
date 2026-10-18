@@ -195,6 +195,10 @@ private slots:
     void startSensor();
 
 private:
+    // Dev tooling (src/dev/devimufeed.cpp) stops the I2C worker and drives
+    // these signals with simulated motion when asked to (sim_imu).
+    friend class DevImuAccess;
+
     bool getConnected() const;
     void scheduleRetry();
     void stopWorker();
