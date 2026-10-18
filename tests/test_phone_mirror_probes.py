@@ -140,6 +140,13 @@ def manager(qapp, monkeypatch):
     m._run_adb_full = lambda args, timeout=10: ""
     yield m
     m.gate.set()
+    # Let pending probe results and retry timers land while the manager is
+    # alive, then delete it here rather than at some later test's GC, where a
+    # late Qt callback into a half-collected manager crashed CI (exit 139).
+    _spin(qapp, lambda: False, 0.5)
+    m.stopScrcpy()
+    m.deleteLater()
+    qapp.processEvents()
 
 
 def test_get_device_state_never_blocks_and_coalesces(qapp, manager):

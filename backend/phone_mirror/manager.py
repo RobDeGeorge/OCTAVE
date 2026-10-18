@@ -744,7 +744,7 @@ class PhoneMirrorManager(QObject):
     def _restart_session(self):
         if self.isRunning:
             self.stopScrcpy()
-            QTimer.singleShot(300, self.startScrcpy)
+            QTimer.singleShot(300, self, self.startScrcpy)
 
     @Slot(float)
     def setAudioGain(self, gain: float):
@@ -1438,7 +1438,7 @@ class PhoneMirrorManager(QObject):
         self.scrcpyStarted.emit(1)
         # Hand the sleep/panel policy to the phone-side keeper. The server
         # powers the device on asynchronously at start; give it a moment.
-        QTimer.singleShot(500, self._send_keeper_policy)
+        QTimer.singleShot(500, self, self._send_keeper_policy)
         # Follow the phone's media session so OCTAVE's media controls can drive it
         self._client.media_command(MEDIA_WATCH, 1)
 
@@ -1468,7 +1468,7 @@ class PhoneMirrorManager(QObject):
                 self._attaching = False
                 self._set_connection_type("")
                 self.isRunningChanged.emit()
-                QTimer.singleShot(300, self.startScrcpy)
+                QTimer.singleShot(300, self, self.startScrcpy)
                 return
             # Not a link problem, so not something the view should keep retrying
             reason = ("The phone's video encoder failed, even in software mode. Try a smaller virtual "
@@ -1484,7 +1484,7 @@ class PhoneMirrorManager(QObject):
             self._persist_scid = ""
             logger.info(f"Reattach failed ({reason}); starting a new session")
             self.isRunningChanged.emit()
-            QTimer.singleShot(0, self.startScrcpy)
+            QTimer.singleShot(0, self, self.startScrcpy)
             return
         if was_ready and self._active_display_size and self._client is not None and self._client.scid:
             # Link drop mid-stream: the server keeps the virtual display for PERSIST_MS
