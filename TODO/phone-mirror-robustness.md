@@ -38,7 +38,7 @@ Done in 0.9.5, for context. Both backends got the same behaviour, and it is docu
 
 ## Tests still missing
 
-- The C++ client against `tests/fake_scrcpy_server.py`. There is no C++ test target yet; see `TODO/python-sunset-after-v1.md`, which plans one.
+- The C++ client against `tests/fake_scrcpy_server.py`. There is no C++ test target yet; see `TODO/python-removal.md`, which plans one.
 - Persist / re-attach flow in the fake server.
 
 ## Hardware checks still open

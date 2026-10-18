@@ -6,22 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 OCTAVE (Open-source Cross-platform Telematics for Augmented Vehicle Experience) is a **C++ / Qt 6 / QML** infotainment system designed for vehicles. It runs on Windows, macOS, Linux, Raspberry Pi, iOS, and Android.
 
-### Backend state: C++ is the only shipped binary; Python is a developer/tinkerer backend
+### Backend state: C++ only; the Python backend is frozen (deprecated 2026-10-18)
 
-OCTAVE intentionally maintains **two parallel backends** — C++ / Qt 6 (`src/`) and Python / PySide6 (`backend/`, `main.py`) — that expose the same API surface to the shared QML frontend (`frontend/`). This is deliberate: Python stays alive for tinkering, accessibility, rapid prototyping, and hardware hacking on Raspberry Pi / single-board setups where a Python REPL is invaluable; C++ is the **sole distribution path** — every shipped binary on every platform (Windows `.exe`, macOS `.dmg`, Linux AppImage / `.deb`, Android `.apk`, iOS `.ipa` once enabled) is built from the C++ tree. Python is not compiled or packaged by CI; tinkerers run it via `python setup.py` or `python main.py` from a checkout.
+OCTAVE is a **C++ / Qt 6** app (`src/`) with a QML frontend (`frontend/`). All development happens in C++. Every shipped binary on every platform (Windows `.exe`, macOS `.dmg`, Linux AppImage, Android `.apk`, iOS `.ipa` once enabled) is built from the C++ tree.
 
-**Mobile (Android/iOS) is C++-only.** The Python backend is desktop-only (Linux / Windows / macOS / Raspberry Pi). Python-on-Android via buildozer/p4a has been removed — do not reintroduce `backend/platform_config.py`, `backend/stubs.py`, `backend/android_obd_manager.py`, `backend/android_sensors.py`, `deployment/buildozer.spec`, or `requirements-android.txt`. Mobile-specific code lives behind `#ifdef Q_OS_ANDROID` / `#ifdef Q_OS_IOS` in C++ and does **not** need a Python mirror.
-
-**Parity is the rule, not the goal — on desktop.** When you add a feature, fix a bug, or change behavior in one backend, you must do the equivalent work in the other in the same change set for desktop functionality (or explicitly note why parity is deferred and open a `TODO/` entry). The QML frontend must continue to work identically against either backend — no QML file should know or care which backend is running, beyond `typeof someManager !== "undefined"` guards for features legitimately absent on one platform.
-
-**Concrete parity expectations (desktop):**
-- Every C++ manager in `src/managers/foo.{h,cpp}` has a Python peer at `backend/foo.py` (and vice versa) for desktop functionality, with the same class name, same QML context property name, same public Slots/Signals/Properties, and equivalent semantics.
-- Settings schemas must match: a key introduced in `SettingsManager` (either language) is added to the other in the same commit.
-- JSON persistence formats (e.g. settings, dashboards) are shared on disk — both backends must read and write compatible files.
-- Volume curves, threading models, logging categories/loggers, image providers, and custom QML types are mirrored.
-- When a QML file gains a new binding or call (`fooManager.bar()`), both backends must expose `bar` before the QML ships — *unless* the binding is mobile-only, in which case only the C++ side needs `bar`.
-
-**Historical migration plan:** `.claude/plans/wondrous-toasting-biscuit.md` describes the original Python→C++ rewrite. It is **superseded** by this dual-backend policy — Python is no longer slated for deletion.
+The Python / PySide6 backend (`backend/`, `main.py`, `setup.py`) is **deprecated and frozen** as of 2026-10-18. Its last maintained state is the `python-final` branch (commit `b5463c9`, C++/Python parity as of that day); anyone wanting a Python version forks from there. Rules until it is deleted:
+- **Do not port changes to `backend/`** and do not add Python peers for new C++ managers, settings or QML bindings. The parity rule is gone.
+- Python stays in `main` only because `tests/` (pytest) still exercises it and is the only behavioural test suite. Once C++ QtTest / ctest targets replace it, `backend/`, `main.py`, `setup.py`, `requirements.txt` and the Python tests are deleted (`TODO/python-removal.md`). Expect the Python backend to drift and break against new QML; that is accepted. Don't fix it.
+- QML may now use C++-only manager members freely; no `typeof` guards are needed for Python's sake.
+- Don't reintroduce Python-on-Android (`backend/platform_config.py`, `backend/stubs.py`, `backend/android_obd_manager.py`, `backend/android_sensors.py`, `deployment/buildozer.spec`, `requirements-android.txt`) or the PyInstaller pipeline.
 
 ## Commands
 
@@ -47,7 +40,7 @@ cmake --build build -j
 
 See `BUILD.md` for the full build matrix (9 targets including iOS / Android / Flatpak / app store variants).
 
-### Python build (equal, supported)
+### Python build (frozen, deprecated; don't develop here)
 
 ```bash
 # First-time setup + run (creates venv, installs deps, launches app)
@@ -78,7 +71,7 @@ A minimal smoke test suite lives in `tests/` and runs in CI on every push and PR
 
 ## Architecture
 
-**Two parallel backends (C++ / Qt 6 in `src/` and Python / PySide6 in `backend/`) + a shared QML frontend** (`frontend/`) communicating via Qt Signals/Slots. Both backends expose the same manager API surface to QML; any work in one must be mirrored in the other.
+**A C++ / Qt 6 backend (`src/`) + a QML frontend** (`frontend/`) communicating via Qt Signals/Slots. The frozen Python backend (`backend/`) still exposes the same API surface as of `python-final`, but is no longer kept in step.
 
 ### Backend — C++ (`src/`, primary for builds & distribution)
 
@@ -97,11 +90,11 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `downloadmanager` — yt-dlp wrapper, compiled out for app-store builds via `OCTAVE_ENABLE_DOWNLOADS` CMake option
 - `clock`, `networkmanager`, `volumecontroller` — self-explanatory
 
-Developer tooling lives in `src/dev/` (committed, compiled only with the `OCTAVE_DEV_TOOLS` CMake option, inert without `--dev` / `--profile`): `devruntime` wires it up from `main.cpp`, `commandserver` + `coreactions` + `uidriver` are the TCP command server (same protocol and actions as `backend/command_server.py`), `perfmonitor` the profiler, `carsim` + `simelm327` a simulated car behind the *real* `OBDManager` (registered with `OBDConnectionWorker::setCustomTransport()` for port `sim://elm327`), `devimufeed` simulated IMU motion, `collagebridge` the collage tool's in-app half, `qml/` the dev overlay (shared with Python dev mode). Time hot paths with `OCTAVE_PERF_SCOPE("label")` from `src/util/perfscope.h` (empty in Release). This tooling is not a manager surface and has no parity requirement, but keep the command-server action names, args and result shapes identical to the Python server so the clients work against both. The clients in the gitignored `dev/` tree (MCP servers, screenshot / story / collage / perf scripts, dashboard drivers) launch the C++ binary through `dev/app_launch.py` (`OCTAVE_BIN` to pick one, `OCTAVE_BACKEND=python` for the Python backend).
+Developer tooling lives in `src/dev/` (committed, compiled only with the `OCTAVE_DEV_TOOLS` CMake option, inert without `--dev` / `--profile`): `devruntime` wires it up from `main.cpp`, `commandserver` + `coreactions` + `uidriver` are the TCP command server (same protocol and actions as `backend/command_server.py`), `perfmonitor` the profiler, `carsim` + `simelm327` a simulated car behind the *real* `OBDManager` (registered with `OBDConnectionWorker::setCustomTransport()` for port `sim://elm327`), `devimufeed` simulated IMU motion, `collagebridge` the collage tool's in-app half, `qml/` the dev overlay (shared with Python dev mode). Time hot paths with `OCTAVE_PERF_SCOPE("label")` from `src/util/perfscope.h` (empty in Release). The clients in the gitignored `dev/` tree (MCP servers, screenshot / story / collage / perf scripts, dashboard drivers) launch the C++ binary through `dev/app_launch.py` (`OCTAVE_BIN` to pick one, `OCTAVE_BACKEND=python` for the Python backend).
 
-When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMakeLists.txt`, instantiate in `main.cpp`, register as a QML context property. **Then immediately do the parallel work on the Python side** — see below.
+When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMakeLists.txt`, instantiate in `main.cpp`, register as a QML context property.
 
-### Backend — Python (`backend/`, first-class peer)
+### Backend — Python (`backend/`, frozen; reference only)
 
 Each feature is a Python **manager class** inheriting from `QObject`. Managers expose state to QML via `Signal`, `Slot`, and `Property` decorators. All managers are instantiated in `main.py` and registered as QML context properties.
 
@@ -117,24 +110,14 @@ Key managers:
 - `android_auto/` — Android Auto via Google Desktop Head Unit (DHU)
 - `phone_mirror/` — Phone screen mirroring via the built-in scrcpy-protocol client (`scrcpy_client.py`); talks to `phone_server/` (our fork of the scrcpy server, prebuilt jar in `tools/phone-server/`) over adb, nothing to install
 
-When adding a new manager: add `foo.py` to `backend/`, import + instantiate it in `main.py`, register as a QML context property with the **same name** the C++ side uses. Mirror every `Q_PROPERTY` / `Q_INVOKABLE` / slot / signal from the C++ header as a PySide6 `Property` / `Slot` / `Signal`. Use `get_app_data_dir()` from `backend/settings_manager.py` for storage paths (matches C++ `SettingsManager::getAppDataDir()`).
+Do not add or change Python managers (see Backend state above).
 
-### Parity workflow (do this on every change)
+### Change workflow
 
-Whenever you touch a manager, follow this sequence so the backends don't drift:
-
-1. Decide which backend leads (usually whichever has the higher-fidelity need — C++ for perf, Python for quick iteration).
-2. Implement on the leading side.
-3. Port to the other backend in the **same change set**, matching:
-   - class name (`DashboardManager` ↔ `DashboardManager`),
-   - QML context property name (`dashboardManager`),
-   - public method names (`loadDashboard`, `saveDashboard`, `deleteDashboard`, …),
-   - signal names (`dashboardsChanged`),
-   - Property names and types (`QVariantList dashboards` ↔ `Property(list)`),
-   - JSON on-disk formats.
-4. If QML was changed, grep the QML for the new symbol and confirm both backends define it.
-5. Build both: `cmake --build build -j` and `QT_QPA_PLATFORM=offscreen python -c "import main"` (or run `python setup.py --no-run`) to catch import errors.
-6. If you genuinely cannot port immediately (e.g. a C++-only library with no Python binding), add a file under `TODO/` with the missing work, gate the QML with `typeof …`, and note the parity debt in the PR.
+1. Implement in C++ (`src/`); QML in `frontend/`.
+2. Build: `cmake --build build -j`. Drive the result with `./build/octave --dev --profile` and the dev tooling (screenshots, stories, dashboard drivers, MCP tools) when it touches the UI.
+3. Don't touch `backend/`. If a C++ change breaks a Python test in `tests/`, mark that test skipped with a reason pointing at the Python freeze rather than porting the change.
+4. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes.
 
 ### Frontend (`frontend/`)
 
@@ -207,7 +190,7 @@ GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff, Python only �
 - Qt Quick Controls style is forced to `"Basic"` for full slider customization
 - QML import path includes `frontend/` — QML files there are importable by name
 - The `dev/` directory is gitignored and fully isolated from production code
-- Backend work lands in **both** C++ (`src/managers/`) and Python (`backend/`) in the same change set — no language is second-class
+- Backend work lands in C++ only (`src/`); the Python backend is frozen at `python-final`
 - Python modules use hierarchical loggers via `get_logger(__name__)`; C++ uses `QLoggingCategory`
 
 ## Wiki Maintenance
@@ -238,7 +221,7 @@ Dashboards are built in layers, each feeding the next:
 2. **Primitives** — `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SparklineGauge`, `WarningLight`, plus the self-binding `GForceGauge` and `CompassGauge`) and media widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`). PID-bound primitives share one binding API: set `paramId`; everything else defaults from the PID and the theme and can be overridden per widget.
 3. **`WidgetCatalog`** (`frontend/dashboards/WidgetCatalog.qml`, singleton) — the single registry the renderer, editor palette, properties panel, and validation all read: type → url, default span, `supportedKinds`, label/range/color capability flags, curated `editableProps`. A widget not in the catalog can't render or be placed.
 4. **JSON specs** — a dashboard is a `"schema": 1` grid spec rendered by `frontend/dashboards/DashboardRenderer.qml` (bad cells are skipped/placeheld, never crash). Built-ins ship read-only in `frontend/dashboards/presets/`; user dashboards live in `<config>/dashboards/*.json` (hot-reloaded).
-5. **Persistence + editor** — `DashboardManager` (C++ `src/managers/dashboardmanager.{h,cpp}` ↔ Python `backend/dashboard_manager.py`, full parity) enumerates, saves, duplicates, deletes, exports, and imports (sanitized, data-only, ids always regenerated). The in-app editor (`frontend/dashboards/editor/`) is pure QML over that API: tap-to-place, drag-to-move, corner-grip resize, PID picker, properties panel.
+5. **Persistence + editor** — `DashboardManager` (C++ `src/managers/dashboardmanager.{h,cpp}` ; the frozen Python peer is `backend/dashboard_manager.py`) enumerates, saves, duplicates, deletes, exports, and imports (sanitized, data-only, ids always regenerated). The in-app editor (`frontend/dashboards/editor/`) is pure QML over that API: tap-to-place, drag-to-move, corner-grip resize, PID picker, properties panel.
 
 Entry point: the square "Dashboards" button at the top-right of `OBDMenu.qml` opens the chooser (New / Edit / Copy / Delete / Share / Import); a horizontal swipe cycles Parameter Cards and every dashboard. The chooser's "Primitives Gallery" is a dev showcase with hardcoded values, marked for removal now that the editor exists. Remaining on-device checks: `TODO/dashboards-roadmap.md`; next step (shareable widget presets/composites, code widgets only behind an opt-in): `TODO/user-primitives.md`.
 

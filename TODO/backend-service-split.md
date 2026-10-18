@@ -1,6 +1,6 @@
 # Run the backend as a headless service so any frontend can connect
 
-**Status:** deferred: an idea scoped on 2026-10-17, after v1.0 and after `TODO/python-sunset-after-v1.md` (C++ only by then). No work started.
+**Status:** deferred: an idea scoped on 2026-10-17, after v1.0 and after `TODO/python-removal.md` (Python frozen 2026-10-18). No work started.
 **Last updated:** 2026-10-17
 
 ## What it is
@@ -19,7 +19,7 @@ Today OCTAVE is one process. The C++ managers (`src/managers/`) are registered a
 ## Why it's parked
 
 - **v1.0 comes first.** Splitting the process is a big structural change, and doing it during the parity era would double it (C++ and Python).
-- **Prerequisite:** the C++ command server from Phase 1 of `TODO/python-sunset-after-v1.md` (a C++ port of `backend/command_server.py`'s JSON-lines protocol on `localhost:9876`). Build that as the first draft of this service API, not as a throwaway dev hook.
+- **Starting point:** the C++ command server exists since 2026-10-18 (`src/dev/commandserver.cpp`, JSON lines on `localhost:9876`, `--profile` only, compiled in with `OCTAVE_DEV_TOOLS`). Grow the service API from it rather than starting over; it would need to leave the dev-only build option first.
 - The car needs road time on v1.0 before the process model changes under it.
 
 ## Design decisions to make
