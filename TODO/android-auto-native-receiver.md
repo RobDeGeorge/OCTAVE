@@ -62,7 +62,7 @@ On the phone, Android Auto refuses uncertified head units unless **Unknown sourc
   - Protobuf: either link libprotobuf and the aasdk `.proto` files, or hand-encode the small set of messages actually used. Decide in Phase 0; the deciding factor is protobuf on Android/iOS.
 - **Reuse from phone mirror:** the libavcodec H.264 decode → `QVideoSink` path (`src/phone_mirror/scrcpyclient.h`, `pushFrame` at line 155) and the touch mapping (`PhoneMirrorManager::injectTouch`). Pull the decoder out into a shared class instead of copying it.
 - `androidautomanager` gains a native mode. Keep the class name and the `androidAutoManager` context property; DHU stays as a fallback behind a setting until the native path proves itself in the Jeep.
-- New CMake deps: libusb-1.0 (desktop), OpenSSL (already bundled on Android, see `TODO/android-openssl-bundling.md`, which wrongly says Android Auto uses no TLS; fix that line when this starts), and maybe protobuf. All optional with an `OCTAVE_HAVE_NATIVE_AA` flag, like `OCTAVE_HAVE_FFMPEG`.
+- New CMake deps: libusb-1.0 (desktop), OpenSSL (already bundled on Android in `android/openssl/` via `QT_ANDROID_EXTRA_LIBS`), and maybe protobuf. All optional with an `OCTAVE_HAVE_NATIVE_AA` flag, like `OCTAVE_HAVE_FFMPEG`.
 
 ### Python (desktop parity)
 

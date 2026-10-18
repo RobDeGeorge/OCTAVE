@@ -60,7 +60,7 @@ for a few weeks and the wireless-connection pain is real rather than assumed.
 
 - `phone_server/` fork building in CI and validated on the Pi (in progress).
 - A decision on distribution (Play Store vs sideload) — Play Store implies
-  signing keys and review; see `TODO/android-signing-keystore.md`.
+  signing keys (done: the APK is signed with a permanent key from repo secrets, see the Sign APK step in `build.yml`) and review.
 
 ## Order of operations
 

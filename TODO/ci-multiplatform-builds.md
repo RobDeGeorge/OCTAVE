@@ -27,7 +27,7 @@ The full-matrix dispatch was green on 2026-09-09 (arm64 needed the GStreamer plu
    `release.yml` (tag), `nightly.yml` (cron), with per-target reusable workflows so one
    platform can be re-run alone.
 4. **Deferred targets:** iOS `.ipa` (needs an Apple Developer account and signing —
-   `TODO/android-signing-keystore.md` covers the Android side), Flatpak, app-store variants
+   Android release signing is already done: the Sign APK step in `build.yml`), Flatpak, app-store variants
    (`OCTAVE_ENABLE_DOWNLOADS=OFF`). None are needed for v0.9.
 
 ## Why it's parked
@@ -38,8 +38,6 @@ regression.
 
 ## Cross-references
 
-- `TODO/android-signing-keystore.md` — release-signed APKs instead of debug-signed
-- `TODO/android-openssl-bundling.md` — needed before the APK is store-ready
 - `docs/PHONE_MIRROR_NATIVE_PLAN.md` — open hardware tests
 
 Delete this file when v0.9.0 is tagged and the nightly job exists.

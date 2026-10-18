@@ -56,7 +56,6 @@ A new section in `frontend/settings/DownloadSettingsPage.qml` (or wherever downl
 
 ## Cross-references
 
-- `TODO/android-openssl-bundling.md` — separate Android networking issue (Qt's TLS); unrelated.
 - `TODO/android-cpp-port.md` — broad mobile parity; this work fits in there.
 
 ## Estimated effort
