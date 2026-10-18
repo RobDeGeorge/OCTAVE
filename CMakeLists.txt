@@ -323,6 +323,20 @@ if(OCTAVE_DEV_TOOLS)
     target_compile_definitions(octave PRIVATE OCTAVE_DEV_TOOLS)
 endif()
 
+# ---- C++ tests (tests/cpp/, run with ctest) ----
+# Same default as the dev tooling: ON for desktop Debug builds, OFF otherwise.
+if(NOT ANDROID AND NOT IOS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(_octave_tests_default ON)
+else()
+    set(_octave_tests_default OFF)
+endif()
+option(OCTAVE_BUILD_TESTS "Build the QtTest suite in tests/cpp (ctest)" ${_octave_tests_default})
+message(STATUS "C++ tests (ctest): ${OCTAVE_BUILD_TESTS}")
+if(OCTAVE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests/cpp)
+endif()
+
 # ---- Shader resources ----
 # Qt RHI's ShaderEffect rejects assets:/ URIs on Android (only qrc:/ or local files),
 # so .qsb shaders must live in the compiled-in Qt resource system. QML branches on

@@ -515,8 +515,11 @@ void ESP32VolumeManager::onSerialReadyRead()
     OCTAVE_PERF_SCOPE("esp32._read_serial");
     if (!m_serialPort)
         return;
+    feedSerialData(m_serialPort->readAll());
+}
 
-    QByteArray data = m_serialPort->readAll();
+void ESP32VolumeManager::feedSerialData(QByteArray data)
+{
     if (m_readResyncing) {
         // The rest of an overlong line is noise too — skip to its newline
         const qsizetype nl = data.indexOf('\n');

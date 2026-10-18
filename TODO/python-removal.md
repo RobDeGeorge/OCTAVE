@@ -10,6 +10,8 @@ Rob deprecated the Python backend on 2026-10-18 and develops only in C++ from th
 - **Snapshot:** branch `python-final` at `b5463c9`, the last commit with C++/Python parity. That is the fork point for anyone who wants a Python version. It hasn't been pushed yet.
 - **Parity rule:** removed from `CLAUDE.md` the same day. Nobody ports changes to `backend/` any more; it will drift and break against new QML, which is accepted.
 - **Dev tooling:** already on C++ (`src/dev/`, `OCTAVE_DEV_TOOLS`; b5463c9). The `dev/` clients launch `build/octave --dev --profile`.
+- **Snapshot pushed:** `python-final` is on GitHub with a "frozen, fork freely" README note (7e01923).
+- **C++ tests started (2026-10-18):** `tests/cpp/` + `OCTAVE_BUILD_TESTS`, run by `ctest` in CI's `cpp-compile-check`. Ported: `test_elm327_dtc` + `test_obd_extended_pids` (→ `tst_elm327protocol`), `test_adaptive_bitrate`, `test_settings_persistence`, `test_dashboard_sharing`, `test_esp32_read_buffer`. New: `tst_obdsim` (real OBDManager vs the simulated ELM327; also covers most of `test_obd_poll_demand`).
 
 ## What still blocks deleting it
 
@@ -19,8 +21,13 @@ Not affected (they aren't the Python backend and stay): `scripts/fetch_platform_
 
 ## Plan
 
-1. **Push the snapshot.** `git push origin python-final`. On that branch, add a README note: "Frozen Python/PySide6 backend as of 2026-10-18 (OCTAVE 0.9.5+). Not maintained. Fork freely."
-2. **C++ tests.** Add `enable_testing()` and a `tests/cpp/` QtTest target. Port the pure-logic tests first: `test_elm327_dtc`, `test_obd_extended_pids`, `test_download_ytm_parse`, `test_dashboard_sharing`, `test_settings_persistence`, `test_adaptive_bitrate`, `test_esp32_read_buffer`. Integration tests (`test_boot`, `test_vehicle_gate_qml`, `test_phone_mirror_*`) can drive `build/octave --dev --profile` through the command server from pytest or a small QtTest harness; the simulated ELM327 (`src/dev/simelm327.cpp`) makes the OBD ones possible without hardware. Wire `ctest` into `cpp-compile-check`. Cross-check against `TODO/future-tests.md`.
+1. ~~Push the snapshot~~ (done 2026-10-18).
+2. **C++ tests (in progress).** Still to port, roughly in order:
+   - logic: `test_download_ytm_parse`, `test_download_partial_file` (DownloadManager; heavy deps, may want a parse helper split out), `test_obd_poll_demand` (any gap left by `tst_obdsim`), `test_rfcomm_bind_async`, `test_obd_adapter_finder` (needs Bluetooth stubbed), `test_media_playback_robustness`, `test_music_devices*`
+   - phone mirror: `test_scrcpy_client_stop`, `test_scrcpy_fake_server` (the C++ `ScrcpyClient` against `tests/fake_scrcpy_server.py` or a C++ fake), `test_phone_mirror_probes`, `test_phone_mirror_media`, `test_phone_mirror_wireless`
+   - QML / app level: `test_boot` (launch `build/octave --smoke`), `test_vehicle_gate_qml`, `test_phone_mirror_view_qml`, `test_wiki_viewer`; these can load QML in a QtTest with a QQmlEngine, or drive `build/octave --dev --profile` over the command server
+   - `test_smoke` / `test_qt_threading` are Python-import checks with no C++ equivalent; drop them.
+   Once a test is ported the Python one can go. Cross-check against `TODO/future-tests.md`. A shared static library of the managers would replace the per-test source lists in `tests/cpp/CMakeLists.txt` once there are many.
 3. **Delete Python from `main`.** `backend/`, `main.py`, `setup.py`, `requirements.txt`, the Python tests the C++ suite replaced, `pyproject.toml`'s backend settings. On the developer machines (gitignored `dev/`, synced by Dropbox) also delete the Python in-app dev peers (`dev/main_dev.py`, `dev/dev_runtime.py`, `dev/mock_obd_manager.py`, `dev/mock_imu.py`, `dev/dev_tools_manager.py`, `dev/collage/bridge.py`, `backend/command_server.py`, `backend/perf_monitor.py`, `backend/perf_patches.py`) and the `python` branch of `dev/app_launch.py`.
 4. **CI:** drop the Python `test` job; keep ruff only for the remaining `dev/` and `scripts/` Python, or drop it. Make the C++ build jobs depend on `ctest`.
 5. **Wiki:** remove the Python file paths, commands and samples from every page (`grep -l "backend/\|Python\|pytest" wiki/*.html`), add one line on `index.html` pointing at the `python-final` branch, rebuild the index with `python wiki/build_search_index.py`.

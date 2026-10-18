@@ -2,7 +2,9 @@
 
 **Status:** Not committed to. This is a menu of things we could add to the test suite over time, organized by effort and value. Pick from it when you have the headspace for testing work.
 
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-18
+
+> **Since 2026-10-18 the Python backend is frozen** (`TODO/python-removal.md`). Add new tests to the C++ QtTest suite in `tests/cpp/` (run with `ctest`), not to the pytest suite below; read the Python-specific items here as "the C++ equivalent". The baseline below describes the frozen pytest suite.
 
 ---
 

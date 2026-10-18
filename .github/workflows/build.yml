@@ -70,7 +70,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # C++ compile check — runs on EVERY push/PR so a C++ break can't land on
-  # main unnoticed between release tags. Configure + build only, no packaging.
+  # main unnoticed between release tags. Configure, build, run the C++ tests
+  # (ctest), lint the QML. No packaging.
   # ---------------------------------------------------------------------------
 
   cpp-compile-check:
@@ -102,6 +103,14 @@ jobs:
 
       - name: Build
         run: cmake --build build -j
+
+      - name: C++ tests (ctest)
+        # tests/cpp: QtTest suite, built because this is a Debug configure
+        # (OCTAVE_BUILD_TESTS); includes the OBD stack against the simulated
+        # ELM327 from src/dev/ (OCTAVE_DEV_TOOLS)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure
 
       - name: Lint QML (errors only)
         # qmllint exits non-zero for plain warnings too, so parse its JSON and

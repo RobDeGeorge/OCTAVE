@@ -38,6 +38,14 @@ public:
     void send_mute_state(bool muted);
     void send_theme_color(int r, int g, int b);
 
+    // Bytes read from the knob: split into lines, run each command, and drop
+    // an overlong partial line. The serial read path; public for tests.
+    void feedSerialData(QByteArray data);
+
+    // Longest partial line kept while waiting for its newline; longer is
+    // dropped. Same name and value as the Python backend.
+    static constexpr int ESP32_MAX_LINE_BYTES = 256;
+
 signals:
     // Connection signals
     void connectionStatusChanged(const QString &status);
@@ -114,9 +122,6 @@ private:
     bool m_readOverflowWarned = false;  // warn once per connection
     bool m_readResyncing = false;       // after an overflow, skip to the next newline
 
-    // Longest partial line kept while waiting for its newline; longer is
-    // dropped. Same name and value as the Python backend.
-    static constexpr int ESP32_MAX_LINE_BYTES = 256;
 
     // Timers
     QTimer m_reconnectTimer;

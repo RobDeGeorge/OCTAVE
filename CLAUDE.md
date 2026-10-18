@@ -36,6 +36,9 @@ cmake --build build -j
 ./build/octave --dev             # simulated car over a fake ELM327 + dev overlay
 ./build/octave --profile         # perf monitor + JSON command server on 127.0.0.1:9876
 ./build/octave --dev --profile   # both: what the screenshot / MCP / perf tooling launches
+
+# C++ tests (tests/cpp, QtTest; OCTAVE_BUILD_TESTS defaults ON for Debug). CI runs these.
+ctest --test-dir build --output-on-failure
 ```
 
 See `BUILD.md` for the full build matrix (9 targets including iOS / Android / Flatpak / app store variants).
@@ -115,7 +118,7 @@ Do not add or change Python managers (see Backend state above).
 ### Change workflow
 
 1. Implement in C++ (`src/`); QML in `frontend/`.
-2. Build: `cmake --build build -j`. Drive the result with `./build/octave --dev --profile` and the dev tooling (screenshots, stories, dashboard drivers, MCP tools) when it touches the UI.
+2. Build and test: `cmake --build build -j && ctest --test-dir build`. Add or extend a QtTest in `tests/cpp/` for logic changes (`octave_add_test()` in its CMakeLists; give anything that touches settings a temp `XDG_CONFIG_HOME`). Drive the result with `./build/octave --dev --profile` and the dev tooling (screenshots, stories, dashboard drivers, MCP tools) when it touches the UI.
 3. Don't touch `backend/`. If a C++ change breaks a Python test in `tests/`, mark that test skipped with a reason pointing at the Python freeze rather than porting the change.
 4. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes.
 
