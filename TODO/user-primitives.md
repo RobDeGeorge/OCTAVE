@@ -98,8 +98,6 @@ this after Tier 1 ships, and only with all of these:
   (`labelProps`, `rangeProps`, `colorProps`, typed `editableProps`) are what a preset
   or code widget must declare. See `docs/GAUGE_AUTHORING.md` §7.
 - `TODO/dashboards-roadmap.md`: its on-device checks should land first.
-- `TODO/god-object-splits.md`: if `OBDMenu.qml`'s chooser is split out, do that before
-  adding a "Mine" palette section and a widget-library UI.
 
 ## Recommended order
 

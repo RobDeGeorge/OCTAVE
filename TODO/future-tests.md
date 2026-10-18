@@ -1,8 +1,8 @@
 # Future Tests (Parked)
 
-**Goal:** add the tests that make the god-object splits safe and catch the silent failures the current suite misses.
+**Goal:** catch the silent failures the current suite misses, and make bigger changes to the managers safe.
 
-**Status:** deferred. A menu, not a commitment; each item is also a prerequisite for a step in `god-object-splits.md`, so it gets picked up when that work starts.
+**Status:** deferred. A menu, not a commitment; pick an item up when work in its area starts.
 
 **Last updated:** 2026-10-18
 
@@ -39,7 +39,7 @@ Steps:
 ## 3. OBD protocol replay suite
 
 **Effort:** L–XL (~2 days initial, plus recording time in the car; ongoing as cars are added)
-**Unblocks:** the `obdmanager.cpp` split. Without it that split is "refactor and pray."
+**Unblocks:** any large change to `obdmanager.cpp`. Without it, refactoring the OBD worker is "refactor and pray."
 
 `tst_obdsim` drives the real `OBDManager` through `OBDConnectionWorker::setCustomTransport()` with `src/dev/simelm327`, but the simulator only speaks the dialect we wrote.
 

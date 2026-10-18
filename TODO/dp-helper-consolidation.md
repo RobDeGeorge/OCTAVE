@@ -20,4 +20,4 @@ The bug looks fixed: 17 files already call `App.Spacing.dp(...)` directly, inclu
 
 **Effort:** M (mechanical, 63 files). **Needs:** the Galaxy S22 for steps 1 and 4.
 
-Touches the same large files as `TODO/god-object-splits.md`; either can go first. Delete this file when all local copies are gone.
+Delete this file when all local copies are gone.
