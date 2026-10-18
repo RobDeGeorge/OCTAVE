@@ -15,7 +15,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, log check, then permissions / audio focus | S … L | S22 |
 | [sensorhome-3d-first-visit.md](sensorhome-3d-first-visit.md) | Check on the phone that the first 3D View tap no longer freezes (code done) | S | S22, Pi |
 | [error-notification-ui.md](error-notification-ui.md) | Notice for phone-mirror failures off-page; check the OBD/download notice on the Pi | S | desktop, Pi |
-| [sensor-driven-ui-cost.md](sensor-driven-ui-cost.md) | Stop idle phone sensors; stop the OBD grid redrawing every card | S–M, M | S22, Pi |
+| [sensor-driven-ui-cost.md](sensor-driven-ui-cost.md) | Measure on the phone: idle sensors stopped, the grid fix, the Full Grid warnings (code done) | S | S22, Pi |
 
 ## 2. One session each (M)
 

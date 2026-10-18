@@ -284,6 +284,8 @@
 
         <p><code>_homeShowsImuParam()</code> checks <code>settingsManager.get_home_obd_parameters()</code> for any of <code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>, <code>LONGITUDINAL_G</code>, <code>BARO_TEMP</code> &mdash; the IMU-fed entries of <code>OBDParameterModel</code>. The handler runs on <code>onCurrentItemChanged</code> and once at completion. The same handler closes the Now Playing Studio if the user navigates while it is open. This is why page <code>objectName</code>s matter: the gating is keyed on them (commits <code>94d61be</code>, <code>2fef514</code>).</p>
 
+        <p>On Android, <code>BerryIMUManager</code> reads the phone's own sensors through QtSensors, and <code>setActive(false)</code> <em>stops</em> them (accelerometer, compass, pressure) rather than lowering the rate: Android treats a data rate as a hint and kept delivering about 25 readings a second. <code>setActive(true)</code> restarts them if the IMU is enabled; <code>connected</code> stays true while they are paused. Not yet measured on a phone (<span class="file-path">TODO/sensor-driven-ui-cost.md</span>).</p>
+
         <!-- Import Path -->
         <h2 id="import-path">Import Path and Singletons</h2>
 

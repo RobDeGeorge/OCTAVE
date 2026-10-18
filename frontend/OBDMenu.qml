@@ -271,17 +271,15 @@ Item {
     // OBD parameters from centralized singleton
     property var allParameters: App.OBDParameterModel.allParameters
 
-    // Live OBD values from singleton (updated via signal connections there).
-    // Only while the parameter grid is actually on screen: paramValues is
-    // replaced up to ~30x/s (every OBD and IMU reading), and each replacement
-    // re-evaluated every card here and restarted its value/bar animations.
-    // This page stays alive hidden (StackView cache, pre-built at startup),
-    // so with the IMU streaming that kept the render loop near 50 fps and
-    // cost ~10% of a Pi core while nothing of it was visible. Hidden, the
-    // cards settle once to 0; on return they pick up the live values.
+    // Cards read live values only while the parameter grid is actually on
+    // screen. This page stays alive hidden (StackView cache, pre-built at
+    // startup), and with the IMU streaming, cards that kept listening held
+    // the render loop near 50 fps and cost ~10% of a Pi core while nothing of
+    // it was visible. Hidden, the cards settle once to "--"; on return they
+    // pick up the live values. On screen each card listens to its own value
+    // (OBDParameterModel.valueHolder), not to every fold of paramValues.
     readonly property bool _gridLive: activeDashboardId === "grid"
         && (StackView.status === StackView.Active || StackView.status === StackView.Activating)
-    property var paramValues: _gridLive ? App.OBDParameterModel.paramValues : ({})
     
     // Parameter Cards = the connected vehicle's full PID list: every OBD
     // parameter its supported-PID scan reported this session. Empty until a
@@ -539,12 +537,19 @@ Item {
                     Layout.preferredWidth: 1     // equal column widths
                     Layout.preferredHeight: 1
 
+                    // This card's own value (OBDParameterModel.valueHolder): it
+                    // re-evaluates only when this PID changes, not on every fold
+                    // of every value. Read only while the grid is live (hidden,
+                    // the card settles once and stops listening, see _gridLive).
+                    readonly property var _holder: App.OBDParameterModel.valueHolder(modelData.id)
+                    readonly property var liveValue: obdPage._gridLive ? _holder.value : undefined
+
                     // False until a reading arrives (adapter disconnected or PID
                     // not reported yet) so the card shows "--" instead of a fake 0.0.
-                    readonly property bool hasValue: paramValues[modelData.id] !== undefined
+                    readonly property bool hasValue: liveValue !== undefined
 
                     // Animated display value - fast rolling effect
-                    property real targetValue: paramValues[modelData.id] || 0
+                    property real targetValue: liveValue || 0
                     property real displayValue: targetValue
                     Behavior on displayValue {
                         NumberAnimation {
@@ -629,7 +634,7 @@ Item {
                             readonly property real zeroFrac: modelData.min < 0 && modelData.max > 0
                                 ? -modelData.min / (modelData.max - modelData.min) : 0
                             readonly property real valueFrac: {
-                                const value = paramValues[modelData.id] || 0;
+                                const value = cardContainer.targetValue;
                                 return Math.max(0, Math.min(1,
                                     (value - modelData.min) / (modelData.max - modelData.min)));
                             }
@@ -685,7 +690,7 @@ Item {
 
                         // Circular gauge arc - using GPU-accelerated Shape
                         property real gaugeValue: {
-                            const value = paramValues[modelData.id] || 0;
+                            const value = cardContainer.targetValue;
                             return Math.min(1, Math.max(0, (value - modelData.min) / (modelData.max - modelData.min)));
                         }
 

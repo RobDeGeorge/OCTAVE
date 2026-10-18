@@ -367,6 +367,8 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
 
         <p>Derived lookups: <code>shortTitles</code> (compact labels for the original 18, e.g. <code>COOLANT_TEMP &rarr; "CLT"</code>), <code>parameterInfo</code> (a map keyed by id with <code>title</code> = short title when available, <code>unit</code>, <code>minValue</code>, <code>maxValue</code>, kept for <code>HomeOBDView</code> compatibility), <code>getParamInfo(id)</code> (permissive &mdash; unknown ids get <code>{title: id, unit: "", 0..100}</code>), <code>hasParameter(id)</code> (strict; used by <code>DashboardRenderer</code> and the editor for validation), <code>isOriginalParameter(id)</code>, and <code>decimalsFor(id)</code> (0 for speed, RPM, run times, distances and counters, else 1; used by the Parameter Cards and Home tiles).</p>
 
+        <p><code>valueHolder(id)</code> returns a small per-PID <code>QtObject</code> with a <code>value</code> property, created on first use and kept for the session. <code>paramValues</code> is replaced as a whole on every fold, so anything reading it re-evaluates whichever value changed; a holder's <code>value</code> changes only when its own PID was in the fold (and is resynced when demo mode replaces every value or resets). The Parameter Cards bind to holders, so with dozens of cards on screen only the ones whose value moved re-evaluate and animate. Covered by <span class="file-path">tests/cpp/tst_vehiclegate.cpp</span>.</p>
+
         <h3>Live values and write coalescing</h3>
 
         <pre><code><span class="prop">property var</span> paramValues: ({})       <span class="cmt">// { "SPEED": 65, "RPM": 3200, ... }</span>

@@ -228,9 +228,39 @@ QtObject {
 
     function _flushPendingValues() {
         if (simulationActive) { _pendingValues = ({}); return; }
-        var newValues = Object.assign({}, paramValues, _pendingValues);
+        var changed = _pendingValues;
+        var newValues = Object.assign({}, paramValues, changed);
         _pendingValues = ({});
         paramValues = newValues;   // fresh object so bindings re-evaluate
+        for (var id in changed) {
+            if (_holders[id])
+                _holders[id].value = changed[id];
+        }
+    }
+
+    // ── Per-parameter value holders ───────────────────────────────────
+    // paramValues is replaced as a whole, so anything that reads it
+    // re-evaluates on every fold, whichever value changed. A view with many
+    // values on screen (OBDMenu's Parameter Cards: one card per supported
+    // PID) binds to valueHolder(id).value instead: only the holders whose
+    // value was in the fold change, so only those cards re-evaluate and
+    // animate. Created on first use and kept for the session.
+    property var _holders: ({})
+    property Component _holderComponent: Component {
+        QtObject { property var value }
+    }
+    function valueHolder(paramId) {
+        var h = _holders[paramId];
+        if (!h) {
+            h = _holderComponent.createObject(root, { value: paramValues[paramId] });
+            _holders[paramId] = h;
+        }
+        return h;
+    }
+    // After paramValues was replaced wholesale (demo mode, reset)
+    function _syncAllHolders() {
+        for (var id in _holders)
+            _holders[id].value = paramValues[id];
     }
 
     property var _flushTimer: Timer {
@@ -272,6 +302,7 @@ QtObject {
         } else {
             _pendingValues = ({});
             paramValues = ({});
+            _syncAllHolders();
         }
     }
 
@@ -290,6 +321,7 @@ QtObject {
             newValues[p.id] = (p.max - p.min) > 20 ? Math.round(v) : Math.round(v * 100) / 100;
         }
         paramValues = newValues;
+        _syncAllHolders();
     }
 
     property var _simTimer: Timer {

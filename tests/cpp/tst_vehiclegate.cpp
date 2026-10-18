@@ -8,6 +8,7 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
+#include <QSignalSpy>
 #include <QTest>
 #include <QUrl>
 
@@ -75,6 +76,9 @@ Item {
         return it ? it.visible : null
     }
     function vehicleIds() { return App.OBDParameterModel.vehicleParameters.map(function(p) { return p.id }) }
+    function holder(id) { return App.OBDParameterModel.valueHolder(id) }
+    function push(id, value) { App.OBDParameterModel.updateParamValue(id, value) }
+    function setDemo(on) { App.OBDParameterModel.simulationActive = on }
 }
 )qml";
 } // namespace
@@ -118,6 +122,42 @@ private slots:
         for (int i = 0; i < 3; ++i)
             QCOMPARE(placeholder(i), false);
         QCOMPARE(call("vehicleIds").toStringList(), QStringList());
+        m_root = nullptr;
+    }
+
+    void valueHoldersChangeOnlyForTheirOwnPid()
+    {
+        // Parameter Cards bind each card to OBDParameterModel.valueHolder(id),
+        // so a fold must touch only the holders whose value was in it
+        QQmlEngine engine;
+        engine.addImportPath(kFrontend);
+        FakeObd obd;
+        engine.rootContext()->setContextProperty("obdManager", &obd);
+        QQmlComponent comp(&engine);
+        comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
+        std::unique_ptr<QObject> root(comp.create());
+        QVERIFY2(root, qPrintable(comp.errorString()));
+        m_root = root.get();
+
+        QObject *rpm = call("holder", "RPM").value<QObject *>();
+        QObject *speed = call("holder", "SPEED").value<QObject *>();
+        QVERIFY(rpm && speed);
+        QVERIFY(call("holder", "RPM").value<QObject *>() == rpm);   // one per PID
+        QSignalSpy rpmChanged(rpm, SIGNAL(valueChanged()));
+        QSignalSpy speedChanged(speed, SIGNAL(valueChanged()));
+
+        QMetaObject::invokeMethod(m_root, "push", Q_ARG(QVariant, "RPM"), Q_ARG(QVariant, 2500));
+        QTRY_COMPARE(rpm->property("value").toInt(), 2500);   // after the ~33 ms fold
+        QCOMPARE(rpmChanged.count(), 1);
+        QCOMPARE(speedChanged.count(), 0);
+        QVERIFY(!speed->property("value").isValid());          // never reported: "--"
+
+        // Demo mode replaces every value at once: holders follow, and clear on exit
+        QMetaObject::invokeMethod(m_root, "setDemo", Q_ARG(QVariant, true));
+        QVERIFY(speed->property("value").isValid());
+        QMetaObject::invokeMethod(m_root, "setDemo", Q_ARG(QVariant, false));
+        QVERIFY(!speed->property("value").isValid());
+        QVERIFY(!rpm->property("value").isValid());
         m_root = nullptr;
     }
 

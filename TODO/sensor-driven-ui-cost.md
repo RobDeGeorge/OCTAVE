@@ -1,35 +1,31 @@
 # Sensor-driven UI cost: remaining idle and on-screen overhead
 
-**Status:** deferred (measured in 0.9.4 testing; the hidden-page regressions are fixed, these three are what's left)
+**Status:** code done for all three (2026-10-18); what is left is measuring on the phone and the Pi
 **Last updated:** 2026-10-18
 
 **Goal:** Cut the remaining CPU and battery cost of sensor and OBD values: stop phone sensors nobody is using, and stop the OBD card grid redrawing every card on every value.
 
 0.9.4 fixed hidden pages redrawing on sensor readings (idle is about 10% of a core on the Pi, and about 23% / 10 fps on the S22).
 
-## 1. Android: stop the sensors while nothing uses them
+## 1. Android: sensors stopped while nothing uses them (verify on the S22)
 
-Mobile `BerryIMUManager::setActive(false)` (`src/managers/berryimumanager.cpp:1209-1216`) only lowers the data rate to 5 Hz, and `idleThrottled()` (`:1091`) drops readings in software. Android still delivers about 25 readings/s to `QtSensorsLooper` (about 7% of a core), and two 5 Hz streams still cause about 10 redraws/s.
+Done in code 2026-10-18, untested on a phone: the mobile `BerryIMUManager::setActive(false)` (`src/managers/berryimumanager.cpp`) now stops `m_accel`, `m_compass` and `m_pressure`; `setActive(true)` restarts them when the IMU is enabled; `setEnabled(true)` probes with `start()` and stops again if no page is active; `connected` stays true while paused. The consumers that keep it active are unchanged (`updateSensorConsumers()` in `frontend/Main.qml`); the Settings status card reads only the connection status. Compiles for Android (`build-android-rhea`).
 
-Steps:
-1. In the mobile `setActive(false)`, stop `m_accel`, `m_compass` and `m_pressure` (if `m_hasPressure`). In `setActive(true)`, start them again, but only if `m_enabled`. Keep `m_connected` true, since only the sensor is paused, not disconnected.
-2. Check what still needs readings while inactive: the Settings IMU status card, and the Home IMU card when it's configured (`frontend/Main.qml:930-940`, `updateSensorConsumers()` / `_homeShowsImuParam()`). Those must keep `setActive(true)`.
-3. Re-measure on the S22: pidstat for 20 s, and screenrecord frame count.
+Left, on the S22 (sideload APK):
+1. Sensor Home, the 3D view, OBD dashboards and a home screen with an IMU card still update live; leaving them stops the readings (`phone sensors paused` / `running` in `octave-cpp.log`).
+2. Settings > Accessories still shows the IMU as connected while paused.
+3. Re-measure idle on the home screen: pidstat for 20 s (`QtSensorsLooper` should be near 0) and a screenrecord frame count, against the ~7% of a core and ~10 redraws/s from 0.9.4 testing.
+4. Tare (`calibrateTare()`, CarMenu) reads `m_accel->reading()`, which is stale while the sensors are paused. It's only reachable from an active page today, so it's fine; anything that adds a tare elsewhere (e.g. a Settings button) must start the sensors first.
 
-**Effort:** S–M. **Needs:** the Galaxy S22.
+**Effort:** S. **Needs:** the Galaxy S22.
 
-## 2. OBD Parameter Cards grid on screen: about 106% CPU on the phone
+## 2. OBD Parameter Cards grid on screen: about 106% CPU on the phone (measure on the S22 and Pi)
 
-`OBDParameterModel.paramValues` is replaced up to about 30 times a second (`frontend/OBDParameterModel.qml:233`, `_flushTimer` at `:236-237`, 33 ms). Every card in `frontend/OBDMenu.qml`'s `parametersGrid` (`:508`) reads `paramValues[modelData.id]` (`:531-534, 619, 675`) through the page-level `paramValues` binding (`:271`), so every card re-evaluates and restarts its `Behavior` animations (`:536, 681`) even when only a few values changed.
+Done 2026-10-18 (option 1): each card binds to `OBDParameterModel.valueHolder(id).value`, which changes only when that PID is in a fold, instead of `paramValues`, which every fold replaces. So with the grid on screen, only the cards whose value moved re-evaluate and restart their `Behavior`s (`tst_vehiclegate` checks a fold touches only its own holder). On desktop under Xvfb the CPU difference is within noise (software rendering dominates), so the win has to be measured where the problem was seen.
 
-Steps (pick one, or combine them):
-1. Bind each card to its own value: a per-parameter signal (`paramChanged(id, value)`) or a model role, so only the card whose value changed updates.
-2. Skip the `Behavior` when the change is below display precision.
-3. Fold sensor-derived params at a lower rate in `_flushTimer`.
+Left: with the grid on screen and live OBD (or the simulated car via `--dev`), measure on the S22 and the Orange Pi (pidstat 20 s, `qt.scenegraph` frames/s) against the 106% figure. If it's still high, the next steps are skipping the `Behavior` for changes below display precision, and folding sensor-derived params at a lower rate in `_flushTimer`.
 
-Then re-measure on the phone and Pi with the grid on screen (pidstat 20 s, `qt.scenegraph` frames/s).
-
-**Effort:** M. **Needs:** the Galaxy S22 and the Orange Pi (live OBD, or the simulated car via `--dev`).
+**Effort:** S (measuring), M if more work is needed. **Needs:** the Galaxy S22 and the Orange Pi.
 
 ## 3. Full Grid: "Object or context destroyed during incubation" warnings (check on the S22)
 

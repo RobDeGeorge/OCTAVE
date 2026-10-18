@@ -1084,10 +1084,11 @@ QString BerryIMUManager::getConnectionStatus()
 }
 
 // While no page shows the values (setActive(false)), emit at most every
-// 200 ms like the BerryIMU worker's IDLE_EMIT_INTERVAL. Android takes the 5 Hz
-// setDataRate() as a hint and delivered ~25 readings/s, and every emit
-// re-evaluated sensor-bound QML, keeping a static screen redrawing at ~24 fps
-// (~35% of a core on a Galaxy S22, 0.9.4 testing).
+// 200 ms like the BerryIMU worker's IDLE_EMIT_INTERVAL. The sensors are
+// stopped then (see setActive), so this only thins out readings already
+// queued when they stopped; before that, every emit re-evaluated
+// sensor-bound QML and kept a static screen redrawing at ~24 fps (~35% of a
+// core on a Galaxy S22, 0.9.4 testing).
 bool BerryIMUManager::idleThrottled(QElapsedTimer &last) const
 {
     if (m_active)
@@ -1181,9 +1182,16 @@ void BerryIMUManager::setEnabled(bool enabled)
                                   Q_ARG(bool, enabled));
     }
     if (enabled) {
+        // start() is also the availability probe; while no page uses the
+        // values, stop again straight away (see setActive)
         m_connected = m_accel->start();
         m_compass->start();
         if (m_hasPressure) m_pressure->start();
+        if (!m_active) {
+            m_accel->stop();
+            m_compass->stop();
+            m_pressure->stop();
+        }
         emit connectionStatusChanged(m_connected ? QStringLiteral("Connected")
                                                  : QStringLiteral("Unavailable"));
     } else {
@@ -1201,19 +1209,38 @@ void BerryIMUManager::setEmitRate(int hz)
 {
     hz = qBound(10, hz, 120);   // same clamp as desktop
     m_emitRate = hz;
-    const int rate = m_active ? m_emitRate : 5;
-    m_accel->setDataRate(rate);
-    m_compass->setDataRate(rate);
+    m_accel->setDataRate(m_emitRate);   // only running while active
+    m_compass->setDataRate(m_emitRate);
 }
 
+// No page shows the values: stop the phone's sensors rather than only
+// lowering the rate. Android treats setDataRate() as a hint and still
+// delivered ~25 readings/s to QtSensorsLooper (~7% of a core on a Galaxy
+// S22) plus ~10 redraws/s. `connected` stays true: the sensors are paused,
+// not lost. Main.qml's updateSensorConsumers() decides (the 3D vehicle, the
+// sensor pages, OBD dashboards, a home screen with an IMU card); the
+// Settings status card reads only the connection status.
 void BerryIMUManager::setActive(bool active)
 {
     if (active == m_active)
         return;
     m_active = active;
-    const int rate = m_active ? m_emitRate : 5;   // 5 Hz while no page shows the values
-    if (m_accel) m_accel->setDataRate(rate);
-    if (m_compass) m_compass->setDataRate(rate);
+    if (!m_accel || !m_compass || !m_pressure)
+        return;
+    if (m_active) {
+        m_accel->setDataRate(m_emitRate);
+        m_compass->setDataRate(m_emitRate);
+        if (m_enabled) {
+            m_accel->start();
+            m_compass->start();
+            if (m_hasPressure) m_pressure->start();
+        }
+    } else {
+        m_accel->stop();
+        m_compass->stop();
+        m_pressure->stop();
+    }
+    qCInfo(lcImuMobile) << "phone sensors" << (m_active && m_enabled ? "running" : "paused");
 }
 
 void BerryIMUManager::calibrateTare()
