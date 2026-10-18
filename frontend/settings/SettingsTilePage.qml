@@ -45,6 +45,13 @@ Item {
             ? 2
             : Math.max(2, Math.ceil(Math.sqrt(tilePage.tileModel ? tilePage.tileModel.length : 0)))
 
+        // Split the height the grid is given evenly between its rows, so the
+        // tiles always fit above the bottom bar rather than overflowing it.
+        readonly property int tileCount: tilePage.tileModel ? tilePage.tileModel.length : 0
+        readonly property int rowCount: tilePage.rows > 0 ? tilePage.rows
+            : Math.max(1, Math.ceil(tileCount / Math.max(1, columns)))
+        readonly property real tileHeight: Math.max(0, (height - (rowCount - 1) * rowSpacing) / rowCount)
+
         Repeater {
             id: tileRepeater
             model: tilePage.tileModel
@@ -53,7 +60,9 @@ Item {
                 id: tileDelegate
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.minimumHeight: tilePage.dp(100)
+                Layout.minimumHeight: 0
+                Layout.preferredHeight: grid.tileHeight
+                Layout.maximumHeight: grid.tileHeight
                 cardId: modelData && modelData.cardId !== undefined ? modelData.cardId : ""
                 title: modelData && modelData.title !== undefined ? modelData.title : ""
                 // `summary` is a function on the page's tileModel entry, so
