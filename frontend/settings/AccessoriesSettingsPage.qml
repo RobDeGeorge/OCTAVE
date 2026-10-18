@@ -1602,12 +1602,17 @@ Flickable {
                     readonly property string remembered: phoneMirrorManager ? phoneMirrorManager.wirelessAddress : ""
                     property string resultText: ""
                     property bool resultOk: true
+                    // This page started the pairing now on screen. The page is
+                    // pre-built and stays alive hidden, so without this its modal
+                    // also popped up over Phone Mirror's own QR screen.
+                    property bool pairingFromHere: false
 
                     Connections {
                         target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
                         function onWirelessResult(ok, message) {
                             wirelessSection.resultOk = ok
                             wirelessSection.resultText = message
+                            wirelessSection.pairingFromHere = false
                         }
                     }
 
@@ -1638,6 +1643,7 @@ Flickable {
                             opacity: enabled ? 1.0 : 0.6
                             onClicked: {
                                 wirelessSection.resultText = ""
+                                wirelessSection.pairingFromHere = true
                                 qrPanel.start()
                             }
                         }
@@ -1673,7 +1679,9 @@ Flickable {
                         dim: true
                         closePolicy: Popup.NoAutoClose
                         padding: App.Spacing.overallSpacing * 1.5
-                        visible: phoneMirrorManager ? phoneMirrorManager.qrPairingActive : false
+                        visible: wirelessSection.pairingFromHere
+                                 && (phoneMirrorManager ? phoneMirrorManager.qrPairingActive : false)
+                        onClosed: wirelessSection.pairingFromHere = false
                         width: parent ? parent.width * 0.75 : pageRoot.dp(900)
 
                         background: Rectangle {
