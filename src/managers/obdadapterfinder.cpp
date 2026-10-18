@@ -12,6 +12,11 @@
 #include <QBluetoothServiceInfo>
 #include <QBluetoothUuid>
 #include <QDebug>
+#ifdef OCTAVE_BLUEZ
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusServiceWatcher>
+#endif
 #include <QRegularExpression>
 #include <QTimer>
 #include <algorithm>
@@ -48,6 +53,46 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
     if (!supported())
         return;
 
+    // BlueZ may come up after OCTAVE (or never): build the Bluetooth objects
+    // once it is on the bus, never by activating it from here
+#ifdef OCTAVE_BLUEZ
+    auto *watcher = new QDBusServiceWatcher(QStringLiteral("org.bluez"), QDBusConnection::systemBus(),
+                                            QDBusServiceWatcher::WatchForRegistration, this);
+    connect(watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { ensureBluetooth(); });
+#endif
+    ensureBluetooth();
+
+    m_sdpTimeout = new QTimer(this);
+    m_sdpTimeout->setSingleShot(true);
+    connect(m_sdpTimeout, &QTimer::timeout, this, [this] {
+        qDebug() << "[OBD-BT] SDP lookup timed out, using channel 1";
+        if (m_sdp) m_sdp->stop();
+        handOff(1);
+    });
+
+    if (m_obd)
+        connect(m_obd, &OBDManager::connectionStatusChanged, this, &OBDAdapterFinder::onObdStatus);
+}
+
+bool OBDAdapterFinder::bluezRunning()
+{
+#ifdef OCTAVE_BLUEZ
+    // Asks the bus daemon whether the name has an owner: answered at once,
+    // and unlike a call to org.bluez it never starts bluetoothd
+    QDBusConnectionInterface *bus = QDBusConnection::systemBus().interface();
+    return bus && bus->isServiceRegistered(QStringLiteral("org.bluez")).value();
+#else
+    return false;
+#endif
+}
+
+bool OBDAdapterFinder::ensureBluetooth()
+{
+    if (m_local)
+        return true;
+    if (!supported() || !bluezRunning())
+        return false;
+    qDebug() << "[OBD-BT] BlueZ is running; setting up Bluetooth";
     m_local = new QBluetoothLocalDevice(this);
     connect(m_local, &QBluetoothLocalDevice::hostModeStateChanged, this, &OBDAdapterFinder::bluetoothOnChanged);
 
@@ -78,16 +123,8 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
     connect(m_pairer, &BluezPairer::finished, this, &OBDAdapterFinder::onPaired);
 #endif
 
-    m_sdpTimeout = new QTimer(this);
-    m_sdpTimeout->setSingleShot(true);
-    connect(m_sdpTimeout, &QTimer::timeout, this, [this] {
-        qDebug() << "[OBD-BT] SDP lookup timed out, using channel 1";
-        if (m_sdp) m_sdp->stop();
-        handOff(1);
-    });
-
-    if (m_obd)
-        connect(m_obd, &OBDManager::connectionStatusChanged, this, &OBDAdapterFinder::onObdStatus);
+    emit bluetoothOnChanged();
+    return true;
 }
 
 OBDAdapterFinder::~OBDAdapterFinder()
@@ -130,8 +167,12 @@ bool OBDAdapterFinder::looksLikeObd(const QString &name, const QStringList &serv
 
 void OBDAdapterFinder::startScan()
 {
-    if (!supported() || !m_agent)
+    if (!supported())
         return;
+    if (!ensureBluetooth()) {
+        setStatus(QStringLiteral("Bluetooth is not available: the Bluetooth service is not running."), true);
+        return;
+    }
     if (!bluetoothOn()) {
         setStatus(QStringLiteral("Bluetooth is off."), true);
         return;
@@ -222,7 +263,7 @@ void OBDAdapterFinder::rebuildList()
 
 void OBDAdapterFinder::connectAdapter(const QString &address)
 {
-    if (!supported())
+    if (!supported() || !ensureBluetooth())
         return;
     const QString addr = address.trimmed().toUpper();
     const QVariantMap d = m_devices.value(addr);
@@ -358,6 +399,7 @@ void OBDAdapterFinder::cancel()
 
 void OBDAdapterFinder::powerOn()
 {
+    ensureBluetooth();
     if (m_local && m_local->isValid())
         m_local->powerOn();
 }

@@ -81,6 +81,12 @@ signals:
     void statusChanged();
 
 private:
+    // Creates the QtBluetooth objects once org.bluez is on the system bus.
+    // Never at startup otherwise: with bluetoothd stopped (or no adapter)
+    // QBluetoothLocalDevice's constructor D-Bus-activates org.bluez and
+    // blocks the GUI thread for the activation timeout, twice (~45 s).
+    bool ensureBluetooth();
+    static bool bluezRunning();
     void setScanning(bool on);
     void setStatus(const QString &message, bool isError = false);
     void setBusy(const QString &address);

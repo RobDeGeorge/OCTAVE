@@ -31,8 +31,8 @@ class FakeSettings:
 
 
 def _finder(monkeypatch, obd=None, settings=None):
-    # No QBluetoothLocalDevice / discovery agent / D-Bus in tests
-    monkeypatch.setattr(OBDAdapterFinder, "_init_bluetooth", lambda self: None)
+    # No QBluetoothLocalDevice / discovery agent in tests: BlueZ "not running"
+    monkeypatch.setattr(OBDAdapterFinder, "_bluez_running", staticmethod(lambda: False))
     return OBDAdapterFinder(obd, settings)
 
 
@@ -103,8 +103,9 @@ def test_failed_connection_is_reported_as_error(qapp, monkeypatch):
 
 
 def test_unsupported_platform_is_inert(qapp, monkeypatch):
+    monkeypatch.setattr(finder_mod, "_SUPPORTED", False)
     f = _finder(monkeypatch)
-    assert not f.supported           # no discovery agent
+    assert not f.supported
     f.startScan()
     f.connectAdapter(MAC)
     assert f.devices == [] and f.busyAddress == "" and not f.scanning
@@ -131,3 +132,29 @@ def test_unreachable_adapter_stops_at_pairing(qapp, monkeypatch):
     f._busy_address, f._busy_name = MAC, "NEXAS"
     f._on_paired(False, False, "The adapter didn't answer.")
     assert obd.direct == [] and f.busyAddress == "" and f.statusIsError
+
+
+def test_no_bluez_means_no_bluetooth_objects_and_no_startup_wait(qapp, monkeypatch):
+    # bluetoothd stopped / no adapter: constructing QBluetoothLocalDevice would
+    # D-Bus-activate org.bluez and block startup for the activation timeout
+    if not finder_mod._SUPPORTED or not finder_mod._HAVE_QTBLUETOOTH:
+        import pytest
+        pytest.skip("Linux + QtBluetooth only")
+    from PySide6 import QtBluetooth
+    built = []
+
+    def local_device(*args, **kwargs):
+        built.append(1)
+        raise AssertionError("QBluetoothLocalDevice built without BlueZ")
+
+    monkeypatch.setattr(QtBluetooth, "QBluetoothLocalDevice", local_device)
+    f = _finder(monkeypatch, FakeObd(), FakeSettings())
+    assert f.supported               # a platform constant, not "BlueZ is up"
+    assert not f.bluetoothOn and built == [] and f._local is None
+    f.powerOn()
+    f.startScan()
+    assert built == [] and not f.scanning
+    assert f.status == "Bluetooth is not available: the Bluetooth service is not running."
+    assert f.statusIsError
+    f.connectAdapter(MAC)            # nothing listed, nothing to pair
+    assert f.busyAddress == ""

@@ -16,6 +16,7 @@ Phase 1 of TODO/obd-adapter-discovery.md: the full flow runs on desktop Linux
 falls back to obdManager.availableAdapters.
 """
 
+import importlib.util
 import re
 import sys
 
@@ -27,6 +28,11 @@ from backend.obd_transports import make_rfcomm_url
 logger = get_logger(__name__)
 
 _SUPPORTED = sys.platform.startswith("linux")
+_NOT_RUNNING = "Bluetooth is not available: the Bluetooth service is not running."
+try:
+    _HAVE_QTBLUETOOTH = importlib.util.find_spec("PySide6.QtBluetooth") is not None
+except (ImportError, ValueError):
+    _HAVE_QTBLUETOOTH = False
 
 # Discovery runs this long, then stops on its own
 _SCAN_MS = 15000
@@ -325,16 +331,46 @@ class OBDAdapterFinder(QObject):
         self._status = ""
         self._status_is_error = False
 
-        if _SUPPORTED:
-            self._init_bluetooth()
+        self._sdp_timeout = None
+        self._bluez_watcher = None
+
+        if self.supported:
+            # BlueZ may come up after OCTAVE (or never): build the Bluetooth
+            # objects once it is on the bus, never by activating it from here
+            from PySide6.QtDBus import QDBusServiceWatcher
+            self._bluez_watcher = QDBusServiceWatcher(_BLUEZ, QDBusConnection.systemBus(),
+                                                      QDBusServiceWatcher.WatchModeFlag.WatchForRegistration, self)
+            self._bluez_watcher.serviceRegistered.connect(lambda _name: self._ensure_bluetooth())
+            self._ensure_bluetooth()
+
+            self._sdp_timeout = QTimer(self)
+            self._sdp_timeout.setSingleShot(True)
+            self._sdp_timeout.timeout.connect(self._on_sdp_timeout)
         self.set_obd_manager(obd_manager)
 
-    def _init_bluetooth(self):
-        try:
-            from PySide6.QtBluetooth import QBluetoothDeviceDiscoveryAgent, QBluetoothLocalDevice
-        except ImportError as e:
-            logger.warning(f"[OBD-BT] QtBluetooth unavailable: {e}")
-            return
+    @staticmethod
+    def _bluez_running():
+        """Asks the bus daemon whether org.bluez has an owner: answered at
+        once, and unlike a call to org.bluez it never starts bluetoothd."""
+        if not _SUPPORTED:
+            return False
+        bus = QDBusConnection.systemBus().interface()
+        if bus is None:
+            return False
+        reply = bus.isServiceRegistered(_BLUEZ)
+        return bool(reply.value() if hasattr(reply, "value") else reply)
+
+    def _ensure_bluetooth(self):
+        """Create the QtBluetooth objects once org.bluez is on the system bus.
+        Never at startup otherwise: with bluetoothd stopped (or no adapter)
+        QBluetoothLocalDevice's constructor D-Bus-activates org.bluez and
+        blocks the GUI thread for the activation timeout, twice (~45 s)."""
+        if self._local is not None:
+            return True
+        if not self.supported or not self._bluez_running():
+            return False
+        from PySide6.QtBluetooth import QBluetoothDeviceDiscoveryAgent, QBluetoothLocalDevice
+        logger.debug("[OBD-BT] BlueZ is running; setting up Bluetooth")
         self._local = QBluetoothLocalDevice(self)
         self._local.hostModeStateChanged.connect(lambda *_: self.bluetoothOnChanged.emit())
 
@@ -350,9 +386,8 @@ class OBDAdapterFinder(QObject):
         self._pairer.progress.connect(lambda m: self._set_status(m))
         self._pairer.finished.connect(self._on_paired)
 
-        self._sdp_timeout = QTimer(self)
-        self._sdp_timeout.setSingleShot(True)
-        self._sdp_timeout.timeout.connect(self._on_sdp_timeout)
+        self.bluetoothOnChanged.emit()
+        return True
 
     def set_obd_manager(self, obd_manager):
         """main.py installs the OBD manager (real or dev mock) after this is built."""
@@ -369,7 +404,8 @@ class OBDAdapterFinder(QObject):
 
     @Property(bool, constant=True)
     def supported(self):
-        return _SUPPORTED and self._agent is not None
+        """Platform constant (Linux with QtBluetooth), not whether BlueZ is up."""
+        return _SUPPORTED and _HAVE_QTBLUETOOTH
 
     def _bluetooth_on(self):
         if self._local is None or not self._local.isValid():
@@ -406,6 +442,9 @@ class OBDAdapterFinder(QObject):
     @Slot()
     def startScan(self):
         if not self.supported:
+            return
+        if not self._ensure_bluetooth():
+            self._set_status(_NOT_RUNNING, True)
             return
         if not self._bluetooth_on():
             self._set_status("Bluetooth is off.", True)
@@ -488,7 +527,7 @@ class OBDAdapterFinder(QObject):
 
     @Slot(str)
     def connectAdapter(self, address):
-        if not self.supported:
+        if not self.supported or not self._ensure_bluetooth():
             return
         addr = (address or "").strip().upper()
         d = self._devices.get(addr)
@@ -604,7 +643,7 @@ class OBDAdapterFinder(QObject):
     def cancel(self):
         if self._pairer is not None:
             self._pairer.cancel()
-        if self._sdp is not None:
+        if self._sdp is not None and self._sdp_timeout is not None:
             self._sdp_timeout.stop()
             self._sdp.stop()
         self.stopScan()
@@ -613,6 +652,7 @@ class OBDAdapterFinder(QObject):
 
     @Slot()
     def powerOn(self):
+        self._ensure_bluetooth()
         if self._local is not None and self._local.isValid():
             self._local.powerOn()
 

@@ -467,6 +467,16 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           On every other platform <code>supported</code> is false and the sheet lists <code>obdManager.availableAdapters</code> instead
           (the ports and paired devices the OS already knows), with an "OBD Settings" shortcut.
         </p>
+        <p>
+          <strong>Startup never waits on BlueZ.</strong> The QtBluetooth objects (<code>QBluetoothLocalDevice</code>, the
+          discovery agent, <code>BluezPairer</code>) are created only once <code>org.bluez</code> is owned on the system bus,
+          a check the bus daemon answers at once (<code>isServiceRegistered</code>, which never activates a service). A
+          <code>QDBusServiceWatcher</code> creates them when BlueZ appears later. Creating them eagerly, as 0.9.5-rc1 did,
+          made <code>QBluetoothLocalDevice</code>'s constructor D-Bus-activate an <code>org.bluez</code> that never came up
+          (BlueZ installed, no adapter or <code>bluetoothd</code> stopped), which blocked the GUI thread for about 45 s before
+          the window appeared. Without BlueZ, <code>bluetoothOn</code> is false and <code>startScan()</code> reports
+          "Bluetooth is not available: the Bluetooth service is not running."
+        </p>
         <ol>
           <li><strong>Scan</strong> (<code>startScan()</code>): <code>QBluetoothDeviceDiscoveryAgent</code>, Classic + LE, 15 s. Unnamed
             devices (BlueZ names them after their address) are dropped. <code>likelyObd</code> is set when the name matches the
