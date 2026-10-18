@@ -128,3 +128,13 @@ bool DiagnosticsManager::openLogFolder()
         return false;
     return QDesktopServices::openUrl(QUrl::fromLocalFile(logDir()));
 }
+
+QString DiagnosticsManager::licenseText(const QString &name) const
+{
+    if (name != QLatin1String("LICENSE") && name != QLatin1String("NOTICE"))
+        return {};
+    QFile f(QStringLiteral(":/licenses/") + name);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+        return {};
+    return QString::fromUtf8(f.readAll());
+}

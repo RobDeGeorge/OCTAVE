@@ -361,6 +361,14 @@ qt_add_resources(octave "phone_server"
           "${CMAKE_SOURCE_DIR}/tools/phone-server/NOTICE"
 )
 
+# OCTAVE's license and third-party notice, for Settings > About > licenses
+# (DiagnosticsManager::licenseText); the frontend/ folder doesn't carry them.
+qt_add_resources(octave "licenses"
+    PREFIX "/licenses"
+    BASE "${CMAKE_SOURCE_DIR}"
+    FILES "${CMAKE_SOURCE_DIR}/LICENSE" "${CMAKE_SOURCE_DIR}/NOTICE"
+)
+
 # ---- QML import path: reuse existing frontend/ directory ----
 # The QML files live in frontend/ and are loaded at runtime (not compiled into resources).
 set_target_properties(octave PROPERTIES

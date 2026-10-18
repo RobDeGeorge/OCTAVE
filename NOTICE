@@ -14,3 +14,11 @@ Third-party code bundled in this repository:
   (https://www.nayuki.io/page/qr-code-generator-library).
   src/phone_mirror/qrcodegen.{hpp,cpp}
 - phone_server/: fork of the scrcpy server, Apache License 2.0 (see phone_server/LICENSE.scrcpy)
+- Fonts in frontend/assets/fonts/, all under the SIL Open Font License 1.1
+  (full text: frontend/assets/fonts/symbols/OFL.txt):
+  - Google Sans, Copyright 2025 The Google Sans Project Authors
+    (https://github.com/googlefonts/googlesans)
+  - JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
+  - OCTAVE Symbols, a subset of Noto Sans Symbols / Symbols 2, Copyright 2022
+    The Noto Project Authors, renamed per the Reserved Font Name clause
+    (built by tools/fonts/build_symbol_font.py)

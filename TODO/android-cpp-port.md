@@ -4,7 +4,7 @@
 **Status:** active. The APK builds (locally and in the `cpp-build-android` CI job), installs and runs; OBD over BLE and YT Music downloads work. What's left is polish.
 **Last updated:** 2026-10-18
 
-Done so far, in one line: APK version from `project()` (2026-10-18), CMake/`android/` wiring, `#ifdef Q_OS_ANDROID` hardware gating in `src/main.cpp`, landscape lock (`android/AndroidManifest.xml:63`), OBD over BLE through the JNI `OctaveOBDBridge` (`f1901d9`, `2d05676`), app data under `SettingsManager::getAppDataDir()`.
+Done so far, in one line: APK version from `project()` and the About > licenses card (2026-10-18), CMake/`android/` wiring, `#ifdef Q_OS_ANDROID` hardware gating in `src/main.cpp`, landscape lock (`android/AndroidManifest.xml:63`), OBD over BLE through the JNI `OctaveOBDBridge` (`f1901d9`, `2d05676`), app data under `SettingsManager::getAppDataDir()`.
 
 Test device: Galaxy S22 (arm64-v8a, see the Android phone loop in `BUILD.md`). Build and install:
 
@@ -15,7 +15,7 @@ adb install -r build-android/android-build/build/outputs/apk/debug/android-build
 
 ## Hardware managers on Android
 
-These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager` (the DHU is desktop-only), `phonemirrormanager`, `esp32volumemanager`. `berryimumanager` has no Android replacement yet (see item 7). `downloadmanager` follows `OCTAVE_ENABLE_DOWNLOADS` (ON for sideload, OFF for store builds).
+These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager` (the DHU is desktop-only), `phonemirrormanager`, `esp32volumemanager`. `berryimumanager` has no Android replacement yet (see item 6). `downloadmanager` follows `OCTAVE_ENABLE_DOWNLOADS` (ON for sideload, OFF for store builds).
 
 ## Remaining work, easiest first
 
@@ -28,19 +28,17 @@ These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager
    - Connect the ELM327 and check `octave-cpp.log` for `[BLE]` lines (`OBDManager::onAndroidBlePoll()`, `src/managers/obdmanager.cpp:2688`); pull the dongle and look for a `[BLE]` warning.
    - Confirm `octave-cpp.log` exists at all, and that `kill -SEGV` leaves a `==== FATAL SIGSEGV ====` block with the "no backtrace support" line (bionic has no `execinfo`).
    **Effort:** S. **Needs:** S22 + the BLE ELM327 dongle.
-4. **Open-source licenses screen.** No page mentions licenses today. Add an About → Licenses page listing OCTAVE's GPL-3.0+ license, Qt (GPL/LGPL modules), FFmpeg, OpenSSL, the youtubedl-android AAR and anything else bundled in the APK. Needed before any store submission.
-   **Effort:** S–M. **Needs:** nothing (desktop is fine; check it on the S22).
-5. **Just-in-time permissions with denial handling.** Today `src/main.cpp:199-219` asks for audio and Bluetooth permissions all at once on launch, and `OctaveOBDBridge.java:143-158` re-asks on connect. Steps: drop the startup loop; ask for `READ_MEDIA_AUDIO` when the media library is first opened and Bluetooth when OBD connect is first tapped; on denial, show a short explainer with "Try again" and "Open app settings" (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS` via JNI); re-scan the library once audio is granted.
+4. **Just-in-time permissions with denial handling.** Today `src/main.cpp:199-219` asks for audio and Bluetooth permissions all at once on launch, and `OctaveOBDBridge.java:143-158` re-asks on connect. Steps: drop the startup loop; ask for `READ_MEDIA_AUDIO` when the media library is first opened and Bluetooth when OBD connect is first tapped; on denial, show a short explainer with "Try again" and "Open app settings" (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS` via JNI); re-scan the library once audio is granted.
    **Effort:** M. **Needs:** S22, fresh install (`adb uninstall` first).
-6. **Audio focus.** No `AudioManager` code exists. Request audio focus when playback starts (JNI `AudioManager.requestAudioFocus` with an `AudioFocusRequest`), pause `MediaManager` on `AUDIOFOCUS_LOSS`/`LOSS_TRANSIENT` (incoming call), resume on `AUDIOFOCUS_GAIN` if we paused it.
+5. **Audio focus.** No `AudioManager` code exists. Request audio focus when playback starts (JNI `AudioManager.requestAudioFocus` with an `AudioFocusRequest`), pause `MediaManager` on `AUDIOFOCUS_LOSS`/`LOSS_TRANSIENT` (incoming call), resume on `AUDIOFOCUS_GAIN` if we paused it.
    **Effort:** M. **Needs:** S22 + a second phone to place a call.
-7. **AndroidSensorManager.** Nothing reads the phone's sensors, so the IMU parameters (`HEADING`, G-force, etc. in `OBDParameterModel`) are empty on Android. Add a manager using QtSensors (`QAccelerometer`, `QGyroscope`, `QMagnetometer`, `QPressureSensor`) that publishes the same values/signals as `berryimumanager`, instantiate it under `Q_OS_ANDROID`, link `Qt6::Sensors`.
+6. **AndroidSensorManager.** Nothing reads the phone's sensors, so the IMU parameters (`HEADING`, G-force, etc. in `OBDParameterModel`) are empty on Android. Add a manager using QtSensors (`QAccelerometer`, `QGyroscope`, `QMagnetometer`, `QPressureSensor`) that publishes the same values/signals as `berryimumanager`, instantiate it under `Q_OS_ANDROID`, link `Qt6::Sensors`.
    **Effort:** M–L. **Needs:** S22 (rotate/tilt to check axes and heading).
-8. **Daily-drive week.** Use the APK in the Jeep for a week with no drive-blocking bugs. That is the exit for this file's polish phase.
+7. **Daily-drive week.** Use the APK in the Jeep for a week with no drive-blocking bugs. That is the exit for this file's polish phase.
    **Effort:** L (calendar time). **Needs:** S22 in the Jeep with the OBD dongle.
 
 ## After that: Play Store (write `TODO/android-play-store.md` then)
 
-Upload keystore, signed AAB, privacy policy URL, permission justifications (review `CAMERA` / `RECORD_AUDIO` / `MANAGE_EXTERNAL_STORAGE`, unused ones cause review friction), internal → closed → production tracks, store build with `OCTAVE_ENABLE_DOWNLOADS=OFF`. Open question: OCTAVE is GPL-3.0+ (`3352b92`, required by Qt Quick 3D / Timeline), so the store listing must ship with the source offer and the licenses screen from item 4; decide whether a paid listing is still wanted under GPL.
+Upload keystore, signed AAB, privacy policy URL, permission justifications (review `CAMERA` / `RECORD_AUDIO` / `MANAGE_EXTERNAL_STORAGE`, unused ones cause review friction), internal → closed → production tracks, store build with `OCTAVE_ENABLE_DOWNLOADS=OFF`. Open question: OCTAVE is GPL-3.0+ (`3352b92`, required by Qt Quick 3D / Timeline), so the store listing must ship with the source offer and the licenses screen (Settings > About, added 2026-10-18; check it on the S22); decide whether a paid listing is still wanted under GPL.
 
-Delete this file when a signed AAB is on the Play Store production track (or Play Store is dropped and item 8 passes).
+Delete this file when a signed AAB is on the Play Store production track (or Play Store is dropped and item 7 passes).

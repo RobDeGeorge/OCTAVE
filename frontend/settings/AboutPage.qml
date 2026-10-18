@@ -5,6 +5,7 @@ import ".." as App
 
 Flickable {
     id: aboutPage
+    objectName: "aboutPage"
     // Accepted for parity with the tile pages; About has no cards to skip.
     property bool renderCards: true
     property var stackView: null
@@ -13,6 +14,77 @@ Flickable {
     WikiPopup {
         id: wikiPopup
         contentArea: aboutPage.stackView
+    }
+
+    // Full text of LICENSE / NOTICE for the licenses card
+    Popup {
+        id: licenseTextPopup
+        objectName: "licenseTextPopup"
+        parent: Overlay.overlay
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width * 0.92, aboutPage.dp(900))
+        height: parent.height * 0.85
+        modal: true
+        focus: true
+        padding: aboutPage.dp(16)
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property string heading: ""
+        property string body: ""
+        function showFile(name, title) {
+            heading = title
+            body = typeof diagnosticsManager !== "undefined" && diagnosticsManager
+                   ? diagnosticsManager.licenseText(name) : ""
+            if (body === "")
+                body = "Not available in this build. See github.com/RobDeGeorge/OCTAVE/blob/main/" + name
+            open()
+        }
+        background: Rectangle {
+            color: App.Style.contentColor
+            radius: aboutPage.dp(12)
+            border.color: App.Style.accent
+            border.width: 1
+        }
+        contentItem: ColumnLayout {
+            spacing: aboutPage.dp(10)
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    Layout.fillWidth: true
+                    text: licenseTextPopup.heading
+                    color: App.Style.accent
+                    font.pixelSize: App.Spacing.overallText
+                    font.family: App.Style.fontFamily
+                    font.bold: true
+                    elide: Text.ElideRight
+                }
+                SettingsButton {
+                    text: "Close"
+                    Layout.preferredHeight: aboutPage.dp(40)
+                    onClicked: licenseTextPopup.close()
+                }
+            }
+            Flickable {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: width
+                contentHeight: licenseBody.implicitHeight
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                Text {
+                    id: licenseBody
+                    objectName: "licenseBody"
+                    width: parent.width
+                    text: licenseTextPopup.body
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.7
+                    font.family: "monospace"
+                }
+            }
+        }
     }
     function registerWikiPopup() {
         if (wikiHost && wikiHost.activeWikiPopup === wikiPopup)
@@ -190,6 +262,103 @@ Flickable {
                     Layout.fillWidth: true
                     Layout.preferredHeight: aboutPage.dp(44)
                     onClicked: wikiPopup.open()
+                }
+            }
+
+            // ─── Open-source licenses ───
+            // What this build bundles, with each license, and the full text of
+            // OCTAVE's own license and NOTICE (compiled in; see CMakeLists.txt).
+            SettingsCard {
+                id: licensesCard
+                objectName: "licensesCard"
+                Layout.fillWidth: true
+                title: "Open-Source Licenses"
+
+                readonly property bool isAndroid: Qt.platform.os === "android"
+                readonly property bool bundlesDownloads: isAndroid && typeof downloadManager !== "undefined"
+                                                         && downloadManager && downloadManager.downloadsAvailable
+                readonly property var components: {
+                    var all = [
+                        { name: "Qt 6", license: "LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline", use: "The whole application" },
+                        { name: "QR Code generator library (Project Nayuki)", license: "MIT", use: "The phone-pairing QR code" },
+                        { name: "scrcpy server (fork)", license: "Apache-2.0", use: "The program that runs on the phone during mirroring" },
+                        { name: "Google Sans", license: "OFL-1.1", use: "UI text (selectable font)" },
+                        { name: "JetBrains Mono", license: "OFL-1.1", use: "UI text (selectable font)" },
+                        { name: "OCTAVE Symbols (subset of Noto Sans Symbols / Symbols 2)", license: "OFL-1.1", use: "Icon glyphs" }
+                    ]
+                    if (!isAndroid) {
+                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art" })
+                        all.push({ name: "FFmpeg (libavcodec, libavutil)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video" })
+                        all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)" })
+                    } else {
+                        all.push({ name: "OpenSSL 3", license: "Apache-2.0", use: "HTTPS" })
+                    }
+                    if (bundlesDownloads) {
+                        all.push({ name: "youtubedl-android", license: "GPL-3.0", use: "Music downloads on the phone" })
+                        all.push({ name: "yt-dlp", license: "Unlicense", use: "Music downloads (inside youtubedl-android)" })
+                        all.push({ name: "Python", license: "PSF-2.0", use: "Runs yt-dlp and the search helper (inside youtubedl-android)" })
+                        all.push({ name: "FFmpeg (inside youtubedl-android)", license: "LGPL-2.1+ / GPL-2.0+", use: "Audio conversion for downloads" })
+                        all.push({ name: "mutagen", license: "GPL-2.0+", use: "Embedding cover art in downloads" })
+                        all.push({ name: "ytmusicapi", license: "MIT", use: "YouTube Music search" })
+                        all.push({ name: "requests", license: "Apache-2.0", use: "HTTP for the search helper" })
+                        all.push({ name: "urllib3, idna, charset-normalizer, certifi", license: "MIT, BSD-3-Clause, MIT, MPL-2.0", use: "What requests depends on, bundled with it" })
+                    }
+                    return all
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "OCTAVE is free software under the GNU General Public License, version 3 or later. "
+                          + "Its source code is at github.com/RobDeGeorge/OCTAVE. This build includes:"
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.family: App.Style.fontFamily
+                    wrapMode: Text.WordWrap
+                }
+
+                Repeater {
+                    model: licensesCard.components
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.name + "  \u2014  " + modelData.license
+                            color: App.Style.primaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.85
+                            font.family: App.Style.fontFamily
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.use
+                            color: App.Style.secondaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.75
+                            font.family: App.Style.fontFamily
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: aboutPage.dp(8)
+                    SettingsButton {
+                        objectName: "showLicenseButton"
+                        text: "GPL-3.0 Text"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: aboutPage.dp(44)
+                        onClicked: licenseTextPopup.showFile("LICENSE", "GNU General Public License v3")
+                    }
+                    SettingsButton {
+                        objectName: "showNoticeButton"
+                        text: "Notices"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: aboutPage.dp(44)
+                        onClicked: licenseTextPopup.showFile("NOTICE", "Copyright and third-party notices")
+                    }
                 }
             }
 

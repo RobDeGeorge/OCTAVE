@@ -450,6 +450,7 @@
             <tr><td><code>copyLogsToClipboard(int maxLines)</code></td><td><code>bool</code></td><td>Header (version, <code>backendName</code>, device, time) plus <code>recentLogLines()</code> onto the clipboard; default 400 lines</td></tr>
             <tr><td><code>exportLogs()</code></td><td><code>QString</code></td><td>Copy every <code>octave*.log*</code> file plus <code>device-info.txt</code> into <code>&lt;Downloads&gt;/OCTAVE-logs-&lt;timestamp&gt;/</code> (Android: <code>/storage/emulated/0/Download</code>). Returns the folder, <code>""</code> on failure</td></tr>
             <tr><td><code>openLogFolder()</code></td><td><code>bool</code></td><td>Desktop: open the log folder in the OS file manager</td></tr>
+            <tr><td><code>licenseText(QString name)</code></td><td><code>QString</code></td><td>Full text of <code>LICENSE</code> or <code>NOTICE</code> (compiled-in resources); <code>""</code> for any other name</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
