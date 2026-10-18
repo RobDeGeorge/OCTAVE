@@ -117,10 +117,9 @@ Item {
         }
     }
 
-    // Background with accent color
     Rectangle {
         anchors.fill: parent
-        color: App.Style.accent
+        color: App.Style.backgroundColor
 
         // 3D View container
         Rectangle {
@@ -132,7 +131,29 @@ Item {
                 bottom: controlPanel.top
                 margins: App.Spacing.overallMargin
             }
-            color: "black"
+            // Same colour as the scene clearColor so the vehicle controls and
+            // the 3D view read as one panel.
+            color: "#18232F"
+            radius: dpMin(10, 2)
+            clip: true
+            border.width: 1
+            border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.45)
+
+            // The stock Basic Buttons/Sliders/Labels here sit on the dark scene
+            // whatever the theme, so they get light text and accent fills rather
+            // than the default light-grey widgets. Basic reads: button/buttonText
+            // (idle), dark/brightText (checked button, slider fill + handle
+            // border), mid (pressed blend), midlight (slider groove),
+            // window/light (handle).
+            palette.button: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.22)
+            palette.buttonText: "white"
+            palette.dark: App.Style.accent
+            palette.brightText: "#18232F"
+            palette.mid: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.5)
+            palette.midlight: Qt.rgba(1, 1, 1, 0.18)
+            palette.window: "white"
+            palette.light: App.Style.accent
+            palette.windowText: "white"
 
             View3D {
                 id: view3d
@@ -306,8 +327,21 @@ Item {
             anchors.margins: App.Spacing.overallMargin
             width: parent.width - (App.Spacing.overallMargin * 2)
             height: dp(60)
-            color: "#333333"
+            color: App.Style.contentColor
             radius: dpMin(10, 2)
+            border.width: 1
+            border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.25)
+
+            // Buttons and simulation sliders in this strip follow the theme
+            palette.button: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.14)
+            palette.buttonText: App.Style.primaryTextColor
+            palette.brightText: App.Style.backgroundColor
+            palette.dark: App.Style.accent
+            palette.mid: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.45)
+            palette.midlight: Qt.rgba(App.Style.primaryTextColor.r, App.Style.primaryTextColor.g, App.Style.primaryTextColor.b, 0.18)
+            palette.window: App.Style.primaryTextColor
+            palette.light: App.Style.accent
+            palette.windowText: App.Style.primaryTextColor
 
             // LIVE mode: show status and IMU readings
             RowLayout {
@@ -320,7 +354,7 @@ Item {
                     width: dp(70)
                     height: dp(30)
                     radius: 5
-                    color: "#00AA00"
+                    color: App.Style.statusConnected
 
                     Text {
                         anchors.centerIn: parent
@@ -338,7 +372,7 @@ Item {
                     width: dp(70)
                     height: dp(30)
                     radius: 5
-                    color: tareMouseArea.pressed ? "#0066AA" : "#0088CC"
+                    color: tareMouseArea.pressed ? Qt.darker(App.Style.accent, 1.3) : App.Style.accent
 
                     Text {
                         anchors.centerIn: parent
@@ -362,7 +396,7 @@ Item {
                     width: dp(70)
                     height: dp(30)
                     radius: 5
-                    color: resetTareMouseArea.pressed ? "#664400" : "#886600"
+                    color: resetTareMouseArea.pressed ? Qt.darker(App.Style.statusWarning, 1.3) : App.Style.statusWarning
 
                     Text {
                         anchors.centerIn: parent
@@ -382,35 +416,35 @@ Item {
 
                 Text {
                     text: "Pitch: " + currentPitch.toFixed(1) + "\u00B0"
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: "Roll: " + currentRoll.toFixed(1) + "\u00B0"
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: "Heading: " + currentHeading.toFixed(1) + "\u00B0 " + headingToCardinal(currentHeading)
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: "Alt: " + currentAltitude.toFixed(1) + " m"
-                    color: "white"
+                    color: App.Style.primaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
 
                 Text {
                     text: currentBaroTemp.toFixed(1) + " \u00B0C"
-                    color: "#AAAAAA"
+                    color: App.Style.secondaryTextColor
                     font.pixelSize: dp(13)
                     font.family: carMenu.globalFont
                 }
@@ -427,12 +461,14 @@ Item {
                     width: dp(90)
                     height: dp(30)
                     radius: 5
-                    color: "#666666"
+                    color: "transparent"
+                    border.width: 1
+                    border.color: App.Style.secondaryTextColor
 
                     Text {
                         anchors.centerIn: parent
                         text: "NO IMU"
-                        color: "#CCCCCC"
+                        color: App.Style.secondaryTextColor
                         font.pixelSize: dp(12)
                         font.bold: true
                         font.family: carMenu.globalFont
@@ -470,7 +506,7 @@ Item {
                     Text {
                         anchors.bottom: parent.top
                         text: "Pitch"
-                        color: "white"
+                        color: App.Style.secondaryTextColor
                         font.pixelSize: dp(12)
                         font.family: carMenu.globalFont
                     }
@@ -491,7 +527,7 @@ Item {
                     Text {
                         anchors.bottom: parent.top
                         text: "Roll"
-                        color: "white"
+                        color: App.Style.secondaryTextColor
                         font.pixelSize: dp(12)
                         font.family: carMenu.globalFont
                     }

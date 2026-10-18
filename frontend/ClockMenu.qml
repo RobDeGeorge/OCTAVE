@@ -20,52 +20,50 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: "#2c3e50"  // Dark blue-gray background
+        color: App.Style.backgroundColor
 
         ColumnLayout {
             anchors.centerIn: parent
-            spacing: dp(30)
-
-            // Digital Clock
-            Text {
-                id: digitalClock
-                Layout.alignment: Qt.AlignCenter
-                color: "white"
-                font {
-                    pixelSize: dp(72)
-                    family: clockMenu.globalFont
-                    bold: true
-                }
-            }
-
-            // Date display
-            Text {
-                id: dateDisplay
-                Layout.alignment: Qt.AlignCenter
-                color: "#ecf0f1"
-                font {
-                    pixelSize: dp(24)
-                    family: clockMenu.globalFont
-                }
-            }
+            spacing: dp(24)
 
             // Analog clock face
             Rectangle {
                 id: clockFace
                 Layout.alignment: Qt.AlignCenter
-                width: dp(200)
-                height: dp(200)
+                width: Math.min(dp(240), clockMenu.height * 0.45)
+                height: width
                 radius: width/2
-                color: "transparent"
-                border.color: "white"
-                border.width: dp(3)
+                color: App.Style.contentColor
+                border.color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.6)
+                border.width: dpMin(3, 1)
+
+                // Hour ticks (major every 3 hours)
+                Repeater {
+                    model: 12
+                    Item {
+                        required property int index
+                        anchors.fill: parent
+                        rotation: index * 30
+                        Rectangle {
+                            readonly property bool major: index % 3 === 0
+                            width: major ? dpMin(4, 2) : dpMin(2, 1)
+                            height: clockFace.height * (major ? 0.09 : 0.05)
+                            radius: width / 2
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: clockFace.height * 0.05
+                            color: major ? App.Style.primaryTextColor : App.Style.secondaryTextColor
+                            antialiasing: true
+                        }
+                    }
+                }
 
                 // Hour hand
                 Rectangle {
                     id: hourHand
-                    width: dp(4)
-                    height: parent.height * 0.3
-                    color: "white"
+                    width: dpMin(6, 2)
+                    height: parent.height * 0.26
+                    radius: width / 2
+                    color: App.Style.primaryTextColor
                     antialiasing: true
                     anchors {
                         horizontalCenter: parent.horizontalCenter
@@ -77,9 +75,10 @@ Item {
                 // Minute hand
                 Rectangle {
                     id: minuteHand
-                    width: dp(2)
-                    height: parent.height * 0.4
-                    color: "white"
+                    width: dpMin(4, 2)
+                    height: parent.height * 0.38
+                    radius: width / 2
+                    color: App.Style.primaryTextColor
                     antialiasing: true
                     anchors {
                         horizontalCenter: parent.horizontalCenter
@@ -91,9 +90,9 @@ Item {
                 // Second hand
                 Rectangle {
                     id: secondHand
-                    width: 1
-                    height: parent.height * 0.45
-                    color: "#e74c3c"  // Red color
+                    width: dpMin(2, 1)
+                    height: parent.height * 0.42
+                    color: App.Style.accent
                     antialiasing: true
                     anchors {
                         horizontalCenter: parent.horizontalCenter
@@ -104,11 +103,34 @@ Item {
 
                 // Center dot
                 Rectangle {
-                    width: dp(8)
-                    height: dp(8)
-                    radius: 4
-                    color: "#e74c3c"
+                    width: dpMin(10, 4)
+                    height: width
+                    radius: width / 2
+                    color: App.Style.accent
                     anchors.centerIn: parent
+                }
+            }
+
+            // Digital Clock
+            Text {
+                id: digitalClock
+                Layout.alignment: Qt.AlignCenter
+                color: App.Style.clockTextColor
+                font {
+                    pixelSize: dp(64)
+                    family: clockMenu.globalFont
+                    bold: true
+                }
+            }
+
+            // Date display
+            Text {
+                id: dateDisplay
+                Layout.alignment: Qt.AlignCenter
+                color: App.Style.secondaryTextColor
+                font {
+                    pixelSize: dp(22)
+                    family: clockMenu.globalFont
                 }
             }
         }
