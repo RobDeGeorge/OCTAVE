@@ -234,6 +234,7 @@ class ScrcpyClient(QObject):
         self._start_bit_rate = 0
         self._adaptive_min_bps = 0
         self._adaptive_max_bps = 0
+        self._video_encoder = ""
         self._proc: Optional[subprocess.Popen] = None
         # Guards handing _proc/_port/sockets from the session thread to
         # whoever releases them (stop() or the session's own exit)
@@ -445,6 +446,11 @@ class ScrcpyClient(QObject):
         self._adaptive_min_bps = int(min_bps)
         self._adaptive_max_bps = int(max_bps)
 
+    def set_video_encoder(self, name: str):
+        """Server option video_encoder (e.g. a software encoder after the
+        hardware one failed); "" = the phone's default. Set before start()."""
+        self._video_encoder = name or ""
+
     def _send_bit_rate(self, bps: int):
         self._send(struct.pack(">Bi", MSG_OCTAVE_SET_BIT_RATE, int(bps)))
 
@@ -598,6 +604,8 @@ class ScrcpyClient(QObject):
         codec_options = os.environ.get("OCTAVE_VIDEO_CODEC_OPTIONS", VIDEO_CODEC_OPTIONS)
         if codec_options:
             opts.append(f"video_codec_options={codec_options}")
+        if self._video_encoder:
+            opts.append(f"video_encoder={self._video_encoder}")
         if display_size:
             opts.append(f"new_display={display_size}")
         # The assignment must precede nohup (it applies to the command it prefixes).

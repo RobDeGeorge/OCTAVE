@@ -470,7 +470,7 @@ class SettingsManager(QObject):
             "scrcpyDisplayDpi": 0,  # Virtual display density, 0 = scaled from the phone's own
             "scrcpyBitRateUsb": 16,  # Video bit rate over USB, Mbps
             "scrcpyBitRateWifi": 8,  # Video bit rate over Wi-Fi, Mbps
-            "scrcpyAutoWifi": True,  # Switch a USB phone to adb over TCP for later Wi-Fi use
+            "scrcpyAutoWifi": False,  # Switch a USB phone to adb over TCP for later Wi-Fi use (off: adb then listens on the network)
             "scrcpyBitRateAuto": True,  # Adapt the bit rate to the link; the rates above are the ceiling
             "scrcpyWirelessAddress": "",  # Last phone connected over Wi-Fi ("ip:port"), "" = none
             # Settings menu section visibility (all visible by default, except advanced features)
@@ -661,7 +661,7 @@ class SettingsManager(QObject):
         self._scrcpy_display_dpi = int(self._settings.get("scrcpyDisplayDpi", 0))
         self._scrcpy_bit_rate_usb = int(self._settings.get("scrcpyBitRateUsb", 16))
         self._scrcpy_bit_rate_wifi = int(self._settings.get("scrcpyBitRateWifi", 8))
-        self._scrcpy_auto_wifi = bool(self._settings.get("scrcpyAutoWifi", True))
+        self._scrcpy_auto_wifi = bool(self._settings.get("scrcpyAutoWifi", False))
         self._scrcpy_bit_rate_auto = bool(self._settings.get("scrcpyBitRateAuto", True))
         self._scrcpy_wireless_address = str(self._settings.get("scrcpyWirelessAddress", "") or "")
 

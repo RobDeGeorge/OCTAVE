@@ -11,9 +11,8 @@ TCP = "192.168.1.5:37199"
 MDNS = "adb-R5CT1234ABC-AbCdEf._adb-tls-connect._tcp"
 
 
-def _manager(devices):
+def _manager():
     m = PhoneMirrorManager()
-    m._devices = lambda: list(devices)
     m._maybe_reconnect_wireless = lambda: None
     return m
 
@@ -33,23 +32,23 @@ def test_host_of():
 
 
 def test_usb_preferred_over_wifi():
-    assert _manager([(TCP, "device"), (USB, "device")]).getDeviceSerial() == USB
-    assert _manager([(TCP, "device"), (USB, "unauthorized")]).getDeviceSerial() == TCP
-    assert _manager([(MDNS, "device")]).getDeviceSerial() == MDNS
-    assert _manager([]).getDeviceSerial() == ""
+    pick = PhoneMirrorManager.pickSerial
+    assert pick([(TCP, "device"), (USB, "device")], "") == USB
+    assert pick([(TCP, "device"), (USB, "unauthorized")], "") == TCP
+    assert pick([(MDNS, "device")], "") == MDNS
+    assert pick([], "") == ""
 
 
 def test_wifi_messages_keep_retry_phrases():
     # PhoneMirrorView auto-retries on /disconnected|No Android device|not authorized|offline/
-    m = _manager([(TCP, "offline")])
-    assert "Wi-Fi" in m._describe_problem("offline") and "offline" in m._describe_problem("offline")
-    m = _manager([(TCP, "unauthorized")])
-    assert "not authorized" in m._describe_problem("unauthorized")
-    m = _manager([(USB, "offline")])
-    assert "cable" in m._describe_problem("offline")
-    m = _manager([])
+    m = _manager()
+    msg = m._describe_problem("offline", [(TCP, "offline")])
+    assert "Wi-Fi" in msg and "offline" in msg
+    assert "not authorized" in m._describe_problem("unauthorized", [(TCP, "unauthorized")])
+    assert "cable" in m._describe_problem("offline", [(USB, "offline")])
+    assert "USB permissions" in m._describe_problem("no-permissions", [(USB, "no-permissions")])
     m._wireless_address = TCP
-    msg = m._describe_problem("none")
+    msg = m._describe_problem("none", [])
     assert msg.startswith("No Android device") and TCP in msg
     assert "Wi-Fi" in disconnected_message(TCP) and "disconnected" in disconnected_message(TCP)
     assert "USB" in disconnected_message(USB)
@@ -63,7 +62,7 @@ def test_qr_pairing_payload_and_cancel(monkeypatch):
     monkeypatch.setattr(manager_module, "adb_tools_major", lambda path: manager_module.ADB_WIRELESS_MIN_TOOLS)
 
     assert qr_pairing_payload("octave-abc", "pw123") == "WIFI:T:ADB;S:octave-abc;P:pw123;;"
-    m = _manager([])
+    m = _manager()
     m._adb_path = "adb"                       # no adb is run: the wait job is not started
     m._run_wireless_job = lambda job, ui: None
     m.startQrPairing()

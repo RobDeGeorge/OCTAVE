@@ -1,0 +1,57 @@
+# udev rules for Android phones: let the logged-in user open them over USB,
+# so `adb devices` lists the phone instead of "no permissions" and OCTAVE's
+# phone mirroring can use it.
+#
+# Install:
+#   sudo cp packaging/linux/51-android.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# then unplug and replug the phone. (Alternatively, add your user to the
+# plugdev group if your distro ships its own android-udev rules.)
+#
+# Each rule matches a phone maker's USB vendor id. TAG+="uaccess" gives the
+# user at the seat access (systemd-logind); MODE/GROUP cover headless boxes
+# where OCTAVE runs from a plugdev user without a seat.
+
+SUBSYSTEM!="usb", GOTO="octave_android_end"
+ENV{DEVTYPE}!="usb_device", GOTO="octave_android_end"
+
+# Google (Pixel, Nexus)
+ATTR{idVendor}=="18d1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Samsung
+ATTR{idVendor}=="04e8", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Xiaomi / Redmi / POCO
+ATTR{idVendor}=="2717", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# OnePlus
+ATTR{idVendor}=="2a70", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Motorola
+ATTR{idVendor}=="22b8", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# LG
+ATTR{idVendor}=="1004", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# HTC
+ATTR{idVendor}=="0bb4", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Huawei / Honor
+ATTR{idVendor}=="12d1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Sony
+ATTR{idVendor}=="0fce", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Oppo / Realme
+ATTR{idVendor}=="22d9", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Vivo
+ATTR{idVendor}=="2d95", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Nothing
+ATTR{idVendor}=="2b4c", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Asus
+ATTR{idVendor}=="0b05", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Lenovo
+ATTR{idVendor}=="17ef", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# ZTE / Nubia
+ATTR{idVendor}=="19d2", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Nokia (HMD)
+ATTR{idVendor}=="2e04", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Fairphone
+ATTR{idVendor}=="2ae5", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# MediaTek-based phones
+ATTR{idVendor}=="0e8d", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Qualcomm reference / unbranded
+ATTR{idVendor}=="05c6", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+LABEL="octave_android_end"

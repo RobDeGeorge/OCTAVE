@@ -54,6 +54,9 @@ AUTO_MAX_SIDE = 1920
 # A view resize restarts an "auto" session once the size has settled
 RESIZE_RESTART_MS = 1500
 NEW_DISPLAY_MIN_SDK = 30  # Android 11
+AUDIO_MIN_SDK = 30        # phone audio capture arrived in Android 11
+# An encoder error counts as the cause of a disconnect this soon after it
+FATAL_CAUSE_WINDOW_S = 5.0
 # After a power press from the locked state the phone-side keeper wakes the
 # phone but leaves its panel lit for this long. If the keyguard is dismissed
 # in that window the user wants their phone, not the mirror's screen-off;
@@ -183,6 +186,28 @@ def adb_tools_major(adb_path: str) -> int:
     return major
 
 
+def _ios_device_on_usb() -> bool:
+    """An iPhone or iPad on USB (Apple's vendor id with an iOS-device product
+    id). Linux only, from sysfs; elsewhere it is not worth a USB library."""
+    if platform.system() != "Linux":
+        return False
+    root = Path("/sys/bus/usb/devices")
+    try:
+        entries = list(root.iterdir())
+    except OSError:
+        return False
+    for entry in entries:
+        try:
+            if (entry / "idVendor").read_text().strip() != "05ac":
+                continue
+            pid = int((entry / "idProduct").read_text().strip(), 16)
+        except (OSError, ValueError):
+            continue
+        if 0x1290 <= pid <= 0x12AF:
+            return True
+    return False
+
+
 def _find_adb() -> Optional[str]:
     """Bundled platform-tools first, then PATH, then common install locations,
     preferring the first adb new enough to pair (ADB_WIRELESS_MIN_TOOLS); with
@@ -252,6 +277,8 @@ class PhoneMirrorManager(QObject):
     mediaArtChanged = Signal()
     mediaQueueChanged = Signal()
     mediaActiveChanged = Signal(bool)   # main.py pauses OCTAVE's own sources when the phone takes over
+    deviceStateChanged = Signal()       # deviceState / deviceHint / devices
+    mirrorNoticeChanged = Signal()
     _post = Signal(object)                      # worker thread -> GUI thread callable
 
     def __init__(self, parent=None):
@@ -278,7 +305,7 @@ class PhoneMirrorManager(QObject):
         self._display_dpi: int = 0
         self._bit_rate_usb_mbps: int = DEFAULT_USB_BIT_RATE_MBPS
         self._bit_rate_wifi_mbps: int = DEFAULT_WIFI_BIT_RATE_MBPS
-        self._auto_wifi: bool = True
+        self._auto_wifi: bool = False
         self._bit_rate_auto: bool = True
         self._current_bit_rate: int = 0
         self._media: dict = dict(_NO_MEDIA)
@@ -326,6 +353,22 @@ class PhoneMirrorManager(QObject):
         self._persist_scid: str = ""
         self._persist_until: float = 0.0
         self._attaching: bool = False
+
+        self._device_state: str = "none"
+        self._device_hint: str = ""
+        self._device_rows: list = []            # [(serial, state)] from the last probe
+        self._device_models: dict = {}          # serial -> ro.product.model
+        self._preferred_serial: str = ""        # selectDevice()
+        # adb devices / start prep: one at a time on their own worker thread
+        self._probe_jobs: queue.Queue = queue.Queue()
+        self._probe_worker: Optional[threading.Thread] = None
+        self._probe_running: bool = False
+        self._probe_again: bool = False         # a refresh was asked for while one ran
+        self._notices: list = []
+        self._fatal_cause: str = ""             # classifyServerLine() of the session's fatal error
+        self._fatal_cause_at: float = 0.0
+        self._session_sdk: int = 0
+        self._software_encoder_serial: str = ""  # phone whose hardware encoder failed this run
 
         self._wireless_address: str = ""
         self._connection_type: str = ""
@@ -405,38 +448,202 @@ class PhoneMirrorManager(QObject):
         except (subprocess.SubprocessError, OSError):
             return ""
 
-    def _serial_args(self) -> list:
-        """["-s", serial] for the phone getDeviceSerial() picks. With a phone on
-        both USB and Wi-Fi (or two phones) a bare `adb shell` fails with
-        "more than one device", so every probe names its phone."""
-        serial = self.getDeviceSerial()
-        return ["-s", serial] if serial else []
+    # Probe-thread results, applied on the GUI thread (_apply_probe):
+    # {"rows": [(serial, state)], "state": str, "hint": str, "models": {serial: model}}
 
-    def _devices(self) -> list:
-        """[(serial, state)] from `adb devices`."""
-        out = self._run_adb(["devices"])
+    @staticmethod
+    def parseDevices(output: str) -> list:
+        """`adb devices` output -> [(serial, state)]. Skips the header and the
+        "* daemon ..." start-up lines; "no permissions (...)" becomes "no-permissions".
+
+        adb prints "* daemon not running; starting now ..." lines first when it
+        has to start its server, and "no permissions (user in plugdev group;
+        are your udev rules wrong?); see [...]" as the state of a USB phone
+        this user may not open."""
         rows = []
-        for line in out.strip().split("\n")[1:]:
-            parts = line.split()
-            if len(parts) >= 2:
-                rows.append((parts[0], parts[1]))
+        for raw in (output or "").split("\n"):
+            line = raw.strip()
+            if (not line or line.startswith("*") or line.startswith("List of devices")
+                    or line.startswith("adb server") or line.startswith("adb:")):
+                continue
+            parts = line.split(None, 1)
+            if len(parts) < 2:
+                continue
+            serial, rest = parts[0], parts[1].strip()
+            state = rest.split()[0] if rest else ""
+            if rest.startswith("no permissions"):
+                state = "no-permissions"
+            if state:
+                rows.append((serial, state))
         return rows
+
+    @staticmethod
+    def summarizeState(rows: list) -> str:
+        """Rows -> the single state deviceState reports: a usable phone, then
+        the ones the user can fix."""
+        for wanted in ("device", "unauthorized", "no-permissions", "offline"):
+            if any(state == wanted for _, state in rows):
+                return wanted
+        return "none"
+
+    @staticmethod
+    def pickSerial(rows: list, preferred: str) -> str:
+        """Phone to mirror: the one picked in the UI, then USB (the faster,
+        steadier link when the phone is on both), then Wi-Fi."""
+        usb = wireless = ""
+        for serial, state in rows:
+            if state != "device":
+                continue
+            if preferred and serial == preferred:
+                return serial
+            if not is_network_serial(serial):
+                usb = usb or serial
+            else:
+                wireless = wireless or serial
+        return usb or wireless
+
+    @staticmethod
+    def classifyServerLine(line: str) -> str:
+        """Phone-server log line -> "inject" (touch blocked), "no-audio"
+        (Android < 11), "encoder" (video encoder failed), "" for anything else."""
+        if "INJECT_EVENTS" in line:
+            return "inject"
+        if "Audio disabled" in line and "before Android 11" in line:
+            return "no-audio"
+        if ("Capture/encoding error" in line or "Video encoding error" in line
+                or "Could not create default video encoder" in line
+                or "Could not create video encoder" in line
+                or ("Video encoder '" in line and "not found" in line)):
+            return "encoder"
+        return ""
+
+    @staticmethod
+    def softwareEncoderFor(sdk: int) -> str:
+        """Google's software AVC encoder: Codec2 since Android 10, OMX before."""
+        return "c2.android.avc.encoder" if sdk >= 29 or sdk <= 0 else "OMX.google.h264.encoder"
+
+    @staticmethod
+    def noticeText(kind: str) -> str:
+        """On-screen text for a mirrorNotice kind."""
+        return {
+            "inject": "The phone is blocking touch input from OCTAVE. On Xiaomi / MIUI phones, turn on "
+                      "\"USB debugging (Security settings)\" in Developer options and restart the phone.",
+            "no-audio": "This phone runs Android 10 or older, which cannot send its sound to OCTAVE. "
+                        "Audio keeps playing on the phone.",
+            "software-encoder": "The phone's hardware video encoder failed, so OCTAVE switched to its software "
+                                "encoder. The picture may be less smooth.",
+        }.get(kind, "")
+
+    def _probe_devices(self) -> dict:
+        """Blocking: probe thread only."""
+        out = self._run_adb_full(["devices"], timeout=10)
+        rows = self.parseDevices(out)
+        state = self.summarizeState(rows)
+        hint = ""
+        if "doesn't match this client" in out or "does not match this client" in out:
+            hint = ("Another adb (Android Studio, or a system adb of a different version) keeps "
+                    "restarting the adb server, which drops the phone. Close it, or make both use "
+                    "the same adb.")
+        elif state == "none" and _ios_device_on_usb():
+            hint = "An iPhone is plugged in. Phone mirroring works with Android phones only."
+        # Names for the picker, only when there is something to pick
+        models = {}
+        usable = [serial for serial, st in rows if st == "device"]
+        if len(usable) > 1:
+            for serial in usable:
+                models[serial] = self._run_adb_full(["-s", serial, "shell", "getprop", "ro.product.model"],
+                                                    timeout=3)
+        return {"rows": rows, "state": state, "hint": hint, "models": models}
+
+    def _probe_loop(self):
+        while True:
+            job = self._probe_jobs.get()
+            try:
+                job()
+            except Exception:
+                logger.exception("phone mirror: probe job failed")
+
+    def _run_probe_job(self, job):
+        """adb probes and start prep run one at a time on their own thread,
+        never behind a 2-minute QR wait on the wireless worker."""
+        if self._probe_worker is None or not self._probe_worker.is_alive():
+            self._probe_worker = threading.Thread(target=self._probe_loop, daemon=True, name="phone-mirror-probe")
+            self._probe_worker.start()
+        self._probe_jobs.put(job)
+
+    @Slot()
+    def refreshDeviceState(self):
+        """Probe `adb devices` on the probe thread; deviceStateChanged follows."""
+        if not self._adb_path:
+            self._apply_probe({"rows": [], "state": "no-adb", "hint": "", "models": {}})
+            return
+        if self._probe_running:
+            self._probe_again = True
+            return
+        self._probe_running = True
+
+        def job():
+            probe = self._probe_devices()
+
+            def done():
+                self._probe_running = False
+                self._apply_probe(probe)
+                if self._probe_again:
+                    self._probe_again = False
+                    self.refreshDeviceState()
+            self._post.emit(done)
+
+        self._run_probe_job(job)
+
+    def _apply_probe(self, probe: dict):
+        # Keep known model names: a probe only fetches them with several phones
+        models = dict(self._device_models)
+        models.update({k: v for k, v in probe["models"].items() if v})
+        changed = (probe["state"] != self._device_state or probe["hint"] != self._device_hint
+                   or probe["rows"] != self._device_rows or models != self._device_models)
+        self._device_state = probe["state"]
+        self._device_hint = probe["hint"]
+        self._device_rows = list(probe["rows"])
+        self._device_models = models
+        if changed:
+            self.deviceStateChanged.emit()
+        # Nothing usable: if a Wi-Fi phone is remembered, try to reach it in the
+        # background (throttled). The view keeps refreshing, so it is retried for free.
+        if self._device_state not in ("device", "no-adb"):
+            self._maybe_reconnect_wireless()
+
+    @Property(str, notify=deviceStateChanged)
+    def deviceState(self) -> str:
+        """Last `adb devices` probe: "device" | "unauthorized" | "offline" |
+        "no-permissions" | "none" | "no-adb"."""
+        return self._device_state
+
+    @Property(str, notify=deviceStateChanged)
+    def deviceHint(self) -> str:
+        """An iPhone on USB, another adb server fighting this one; "" otherwise."""
+        return self._device_hint
+
+    @Property("QVariantList", notify=deviceStateChanged)
+    def devices(self) -> list:
+        """Phones adb lists: [{serial, state, wireless, model, selected}]
+        (model only for usable phones when more than one is listed)."""
+        running = self.isRunning
+        return [{"serial": serial, "state": state, "wireless": is_network_serial(serial),
+                 "model": self._device_models.get(serial, ""),
+                 "selected": running and serial == self._serial}
+                for serial, state in self._device_rows]
+
+    @Property(str, notify=mirrorNoticeChanged)
+    def mirrorNotice(self) -> str:
+        """What the user should know about the running session that does not
+        stop it; "" when all is well. Cleared on each start."""
+        return "\n".join(self._notices)
 
     @Slot(result=str)
     def getDeviceState(self) -> str:
-        """"device" (ready), "unauthorized", "offline", "none" or "no-adb"."""
-        if not self._adb_path:
-            return "no-adb"
-        states = [st for _, st in self._devices()]
-        if "device" in states:
-            return "device"
-        # Nothing usable: if a Wi-Fi phone is remembered, try to reach it in
-        # the background (throttled). The view polls this, so it is retried for free.
-        self._maybe_reconnect_wireless()
-        for st in ("unauthorized", "offline"):
-            if st in states:
-                return st
-        return "none"
+        """The cached deviceState; also schedules a refresh. Never blocks."""
+        self.refreshDeviceState()
+        return self._device_state
 
     @staticmethod
     def describeDeviceState(state: str) -> str:
@@ -445,16 +652,19 @@ class PhoneMirrorManager(QObject):
             "unauthorized": "Phone is connected but USB debugging is not authorized. "
                             "Unlock the phone and tap 'Allow' on the USB debugging prompt.",
             "offline": "Phone is connected but adb reports it offline. Unplug and replug the cable.",
+            "no-permissions": "A phone is plugged in, but this computer's USB permissions keep adb from opening it. "
+                              "Install the udev rules (packaging/linux/51-android.rules, see the wiki) or add your "
+                              "user to the plugdev group, then replug the phone.",
             "none": "No Android device connected. Connect via USB and enable USB debugging.",
         }.get(state, "")
 
-    def _describe_problem(self, state: str) -> str:
+    def _describe_problem(self, state: str, rows: list) -> str:
         """describeDeviceState() with the Wi-Fi case spelled out. The phrases the
         view keys its auto-retry on (No Android device / not authorized /
-        offline) are kept."""
+        offline / USB permissions) are kept."""
         wireless = False
         if state in ("offline", "unauthorized"):
-            matching = [serial for serial, st in self._devices() if st == state]
+            matching = [serial for serial, st in rows if st == state]
             wireless = bool(matching) and all(is_network_serial(s) for s in matching)
         if wireless and state == "offline":
             return ("The phone's Wi-Fi link is offline. Check that it is on the same Wi-Fi network "
@@ -471,40 +681,46 @@ class PhoneMirrorManager(QObject):
     def hasConnectedDevice(self) -> bool:
         return self.getDeviceState() == "device"
 
-    @Slot(result=str)
-    def getDeviceSerial(self) -> str:
-        """USB first: it is the faster, steadier link when the phone is on both."""
-        wireless = ""
-        for serial, st in self._devices():
-            if st != "device":
-                continue
-            if not is_network_serial(serial):
-                return serial
-            wireless = wireless or serial
-        return wireless
+    @Slot(str)
+    def selectDevice(self, serial: str):
+        """Mirror this phone (from `devices`); restarts a session on another phone."""
+        if not serial:
+            return
+        self._preferred_serial = serial
+        logger.info(f"Phone mirror: phone picked: {serial}")
+        if self.isRunning and serial != self._serial:
+            self._persist_scid = ""   # never reattach to the other phone's session
+            self._restart_session()
 
-    @Slot(result=str)
-    def getDeviceName(self) -> str:
-        return self._run_adb(self._serial_args() + ["shell", "getprop", "ro.product.model"]).strip()
+    @Slot()
+    def dismissNotice(self):
+        """Hide the current mirrorNotice."""
+        self._clear_notices()
 
-    @Slot(result=str)
-    def getDeviceResolution(self) -> str:
-        for line in self._run_adb(self._serial_args() + ["shell", "wm", "size"]).split("\n"):
-            if "Physical size:" in line:
-                return line.split(":", 1)[1].strip()
-        return ""
+    def _add_notice(self, notice: str):
+        if not notice or notice in self._notices:
+            return
+        self._notices.append(notice)
+        self.mirrorNoticeChanged.emit()
 
-    @Slot(result=int)
-    def getDeviceSdk(self) -> int:
-        try:
-            return int(self._run_adb(self._serial_args() + ["shell", "getprop", "ro.build.version.sdk"]).strip())
-        except (TypeError, ValueError):
-            return 0
+    def _clear_notices(self):
+        if self._notices:
+            self._notices = []
+            self.mirrorNoticeChanged.emit()
 
     def _kill_stale_server(self):
-        """A crashed session can leave the device-side server running."""
+        """A crashed session can leave the device-side server running. Fire and
+        forget: a dead link must not hold up the GUI thread."""
+        if not self._adb_path:
+            return
         serial_args = ["-s", self._serial] if self._serial else []
-        self._run_adb(serial_args + ["shell", "pkill", "-f", SERVER_PROCESS_PATTERN], timeout=5)
+        try:
+            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+            subprocess.Popen([self._adb_path] + serial_args + ["shell", "pkill", "-f", SERVER_PROCESS_PATTERN],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             creationflags=creationflags)
+        except OSError:
+            pass
 
     # ── settings ────────────────────────────────────────────────────
 
@@ -1040,6 +1256,14 @@ class PhoneMirrorManager(QObject):
         m = re.search(r"New display: .*\(id=(\d+)\)", line)
         if m:
             self._vdisplay_id = int(m.group(1))
+        kind = self.classifyServerLine(line)
+        if kind == "encoder":
+            # The server retries (smaller size) on its own; this only decides
+            # what a disconnect right after it means
+            self._fatal_cause = kind
+            self._fatal_cause_at = time.monotonic()
+        elif kind:
+            self._add_notice(self.noticeText(kind))
 
     @Slot()
     def pressBack(self):
@@ -1067,11 +1291,39 @@ class PhoneMirrorManager(QObject):
         if not self.nativeAvailable:
             self.scrcpyError.emit(self.getInstallInstructions())
             return
-        state = self.getDeviceState()
-        if state != "device":
-            self.scrcpyError.emit(self._describe_problem(state))
+        # Everything that talks to adb runs on the probe thread: a dead Wi-Fi
+        # link, an adb server restart or a box64 adb must never freeze the dash.
+        self._is_starting = True
+        self._start_generation += 1
+        gen = self._start_generation
+        attach_scid = self._persist_scid if self._persist_scid and time.monotonic() < self._persist_until else ""
+        preferred = self._preferred_serial
+
+        def job():
+            prep = {"probe": self._probe_devices(), "serial": "", "sdk": 0}
+            prep["serial"] = self.pickSerial(prep["probe"]["rows"], preferred)
+            if prep["serial"]:
+                shell = ["-s", prep["serial"], "shell"]
+                if not attach_scid:   # clear a stale server first
+                    self._run_adb_full(shell + ["pkill", "-f", SERVER_PROCESS_PATTERN], timeout=5)
+                try:
+                    prep["sdk"] = int(self._run_adb_full(shell + ["getprop", "ro.build.version.sdk"],
+                                                         timeout=5).strip())
+                except ValueError:
+                    prep["sdk"] = 0
+            self._post.emit(lambda: self._continue_start(prep, gen))
+
+        self._run_probe_job(job)
+
+    def _continue_start(self, prep: dict, generation: int):
+        if generation != self._start_generation:
+            return   # stopped (or restarted) meanwhile
+        self._is_starting = False
+        self._apply_probe(prep["probe"])
+        serial = prep["serial"]
+        if not serial:
+            self.scrcpyError.emit(self._describe_problem(prep["probe"]["state"], prep["probe"]["rows"]))
             return
-        serial = self.getDeviceSerial()
         wireless = is_network_serial(serial)
         if not wireless and self._auto_wifi and not self._tcpip_checked:
             # Off the GUI thread: `adb tcpip` restarts the phone's adbd, which
@@ -1102,17 +1354,18 @@ class PhoneMirrorManager(QObject):
         self._is_starting = True
         self._is_stopping = False
         self._ready = False
+        self._fatal_cause = ""
+        self._session_sdk = prep["sdk"]
+        self._clear_notices()
         requested = self._requested_display()
         self._active_display_size = requested.split("/", 1)[0]
         self._started_auto_size = self._active_display_size if self._display_size == AUTO_DISPLAY_SIZE else ""
         attach_scid = ""
-        if self._persist_scid and time.monotonic() < self._persist_until:
+        if self._persist_scid and time.monotonic() < self._persist_until and serial == self._serial:
             attach_scid = self._persist_scid
         self._attaching = bool(attach_scid)
         if not attach_scid:
             self._persist_scid = ""
-            self._serial = serial
-            self._kill_stale_server()
 
         if self._client is not None:
             self._client.stop()
@@ -1136,14 +1389,18 @@ class PhoneMirrorManager(QObject):
         client.set_volume(0.0 if self._muted else self._volume)
         self._client = client
 
+        sdk = prep["sdk"]
         display_size = requested
-        if display_size:
-            sdk = self.getDeviceSdk()
-            if 0 < sdk < NEW_DISPLAY_MIN_SDK:
-                logger.warning(f"Device SDK {sdk} < {NEW_DISPLAY_MIN_SDK}: virtual display unavailable, mirroring phone screen")
-                display_size = ""
-                self._active_display_size = ""
-                self._started_auto_size = ""
+        if display_size and 0 < sdk < NEW_DISPLAY_MIN_SDK:
+            logger.warning(f"Device SDK {sdk} < {NEW_DISPLAY_MIN_SDK}: virtual display unavailable, mirroring phone screen")
+            display_size = ""
+            self._active_display_size = ""
+            self._started_auto_size = ""
+        if 0 < sdk < AUDIO_MIN_SDK:
+            self._add_notice(self.noticeText("no-audio"))
+        if self._software_encoder_serial and self._software_encoder_serial == serial:
+            client.set_video_encoder(self.softwareEncoderFor(sdk))
+            self._add_notice(self.noticeText("software-encoder"))
         bit_rate_mbps = self._bit_rate_wifi_mbps if wireless else self._bit_rate_usb_mbps
         start_bps = bit_rate_mbps * 1_000_000
         if self._bit_rate_auto:
@@ -1165,6 +1422,7 @@ class PhoneMirrorManager(QObject):
         client.start(serial, display_size=display_size, audio=True, attach_scid=attach_scid,
                      bit_rate=start_bps)
         self.isRunningChanged.emit()
+        self.deviceStateChanged.emit()   # "selected" in devices follows _serial
 
     def _on_connected(self, w: int, h: int):
         self._ready = True
@@ -1192,6 +1450,29 @@ class PhoneMirrorManager(QObject):
     def _on_disconnected(self, reason: str):
         if self._is_stopping:
             return
+        encoder_failed = (self._fatal_cause == "encoder"
+                          and time.monotonic() - self._fatal_cause_at < FATAL_CAUSE_WINDOW_S)
+        self._fatal_cause = ""
+        if encoder_failed:
+            # The server is gone with its virtual display: nothing to reattach to
+            self._persist_scid = ""
+            if self._software_encoder_serial != self._serial:
+                # Hardware encoder failed: once more with Google's software encoder
+                logger.warning("Phone mirror: the phone's video encoder failed; retrying with "
+                               f"{self.softwareEncoderFor(self._session_sdk)}")
+                self._software_encoder_serial = self._serial
+                self._reset_phone_state()
+                self._reset_media()
+                self._ready = False
+                self._is_starting = False
+                self._attaching = False
+                self._set_connection_type("")
+                self.isRunningChanged.emit()
+                QTimer.singleShot(300, self.startScrcpy)
+                return
+            # Not a link problem, so not something the view should keep retrying
+            reason = ("The phone's video encoder failed, even in software mode. Try a smaller virtual "
+                      "display size (Settings > Accessories > Phone Mirror), or mirror the phone screen.")
         self._reset_phone_state()
         self._reset_media()
         was_ready = self._ready
