@@ -133,6 +133,26 @@ QString ESP32VolumeManager::detectPlatform() const
 
 // ==================== Device Discovery ====================
 
+bool ESP32VolumeManager::looksLikeEsp32S3(const QSerialPortInfo &info)
+{
+    if (info.vendorIdentifier() == 0x303A)   // Espressif
+        return true;
+    const QString desc = info.description().toLower();
+    return desc.contains(QStringLiteral("jtag"))
+        || desc.contains(QStringLiteral("esp32-s3"))
+        || desc.contains(QStringLiteral("esp32s3"));
+}
+
+bool ESP32VolumeManager::isEsp32S3Port(const QString &port) const
+{
+    const auto infos = QSerialPortInfo::availablePorts();
+    for (const QSerialPortInfo &info : infos) {
+        if (info.systemLocation() == port || info.portName() == port)
+            return looksLikeEsp32S3(info);
+    }
+    return false;
+}
+
 QStringList ESP32VolumeManager::scanForDevices()
 {
     QStringList ports;
@@ -157,17 +177,7 @@ QStringList ESP32VolumeManager::scanForDevices()
         if (!obdPort.isEmpty() && systemLocation == obdPort)
             continue;
 
-        // Check for ESP32-S3 (Espressif VID = 0x303A)
-        bool isEsp32S3 = false;
-        if (info.vendorIdentifier() == 0x303A) {
-            isEsp32S3 = true;
-        } else if (desc.contains(QStringLiteral("jtag"))
-                   || desc.contains(QStringLiteral("esp32-s3"))
-                   || desc.contains(QStringLiteral("esp32s3"))) {
-            isEsp32S3 = true;
-        }
-
-        if (isEsp32S3) {
+        if (looksLikeEsp32S3(info)) {
             ports.prepend(systemLocation);
             m_esp32S3Port = systemLocation;
             qCInfo(lcEsp32) << "detected ESP32-S3 on" << systemLocation;
@@ -287,26 +297,14 @@ void ESP32VolumeManager::initialConnect()
 
     QString port = m_settingsManager->property("esp32VolumePort").toString();
 
-    // Auto-select ESP32-S3 if detected and no port configured
+    // Auto-select only an ESP32-S3. Any other serial port could be unrelated
+    // hardware (a VM's COM1 / ttyS0 once got the knob's LED commands), so it
+    // has to be picked by hand on the Accessories page.
     if (port.isEmpty() && !m_esp32S3Port.isEmpty()) {
         qCInfo(lcEsp32) << "auto-selecting ESP32-S3 on" << m_esp32S3Port;
         QMetaObject::invokeMethod(m_settingsManager, "save_esp32_volume_port",
                                   Q_ARG(QString, m_esp32S3Port));
         port = m_esp32S3Port;
-    }
-    // Fallback: try first available USB serial port
-    else if (port.isEmpty() && !m_availablePorts.isEmpty()) {
-        QString obdPort = m_settingsManager->property("obdBluetoothPort").toString();
-        for (const QVariant &v : m_availablePorts) {
-            QString p = v.toString();
-            if (p != obdPort) {
-                qCInfo(lcEsp32) << "auto-selecting port" << p;
-                QMetaObject::invokeMethod(m_settingsManager, "save_esp32_volume_port",
-                                          Q_ARG(QString, p));
-                port = p;
-                break;
-            }
-        }
     }
 
     if (!port.isEmpty()) {
@@ -325,7 +323,7 @@ void ESP32VolumeManager::connect_device()
 
     {
         QMutexLocker locker(&m_lock);
-        if (m_connected) {
+        if (m_connected || m_awaitingKnob) {
             qCDebug(lcEsp32) << "already connected";
             return;
         }
@@ -393,21 +391,45 @@ void ESP32VolumeManager::connect_device()
         return;
     }
 
-    {
-        QMutexLocker locker(&m_lock);
-        m_connected = true;
-    }
-
-    m_connectionStatus = QStringLiteral("Connected");
-    m_connectionDetail = QStringLiteral("Connected to ESP32 on %1").arg(port);
-    emit connectionStatusChanged(m_connectionStatus);
-    emit connectionDetailChanged(m_connectionDetail);
-    qCInfo(lcEsp32) << "connected to" << port;
-
+    m_openPort = port;
     m_reconnectAttempts = 0;
     m_readBuffer.clear();
     m_readOverflowWarned = false;
     m_readResyncing = false;
+    // Stop scanning while the port is open
+    m_scanTimer.stop();
+
+    // An ESP32-S3 is trusted as soon as it opens. Any other port only listens
+    // until the knob sends a command, so nothing is written to a port that
+    // turns out to be other hardware.
+    if (isEsp32S3Port(port)) {
+        markKnobVerified();
+        return;
+    }
+    {
+        QMutexLocker locker(&m_lock);
+        m_awaitingKnob = true;
+    }
+    m_connectionStatus = QStringLiteral("Waiting");
+    m_connectionDetail = QStringLiteral("Port %1 open: turn the knob to confirm").arg(port);
+    emit connectionStatusChanged(m_connectionStatus);
+    emit connectionDetailChanged(m_connectionDetail);
+    qCInfo(lcEsp32) << "opened" << port << "(not an ESP32-S3); waiting for a knob command before writing";
+}
+
+void ESP32VolumeManager::markKnobVerified()
+{
+    {
+        QMutexLocker locker(&m_lock);
+        m_awaitingKnob = false;
+        m_connected = true;
+    }
+
+    m_connectionStatus = QStringLiteral("Connected");
+    m_connectionDetail = QStringLiteral("Connected to ESP32 on %1").arg(m_openPort);
+    emit connectionStatusChanged(m_connectionStatus);
+    emit connectionDetailChanged(m_connectionDetail);
+    qCInfo(lcEsp32) << "connected to" << m_openPort;
 
     // Start keepalive (only if sleep is disabled)
     bool sleepEnabled = m_settingsManager
@@ -419,9 +441,6 @@ void ESP32VolumeManager::connect_device()
     } else {
         qCInfo(lcEsp32) << "keepalive timer NOT started (sleep enabled)";
     }
-
-    // Stop scanning while connected
-    m_scanTimer.stop();
 }
 
 void ESP32VolumeManager::disconnect_device()
@@ -440,6 +459,7 @@ void ESP32VolumeManager::disconnect_device()
     {
         QMutexLocker locker(&m_lock);
         m_connected = false;
+        m_awaitingKnob = false;
     }
 
     m_connectionStatus = QStringLiteral("Disconnected");
@@ -484,7 +504,7 @@ void ESP32VolumeManager::scheduleReconnect()
 
 void ESP32VolumeManager::attemptReconnect()
 {
-    if (m_connected)
+    if (m_connected || m_awaitingKnob)
         return;
     qCInfo(lcEsp32) << "attempting reconnect...";
     connect_device();
@@ -494,10 +514,12 @@ void ESP32VolumeManager::handleDisconnect()
 {
     {
         QMutexLocker locker(&m_lock);
-        if (!m_connected)
+        if (!m_connected && !m_awaitingKnob)
             return;
         m_connected = false;
+        m_awaitingKnob = false;
     }
+    m_keepaliveTimer.stop();
 
     m_connectionStatus = QStringLiteral("Disconnected");
     m_connectionDetail = QStringLiteral("Connection lost");
@@ -535,9 +557,8 @@ void ESP32VolumeManager::feedSerialData(QByteArray data)
         int idx = m_readBuffer.indexOf(QLatin1Char('\n'));
         QString line = m_readBuffer.left(idx).trimmed();
         m_readBuffer = m_readBuffer.mid(idx + 1);
-        if (!line.isEmpty()) {
-            processCommand(line);
-        }
+        if (!line.isEmpty() && processCommand(line) && m_awaitingKnob)
+            markKnobVerified();
     }
 
     // Knob commands are a few bytes; a partial line this long is line noise
@@ -593,7 +614,7 @@ bool ESP32VolumeManager::writeCommand(const QByteArray &data, const char *what)
     return true;
 }
 
-void ESP32VolumeManager::processCommand(const QString &command)
+bool ESP32VolumeManager::processCommand(const QString &command)
 {
     QString cmd = command.trimmed().toUpper();
     qCDebug(lcEsp32) << "received command:" << cmd;
@@ -601,36 +622,37 @@ void ESP32VolumeManager::processCommand(const QString &command)
     if (cmd == QLatin1String("+")) {
         // Single tick clockwise
         emit volumeChangeRequested(static_cast<float>(m_stepSize));
-    } else if (cmd == QLatin1String("-")) {
+        return true;
+    }
+    if (cmd == QLatin1String("-")) {
         // Single tick counter-clockwise
         emit volumeChangeRequested(static_cast<float>(-m_stepSize));
-    } else if (cmd.startsWith(QLatin1Char('+')) && cmd.length() > 1) {
-        // Multiple ticks clockwise: +3
+        return true;
+    }
+    if ((cmd.startsWith(QLatin1Char('+')) || cmd.startsWith(QLatin1Char('-'))) && cmd.length() > 1) {
+        // Multiple ticks: +3 clockwise, -2 counter-clockwise
         bool ok = false;
-        int ticks = cmd.mid(1).toInt(&ok);
-        if (ok) {
-            emit volumeChangeRequested(static_cast<float>(m_stepSize * ticks));
-        } else {
+        const int ticks = cmd.mid(1).toInt(&ok);
+        if (!ok) {
             qCWarning(lcEsp32) << "invalid command format:" << cmd;
+            return false;
         }
-    } else if (cmd.startsWith(QLatin1Char('-')) && cmd.length() > 1) {
-        // Multiple ticks counter-clockwise: -2
-        bool ok = false;
-        int ticks = cmd.mid(1).toInt(&ok);
-        if (ok) {
-            emit volumeChangeRequested(static_cast<float>(-m_stepSize * ticks));
-        } else {
-            qCWarning(lcEsp32) << "invalid command format:" << cmd;
-        }
-    } else if (cmd == QLatin1String("M")) {
+        const float sign = cmd.startsWith(QLatin1Char('+')) ? 1.0f : -1.0f;
+        emit volumeChangeRequested(sign * static_cast<float>(m_stepSize * ticks));
+        return true;
+    }
+    if (cmd == QLatin1String("M")) {
         // Mute toggle (encoder button press)
         emit muteToggleRequested();
-    } else if (cmd == QLatin1String("P")) {
+        return true;
+    }
+    if (cmd == QLatin1String("P")) {
         // Play/pause (optional - double-click)
         qCDebug(lcEsp32) << "play/pause command (not implemented)";
-    } else {
-        qCDebug(lcEsp32) << "unknown command:" << cmd;
+        return true;
     }
+    qCDebug(lcEsp32) << "unknown command:" << cmd;
+    return false;
 }
 
 // ==================== Public Slots for QML ====================
@@ -660,10 +682,7 @@ QString ESP32VolumeManager::get_ports_with_descriptions()
         if (desc.isEmpty())
             desc = QStringLiteral("Unknown Device");
 
-        // Identify ESP32-S3
-        bool isEsp32S3 = (info.vendorIdentifier() == 0x303A)
-            || desc.toLower().contains(QStringLiteral("jtag"))
-            || desc.toLower().contains(QStringLiteral("esp32-s3"));
+        const bool isEsp32S3 = looksLikeEsp32S3(info);
 
         // Build display label
         QString label;

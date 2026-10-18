@@ -10,7 +10,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 
 | File | Goal | Effort | Needs |
 |---|---|---|---|
-| [esp32-port-and-firewall.md](esp32-port-and-firewall.md) | Knob manager stops writing to the first serial port it finds; Windows installer adds the adb firewall rule | S + S | real knob, Win11 VM |
+| [windows-adb-firewall.md](windows-adb-firewall.md) | Windows installer adds the adb firewall rule so the first QR pairing has no prompt | S | Win11 VM, a phone |
 | [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror starts fast, recovers cleanly, works beyond Samsung (items 1–6 are S) | S … L | desktop first, then phones |
 | [dashboards-roadmap.md](dashboards-roadmap.md) | Remove the Primitives Gallery, placeholder for too-new dashboards, then on-device checks | S, then checks | S22, Jeep |
 | [future-tests.md](future-tests.md) | Tests for volume routing, metadata sanitizing, settings round-trip, then bigger suites | S … L–XL | desktop |

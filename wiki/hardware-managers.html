@@ -211,7 +211,7 @@
           <ol class="steps">
             <li><code>connect_settings_manager()</code> wires the five <code>esp32*Changed</code> settings signals, reads <code>esp32VolumeStepSize</code>, and starts a <strong>3 s one-shot startup timer</strong>.</li>
             <li><code>initialConnect()</code> runs a scan. If <code>esp32VolumeEnabled</code> is false it stops here.</li>
-            <li>The port comes from <code>esp32VolumePort</code>. <strong>Only if that setting is empty</strong> does auto-selection happen: the detected ESP32-S3 port is saved via <code>save_esp32_volume_port()</code>; failing that, the first non-OBD port in the scan list is saved and used.</li>
+            <li>The port comes from <code>esp32VolumePort</code>. <strong>Only if that setting is empty</strong> does auto-selection happen: the detected ESP32-S3 port is saved via <code>save_esp32_volume_port()</code>. No other port is ever auto-selected: an earlier "first non-OBD port" fallback sent the knob's LED commands to a VM's COM1 / <code>ttyS0</code> and reported "Connected" with no knob attached.</li>
             <li>With a port, <code>connect_device()</code> is called; without one the detail becomes "No port configured - select one above".</li>
           </ol>
           <div class="info-box info">
@@ -228,7 +228,8 @@
             <li>Returns early if already connected, if there is no settings manager, or if <code>esp32VolumeEnabled</code> is false.</li>
             <li>Empty port &rarr; status <strong>"Not Configured"</strong>, detail "No port configured", and the 10 s background scan timer starts.</li>
             <li>Otherwise status <strong>"Connecting"</strong> ("Connecting to &lt;port&gt;...") and the port is opened.</li>
-            <li>Success &rarr; <strong>"Connected"</strong> ("Connected to ESP32 on &lt;port&gt;"), reconnect counter reset, read buffer cleared, keepalive timer started <em>only if</em> <code>esp32LedSleepEnabled</code> is false, background scan stopped.</li>
+            <li>Success, port is an ESP32-S3 (<code>looksLikeEsp32S3()</code>: VID 0x303A or a JTAG / ESP32-S3 description) &rarr; <strong>"Connected"</strong> ("Connected to ESP32 on &lt;port&gt;"), reconnect counter reset, read buffer cleared, keepalive timer started <em>only if</em> <code>esp32LedSleepEnabled</code> is false, background scan stopped.</li>
+            <li>Success, any other port (picked by hand) &rarr; <strong>"Waiting"</strong> ("Port &lt;port&gt; open: turn the knob to confirm"). The port is read but <code>is_connected()</code> stays false, so <code>send_volume_update</code> / <code>send_mute_state</code> / <code>send_theme_color</code> write nothing. The first recognised knob command (<code>+</code>, <code>-</code>, <code>+N</code>, <code>-N</code>, <code>M</code>, <code>P</code>) is acted on and switches it to "Connected", which makes <span class="file-path">src/main.cpp</span> push volume, mute and colour. The protocol has no reply command, so a knob turn is the only proof the port is the knob. Tested with a pty in <span class="file-path">tests/cpp/tst_esp32volumemanager.cpp</span>.</li>
             <li>Failure &rarr; <strong>"Error"</strong> ("Connection failed: &hellip;") and <code>scheduleReconnect()</code>.</li>
           </ol>
           <p>

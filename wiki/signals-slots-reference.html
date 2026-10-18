@@ -914,7 +914,7 @@
             <tr><td><code>disconnect_device()</code></td><td><code>void</code></td><td>Close the serial port</td></tr>
             <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>Scan and return port names</td></tr>
             <tr><td><code>get_ports_with_descriptions()</code></td><td><code>QString</code></td><td>JSON array of <code>{port, description, label, jtag}</code> for the settings picker (ESP32-S3 auto-detected via VID 303A; the port used by OBD is labelled)</td></tr>
-            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Serial link open</td></tr>
+            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Link verified: an ESP32-S3 port is open, or another port has sent a knob command (only then does the manager write)</td></tr>
             <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>Status text</td></tr>
             <tr><td><code>get_connection_detail()</code></td><td><code>QString</code></td><td>Detail text</td></tr>
             <tr><td><code>refresh_ports()</code></td><td><code>void</code></td><td>Rescan ports now</td></tr>

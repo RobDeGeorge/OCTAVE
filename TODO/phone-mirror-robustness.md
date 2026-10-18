@@ -6,7 +6,7 @@
 
 ## Why this is parked here
 
-Phone mirroring (`src/phone_mirror/scrcpyclient.{h,cpp}`, `src/managers/phonemirrormanager.{h,cpp}`, `frontend/PhoneMirrorView.qml`, server fork in `phone_server/`) was audited on 2026-10-17. The 0.9.5 pass fixed every gap a new user on a common setup hits first (that list is in `wiki/phone-mirror-android-auto.html`, "Errors and recovery"). None of the items below affect the Jeep's normal use (Orange Pi 5 Plus + S22/S26), only start-up time, other phone brands, or polish. Items 3–6 came from 0.9.5 RC testing (formerly `TODO/esp32-port-and-firewall.md (formerly 0.9.5-rc-followups.md)` items 7, 5, 6, 2).
+Phone mirroring (`src/phone_mirror/scrcpyclient.{h,cpp}`, `src/managers/phonemirrormanager.{h,cpp}`, `frontend/PhoneMirrorView.qml`, server fork in `phone_server/`) was audited on 2026-10-17. The 0.9.5 pass fixed every gap a new user on a common setup hits first (that list is in `wiki/phone-mirror-android-auto.html`, "Errors and recovery"). None of the items below affect the Jeep's normal use (Orange Pi 5 Plus + S22/S26), only start-up time, other phone brands, or polish. Items 3–6 came from 0.9.5 RC testing (formerly `TODO/windows-adb-firewall.md (formerly 0.9.5-rc-followups.md)` items 7, 5, 6, 2).
 
 Dropped on purpose: a manual fallback when QR pairing times out without mDNS / with AP isolation. The 120 s timeout with no fallback was a deliberate choice; the Avahi fallback stays Linux-only.
 

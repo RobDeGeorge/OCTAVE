@@ -116,8 +116,9 @@
         <div class="info-box info">
           <div class="info-box-title">First run: the port is picked for you</div>
           The <code>esp32VolumePort</code> setting defaults to <code>""</code> (empty), and an empty setting
-          means "auto-select": on the first start OCTAVE scans, saves the detected ESP32-S3 port and connects. Only override it
-          in the Volume Knob settings if the scan picked the wrong device (OCTAVE saves the choice and reconnects 500 ms later).
+          means "auto-select": on the first start OCTAVE scans, saves the detected ESP32-S3 port and connects. Only an ESP32-S3 is picked automatically; for any other USB-serial dongle choose the port
+          in the Volume Knob settings (OCTAVE saves the choice and reconnects 500 ms later). Such a port shows "turn the knob to confirm"
+          and gets no LED commands until the first knob turn or press arrives.
           A <code>settingsConfigure.json</code> written by an older build may still carry the former <code>"COM7"</code>
           default; clear or change it there once. From then on it connects 3 s after every launch.
         </div>

@@ -294,7 +294,7 @@ i2cdetect -y 2
         <h3>ESP32 volume knob not connecting</h3>
         <ul>
           <li>Confirm the ESP32-S3 dongle appears in <code>dmesg</code> after plugging in and that you are in <code>dialout</code>.</li>
-          <li>The knob's manager excludes the OBD adapter's port from its scan; <code>esp32VolumePort</code> defaults to empty, which means the ESP32-S3 is auto-selected at startup &mdash; set it manually (Volume Knob settings) only if auto-detection picks the wrong one. A settings file from an older build may still hold the former <code>"COM7"</code> default; clear it.</li>
+          <li>The knob's manager excludes the OBD adapter's port from its scan; <code>esp32VolumePort</code> defaults to empty, which means an ESP32-S3 is auto-selected at startup; no other port is. A dongle that isn't an ESP32-S3 has to be picked in the Volume Knob settings, and then shows "Port &hellip; open: turn the knob to confirm" until the first turn or press (nothing is written to it before that). A settings file from an older build may still hold the former <code>"COM7"</code> default; clear it.</li>
           <li>A dongle that disappears is detected on <code>QSerialPort</code>'s <code>ResourceError</code> / <code>DeviceNotFoundError</code> / <code>PermissionError</code> / <code>ReadError</code> / <code>WriteError</code> or a rejected keepalive write; with <code>esp32AutoReconnect</code> on it then retries five times.</li>
           <li>Baud rate is 115200. The reader is driven by <code>QSerialPort::readyRead</code>.</li>
         </ul>

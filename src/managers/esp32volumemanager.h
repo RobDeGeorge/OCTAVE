@@ -20,6 +20,7 @@ class SettingsManager;
 class ESP32VolumeManager : public QObject
 {
     Q_OBJECT
+    friend class TstEsp32VolumeManager;
 
     Q_PROPERTY(bool connected READ getConnected NOTIFY connectionStatusChanged)
     Q_PROPERTY(QString connectionStatus READ getConnectionStatusProp NOTIFY connectionStatusChanged)
@@ -45,6 +46,10 @@ public:
     // Longest partial line kept while waiting for its newline; longer is
     // dropped.
     static constexpr int ESP32_MAX_LINE_BYTES = 256;
+
+    // The knob's USB side: Espressif's VID (0x303A) or an ESP32-S3 / USB-JTAG
+    // description. Only such a port is auto-selected or trusted on open.
+    static bool looksLikeEsp32S3(const QSerialPortInfo &info);
 
 signals:
     // Connection signals
@@ -90,7 +95,10 @@ private:
     void scheduleReconnect();
     void attemptReconnect();
     void handleDisconnect();
-    void processCommand(const QString &command);
+    // True for a recognised knob command (+, -, +N, -N, M, P)
+    bool processCommand(const QString &command);
+    bool isEsp32S3Port(const QString &port) const;
+    void markKnobVerified();
     void sendPendingVolume();
     void sendKeepalive();
     // Writes to the port and checks the result; false means the write was
@@ -110,7 +118,9 @@ private:
 
     SettingsManager *m_settingsManager;
     QSerialPort *m_serialPort;
-    bool m_connected;
+    bool m_connected;      // link verified: the only state in which we write
+    bool m_awaitingKnob = false;  // port open, no knob command seen yet
+    QString m_openPort;
     QString m_connectionStatus;
     QString m_connectionDetail;
     QVariantList m_availablePorts;
