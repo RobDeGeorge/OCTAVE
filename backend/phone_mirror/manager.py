@@ -1320,8 +1320,11 @@ class PhoneMirrorManager(QObject):
     def _continue_start(self, prep: dict, generation: int):
         if generation != self._start_generation:
             return   # stopped (or restarted) meanwhile
-        self._is_starting = False
+        # _apply_probe emits deviceStateChanged, and the view answers a phone
+        # that is back by calling startScrcpy(): keep _is_starting set until
+        # after it, or that call starts a second session over this one
         self._apply_probe(prep["probe"])
+        self._is_starting = False
         serial = prep["serial"]
         if not serial:
             self.scrcpyError.emit(self._describe_problem(prep["probe"]["state"], prep["probe"]["rows"]))

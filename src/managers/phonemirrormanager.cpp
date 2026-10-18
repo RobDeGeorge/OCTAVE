@@ -758,8 +758,11 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
 {
     if (generation != m_startGeneration)
         return;   // stopped (or restarted) meanwhile
-    m_isStarting = false;
+    // applyProbe emits deviceStateChanged, and the view answers a phone that
+    // is back by calling startScrcpy(): keep m_isStarting set until after it,
+    // or that call starts a second session over this one
     applyProbe(prep.probe);
+    m_isStarting = false;
     if (prep.serial.isEmpty()) {
         emit scrcpyError(describeProblem(prep.probe.state, prep.probe.rows));
         return;

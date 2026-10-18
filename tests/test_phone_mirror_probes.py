@@ -272,3 +272,21 @@ def test_cable_pull_reattaches_over_wifi_to_the_same_phone(qapp, manager, monkey
     # Picking another phone never reattaches to this one's session
     manager.selectDevice(USB2)
     assert manager._persist_scid == ""
+
+
+def test_device_state_handler_cannot_start_a_second_session(qapp, manager, monkeypatch):
+    # PhoneMirrorView restarts the mirror from onDeviceStateChanged; the probe
+    # result applied inside _continue_start emits that signal, which must not
+    # start a second session over the one being started (seen on the Pi:
+    # two "Reattaching" starts 85 ms apart after a cable pull).
+    preps = []
+    monkeypatch.setattr(manager, "_run_probe_job", lambda job: preps.append(job))
+    monkeypatch.setattr(type(manager), "nativeAvailable", property(lambda self: True))
+    manager.deviceStateChanged.connect(lambda: manager.startScrcpy())
+    manager.startScrcpy()
+    assert len(preps) == 1
+    gen = manager._start_generation
+    prep = {"probe": {"rows": [(USB, "unauthorized")], "state": "unauthorized", "hint": "", "models": {}},
+            "serial": "", "sdk": 0}
+    manager._continue_start(prep, gen)
+    assert len(preps) == 1
