@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "year": 2003,
+    "model": "Jeep Wrangler TJ",
+    "trim": null
+  },
+  "confirmed_by_owner": {
+    "front_axle": "Dana 44",
+    "rear_axle": "Dana 44",
+    "lift_inches": 3.5,
+    "tire": {"brand": "BFGoodrich", "model": "All-Terrain T/A KO2", "nominal_diameter_inches": 31},
+    "shock": {"brand": "Fox", "model": null},
+    "wheel": {"brand": "Method", "diameter_inches": 16, "color": "black", "model": null},
+    "engine": {"displacement_litres": 4.0, "layout": "inline six", "modification": "stock"},
+    "transmission": {"type": "manual", "forward_gears": 5},
+    "top": {"type": "soft top", "style": null, "color": null}
+  },
+  "unconfirmed": {
+    "axle_ratio": null,
+    "axle_widths_and_hardpoints": null,
+    "lift_kit_and_suspension_geometry": null,
+    "lift_type_suspension_body_or_combination": null,
+    "shock_lengths_stroke_and_mounts": null,
+    "tire_full_size_and_loaded_radius": null,
+    "wheel_width_offset_and_backspacing": null,
+    "transmission_model": "NV3550 is an existing generator assumption",
+    "transfer_case_model": "NP231 is an existing generator assumption",
+    "body_color": "Silver is an existing generator assumption"
+  },
+  "known_generator_gaps": [
+    "Hardtop shell and hinged rear glass must be replaced with the specified soft-top structure and window mechanism.",
+    "Existing chassis does not implement the owner's 3.5-inch lift or articulated suspension.",
+    "Generic shock geometry is not a verified Fox model.",
+    "Generic eight-spoke rims are not a verified Method wheel model.",
+    "Existing 3.73 axle ratio is not owner-confirmed."
+  ]
+}

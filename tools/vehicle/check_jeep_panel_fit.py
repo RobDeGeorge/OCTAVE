@@ -5,13 +5,18 @@ Run with the builder's bpy Python after generating the editable .blend.
 
 from pathlib import Path
 import math
+import argparse
+import sys
 
 import bpy
 import bmesh
 from mathutils.bvhtree import BVHTree
 
 ROOT = Path(__file__).resolve().parents[2]
-bpy.ops.wm.open_mainfile(filepath=str(ROOT / "dev/jeep-tj-reference/jeep-tj-2003.blend"))
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--blend", type=Path, default=ROOT / "dev/jeep-tj-reference/jeep-tj-2003.blend")
+args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
+bpy.ops.wm.open_mainfile(filepath=str(args.blend.resolve()))
 names = (
     "Tub rear corner return",
     "Door aperture recessed flange",
