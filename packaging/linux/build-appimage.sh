@@ -34,7 +34,9 @@ echo "==> OCTAVE AppImage build (version=$VERSION)"
 
 # ---- 1. Configure + build ------------------------------------------------
 echo "==> Configuring CMake (Release)"
-cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release
+# OCTAVE_CMAKE_ARGS: extra configure flags (CI passes -DOCTAVE_REQUIRE_FFMPEG=ON)
+# shellcheck disable=SC2086
+cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release ${OCTAVE_CMAKE_ARGS:-}
 
 echo "==> Building"
 cmake --build "$BUILD_DIR" -j

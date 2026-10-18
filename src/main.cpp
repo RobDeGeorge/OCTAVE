@@ -430,6 +430,8 @@ int main(int argc, char *argv[])
     }
     if (smokeTest) {
         qInfo("Smoke test: Main.qml loaded, exiting in 5 s");
+        // CI greps this line: release builds must ship the phone-mirror decoder + adb
+        qInfo("Smoke test: phone mirror native: %d", int(phoneMirrorManager.nativeAvailable()));
         QTimer::singleShot(5000, &app, [&app]() { app.exit(0); });
     }
 

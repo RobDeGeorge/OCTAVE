@@ -80,11 +80,20 @@ endif()
 # ---- FFmpeg (libavcodec) for the built-in phone-mirror client ----
 # Optional: without it the C++ backend still builds and reports
 # phoneMirrorManager.nativeAvailable=false (docs/PHONE_MIRROR_NATIVE_PLAN.md).
+# Release CI passes -DOCTAVE_REQUIRE_FFMPEG=ON so a desktop build can't ship
+# without the decoder again (v0.9.4 Windows did, silently).
+option(OCTAVE_REQUIRE_FFMPEG "Fail configure when libavcodec/libavutil are missing" OFF)
 set(OCTAVE_HAVE_FFMPEG OFF)
 if(NOT ANDROID)
     if(WIN32)
-        find_package(FFMPEG QUIET)               # vcpkg: ffmpeg[avcodec,avutil]
-        if(FFMPEG_FOUND)
+        # vcpkg's FindFFMPEG wrapper prints the DLLs but leaves FFMPEG_FOUND
+        # false, so look the headers and import libs up directly (vcpkg's
+        # toolchain puts installed/<triplet>/{include,lib} on the search path).
+        find_path(FFMPEG_INCLUDE_DIRS libavcodec/avcodec.h)
+        find_library(FFMPEG_AVCODEC_LIBRARY NAMES avcodec)
+        find_library(FFMPEG_AVUTIL_LIBRARY NAMES avutil)
+        if(FFMPEG_INCLUDE_DIRS AND FFMPEG_AVCODEC_LIBRARY AND FFMPEG_AVUTIL_LIBRARY)
+            set(FFMPEG_LIBRARIES ${FFMPEG_AVCODEC_LIBRARY} ${FFMPEG_AVUTIL_LIBRARY})
             set(OCTAVE_HAVE_FFMPEG ON)
         endif()
     else()
@@ -95,6 +104,11 @@ if(NOT ANDROID)
     endif()
 endif()
 message(STATUS "Built-in phone mirror decoder (libavcodec): ${OCTAVE_HAVE_FFMPEG}")
+if(OCTAVE_REQUIRE_FFMPEG AND NOT OCTAVE_HAVE_FFMPEG)
+    message(FATAL_ERROR "OCTAVE_REQUIRE_FFMPEG is ON but libavcodec/libavutil were not found "
+                        "(Windows: vcpkg install ffmpeg[core,avcodec]; Debian/Ubuntu: libavcodec-dev libavutil-dev; "
+                        "macOS: brew install ffmpeg)")
+endif()
 
 # ---- Download feature flag ----
 # Desktop: default ON. Disable with `-DOCTAVE_ENABLE_DOWNLOADS=OFF` for app-store builds

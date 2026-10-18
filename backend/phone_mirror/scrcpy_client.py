@@ -254,6 +254,7 @@ class ScrcpyClient(QObject):
         self._frame_lock = threading.Lock()
         self._send_lock = threading.Lock()
         self._frame_count = 0
+        self._format_warned = False
         self.frameReady.connect(self._deliver_frame)
         # Audio: PCM from the audio socket, played through QAudioSink on the
         # GUI thread (QAudioSink is not thread-safe). Volume follows OCTAVE.
@@ -940,7 +941,14 @@ class ScrcpyClient(QObject):
                     data = pending_config + data
                     pending_config = b""
                 packet = av.Packet(data)
-                for frame in ctx.decode(packet):
+                try:
+                    frames = ctx.decode(packet)
+                except av.error.FFmpegError as e:
+                    # One bad packet (corrupt slice, garbage after a reconnect)
+                    # is skipped, as in the C++ client; the next key frame recovers
+                    logger.debug(f"scrcpy client: skipping undecodable packet ({size} bytes): {e}")
+                    continue
+                for frame in frames:
                     self._push_frame(frame)
                     if first:
                         first = False
@@ -956,8 +964,13 @@ class ScrcpyClient(QObject):
 
     def _push_frame(self, frame):
         """Convert a PyAV frame to a QVideoFrame (YUV420P, no RGB conversion)."""
-        if frame.format.name != "yuv420p":
-            frame = frame.reformat(format="yuv420p")
+        if frame.format.name not in ("yuv420p", "yuvj420p"):
+            # Dropped, as in the C++ client: the phone's H.264 encoders only emit
+            # 4:2:0, and a per-frame software reformat would stall the decoder
+            if not self._format_warned:
+                self._format_warned = True
+                logger.warning(f"scrcpy client: dropping {frame.format.name} frames (only YUV420P is shown)")
+            return
         w, h = frame.width, frame.height
         if (w, h) != (self._width, self._height):
             self._width, self._height = w, h

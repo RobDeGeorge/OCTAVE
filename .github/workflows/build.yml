@@ -98,7 +98,7 @@ jobs:
           cache: true
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DOCTAVE_REQUIRE_FFMPEG=ON
 
       - name: Build
         run: cmake --build build -j
@@ -228,7 +228,8 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" \
-            -DVCPKG_TARGET_TRIPLET=x64-windows
+            -DVCPKG_TARGET_TRIPLET=x64-windows \
+            -DOCTAVE_REQUIRE_FFMPEG=ON
 
       - name: Build
         run: cmake --build build --config Release -j
@@ -245,9 +246,12 @@ jobs:
           fi
           # Copy taglib + ffmpeg runtime DLLs alongside the .exe (vcpkg dynamic build).
           cp "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/tag.dll dist/OCTAVE/ 2>/dev/null || true
+          # avcodec/avutil are the phone-mirror decoder: a missing DLL fails the
+          # build (0.9.4 hid it with `|| true`). swresample is only present when
+          # vcpkg's feature set pulls it in, so it stays optional.
           cp "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/avcodec-*.dll \
-             "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/avutil-*.dll \
-             "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/swresample-*.dll dist/OCTAVE/ 2>/dev/null || true
+             "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/avutil-*.dll dist/OCTAVE/
+          cp "$VCPKG_INSTALLATION_ROOT"/installed/x64-windows/bin/swresample-*.dll dist/OCTAVE/ 2>/dev/null || true
           # adb next to the binary so phone mirroring needs no user install
           mkdir -p dist/OCTAVE/platform-tools
           cp tools/platform-tools/windows/* dist/OCTAVE/platform-tools/
@@ -296,7 +300,14 @@ jobs:
           }
           if (Test-Path $logs) { Get-ChildItem $logs | ForEach-Object { Write-Host "== $($_.Name)"; Get-Content $_.FullName -Tail 40 } }
           if (-not $ok -or $p.ExitCode -ne 0) { exit 1 }
-          Write-Host "Smoke test passed: the packaged app starts and loads Main.qml on a clean PATH"
+          # main.cpp logs "phone mirror native: 1" under --smoke when libavcodec
+          # is compiled in and the bundled adb is found.
+          $native = Select-String -Path (Join-Path $logs "octave-cpp.log") -Pattern "phone mirror native: (\d)" | Select-Object -Last 1
+          if (-not $native -or $native.Matches[0].Groups[1].Value -ne "1") {
+            Write-Host "::error::Phone mirror is not available in the packaged app (no libavcodec or no bundled adb)"
+            exit 1
+          }
+          Write-Host "Smoke test passed: the packaged app starts, loads Main.qml and has phone mirroring on a clean PATH"
 
       - name: Build Windows installer (Inno Setup)
         shell: pwsh
@@ -349,7 +360,7 @@ jobs:
         run: python3 scripts/fetch_platform_tools.py --os darwin
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_REQUIRE_FFMPEG=ON
 
       - name: Build
         run: cmake --build build -j
@@ -420,6 +431,7 @@ jobs:
           # so it picks up Qt 6 modules instead of any system Qt 5 stub.
           QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake6
           OCTAVE_VERSION: ${{ github.ref_name }}
+          OCTAVE_CMAKE_ARGS: -DOCTAVE_REQUIRE_FFMPEG=ON
         run: |
           python3 scripts/fetch_platform_tools.py --os linux
           bash packaging/linux/build-appimage.sh
@@ -477,6 +489,7 @@ jobs:
           # so it picks up Qt 6 modules instead of any system Qt 5 stub.
           QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake6
           OCTAVE_VERSION: ${{ github.ref_name }}
+          OCTAVE_CMAKE_ARGS: -DOCTAVE_REQUIRE_FFMPEG=ON
           # OCTAVE uses Qt's FFmpeg media backend; the arm64 Qt package's
           # GStreamer plugin needs libgstphotography, which jammy does not
           # ship, and linuxdeploy-plugin-qt aborts on the unresolved
