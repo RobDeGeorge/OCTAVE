@@ -1,3 +1,11 @@
+> [!IMPORTANT]
+> **This is the `python-final` branch: a frozen snapshot, not maintained.**
+> It is the last state of OCTAVE (2026-10-18, v0.9.5+) in which the Python / PySide6 backend
+> (`backend/`, `main.py`) matched the C++ backend feature for feature. After this point OCTAVE is
+> developed in C++ only on [`main`](https://github.com/RobDeGeorge/OCTAVE/tree/main), and the Python
+> backend there is frozen and will be removed. Fork this branch freely if you want a Python version;
+> issues and pull requests against it won't be picked up.
+
 <div align="center">
 
 # OCTAVE
