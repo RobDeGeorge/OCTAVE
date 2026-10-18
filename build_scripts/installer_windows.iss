@@ -62,7 +62,17 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
 
 [Run]
+; Allow the bundled adb through Windows Firewall on private networks, so the
+; first QR pairing (adb listens for the phone over mDNS) doesn't stop on an
+; "allow adb, Publisher: Unknown" prompt. Delete first so an upgrade doesn't
+; stack duplicate rules. Admin installs only: a per-user install can't change
+; the firewall and keeps the prompt.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OCTAVE adb"""; Flags: runhidden; Check: IsAdminInstallMode
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""OCTAVE adb"" dir=in action=allow program=""{app}\platform-tools\adb.exe"" profile=private enable=yes"; Flags: runhidden; Check: IsAdminInstallMode
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OCTAVE adb"""; Flags: runhidden; RunOnceId: "DeleteAdbFirewallRule"; Check: IsAdminInstallMode
 
 [UninstallDelete]
 ; Clean up user data on uninstall (optional - remove if you want to preserve settings)

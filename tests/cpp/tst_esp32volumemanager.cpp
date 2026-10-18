@@ -69,8 +69,10 @@ private slots:
 
         // A line that isn't a knob command proves nothing
         QVERIFY(::write(master, "hello\n", 6) == 6);
-        QTRY_COMPARE(mgr.m_readBuffer, QString());
+        QTest::qWait(150);   // long enough for readyRead to deliver the line
         QVERIFY(!mgr.is_connected());
+        QCOMPARE(mgr.get_connection_status(), QStringLiteral("Waiting"));
+        QCOMPARE(volume.count(), 0);
 
         // The first knob command verifies the link, and counts as a tick
         QVERIFY(::write(master, "+\n", 2) == 2);
