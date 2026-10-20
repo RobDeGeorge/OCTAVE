@@ -35,6 +35,15 @@ Item {
         ? settingsManager.get_setting_with_default("activeDashboard", "grid")
         : "grid"
 
+    // Dashboards only show against a live vehicle. Until obdManager reports
+    // a connection the page shows the connect prompt (parameterCardsEmpty)
+    // instead of whichever dashboard is active, swipe is off and the page
+    // dots are hidden. The active id is kept, so the same dashboard comes
+    // back the moment the adapter connects. The chooser stays reachable so
+    // dashboards can still be created and edited while parked offline.
+    readonly property bool obdConnected: typeof obdManager !== "undefined" && obdManager
+                                         && obdManager.connected === true
+
     // Dashboard registry — built-in "grid" (parameter-cards view in this
     // file) plus every JSON-defined dashboard enumerated by DashboardManager
     // (presets + user-authored files). Ids like "sport"/"minimal"/"fullgrid"
@@ -109,7 +118,7 @@ Item {
     // dir = +1 next, -1 previous; wraps around the registry.
     function swipeDashboard(dir) {
         var n = dashboardRegistry.length
-        if (n < 2) return
+        if (n < 2 || !obdConnected) return
         _swipeDir = dir
         swipeAnim.restart()
     }
@@ -278,7 +287,7 @@ Item {
     // it was visible. Hidden, the cards settle once to "--"; on return they
     // pick up the live values. On screen each card listens to its own value
     // (OBDParameterModel.valueHolder), not to every fold of paramValues.
-    readonly property bool _gridLive: activeDashboardId === "grid"
+    readonly property bool _gridLive: obdConnected && activeDashboardId === "grid"
         && (StackView.status === StackView.Active || StackView.status === StackView.Activating)
     
     // Parameter Cards = the connected vehicle's full PID list: every OBD
@@ -310,9 +319,9 @@ Item {
     readonly property bool _pageActiveForDemand:
         StackView.status === StackView.Active || StackView.status === StackView.Activating
     readonly property var _dashboardDemand:
-        (_pageActiveForDemand && activeDashboardId !== "grid") ? dashboardRenderer.paramIds : []
+        (_pageActiveForDemand && obdConnected && activeDashboardId !== "grid") ? dashboardRenderer.paramIds : []
     readonly property var _cardsDemand: {
-        if (!_pageActiveForDemand || activeDashboardId !== "grid") return [];
+        if (!_pageActiveForDemand || !obdConnected || activeDashboardId !== "grid") return [];
         return vehicleParameters.map(function(p) { return p.id; });
     }
     function _pushDemand(consumer, ids) {
@@ -350,7 +359,7 @@ Item {
             // where you are when swiping between dashboards.
             Row {
                 objectName: "dashboardPageDots"
-                visible: obdPage.dashboardRegistry.length > 1
+                visible: obdPage.obdConnected && obdPage.dashboardRegistry.length > 1
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: dp(5)
@@ -458,6 +467,8 @@ Item {
         // ── Dashboard renderer (visible only when a dashboard is active) ──
         // Takes a JSON spec (fetched from DashboardManager) and instantiates
         // widgets into a grid. Replaces the old per-dashboard QML loader.
+        // Hidden (and, through `spec`, unloaded) while no vehicle is
+        // connected: the connect prompt takes the page instead.
         Dashboards.DashboardRenderer {
             id: dashboardRenderer
             objectName: "activeDashboardRenderer"
@@ -472,7 +483,7 @@ Item {
                 topMargin: dp(6)
                 bottomMargin: dp(10)
             }
-            visible: obdPage.activeDashboardId !== "grid"
+            visible: obdPage.obdConnected && obdPage.activeDashboardId !== "grid"
             // Load the dashboard only while this is the active StackView page,
             // not merely `visible`: page pre-building draws this page once
             // offscreen (briefly visible), and a visible-keyed spec then
@@ -490,7 +501,7 @@ Item {
         Flickable {
             id: cardsScroll
             objectName: "parameterCardsScroll"
-            visible: obdPage.activeDashboardId === "grid"
+            visible: obdPage.obdConnected && obdPage.activeDashboardId === "grid"
             anchors {
                 top: obdHeader.bottom
                 left: parent.left
@@ -788,19 +799,21 @@ Item {
         }
         }   // cardsScroll
 
-        // ── Parameter Cards empty states ────────────────────────────────
-        // The page lists the connected vehicle's PIDs, so it is empty until
-        // a vehicle has answered the supported-PID scan.
+        // ── Empty states ────────────────────────────────────────────────
+        // With no adapter connected this replaces every dashboard (the
+        // connect prompt). Once connected it covers only Parameter Cards,
+        // which lists the vehicle's PIDs and so stays empty until the
+        // vehicle has answered the supported-PID scan.
         Column {
             objectName: "parameterCardsEmpty"
-            visible: obdPage.activeDashboardId === "grid" && obdPage.vehicleParameters.length === 0
+            visible: !obdPage.obdConnected
+                     || (obdPage.activeDashboardId === "grid" && obdPage.vehicleParameters.length === 0)
             anchors.centerIn: cardsScroll
             width: Math.min(cardsScroll.width - dp(40), dp(560))
             spacing: dp(10)
             transform: Translate { x: obdPage._swipeOffset }
 
-            readonly property bool _connected: typeof obdManager !== "undefined" && obdManager
-                                               && obdManager.connected === true
+            readonly property bool _connected: obdPage.obdConnected
 
             Text {
                 width: parent.width
@@ -889,7 +902,7 @@ Item {
             target: null
             xAxis.enabled: true
             yAxis.enabled: false
-            enabled: obdPage.dashboardRegistry.length > 1 && !swipeAnim.running
+            enabled: obdPage.obdConnected && obdPage.dashboardRegistry.length > 1 && !swipeAnim.running
             onTranslationChanged: if (active) obdPage._swipeOffset = translation.x
             onActiveChanged: {
                 if (active) return

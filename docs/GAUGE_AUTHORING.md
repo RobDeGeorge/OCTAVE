@@ -259,7 +259,7 @@ automatically look correct.
 
 ## 5. Recipe: add a new dashboard
 
-As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRenderer.qml` reads a spec and instantiates widgets into a grid. `OBDMenu.qml` hosts the renderer and a modal chooser popup; the active dashboard id persists under the `activeDashboard` setting. The default choice (`"grid"`) shows the built-in Parameter Cards view in `OBDMenu.qml` itself: one card for every PID the connected vehicle reported in this session's supported-PID scan (empty, with an explanatory message, until a vehicle answers). A horizontal swipe anywhere on the page cycles Parameter Cards and every dashboard (wrapping); page dots under the header show the position.
+As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRenderer.qml` reads a spec and instantiates widgets into a grid. `OBDMenu.qml` hosts the renderer and a modal chooser popup; the active dashboard id persists under the `activeDashboard` setting. The default choice (`"grid"`) shows the built-in Parameter Cards view in `OBDMenu.qml` itself: one card for every PID the connected vehicle reported in this session's supported-PID scan (empty, with an explanatory message, until a vehicle answers). A horizontal swipe anywhere on the page cycles Parameter Cards and every dashboard (wrapping); page dots under the header show the position. Nothing renders until `obdManager.connected` is true (`obdPage.obdConnected`): while disconnected the renderer is hidden with a `null` spec (widgets unloaded), swipe and the dots are off, and the page shows the "No vehicle connected" prompt with the connect button in place of the active dashboard. The chooser and editor still work offline.
 
 ### 5.1 Dashboard JSON schema (v1)
 
