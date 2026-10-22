@@ -90,122 +90,66 @@ Item {
     property real buttonPressedOpacity: 0.7
     property real buttonNormalOpacity: 1.0
 
-    property int duration: 0
+    // What is playing, whichever source has the media controls (the phone
+    // while mirroring, else local media): nowPlaying (C++) follows it, routes
+    // the controls and owns the phone's position clock
+    readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
+    readonly property bool usePhone: !!_np && _np.source === "phone"
+    readonly property bool devicePlaying: !!_np && _np.playing
+    readonly property string playIcon: devicePlaying ? "./assets/pause_button.svg" : "./assets/play_button.svg"
+    readonly property int duration: _np ? _np.durationMs : 0
     property int position: 0
     property bool userSeeking: false
-    property bool devicePlaying: false
-    function refreshDevicePlaying() {
-        if (phoneActive()) {
-            devicePlaying = phoneMirrorManager.mediaPlaying
-            return
-        }
-        devicePlaying = mediaManager ? mediaManager.is_playing() : false
-    }
-    Connections {
-        target: mediaManager
-        function onPlayStateChanged(playing) { if (!mediaRoom.phoneActive()) mediaRoom.devicePlaying = playing }
+    // Follow the source's position, except while the user drags, and not
+    // while hidden: this page is alive off-screen from startup, and 10 Hz
+    // ticks re-laid out the time text, slider and carousel for nothing on
+    // screen (~9% of a Pi core). Back on screen it catches up at once.
+    Binding {
+        target: mediaRoom
+        property: "position"
+        value: mediaRoom._np ? mediaRoom._np.positionMs : 0
+        when: mediaRoom.visible && !mediaRoom.userSeeking
+        restoreMode: Binding.RestoreNone
     }
 
-    // Phone mirror media: while the phone is playing (or played last), this
-    // room shows and drives the phone's media session (any app on the phone)
-    property bool usePhone: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null &&
-                            phoneMirrorManager.mediaActive
-    // Read the manager directly, not usePhone: signal handlers can run
-    // before the usePhone binding has caught up
-    function phoneActive() {
-        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.mediaActive
-    }
-    function playIconSource() {
-        var isPlaying = phoneActive() ? phoneMirrorManager.mediaPlaying
-                      : (mediaManager && mediaManager.is_playing())
-        return isPlaying ? "./assets/pause_button.svg" : "./assets/play_button.svg"
-    }
-    property string _phoneTrackKey: ""   // title + artist last shown, to spot a track change
-
+    // Track-change animation for a change made on the phone itself (local
+    // changes animate in onCurrentMediaChanged, with the carousel's
+    // bookkeeping). A source switch re-reads everything without animating.
+    property bool _skipTrackAnimation: false
     Connections {
-        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-        function onMediaActiveChanged(active) {
-            // Switching to or from the phone: re-read everything from the new source
-            mediaRoom._phoneTrackKey = ""
+        target: mediaRoom._np
+        function onSourceChanged() {
+            mediaRoom._skipTrackAnimation = true
             mainContent.syncNowPlaying()
-            playButtonImage.source = mediaRoom.playIconSource()
-            mediaRoom.refreshDevicePlaying()
         }
-        function onMediaChanged() {
-            if (!mediaRoom.phoneActive())
+        function onTrackChanged() {
+            if (mediaRoom._skipTrackAnimation) {
+                mediaRoom._skipTrackAnimation = false
                 return
-            playButtonImage.source = mediaRoom.playIconSource()
-            mediaRoom.devicePlaying = phoneMirrorManager.mediaPlaying
-            mediaRoom.duration = phoneMirrorManager.mediaDuration
-            var key = phoneMirrorManager.mediaTitle + "\n" + phoneMirrorManager.mediaArtist
-            if (key !== mediaRoom._phoneTrackKey) {
-                var first = mediaRoom._phoneTrackKey === ""
-                mediaRoom._phoneTrackKey = key
-                if (!userSeeking) {
-                    mediaRoom.position = phoneMirrorManager.mediaPosition()
-                    progressSlider.value = mediaRoom.position
-                }
-                if (mediaRoom._userInitiatedChange) {
-                    mediaRoom._userInitiatedChange = false   // the click handler animated already
-                } else if (!first) {
-                    mediaRoom.animateTrackChange()           // changed on the phone itself
-                }
-            } else if (!userSeeking) {
-                // A seek or play / pause: the phone's position is authoritative
-                mediaRoom.position = phoneMirrorManager.mediaPosition()
-                progressSlider.value = mediaRoom.position
             }
-        }
-    }
-
-    // The phone does not stream its position: read the extrapolated one
-    Timer {
-        interval: 500
-        repeat: true
-        running: mediaRoom.usePhone && mediaRoom.devicePlaying && mediaRoom.visible
-        onTriggered: {
-            if (!userSeeking) {
-                mediaRoom.position = phoneMirrorManager.mediaPosition()
-                progressSlider.value = mediaRoom.position
-            }
+            if (!mediaRoom.usePhone)
+                return
+            if (mediaRoom._userInitiatedChange)
+                mediaRoom._userInitiatedChange = false   // the click handler animated already
+            else
+                mediaRoom.animateTrackChange()
         }
     }
     readonly property bool showMusicDevice: App.MusicDevicePreference.enabled && App.MusicDevicePreference.isAvailable()
 
-    property bool isShuffleEnabled: false
+    // The phone's shuffle belongs to its app: off (and dimmed) meanwhile
+    readonly property bool isShuffleEnabled: !usePhone && !!_np && _np.shuffled
 
     // Empty playlist detection — drives download button vs controls swap
     property int localSongCount: 0
     property bool playlistEmpty: !usePhone && localSongCount === 0
 
-    // Track info: the phone while it has the controls, else local media
-    property string currentTrackName: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaTitle : "Phone"
-        }
-        return currentSongText.text ? (mediaManager ? mediaManager.get_display_name(currentSongText.text) : currentSongText.text.replace('.mp3', '')) : ""
-    }
-
-    property string currentArtist: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaArtist : "Nothing playing"
-        }
-        return currentSongText.text ? (mediaManager ? mediaManager.get_band(currentSongText.text) : "Unknown Artist") : "Unknown Artist"
-    }
-
-    property string currentAlbum: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaAlbum
-        }
-        return currentSongText.text ? (mediaManager ? mediaManager.get_album(currentSongText.text) : "Unknown Album") : "Unknown Album"
-    }
-
-    property string currentAlbumArt: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaArtUrl || "./assets/missing_art.png"
-        }
-        return currentSongText.text ? (mediaManager ? mediaManager.get_album_art(currentSongText.text) || "./assets/missing_art.png" : "./assets/missing_art.png") : "./assets/missing_art.png"
-    }
+    // Track info from nowPlaying (the phone while it has the controls, else
+    // local media); this page only picks the wording
+    property string currentTrackName: !_np ? "" : (_np.hasTrack ? _np.title : (usePhone ? "Phone" : ""))
+    property string currentArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (usePhone ? "Nothing playing" : "Unknown Artist"))
+    property string currentAlbum: !_np ? "" : (_np.hasTrack ? _np.album : (usePhone ? "" : "Unknown Album"))
+    property string currentAlbumArt: (_np && _np.artUrl) ? _np.artUrl : "./assets/missing_art.png"
 
     // Card stack -- peek at adjacent tracks
     property int _slideDirection: 1      // 1 = next (slide from right), -1 = prev (slide from left)
@@ -226,7 +170,7 @@ Item {
         interval: 0
         onTriggered: {
             var prevUrl = "", nextUrl = ""
-            if (mediaRoom.phoneActive()) {
+            if (mediaRoom.usePhone) {
                 // The phone reports only what is playing now: no side cards
             } else if (mediaManager) {
                 var arts = mediaManager.get_neighbor_album_arts()
@@ -389,19 +333,13 @@ Item {
 
         Component.onCompleted: syncNowPlaying()
 
+        // The carousel's local bookkeeping; what is playing comes from nowPlaying
         function syncNowPlaying() {
-            if (mediaRoom.phoneActive()) {
-                mediaRoom.duration = phoneMirrorManager.mediaDuration
-                mediaRoom.position = phoneMirrorManager.mediaPosition()
-                isShuffleEnabled = false   // the phone's shuffle belongs to its app
-            } else if (mediaManager) {
-                mediaRoom.duration = mediaManager.get_duration()
-                mediaRoom.position = mediaManager.get_position()
+            if (!mediaRoom.usePhone && mediaManager) {
                 var currentFile = mediaManager.get_current_file()
                 if (currentFile) {
                     currentSongText.text = currentFile
                 }
-                isShuffleEnabled = mediaManager.is_shuffled()
             }
             // Force initial evaluation of side card art
             sideCardRefreshTimer.restart()
@@ -769,11 +707,7 @@ Item {
                                     // Backend data arrives while card is still transparent.
                                     mediaRoom._userInitiatedChange = true
                                     mediaRoom.animateTrackChange()
-                                    if (mediaRoom.phoneActive()) {
-                                        phoneMirrorManager.mediaPrevious()
-                                    } else {
-                                        mediaManager.previous_track()
-                                    }
+                                    if (mediaRoom._np) mediaRoom._np.previous()
                                 }
                             }
                         }
@@ -804,7 +738,7 @@ Item {
                                     anchors.centerIn: parent
                                     width: parent.width
                                     height: parent.height
-                                    source: mediaRoom.playIconSource()
+                                    source: mediaRoom.playIcon
                                     sourceSize: Qt.size(width * 2, height * 2)
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
@@ -833,11 +767,7 @@ Item {
                                 anchors.fill: parent
                                 anchors.margins: -App.Spacing.mediaRoomBetweenButton / 2
                                 onClicked: {
-                                    if (mediaRoom.phoneActive()) {
-                                        phoneMirrorManager.mediaPlayPause()
-                                    } else {
-                                        mediaManager.toggle_play()
-                                    }
+                                    if (mediaRoom._np) mediaRoom._np.togglePlay()
                                 }
                             }
                         }
@@ -900,11 +830,7 @@ Item {
                                     mediaRoom._slideDirection = 1
                                     mediaRoom._userInitiatedChange = true
                                     mediaRoom.animateTrackChange()
-                                    if (mediaRoom.phoneActive()) {
-                                        phoneMirrorManager.mediaNext()
-                                    } else {
-                                        mediaManager.next_track()
-                                    }
+                                    if (mediaRoom._np) mediaRoom._np.next()
                                 }
                             }
                         }
@@ -1084,7 +1010,6 @@ Item {
                         anchors.fill: parent
                         active: mediaRoom.showMusicDevice
                         source: active ? "MusicDeviceScene.qml" : ""
-                        onLoaded: mediaRoom.refreshDevicePlaying()
                     }
                     Binding { target: musicDeviceLoader.item; property: "device"; value: App.MusicDevicePreference.mode; when: musicDeviceLoader.status === Loader.Ready }
                     Binding { target: musicDeviceLoader.item; property: "playing"; value: mediaRoom.devicePlaying; when: musicDeviceLoader.status === Loader.Ready }
@@ -1426,8 +1351,14 @@ Item {
                     Layout.fillWidth: true
                     from: 0
                     to: mediaRoom.duration > 0 ? mediaRoom.duration : 1
-                    value: mediaRoom.position
-                    enabled: mediaRoom.duration > 0
+                    enabled: mediaRoom.duration > 0 && !!mediaRoom._np && mediaRoom._np.canSeek
+                    // Follows the position, except while the user drags (a
+                    // plain value binding would break on the first touch)
+                    Binding on value {
+                        when: !mediaRoom.userSeeking
+                        value: mediaRoom.position
+                        restoreMode: Binding.RestoreNone
+                    }
                     
                     // Increase the implicit height to provide a larger touch area
                     implicitHeight: App.Spacing.mediaRoomProgressSliderHeight * 4 // Increased touch area height
@@ -1500,22 +1431,16 @@ Item {
                         anchors.bottomMargin: -dp(10)
 
                         onPressed: function(mouse) {
-                            // Calculate value based on mouse position
+                            // Pause the position binding first, then jump to the press point
+                            userSeeking = true
                             var newPos = Math.max(0, Math.min(1, (mouseX - progressSlider.leftPadding) / progressSlider.availableWidth))
                             progressSlider.value = progressSlider.from + newPos * (progressSlider.to - progressSlider.from)
                             progressSlider.pressed = true
-                            userSeeking = true
                             mouse.accepted = false  // Allow the event to propagate to the Slider
                         }
                         onReleased: function(mouse) {
+                            // onPressedChanged seeks (once: this used to seek too)
                             progressSlider.pressed = false
-                            userSeeking = false
-                            if (mediaRoom.phoneActive()) {
-                                phoneMirrorManager.mediaSeek(progressSlider.value)
-                            } else {
-                                mediaManager.set_position(progressSlider.value)
-                            }
-                            mediaRoom.position = progressSlider.value
                             mouse.accepted = false
                         }
                     }
@@ -1524,13 +1449,10 @@ Item {
                         if (pressed) {
                             userSeeking = true
                         } else {
-                            userSeeking = false
-                            if (mediaRoom.phoneActive()) {
-                                phoneMirrorManager.mediaSeek(value)
-                            } else {
-                                mediaManager.set_position(value)
-                            }
                             mediaRoom.position = value
+                            if (mediaRoom._np)
+                                mediaRoom._np.seek(value)
+                            userSeeking = false
                         }
                     }
 
@@ -1577,7 +1499,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: {
-                            if (mediaRoom.phoneActive())
+                            if (mediaRoom.usePhone)
                                 phoneMirrorManager.releaseMedia(true)
                         }
                     }
@@ -1628,8 +1550,8 @@ Item {
                 id: shuffleMouseArea
                 anchors.fill: parent
                 onClicked: {
-                    if (!mediaRoom.phoneActive())
-                        mediaManager.toggle_shuffle()
+                    if (mediaRoom._np)
+                        mediaRoom._np.toggleShuffle()   // does nothing for the phone
                 }
             }
         }
@@ -1654,37 +1576,9 @@ Item {
         target: mediaManager
         enabled: !usePhone
 
-        function onPlayStateChanged(playing) {
-            playButtonImage.source = playing ?
-                "./assets/pause_button.svg" : "./assets/play_button.svg"
-            if (playing) {
-                mediaRoom.duration = mediaManager.get_duration()
-                mediaRoom.position = mediaManager.get_position()
-            }
-        }
-
-        function onDurationChanged(duration) {
-            mediaRoom.duration = duration
-        }
-
-        function onPositionChanged(position) {
-            // Skip 10 Hz position ticks while hidden (this page is alive
-            // off-screen from startup): each one re-laid out the time text,
-            // moved the slider and the carousel, ~9% of a Pi core during
-            // playback for nothing on screen. StackView.onActivated ->
-            // syncNowPlaying() re-reads the position when the page returns.
-            if (!mediaRoom.visible)
-                return
-            if (!userSeeking) {
-                mediaRoom.position = position
-                progressSlider.value = position
-            }
-        }
-
+        // Play state, duration and position come from nowPlaying; this keeps
+        // the carousel and its track-change animation in step
         function onCurrentMediaChanged(filename) {
-            playButtonImage.source = "./assets/pause_button.svg"
-            mediaRoom.position = 0
-            progressSlider.value = 0
             currentSongText.text = filename
             sideCardRefreshTimer.restart()
 
@@ -1698,7 +1592,6 @@ Item {
             }
         }
         function onShuffleStateChanged(enabled) {
-            isShuffleEnabled = enabled
             // Shuffle reorders the playlist — neighbors changed
             sideCardRefreshTimer.restart()
         }
@@ -1719,7 +1612,7 @@ Item {
             themeSaved = false
             // Always extract fresh colors for the current song so the theme
             // matches what's playing now, not a stale previous extraction
-            if (mediaRoom.phoneActive()) {
+            if (mediaRoom.usePhone) {
                 if (mediaManager && phoneMirrorManager.mediaArtUrl)
                     mediaManager.extract_colors_from_image(phoneMirrorManager.mediaArtUrl)
             } else if (mediaManager) {

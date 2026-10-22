@@ -498,8 +498,9 @@
           <p><strong>QML</strong> reads what is playing from <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>, which
             follows the phone while <code>mediaActive</code> and local media otherwise. Position is not streamed by the phone:
             <code>nowPlaying</code> extrapolates <code>mediaPosition()</code> every 500 ms while the phone plays (one clock for
-            every view). The bottom bar, the home menu and the dashboard media widgets use it; Media Room and the media player
-            still read <code>phoneMirrorManager</code> directly until they move over.</p>
+            every view). Every view uses it; phone-only features still read <code>phoneMirrorManager</code>: the queue
+            (<code>MediaPlayer.qml</code>, shown while <code>nowPlaying.source</code> is the phone, following source changes while the
+            page is open) and Media Room's "Phone" pill (<code>releaseMedia(true)</code>).</p>
         </section>
 
         <section id="pm-persist">

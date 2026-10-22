@@ -221,6 +221,19 @@ Item {
     readonly property var phoneQueue: hasPhoneMirror ? phoneMirrorManager.mediaQueue : []
     readonly property bool phoneQueueAvailable: phoneQueue.length > 0
     property bool showingPhoneQueue: false
+    // The phone's queue is shown while the phone has the media controls
+    readonly property bool _phoneIsSource: typeof nowPlaying !== "undefined" && !!nowPlaying && nowPlaying.source === "phone"
+    function _pickQueue() {
+        showingPhoneQueue = phoneQueueAvailable && _phoneIsSource
+        if (showingPhoneQueue)
+            phoneQueueView.positionViewAtBeginning()
+    }
+    // Follow a source change while the page is open (the phone taking the
+    // controls, or a local track handing them back)
+    Connections {
+        target: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
+        function onSourceChanged() { mediaPlayer._pickQueue() }
+    }
     readonly property bool phoneQueueShown: showingPhoneQueue && phoneQueueAvailable
     readonly property var dropdownEntries: (phoneQueueAvailable ? [phoneQueueName] : []).concat(playlistNames)
 
@@ -268,9 +281,7 @@ Item {
     // work (playlists, current track, scroll position, album art) lives here
     // rather than in Component.onCompleted, which would only ever run once.
     StackView.onActivated: {
-        showingPhoneQueue = phoneQueueAvailable && phoneMirrorManager.mediaActive
-        if (showingPhoneQueue)
-            phoneQueueView.positionViewAtBeginning()
+        _pickQueue()
         if (mediaManager) {
             // Load playlist names
             playlistNames = mediaManager.get_playlist_names()
