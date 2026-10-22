@@ -124,7 +124,9 @@ public slots:
     Q_INVOKABLE void endTripNow();                 // split here; a new trip starts on the next RPM > 0
     Q_INVOKABLE void refresh();                    // re-list trips and storage
     Q_INVOKABLE void requestDetail(qint64 id);     // -> detailReady
-    Q_INVOKABLE void requestSeries(qint64 id, const QString &paramId, int maxPoints = 400);  // -> seriesReady
+    // -> seriesReady; fromS / toS (seconds since trip start, negative = whole trip) window the query
+    Q_INVOKABLE void requestSeries(qint64 id, const QString &paramId, int maxPoints = 400,
+                                   double fromS = -1, double toS = -1);
     Q_INVOKABLE void deleteTrip(qint64 id);
     Q_INVOKABLE void clearHistory();               // everything but the trip being recorded
     Q_INVOKABLE void exportTrip(qint64 id);        // copy CSV + JSON to Downloads -> exportFinished

@@ -454,11 +454,11 @@ void TripRecorder::requestDetail(qint64 id)
     onStore([id](TripStore *store) { store->tripDetail(id); });
 }
 
-void TripRecorder::requestSeries(qint64 id, const QString &paramId, int maxPoints)
+void TripRecorder::requestSeries(qint64 id, const QString &paramId, int maxPoints, double fromS, double toS)
 {
     if (id == m_tripId && m_tripOpen)
         flush();
-    onStore([id, paramId, maxPoints](TripStore *store) { store->series(id, paramId, maxPoints); });
+    onStore([id, paramId, maxPoints, fromS, toS](TripStore *store) { store->series(id, paramId, maxPoints, fromS, toS); });
 }
 
 void TripRecorder::deleteTrip(qint64 id)

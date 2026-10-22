@@ -72,8 +72,10 @@ public:
     // and `events` ([{t, kind, detail}]); emits detailReady().
     QVariantMap tripDetail(qint64 id);
     // Downsampled series of one parameter: [{t (s since start), v (avg), lo, hi}],
-    // at most `maxPoints` buckets. Emits seriesReady().
-    QVariantList series(qint64 id, const QString &paramId, int maxPoints);
+    // at most `maxPoints` buckets over the whole trip, or over the window
+    // [fromS, toS] (seconds since start; negative = unbounded) so a zoomed
+    // chart gets full detail. Emits seriesReady().
+    QVariantList series(qint64 id, const QString &paramId, int maxPoints, double fromS = -1, double toS = -1);
 
     // --- housekeeping ---
     bool deleteTrip(qint64 id);               // rows + files

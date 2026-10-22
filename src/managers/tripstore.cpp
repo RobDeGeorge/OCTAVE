@@ -716,7 +716,7 @@ QVariantMap TripStore::tripDetail(qint64 id)
     return detail;
 }
 
-QVariantList TripStore::series(qint64 id, const QString &param, int maxPoints)
+QVariantList TripStore::series(qint64 id, const QString &param, int maxPoints, double fromS, double toS)
 {
     QVariantList points;
     if (!isOpen())
@@ -736,11 +736,21 @@ QVariantList TripStore::series(qint64 id, const QString &param, int maxPoints)
         }
     }
     maxPoints = std::max(2, maxPoints);
-    const qint64 bucketMs = std::max<qint64>(1, (endMs - startMs) / maxPoints + 1);
+    // Window: clamp to the trip, keep at least one second
+    qint64 winStart = startMs;
+    qint64 winEnd = endMs;
+    if (fromS >= 0)
+        winStart = std::max(startMs, startMs + static_cast<qint64>(fromS * 1000.0));
+    if (toS >= 0)
+        winEnd = std::min(endMs, startMs + static_cast<qint64>(toS * 1000.0));
+    if (winEnd <= winStart)
+        winEnd = winStart + 1000;
+    const qint64 bucketMs = std::max<qint64>(1, (winEnd - winStart) / maxPoints + 1);
     Query q(m_db);
     if (q.prepare("SELECT ((ts_ms - ?) / ?) AS b, MIN(ts_ms), AVG(value), MIN(value), MAX(value) "
-                  "FROM samples WHERE trip_id = ? AND param_id = ? GROUP BY b ORDER BY b")) {
-        q.bind(1, startMs).bind(2, bucketMs).bind(3, id).bind(4, pid);
+                  "FROM samples WHERE trip_id = ? AND param_id = ? AND ts_ms >= ? AND ts_ms <= ? "
+                  "GROUP BY b ORDER BY b")) {
+        q.bind(1, winStart).bind(2, bucketMs).bind(3, id).bind(4, pid).bind(5, winStart).bind(6, winEnd);
         while (q.step()) {
             QVariantMap p;
             p[QStringLiteral("t")] = static_cast<double>(q.int64(1) - startMs) / 1000.0;

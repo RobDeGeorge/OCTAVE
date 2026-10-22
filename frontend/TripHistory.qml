@@ -37,6 +37,48 @@ Item {
     property var seriesPoints: []
     property string notice: ""
 
+    // Chart time window in seconds since trip start; -1 / -1 = the whole trip.
+    // Pinch, drag and wheel change it; every change re-queries the store for
+    // just that window (360 buckets), so zooming in reveals detail instead of
+    // stretching the overview.
+    property real viewFrom: -1
+    property real viewTo: -1
+    readonly property bool zoomed: viewFrom >= 0 || viewTo >= 0
+    readonly property real tripDurationS: {
+        if (detail && detail.durationS !== undefined && detail.durationS > 0) return detail.durationS
+        if (selectedTrip && selectedTrip.open) return Math.max(1, liveElapsedS)
+        return selectedTrip ? Math.max(1, selectedTrip.durationS || 1) : 1
+    }
+    onViewFromChanged: { seriesFetch.restart(); chart.requestPaint() }
+    onViewToChanged: { seriesFetch.restart(); chart.requestPaint() }
+    Timer {
+        id: seriesFetch
+        interval: 120
+        onTriggered: tripHistoryPage.fetchSeries()
+    }
+    function fetchSeries() {
+        if (!selectedTrip || selectedParam === "" || !available) return
+        tripRecorder.requestSeries(selectedTrip.id, selectedParam, 360, viewFrom, viewTo)
+    }
+    function resetWindow() { viewFrom = -1; viewTo = -1 }
+    // Set the visible window, clamped to the trip and never narrower than 5 s
+    function setWindow(from, to) {
+        var dur = tripDurationS
+        var span = Math.max(5, Math.min(dur, to - from))
+        from = Math.max(0, Math.min(from, dur - span))
+        to = from + span
+        if (from <= 0.01 && to >= dur - 0.01) { resetWindow(); return }
+        viewFrom = from
+        viewTo = to
+    }
+    // Zoom by `factor` (>1 in) keeping the time under `anchorFrac` (0..1 across the plot) fixed
+    function zoomAt(factor, anchorFrac) {
+        var from = zoomed ? viewFrom : 0, to = zoomed ? viewTo : tripDurationS
+        var anchorT = from + (to - from) * anchorFrac
+        var span = (to - from) / factor
+        setWindow(anchorT - span * anchorFrac, anchorT + span * (1 - anchorFrac))
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
     function fmtDuration(s) {
         s = Math.max(0, Math.round(s || 0))
@@ -74,19 +116,17 @@ Item {
     function paramDecimals(id) { return App.OBDParameterModel.decimalsFor ? App.OBDParameterModel.decimalsFor(id) : 1 }
 
     function selectTrip(item) {
-        if (!item) { selectedTrip = null; detail = {}; seriesPoints = []; return }
+        if (!item) { selectedTrip = null; detail = {}; seriesPoints = []; resetWindow(); return }
+        var changed = !selectedTrip || selectedTrip.id !== item.id
         selectedTrip = item
-        detail = {}
-        seriesPoints = []
+        if (changed) { detail = {}; seriesPoints = []; resetWindow() }
         tripRecorder.requestDetail(item.id)
-        if (selectedParam !== "")
-            tripRecorder.requestSeries(item.id, selectedParam, 360)
+        fetchSeries()
     }
     function selectParam(id) {
         selectedParam = id
         seriesPoints = []
-        if (selectedTrip)
-            tripRecorder.requestSeries(selectedTrip.id, id, 360)
+        fetchSeries()
     }
     // Keep the selection pointing at fresh list data (the live trip's sample
     // count moves; a deleted trip drops out)
@@ -556,39 +596,49 @@ Item {
                             property color axisColor: labelColor
                             property string font: globalFont
                             property int fontPx: Math.max(8, Math.round(App.Spacing.overallText * 0.6))
+                            // Plot rectangle, shared with the gesture handlers
+                            readonly property real plotLeft: fontPx * 3.4
+                            readonly property real plotRight: 6
+                            readonly property real plotWidth: Math.max(1, width - plotLeft - plotRight)
+                            readonly property real winFrom: tripHistoryPage.zoomed ? tripHistoryPage.viewFrom : 0
+                            readonly property real winTo: tripHistoryPage.zoomed ? tripHistoryPage.viewTo : tripHistoryPage.tripDurationS
 
                             onPointsChanged: requestPaint()
                             onWidthChanged: requestPaint()
                             onHeightChanged: requestPaint()
                             onLineColorChanged: requestPaint()
+                            onWinFromChanged: requestPaint()
+                            onWinToChanged: requestPaint()
 
                             onPaint: {
                                 var ctx = getContext("2d")
                                 ctx.reset()
                                 var pts = points || []
-                                var left = fontPx * 3.4, bottom = fontPx * 1.8, top = fontPx * 0.7, right = 6
+                                var left = plotLeft, bottom = fontPx * 1.8, top = fontPx * 0.7, right = plotRight
                                 var w = width - left - right, h = height - top - bottom
                                 if (w <= 10 || h <= 10) return
                                 ctx.font = fontPx + "px " + font
                                 ctx.fillStyle = axisColor
                                 ctx.strokeStyle = axisColor
                                 ctx.lineWidth = 1
-                                if (pts.length < 2) {
+                                var t0 = winFrom, t1 = Math.max(winFrom + 1, winTo)
+                                // Only the buckets inside the window set the value range
+                                var lo = Infinity, hi = -Infinity, shown = 0
+                                for (var i = 0; i < pts.length; i++) {
+                                    if (pts[i].t < t0 || pts[i].t > t1) continue
+                                    lo = Math.min(lo, pts[i].lo); hi = Math.max(hi, pts[i].hi); shown++
+                                }
+                                if (shown < 2) {
                                     ctx.textAlign = "center"
-                                    ctx.fillText(pts.length === 0 ? "No samples" : "Not enough samples", left + w / 2, top + h / 2)
+                                    ctx.textBaseline = "middle"
+                                    ctx.fillText(pts.length === 0 ? "No samples" : "Not enough samples here", left + w / 2, top + h / 2)
                                     return
                                 }
-                                var tMax = 0, lo = Infinity, hi = -Infinity
-                                for (var i = 0; i < pts.length; i++) {
-                                    tMax = Math.max(tMax, pts[i].t)
-                                    lo = Math.min(lo, pts[i].lo); hi = Math.max(hi, pts[i].hi)
-                                }
-                                if (tMax <= 0) tMax = 1
                                 var span = hi - lo
                                 if (span < 1e-6) { span = Math.max(1, Math.abs(hi) * 0.1); lo -= span / 2; hi += span / 2 }
                                 else { lo -= span * 0.05; hi += span * 0.05 }
                                 span = hi - lo
-                                var X = function(t) { return left + (t / tMax) * w }
+                                var X = function(t) { return left + ((t - t0) / (t1 - t0)) * w }
                                 var Y = function(v) { return top + h - ((v - lo) / span) * h }
 
                                 // Axes + grid
@@ -607,9 +657,15 @@ Item {
                                 ctx.textAlign = "center"
                                 ctx.textBaseline = "top"
                                 for (var x = 0; x <= 4; x++) {
-                                    var t = (tMax * x) / 4
+                                    var t = t0 + ((t1 - t0) * x) / 4
                                     ctx.fillText(tripHistoryPage.fmtClock(t), X(t), top + h + 4)
                                 }
+
+                                // Clip the traces to the plot so a window mid-fetch never spills over the axes
+                                ctx.save()
+                                ctx.beginPath()
+                                ctx.rect(left, top, w, h)
+                                ctx.clip()
 
                                 // Min–max band
                                 ctx.beginPath()
@@ -628,6 +684,85 @@ Item {
                                 ctx.lineWidth = 2
                                 ctx.lineJoin = "round"
                                 ctx.stroke()
+                                ctx.restore()
+                            }
+
+                            // ── Gestures: pinch to zoom, drag to pan, wheel to zoom, double-tap to reset ──
+                            property real _gestureFrom: 0
+                            property real _gestureTo: 0
+                            function _beginGesture() {
+                                _gestureFrom = winFrom
+                                _gestureTo = winTo
+                            }
+
+                            PinchHandler {
+                                id: pinch
+                                target: null
+                                minimumRotation: 0
+                                maximumRotation: 0
+                                onActiveChanged: if (active) chart._beginGesture()
+                                onActiveScaleChanged: {
+                                    if (!active) return
+                                    var span0 = chart._gestureTo - chart._gestureFrom
+                                    var frac = Math.max(0, Math.min(1, (centroid.pressPosition.x - chart.plotLeft) / chart.plotWidth))
+                                    var anchorT = chart._gestureFrom + span0 * frac
+                                    var span = span0 / Math.max(0.05, activeScale)
+                                    // Pan with the centroid too
+                                    var shift = -(centroid.position.x - centroid.pressPosition.x) / chart.plotWidth * span
+                                    tripHistoryPage.setWindow(anchorT - span * frac + shift, anchorT + span * (1 - frac) + shift)
+                                }
+                            }
+                            DragHandler {
+                                id: pan
+                                target: null
+                                xAxis.enabled: true
+                                yAxis.enabled: false
+                                enabled: tripHistoryPage.zoomed
+                                onActiveChanged: if (active) chart._beginGesture()
+                                onTranslationChanged: {
+                                    if (!active) return
+                                    var span = chart._gestureTo - chart._gestureFrom
+                                    var shift = -translation.x / chart.plotWidth * span
+                                    tripHistoryPage.setWindow(chart._gestureFrom + shift, chart._gestureTo + shift)
+                                }
+                            }
+                            WheelHandler {
+                                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                                onWheel: function(event) {
+                                    var frac = Math.max(0, Math.min(1, (point.position.x - chart.plotLeft) / chart.plotWidth))
+                                    tripHistoryPage.zoomAt(event.angleDelta.y > 0 ? 1.25 : 1 / 1.25, frac)
+                                }
+                            }
+                            TapHandler {
+                                onDoubleTapped: tripHistoryPage.resetWindow()
+                            }
+                        }
+
+                        // Window readout + reset, shown while zoomed
+                        Rectangle {
+                            visible: tripHistoryPage.zoomed
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: dp(10)
+                            anchors.bottomMargin: dp(10) + chart.fontPx * 2   // clear of the time labels
+                            radius: dpMin(6, 2)
+                            color: Qt.rgba(0, 0, 0, 0.45)
+                            border.color: accentColor
+                            border.width: 1
+                            implicitWidth: zoomText.implicitWidth + dp(16)
+                            implicitHeight: zoomText.implicitHeight + dp(8)
+                            Text {
+                                id: zoomText
+                                anchors.centerIn: parent
+                                text: fmtClock(tripHistoryPage.viewFrom) + " – " + fmtClock(tripHistoryPage.viewTo) + "   ✕"
+                                color: textColor
+                                font.pixelSize: App.Spacing.overallText * 0.65
+                                font.family: globalFont
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tripHistoryPage.resetWindow()
                             }
                         }
                     }

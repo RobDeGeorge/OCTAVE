@@ -158,6 +158,15 @@ private slots:
         QCOMPARE(series.first().toMap().value("t").toDouble(), 0.0);
         QVERIFY(series.last().toMap().value("hi").toDouble() == 140.0);
         QVERIFY(series.first().toMap().value("lo").toDouble() == 80.0);
+        // A zoomed window (20 s .. 30 s) gets its own buckets, all inside it
+        const QVariantList window = store.series(id, QStringLiteral("COOLANT_TEMP"), 50, 20.0, 30.0);
+        QVERIFY(window.size() >= 10);
+        for (const QVariant &p : window) {
+            const double t = p.toMap().value("t").toDouble();
+            QVERIFY2(t >= 20.0 && t <= 30.0, qPrintable(QString::number(t)));
+        }
+        QCOMPARE(window.first().toMap().value("lo").toDouble(), 100.0);
+        QCOMPARE(window.last().toMap().value("hi").toDouble(), 110.0);
 
         // Export copies both files
         const QString exported = store.exportTrip(id, m_tmp->path() + "/export");

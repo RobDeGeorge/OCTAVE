@@ -888,7 +888,7 @@
             <tr><td><code>endTripNow()</code></td><td><code>void</code></td><td>Close the open trip here (<code>trip_end</code> event "ended by user"); a new one starts on the next RPM &gt; 0</td></tr>
             <tr><td><code>refresh()</code></td><td><code>void</code></td><td>Re-list trips and storage</td></tr>
             <tr><td><code>requestDetail(qint64 id)</code></td><td><code>void</code></td><td>&rarr; <code>detailReady</code> with the full summary (<code>params</code>, <code>events</code>); live for the open trip</td></tr>
-            <tr><td><code>requestSeries(qint64 id, QString paramId, int maxPoints = 400)</code></td><td><code>void</code></td><td>&rarr; <code>seriesReady</code> with <code>[{t, v, lo, hi}]</code>: seconds since start, bucket average, min, max</td></tr>
+            <tr><td><code>requestSeries(qint64 id, QString paramId, int maxPoints = 400, double fromS = -1, double toS = -1)</code></td><td><code>void</code></td><td>&rarr; <code>seriesReady</code> with <code>[{t, v, lo, hi}]</code>: seconds since start, bucket average, min, max. <code>fromS</code> / <code>toS</code> (seconds since start, negative = whole trip) window the query so a zoomed chart gets <code>maxPoints</code> buckets over just that span</td></tr>
             <tr><td><code>deleteTrip(qint64 id)</code></td><td><code>void</code></td><td>Rows and files; the open trip is ended first</td></tr>
             <tr><td><code>clearHistory()</code></td><td><code>void</code></td><td>Everything but the trip being recorded</td></tr>
             <tr><td><code>exportTrip(qint64 id)</code></td><td><code>void</code></td><td>Copy the CSV + JSON into <code>Downloads/OCTAVE-trips/</code> &rarr; <code>exportFinished</code></td></tr>
