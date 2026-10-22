@@ -74,7 +74,7 @@
  |  +--------------------------------------------------------+  |
  +--------------------------------------------------------------+
  |  FolderListModel (assets/fonts) + dynamic FontLoaders         |
- |  Timers: navReloadTimer (150 ms), globalFlashTimer            |
+ |  Timers: navReloadTimer (150 ms)                              |
  +--------------------------------------------------------------+
 </pre>
         </div>
@@ -547,7 +547,6 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <li><strong>Orientation</strong> &mdash; <code>isVerticalLayout</code> from <code>bottomBarOrientation</code>.</li>
           <li><strong>Restore window state</strong> &mdash; fullscreen / maximized.</li>
           <li><strong>Custom-theme hot reload</strong> &mdash; connect <code>customThemesChanged</code>.</li>
-          <li><strong>Shift light</strong> &mdash; <code>loadShiftLightFlags()</code>, then connect <code>obdManager.rpmChanged</code> by hand.</li>
         </ol>
 
         <p>Fonts load independently, driven by the <code>FolderListModel</code>'s <code>onStatusChanged</code> / <code>onCountChanged</code>; the IMU gating handler runs from its own <code>Component.onCompleted</code>.</p>
