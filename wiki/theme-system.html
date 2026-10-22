@@ -197,9 +197,9 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
 
         <h3>Triggers</h3>
         <ul>
-          <li>Selecting the mode: <code>Main.qml onThemeSettingChanged</code> and the Display-page toggle both call <code>mediaManager.extract_colors_from_album_art(mediaManager.get_current_file())</code>. Inside the backend, <code>_on_theme_changed()</code> also sets <code>m_albumArtCaptureActive</code>.</li>
-          <li>Track change while active: <code>_on_media_changed_for_theme(filename)</code> re-extracts for the new local file.</li>
-          <li>Startup: a one-second timer (<code>_extract_colors_on_startup</code>) re-extracts for the restored track if the mode is active.</li>
+          <li>One rule, in <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a>: while <code>themeSetting</code> is "Album Art Capture", the colours follow the art of whatever is playing, the phone's while it has the media controls, else the local track's. It extracts when <code>nowPlaying.artUrl</code> changes (a new track, a source switch, the phone's art arriving after its metadata, the restored track at startup; the same art keeps the same colours, so nothing runs) and when the theme is chosen. Local art goes through <code>extract_colors_from_album_art(file)</code>, the phone's through <code>extract_colors_from_image(artUrl)</code>.</li>
+          <li>On demand: Media Room's "Save as Theme" popup calls <code>nowPlaying.extractArtColors()</code>.</li>
+          <li>Until open-backend #5 the rule lived in four places (MediaManager's own hooks and a startup timer, <code>Main.qml</code> twice, the Display-page toggle), so a theme switch extracted twice and the toggle ignored the phone.</li>
         </ul>
 
         <h3>Extraction Algorithm</h3>

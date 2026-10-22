@@ -518,10 +518,7 @@ Flickable {
                                 App.Style.lastStaticTheme = settingsManager.themeSetting
                             settingsManager.save_theme_setting("Album Art Capture")
                             App.Style.setTheme("Album Art Capture")
-                            if (typeof mediaManager !== "undefined" && mediaManager) {
-                                var f = mediaManager.get_current_file()
-                                if (f) mediaManager.extract_colors_from_album_art(f)
-                            }
+                            // nowPlaying (C++) extracts from the live source's art
                         } else {
                             var fallback = App.Style.lastStaticTheme || "CosmicVoyager"
                             settingsManager.save_theme_setting(fallback)

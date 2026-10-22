@@ -7,6 +7,7 @@
 
 class MediaManager;
 class PhoneMirrorManager;
+class SettingsManager;
 
 /**
  * @brief What is playing right now and the controls for it, whichever source
@@ -22,6 +23,10 @@ class PhoneMirrorManager;
  * It also holds the handoff rules: when the phone takes the controls local
  * playback pauses, and a local track starting hands them back (pausing the
  * phone). PhoneMirrorManager decides when the phone takes them.
+ *
+ * And the Album Art Capture rule: while that theme is selected, the colours
+ * follow the live source's art (extracted on an art change, a source switch,
+ * or the theme being chosen), whichever source it is.
  *
  * Registered in main.cpp as QML context property "nowPlaying".
  */
@@ -45,7 +50,8 @@ class NowPlaying : public QObject
 public:
     static constexpr int kPhoneTickMs = 500;
 
-    explicit NowPlaying(MediaManager *media, PhoneMirrorManager *phone, QObject *parent = nullptr);
+    explicit NowPlaying(MediaManager *media, PhoneMirrorManager *phone,
+                        SettingsManager *settings = nullptr, QObject *parent = nullptr);
 
     QString source() const { return m_phone ? QStringLiteral("phone") : QStringLiteral("local"); }
     bool isPhone() const { return m_phone; }
@@ -80,6 +86,10 @@ public slots:
     void seek(int positionMs);
     void toggleShuffle();   // no-op while the phone is the source
 
+    // Theme colours from the live source's art now, whatever the theme
+    // (Media Room's "save as theme" popup; the Album Art Capture rule)
+    void extractArtColors();
+
 private:
     void onSourceChanged();
     void readLocalTrack();
@@ -87,6 +97,7 @@ private:
     void readPhoneTrack();
     void tickPhone();
     void updateTick();
+    bool albumArtCapture() const;
 
     void setPlaying(bool v);
     void setTrack(bool has, const QString &title, const QString &artist, const QString &album);
@@ -98,6 +109,7 @@ private:
 
     MediaManager *m_media = nullptr;
     PhoneMirrorManager *m_phoneMirror = nullptr;
+    SettingsManager *m_settings = nullptr;
     bool m_phone = false;
     QString m_localFile;
 

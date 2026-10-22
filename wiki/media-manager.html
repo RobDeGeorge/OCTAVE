@@ -289,11 +289,10 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <h2 id="color-extraction">Color Extraction and Theming</h2>
         <p>
           When the "Album Art Capture" theme is active, MediaManager extracts dominant colors from the current cover
-          and generates a complete theme palette. It uses Qt's <code>QImage</code> only. The
-          triggers are the manager's own <code>currentMediaChanged</code>, SettingsManager's
-          <code>themeSettingChanged</code> switching to "Album Art Capture", a 1&nbsp;s startup timer when the theme is
-          already active, and explicit calls to the <code>extract_colors_from_album_art(filename)</code> slot from
-          <span class="file-path">Main.qml</span>.
+          and generates a complete theme palette. It uses Qt's <code>QImage</code> only. MediaManager does the
+          extraction; <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a> decides when (the
+          live source's art changed, or the theme was chosen) and calls <code>extract_colors_from_album_art(filename)</code>
+          for a local track or <code>extract_colors_from_image(url)</code> for the phone's art.
         </p>
 
         <h3>Extraction Pipeline</h3>
@@ -647,7 +646,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           <tbody>
             <tr><td><code>playbackStateChanged</code></td><td>int</td><td>Raw <code>QMediaPlayer</code> playback state, forwarded on every change: 0 stopped, 1 playing, 2 paused</td></tr>
             <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped; also drives the position timer and the analyzer's <code>set_active</code></td></tr>
-            <tr><td><code>currentMediaChanged</code></td><td>str</td><td>Filename of the now-playing (or restored) track; triggers colour extraction when Album Art Capture is active</td></tr>
+            <tr><td><code>currentMediaChanged</code></td><td>str</td><td>Filename of the now-playing (or restored) track (<code>nowPlaying</code> follows it, and through its art the Album Art Capture colours)</td></tr>
             <tr><td><code>mediaListChanged</code></td><td>list</td><td>New ordered file list after a playlist selection, shuffle toggle, strip or scan</td></tr>
             <tr><td><code>metadataChanged</code></td><td>str, str, str</td><td>Title, artist, album for the current track</td></tr>
             <tr><td><code>durationChanged</code></td><td>int</td><td>Track duration in milliseconds (from QMediaPlayer)</td></tr>

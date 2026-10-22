@@ -4,6 +4,8 @@
 // lived in QML. Drives the real PhoneMirrorManager through its state
 // reports and the real MediaManager through its signals.
 
+#include <QBuffer>
+#include <QImage>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -13,6 +15,7 @@
 #include "managers/mediamanager.h"
 #include "managers/nowplaying.h"
 #include "managers/phonemirrormanager.h"
+#include "managers/settingsmanager.h"
 
 namespace {
 QVariantMap phoneState(bool playing, const QString &title = "Song", qint64 positionMs = 1000)
@@ -150,7 +153,57 @@ private slots:
         QVERIFY(!phone.mediaActive());
     }
 
+    // ── Album Art Capture: the theme follows the live source's art ─────
+    // (was MediaManager for local tracks plus two copies in Main.qml for
+    // the phone, which extracted twice on a theme switch)
+
+    void themeFollowsThePhonesArt()
+    {
+        SettingsManager settings;
+        settings.save_theme_setting(QStringLiteral("Album Art Capture"));
+        MediaManager media;   // no settings manager: it reports by signal
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone, &settings);
+        QSignalSpy colors(&media, &MediaManager::albumColorsExtracted);
+
+        phone.onMediaState(phoneState(true));
+        phone.onMediaArt(redJpeg());
+        QVERIFY(!np.artUrl().isEmpty());
+        QTRY_COMPARE(colors.count(), 1);   // once, from the art change
+        QTest::qWait(100);
+        QCOMPARE(colors.count(), 1);
+    }
+
+    void noExtractionForOtherThemes()
+    {
+        SettingsManager settings;
+        settings.save_theme_setting(QStringLiteral("Midnight"));
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone, &settings);
+        QSignalSpy colors(&media, &MediaManager::albumColorsExtracted);
+        phone.onMediaState(phoneState(true));
+        phone.onMediaArt(redJpeg());
+        QTest::qWait(200);
+        QCOMPARE(colors.count(), 0);
+
+        // Switching the theme on picks up the art already showing
+        settings.save_theme_setting(QStringLiteral("Album Art Capture"));
+        QTRY_COMPARE(colors.count(), 1);
+    }
+
 private:
+    static QByteArray redJpeg()
+    {
+        QImage img(32, 32, QImage::Format_RGB32);
+        img.fill(QColor(200, 30, 30));
+        QByteArray bytes;
+        QBuffer buf(&bytes);
+        buf.open(QIODevice::WriteOnly);
+        img.save(&buf, "JPEG");
+        return bytes;
+    }
+
     std::unique_ptr<QTemporaryDir> m_tmp;
 };
 

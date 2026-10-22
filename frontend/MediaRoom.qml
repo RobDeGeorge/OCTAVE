@@ -1612,15 +1612,8 @@ Item {
             themeSaved = false
             // Always extract fresh colors for the current song so the theme
             // matches what's playing now, not a stale previous extraction
-            if (mediaRoom.usePhone) {
-                if (mediaManager && phoneMirrorManager.mediaArtUrl)
-                    mediaManager.extract_colors_from_image(phoneMirrorManager.mediaArtUrl)
-            } else if (mediaManager) {
-                var currentFile = mediaManager.get_current_file()
-                if (currentFile) {
-                    mediaManager.extract_colors_from_album_art(currentFile)
-                }
-            }
+            if (mediaRoom._np)
+                mediaRoom._np.extractArtColors()   // the phone's art or the local track's
         }
 
         background: Rectangle {

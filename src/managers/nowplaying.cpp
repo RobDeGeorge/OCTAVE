@@ -1,11 +1,13 @@
 #include "nowplaying.h"
 #include "mediamanager.h"
 #include "phonemirrormanager.h"
+#include "settingsmanager.h"
 
-NowPlaying::NowPlaying(MediaManager *media, PhoneMirrorManager *phone, QObject *parent)
+NowPlaying::NowPlaying(MediaManager *media, PhoneMirrorManager *phone, SettingsManager *settings, QObject *parent)
     : QObject(parent)
     , m_media(media)
     , m_phoneMirror(phone)
+    , m_settings(settings)
 {
     m_phoneTick.setInterval(kPhoneTickMs);
     connect(&m_phoneTick, &QTimer::timeout, this, &NowPlaying::tickPhone);
@@ -76,6 +78,37 @@ NowPlaying::NowPlaying(MediaManager *media, PhoneMirrorManager *phone, QObject *
     }
 
     onSourceChanged();
+
+    // Album Art Capture: the theme follows the art of whatever is playing.
+    // An art change covers a new track, a source switch and art arriving
+    // late (the phone sends it after the metadata); same art, same colours.
+    connect(this, &NowPlaying::artUrlChanged, this, [this] {
+        if (albumArtCapture())
+            extractArtColors();
+    });
+    if (m_settings) {
+        connect(m_settings, &SettingsManager::themeSettingChanged, this, [this] {
+            if (albumArtCapture())
+                extractArtColors();
+        });
+    }
+}
+
+bool NowPlaying::albumArtCapture() const
+{
+    return m_settings && m_settings->themeSetting() == QLatin1String("Album Art Capture");
+}
+
+void NowPlaying::extractArtColors()
+{
+    if (!m_media)
+        return;
+    if (m_phone) {
+        if (!m_artUrl.isEmpty())
+            m_media->extract_colors_from_image(m_artUrl);
+    } else if (!m_localFile.isEmpty()) {
+        m_media->extract_colors_from_album_art(m_localFile);
+    }
 }
 
 // ── source ─────────────────────────────────────────────────────────────

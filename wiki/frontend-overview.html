@@ -406,7 +406,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <!-- Album Art Capture -->
         <h2 id="album-art-capture">Album Art Capture Pipeline</h2>
 
-        <p>When the "Album Art Capture" theme is active, colors extracted from the current album art become the UI palette. Main.qml listens on three sources:</p>
+        <p>When the "Album Art Capture" theme is active, colors extracted from the current album art become the UI palette. The extraction is triggered in C++ (<code>nowPlaying</code> follows the live source's art, see <a href="theme-system.html#album-art-capture">Theme System</a>); Main.qml only applies the result and sets the transition length:</p>
 
         <pre><code><span class="cmt">// settingsManager.albumArtColorsChanged — reads the property, not the argument</span>
 <span class="kw">function</span> <span class="fn">onAlbumArtColorsChanged</span>(themeJson) {
@@ -415,14 +415,11 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 }
 <span class="cmt">// mediaManager.albumColorsExtracted</span>
 <span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) { App.Style.<span class="fn">updateAlbumArtTheme</span>(themeJson) }
-<span class="cmt">// Duration-based transition speed</span>
-<span class="kw">function</span> <span class="fn">onDurationChanged</span>(durationMs) {
-    <span class="kw">if</span> (settingsManager.songLengthTransition &amp;&amp; durationMs &gt; <span class="num">0</span>)
-        App.Style.colorTransitionMs = durationMs
-}
-<span class="cmt">// phoneMirrorManager: while the phone has the media controls, its art goes
-// through mediaManager.extract_colors_from_image(mediaArtUrl) (onMediaArtChanged /
-// onMediaActiveChanged) and its mediaDuration drives the transition speed</span></code></pre>
+<span class="cmt">// nowPlaying.durationChanged — "transition = song length", the live source's duration</span>
+<span class="kw">function</span> <span class="fn">onDurationChanged</span>() {
+    <span class="kw">if</span> (settingsManager.songLengthTransition &amp;&amp; nowPlaying.durationMs &gt; <span class="num">0</span>)
+        App.Style.colorTransitionMs = nowPlaying.durationMs
+}</code></pre>
 
         <p>At startup, if the saved theme is Album Art Capture and <code>settingsManager.albumArtColors</code> is non-empty, Main.qml primes <code>Style.updateAlbumArtTheme()</code> <em>before</em> <code>setThemeInstant()</code> so the placeholder palette never paints. Manual theme switches are always instant (<code>Style.setThemeInstant</code>); the transition duration only applies to album-art-driven shifts. The settings handler reads the <code>albumArtColors</code> property instead of using the signal argument.</p>
 
@@ -448,7 +445,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <p>A <code>Connections { target: settingsManager }</code> block keeps the window in sync with settings changed elsewhere:</p>
 
         <ul>
-          <li><code>onThemeSettingChanged</code> &mdash; <code>Style.setThemeInstant(newTheme)</code>; if the new theme is Album Art Capture and a local file is playing, <code>mediaManager.extract_colors_from_album_art(currentFile)</code>.</li>
+          <li><code>onThemeSettingChanged</code> &mdash; <code>Style.setThemeInstant(newTheme)</code> (Album Art Capture extraction is <code>nowPlaying</code>'s, in C++).</li>
           <li><code>onFontSettingChanged</code> &mdash; <code>Style.setFont(...)</code>.</li>
           <li><code>onSongLengthTransitionChanged</code> &mdash; when the feature is turned off, restore <code>Style.colorTransitionMs = settingsManager.colorTransitionMs</code>.</li>
           <li><code>onBottomBarOrientationChanged</code> &mdash; updates <code>isVerticalLayout</code> and <code>bottomBar.isVertical</code>, re-asserts <code>stackView.z = 1; bottomBar.z = 0</code>, and if the current page is Settings, restarts <code>navReloadTimer</code> (150&nbsp;ms), which <code>stackView.replace()</code>s the Settings page with a fresh instance on the same section (<code>pendingSection</code>).</li>

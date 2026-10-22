@@ -215,19 +215,8 @@ ApplicationWindow {
                 // Manual theme switch — instant, no fade.
                 App.Style.setThemeInstant(newTheme)
                 theme = newTheme
-
-                // If Album Art Capture is selected, extract colors from current song
-                // (the phone's, while the phone has the media controls)
-                if (newTheme === "Album Art Capture" && mediaManager) {
-                    if (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager.mediaActive
-                            && phoneMirrorManager.mediaArtUrl) {
-                        mediaManager.extract_colors_from_image(phoneMirrorManager.mediaArtUrl)
-                        return
-                    }
-                    var currentFile = mediaManager.get_current_file()
-                    if (currentFile)
-                        mediaManager.extract_colors_from_album_art(currentFile)
-                }
+                // Album Art Capture extracts in C++ (nowPlaying follows the
+                // live source's art, phone or local)
             }
         }
 
@@ -294,29 +283,15 @@ ApplicationWindow {
             App.Style.updateAlbumArtTheme(themeJson)
         }
 
-        function onDurationChanged(durationMs) {
-            if (settingsManager && settingsManager.songLengthTransition && durationMs > 0) {
-                App.Style.colorTransitionMs = durationMs
-            }
-        }
     }
 
-    // Phone media (phone mirror) for Album Art Capture: the phone's art drives
-    // the theme while the phone has the media controls
+    // "Theme transition = song length": the live source's duration (the
+    // phone's while it has the media controls)
     Connections {
-        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-
-        function applyPhoneArt() {
-            if (settingsManager && settingsManager.themeSetting === "Album Art Capture" && mediaManager
-                    && phoneMirrorManager.mediaActive && phoneMirrorManager.mediaArtUrl)
-                mediaManager.extract_colors_from_image(phoneMirrorManager.mediaArtUrl)
-        }
-        function onMediaArtChanged() { applyPhoneArt() }
-        function onMediaActiveChanged(active) { if (active) applyPhoneArt() }
-        function onMediaChanged() {
-            if (phoneMirrorManager.mediaActive && settingsManager && settingsManager.songLengthTransition
-                    && phoneMirrorManager.mediaDuration > 0)
-                App.Style.colorTransitionMs = phoneMirrorManager.mediaDuration
+        target: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
+        function onDurationChanged() {
+            if (settingsManager && settingsManager.songLengthTransition && nowPlaying.durationMs > 0)
+                App.Style.colorTransitionMs = nowPlaying.durationMs
         }
     }
 
@@ -531,7 +506,6 @@ ApplicationWindow {
                 delete _pageCache[qmlFile]
                 return page
             }
-
 
             // Different anchoring based on orientation
             anchors {
@@ -1164,38 +1138,6 @@ ApplicationWindow {
         if (settingsManager && newDeviceName.trim() !== "") {
             settingsManager.save_device_name(newDeviceName)
             deviceName = newDeviceName
-        }
-    }
-
-    function updateTheme(newTheme) {
-        console.warn("[AlbumArtCapture] updateTheme called with:", newTheme)
-        if (settingsManager) {
-            settingsManager.save_theme_setting(newTheme)
-            // Manual theme switch — instant, no fade.
-            App.Style.setThemeInstant(newTheme)
-            theme = newTheme
-
-            // If Album Art Capture is selected, immediately extract colors from current song
-            console.warn("[AlbumArtCapture] Checking if Album Art Capture, mediaManager exists:", typeof mediaManager)
-            if (newTheme === "Album Art Capture") {
-                try {
-                    if (mediaManager) {
-                        let currentFile = mediaManager.get_current_file()
-                        console.warn("[AlbumArtCapture] Theme selected, current file:", currentFile)
-                        if (currentFile) {
-                            console.warn("[AlbumArtCapture] Calling extract_colors_from_album_art now...")
-                            mediaManager.extract_colors_from_album_art(currentFile)
-                            console.warn("[AlbumArtCapture] Call completed")
-                        } else {
-                            console.warn("[AlbumArtCapture] No current file!")
-                        }
-                    } else {
-                        console.warn("[AlbumArtCapture] mediaManager is null/undefined!")
-                    }
-                } catch (e) {
-                    console.error("[AlbumArtCapture] Error:", e)
-                }
-            }
         }
     }
 

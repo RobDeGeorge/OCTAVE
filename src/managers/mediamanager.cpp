@@ -231,9 +231,6 @@ MediaManager::MediaManager(QObject *parent)
     m_metaStoreSaveTimer.setInterval(2000);
     connect(&m_metaStoreSaveTimer, &QTimer::timeout, this, &MediaManager::_save_meta_store);
     _load_display_names();
-
-    // Connect own signal for Album Art Capture theme updates
-    connect(this, &MediaManager::currentMediaChanged, this, &MediaManager::_on_media_changed_for_theme);
 }
 
 MediaManager::~MediaManager()
@@ -272,17 +269,8 @@ void MediaManager::setSettingsManager(SettingsManager *sm)
     // Restore last playback state after library is scanned
     QTimer::singleShot(500, this, &MediaManager::_restore_playback_state);
 
-    // Connect theme change
-    connect(m_settingsManager, &SettingsManager::themeSettingChanged,
-            this, &MediaManager::_on_theme_changed);
-
-    // Check if Album Art Capture is already active
-    m_albumArtCaptureActive = (m_settingsManager->themeSetting() == QStringLiteral("Album Art Capture"));
-
-    // If active on startup, trigger initial extraction after restore
-    if (m_albumArtCaptureActive) {
-        QTimer::singleShot(1000, this, &MediaManager::_extract_colors_on_startup);
-    }
+    // Album Art Capture (the theme following the playing art) is NowPlaying's
+    // rule: it knows whether the phone or this player is the source
 }
 
 // ─── Path safety ───────────────────────────────────────────────────
@@ -1411,8 +1399,9 @@ void MediaManager::extract_colors_from_album_art(const QString &filename)
         return;
     }
 
-    // Restoring playback and the 1 s startup timer both ask for the same file;
-    // one extraction is enough.
+    // NowPlaying can ask twice for one file within moments (a theme switch
+    // right after a track start); one extraction is enough. A "Save as Theme"
+    // within 2 s of a track change is skipped too: those colours are fresh.
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (filename == m_lastColorFile && now - m_lastColorMs < 2000)
         return;
@@ -1455,35 +1444,6 @@ void MediaManager::_apply_album_colors(const QString &themeJson, const QString &
     } else {
         emit albumColorsExtracted(themeJson);
         qCDebug(lcMedia) << "[AlbumArtCapture] Emitted via mediaManager for:" << filename;
-    }
-}
-
-// ─── Theme change handler ──────────────────────────────────────────
-
-void MediaManager::_on_theme_changed(const QString &theme)
-{
-    m_albumArtCaptureActive = (theme == QStringLiteral("Album Art Capture"));
-    if (m_albumArtCaptureActive) {
-        const QString currentFile = get_current_file();
-        if (!currentFile.isEmpty())
-            extract_colors_from_album_art(currentFile);
-    }
-}
-
-void MediaManager::_on_media_changed_for_theme(const QString &filename)
-{
-    if (m_albumArtCaptureActive && !filename.isEmpty()) {
-        qCDebug(lcMedia) << "[AlbumArtCapture] Media changed, extracting colors for:" << filename;
-        extract_colors_from_album_art(filename);
-    }
-}
-
-void MediaManager::_extract_colors_on_startup()
-{
-    if (m_albumArtCaptureActive) {
-        const QString currentFile = get_current_file();
-        if (!currentFile.isEmpty())
-            extract_colors_from_album_art(currentFile);
     }
 }
 

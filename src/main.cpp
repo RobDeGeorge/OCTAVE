@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
     // while mirroring, else OCTAVE's player); also the handoff between the two.
     // Outside the desktop block: on mobile the phone stub never takes them, so
     // the source is always local
-    NowPlaying nowPlaying(&mediaManager, &phoneMirrorManager);
+    NowPlaying nowPlaying(&mediaManager, &phoneMirrorManager, &settingsManager);
     ctx->setContextProperty("nowPlaying", &nowPlaying);
 
     // Register custom QML types for video embedding (stub types on mobile)

@@ -169,9 +169,6 @@ private slots:
     void _handle_player_error(QMediaPlayer::Error error, const QString &errorString);
     void _save_playback_state_now();
     void _precache_neighbors_start();
-    void _on_theme_changed(const QString &theme);
-    void _on_media_changed_for_theme(const QString &filename);
-    void _extract_colors_on_startup();
 
 private:
     // tests/cpp checks the cover cache directly
@@ -284,7 +281,6 @@ private:
     QHash<QString, int> m_accessCount;
 
     // Album Art Capture theme active state
-    bool m_albumArtCaptureActive = false;
 
     // Statistics cache
     struct StatsCache {
