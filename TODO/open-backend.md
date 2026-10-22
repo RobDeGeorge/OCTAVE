@@ -2,7 +2,7 @@
 
 **Goal:** make the C++ managers a documented, language-neutral service so that anyone can write an OCTAVE frontend in whatever language or toolkit they like, with the QML UI in `frontend/` becoming the reference client rather than the only one.
 
-**Status:** in progress (audit done 2026-10-21; #1–#8, #11 and #12 moved 2026-10-22)
+**Status:** in progress (audit done 2026-10-21; #1–#9, #11 and #12 moved 2026-10-22)
 **Last updated:** 2026-10-22
 
 This absorbed the earlier `backend-service-split.md` plan (2026-10-18), which was about running the managers as a separate process so a UI crash never stops the music. That benefit falls out of `--headless` once the contract exists, so the two plans are one; the process-specific constraints are in "Running the core as its own process" below.
@@ -55,11 +55,12 @@ Done: #3 dashboard spec rules. `DashboardManager::normalizeSpec` is the one set 
 
 Done: #12 pollers. `AudioAnalyzer` drives itself (`setViewActive` from the page; `setPlaying`, `set_live`, `setLocalFile`, `setPosition` fed in main.cpp from `nowPlaying` and `MediaManager`): local bars at each 100 ms position report (10 Hz, was a 60 Hz poll), phone audio every 50 ms (was 60 FFTs a second on the GUI thread), nothing while hidden, a new track decoded after the card animation (`tst_audioanalyzer`). `TripRecorder` has `currentTripElapsedS` (its 1 s tick) and `liveTripChanged` (after a flush, at most every 5 s), replacing Trip History's two timers (`tst_triprecorder`). `hasQuick3D` / `hasQuick3DAssetUtils` come from a `qmldir` check in main.cpp (`src/util/qmlmodules`, `tst_qmlmodules`) instead of SensorHome compiling `CarMenu.qml`; MusicDevicePreference keeps its load test (only it catches a missing assimp) but skips it when the modules are absent. From the octave-f4 audit. Still to check on the Pi: waveform CPU with local and phone playback, and the Sensors home on a box without qt6-quick3d. Seen in passing: a file QAudioDecoder rejects waits out the 30 s watchdog instead of failing at the error.
 
+Done: #9 JSON strings in QML (four commits). ESP32 `availablePorts` carries `{port, label, description, isEsp32S3}` (get_ports_with_descriptions gone); `obdSavedAdapters` is a list of `{name, mac}`; `albumArtColors` is the palette object and `customThemeData` every custom theme (get_custom_theme gone, save_custom_theme takes an object); `DownloadManager` publishes `searchResults` and `downloadQueue` as `VariantListModel`s (`src/util/variantlistmodel`), so a status change is one row update (searchResults(QString), downloadStatusChanged, download_song and get_download_queue gone; `download(songId, name)` uses the hit's row; `clear_finished_downloads()`). The settings file keeps every format byte for byte (tests pin it). From the octave-f4 audit. Not exercised in the app: an actual download through the new queue model (the search was; a download writes into the music library); it is pinned by `tst_downloadmanager`.
+
 ### Tables duplicated between QML and C++
 
 | # | Item | Where today | Target | Effort |
 |---|---|---|---|---|
-| 9 | **JSON strings parsed in QML.** `obdSavedAdapters` (three parse sites), custom themes (`get_custom_theme` per theme, twice), `albumArtColors`, download search results and per-download status patches, the ESP32 port list (`get_ports_with_descriptions` while a `QVariantList availablePorts` already exists). The download page rebuilds the whole queue and progress map from signals although `DownloadManager` keeps `m_downloadTasks` and nobody calls `get_download_queue()`. | `OBDAdapterSheet.qml:36`, `settings/OBDSettingsPage.qml:78, 896`, `Main.qml:124-132, 190-206`, `Style.qml:991-1028`, `DownloadPage.qml:107-222`, `settings/AccessoriesSettingsPage.qml:22-31` | Typed `QVariantList` / `QVariantMap` properties; two `QAbstractListModel`s on `DownloadManager` (search results, queue); delete the string getters. | M |
 | 10 | **Smaller duplicates.** Gesture names and action list (`AccessoriesSettingsPage.qml:36-46`, `gesturemanager.cpp:147`, `settingsmanager.cpp:294`); IMU id list (`Main.qml:971` vs `obdmanager.cpp:781`); connection-log ring buffer capped at 40 in `OBDHome.qml:49-51` and 60 in `OBDSettingsPage.qml:34-36`; OBD status classified by `indexOf("Connecting")` in `OBDSettingsPage.qml:54-60` and `widgets/OBDWidget.qml:384-390` with an 18-entry colour table keyed on exact strings; time formatting four ways (`MainMenu.qml:107`, `MediaRoom.qml:261`, `MusicDeviceScene.qml:37`, `DownloadPage.qml:958`) while `MediaManager::_format_duration` goes unused; heading-to-cardinal three times; mph→km/h in `CarMenu.qml:69`, °F and feet in `SensorMenu.qml:52-59`. | as listed | `GestureManager` exposes names/actions; `BerryIMUManager` takes consumer demand like OBD; `Q_PROPERTY(QStringList connectionLog)` on `OBDManager`; `Q_ENUM ConnectionState` on `OBDManager`; a `src/util/units.{h,cpp}` singleton (`cardinal`, `kphFromMph`, `fahrenheit`, `feet`, `mmss`) and a unit preference the catalog in #7 applies. | S each |
 
 ### Managers that leave their own job to the page
@@ -118,7 +119,7 @@ Never as one large update. Every item above can land as its own small change tha
 1. ~~The S items #1, #2, #4, #11~~ (all done 2026-10-22).
 2. ~~#7 and #8~~ (done 2026-10-22; Pi CPU comparison still to run).
 3. ~~#5 and #6~~ (done 2026-10-22; hardware checks listed in the Done notes).
-4. #9, #10, #13 as they come up (#3 and #12 done 2026-10-22); none blocks the bridge.
+4. #10, #13 as they come up (#3, #9 and #12 done 2026-10-22); none blocks the bridge.
 5. Contract steps 1–5, then 7 and 8.
 6. Contract step 6 (media streams) last, after a prototype.
 

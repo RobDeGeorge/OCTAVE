@@ -96,7 +96,7 @@ DownloadManager
             (<code>QStandardPaths::findExecutable</code>), then the application directory,
             <span class="file-path">/usr/local/bin</span>, <span class="file-path">/usr/bin</span> and
             <span class="file-path">~/.local/bin</span> (<code>yt-dlp.exe</code> variants on Windows). When nothing is found,
-            <code>search()</code> and <code>download_song()</code> emit "yt-dlp not found. Please install yt-dlp." On Android it
+            <code>search()</code> and <code>download()</code> emit "yt-dlp not found. Please install yt-dlp." On Android it
             returns the sentinel <code>jni://yt-dlp</code>.</p>
           <h3>Search helper</h3>
           <p>Search runs <span class="file-path">scripts/ytmusic_search.py</span> -- looked up at
@@ -120,7 +120,8 @@ DownloadManager
           <p>
             <code>downloadManager.search(query)</code> is called from the on-screen keyboard's search field. The manager emits
             <code>isSearchingChanged(true)</code>, <code>searchInProgress(true)</code> and <code>statusMessage("Searching: …")</code>,
-            reset pagination state, and end with <code>searchResults(jsonArray)</code>.
+            reset pagination state, and end by resetting the <code>searchResults</code> model from the new hits. The previous
+            results stay in the model while a new search runs.
           </p>
 
           <h3>Text Queries</h3>
@@ -158,8 +159,10 @@ DownloadManager
               folder (see <a href="#duplicate-detection">Duplicate Detection</a>).
             </li>
             <li>
-              <strong>Emit</strong> -- the JSON array goes out on <code>searchResults</code> and
-              <code>statusMessage("Showing N result(s)")</code>; the QML keeps the parsed array as its ListView model.
+              <strong>Publish</strong> -- the array is stored in <code>m_allResults</code>, and <code>_publishResults()</code>
+              resets the <code>searchResults</code> model from it (one row per hit) and re-applies the state of any download
+              still running, so a new search shows <code>is_downloading</code> / <code>progress</code> on rows already being
+              fetched. <code>statusMessage("Showing N result(s)")</code> follows; the page's ListView uses the model directly.
             </li>
           </ol>
 
@@ -176,9 +179,11 @@ DownloadManager
         <section id="download-pipeline">
           <h2>Download Pipeline</h2>
           <p>
-            Tapping a result calls <code>download_song(JSON.stringify(modelData))</code>; the error popup's "Retry" button
-            calls it again with the same JSON. The manager keys everything by <code>song_id</code> so retries and
-            duplicate taps are recognised.
+            Tapping a result calls <code>download(songId, name)</code>; the error popup's "Retry" button calls it again with
+            the same <code>songId</code>. <code>download()</code> looks the id up in the current results
+            (<code>m_allResults</code>) and queues the hit with its artist, album, cover and URL through
+            <code>_queueDownload()</code>; an id that is not among the results is downloaded by id, with the given name as
+            the title. The manager keys everything by <code>song_id</code> so retries and duplicate taps are recognised.
           </p>
 
           <ol class="steps">
@@ -218,8 +223,29 @@ DownloadManager
           <p>The class also exposes queue control: <code>cancel_download()</code> (kills the process
             and emits <code>downloadError(…, "Download cancelled")</code>), <code>pause_download()</code> /
             <code>resume_download()</code> (SIGSTOP / SIGCONT on Unix; kill-and-requeue on Windows; no-ops through the JNI
-            bridge), <code>get_download_queue()</code> and <code>clear_download_queue()</code>. None of these are called by
-            the current QML.</p>
+            bridge) and <code>clear_download_queue()</code> (cancels everything and empties the queue model). None of these
+            are called by the current QML; the queue panel's "Clear" button calls <code>clear_finished_downloads()</code>,
+            which drops complete and failed (including cancelled) rows from <code>downloadQueue</code> together with their
+            tasks.</p>
+
+          <h3 id="models">The two models</h3>
+          <p>Both lists the page shows are <code>VariantListModel</code>s
+            (<span class="file-path">src/util/variantlistmodel.{h,cpp}</span>): <code>QVariantMap</code> rows with one role per
+            key, a <code>count</code> property and a <code>get(row)</code> invokable. A field change is one
+            <code>dataChanged</code> on one row, so the ListView keeps its delegates and scroll position. The role keys are
+            listed in the <code>DownloadModels</code> namespace comment at the top of
+            <span class="file-path">downloadmanager.h</span>.</p>
+          <table>
+            <thead><tr><th>Model</th><th>Rows</th><th>Roles</th></tr></thead>
+            <tbody>
+              <tr><td><code>searchResults</code></td><td>One per search hit</td><td><code>song_id</code>, <code>name</code>, <code>artist</code>, <code>album_name</code>, <code>cover_url</code>, <code>url</code>, <code>duration</code>, <code>explicit</code>, <code>is_downloaded</code>, <code>downloaded_playlist</code>, <code>is_failed</code>, <code>error_message</code>, <code>file_path</code>, plus <code>is_downloading</code> / <code>progress</code> while a download of it runs</td></tr>
+              <tr><td><code>downloadQueue</code></td><td>One per download this session, oldest first</td><td><code>songId</code>, <code>songName</code> ("artist - name"), <code>artist</code>, <code>name</code>, <code>status</code> (<code>"downloading"</code> while queued, running or paused; <code>"complete"</code>; <code>"failed"</code>, including cancelled), <code>progress</code> (0-1), <code>errorMsg</code>, <code>filePath</code></td></tr>
+            </tbody>
+          </table>
+          <p><code>_syncTask(songId)</code> mirrors a <code>DownloadTask</code> into its <code>downloadQueue</code> row
+            (appending it the first time) and into its search row (<code>is_downloading</code>, <code>progress</code>,
+            <code>file_path</code>). It runs at every task state change: queue, start, progress, pause, cancel, complete and
+            fail. <code>tst_downloadmanager</code> covers both models.</p>
 
           <h3>Library refresh</h3>
           <p><span class="file-path">src/main.cpp</span> connects <code>downloadComplete</code> to a non-resetting <code>MediaManager.scan_library()</code>
@@ -248,12 +274,12 @@ Desktop                           Android
 
           <h3>In-Place Status Patching</h3>
           <p>
-            Instead of re-sending the whole result array, the manager emits
-            <code>downloadStatusChanged(song_id, field, value_json)</code> for <code>is_downloaded</code>,
-            <code>is_failed</code>, <code>error_message</code> and <code>status</code>. <code>_emitStatusPatch()</code> wraps the
-            value in a one-element <code>QJsonArray</code> and strips the brackets so booleans,
-            numbers, strings and null all arrive as valid JSON. The QML handler <code>JSON.parse</code>s it, patches the matching
-            row, re-assigns the array and restores <code>contentY</code> so the list does not jump.
+            <code>_emitStatusPatch()</code> sets <code>is_downloaded</code>, <code>is_failed</code>,
+            <code>error_message</code> and <code>status</code> on the matching entry in <code>m_allResults</code> (so a later
+            publish keeps it) and on its <code>searchResults</code> row with <code>setValue()</code>, which emits one
+            <code>dataChanged</code> for that row and role. The list is not rebuilt, so the page needs no scroll-position
+            save and restore. Until open-backend #9 the manager emitted a <code>downloadStatusChanged</code> JSON patch signal
+            that the QML parsed into a re-assigned JS array; it has been removed.
           </p>
         </section>
 
@@ -372,8 +398,8 @@ QString downloadPath = QDir(mediaFolder).filePath(subfolder);</code></pre>
             wherever they live. <code>hasStorageAccess()</code> / <code>requestStorageAccess()</code> are exposed to QML
             (the latter opens Android's per-app "All files access" settings screen, since this permission has no runtime
             dialog). <span class="file-path">DownloadPage.qml</span> routes every download (result row and the error-popup
-            retry) through its <code>startDownload(songJson)</code> function, which always calls
-            <code>download_song()</code> first: without All files access the file simply lands in the app-scoped folder,
+            retry) through its <code>startDownload(songId, songName)</code> function, which always calls
+            <code>download()</code> first: without All files access the file simply lands in the app-scoped folder,
             which the library scans. On Android it then shows a one-time status hint ("Saving inside OCTAVE's app folder.
             To download into your phone's Music folder, allow \"All files access\" for OCTAVE in Android settings"). Until
             v0.9.2 the first tap instead called <code>requestStorageAccess()</code>, jumped to the system settings page and
@@ -452,9 +478,10 @@ QString downloadPath = QDir(mediaFolder).filePath(subfolder);</code></pre>
             feature (disable for app store builds)" ON)</code> and forwards it as a compile definition. It is intended for builds that omit the downloading feature. Configure with
             <code>-DOCTAVE_ENABLE_DOWNLOADS=OFF</code> and <span class="file-path">downloadmanager.h</span> compiles a stub class
             that preserves the core download properties, signals and slots: <code>search()</code> emits
-            <code>searchError("Downloads disabled in this build")</code>, <code>download()</code> / <code>download_song()</code>
-            emit the same text through <code>downloadError</code>, everything else is a no-op and
-            <code>get_download_playlist()</code> returns <code>"Downloads"</code>. The stub omits <code>hasStorageAccess()</code> and <code>requestStorageAccess()</code>; the QML guards those optional methods.
+            <code>searchError("Downloads disabled in this build")</code>, <code>download()</code>
+            emits the same text through <code>downloadError</code>, everything else (including <code>clear_finished_downloads()</code>) is a
+            no-op, the <code>searchResults</code> and <code>downloadQueue</code> models exist with the same roles but stay
+            empty, and <code>get_download_playlist()</code> returns <code>"Downloads"</code>. The stub omits <code>hasStorageAccess()</code> and <code>requestStorageAccess()</code>; the QML guards those optional methods.
             The manager is still constructed and registered, and its <code>downloadsAvailable</code> property is <code>false</code>
             (<code>true</code> in the full class), which hides the download buttons in
             <span class="file-path">MediaRoom.qml</span> and <span class="file-path">MediaPlayer.qml</span> so a store build shows no download entry point. The whole
@@ -481,7 +508,6 @@ QString downloadPath = QDir(mediaFolder).filePath(subfolder);</code></pre>
               <tr><th>Signal</th><th>Parameters</th><th>Description</th></tr>
             </thead>
             <tbody>
-              <tr><td><code>searchResults</code></td><td><code>str</code> (JSON array)</td><td>Search results ready for display</td></tr>
               <tr><td><code>searchInProgress</code></td><td><code>bool</code></td><td>Search loading state</td></tr>
               <tr><td><code>searchError</code></td><td><code>str</code></td><td>Search failure message</td></tr>
               <tr><td><code>downloadStarted</code></td><td><code>str, str</code></td><td>song_id, display name -- download queued</td></tr>
@@ -489,7 +515,6 @@ QString downloadPath = QDir(mediaFolder).filePath(subfolder);</code></pre>
               <tr><td><code>downloadComplete</code></td><td><code>str, str</code></td><td>song_id, file path -- download finished (also triggers a library rescan)</td></tr>
               <tr><td><code>downloadError</code></td><td><code>str, str, str</code></td><td>song_id, display name, error message (also used for cancellation)</td></tr>
               <tr><td><code>downloadQueueChanged</code></td><td>--</td><td>Queue state changed: emitted when queued work is added, removed or completed</td></tr>
-              <tr><td><code>downloadStatusChanged</code></td><td><code>str, str, str</code></td><td>song_id, field, value_json -- targeted patch</td></tr>
               <tr><td><code>statusMessage</code></td><td><code>str</code></td><td>General status text for the page footer</td></tr>
               <tr><td><code>isSearchingChanged</code></td><td><code>bool</code></td><td>Search state property changed</td></tr>
               <tr><td><code>activeDownloadsChanged</code></td><td><code>int</code></td><td>Active download count changed</td></tr>
@@ -509,6 +534,8 @@ QString downloadPath = QDir(mediaFolder).filePath(subfolder);</code></pre>
               <tr><td><code>activeDownloads</code></td><td><code>int</code></td><td><code>activeDownloadsChanged</code></td><td>Number of queued + in-progress downloads</td></tr>
               <tr><td><code>downloadPath</code></td><td><code>str</code></td><td>constant</td><td>Current download directory (computed on read)</td></tr>
               <tr><td><code>downloadsAvailable</code></td><td><code>bool</code></td><td>constant</td><td><code>false</code> only in the <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> stub; QML hides download buttons on it</td></tr>
+              <tr><td><code>searchResults</code></td><td><code>QAbstractListModel*</code></td><td>constant</td><td>One row per search hit (see <a href="#models">The two models</a>); reset when a search finishes, patched per row</td></tr>
+              <tr><td><code>downloadQueue</code></td><td><code>QAbstractListModel*</code></td><td>constant</td><td>One row per download this session, oldest first; the Download page's queue panel</td></tr>
             </tbody>
           </table>
         </section>
@@ -524,10 +551,10 @@ QString downloadPath = QDir(mediaFolder).filePath(subfolder);</code></pre>
               <tr><td><code>search(query)</code></td><td><code>str</code></td><td>Search YouTube Music by text</td></tr>
               <tr><td><code>search_more()</code></td><td>--</td><td>Emits "All results shown" (no QML caller since the "Load More Results" footer was removed)</td></tr>
               <tr><td><code>next_search_page()</code></td><td>--</td><td>Same as <code>search_more()</code></td></tr>
-              <tr><td><code>download_song(song_json)</code></td><td><code>str</code></td><td>Download a single song from its result JSON</td></tr>
-              <tr><td><code>download(song_id, name)</code></td><td><code>str, str</code></td><td>Convenience wrapper that builds minimal JSON and calls <code>download_song()</code></td></tr>
+              <tr><td><code>download(song_id, name)</code></td><td><code>str, str</code></td><td>Queue a search hit (its <code>searchResults</code> row supplies the details); an unknown id downloads by id with <code>name</code> as the title</td></tr>
               <tr><td><code>cancel_download(id)</code>, <code>pause_download(id)</code>, <code>resume_download(id)</code></td><td><code>str</code></td><td>Queue control (not used by QML)</td></tr>
-              <tr><td><code>get_download_queue()</code>, <code>clear_download_queue()</code></td><td>-- / --</td><td>Snapshot of <code>DownloadTask</code>s as maps; cancel everything</td></tr>
+              <tr><td><code>clear_download_queue()</code></td><td>--</td><td>Cancel everything and empty <code>downloadQueue</code></td></tr>
+              <tr><td><code>clear_finished_downloads()</code></td><td>--</td><td>Remove complete / failed (incl. cancelled) rows from <code>downloadQueue</code> and their tasks</td></tr>
               <tr><td><code>set_download_playlist(name)</code></td><td><code>str</code></td><td>Set (or clear, with an empty string) the target subfolder</td></tr>
               <tr><td><code>get_download_playlist()</code></td><td>-- (returns <code>str</code>)</td><td>Effective target playlist name</td></tr>
               <tr><td><code>connect_settings_manager(sm)</code></td><td><code>QObject</code></td><td>Wire the settings manager (called from the entry point)</td></tr>
@@ -564,12 +591,12 @@ QString downloadPath = QDir(mediaFolder).filePath(subfolder);</code></pre>
             whereas ytmusicapi returns songs with real album art -- and on Android it answers in "~1-2s" instead of spinning
             up yt-dlp. Desktop runs the same script through <code>python3</code>, so both platforms share one result shape;
             the yt-dlp path survives only as a desktop fallback.</p>
-          <h3>Song IDs as the identity, patches instead of re-emits</h3>
+          <h3>Song IDs as the identity, row patches instead of rebuilds</h3>
           <p>Commit <code>9573c7b</code> reworked downloads "to use unique song IDs instead of display names": every signal
             and every internal map is keyed by the YouTube video ID, so two results with the same title cannot collide and a
-            retry addresses the same row. The <code>downloadStatusChanged</code> patch signal exists so a status flip does not
-            rebuild the QML ListView (source comment: "patch without full re-emit"), and the QML side restores the scroll
-            position for the same reason.</p>
+            retry addresses the same row. Results and the queue are list models patched row by row, so a status flip or a
+            progress tick is one <code>dataChanged</code> and does not rebuild the QML ListView or move its scroll
+            position.</p>
           <h3>A shared filename contract</h3>
           <p>The <code>%(artist,uploader)s - %(title)s.%(ext)s</code> output template is fixed on purpose (comment in
             <code>_startNextDownload()</code>): <code>MediaManager.play_downloaded_song()</code> and the duplicate check above

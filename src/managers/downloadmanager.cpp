@@ -72,6 +72,8 @@ const QStringList DownloadManager::s_audioExtensions = {
 
 DownloadManager::DownloadManager(QObject *parent)
     : QObject(parent)
+    , m_searchModel(new VariantListModel(DownloadModels::searchKeys(), this))
+    , m_queueModel(new VariantListModel(DownloadModels::queueKeys(), this))
     , m_networkManager(new QNetworkAccessManager(this))
 {
     connect(m_networkManager, &QNetworkAccessManager::finished,
@@ -398,8 +400,7 @@ void DownloadManager::search(const QString &query)
         m_allResults = results;
         m_searchOffset = results.size();
 
-        QJsonDocument doc(m_allResults);
-        emit searchResults(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+        _publishResults();
         emit statusMessage(QStringLiteral("Showing %1 result(s)").arg(m_allResults.size()));
     });
     const QString q = trimmed;
@@ -505,8 +506,7 @@ void DownloadManager::_onSearchProcessFinished(int exitCode, QProcess::ExitStatu
     m_allResults = results;
     m_searchOffset = results.size();
 
-    QJsonDocument doc(m_allResults);
-    emit searchResults(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    _publishResults();
     emit statusMessage(QStringLiteral("Showing %1 result(s)").arg(m_allResults.size()));
 }
 
@@ -654,19 +654,24 @@ void DownloadManager::_markDownloaded(QJsonArray &results)
 
 void DownloadManager::download(const QString &songId, const QString &songName)
 {
-    // Build a minimal JSON and delegate to download_song
+    // The search hit's details (artist, album, cover, url) when it is one
+    for (const QJsonValue &v : std::as_const(m_allResults)) {
+        const QJsonObject hit = v.toObject();
+        if (!songId.isEmpty() && hit.value(QStringLiteral("song_id")).toString() == songId) {
+            _queueDownload(hit);
+            return;
+        }
+    }
     QJsonObject obj;
     obj.insert(QStringLiteral("song_id"), songId);
     obj.insert(QStringLiteral("name"), songName);
     obj.insert(QStringLiteral("artist"), QString());
     obj.insert(QStringLiteral("url"),
                QStringLiteral("https://music.youtube.com/watch?v=") + songId);
-
-    QJsonDocument doc(obj);
-    download_song(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    _queueDownload(obj);
 }
 
-void DownloadManager::download_song(const QString &jsonString)
+void DownloadManager::_queueDownload(const QJsonObject &songData)
 {
     QString ytDlp = _findYtDlp();
     if (ytDlp.isEmpty()) {
@@ -676,16 +681,6 @@ void DownloadManager::download_song(const QString &jsonString)
         return;
     }
 
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(jsonString.toUtf8(), &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        qCWarning(lcDownload) << "Invalid song JSON:" << parseError.errorString();
-        emit downloadError(QString(), QStringLiteral("Unknown"),
-                           QStringLiteral("Invalid song data: ") + parseError.errorString());
-        return;
-    }
-
-    QJsonObject songData = doc.object();
     QString songId = songData.value(QStringLiteral("song_id")).toString();
     QString name = songData.value(QStringLiteral("name")).toString();
     QString artist = songData.value(QStringLiteral("artist")).toString();
@@ -724,6 +719,7 @@ void DownloadManager::download_song(const QString &jsonString)
         m_downloadQueue.enqueue(songId);
     }
 
+    _syncTask(songId);
     emit statusMessage(QStringLiteral("Queuing download: ") + displayName);
     emit downloadStarted(songId, displayName);
     emit downloadQueueChanged();
@@ -759,6 +755,8 @@ void DownloadManager::cancel_download(const QString &songId)
             ? task.songName
             : (task.artist + QStringLiteral(" - ") + task.songName);
         task.status = QStringLiteral("cancelled");
+        task.errorMessage = QStringLiteral("Download cancelled");
+        _syncTask(songId);
 
         // A song waiting on its cover art already left the active count
         // when its yt-dlp process finished; _finishDownload drops its file.
@@ -796,6 +794,7 @@ void DownloadManager::pause_download(const QString &songId)
 #endif
         if (m_downloadTasks.contains(songId)) {
             m_downloadTasks[songId].status = QStringLiteral("paused");
+            _syncTask(songId);
         }
         _emitStatusPatch(songId, QStringLiteral("status"), QStringLiteral("paused"));
         emit statusMessage(QStringLiteral("Download paused"));
@@ -862,11 +861,13 @@ void DownloadManager::_startNextDownload()
         }
 
         task.status = QStringLiteral("downloading");
+        _syncTask(songId);
 
         QString ytDlp = _findYtDlp();
         if (ytDlp.isEmpty()) {
             task.status = QStringLiteral("error");
             task.errorMessage = QStringLiteral("yt-dlp not found");
+            _syncTask(songId);
             emit downloadError(songId, task.songName, task.errorMessage);
             m_activeDownloads = qMax(0, m_activeDownloads - 1);
             emit activeDownloadsChanged(m_activeDownloads);
@@ -1023,6 +1024,7 @@ void DownloadManager::_onDownloadReadyReadStdout()
         if (progress >= 0.0f) {
             if (m_downloadTasks.contains(songId)) {
                 m_downloadTasks[songId].progress = progress;
+                _syncTask(songId);
             }
             emit downloadProgress(songId, progress);
         }
@@ -1086,6 +1088,7 @@ void DownloadManager::_pollMobileProgress()
         // Monotonic: don't regress if the poll caught a stale value.
         if (progress > task.progress) {
             task.progress = progress;
+            _syncTask(songId);
             emit downloadProgress(songId, progress);
         }
     }
@@ -1140,6 +1143,7 @@ void DownloadManager::_onDownloadProcessFinished(int exitCode, QProcess::ExitSta
         QString errorMsg = QStringLiteral("Download failed (exit code %1)").arg(exitCode);
         task.status = QStringLiteral("error");
         task.errorMessage = errorMsg;
+        _syncTask(songId);
         QString displayName = task.artist.isEmpty()
             ? task.songName
             : (task.artist + QStringLiteral(" - ") + task.songName);
@@ -1277,6 +1281,7 @@ void DownloadManager::_onDownloadProcessError(QProcess::ProcessError error)
         DownloadTask &task = m_downloadTasks[songId];
         task.status = QStringLiteral("error");
         task.errorMessage = QStringLiteral("Failed to start yt-dlp process");
+        _syncTask(songId);
         QString displayName = task.artist.isEmpty()
             ? task.songName
             : (task.artist + QStringLiteral(" - ") + task.songName);
@@ -1337,6 +1342,8 @@ void DownloadManager::_finishDownload(const QString &songId, const QString &file
     DownloadTask &task = it.value();
     task.status = QStringLiteral("complete");
     task.filePath = finalPath;
+    task.progress = 1.0f;
+    _syncTask(songId);
 
     QString displayName = task.artist.isEmpty()
         ? task.songName
@@ -1357,6 +1364,7 @@ void DownloadManager::_failDownload(const QString &songId, const QString &errorM
     DownloadTask &task = m_downloadTasks[songId];
     task.status = QStringLiteral("error");
     task.errorMessage = errorMsg;
+    _syncTask(songId);
     QString displayName = task.artist.isEmpty()
         ? task.songName
         : (task.artist + QStringLiteral(" - ") + task.songName);
@@ -1569,26 +1577,6 @@ void DownloadManager::_embedCoverArt(const QString &filePath, const QByteArray &
 // Queue management
 // ═══════════════════════════════════════════════════════════════════
 
-QVariantList DownloadManager::get_download_queue()
-{
-    QVariantList list;
-    for (auto it = m_downloadTasks.constBegin(); it != m_downloadTasks.constEnd(); ++it) {
-        const DownloadTask &task = it.value();
-        QVariantMap item;
-        item.insert(QStringLiteral("song_id"), task.songId);
-        item.insert(QStringLiteral("name"), task.songName);
-        item.insert(QStringLiteral("artist"), task.artist);
-        item.insert(QStringLiteral("album_name"), task.albumName);
-        item.insert(QStringLiteral("cover_url"), task.coverUrl);
-        item.insert(QStringLiteral("progress"), static_cast<double>(task.progress));
-        item.insert(QStringLiteral("status"), task.status);
-        item.insert(QStringLiteral("error_message"), task.errorMessage);
-        item.insert(QStringLiteral("file_path"), task.filePath);
-        list.append(item);
-    }
-    return list;
-}
-
 void DownloadManager::clear_download_queue()
 {
     // Cancel all active downloads
@@ -1598,13 +1586,31 @@ void DownloadManager::clear_download_queue()
     }
 
     m_downloadQueue.clear();
+    const QStringList ids = m_downloadTasks.keys();
     m_downloadTasks.clear();
     m_downloadStdout.clear();
+    m_queueModel->reset({});
+    for (const QString &id : ids)
+        _syncTask(id);   // no task: the search row stops showing a download
 
     m_activeDownloads = 0;
     emit activeDownloadsChanged(0);
     emit downloadQueueChanged();
     emit statusMessage(QStringLiteral("Download queue cleared"));
+}
+
+void DownloadManager::clear_finished_downloads()
+{
+    for (int row = m_queueModel->rowCount() - 1; row >= 0; --row) {
+        const QString status = m_queueModel->get(row).value(QStringLiteral("status")).toString();
+        if (status != QLatin1String("complete") && status != QLatin1String("failed"))
+            continue;
+        const QString songId = m_queueModel->get(row).value(QStringLiteral("songId")).toString();
+        m_queueModel->remove(row);
+        // A finished task is only history; a retry starts a new one
+        m_downloadTasks.remove(songId);
+    }
+    emit downloadQueueChanged();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1647,7 +1653,8 @@ void DownloadManager::_emitStatusPatch(const QString &songId, const QString &fie
         return;
     }
 
-    // Update the stored result in m_allResults
+    // The stored result in m_allResults (a later search re-reads it) and its
+    // row in the model: one dataChanged, the view keeps its place
     for (int i = 0; i < m_allResults.size(); ++i) {
         QJsonObject obj = m_allResults[i].toObject();
         if (obj.value(QStringLiteral("song_id")).toString() == songId) {
@@ -1656,19 +1663,58 @@ void DownloadManager::_emitStatusPatch(const QString &songId, const QString &fie
             break;
         }
     }
+    m_searchModel->setValue(m_searchModel->indexOf(QStringLiteral("song_id"), songId), field, value);
+}
 
-    // Emit the targeted patch as a single JSON value. QJsonDocument's top
-    // level only supports object/array, so wrap the scalar in a one-element
-    // array and strip the brackets — that way bools, ints, doubles, strings,
-    // and null all serialize uniformly to valid JSON the QML JSON.parse()
-    // receiver can consume.
-    QJsonArray arr;
-    arr.append(QJsonValue::fromVariant(value));
-    QString jsonStr = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
-    if (jsonStr.startsWith(QLatin1Char('[')) && jsonStr.endsWith(QLatin1Char(']'))) {
-        jsonStr = jsonStr.mid(1, jsonStr.length() - 2);
+void DownloadManager::_publishResults()
+{
+    QList<QVariantMap> rows;
+    rows.reserve(m_allResults.size());
+    for (const QJsonValue &v : std::as_const(m_allResults))
+        rows.append(v.toObject().toVariantMap());
+    m_searchModel->reset(rows);
+    for (auto it = m_downloadTasks.constBegin(); it != m_downloadTasks.constEnd(); ++it)
+        _syncTask(it.key());
+}
+
+void DownloadManager::_syncTask(const QString &songId)
+{
+    if (songId.isEmpty())
+        return;
+    const auto it = m_downloadTasks.constFind(songId);
+    const int resultRow = m_searchModel->indexOf(QStringLiteral("song_id"), songId);
+    if (it == m_downloadTasks.constEnd()) {
+        m_searchModel->update(resultRow, {{QStringLiteral("is_downloading"), false},
+                                          {QStringLiteral("progress"), 0.0}});
+        return;
     }
-    emit downloadStatusChanged(songId, field, jsonStr);
+    const DownloadTask &task = it.value();
+    const bool running = task.status == QLatin1String("queued") || task.status == QLatin1String("downloading")
+                         || task.status == QLatin1String("paused");
+    QVariantMap result{{QStringLiteral("is_downloading"), running},
+                       {QStringLiteral("progress"), double(task.progress)}};
+    if (!task.filePath.isEmpty())
+        result.insert(QStringLiteral("file_path"), task.filePath);
+    m_searchModel->update(resultRow, result);
+
+    const QString status = task.status == QLatin1String("complete") ? QStringLiteral("complete")
+                           : (task.status == QLatin1String("error") || task.status == QLatin1String("cancelled"))
+                               ? QStringLiteral("failed")
+                               : QStringLiteral("downloading");
+    const QVariantMap row{{QStringLiteral("songId"), task.songId},
+                          {QStringLiteral("songName"), task.artist.isEmpty()
+                               ? task.songName : task.artist + QStringLiteral(" - ") + task.songName},
+                          {QStringLiteral("artist"), task.artist},
+                          {QStringLiteral("name"), task.songName},
+                          {QStringLiteral("status"), status},
+                          {QStringLiteral("progress"), double(task.progress)},
+                          {QStringLiteral("errorMsg"), task.errorMessage},
+                          {QStringLiteral("filePath"), task.filePath}};
+    const int queueRow = m_queueModel->indexOf(QStringLiteral("songId"), songId);
+    if (queueRow < 0)
+        m_queueModel->append(row);
+    else
+        m_queueModel->update(queueRow, row);
 }
 
 // ═══════════════════════════════════════════════════════════════════

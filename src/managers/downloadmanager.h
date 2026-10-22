@@ -6,6 +6,36 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include "../util/variantlistmodel.h"
+
+// The two lists the download page shows, as models (one role per key) so a
+// status change updates one row in place:
+//   searchResults - one row per search hit: song_id, name, artist, album_name,
+//     cover_url, url, duration, explicit, is_downloaded, downloaded_playlist,
+//     is_failed, error_message, file_path, plus is_downloading / progress
+//     while a download of it runs
+//   downloadQueue - one row per download this session, oldest first: songId,
+//     songName ("artist - name"), artist, name, status ("downloading" while
+//     queued, running or paused, "complete", "failed" incl. cancelled),
+//     progress (0-1), errorMsg, filePath
+namespace DownloadModels {
+inline QStringList searchKeys()
+{
+    return {QStringLiteral("song_id"), QStringLiteral("name"), QStringLiteral("artist"),
+            QStringLiteral("album_name"), QStringLiteral("cover_url"), QStringLiteral("url"),
+            QStringLiteral("duration"), QStringLiteral("explicit"), QStringLiteral("is_downloaded"),
+            QStringLiteral("downloaded_playlist"), QStringLiteral("is_failed"),
+            QStringLiteral("error_message"), QStringLiteral("file_path"),
+            QStringLiteral("is_downloading"), QStringLiteral("progress")};
+}
+inline QStringList queueKeys()
+{
+    return {QStringLiteral("songId"), QStringLiteral("songName"), QStringLiteral("artist"),
+            QStringLiteral("name"), QStringLiteral("status"), QStringLiteral("progress"),
+            QStringLiteral("errorMsg"), QStringLiteral("filePath")};
+}
+} // namespace DownloadModels
+
 #ifdef OCTAVE_ENABLE_DOWNLOADS
 
 #include <QProcess>
@@ -47,6 +77,7 @@ struct DownloadTask {
 class DownloadManager : public QObject
 {
     Q_OBJECT
+    friend class TstDownloadManager;
 
     Q_PROPERTY(bool isSearching READ isSearching NOTIFY isSearchingChanged)
     Q_PROPERTY(int activeDownloads READ activeDownloads NOTIFY activeDownloadsChanged)
@@ -54,6 +85,9 @@ class DownloadManager : public QObject
     // False only in the stub below (OCTAVE_ENABLE_DOWNLOADS=OFF, app-store
     // builds); QML hides every download entry point on it.
     Q_PROPERTY(bool downloadsAvailable READ downloadsAvailable CONSTANT)
+    // See DownloadModels above
+    Q_PROPERTY(QAbstractListModel *searchResults READ searchResults CONSTANT)
+    Q_PROPERTY(QAbstractListModel *downloadQueue READ downloadQueue CONSTANT)
 
 public:
     explicit DownloadManager(QObject *parent = nullptr);
@@ -64,6 +98,8 @@ public:
     int activeDownloads() const;
     QString downloadPath() const;
     bool downloadsAvailable() const { return true; }
+    QAbstractListModel *searchResults() const { return m_searchModel; }
+    QAbstractListModel *downloadQueue() const { return m_queueModel; }
 
     // Android All-Files-Access (MANAGE_EXTERNAL_STORAGE). On other platforms
     // hasStorageAccess() always returns true and requestStorageAccess() is a
@@ -72,8 +108,7 @@ public:
     Q_INVOKABLE bool requestStorageAccess();
 
 signals:
-    // Search signals
-    void searchResults(const QString &jsonArray);
+    // Search signals (the results themselves are the searchResults model)
     void searchInProgress(bool inProgress);
     void searchError(const QString &errorMsg);
 
@@ -83,7 +118,6 @@ signals:
     void downloadComplete(const QString &songId, const QString &filePath);
     void downloadError(const QString &songId, const QString &displayName, const QString &errorMsg);
     void downloadQueueChanged();
-    void downloadStatusChanged(const QString &songId, const QString &field, const QString &valueJson);
 
     // Status
     void statusMessage(const QString &message);
@@ -102,16 +136,17 @@ public slots:
     void next_search_page();
     void search_more();
 
-    // Download
+    // Download a search hit (its row in searchResults supplies the details;
+    // an id that isn't there downloads by id with songName as the title)
     void download(const QString &songId, const QString &songName);
-    void download_song(const QString &jsonString);
     void cancel_download(const QString &songId);
     void pause_download(const QString &songId);
     void resume_download(const QString &songId);
 
     // Queue management
-    Q_INVOKABLE QVariantList get_download_queue();
     void clear_download_queue();
+    // Drop finished (complete / failed / cancelled) rows from downloadQueue
+    void clear_finished_downloads();
 
     // Settings
     Q_INVOKABLE void connect_settings_manager(QObject *sm);
@@ -158,6 +193,12 @@ private:
     void _finishDownload(const QString &songId, const QString &filePath);
     void _failDownload(const QString &songId, const QString &errorMsg);
     void _emitStatusPatch(const QString &songId, const QString &field, const QVariant &value);
+    // Queue a download from a search hit's fields (song_id, name, artist, ...)
+    void _queueDownload(const QJsonObject &songData);
+    // Mirror a task into downloadQueue and its search row (is_downloading, progress)
+    void _syncTask(const QString &songId);
+    // m_allResults into searchResults, with any running downloads' state
+    void _publishResults();
     float _parseProgressLine(const QString &line);
 #ifdef Q_OS_MOBILE
     // Android/iOS: yt-dlp runs via JNI (OctaveMediaBridge) which is a blocking
@@ -172,6 +213,9 @@ private:
     // Member variables
     // ──────────────────────────────────────────────────────────────
     SettingsManager *m_settingsManager = nullptr;
+
+    VariantListModel *m_searchModel = nullptr;
+    VariantListModel *m_queueModel = nullptr;
 
     // Search state
     bool m_isSearching = false;
@@ -220,18 +264,24 @@ class DownloadManager : public QObject
     Q_PROPERTY(int activeDownloads READ activeDownloads NOTIFY activeDownloadsChanged)
     Q_PROPERTY(QString downloadPath READ downloadPath CONSTANT)
     Q_PROPERTY(bool downloadsAvailable READ downloadsAvailable CONSTANT)
+    Q_PROPERTY(QAbstractListModel *searchResults READ searchResults CONSTANT)
+    Q_PROPERTY(QAbstractListModel *downloadQueue READ downloadQueue CONSTANT)
 
 public:
-    explicit DownloadManager(QObject *parent = nullptr) : QObject(parent) {}
+    explicit DownloadManager(QObject *parent = nullptr)
+        : QObject(parent)
+        , m_searchModel(new VariantListModel(DownloadModels::searchKeys(), this))
+        , m_queueModel(new VariantListModel(DownloadModels::queueKeys(), this)) {}
     ~DownloadManager() override = default;
 
     bool isSearching() const { return false; }
     int activeDownloads() const { return 0; }
     QString downloadPath() const { return QString(); }
     bool downloadsAvailable() const { return false; }
+    QAbstractListModel *searchResults() const { return m_searchModel; }   // always empty
+    QAbstractListModel *downloadQueue() const { return m_queueModel; }
 
 signals:
-    void searchResults(const QString &jsonArray);
     void searchInProgress(bool inProgress);
     void searchError(const QString &errorMsg);
     void downloadStarted(const QString &songId, const QString &displayName);
@@ -239,7 +289,6 @@ signals:
     void downloadComplete(const QString &songId, const QString &filePath);
     void downloadError(const QString &songId, const QString &displayName, const QString &errorMsg);
     void downloadQueueChanged();
-    void downloadStatusChanged(const QString &songId, const QString &field, const QString &valueJson);
     void statusMessage(const QString &message);
     void isSearchingChanged(bool value);
     void activeDownloadsChanged(int count);
@@ -249,16 +298,19 @@ public slots:
     void next_search_page() {}
     void search_more() {}
     void download(const QString &songId, const QString &) { emit downloadError(songId, QString(), QStringLiteral("Downloads disabled in this build")); }
-    void download_song(const QString &) { emit downloadError(QString(), QString(), QStringLiteral("Downloads disabled in this build")); }
     void cancel_download(const QString &) {}
     void pause_download(const QString &) {}
     void resume_download(const QString &) {}
-    Q_INVOKABLE QVariantList get_download_queue() { return {}; }
     void clear_download_queue() {}
+    void clear_finished_downloads() {}
     Q_INVOKABLE void connect_settings_manager(QObject *) {}
     void set_download_playlist(const QString &) {}
     Q_INVOKABLE QString get_download_playlist() { return QStringLiteral("Downloads"); }
     void cleanup() {}
+
+private:
+    VariantListModel *m_searchModel;
+    VariantListModel *m_queueModel;
 };
 
 #endif // OCTAVE_ENABLE_DOWNLOADS

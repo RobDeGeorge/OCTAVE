@@ -106,6 +106,13 @@ if(TARGET TagLib::tag)
 else()
     set(_taglib PkgConfig::TAGLIB)
 endif()
+octave_add_test(tst_downloadmanager
+    SOURCES managers/downloadmanager.h managers/downloadmanager.cpp
+            managers/downloadutil.h managers/downloadutil.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+            util/variantlistmodel.h util/variantlistmodel.cpp
+    LIBS Qt6::Gui Qt6::Network Qt6::Concurrent ${_taglib}
+    DEFINES OCTAVE_ENABLE_DOWNLOADS)
 octave_add_test(tst_mediamanager
     SOURCES managers/mediamanager.h managers/mediamanager.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp

@@ -193,6 +193,8 @@ qt_add_executable(octave
     src/util/dashboardgrid.cpp
     src/util/qmlmodules.h
     src/util/qmlmodules.cpp
+    src/util/variantlistmodel.h
+    src/util/variantlistmodel.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
     src/managers/diagnosticsmanager.h

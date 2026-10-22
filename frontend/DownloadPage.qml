@@ -29,8 +29,7 @@ Item {
     // On-screen keyboard state
     property bool showKeyboard: false
 
-    // Search state
-    property var searchResults: []
+    // Search state (the results are downloadManager.searchResults, a model)
     property bool isSearching: false
     property string statusText: "Search for songs to download"
     property bool statusVisible: true
@@ -43,8 +42,8 @@ Item {
     // app while they were there. On desktop
     // hasStorageAccess() is always true.
     property bool storageHintShown: false
-    function startDownload(songJson) {
-        downloadManager.download_song(songJson)
+    function startDownload(songId, songName) {
+        downloadManager.download(songId, songName)
         if (isAndroid && !storageHintShown
                 && typeof downloadManager.hasStorageAccess === "function"
                 && !downloadManager.hasStorageAccess()) {
@@ -66,19 +65,15 @@ Item {
         onTriggered: downloadPage.statusVisible = false
     }
 
-    // Download state — keyed by song_id for uniqueness
-    property var activeDownloads: ({})    // song_id -> progress (0.0-1.0)
-    property var downloadNames: ({})      // song_id -> display name
-    property var downloadedPaths: ({})    // song_id -> absolute file path (captured from backend)
+    // Download state lives in the manager: each search row carries
+    // is_downloading / progress / file_path, and downloadManager.downloadQueue
+    // is the queue panel's model
 
     // Queue panel is always visible when items exist (no toggle needed)
 
     // Playlist selector state
     property var downloadPlaylists: []
     property string selectedPlaylist: ""
-
-    // Download queue data model
-    ListModel { id: queueModel }
 
     Component.onCompleted: {
         // Load available playlists for the download target selector
@@ -107,113 +102,12 @@ Item {
     Connections {
         target: downloadManager
 
-        function onSearchResults(jsonStr) {
-            try {
-                var results = JSON.parse(jsonStr)
-                downloadPage.searchResults = results
-            } catch (e) {
-                downloadPage.searchResults = []
-            }
-        }
-
         function onSearchInProgress(inProgress) {
             downloadPage.isSearching = inProgress
         }
 
         function onSearchError(msg) {
             downloadPage.statusText = "Search error: " + msg
-        }
-
-        function onDownloadStarted(songId, songName) {
-            var downloads = Object.assign({}, downloadPage.activeDownloads)
-            downloads[songId] = 0.0
-            downloadPage.activeDownloads = downloads
-            var names = Object.assign({}, downloadPage.downloadNames)
-            names[songId] = songName
-            downloadPage.downloadNames = names
-
-            // Add to queue model
-            queueModel.append({
-                songId: songId,
-                songName: songName,
-                status: "downloading",
-                progress: 0.0,
-                errorMsg: ""
-            })
-        }
-
-        function onDownloadProgress(songId, progress) {
-            var downloads = Object.assign({}, downloadPage.activeDownloads)
-            downloads[songId] = progress
-            downloadPage.activeDownloads = downloads
-
-            // Update queue model
-            for (var i = 0; i < queueModel.count; i++) {
-                if (queueModel.get(i).songId === songId) {
-                    queueModel.setProperty(i, "progress", progress)
-                    break
-                }
-            }
-        }
-
-        function onDownloadComplete(songId, filePath) {
-            var displayName = downloadPage.downloadNames[songId] || ""
-            var downloads = Object.assign({}, downloadPage.activeDownloads)
-            delete downloads[songId]
-            downloadPage.activeDownloads = downloads
-            var names = Object.assign({}, downloadPage.downloadNames)
-            delete names[songId]
-            downloadPage.downloadNames = names
-            // Remember the exact file path so click-to-play can use it directly
-            var paths = Object.assign({}, downloadPage.downloadedPaths)
-            paths[songId] = filePath
-            downloadPage.downloadedPaths = paths
-            downloadPage.statusText = displayName ? ("Downloaded: " + displayName) : "Download complete"
-
-            // Update queue model
-            for (var i = 0; i < queueModel.count; i++) {
-                if (queueModel.get(i).songId === songId) {
-                    queueModel.setProperty(i, "status", "complete")
-                    queueModel.setProperty(i, "progress", 1.0)
-                    break
-                }
-            }
-        }
-
-        function onDownloadError(songId, songName, errorMsg) {
-            var displayName = downloadPage.downloadNames[songId] || songName || "download"
-            var downloads = Object.assign({}, downloadPage.activeDownloads)
-            delete downloads[songId]
-            downloadPage.activeDownloads = downloads
-            var names = Object.assign({}, downloadPage.downloadNames)
-            delete names[songId]
-            downloadPage.downloadNames = names
-            downloadPage.statusText = "Error: " + displayName + " - " + errorMsg
-
-            // Update queue model
-            for (var i = 0; i < queueModel.count; i++) {
-                if (queueModel.get(i).songId === songId) {
-                    queueModel.setProperty(i, "status", "failed")
-                    queueModel.setProperty(i, "errorMsg", errorMsg)
-                    break
-                }
-            }
-        }
-
-        function onDownloadStatusChanged(songId, field, valueJson) {
-            // Patch searchResults and re-assign, but save/restore scroll position
-            // so the ListView doesn't jump to the top
-            var val = JSON.parse(valueJson)
-            var results = downloadPage.searchResults
-            for (var i = 0; i < results.length; i++) {
-                if (results[i].song_id === songId) {
-                    results[i][field] = val
-                    break
-                }
-            }
-            var savedY = resultsListView.contentY
-            downloadPage.searchResults = results.slice()  // trigger model update
-            resultsListView.contentY = savedY
         }
 
         function onStatusMessage(msg) {
@@ -816,7 +710,7 @@ Item {
                     Layout.fillWidth: true
                     clip: true
                     spacing: dp(6)
-                    model: downloadPage.searchResults
+                    model: downloadManager ? downloadManager.searchResults : null
 
                     ScrollBar.vertical: ScrollBar {
                         active: true
@@ -826,9 +720,9 @@ Item {
                 delegate: Rectangle {
                     id: songDelegate
                     property color failedColor: App.Style.statusDanger
-                    property string songId: modelData.song_id || ""
-                    property bool isDownloading: songId !== "" && downloadPage.activeDownloads.hasOwnProperty(songId)
-                    property real dlProgress: isDownloading ? (downloadPage.activeDownloads[songId] || 0) : 0
+                    property string songId: model.song_id || ""
+                    property bool isDownloading: model.is_downloading === true
+                    property real dlProgress: isDownloading ? (model.progress || 0) : 0
                     onDlProgressChanged: if (progressRing.visible) progressRing.requestPaint()
 
                     width: resultsListView.width - dp(14)
@@ -836,11 +730,11 @@ Item {
                     color: cardHover.hovered ? Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.12) : cardColor
 
                     function handleCardAction() {
-                        if (modelData.is_downloaded) {
-                            var artist = modelData.artist || ""
-                            var name = modelData.name || ""
-                            var playlist = modelData.downloaded_playlist || ""
-                            var knownPath = downloadPage.downloadedPaths[modelData.song_id || ""] || ""
+                        if (model.is_downloaded) {
+                            var artist = model.artist || ""
+                            var name = model.name || ""
+                            var playlist = model.downloaded_playlist || ""
+                            var knownPath = model.file_path || ""
                             downloadPage.statusText = "Playing: " + artist + " - " + name
                             if (!mediaManager) return
                             var ok = false
@@ -857,13 +751,14 @@ Item {
                             if (downloadPage.stackView) {
                                 downloadPage.stackView.openPage("MediaRoom.qml")
                             }
-                        } else if (modelData.is_failed) {
-                            errorPopup.errorMsg = modelData.error_message || "Download failed — no audio source found"
-                            errorPopup.songName = (modelData.artist || "") + " - " + (modelData.name || "")
-                            errorPopup.songJson = JSON.stringify(modelData)
+                        } else if (model.is_failed) {
+                            errorPopup.errorMsg = model.error_message || "Download failed — no audio source found"
+                            errorPopup.songName = (model.artist || "") + " - " + (model.name || "")
+                            errorPopup.songId = songId
+                            errorPopup.songTitle = model.name || ""
                             errorPopup.open()
                         } else {
-                            downloadPage.startDownload(JSON.stringify(modelData))
+                            downloadPage.startDownload(songId, model.name || "")
                         }
                     }
 
@@ -878,8 +773,8 @@ Item {
                         onTapped: songDelegate.handleCardAction()
                     }
                     border.color: {
-                        if (modelData.is_downloaded) return Qt.rgba(successColor.r, successColor.g, successColor.b, 0.3)
-                        if (modelData.is_failed) return Qt.rgba(failedColor.r, failedColor.g, failedColor.b, 0.3)
+                        if (model.is_downloaded) return Qt.rgba(successColor.r, successColor.g, successColor.b, 0.3)
+                        if (model.is_failed) return Qt.rgba(failedColor.r, failedColor.g, failedColor.b, 0.3)
                         return cardBorderColor
                     }
                     border.width: 1
@@ -901,7 +796,7 @@ Item {
                             Image {
                                 id: albumArtImg
                                 anchors.fill: parent
-                                source: modelData.cover_url || ""
+                                source: model.cover_url || ""
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 visible: status === Image.Ready
@@ -925,7 +820,7 @@ Item {
 
                             Text {
                                 Layout.fillWidth: true
-                                text: modelData.name || "Unknown"
+                                text: model.name || "Unknown"
                                 font.family: downloadPage.globalFont
                                 font.pixelSize: dp(14)
                                 font.weight: Font.DemiBold
@@ -935,7 +830,7 @@ Item {
 
                             Text {
                                 Layout.fillWidth: true
-                                text: modelData.artist || "Unknown Artist"
+                                text: model.artist || "Unknown Artist"
                                 font.family: downloadPage.globalFont
                                 font.pixelSize: dp(12)
                                 color: dimTextColor
@@ -946,7 +841,7 @@ Item {
                                 spacing: dp(8)
 
                                 Text {
-                                    text: modelData.album_name || ""
+                                    text: model.album_name || ""
                                     font.family: downloadPage.globalFont
                                     font.pixelSize: dp(10)
                                     color: dimTextColor
@@ -956,7 +851,7 @@ Item {
 
                                 Text {
                                     text: {
-                                        var dur = modelData.duration || 0
+                                        var dur = model.duration || 0
                                         var m = Math.floor(dur / 60)
                                         var s = dur % 60
                                         return m + ":" + (s < 10 ? "0" : "") + s
@@ -967,7 +862,7 @@ Item {
                                 }
 
                                 Rectangle {
-                                    visible: modelData.explicit === true
+                                    visible: model.explicit === true
                                     width: explicitLabel.implicitWidth + dp(6)
                                     height: explicitLabel.implicitHeight + dp(4)
                                     color: Qt.rgba(textColor.r, textColor.g, textColor.b, 0.6)
@@ -986,7 +881,7 @@ Item {
 
                                 // Playlist badge for downloaded songs
                                 Rectangle {
-                                    visible: modelData.is_downloaded === true && (modelData.downloaded_playlist || "") !== ""
+                                    visible: model.is_downloaded === true && (model.downloaded_playlist || "") !== ""
                                     width: playlistBadgeText.implicitWidth + dp(10)
                                     height: playlistBadgeText.implicitHeight + dp(4)
                                     color: Qt.rgba(successColor.r, successColor.g, successColor.b, 0.15)
@@ -997,7 +892,7 @@ Item {
                                     Text {
                                         id: playlistBadgeText
                                         anchors.centerIn: parent
-                                        text: modelData.downloaded_playlist || ""
+                                        text: model.downloaded_playlist || ""
                                         font.family: downloadPage.globalFont
                                         font.pixelSize: dp(9)
                                         font.weight: Font.DemiBold
@@ -1013,9 +908,9 @@ Item {
                             Layout.preferredHeight: dp(40)
                             radius: dp(20)
                             color: {
-                                if (modelData.is_downloaded)
+                                if (model.is_downloaded)
                                     return Qt.rgba(successColor.r, successColor.g, successColor.b, 0.15)
-                                if (modelData.is_failed)
+                                if (model.is_failed)
                                     return Qt.rgba(failedColor.r, failedColor.g, failedColor.b, 0.12)
                                 if (isDownloading)
                                     return Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.15)
@@ -1037,7 +932,7 @@ Item {
                                 anchors.fill: dlBtnIcon
                                 source: dlBtnIcon
                                 color: "#000000"
-                                visible: !modelData.is_downloaded && !modelData.is_failed && !isDownloading
+                                visible: !model.is_downloaded && !model.is_failed && !isDownloading
                             }
 
                             // Progress ring (shown while downloading)
@@ -1095,7 +990,7 @@ Item {
                                 font.pixelSize: dp(20)
                                 font.weight: Font.Bold
                                 color: successColor
-                                visible: modelData.is_downloaded === true
+                                visible: model.is_downloaded === true
                             }
 
                             // X mark (shown when failed)
@@ -1106,7 +1001,7 @@ Item {
                                 font.pixelSize: dp(18)
                                 font.weight: Font.Bold
                                 color: failedColor
-                                visible: modelData.is_failed === true && !modelData.is_downloaded
+                                visible: model.is_failed === true && !model.is_downloaded
                             }
 
                         }
@@ -1116,8 +1011,8 @@ Item {
                     // Loading indicator
                     BusyIndicator {
                         anchors.centerIn: parent
-                        visible: downloadPage.isSearching && downloadPage.searchResults.length === 0
-                        running: downloadPage.isSearching && downloadPage.searchResults.length === 0
+                        visible: downloadPage.isSearching && resultsListView.count === 0
+                        running: downloadPage.isSearching && resultsListView.count === 0
                         palette.dark: accentColor
                     }
                 }
@@ -1129,7 +1024,9 @@ Item {
                     Layout.preferredWidth: downloadPage.width * 0.25
                     Layout.minimumWidth: dp(200)
                     Layout.maximumWidth: dp(350)
-                    visible: queueModel.count > 0
+                    // The queue: one row per download this session, kept by the manager
+                    readonly property var queue: downloadManager ? downloadManager.downloadQueue : null
+                    visible: !!queue && queue.count > 0
                     color: cardColor
                     border.color: cardBorderColor
                     border.width: 1
@@ -1163,7 +1060,7 @@ Item {
                                 Text {
                                     id: queueCountText
                                     anchors.centerIn: parent
-                                    text: queueModel.count
+                                    text: queuePanel.queue ? queuePanel.queue.count : 0
                                     font.family: downloadPage.globalFont
                                     font.pixelSize: dp(11)
                                     font.weight: Font.Bold
@@ -1183,13 +1080,9 @@ Item {
                                     : "transparent"
                                 border.width: 1
                                 border.color: Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.3)
-                                visible: {
-                                    for (var i = 0; i < queueModel.count; i++) {
-                                        var s = queueModel.get(i).status
-                                        if (s === "complete" || s === "failed") return true
-                                    }
-                                    return false
-                                }
+                                // Something has finished: more rows than downloads still running
+                                visible: !!queuePanel.queue && !!downloadManager
+                                         && queuePanel.queue.count > downloadManager.activeDownloads
 
                                 Text {
                                     id: clearQueueText
@@ -1205,15 +1098,7 @@ Item {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        // Remove completed and failed items
-                                        for (var i = queueModel.count - 1; i >= 0; i--) {
-                                            var s = queueModel.get(i).status
-                                            if (s === "complete" || s === "failed") {
-                                                queueModel.remove(i)
-                                            }
-                                        }
-                                    }
+                                    onClicked: downloadManager.clear_finished_downloads()
                                 }
                             }
                         }
@@ -1232,7 +1117,7 @@ Item {
                             Layout.fillHeight: true
                             clip: true
                             spacing: dp(4)
-                            model: queueModel
+                            model: queuePanel.queue
 
                             ScrollBar.vertical: ScrollBar {
                                 active: true
@@ -1265,26 +1150,12 @@ Item {
                                     enabled: model.status === "complete"
                                     onTapped: {
                                         if (!mediaManager) return
-                                        var knownPath = downloadPage.downloadedPaths[model.songId] || ""
-                                        // Fall back to looking up song data from searchResults
-                                        var song = null
-                                        var results = downloadPage.searchResults
-                                        for (var i = 0; i < results.length; i++) {
-                                            if (results[i].song_id === model.songId) {
-                                                song = results[i]
-                                                break
-                                            }
-                                        }
                                         var ok = false
-                                        if (knownPath) {
-                                            ok = mediaManager.play_file_at_path(knownPath)
+                                        if (model.filePath) {
+                                            ok = mediaManager.play_file_at_path(model.filePath)
                                         }
-                                        if (!ok && song) {
-                                            ok = mediaManager.play_downloaded_song(
-                                                song.artist || "",
-                                                song.name || "",
-                                                song.downloaded_playlist || ""
-                                            )
+                                        if (!ok && model.name) {
+                                            ok = mediaManager.play_downloaded_song(model.artist || "", model.name, "")
                                         }
                                         if (!ok) {
                                             downloadPage.statusText = "Could not play: " + (model.songName || "")
@@ -1419,7 +1290,8 @@ Item {
 
         property string songName: ""
         property string errorMsg: ""
-        property string songJson: ""
+        property string songId: ""
+        property string songTitle: ""   // for the queue row if the results change meanwhile
 
         Overlay.modal: Rectangle {
             color: Qt.rgba(0, 0, 0, 0.5)
@@ -1503,8 +1375,8 @@ Item {
                         id: errorRetryMouse
                         anchors.fill: parent
                         onClicked: {
-                            if (errorPopup.songJson.length > 0) {
-                                downloadPage.startDownload(errorPopup.songJson)
+                            if (errorPopup.songId.length > 0) {
+                                downloadPage.startDownload(errorPopup.songId, errorPopup.songTitle)
                             }
                             errorPopup.close()
                         }

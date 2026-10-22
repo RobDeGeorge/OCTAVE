@@ -1438,6 +1438,8 @@
             <tr><td><code>activeDownloads</code></td><td><code>int</code></td><td>read-only</td><td><code>activeDownloadsChanged</code></td><td>Downloads queued or running</td></tr>
             <tr><td><code>downloadPath</code></td><td><code>QString</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Destination folder (media folder / download sub-folder)</td></tr>
             <tr><td><code>downloadsAvailable</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td><code>false</code> only in app-store builds (<code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> stub); QML hides every download button on it</td></tr>
+            <tr><td><code>searchResults</code></td><td><code>QAbstractListModel*</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>One row per search hit (<code>VariantListModel</code>, one role per key: <code>song_id, name, artist, album_name, cover_url, url, duration, explicit, is_downloaded, downloaded_playlist, is_failed, error_message, file_path, is_downloading, progress</code>); reset when a search finishes, patched one row at a time; always empty in the stub</td></tr>
+            <tr><td><code>downloadQueue</code></td><td><code>QAbstractListModel*</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>One row per download this session, oldest first (roles <code>songId, songName, artist, name, status, progress, errorMsg, filePath</code>; <code>status</code> is <code>"downloading"</code>, <code>"complete"</code> or <code>"failed"</code>, cancelled counting as failed)</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1446,16 +1448,15 @@
           <tbody>
             <tr><td><code>hasStorageAccess()</code></td><td><code>bool</code></td><td>Android All-Files-Access granted; always <code>true</code> elsewhere</td></tr>
             <tr><td><code>requestStorageAccess()</code></td><td><code>bool</code></td><td>Open the Android All-Files-Access prompt; no-op elsewhere</td></tr>
-            <tr><td><code>search(QString query)</code></td><td><code>void</code></td><td>Search YouTube Music with yt-dlp; results via <code>searchResults</code></td></tr>
+            <tr><td><code>search(QString query)</code></td><td><code>void</code></td><td>Search YouTube Music (ytmusicapi helper, yt-dlp fallback); when it finishes the <code>searchResults</code> model is reset to the hits</td></tr>
             <tr><td><code>next_search_page()</code></td><td><code>void</code></td><td>No offset pagination in yt-dlp flat search &mdash; emits "All results shown"</td></tr>
             <tr><td><code>search_more()</code></td><td><code>void</code></td><td>Alias of <code>next_search_page()</code></td></tr>
-            <tr><td><code>download(QString songId, QString songName)</code></td><td><code>void</code></td><td>Queue a YouTube Music video id with a display name (builds the JSON for <code>download_song</code>)</td></tr>
-            <tr><td><code>download_song(QString jsonString)</code></td><td><code>void</code></td><td>Queue a download from a result JSON object</td></tr>
+            <tr><td><code>download(QString songId, QString songName)</code></td><td><code>void</code></td><td>Queue a search hit by id (its row in the current results supplies artist, album, cover and URL); an id not among the results downloads by id with <code>songName</code> as the title</td></tr>
             <tr><td><code>cancel_download(QString songId)</code></td><td><code>void</code></td><td>Kill/unqueue a download</td></tr>
             <tr><td><code>pause_download(QString songId)</code></td><td><code>void</code></td><td>SIGSTOP the yt-dlp process (Windows: kill and re-queue as paused)</td></tr>
             <tr><td><code>resume_download(QString songId)</code></td><td><code>void</code></td><td>Resume a paused download</td></tr>
-            <tr><td><code>get_download_queue()</code></td><td><code>QVariantList</code></td><td>Queue entries as <code>[{song_id, name, artist, status, progress, &hellip;}]</code></td></tr>
-            <tr><td><code>clear_download_queue()</code></td><td><code>void</code></td><td>Cancel everything and empty the queue</td></tr>
+            <tr><td><code>clear_download_queue()</code></td><td><code>void</code></td><td>Cancel everything and empty the queue (and the <code>downloadQueue</code> model)</td></tr>
+            <tr><td><code>clear_finished_downloads()</code></td><td><code>void</code></td><td>Remove complete / failed (incl. cancelled) rows from <code>downloadQueue</code> and drop their tasks</td></tr>
             <tr><td><code>connect_settings_manager(QObject *sm)</code></td><td><code>void</code></td><td>Wire the SettingsManager (called from <code>main.cpp</code>)</td></tr>
             <tr><td><code>set_download_playlist(QString name)</code></td><td><code>void</code></td><td>Target playlist sub-folder for new downloads (<code>""</code> resets to the default)</td></tr>
             <tr><td><code>get_download_playlist()</code></td><td><code>QString</code></td><td>Current target playlist name (default <code>"Downloads"</code>)</td></tr>
@@ -1466,7 +1467,6 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>searchResults(QString jsonArray)</code></td><td>JSON array of results (<code>song_id, name, artist, album, duration, url, cover_url, downloaded</code>)</td></tr>
             <tr><td><code>searchInProgress(bool inProgress)</code></td><td>Search started / finished</td></tr>
             <tr><td><code>searchError(QString errorMsg)</code></td><td>Search failure text</td></tr>
             <tr><td><code>downloadStarted(QString songId, QString displayName)</code></td><td>A download began (song id, display name)</td></tr>
@@ -1474,7 +1474,6 @@
             <tr><td><code>downloadComplete(QString songId, QString filePath)</code></td><td>File written (song id, path); <code>main</code> rescans the library</td></tr>
             <tr><td><code>downloadError(QString songId, QString displayName, QString errorMsg)</code></td><td>Download failed (song id, display name, error)</td></tr>
             <tr><td><code>downloadQueueChanged()</code></td><td>Queue contents changed</td></tr>
-            <tr><td><code>downloadStatusChanged(QString songId, QString field, QString valueJson)</code></td><td>Patch one field of a result/queue entry (<code>field</code>, <code>valueJson</code>) without a full re-emit</td></tr>
             <tr><td><code>statusMessage(QString message)</code></td><td>General status line</td></tr>
             <tr><td><code>isSearchingChanged(bool value)</code></td><td>Notify for <code>isSearching</code></td></tr>
             <tr><td><code>activeDownloadsChanged(int count)</code></td><td>Notify for <code>activeDownloads</code></td></tr>
