@@ -727,7 +727,7 @@ tz = yw*qz - yz*qw</code></pre>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/SensorHome.qml</span></td>
-                <td>Hub page: an "IMU Connected" / "IMU Disconnected" indicator driven by <code>berryIMU.connected</code> and <code>connectionStatusChanged</code>, plus tiles for SensorMenu and CarMenu. The CarMenu tile is dimmed and disabled only when the optional Qt Quick 3D module is missing (<code>has3DView</code>), not by IMU state; a "Calibration" tile is a "Coming soon" placeholder.</td>
+                <td>Hub page: an "IMU Connected" / "IMU Disconnected" indicator driven by <code>berryIMU.connected</code> and <code>connectionStatusChanged</code>, plus tiles for SensorMenu and CarMenu. The CarMenu tile is dimmed and disabled only when the optional Qt Quick 3D module is missing (<code>has3DView</code>, from <code>main.cpp</code>'s <code>hasQuick3D</code>), not by IMU state; a "Calibration" tile is a "Coming soon" placeholder.</td>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/OBDParameterModel.qml</span></td>

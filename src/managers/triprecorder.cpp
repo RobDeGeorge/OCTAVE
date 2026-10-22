@@ -299,8 +299,10 @@ void TripRecorder::openTrip(qint64 now)
     onStore([id, now, meta](TripStore *store) { store->beginTrip(id, now, meta); });
     m_flushTimer.start();
     qCInfo(lcTrip) << "Trip" << id << "started";
+    m_lastLiveRefreshMs = now;
     emit recordingChanged();
     emit currentSampleCountChanged();
+    updateElapsed();
     emit tripStarted(id);
 }
 
@@ -328,6 +330,7 @@ void TripRecorder::closeTrip(const QString &reason, bool blocking)
         onStore(finish);
     emit recordingChanged();
     emit currentSampleCountChanged();
+    updateElapsed();
     prune();
 }
 
@@ -340,12 +343,26 @@ void TripRecorder::flush()
     batch.swap(m_buffer);
     onStore([batch](TripStore *store) { store->append(batch); });
     emit currentSampleCountChanged();
+    if (m_tripOpen && nowMs() - m_lastLiveRefreshMs >= m_liveRefreshMs) {
+        m_lastLiveRefreshMs = nowMs();
+        emit liveTripChanged(m_tripId);
+    }
+}
+
+void TripRecorder::updateElapsed()
+{
+    const int s = m_tripOpen ? int(std::max<qint64>(0, nowMs() - m_tripStartMs) / 1000) : 0;
+    if (s == m_elapsedS)
+        return;
+    m_elapsedS = s;
+    emit currentTripElapsedSChanged();
 }
 
 void TripRecorder::tick()
 {
     if (!m_tripOpen)
         return;
+    updateElapsed();
     const qint64 now = nowMs();
     if (!m_connected) {
         if (now - std::max(m_disconnectedAtMs, m_lastSampleMs) >= m_reconnectGraceMs)

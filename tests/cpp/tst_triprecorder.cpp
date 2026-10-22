@@ -315,6 +315,40 @@ private slots:
         r->shutdown();
     }
 
+    void liveTripReportsElapsedAndThrottledGrowth()
+    {
+        // Trip History follows these instead of a 1 s clock and a 5 s poll
+        auto r = makeRecorder();
+        r->setLiveRefreshMs(5000);
+        QSignalSpy elapsed(r.get(), &TripRecorder::currentTripElapsedSChanged);
+        QSignalSpy grew(r.get(), &TripRecorder::liveTripChanged);
+        QCOMPARE(r->currentTripElapsedS(), 0);
+
+        drive(*r, 1, 10.0f);
+        QVERIFY(r->recording());
+        const qint64 id = r->currentTripId();
+        m_now += 3000;
+        r->tick();
+        QCOMPARE(r->currentTripElapsedS(), 3);
+        QVERIFY(elapsed.count() >= 1);
+
+        // Flushes every 50 ms here, but growth is reported once per 5 s
+        drive(*r, 1, 20.0f);
+        r->flush();
+        QCOMPARE(grew.count(), 0);       // 4 s in
+        drive(*r, 2, 30.0f);
+        r->flush();
+        QCOMPARE(grew.count(), 1);       // 6 s in
+        QCOMPARE(grew.first().first().toLongLong(), id);
+        drive(*r, 1, 30.0f);
+        r->flush();
+        QCOMPARE(grew.count(), 1);
+
+        r->endTripNow();
+        QCOMPARE(r->currentTripElapsedS(), 0);
+        r->shutdown();
+    }
+
     void unchangedValuesAreCoalesced()
     {
         auto r = makeRecorder();

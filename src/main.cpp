@@ -38,6 +38,7 @@ extern "C" {
 #include "managers/settingsmanager.h"
 #include "managers/diagnosticsmanager.h"
 #include "util/logger.h"
+#include "util/qmlmodules.h"
 #include "util/uiwatchdog.h"
 #include "managers/clock.h"
 #include "managers/networkmanager.h"
@@ -370,6 +371,21 @@ int main(int argc, char *argv[])
     NowPlaying nowPlaying(&mediaManager, &phoneMirrorManager, &settingsManager);
     ctx->setContextProperty("nowPlaying", &nowPlaying);
 
+    // The visualizer follows what is playing: phone audio live, a local
+    // track pre-analysed and read at its position
+    auto feedAnalyzer = [&] {
+        audioAnalyzer.set_live(nowPlaying.isPhone());
+        audioAnalyzer.setPlaying(nowPlaying.playing());
+    };
+    QObject::connect(&nowPlaying, &NowPlaying::sourceChanged, &audioAnalyzer, feedAnalyzer);
+    QObject::connect(&nowPlaying, &NowPlaying::playingChanged, &audioAnalyzer, feedAnalyzer);
+    QObject::connect(&mediaManager, &MediaManager::positionChanged, &audioAnalyzer, &AudioAnalyzer::setPosition);
+    QObject::connect(&mediaManager, &MediaManager::currentMediaChanged, &audioAnalyzer,
+                     [&](const QString &file) { audioAnalyzer.setLocalFile(mediaManager.get_full_file_path(file)); });
+    feedAnalyzer();
+    if (!mediaManager.get_current_file().isEmpty())
+        audioAnalyzer.setLocalFile(mediaManager.get_full_file_path(mediaManager.get_current_file()));
+
     // Register custom QML types for video embedding (stub types on mobile)
     qmlRegisterType<EmbeddedDhuItem>("OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem");
 
@@ -436,6 +452,27 @@ int main(int argc, char *argv[])
     // Assimp importer) must open themselves — extracted from the APK on Android.
     AssetStore assetStore(frontendDir.absoluteFilePath(QStringLiteral("assets")));
     ctx->setContextProperty("assetStore", &assetStore);
+
+    // Optional QML modules, checked without loading them: CarMenu's 3D view
+    // needs QtQuick3D (SensorHome greys its card without it); the music
+    // device objects also need AssetUtils and Timeline (MusicDevicePreference
+    // still load-tests the scene before offering them: assimp can be
+    // missing). A mobile package bundles whatever the app links
+    // (androiddeployqt), so there the build decides; a desktop install may
+    // lack a module the build found.
+    bool hasQuick3D = QmlModules::isInstalled(engine, QStringLiteral("QtQuick3D"));
+    bool hasQuick3DAssetUtils = QmlModules::isInstalled(engine, QStringLiteral("QtQuick3D.AssetUtils"))
+                                && QmlModules::isInstalled(engine, QStringLiteral("QtQuick.Timeline"));
+#ifdef Q_OS_MOBILE
+#ifdef OCTAVE_LINKED_QUICK3D
+    hasQuick3D = true;
+#endif
+#ifdef OCTAVE_LINKED_QUICK3D_ASSETUTILS
+    hasQuick3DAssetUtils = true;
+#endif
+#endif
+    ctx->setContextProperty("hasQuick3D", hasQuick3D);
+    ctx->setContextProperty("hasQuick3DAssetUtils", hasQuick3DAssetUtils);
 
     // Prefer editable documentation alongside the checkout; packaged desktop
     // builds fall back to the offline copy embedded in the executable.

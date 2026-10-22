@@ -15,6 +15,9 @@ QtObject {
     // binding had just read logged "Binding loop detected for description".
     readonly property var _probe: ({ availability: -1 })
     function isAvailable() {
+        // Modules not installed (main.cpp's check, no load): no need to try
+        if (typeof hasQuick3DAssetUtils !== "undefined" && !hasQuick3DAssetUtils)
+            return false
         if (_probe.availability < 0) {
             var component = Qt.createComponent("MusicDeviceScene.qml", Component.PreferSynchronous)
             _probe.availability = component.status === Component.Ready ? 1 : 0

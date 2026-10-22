@@ -10,18 +10,33 @@
 #include <QFuture>
 #include <QFutureWatcher>
 #include <QElapsedTimer>
+#include <QTimer>
 
 #include <vector>
 #include <complex>
 #include <cmath>
 
+// Waveform visualizer bars: m_numBars levels (0-8) while shown and playing.
+// Local tracks are pre-analysed (decoded off-thread, one frame per 100 ms)
+// and read at each playback position report (MediaManager's 100 ms tick, so
+// at most 10 changes a second); phone audio is analysed live from the PCM
+// OCTAVE plays, every kLiveFrameMs (the window is 100 ms). main.cpp feeds it
+// what is playing (NowPlaying's source and play state, MediaManager's track
+// and position); a frontend only says whether its bars are on screen
+// (setViewActive) and draws `levels`. Nothing runs, and no file is decoded,
+// while no view is.
 class AudioAnalyzer : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(QVariantList levels READ get_current_levels NOTIFY fftDataChanged)
+    Q_PROPERTY(int numBars READ get_num_bars CONSTANT)
 
 public:
+    static constexpr int kLiveFrameMs = 50;
+
     explicit AudioAnalyzer(QObject *parent = nullptr);
     ~AudioAnalyzer() override;
+
 
 signals:
     void fftDataChanged(const QVariantList &levels);
@@ -29,6 +44,16 @@ signals:
     void analysisStarted();
 
 public slots:
+    // A view showing the bars is on screen (and not mid-animation)
+    void setViewActive(bool active);
+    // What is playing (main.cpp): local or phone, playing or not, and the
+    // local track's full path ("" for none). A new track is analysed once a
+    // view is active.
+    void setPlaying(bool playing);
+    void setLocalFile(const QString &filePath);
+    // The local playback position (MediaManager::positionChanged)
+    void setPosition(qint64 positionMs);
+
     void analyze_file(const QString &filePath);
     void update_position(float positionSeconds);
     void set_active(bool active);
@@ -39,8 +64,8 @@ public slots:
 
     // ── Live mode (phone mirror) ──────────────────────────────
     //    Bars from the PCM OCTAVE is playing right now instead of a
-    //    pre-analysed file. update_live() is polled at the visualizer
-    //    frame rate, like update_position() for files.
+    //    pre-analysed file. update_live() runs every kLiveFrameMs while
+    //    live and active, as update_position() runs per position report.
     void set_live(bool live);
     void update_live();
     // s16le 48 kHz stereo just written to the audio sink; bufferedMs is
@@ -63,6 +88,14 @@ private:
     static AnalysisResult analyzeAudio(const QString &filePath, int numBars, double chunkDuration);
 
     void onAnalysisDone();
+
+    // Driving: bars move while a view is active and something plays
+    void refreshActive();
+    bool               m_viewActive = false;
+    bool               m_playing    = false;
+    QString            m_localFile;
+    qint64             m_positionMs = 0;
+    QTimer             m_liveTimer;
 
     // ── Pre-computed FFT data ──────────────────────────────────
     //    Bar levels 0-8, m_numBars per time chunk (~100 ms), flat

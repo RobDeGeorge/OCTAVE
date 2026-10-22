@@ -163,20 +163,14 @@ Item {
             if (tripHistoryPage.selectedTrip && tripHistoryPage.selectedTrip.id === id)
                 tripHistoryPage.selectTrip(tripHistoryPage.selectedTrip)
         }
-    }
-    // The live trip keeps growing: refresh its detail and chart while shown
-    Timer {
-        interval: 5000; repeat: true
-        running: tripHistoryPage.visible && tripHistoryPage.selectedTrip !== null && tripHistoryPage.selectedTrip.open === true
-        onTriggered: tripHistoryPage.selectTrip(tripHistoryPage.selectedTrip)
+        // The live trip grew (at most every 5 s): refresh its detail and chart while shown
+        function onLiveTripChanged(id) {
+            if (tripHistoryPage.visible && tripHistoryPage.selectedTrip && tripHistoryPage.selectedTrip.id === id)
+                tripHistoryPage.selectTrip(tripHistoryPage.selectedTrip)
+        }
     }
     // Elapsed clock for the recording pill
-    property int liveElapsedS: 0
-    Timer {
-        interval: 1000; repeat: true; running: tripHistoryPage.recording && tripHistoryPage.visible
-        triggeredOnStart: true
-        onTriggered: tripHistoryPage.liveElapsedS = Math.round((Date.now() - tripRecorder.currentTripStartMs) / 1000)
-    }
+    readonly property int liveElapsedS: available ? tripRecorder.currentTripElapsedS : 0
     Component.onCompleted: {
         if (available) {
             tripRecorder.refresh()
@@ -321,7 +315,7 @@ Item {
                                 }
                                 Text {
                                     text: modelData.open === true
-                                          ? "Recording · " + modelData.sampleCount + " samples"
+                                          ? "Recording · " + tripRecorder.currentSampleCount + " samples"   // live: the recorder's count, not the list's snapshot
                                           : fmtDuration(modelData.durationS) + " · "
                                             + fmtNum(modelData.distanceMiles, 1) + " mi · "
                                             + fmtNum(modelData.maxSpeed, 0) + " mph max"

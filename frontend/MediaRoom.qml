@@ -214,21 +214,6 @@ Item {
     // Driven by AlbumArtCarousel.animBusy via onAnimBusyChanged binding.
     property bool _cardAnimBusy: false
 
-    // Heavy work deferred until after animation settles — FFT analysis
-    // doesn't compete with animation frames.  Called by carousel's settled signal.
-    function _doTrackChangeWork() {
-        if (audioAnalyzer && mediaManager && !usePhone) {
-            var currentFile = mediaManager.get_current_file()
-            if (currentFile) {
-                var fullPath = mediaManager.get_full_file_path(currentFile)
-                if (fullPath) {
-                    audioAnalyzer.analyze_file(fullPath)
-                    waveformContainer.lastAnalyzedFile = currentFile
-                }
-            }
-        }
-    }
-
     function animateTrackChange() {
         // Snap bars to zero before the card animation begins so the waveform
         // doesn't hang at stale levels. _cardAnimBusy disables bar Behaviors
@@ -1049,8 +1034,6 @@ Item {
 
                         onAnimationFinished: sideCardRefreshTimer.restart()
 
-                        onSettled: mediaRoom._doTrackChangeWork()
-
                         onArtClicked: albumArtPopup.open()
 
                         onArtLoadFailed: mediaRoom._displayAlbumArt = "./assets/missing_art.png"
@@ -1103,28 +1086,16 @@ Item {
             property bool _vizFadedOut: false
             opacity: visible ? 1.0 : 0.0
 
-            // Track playback state reactively (method calls aren't reactive in bindings)
-            property bool isPlaying: false
-            property string lastAnalyzedFile: ""
-
-            // Phone media: no file to analyse, the bars come live from the
-            // phone audio OCTAVE is playing (audioAnalyzer.update_live)
-            readonly property bool live: mediaRoom.usePhone
-            onLiveChanged: initializeWaveform()
-
-            Connections {
-                target: mediaRoom
-                enabled: waveformContainer.live
-
-                function onDevicePlayingChanged() {
-                    waveformContainer.isPlaying = mediaRoom.devicePlaying
-                    if (audioAnalyzer)
-                        audioAnalyzer.set_active(waveformContainer.isPlaying)
-                }
-            }
+            // The analyzer follows what is playing (phone live, a local track
+            // pre-analysed) and runs only while bars are on screen; held
+            // during the card animation so a new track's decode starts after
+            // it settles instead of competing with its frames
+            readonly property bool _barsOn: visible && !mediaRoom._cardAnimBusy
+            on_BarsOnChanged: if (audioAnalyzer) audioAnalyzer.setViewActive(_barsOn)
+            Component.onCompleted: if (audioAnalyzer) audioAnalyzer.setViewActive(_barsOn)
+            Component.onDestruction: if (audioAnalyzer) audioAnalyzer.setViewActive(false)
 
             // 96 bars at 60 FPS with pill-shaped fancy bars
-            property int timerInterval: 16
             property bool smoothBars: true
             property int animDuration: 120
             property int animEasing: Easing.InOutSine
@@ -1160,7 +1131,7 @@ Item {
                 // Via Binding, see albumArtGrid above.
                 Binding { target: waveformBars.layer; property: "live"; value: !mediaRoom._cardAnimBusy }
 
-                property int numBars: audioAnalyzer ? audioAnalyzer.get_num_bars() : 96
+                property int numBars: audioAnalyzer ? audioAnalyzer.numBars : 96
 
                 Repeater {
                     id: waveformRepeater
@@ -1236,43 +1207,6 @@ Item {
                 }
             }
 
-            // Update position periodically at the visualizer frame rate
-            Timer {
-                id: waveformUpdateTimer
-                interval: waveformContainer.timerInterval
-                running: waveformContainer.visible && waveformContainer.isPlaying && !mediaRoom._cardAnimBusy
-                repeat: true
-
-                onTriggered: {
-                    if (!audioAnalyzer)
-                        return
-                    if (waveformContainer.live) {
-                        audioAnalyzer.update_live()
-                    } else if (audioAnalyzer.is_analyzed() && mediaManager) {
-                        audioAnalyzer.update_position(mediaManager.get_position() / 1000.0)
-                    }
-                }
-            }
-
-            // Handle media manager signals
-            Connections {
-                target: mediaManager
-                enabled: settingsManager && settingsManager.showWaveformVisualizer
-
-                function onCurrentMediaChanged(filename) {
-                    // analyze_file is handled by _doTrackChangeWork() (deferred until after card animation)
-                }
-
-                function onPlayStateChanged(playing) {
-                    if (waveformContainer.live)
-                        return   // local media is not what is playing
-                    waveformContainer.isPlaying = playing
-                    if (audioAnalyzer) {
-                        audioAnalyzer.set_active(playing)
-                    }
-                }
-            }
-
             // Immediately zero all bars (snaps because Behaviors are disabled when _cardAnimBusy)
             function dropBars() {
                 for (var i = 0; i < waveformRepeater.count; i++) {
@@ -1281,44 +1215,6 @@ Item {
                 }
             }
 
-            // Initialize waveform when needed
-            function initializeWaveform() {
-                if (!audioAnalyzer)
-                    return
-                audioAnalyzer.set_live(waveformContainer.live)
-                if (waveformContainer.live) {
-                    waveformContainer.isPlaying = mediaRoom.devicePlaying
-                    audioAnalyzer.set_active(waveformContainer.isPlaying)
-                    return
-                }
-                if (mediaManager) {
-                    var currentFile = mediaManager.get_current_file()
-                    if (currentFile) {
-                        var fullPath = mediaManager.get_full_file_path(currentFile)
-                        if (fullPath) {
-                            audioAnalyzer.analyze_file(fullPath)
-                            waveformContainer.lastAnalyzedFile = currentFile
-                        }
-                    }
-                    // Set active state based on current playback
-                    waveformContainer.isPlaying = mediaManager.is_playing()
-                    audioAnalyzer.set_active(waveformContainer.isPlaying)
-                }
-            }
-
-            // Re-initialize when becoming visible
-            onVisibleChanged: {
-                if (visible) {
-                    initializeWaveform()
-                }
-            }
-
-            // Also initialize on component load
-            Component.onCompleted: {
-                if (waveformContainer.visible) {
-                    initializeWaveform()
-                }
-            }
         }
 
         Rectangle { //duration bar

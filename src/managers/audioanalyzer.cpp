@@ -31,6 +31,69 @@ AudioAnalyzer::AudioAnalyzer(QObject *parent)
 
     connect(&m_watcher, &QFutureWatcher<AnalysisResult>::finished,
             this, &AudioAnalyzer::onAnalysisDone);
+
+    m_liveTimer.setInterval(kLiveFrameMs);
+    connect(&m_liveTimer, &QTimer::timeout, this, &AudioAnalyzer::update_live);
+}
+
+// ════════════════════════════════════════════════════════════════
+// Driving (replaces MediaRoom's 16 ms timer, its analyze_file calls on
+// track change and its play-state syncs)
+// ════════════════════════════════════════════════════════════════
+
+void AudioAnalyzer::setViewActive(bool active)
+{
+    if (active == m_viewActive)
+        return;
+    m_viewActive = active;
+    // A track that changed while no view was up (or mid card animation,
+    // so the decode doesn't compete with its frames) is analysed now
+    if (m_viewActive && !m_live && !m_localFile.isEmpty())
+        analyze_file(m_localFile);
+    refreshActive();
+}
+
+void AudioAnalyzer::setPlaying(bool playing)
+{
+    if (playing == m_playing)
+        return;
+    m_playing = playing;
+    refreshActive();
+}
+
+void AudioAnalyzer::setLocalFile(const QString &filePath)
+{
+    if (filePath == m_localFile)
+        return;
+    m_localFile = filePath;
+    // Next pass: a page reacting to the same track change (Media Room's card
+    // animation) holds the view first, so the decode waits for it to settle
+    QMetaObject::invokeMethod(this, [this] {
+        if (m_viewActive && !m_live && !m_localFile.isEmpty())
+            analyze_file(m_localFile);
+    }, Qt::QueuedConnection);
+}
+
+void AudioAnalyzer::setPosition(qint64 positionMs)
+{
+    m_positionMs = positionMs;
+    if (m_isActive && !m_live)
+        update_position(static_cast<float>(positionMs / 1000.0));
+}
+
+void AudioAnalyzer::refreshActive()
+{
+    const bool active = m_viewActive && m_playing;
+    if (active != m_isActive) {
+        set_active(active);
+        if (active && !m_live)
+            update_position(static_cast<float>(m_positionMs / 1000.0));
+    }
+    const bool liveFrames = active && m_live;
+    if (liveFrames && !m_liveTimer.isActive())
+        m_liveTimer.start();
+    else if (!liveFrames)
+        m_liveTimer.stop();
 }
 
 AudioAnalyzer::~AudioAnalyzer()
@@ -489,6 +552,8 @@ void AudioAnalyzer::onAnalysisDone()
     if (result.success) {
         m_fftData = std::move(result.fftData);
         emit analysisComplete();
+        if (m_isActive && !m_live)
+            update_position(static_cast<float>(m_positionMs / 1000.0));
         qCInfo(lcAudioAnalyzer) << "Analysis complete:"
                                 << chunkCount() << "chunks generated";
     } else {
@@ -571,8 +636,8 @@ void AudioAnalyzer::clear()
 // The phone's audio arrives as PCM that OCTAVE plays itself, so there
 // is no file to pre-analyse. ScrcpyClient hands every chunk it writes
 // to the audio sink to feed_live_pcm(), which mixes it to mono and
-// decimates it to 8 kHz into a one-second ring. update_live(), polled
-// at the visualizer frame rate, analyses the 100 ms ending at the
+// decimates it to 8 kHz into a one-second ring. update_live(), every
+// kLiveFrameMs while live and shown, analyses the 100 ms ending at the
 // sample being heard (the sink's backlog behind the newest one) with
 // the same window, FFT and log bands as a file chunk. A stream has no
 // whole-track 95th percentile to normalise by, so the reference
@@ -634,6 +699,10 @@ void AudioAnalyzer::set_live(bool live)
     }
     m_currentLevels = zeroLevels();
     emit fftDataChanged(m_currentLevels);
+    refreshActive();
+    // Back to local playback: its track's bars, if one is showing
+    if (!m_live && m_viewActive && !m_localFile.isEmpty())
+        analyze_file(m_localFile);
 }
 
 void AudioAnalyzer::feed_live_pcm(const QByteArray &pcm, int bufferedMs)

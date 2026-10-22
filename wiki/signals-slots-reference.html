@@ -661,17 +661,27 @@
         <h2 id="audioAnalyzer">AudioAnalyzer <span class="cmt">&mdash; <code>audioAnalyzer</code></span></h2>
         <p><span class="file-path">src/managers/audioanalyzer.h</span> &mdash; QML context property <code>audioAnalyzer</code></p>
         <p>Pre-computes FFT bar levels for the waveform visualizer and replays them at the playback position. It decodes to 8 kHz mono and bin the 0&ndash;4 kHz magnitudes into 96 logarithmic bands, each at least one FFT bin wide (the first bands are linear until the log curve overtakes them, so no bar is permanently 0).</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>levels</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>fftDataChanged</code></td><td>The current 96 bar levels (0&ndash;8)</td></tr>
+            <tr><td><code>numBars</code></td><td><code>int</code></td><td>constant</td><td>&mdash;</td><td>96</td></tr>
+          </tbody>
+        </table>
         <h3>Invokables &amp; Slots</h3>
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
+            <tr><td><code>setViewActive(bool active)</code></td><td><code>void</code></td><td>A view showing the bars is on screen; the only call a frontend makes. Nothing runs and no file is decoded while no view is active</td></tr>
+            <tr><td><code>setPlaying(bool)</code>, <code>setLocalFile(QString path)</code>, <code>setPosition(qint64 ms)</code></td><td><code>void</code></td><td>What is playing, fed by <code>main.cpp</code> from <code>nowPlaying.playing</code>, <code>MediaManager::currentMediaChanged</code> and <code>MediaManager::positionChanged</code> (local bars change at that 100 ms rate)</td></tr>
             <tr><td><code>analyze_file(QString filePath)</code></td><td><code>void</code></td><td>Decode a file and pre-compute FFT levels in 100 ms chunks off the GUI thread (QtConcurrent / ThreadPoolExecutor); a file requested mid-analysis is queued</td></tr>
             <tr><td><code>update_position(float positionSeconds)</code></td><td><code>void</code></td><td>Select the chunk for a playback position (seconds) and emit <code>fftDataChanged</code> when active</td></tr>
             <tr><td><code>set_active(bool active)</code></td><td><code>void</code></td><td>Enable/disable emission; disabling emits a row of zeros to clear the visualizer</td></tr>
             <tr><td><code>get_current_levels()</code></td><td><code>QVariantList</code></td><td>Last emitted bar levels</td></tr>
             <tr><td><code>get_num_bars()</code></td><td><code>int</code></td><td>Number of bars (96)</td></tr>
-            <tr><td><code>set_live(bool live)</code></td><td><code>void</code></td><td>Switch between file analysis and live phone PCM; resets the live buffers on a mode change</td></tr>
-            <tr><td><code>update_live()</code></td><td><code>void</code></td><td>Publish spectrum levels for the phone audio currently being heard; called at the visualizer refresh rate</td></tr>
+            <tr><td><code>set_live(bool live)</code></td><td><code>void</code></td><td>Switch between file analysis and live phone PCM (main.cpp, from <code>nowPlaying.source</code>); resets the live buffers on a mode change</td></tr>
+            <tr><td><code>update_live()</code></td><td><code>void</code></td><td>Publish spectrum levels for the phone audio currently being heard; run by the analyzer's own 50 ms timer while live and shown</td></tr>
             <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code></td><td><code>void</code></td><td>Slot connected in <code>main.cpp</code>. Receives s16le 48 kHz stereo PCM handed to the output sink and its queued delay from <code>PhoneMirrorManager.audioPlayed</code></td></tr>
             <tr><td><code>is_analyzed()</code></td><td><code>bool</code></td><td>True when FFT data for the current file is ready</td></tr>
             <tr><td><code>clear()</code></td><td><code>void</code></td><td>Drop the pre-computed data and reset the levels</td></tr>
@@ -1021,6 +1031,7 @@
             <tr><td><code>currentTripId</code></td><td><code>qint64</code></td><td><code>recordingChanged</code></td><td>Id (= start time in ms) of the open trip, 0 when idle</td></tr>
             <tr><td><code>currentTripStartMs</code></td><td><code>qint64</code></td><td><code>recordingChanged</code></td><td>Start of the open trip</td></tr>
             <tr><td><code>currentSampleCount</code></td><td><code>int</code></td><td><code>currentSampleCountChanged</code></td><td>Samples stored this trip (updated on each flush)</td></tr>
+            <tr><td><code>currentTripElapsedS</code></td><td><code>int</code></td><td><code>currentTripElapsedSChanged</code></td><td>Seconds since the trip being recorded started, 0 when none; moves once a second (the recorder's 1 s tick)</td></tr>
             <tr><td><code>trips</code></td><td><code>QVariantList</code></td><td><code>tripsChanged</code></td><td>Summaries newest first: <code>{id, startMs, endMs, startIso, endIso, durationS, open, clean, vin, make, modelYear, sampleCount, paramCount, distanceMiles, maxSpeed, maxRpm, maxCoolant, maxOilTemp, minVoltage, maxVoltage, fuelStart, fuelEnd, fuelUsedPct, eventCount, file, summaryFile}</code> (no per-parameter list)</td></tr>
             <tr><td><code>historyDir</code> / <code>tripsDir</code></td><td><code>QString</code></td><td><code>historyDirChanged</code></td><td><code>&lt;config&gt;/history</code> and its <code>trips/</code></td></tr>
             <tr><td><code>storageBytes</code></td><td><code>qint64</code></td><td><code>storageBytesChanged</code></td><td>Database (+ WAL) plus trip files</td></tr>
@@ -1052,7 +1063,8 @@
             <tr><td><code>tripStarted(qint64 id)</code></td><td>A trip opened</td></tr>
             <tr><td><code>tripEnded(qint64 id, QVariantMap summary)</code></td><td>Closed, summarised and written out</td></tr>
             <tr><td><code>detailReady(qint64 id, QVariantMap detail)</code>, <code>seriesReady(qint64 id, QString paramId, QVariantList points)</code>, <code>exportFinished(qint64 id, QString path)</code></td><td>Answers to the requests above (<code>path</code> empty on failure)</td></tr>
-            <tr><td><code>enabledChanged(bool)</code>, <code>storeReadyChanged()</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code></td><td>Property notifiers</td></tr>
+            <tr><td><code>enabledChanged(bool)</code>, <code>storeReadyChanged()</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code>, <code>currentTripElapsedSChanged()</code></td><td>Property notifiers</td></tr>
+            <tr><td><code>liveTripChanged(qint64 id)</code></td><td>New samples of the trip being recorded reached the store, at most once per 5 s: a view showing that trip re-requests its detail and series (the requests queue behind the write)</td></tr>
           </tbody>
         </table>
 

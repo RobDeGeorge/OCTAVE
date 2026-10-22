@@ -62,12 +62,10 @@ Item {
         }
     }
 
-    // QtQuick3D is an optional runtime dependency; probe it once so the 3D View
-    // card can say so instead of looking clickable and doing nothing.
-    property bool has3DView: {
-        var probe = Qt.createComponent("CarMenu.qml", Component.PreferSynchronous)
-        return probe.status === Component.Ready
-    }
+    // QtQuick3D is an optional runtime dependency (main.cpp checks for it
+    // without loading it) so the 3D View card can say so instead of looking
+    // clickable and doing nothing.
+    readonly property bool has3DView: typeof hasQuick3D !== "undefined" && hasQuick3D
 
     Rectangle {
         anchors.fill: parent

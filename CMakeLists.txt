@@ -191,6 +191,8 @@ qt_add_executable(octave
     src/util/perfscope.h
     src/util/dashboardgrid.h
     src/util/dashboardgrid.cpp
+    src/util/qmlmodules.h
+    src/util/qmlmodules.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
     src/managers/diagnosticsmanager.h
@@ -337,8 +339,11 @@ if(OCTAVE_HAVE_FFMPEG)
 endif()
 if(Qt6Quick3D_FOUND)
     target_link_libraries(octave PRIVATE Qt6::Quick3D)
+    # main.cpp: a mobile package always bundles a linked module (hasQuick3D)
+    target_compile_definitions(octave PRIVATE OCTAVE_LINKED_QUICK3D)
     if(Qt6Quick3DAssetUtils_FOUND AND Qt6QuickTimeline_FOUND)
         target_link_libraries(octave PRIVATE Qt6::Quick3DAssetUtils Qt6::QuickTimeline)
+        target_compile_definitions(octave PRIVATE OCTAVE_LINKED_QUICK3D_ASSETUTILS)
     endif()
 endif()
 if(TARGET Qt6::WebEngineQuick)

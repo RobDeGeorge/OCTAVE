@@ -190,3 +190,7 @@ endif()
 octave_add_test(tst_boot LIBS Qt6::Network DEFINES ${_boot_defines})
 add_dependencies(tst_boot octave)
 set_tests_properties(tst_boot PROPERTIES TIMEOUT 180)
+
+octave_add_test(tst_audioanalyzer SOURCES managers/audioanalyzer.h managers/audioanalyzer.cpp
+    LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent)
+octave_add_test(tst_qmlmodules SOURCES util/qmlmodules.h util/qmlmodules.cpp LIBS Qt6::Qml)

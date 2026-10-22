@@ -645,7 +645,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           </thead>
           <tbody>
             <tr><td><code>playbackStateChanged</code></td><td>int</td><td>Raw <code>QMediaPlayer</code> playback state, forwarded on every change: 0 stopped, 1 playing, 2 paused</td></tr>
-            <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped; also drives the position timer and the analyzer's <code>set_active</code></td></tr>
+            <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped; also drives the position timer (whose <code>positionChanged</code> reports also drive the waveform analyzer, through <code>main.cpp</code>)</td></tr>
             <tr><td><code>currentMediaChanged</code></td><td>str</td><td>Filename of the now-playing (or restored) track (<code>nowPlaying</code> follows it, and through its art the Album Art Capture colours)</td></tr>
             <tr><td><code>mediaListChanged</code></td><td>list</td><td>New ordered file list after a playlist selection, shuffle toggle, strip or scan</td></tr>
             <tr><td><code>metadataChanged</code></td><td>str, str, str</td><td>Title, artist, album for the current track</td></tr>

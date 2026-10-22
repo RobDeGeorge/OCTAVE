@@ -53,6 +53,8 @@ class TripRecorder : public QObject
     Q_PROPERTY(qint64 currentTripId READ currentTripId NOTIFY recordingChanged)
     Q_PROPERTY(qint64 currentTripStartMs READ currentTripStartMs NOTIFY recordingChanged)
     Q_PROPERTY(int currentSampleCount READ currentSampleCount NOTIFY currentSampleCountChanged)
+    // Seconds since the trip being recorded started (0 when none); moves once a second
+    Q_PROPERTY(int currentTripElapsedS READ currentTripElapsedS NOTIFY currentTripElapsedSChanged)
     // Trip summaries, newest first (see TripStore::listTrips)
     Q_PROPERTY(QVariantList trips READ trips NOTIFY tripsChanged)
     Q_PROPERTY(QString historyDir READ historyDir NOTIFY historyDirChanged)
@@ -85,6 +87,7 @@ public:
     qint64 currentTripId() const { return m_tripOpen ? m_tripId : 0; }
     qint64 currentTripStartMs() const { return m_tripOpen ? m_tripStartMs : 0; }
     int currentSampleCount() const { return m_sampleCount; }
+    int currentTripElapsedS() const { return m_elapsedS; }
     QVariantList trips() const { return m_trips; }
     QString historyDir() const { return m_historyDir; }
     QString tripsDir() const { return m_historyDir + QStringLiteral("/trips"); }
@@ -102,6 +105,8 @@ public:
     // times come straight from it instead of start + monotonic elapsed.
     void setClock(std::function<qint64()> clock) { m_clock = std::move(clock); }
     void setMaxBytes(qint64 bytes) { m_maxBytes = bytes; }
+    // Least time between two liveTripChanged signals (default 5 s)
+    void setLiveRefreshMs(int ms) { m_liveRefreshMs = ms; }
     // Run the trip-boundary check now (the 1 s timer does this normally)
     void tick();
     // Push buffered samples to the store now
@@ -137,6 +142,11 @@ signals:
     void storeReadyChanged();
     void recordingChanged();
     void currentSampleCountChanged();
+    void currentTripElapsedSChanged();
+    // New samples of the trip being recorded have reached the store, at most
+    // once per setLiveRefreshMs: a view showing that trip re-requests its
+    // detail and series (the requests queue behind the write)
+    void liveTripChanged(qint64 id);
     void tripsChanged();
     void historyDirChanged();
     void storageBytesChanged();
@@ -198,6 +208,10 @@ private:
     int m_engineOffTimeoutMs = 120000;
     int m_reconnectGraceMs = 120000;
     int m_heartbeatMs = 5000;
+    int m_liveRefreshMs = 5000;
+    qint64 m_lastLiveRefreshMs = 0;
+    int m_elapsedS = 0;
+    void updateElapsed();
     std::function<qint64()> m_clock;
 
     // Mirrors of store results for QML

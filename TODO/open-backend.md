@@ -2,7 +2,7 @@
 
 **Goal:** make the C++ managers a documented, language-neutral service so that anyone can write an OCTAVE frontend in whatever language or toolkit they like, with the QML UI in `frontend/` becoming the reference client rather than the only one.
 
-**Status:** in progress (audit done 2026-10-21; #1–#8 and #11 moved 2026-10-22)
+**Status:** in progress (audit done 2026-10-21; #1–#8, #11 and #12 moved 2026-10-22)
 **Last updated:** 2026-10-22
 
 This absorbed the earlier `backend-service-split.md` plan (2026-10-18), which was about running the managers as a separate process so a UI crash never stops the music. That benefit falls out of `--headless` once the contract exists, so the two plans are one; the process-specific constraints are in "Running the core as its own process" below.
@@ -53,6 +53,8 @@ Done: #6 phone-mirror recovery. `PhoneMirrorManager` publishes `lastErrorKind` (
 
 Done: #3 dashboard spec rules. `DashboardManager::normalizeSpec` is the one set of rules, applied by `saveDashboard` (editor, Duplicate, Import), `loadDashboard` and import; the grid placement is `src/util/dashboardgrid.{h,cpp}`, which the editor calls through `dashboardManager.canPlace` / `fitAt` (`tst_dashboardmanager`). Decided from octave-f4's audit: a cell off the grid moves in before it shrinks (as a drag does); overlaps resolve in file order, a later cell shrinking toward 1x1 and dropped only if its corner is taken; unknown widget types and PIDs are kept in the file (the editor shows them inert / unbound); a save needs a file-safe id (`[A-Za-z0-9_-]`, the one real bug: an id like `../x` used to write outside the folder); a newer schema loads untouched for the renderer and the editor won't open it; a file with no `cells` is an empty dashboard (it crashed the editor). All five presets already satisfy the rules. Not checked on a device: the editor's drag feel now that `canPlace` is a C++ call per drag frame.
 
+Done: #12 pollers. `AudioAnalyzer` drives itself (`setViewActive` from the page; `setPlaying`, `set_live`, `setLocalFile`, `setPosition` fed in main.cpp from `nowPlaying` and `MediaManager`): local bars at each 100 ms position report (10 Hz, was a 60 Hz poll), phone audio every 50 ms (was 60 FFTs a second on the GUI thread), nothing while hidden, a new track decoded after the card animation (`tst_audioanalyzer`). `TripRecorder` has `currentTripElapsedS` (its 1 s tick) and `liveTripChanged` (after a flush, at most every 5 s), replacing Trip History's two timers (`tst_triprecorder`). `hasQuick3D` / `hasQuick3DAssetUtils` come from a `qmldir` check in main.cpp (`src/util/qmlmodules`, `tst_qmlmodules`) instead of SensorHome compiling `CarMenu.qml`; MusicDevicePreference keeps its load test (only it catches a missing assimp) but skips it when the modules are absent. From the octave-f4 audit. Still to check on the Pi: waveform CPU with local and phone playback, and the Sensors home on a box without qt6-quick3d. Seen in passing: a file QAudioDecoder rejects waits out the 30 s watchdog instead of failing at the error.
+
 ### Tables duplicated between QML and C++
 
 | # | Item | Where today | Target | Effort |
@@ -64,7 +66,6 @@ Done: #3 dashboard spec rules. `DashboardManager::normalizeSpec` is the one set 
 
 | # | Item | Where today | Target | Effort |
 |---|---|---|---|---|
-| 12 | **Pollers in place of signals.** Waveform visualizer: a 16 ms QML timer calls `get_position` + `update_position` 60×/s then loops 96 repeater items per FFT frame, because `AudioAnalyzer` is not wired to `MediaManager` in `main.cpp` (only the phone PCM feed is). Trip History polls the live trip every 5 s although `TripRecorder` emits `currentSampleCountChanged`. `SensorHome.qml:68` answers "is Quick3D available" by synchronously compiling `CarMenu.qml`. | `MediaRoom.qml:1311-1357, 1387-1409`, `TripHistory.qml:168-179`, `SensorHome.qml:66-70` | Connect analyzer to media in C++, expose levels as a property; `currentTripElapsedS` + throttled `liveSummaryChanged` on `TripRecorder`; `hasQuick3D` context property from `main.cpp`. | S–M |
 | 13 | **Platform and persistence work in pages.** Android `content://` tree URIs and Windows drive letters decoded by hand in `settings/MediaSettingsPage.qml:52-82` while `dashboardmanager.cpp:498` has its own file-URL conversion; linear↔dB for phone audio gain in `AccessoriesSettingsPage.qml:2042-2053, 2111-2122`; screen size saved on every resize from both `Main.qml:1283-1295` and `DisplaySettingsPage.qml:196-269` with range limits only in a QML validator; font discovery via `FolderListModel` + dynamic `FontLoader`s (`Main.qml:1101-1226`); home-grid add/remove/move and the cap of 8 in `OBDSettingsPage.qml:1159-1172, 1503-1537` duplicating `settingsmanager.cpp:1413`. | as listed | `SettingsManager::save_media_folder_url(QUrl)`; dB properties; clamp in `save_screen_*`; `QFontDatabase` at startup; `add/remove/move_home_obd_parameter` slots. | S each |
 
 ### Data that is QML today but is really a resource
@@ -117,7 +118,7 @@ Never as one large update. Every item above can land as its own small change tha
 1. ~~The S items #1, #2, #4, #11~~ (all done 2026-10-22).
 2. ~~#7 and #8~~ (done 2026-10-22; Pi CPU comparison still to run).
 3. ~~#5 and #6~~ (done 2026-10-22; hardware checks listed in the Done notes).
-4. #9, #10, #12, #13 as they come up (#3 done 2026-10-22); none blocks the bridge.
+4. #9, #10, #13 as they come up (#3 and #12 done 2026-10-22); none blocks the bridge.
 5. Contract steps 1–5, then 7 and 8.
 6. Contract step 6 (media streams) last, after a prototype.
 
