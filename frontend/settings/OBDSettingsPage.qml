@@ -178,6 +178,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: !parent.recorderReady ? "Trip recorder unavailable"
+                    : !tripRecorder.storeReady ? "Black box unavailable: the database could not be opened (nothing is recorded)"
                     : tripRecorder.recording
                         ? "Recording · " + tripRecorder.currentSampleCount + " samples this drive"
                         : (settingsManager && settingsManager.blackBoxEnabled ? "Waiting for the engine" : "Off")

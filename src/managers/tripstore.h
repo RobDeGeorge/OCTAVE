@@ -2,7 +2,6 @@
 #define TRIPSTORE_H
 
 #include <QObject>
-#include <QSqlDatabase>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
@@ -20,7 +19,8 @@ struct TripSample {
 // ===========================================================================
 // TripStore -- the black box on disk.
 //
-// One SQLite database (<dir>/blackbox.sqlite, WAL) holds every sample of
+// One SQLite database (<dir>/blackbox.sqlite, WAL; SQLite is compiled in from
+// third_party/sqlite, so no Qt Sql driver plugin is needed) holds every sample of
 // every trip, keyed by trip, parameter and time, plus the events around them
 // (connection drops, MIL, trouble codes). When a trip ends it is summarised
 // (peaks, distance, per-parameter stats) and written out as a pair of files
@@ -46,7 +46,7 @@ public:
     // a no-op.
     bool open(const QString &dir);
     void close();
-    bool isOpen() const { return m_db.isOpen(); }
+    bool isOpen() const { return m_db != nullptr; }
     QString dir() const { return m_dir; }
     QString tripsDir() const { return m_dir + QStringLiteral("/trips"); }
     QString databasePath() const { return m_dir + QStringLiteral("/blackbox.sqlite"); }
@@ -90,6 +90,8 @@ public:
     qint64 sampleCount(qint64 id);
 
 signals:
+    // Result of open(): ok, and the error text when not
+    void storeOpened(bool ok, const QString &error);
     void tripsChanged(const QVariantList &trips);
     void tripFinalized(qint64 id, const QVariantMap &summary);
     void detailReady(qint64 id, const QVariantMap &detail);
@@ -112,8 +114,7 @@ private:
     void emitStorage();
 
     QString m_dir;
-    QString m_connectionName;
-    QSqlDatabase m_db;
+    struct sqlite3 *m_db = nullptr;
     QHash<QString, int> m_paramIds;
 };
 

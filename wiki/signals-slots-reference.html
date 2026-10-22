@@ -866,6 +866,7 @@
           <thead><tr><th>Name</th><th>Type</th><th>Notify</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>enabled</code></td><td><code>bool</code></td><td><code>enabledChanged</code></td><td>Mirrors <code>blackBoxEnabled</code></td></tr>
+            <tr><td><code>storeReady</code></td><td><code>bool</code></td><td><code>storeReadyChanged</code></td><td>The database opened; while false nothing is recorded and <code>lastError</code> says why</td></tr>
             <tr><td><code>recording</code></td><td><code>bool</code></td><td><code>recordingChanged</code></td><td>A trip is open</td></tr>
             <tr><td><code>currentTripId</code></td><td><code>qint64</code></td><td><code>recordingChanged</code></td><td>Id (= start time in ms) of the open trip, 0 when idle</td></tr>
             <tr><td><code>currentTripStartMs</code></td><td><code>qint64</code></td><td><code>recordingChanged</code></td><td>Start of the open trip</td></tr>
@@ -901,7 +902,7 @@
             <tr><td><code>tripStarted(qint64 id)</code></td><td>A trip opened</td></tr>
             <tr><td><code>tripEnded(qint64 id, QVariantMap summary)</code></td><td>Closed, summarised and written out</td></tr>
             <tr><td><code>detailReady(qint64 id, QVariantMap detail)</code>, <code>seriesReady(qint64 id, QString paramId, QVariantList points)</code>, <code>exportFinished(qint64 id, QString path)</code></td><td>Answers to the requests above (<code>path</code> empty on failure)</td></tr>
-            <tr><td><code>enabledChanged(bool)</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code></td><td>Property notifiers</td></tr>
+            <tr><td><code>enabledChanged(bool)</code>, <code>storeReadyChanged()</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code></td><td>Property notifiers</td></tr>
           </tbody>
         </table>
 

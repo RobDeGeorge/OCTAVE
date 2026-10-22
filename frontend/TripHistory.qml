@@ -207,7 +207,7 @@ Item {
                                     }
                                 }
                                 Text {
-                                    text: !available ? "Unavailable"
+                                    text: !available || !tripRecorder.storeReady ? "Unavailable"
                                         : !tripRecorder.enabled ? "Off"
                                         : recording ? "REC " + fmtClock(liveElapsedS) + " · " + tripRecorder.currentSampleCount
                                         : "Waiting for engine"
@@ -308,6 +308,7 @@ Item {
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.WordWrap
                             text: !available ? "The trip recorder is not available."
+                                : !tripRecorder.storeReady ? "The black box could not open its database, so nothing is recorded.\n" + tripRecorder.lastError
                                 : !tripRecorder.enabled ? "Black box recording is off.\nTurn it on in Settings → OBD → Black Box."
                                 : "No drives recorded yet.\nA trip starts on the first RPM reading after the adapter connects."
                             color: labelColor

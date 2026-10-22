@@ -8,11 +8,11 @@
 #include <QJsonObject>
 #include <QLoggingCategory>
 #include <QSaveFile>
-#include <QSqlError>
-#include <QSqlQuery>
 #include <QTextStream>
 
 #include <algorithm>
+
+#include "sqlite3.h"
 
 Q_LOGGING_CATEGORY(lcTripStore, "octave.tripstore")
 
@@ -21,11 +21,87 @@ const int kSchemaVersion = 1;
 // Gaps longer than this between two speed samples are not integrated into
 // the distance (a dropout, not a 10 s stretch at the last known speed)
 const qint64 kMaxIntegrationGapMs = 10000;
-}
+
+// A prepared statement with Qt-typed binds and reads; finalised on scope exit.
+class Query
+{
+public:
+    explicit Query(sqlite3 *db) : m_db(db) {}
+    ~Query() { sqlite3_finalize(m_stmt); }
+    Query(const Query &) = delete;
+    Query &operator=(const Query &) = delete;
+
+    bool prepare(const char *sql)
+    {
+        sqlite3_finalize(m_stmt);
+        m_stmt = nullptr;
+        if (sqlite3_prepare_v2(m_db, sql, -1, &m_stmt, nullptr) != SQLITE_OK) {
+            m_error = QString::fromUtf8(sqlite3_errmsg(m_db));
+            qCWarning(lcTripStore) << "prepare failed:" << sql << "--" << m_error;
+            return false;
+        }
+        return true;
+    }
+    bool prepare(const QString &sql) { return prepare(sql.toUtf8().constData()); }
+    Query &bind(int idx, qint64 v) { if (m_stmt) sqlite3_bind_int64(m_stmt, idx, v); return *this; }
+    Query &bind(int idx, int v) { if (m_stmt) sqlite3_bind_int(m_stmt, idx, v); return *this; }
+    Query &bind(int idx, double v) { if (m_stmt) sqlite3_bind_double(m_stmt, idx, v); return *this; }
+    Query &bind(int idx, const QString &v)
+    {
+        if (m_stmt) {
+            const QByteArray utf8 = v.toUtf8();
+            sqlite3_bind_text(m_stmt, idx, utf8.constData(), utf8.size(), SQLITE_TRANSIENT);
+        }
+        return *this;
+    }
+    // One row available (SELECT); false when done or failed
+    bool step()
+    {
+        if (!m_stmt)
+            return false;
+        const int rc = sqlite3_step(m_stmt);
+        if (rc == SQLITE_ROW)
+            return true;
+        if (rc != SQLITE_DONE) {
+            m_error = QString::fromUtf8(sqlite3_errmsg(m_db));
+            qCWarning(lcTripStore) << "step failed:" << m_error;
+        }
+        return false;
+    }
+    // Run to completion (INSERT / UPDATE / DELETE); true on success
+    bool exec()
+    {
+        if (!m_stmt)
+            return false;
+        const int rc = sqlite3_step(m_stmt);
+        if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
+            m_error = QString::fromUtf8(sqlite3_errmsg(m_db));
+            qCWarning(lcTripStore) << "exec failed:" << m_error;
+            return false;
+        }
+        return true;
+    }
+    void reset() { if (m_stmt) { sqlite3_reset(m_stmt); sqlite3_clear_bindings(m_stmt); } }
+    bool isNull(int col) const { return sqlite3_column_type(m_stmt, col) == SQLITE_NULL; }
+    qint64 int64(int col) const { return sqlite3_column_int64(m_stmt, col); }
+    int integer(int col) const { return sqlite3_column_int(m_stmt, col); }
+    double dbl(int col) const { return sqlite3_column_double(m_stmt, col); }
+    QString text(int col) const
+    {
+        const unsigned char *t = sqlite3_column_text(m_stmt, col);
+        return t ? QString::fromUtf8(reinterpret_cast<const char *>(t), sqlite3_column_bytes(m_stmt, col)) : QString();
+    }
+    QString error() const { return m_error; }
+
+private:
+    sqlite3 *m_db;
+    sqlite3_stmt *m_stmt = nullptr;
+    QString m_error;
+};
+} // namespace
 
 TripStore::TripStore(QObject *parent)
     : QObject(parent)
-    , m_connectionName(QStringLiteral("octave_blackbox_%1").arg(reinterpret_cast<quintptr>(this)))
 {
 }
 
@@ -43,46 +119,59 @@ bool TripStore::open(const QString &dir)
     close();
     m_dir = dir;
     if (!QDir().mkpath(tripsDir())) {
-        emit error(QStringLiteral("Cannot create %1").arg(tripsDir()));
-        return false;
-    }
-    m_db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), m_connectionName);
-    m_db.setDatabaseName(databasePath());
-    if (!m_db.open()) {
-        const QString msg = QStringLiteral("Cannot open %1: %2").arg(databasePath(), m_db.lastError().text());
+        const QString msg = QStringLiteral("Cannot create %1").arg(tripsDir());
         qCWarning(lcTripStore) << msg;
         emit error(msg);
-        m_db = QSqlDatabase();
-        QSqlDatabase::removeDatabase(m_connectionName);
+        emit storeOpened(false, msg);
         return false;
     }
+    sqlite3 *db = nullptr;
+    const int rc = sqlite3_open_v2(databasePath().toUtf8().constData(), &db,
+                                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+    if (rc != SQLITE_OK) {
+        const QString msg = QStringLiteral("Cannot open %1: %2")
+                                .arg(databasePath(), db ? QString::fromUtf8(sqlite3_errmsg(db)) : QString::fromUtf8(sqlite3_errstr(rc)));
+        qCWarning(lcTripStore) << msg;
+        if (db)
+            sqlite3_close(db);
+        emit error(msg);
+        emit storeOpened(false, msg);
+        return false;
+    }
+    m_db = db;
+    sqlite3_busy_timeout(m_db, 2000);
     if (!createSchema()) {
+        const QString msg = QStringLiteral("Cannot initialise %1").arg(databasePath());
         close();
+        emit storeOpened(false, msg);
         return false;
     }
-    qCInfo(lcTripStore) << "Black box open at" << databasePath();
+    qCInfo(lcTripStore) << "Black box open at" << databasePath() << "(SQLite" << SQLITE_VERSION << ")";
+    emit storeOpened(true, QString());
     return true;
 }
 
 void TripStore::close()
 {
-    if (m_db.isValid()) {
-        if (m_db.isOpen()) {
-            exec(QStringLiteral("PRAGMA wal_checkpoint(TRUNCATE)"));
-            m_db.close();
-        }
-        m_db = QSqlDatabase();
-        QSqlDatabase::removeDatabase(m_connectionName);
+    if (m_db) {
+        exec(QStringLiteral("PRAGMA wal_checkpoint(TRUNCATE)"));
+        sqlite3_close(m_db);
+        m_db = nullptr;
     }
     m_paramIds.clear();
 }
 
 bool TripStore::exec(const QString &sql)
 {
-    QSqlQuery q(m_db);
-    if (!q.exec(sql)) {
-        qCWarning(lcTripStore) << "SQL failed:" << sql << "--" << q.lastError().text();
-        emit error(q.lastError().text());
+    if (!m_db)
+        return false;
+    char *errmsg = nullptr;
+    const int rc = sqlite3_exec(m_db, sql.toUtf8().constData(), nullptr, nullptr, &errmsg);
+    if (rc != SQLITE_OK) {
+        const QString msg = errmsg ? QString::fromUtf8(errmsg) : QString::fromUtf8(sqlite3_errstr(rc));
+        sqlite3_free(errmsg);
+        qCWarning(lcTripStore) << "SQL failed:" << sql << "--" << msg;
+        emit error(msg);
         return false;
     }
     return true;
@@ -114,10 +203,9 @@ bool TripStore::createSchema()
         if (!exec(sql))
             return false;
     }
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', ?)"));
-    q.addBindValue(QString::number(kSchemaVersion));
-    q.exec();
+    Query q(m_db);
+    if (q.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', ?)"))
+        q.bind(1, QString::number(kSchemaVersion)).exec();
     return true;
 }
 
@@ -126,15 +214,16 @@ int TripStore::paramId(const QString &name)
     auto it = m_paramIds.constFind(name);
     if (it != m_paramIds.constEnd())
         return it.value();
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT OR IGNORE INTO params(name) VALUES(?)"));
-    q.addBindValue(name);
-    q.exec();
-    q.prepare(QStringLiteral("SELECT id FROM params WHERE name = ?"));
-    q.addBindValue(name);
+    Query ins(m_db);
+    if (ins.prepare("INSERT OR IGNORE INTO params(name) VALUES(?)"))
+        ins.bind(1, name).exec();
+    Query sel(m_db);
     int id = -1;
-    if (q.exec() && q.next())
-        id = q.value(0).toInt();
+    if (sel.prepare("SELECT id FROM params WHERE name = ?")) {
+        sel.bind(1, name);
+        if (sel.step())
+            id = sel.integer(0);
+    }
     if (id >= 0)
         m_paramIds.insert(name, id);
     return id;
@@ -143,9 +232,11 @@ int TripStore::paramId(const QString &name)
 QHash<int, QString> TripStore::paramNames()
 {
     QHash<int, QString> names;
-    QSqlQuery q(QStringLiteral("SELECT id, name FROM params"), m_db);
-    while (q.next())
-        names.insert(q.value(0).toInt(), q.value(1).toString());
+    Query q(m_db);
+    if (q.prepare("SELECT id, name FROM params")) {
+        while (q.step())
+            names.insert(q.integer(0), q.text(1));
+    }
     return names;
 }
 
@@ -157,16 +248,15 @@ void TripStore::beginTrip(qint64 id, qint64 startMs, const QVariantMap &meta)
 {
     if (!isOpen())
         return;
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT OR REPLACE INTO trips(id, start_ms, vin, make, model_year) VALUES(?, ?, ?, ?, ?)"));
-    q.addBindValue(id);
-    q.addBindValue(startMs);
-    q.addBindValue(meta.value(QStringLiteral("vin")).toString());
-    q.addBindValue(meta.value(QStringLiteral("make")).toString());
-    q.addBindValue(meta.value(QStringLiteral("modelYear")).toInt());
+    Query q(m_db);
+    if (!q.prepare("INSERT OR REPLACE INTO trips(id, start_ms, vin, make, model_year) VALUES(?, ?, ?, ?, ?)"))
+        return;
+    q.bind(1, id).bind(2, startMs)
+        .bind(3, meta.value(QStringLiteral("vin")).toString())
+        .bind(4, meta.value(QStringLiteral("make")).toString())
+        .bind(5, meta.value(QStringLiteral("modelYear")).toInt());
     if (!q.exec()) {
-        qCWarning(lcTripStore) << "beginTrip failed:" << q.lastError().text();
-        emit error(q.lastError().text());
+        emit error(q.error());
         return;
     }
     qCInfo(lcTripStore) << "Trip" << id << "started";
@@ -177,82 +267,77 @@ void TripStore::updateTripMeta(qint64 id, const QVariantMap &meta)
 {
     if (!isOpen())
         return;
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE trips SET vin = ?, make = ?, model_year = ? WHERE id = ?"));
-    q.addBindValue(meta.value(QStringLiteral("vin")).toString());
-    q.addBindValue(meta.value(QStringLiteral("make")).toString());
-    q.addBindValue(meta.value(QStringLiteral("modelYear")).toInt());
-    q.addBindValue(id);
-    q.exec();
+    Query q(m_db);
+    if (!q.prepare("UPDATE trips SET vin = ?, make = ?, model_year = ? WHERE id = ?"))
+        return;
+    q.bind(1, meta.value(QStringLiteral("vin")).toString())
+        .bind(2, meta.value(QStringLiteral("make")).toString())
+        .bind(3, meta.value(QStringLiteral("modelYear")).toInt())
+        .bind(4, id)
+        .exec();
 }
 
 void TripStore::append(const QVector<TripSample> &samples)
 {
     if (!isOpen() || samples.isEmpty())
         return;
-    if (!m_db.transaction()) {
-        qCWarning(lcTripStore) << "transaction failed:" << m_db.lastError().text();
+    if (!exec(QStringLiteral("BEGIN")))
+        return;
+    Query q(m_db);
+    if (!q.prepare("INSERT INTO samples(trip_id, ts_ms, param_id, value) VALUES(?, ?, ?, ?)")) {
+        exec(QStringLiteral("ROLLBACK"));
         return;
     }
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT INTO samples(trip_id, ts_ms, param_id, value) VALUES(?, ?, ?, ?)"));
     QHash<qint64, int> perTrip;
     for (const TripSample &s : samples) {
         const int pid = paramId(s.paramId);
         if (pid < 0)
             continue;
-        q.addBindValue(s.tripId);
-        q.addBindValue(s.tsMs);
-        q.addBindValue(pid);
-        q.addBindValue(static_cast<double>(s.value));
+        q.bind(1, s.tripId).bind(2, s.tsMs).bind(3, pid).bind(4, static_cast<double>(s.value));
         if (q.exec())
             ++perTrip[s.tripId];
+        q.reset();
     }
-    QSqlQuery c(m_db);
-    c.prepare(QStringLiteral("UPDATE trips SET sample_count = sample_count + ? WHERE id = ?"));
-    for (auto it = perTrip.constBegin(); it != perTrip.constEnd(); ++it) {
-        c.addBindValue(it.value());
-        c.addBindValue(it.key());
-        c.exec();
+    Query c(m_db);
+    if (c.prepare("UPDATE trips SET sample_count = sample_count + ? WHERE id = ?")) {
+        for (auto it = perTrip.constBegin(); it != perTrip.constEnd(); ++it) {
+            c.bind(1, it.value()).bind(2, it.key()).exec();
+            c.reset();
+        }
     }
-    if (!m_db.commit()) {
-        qCWarning(lcTripStore) << "commit failed:" << m_db.lastError().text();
-        m_db.rollback();
-    }
+    if (!exec(QStringLiteral("COMMIT")))
+        exec(QStringLiteral("ROLLBACK"));
 }
 
 void TripStore::appendEvent(qint64 tripId, qint64 tsMs, const QString &kind, const QString &detail)
 {
     if (!isOpen())
         return;
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT INTO events(trip_id, ts_ms, kind, detail) VALUES(?, ?, ?, ?)"));
-    q.addBindValue(tripId);
-    q.addBindValue(tsMs);
-    q.addBindValue(kind);
-    q.addBindValue(detail);
-    q.exec();
+    Query q(m_db);
+    if (q.prepare("INSERT INTO events(trip_id, ts_ms, kind, detail) VALUES(?, ?, ?, ?)"))
+        q.bind(1, tripId).bind(2, tsMs).bind(3, kind).bind(4, detail).exec();
 }
 
 QVariantMap TripStore::tripRow(qint64 id)
 {
     QVariantMap row;
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT id, start_ms, end_ms, clean, vin, make, model_year, sample_count, summary, file_base "
-                             "FROM trips WHERE id = ?"));
-    q.addBindValue(id);
-    if (!q.exec() || !q.next())
+    Query q(m_db);
+    if (!q.prepare("SELECT id, start_ms, end_ms, clean, vin, make, model_year, sample_count, summary, file_base "
+                   "FROM trips WHERE id = ?"))
         return row;
-    row[QStringLiteral("id")] = q.value(0).toLongLong();
-    row[QStringLiteral("startMs")] = q.value(1).toLongLong();
-    row[QStringLiteral("endMs")] = q.value(2).isNull() ? QVariant() : QVariant(q.value(2).toLongLong());
-    row[QStringLiteral("clean")] = q.value(3).toInt() != 0;
-    row[QStringLiteral("vin")] = q.value(4).toString();
-    row[QStringLiteral("make")] = q.value(5).toString();
-    row[QStringLiteral("modelYear")] = q.value(6).toInt();
-    row[QStringLiteral("sampleCount")] = q.value(7).toLongLong();
-    row[QStringLiteral("summary")] = q.value(8).toString();
-    row[QStringLiteral("fileBase")] = q.value(9).toString();
+    q.bind(1, id);
+    if (!q.step())
+        return row;
+    row[QStringLiteral("id")] = q.int64(0);
+    row[QStringLiteral("startMs")] = q.int64(1);
+    row[QStringLiteral("endMs")] = q.isNull(2) ? QVariant() : QVariant(q.int64(2));
+    row[QStringLiteral("clean")] = q.integer(3) != 0;
+    row[QStringLiteral("vin")] = q.text(4);
+    row[QStringLiteral("make")] = q.text(5);
+    row[QStringLiteral("modelYear")] = q.integer(6);
+    row[QStringLiteral("sampleCount")] = q.int64(7);
+    row[QStringLiteral("summary")] = q.text(8);
+    row[QStringLiteral("fileBase")] = q.text(9);
     return row;
 }
 
@@ -278,16 +363,13 @@ QVariantMap TripStore::endTrip(qint64 id, qint64 endMs, bool clean)
     if (writeTripFiles(id, startMs, summary, &base))
         summary[QStringLiteral("file")] = base + QStringLiteral(".csv");
 
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE trips SET end_ms = ?, clean = ?, summary = ?, file_base = ? WHERE id = ?"));
-    q.addBindValue(endMs);
-    q.addBindValue(clean ? 1 : 0);
-    q.addBindValue(QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(summary)).toJson(QJsonDocument::Compact)));
-    q.addBindValue(base);
-    q.addBindValue(id);
-    if (!q.exec()) {
-        qCWarning(lcTripStore) << "endTrip failed:" << q.lastError().text();
-        emit error(q.lastError().text());
+    Query q(m_db);
+    if (q.prepare("UPDATE trips SET end_ms = ?, clean = ?, summary = ?, file_base = ? WHERE id = ?")) {
+        q.bind(1, endMs).bind(2, clean ? 1 : 0)
+            .bind(3, QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(summary)).toJson(QJsonDocument::Compact)))
+            .bind(4, base).bind(5, id);
+        if (!q.exec())
+            emit error(q.error());
     }
     exec(QStringLiteral("PRAGMA wal_checkpoint(PASSIVE)"));
     qCInfo(lcTripStore) << "Trip" << id << "ended:" << summary.value(QStringLiteral("sampleCount")).toLongLong()
@@ -304,18 +386,23 @@ int TripStore::recoverOpenTrips()
     if (!isOpen())
         return 0;
     QList<qint64> open;
-    QSqlQuery q(QStringLiteral("SELECT id FROM trips WHERE end_ms IS NULL"), m_db);
-    while (q.next())
-        open.append(q.value(0).toLongLong());
+    {
+        Query q(m_db);
+        if (q.prepare("SELECT id FROM trips WHERE end_ms IS NULL")) {
+            while (q.step())
+                open.append(q.int64(0));
+        }
+    }
     for (qint64 id : open) {
-        QSqlQuery last(m_db);
-        last.prepare(QStringLiteral("SELECT MAX(ts_ms), COUNT(*) FROM samples WHERE trip_id = ?"));
-        last.addBindValue(id);
         qint64 endMs = 0;
         qint64 count = 0;
-        if (last.exec() && last.next()) {
-            endMs = last.value(0).toLongLong();
-            count = last.value(1).toLongLong();
+        Query last(m_db);
+        if (last.prepare("SELECT MAX(ts_ms), COUNT(*) FROM samples WHERE trip_id = ?")) {
+            last.bind(1, id);
+            if (last.step()) {
+                endMs = last.int64(0);
+                count = last.int64(1);
+            }
         }
         if (count == 0) {
             // Nothing was ever written: drop the empty shell instead of
@@ -351,19 +438,18 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
     QVariantList params;
     QHash<QString, QVariantMap> byName;
     {
-        QSqlQuery q(m_db);
-        q.prepare(QStringLiteral("SELECT p.name, COUNT(*), MIN(s.value), MAX(s.value), AVG(s.value) "
-                                 "FROM samples s JOIN params p ON p.id = s.param_id "
-                                 "WHERE s.trip_id = ? GROUP BY p.name ORDER BY p.name"));
-        q.addBindValue(id);
-        if (q.exec()) {
-            while (q.next()) {
+        Query q(m_db);
+        if (q.prepare("SELECT p.name, COUNT(*), MIN(s.value), MAX(s.value), AVG(s.value) "
+                      "FROM samples s JOIN params p ON p.id = s.param_id "
+                      "WHERE s.trip_id = ? GROUP BY p.name ORDER BY p.name")) {
+            q.bind(1, id);
+            while (q.step()) {
                 QVariantMap p;
-                p[QStringLiteral("id")] = q.value(0).toString();
-                p[QStringLiteral("count")] = q.value(1).toLongLong();
-                p[QStringLiteral("min")] = q.value(2).toDouble();
-                p[QStringLiteral("max")] = q.value(3).toDouble();
-                p[QStringLiteral("avg")] = q.value(4).toDouble();
+                p[QStringLiteral("id")] = q.text(0);
+                p[QStringLiteral("count")] = q.int64(1);
+                p[QStringLiteral("min")] = q.dbl(2);
+                p[QStringLiteral("max")] = q.dbl(3);
+                p[QStringLiteral("avg")] = q.dbl(4);
                 byName.insert(p.value(QStringLiteral("id")).toString(), p);
             }
         }
@@ -371,18 +457,22 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
     qint64 sampleCount = 0;
     QStringList names = byName.keys();
     names.sort();
+    Query first(m_db), lastQ(m_db);
+    const bool haveEnds = first.prepare("SELECT value FROM samples WHERE trip_id = ? AND param_id = ? ORDER BY ts_ms ASC LIMIT 1")
+                          && lastQ.prepare("SELECT value FROM samples WHERE trip_id = ? AND param_id = ? ORDER BY ts_ms DESC LIMIT 1");
     for (const QString &name : names) {
         QVariantMap p = byName.value(name);
         sampleCount += p.value(QStringLiteral("count")).toLongLong();
         const int pid = paramId(name);
-        for (const char *order : {"ASC", "DESC"}) {
-            QSqlQuery q(m_db);
-            q.prepare(QStringLiteral("SELECT value FROM samples WHERE trip_id = ? AND param_id = ? ORDER BY ts_ms %1 LIMIT 1")
-                          .arg(QLatin1String(order)));
-            q.addBindValue(id);
-            q.addBindValue(pid);
-            if (q.exec() && q.next())
-                p[QLatin1String(order[0] == 'A' ? "first" : "last")] = q.value(0).toDouble();
+        if (haveEnds) {
+            first.bind(1, id).bind(2, pid);
+            if (first.step())
+                p[QStringLiteral("first")] = first.dbl(0);
+            first.reset();
+            lastQ.bind(1, id).bind(2, pid);
+            if (lastQ.step())
+                p[QStringLiteral("last")] = lastQ.dbl(0);
+            lastQ.reset();
         }
         params.append(p);
     }
@@ -409,17 +499,15 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
     // Distance: trapezoid over the speed trace (mph x hours), dropouts skipped
     double miles = 0.0;
     if (byName.contains(QStringLiteral("SPEED"))) {
-        QSqlQuery q(m_db);
-        q.prepare(QStringLiteral("SELECT ts_ms, value FROM samples WHERE trip_id = ? AND param_id = ? ORDER BY ts_ms"));
-        q.addBindValue(id);
-        q.addBindValue(paramId(QStringLiteral("SPEED")));
-        if (q.exec()) {
+        Query q(m_db);
+        if (q.prepare("SELECT ts_ms, value FROM samples WHERE trip_id = ? AND param_id = ? ORDER BY ts_ms")) {
+            q.bind(1, id).bind(2, paramId(QStringLiteral("SPEED")));
             bool have = false;
             qint64 lastTs = 0;
             double lastV = 0.0;
-            while (q.next()) {
-                const qint64 ts = q.value(0).toLongLong();
-                const double v = std::max(0.0, q.value(1).toDouble());
+            while (q.step()) {
+                const qint64 ts = q.int64(0);
+                const double v = std::max(0.0, q.dbl(1));
                 if (have) {
                     const qint64 dt = ts - lastTs;
                     if (dt > 0 && dt <= kMaxIntegrationGapMs)
@@ -436,15 +524,14 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
     // Events
     QVariantList events;
     {
-        QSqlQuery q(m_db);
-        q.prepare(QStringLiteral("SELECT ts_ms, kind, detail FROM events WHERE trip_id = ? ORDER BY ts_ms"));
-        q.addBindValue(id);
-        if (q.exec()) {
-            while (q.next()) {
+        Query q(m_db);
+        if (q.prepare("SELECT ts_ms, kind, detail FROM events WHERE trip_id = ? ORDER BY ts_ms")) {
+            q.bind(1, id);
+            while (q.step()) {
                 QVariantMap e;
-                e[QStringLiteral("t")] = static_cast<double>(q.value(0).toLongLong() - startMs) / 1000.0;
-                e[QStringLiteral("kind")] = q.value(1).toString();
-                e[QStringLiteral("detail")] = q.value(2).toString();
+                e[QStringLiteral("t")] = static_cast<double>(q.int64(0) - startMs) / 1000.0;
+                e[QStringLiteral("kind")] = q.text(1);
+                e[QStringLiteral("detail")] = q.text(2);
                 events.append(e);
             }
         }
@@ -479,18 +566,17 @@ bool TripStore::writeTripFiles(qint64 id, qint64 startMs, const QVariantMap &sum
         }
         QTextStream out(&f);
         out << "timestamp_ms,time,elapsed_s,parameter,value\n";
-        QSqlQuery q(m_db);
-        q.prepare(QStringLiteral("SELECT s.ts_ms, p.name, s.value FROM samples s JOIN params p ON p.id = s.param_id "
-                                 "WHERE s.trip_id = ? ORDER BY s.ts_ms, p.name"));
-        q.addBindValue(id);
-        if (q.exec()) {
-            while (q.next()) {
-                const qint64 ts = q.value(0).toLongLong();
+        Query q(m_db);
+        if (q.prepare("SELECT s.ts_ms, p.name, s.value FROM samples s JOIN params p ON p.id = s.param_id "
+                      "WHERE s.trip_id = ? ORDER BY s.ts_ms, p.name")) {
+            q.bind(1, id);
+            while (q.step()) {
+                const qint64 ts = q.int64(0);
                 out << ts << ','
                     << QDateTime::fromMSecsSinceEpoch(ts).toString(Qt::ISODateWithMs) << ','
                     << QString::number(static_cast<double>(ts - startMs) / 1000.0, 'f', 3) << ','
-                    << q.value(1).toString() << ','
-                    << QString::number(q.value(2).toDouble(), 'g', 7) << '\n';
+                    << q.text(1) << ','
+                    << QString::number(q.dbl(2), 'g', 7) << '\n';
             }
         }
         out.flush();
@@ -570,10 +656,14 @@ QVariantList TripStore::listTrips()
     QVariantList list;
     if (!isOpen())
         return list;
-    QSqlQuery q(QStringLiteral("SELECT id FROM trips ORDER BY start_ms DESC"), m_db);
     QList<qint64> ids;
-    while (q.next())
-        ids.append(q.value(0).toLongLong());
+    {
+        Query q(m_db);
+        if (q.prepare("SELECT id FROM trips ORDER BY start_ms DESC")) {
+            while (q.step())
+                ids.append(q.int64(0));
+        }
+    }
     for (qint64 id : ids)
         list.append(rowSummary(tripRow(id)));
     emit tripsChanged(list);
@@ -591,12 +681,13 @@ QVariantMap TripStore::tripDetail(qint64 id)
     const bool open = !row.value(QStringLiteral("endMs")).isValid();
     if (open) {
         // Live summary of the trip being recorded (not persisted)
-        QSqlQuery last(m_db);
-        last.prepare(QStringLiteral("SELECT MAX(ts_ms) FROM samples WHERE trip_id = ?"));
-        last.addBindValue(id);
         qint64 endMs = row.value(QStringLiteral("startMs")).toLongLong();
-        if (last.exec() && last.next() && !last.value(0).isNull())
-            endMs = last.value(0).toLongLong();
+        Query last(m_db);
+        if (last.prepare("SELECT MAX(ts_ms) FROM samples WHERE trip_id = ?")) {
+            last.bind(1, id);
+            if (last.step() && !last.isNull(0))
+                endMs = last.int64(0);
+        }
         QVariantMap meta;
         meta[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
         meta[QStringLiteral("make")] = row.value(QStringLiteral("make"));
@@ -624,31 +715,27 @@ QVariantList TripStore::series(qint64 id, const QString &param, int maxPoints)
         return points;
     const qint64 startMs = row.value(QStringLiteral("startMs")).toLongLong();
     qint64 endMs = row.value(QStringLiteral("endMs")).toLongLong();
-    const int pid = m_paramIds.value(param, -1) >= 0 ? m_paramIds.value(param) : paramId(param);
+    const int pid = paramId(param);
     if (!row.value(QStringLiteral("endMs")).isValid()) {
-        QSqlQuery last(m_db);
-        last.prepare(QStringLiteral("SELECT MAX(ts_ms) FROM samples WHERE trip_id = ? AND param_id = ?"));
-        last.addBindValue(id);
-        last.addBindValue(pid);
-        if (last.exec() && last.next())
-            endMs = last.value(0).toLongLong();
+        Query last(m_db);
+        if (last.prepare("SELECT MAX(ts_ms) FROM samples WHERE trip_id = ? AND param_id = ?")) {
+            last.bind(1, id).bind(2, pid);
+            if (last.step())
+                endMs = last.int64(0);
+        }
     }
     maxPoints = std::max(2, maxPoints);
     const qint64 bucketMs = std::max<qint64>(1, (endMs - startMs) / maxPoints + 1);
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT ((ts_ms - ?) / ?) AS b, MIN(ts_ms), AVG(value), MIN(value), MAX(value) "
-                             "FROM samples WHERE trip_id = ? AND param_id = ? GROUP BY b ORDER BY b"));
-    q.addBindValue(startMs);
-    q.addBindValue(bucketMs);
-    q.addBindValue(id);
-    q.addBindValue(pid);
-    if (q.exec()) {
-        while (q.next()) {
+    Query q(m_db);
+    if (q.prepare("SELECT ((ts_ms - ?) / ?) AS b, MIN(ts_ms), AVG(value), MIN(value), MAX(value) "
+                  "FROM samples WHERE trip_id = ? AND param_id = ? GROUP BY b ORDER BY b")) {
+        q.bind(1, startMs).bind(2, bucketMs).bind(3, id).bind(4, pid);
+        while (q.step()) {
             QVariantMap p;
-            p[QStringLiteral("t")] = static_cast<double>(q.value(1).toLongLong() - startMs) / 1000.0;
-            p[QStringLiteral("v")] = q.value(2).toDouble();
-            p[QStringLiteral("lo")] = q.value(3).toDouble();
-            p[QStringLiteral("hi")] = q.value(4).toDouble();
+            p[QStringLiteral("t")] = static_cast<double>(q.int64(1) - startMs) / 1000.0;
+            p[QStringLiteral("v")] = q.dbl(2);
+            p[QStringLiteral("lo")] = q.dbl(3);
+            p[QStringLiteral("hi")] = q.dbl(4);
             points.append(p);
         }
     }
@@ -658,10 +745,13 @@ QVariantList TripStore::series(qint64 id, const QString &param, int maxPoints)
 
 qint64 TripStore::sampleCount(qint64 id)
 {
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT COUNT(*) FROM samples WHERE trip_id = ?"));
-    q.addBindValue(id);
-    return (q.exec() && q.next()) ? q.value(0).toLongLong() : 0;
+    if (!isOpen())
+        return 0;
+    Query q(m_db);
+    if (!q.prepare("SELECT COUNT(*) FROM samples WHERE trip_id = ?"))
+        return 0;
+    q.bind(1, id);
+    return q.step() ? q.int64(0) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -673,15 +763,16 @@ bool TripStore::deleteTrip(qint64 id)
     if (!isOpen())
         return false;
     const QString base = tripFileBase(id);
-    m_db.transaction();
+    exec(QStringLiteral("BEGIN"));
     for (const char *sql : {"DELETE FROM samples WHERE trip_id = ?", "DELETE FROM events WHERE trip_id = ?",
                             "DELETE FROM trips WHERE id = ?"}) {
-        QSqlQuery q(m_db);
-        q.prepare(QLatin1String(sql));
-        q.addBindValue(id);
-        q.exec();
+        Query q(m_db);
+        if (q.prepare(sql))
+            q.bind(1, id).exec();
     }
-    const bool ok = m_db.commit();
+    const bool ok = exec(QStringLiteral("COMMIT"));
+    if (!ok)
+        exec(QStringLiteral("ROLLBACK"));
     removeTripFiles(base);
     exec(QStringLiteral("PRAGMA incremental_vacuum"));
     qCInfo(lcTripStore) << "Trip" << id << "deleted";
@@ -695,15 +786,20 @@ void TripStore::clearAll()
     if (!isOpen())
         return;
     QList<QString> bases;
-    QSqlQuery q(QStringLiteral("SELECT file_base FROM trips WHERE end_ms IS NOT NULL"), m_db);
-    while (q.next())
-        bases.append(q.value(0).toString());
-    m_db.transaction();
+    {
+        Query q(m_db);
+        if (q.prepare("SELECT file_base FROM trips WHERE end_ms IS NOT NULL")) {
+            while (q.step())
+                bases.append(q.text(0));
+        }
+    }
+    exec(QStringLiteral("BEGIN"));
     // Keep the trip being recorded (end_ms NULL) and its samples
     exec(QStringLiteral("DELETE FROM samples WHERE trip_id IN (SELECT id FROM trips WHERE end_ms IS NOT NULL)"));
     exec(QStringLiteral("DELETE FROM events WHERE trip_id IN (SELECT id FROM trips WHERE end_ms IS NOT NULL)"));
     exec(QStringLiteral("DELETE FROM trips WHERE end_ms IS NOT NULL"));
-    m_db.commit();
+    if (!exec(QStringLiteral("COMMIT")))
+        exec(QStringLiteral("ROLLBACK"));
     for (const QString &b : bases)
         removeTripFiles(b);
     exec(QStringLiteral("PRAGMA incremental_vacuum"));
@@ -736,20 +832,27 @@ qint64 TripStore::prune(qint64 maxBytes)
     qint64 bytes = storageBytes();
     int deleted = 0;
     while (bytes > maxBytes) {
-        QSqlQuery q(QStringLiteral("SELECT id FROM trips WHERE end_ms IS NOT NULL ORDER BY start_ms ASC LIMIT 1"), m_db);
-        if (!q.next())
+        qint64 id = 0;
+        bool found = false;
+        {
+            Query q(m_db);
+            if (q.prepare("SELECT id FROM trips WHERE end_ms IS NOT NULL ORDER BY start_ms ASC LIMIT 1") && q.step()) {
+                id = q.int64(0);
+                found = true;
+            }
+        }
+        if (!found)
             break;
-        const qint64 id = q.value(0).toLongLong();
         const QString base = tripFileBase(id);
-        m_db.transaction();
+        exec(QStringLiteral("BEGIN"));
         for (const char *sql : {"DELETE FROM samples WHERE trip_id = ?", "DELETE FROM events WHERE trip_id = ?",
                                 "DELETE FROM trips WHERE id = ?"}) {
-            QSqlQuery d(m_db);
-            d.prepare(QLatin1String(sql));
-            d.addBindValue(id);
-            d.exec();
+            Query d(m_db);
+            if (d.prepare(sql))
+                d.bind(1, id).exec();
         }
-        m_db.commit();
+        if (!exec(QStringLiteral("COMMIT")))
+            exec(QStringLiteral("ROLLBACK"));
         removeTripFiles(base);
         ++deleted;
         exec(QStringLiteral("PRAGMA incremental_vacuum"));

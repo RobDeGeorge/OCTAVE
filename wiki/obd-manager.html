@@ -663,7 +663,8 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
         <p>
           <code>TripRecorder</code> (<span class="file-path">src/managers/triprecorder.{h,cpp}</span>, QML context
           property <code>tripRecorder</code>) records every decoded OBD value of every drive, with its time, into a
-          SQLite database, and writes each drive out as a CSV + JSON pair when it ends. It is the vehicle's black box:
+          SQLite database (SQLite compiled in from <span class="file-path">third_party/sqlite/</span>, no Qt Sql
+          driver plugin involved), and writes each drive out as a CSV + JSON pair when it ends. It is the vehicle's black box:
           the pages on screen decide what is polled fast, the recorder makes sure everything the car supports is
           recorded at least slowly, and a power cut loses at most the last two seconds.
         </p>
@@ -701,7 +702,10 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
         <p>
           On start the store finalises any trip left open (<code>recoverOpenTrips()</code>: end = last sample, empty
           shells dropped), then prunes the oldest closed trips until the database and files fit the
-          <code>blackBoxMaxMB</code> cap (default 500 MB; about 3 MB per hour of driving with the full sweep). "Export"
+          <code>blackBoxMaxMB</code> cap (default 500 MB; about 3 MB per hour of driving with the full sweep). If the
+          database cannot be opened (read-only or full file system, a broken config directory) <code>storeReady</code>
+          stays false, <code>lastError</code> carries the reason, the OBD Home tile and the Black Box settings card say
+          "unavailable", and nothing is recorded: the recorder never pretends. "Export"
           copies a drive's pair into <code>Downloads/OCTAVE-trips/</code> (the way to get a file off a phone); on desktop
           "Open folder" opens <code>trips/</code>.
         </p>

@@ -298,6 +298,7 @@ Item {
                     border.width: lastSubpage === "TripHistory.qml" ? 2 : 0
 
                     readonly property bool recording: typeof tripRecorder !== "undefined" && tripRecorder && tripRecorder.recording
+                    readonly property bool unavailable: typeof tripRecorder !== "undefined" && tripRecorder && !tripRecorder.storeReady
                     readonly property int tripCount: typeof tripRecorder !== "undefined" && tripRecorder ? tripRecorder.trips.length : 0
 
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -349,7 +350,8 @@ Item {
                         }
 
                         Text {
-                            text: tripCard.recording ? "Recording this drive"
+                            text: tripCard.unavailable ? "Black box unavailable"
+                                : tripCard.recording ? "Recording this drive"
                                 : tripCard.tripCount > 0 ? tripCard.tripCount + (tripCard.tripCount === 1 ? " drive logged" : " drives logged")
                                 : "Black box drive logs"
                             color: labelColor

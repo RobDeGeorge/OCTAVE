@@ -41,7 +41,7 @@ octave_add_test(tst_triprecorder
             managers/obdmanager.h managers/obdmanager.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
-    LIBS Qt6::Gui Qt6::SerialPort Qt6::Sql)
+    LIBS Qt6::Gui Qt6::SerialPort octave_sqlite)
 octave_add_test(tst_esp32readbuffer SOURCES managers/esp32volumemanager.h managers/esp32volumemanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui Qt6::SerialPort)
 # Port selection and the no-writes-before-the-knob-speaks rule, over a pty (Linux)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

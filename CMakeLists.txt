@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
-project(OCTAVE VERSION 0.9.5 LANGUAGES CXX)
+project(OCTAVE VERSION 0.9.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 # ---- Qt 6 ----
-set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Concurrent SerialPort Bluetooth Sql)
+set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Concurrent SerialPort Bluetooth)
 if(ANDROID)
     list(APPEND OCTAVE_QT_COMPONENTS Sensors)
 endif()
@@ -61,6 +61,28 @@ else()
                    "Install it to enable (Arch: qt6-quick3d, Debian/Ubuntu: qt6-quick3d-dev, "
                    "macOS: brew install qt, or add the Quick3D module in the Qt online installer).")
 endif()
+# SQLite for the black box trip store (src/managers/tripstore.cpp), compiled
+# in from the public-domain amalgamation (third_party/sqlite/README.md) so no
+# platform depends on a Qt Sql driver plugin being installed at runtime.
+add_library(octave_sqlite STATIC third_party/sqlite/sqlite3.c)
+target_include_directories(octave_sqlite PUBLIC "${CMAKE_SOURCE_DIR}/third_party/sqlite")
+target_compile_definitions(octave_sqlite PRIVATE
+    SQLITE_THREADSAFE=1
+    SQLITE_OMIT_LOAD_EXTENSION=1
+    SQLITE_OMIT_DEPRECATED=1
+    SQLITE_DQS=0
+    SQLITE_DEFAULT_WAL_SYNCHRONOUS=2
+    SQLITE_LIKE_DOESNT_MATCH_BLOBS=1
+    SQLITE_MAX_EXPR_DEPTH=0)
+set_target_properties(octave_sqlite PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(octave_sqlite PRIVATE -w)   # third-party: not our warnings
+endif()
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    find_package(Threads REQUIRED)
+    target_link_libraries(octave_sqlite PUBLIC Threads::Threads)
+endif()
+
 # Qt6::CorePrivate is an imported target provided by Qt6::Core — not a
 # separately-findable component. Linking it grants access to private headers
 # (QtAndroidPrivate::requestPermission on Android).
@@ -250,7 +272,7 @@ target_link_libraries(octave PRIVATE
     Qt6::Concurrent
     Qt6::SerialPort
     Qt6::Bluetooth
-    Qt6::Sql
+    octave_sqlite
 )
 # Desktop Linux pairs OBD adapters through BlueZ over D-Bus (PIN agent +
 # trust), see src/platform/bluezpairer.h. Qt Bluetooth already depends on

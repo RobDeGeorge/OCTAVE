@@ -47,6 +47,8 @@ class TripRecorder : public QObject
     Q_OBJECT
 
     Q_PROPERTY(bool enabled READ enabled NOTIFY enabledChanged)
+    // The database opened; while false nothing is recorded and lastError says why
+    Q_PROPERTY(bool storeReady READ storeReady NOTIFY storeReadyChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(qint64 currentTripId READ currentTripId NOTIFY recordingChanged)
     Q_PROPERTY(qint64 currentTripStartMs READ currentTripStartMs NOTIFY recordingChanged)
@@ -78,6 +80,7 @@ public:
     void shutdown();
 
     bool enabled() const { return m_enabled; }
+    bool storeReady() const { return m_storeReady; }
     bool recording() const { return m_tripOpen; }
     qint64 currentTripId() const { return m_tripOpen ? m_tripId : 0; }
     qint64 currentTripStartMs() const { return m_tripOpen ? m_tripStartMs : 0; }
@@ -129,6 +132,7 @@ public slots:
 
 signals:
     void enabledChanged(bool enabled);
+    void storeReadyChanged();
     void recordingChanged();
     void currentSampleCountChanged();
     void tripsChanged();
@@ -159,6 +163,7 @@ private:
     QString m_historyDir;
     bool m_started = false;
     bool m_shutDown = false;
+    bool m_storeReady = false;
 
     // Settings mirror
     bool m_enabled = true;

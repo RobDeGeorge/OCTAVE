@@ -14,6 +14,8 @@ Third-party code bundled in this repository:
   (https://www.nayuki.io/page/qr-code-generator-library).
   src/phone_mirror/qrcodegen.{hpp,cpp}
 - phone_server/: fork of the scrcpy server, Apache License 2.0 (see phone_server/LICENSE.scrcpy)
+- SQLite 3.54.1 amalgamation, public domain (https://sqlite.org/copyright.html).
+  third_party/sqlite/sqlite3.{c,h}, compiled in for the black box trip store
 - Fonts in frontend/assets/fonts/, all under the SIL Open Font License 1.1
   (full text: frontend/assets/fonts/symbols/OFL.txt):
   - Google Sans, Copyright 2025 The Google Sans Project Authors

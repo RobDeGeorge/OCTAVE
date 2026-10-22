@@ -217,6 +217,18 @@ ls -la /dev/rfcomm0</code></pre>
         <p>TX/RX lines with round-trip times are logged at debug level under <code>octave.elm327</code> (run with <code>--debug</code> and read <code>octave-cpp-debug.log</code>); short responses and decoder exceptions are warnings and always logged.</p>
 
         <!-- Android OBD -->
+        <h3 id="black-box-unavailable">Black box says "unavailable" / Trip History stays empty after a drive</h3>
+        <p>
+          The OBD Home tile reads "Black box unavailable", the Black Box card in OBD settings shows the error under
+          Status, and <code>octave-cpp.log</code> has a <code>octave.tripstore</code> warning such as
+          <code>Cannot open .../history/blackbox.sqlite: ...</code>. The recorder then records nothing rather than
+          pretend. Common causes: the config directory is not writable or the disk is full (the error names the path);
+          or a build older than the bundled SQLite (<span class="file-path">third_party/sqlite/</span>) running on a
+          Debian / Ubuntu box without the <code>libqt6sql6-sqlite</code> package, which showed as
+          <code>Driver not loaded</code>. Current builds compile SQLite in and need no package; for an old build install
+          that package and restart OCTAVE. See <a href="obd-manager.html#black-box">OBD Manager &rarr; Black Box</a>.
+        </p>
+
         <h2 id="android-obd">Android OBD (Bluetooth / BLE)</h2>
         <span class="platform-badge android">Android</span>
         <p>The APK connects to ELM327 adapters over Bluetooth through <span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span> (Qt's <code>QLowEnergyController</code> is deliberately bypassed). The manifest declares <code>BLUETOOTH_CONNECT</code>, <code>BLUETOOTH_SCAN</code> (<code>neverForLocation</code>, so no location permission is needed on Android 12+) and <code>BLUETOOTH_ADVERTISE</code>; <code>ACCESS_FINE_LOCATION</code> is only declared up to API 30.</p>

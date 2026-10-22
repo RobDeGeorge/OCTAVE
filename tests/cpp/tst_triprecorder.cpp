@@ -37,6 +37,8 @@ class TstTripRecorder : public QObject
         r->setFlushIntervalMs(50);
         r->setHeartbeatMs(2000);
         r->start();
+        // The store opens on its own thread; nothing is recorded until it reports ready
+        QTest::qWaitFor([&r]() { return r->storeReady(); }, 5000);
         r->setConnected(true);
         r->setVehicleParameters({QStringLiteral("RPM"), QStringLiteral("SPEED"), QStringLiteral("COOLANT_TEMP")});
         return r;
@@ -391,6 +393,30 @@ private slots:
         // Turning it off mid-trip ends the trip
         m_settings->save_black_box_enabled(false);
         QVERIFY(!r->recording());
+        r->shutdown();
+    }
+
+    void unopenableStoreNeverPretendsToRecord()
+    {
+        // A history dir under a regular file cannot be created
+        QFile blocker(m_tmp->path() + "/blocker");
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.close();
+        auto r = std::make_unique<TripRecorder>(m_settings.get());
+        r->setHistoryDir(m_tmp->path() + "/blocker/history");
+        r->setClock([this]() { return m_now; });
+        QSignalSpy ready(r.get(), &TripRecorder::storeReadyChanged);
+        QSignalSpy errors(r.get(), &TripRecorder::lastErrorChanged);
+        r->start();
+        r->setConnected(true);
+        QTRY_VERIFY_WITH_TIMEOUT(errors.count() >= 1, 5000);
+        QVERIFY(!r->storeReady());
+        QVERIFY(!r->lastError().isEmpty());
+        QCOMPARE(ready.count(), 0);
+        m_now += 1000;
+        r->recordSample(QStringLiteral("RPM"), 1200.0f);
+        QVERIFY(!r->recording());
+        QCOMPARE(r->currentSampleCount(), 0);
         r->shutdown();
     }
 

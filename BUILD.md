@@ -65,6 +65,9 @@ perf tooling) and links Qt Test. See `wiki/development.html`.
 
 ### Linux
 
+SQLite (for the OBD black box) is compiled in from `third_party/sqlite/`, so no
+`libsqlite3` / Qt Sql driver package is needed at build or run time.
+
 ```bash
 sudo apt install -y build-essential cmake ninja-build pkg-config \
                     libgl1-mesa-dev libxkbcommon-dev libfontconfig1 libdbus-1-3 \

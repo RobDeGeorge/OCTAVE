@@ -112,6 +112,17 @@ void TripRecorder::start()
     m_store->moveToThread(m_thread);
     connect(m_thread, &QThread::finished, m_store, &QObject::deleteLater);
 
+    connect(m_store, &TripStore::storeOpened, this, [this](bool ok, const QString &err) {
+        if (!ok) {
+            m_lastError = err;
+            emit lastErrorChanged();
+            qCWarning(lcTrip) << "Black box unavailable, nothing will be recorded:" << err;
+        }
+        if (ok != m_storeReady) {
+            m_storeReady = ok;
+            emit storeReadyChanged();
+        }
+    });
     connect(m_store, &TripStore::tripsChanged, this, [this](const QVariantList &trips) {
         m_trips = trips;
         emit tripsChanged();
@@ -236,8 +247,8 @@ qint64 TripRecorder::sampleTimeMs()
 
 void TripRecorder::recordSample(const QString &paramId, float value)
 {
-    if (!m_enabled || !m_store)
-        return;
+    if (!m_enabled || !m_store || !m_storeReady)
+        return;   // no database: never pretend to record
     const qint64 now = nowMs();
     m_lastSampleMs = now;
 
