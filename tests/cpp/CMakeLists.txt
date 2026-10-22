@@ -162,6 +162,19 @@ octave_add_test(tst_phonemirror
 if(WIN32 AND OCTAVE_HAVE_FFMPEG)
     target_include_directories(tst_phonemirror PRIVATE ${FFMPEG_INCLUDE_DIRS})
 endif()
+# NowPlaying over the real MediaManager and PhoneMirrorManager
+octave_add_test(tst_nowplaying
+    SOURCES managers/nowplaying.h managers/nowplaying.cpp
+            managers/mediamanager.h managers/mediamanager.cpp
+            managers/phonemirrormanager.h managers/phonemirrormanager.cpp
+            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
+            phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS ${_mirror_libs} Qt6::Concurrent ${_taglib}
+    DEFINES ${_mirror_defines})
+if(WIN32 AND OCTAVE_HAVE_FFMPEG)
+    target_include_directories(tst_nowplaying PRIVATE ${FFMPEG_INCLUDE_DIRS})
+endif()
 # The bundled phone server, as in the app (ScrcpyClient::available() checks it)
 qt_add_resources(tst_phonemirror "phone_server"
     PREFIX "/phone-server"

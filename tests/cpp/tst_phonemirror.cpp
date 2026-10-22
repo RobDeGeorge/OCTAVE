@@ -271,6 +271,30 @@ private slots:
         QCOMPARE(changes, (QList<bool>{true, false, true, false}));
     }
 
+    void trackChangedOnlyForANewTrack()
+    {
+        // mediaChanged fires for every state report (play/pause, position,
+        // metadata); mediaTrackChanged only when the track itself changes, so
+        // consumers stop diffing title + artist themselves
+        PhoneMirrorManager m;
+        QSignalSpy track(&m, &PhoneMirrorManager::mediaTrackChanged);
+        m.onMediaState(mediaState(true, "Song"));
+        QCOMPARE(track.count(), 1);                // first report
+        m.onMediaState(mediaState(false, "Song"));  // pause
+        m.onMediaState(mediaState(true, "Song"));   // play, new position
+        QCOMPARE(track.count(), 1);
+        m.onMediaState(mediaState(true, "Other"));
+        QCOMPARE(track.count(), 2);
+        QVariantMap otherApp = mediaState(true, "Other");
+        otherApp.insert("package", "com.example.podcasts");   // same title, another app
+        m.onMediaState(otherApp);
+        QCOMPARE(track.count(), 3);
+        m.resetMedia();                            // the track is gone
+        QCOMPARE(track.count(), 4);
+        m.resetMedia();
+        QCOMPARE(track.count(), 4);
+    }
+
     void muteSilencesPhoneAudio()
     {
         PhoneMirrorManager m;

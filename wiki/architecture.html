@@ -195,6 +195,7 @@
             <tr><td>DownloadManager</td><td><code>downloadmanager.{h,cpp}</code></td><td><code>downloadManager</code></td><td>Music search + yt-dlp download; disabled with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
             <tr><td>DashboardManager</td><td><code>dashboardmanager.{h,cpp}</code></td><td><code>dashboardManager</code></td><td>Built-in preset + user JSON dashboards, save / delete / duplicate, hot reload</td></tr>
             <tr><td>ParameterCatalog</td><td><code>parametercatalog.{h,cpp}</code></td><td><code>parameterCatalog</code></td><td>Title / short title / unit / range / kind / decimals of every OBD PID and IMU reading, one table for C++ and every frontend; see <a href="signals-slots-reference.html#parameterCatalog">Signals &amp; Slots</a></td></tr>
+            <tr><td>NowPlaying</td><td><code>nowplaying.{h,cpp}</code></td><td><code>nowPlaying</code></td><td>What is playing and its controls, phone or local; the one phone-position clock; the phone/local hand-off</td></tr>
             <tr><td>ParameterStore</td><td><code>parameterstore.{h,cpp}</code></td><td><code>paramStore</code></td><td>Latest value of every PID and IMU reading as a <code>QQmlPropertyMap</code> (one notifying key per id, 33 ms coalescing), fed from <code>parameterSampled</code> and the IMU in <code>main.cpp</code>; <code>OBDParameterModel</code> mirrors it</td></tr>
             <tr><td>ShiftLightManager</td><td><code>shiftlightmanager.{h,cpp}</code></td><td><code>shiftLightManager</code></td><td>RPM shift light: flag migration, band match and flash phase, fed by <code>OBDManager::rpmChanged</code>; QML only draws it. See <a href="obd-manager.html#shift-light">OBD Manager &rarr; Shift Light</a></td></tr>
             <tr><td>TripRecorder</td><td><code>triprecorder.{h,cpp}</code>, <code>tripstore.{h,cpp}</code></td><td><code>tripRecorder</code></td><td>Black box: every OBD reading of every drive into SQLite (own thread) and one CSV + JSON per trip; see <a href="obd-manager.html#black-box">OBD Manager &rarr; Black Box</a></td></tr>
@@ -680,9 +681,9 @@ Gesture Sensor                       ESP32 Volume Knob
     │ actionTriggered                     │ volumeChangeRequested(delta) / muteToggleRequested
     ▼                                     ▼
 gesture lambda                   volume lambda / muteToggleRequested ─► volumeController.toggleMute()
-    ├── next_track ──► mediaManager*      ├── accumulate ≥ 1.0
-    ├── previous_track ► mediaManager*    └── volumeController.applyVolume()
-    ├── play_pause ──► mediaManager*                ├── settingsManager.setCurrentVolume()
+    ├── next_track ──► nowPlaying*       ├── accumulate ≥ 1.0
+    ├── previous_track ► nowPlaying*     └── volumeController.applyVolume()
+    ├── play_pause ──► nowPlaying*                  ├── settingsManager.setCurrentVolume()
     ├── mute_toggle ─► volumeController             ├── mediaManager.setVolume(linear)
     ├── volume_up ───► volumeController              ├── phoneMirrorManager.setVolume(linear)
     └── volume_down ─► volumeController              │
@@ -690,8 +691,7 @@ gesture lambda                   volume lambda / muteToggleRequested ─► volu
                                      volumeController.mutedChanged ─► mediaManager.setMuted()
                                        (raise while muted unmutes)  ├► phoneMirrorManager.setMuted()
                                                                     └► esp32VolumeManager.send_mute_state()
-  * phoneMirrorManager.mediaNext() / mediaPrevious() / mediaPlayPause()
-    instead while phoneMirrorManager.mediaActive()
+  * routed to the phone while it has the media controls, else mediaManager
 
                    ESP32 LED sync (desktop only)
 settingsManager.albumArtColorsChanged ──────► send_theme_color(accent)   (theme mode: album accent)

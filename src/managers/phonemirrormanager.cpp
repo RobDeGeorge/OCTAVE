@@ -1342,6 +1342,8 @@ void PhoneMirrorManager::runWirelessJob(std::function<void()> job, bool ui)
 void PhoneMirrorManager::onMediaState(const QVariantMap &state)
 {
     const bool wasPlaying = m_mediaPlaying;
+    const QString oldTrack = m_mediaApp + QLatin1Char('\n') + m_mediaTitle + QLatin1Char('\n') + m_mediaArtist;
+    const bool hadTrack = m_mediaReported;
     m_mediaAvailable = state.value(QStringLiteral("has_session")).toBool();
     m_mediaPlaying = m_mediaAvailable && state.value(QStringLiteral("playing")).toBool();
     m_mediaCanSeek = state.value(QStringLiteral("can_seek")).toBool();
@@ -1353,6 +1355,8 @@ void PhoneMirrorManager::onMediaState(const QVariantMap &state)
     m_mediaArtist = state.value(QStringLiteral("artist")).toString();
     m_mediaAlbum = state.value(QStringLiteral("album")).toString();
     emit mediaChanged();
+    if (!hadTrack || oldTrack != m_mediaApp + QLatin1Char('\n') + m_mediaTitle + QLatin1Char('\n') + m_mediaArtist)
+        emit mediaTrackChanged();
     // The phone is the media source while mirroring: it takes the controls
     // with its first report, and again whenever it starts playing after a
     // local track took them (releaseMedia)
@@ -1436,6 +1440,7 @@ void PhoneMirrorManager::publishMediaQueue()
 
 void PhoneMirrorManager::resetMedia()
 {
+    const bool hadTrack = m_mediaReported;
     m_mediaReported = false;
     setMediaActive(false);
     if (m_mediaAvailable || m_mediaPlaying || !m_mediaTitle.isEmpty()) {
@@ -1457,6 +1462,8 @@ void PhoneMirrorManager::resetMedia()
         m_queueArt.clear();
         QDir(queueArtDir()).removeRecursively();
     }
+    if (hadTrack)
+        emit mediaTrackChanged();   // the track is gone (fields already cleared)
 }
 
 void PhoneMirrorManager::setMediaActive(bool active)

@@ -231,7 +231,10 @@ signals:
     void wirelessResult(bool ok, const QString &message);
     void qrPairingChanged();
     void currentBitRateChanged();
+    // Every media state report: play/pause, position, metadata
     void mediaChanged();
+    // The track itself changed (title, artist or app), or went away
+    void mediaTrackChanged();
     void mediaArtChanged();
     void mediaQueueChanged();
     // main.cpp pauses OCTAVE's own sources when the phone takes over
@@ -325,6 +328,7 @@ public slots:
 private:
     // tests/cpp drives probes, media state and notices directly
     friend class TstPhoneMirror;
+    friend class TstNowPlaying;
     QString runAdb(const QStringList &args, int timeoutMs = 10000) const;
     // What a probe found (built on the probe thread, applied on the GUI thread)
     struct Probe {
@@ -623,6 +627,11 @@ signals:
     void wirelessAddressChanged(const QString &);
     void wirelessResult(bool, const QString &);
     void mediaActiveChanged(bool);
+    // Never emitted here; declared so QML Connections on them load quietly
+    void mediaChanged();
+    void mediaTrackChanged();
+    void mediaArtChanged();
+    void mediaQueueChanged();
 };
 
 #endif // Q_OS_MOBILE

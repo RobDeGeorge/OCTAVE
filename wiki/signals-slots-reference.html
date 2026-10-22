@@ -33,6 +33,7 @@
             <li><a href="#obdAdapterFinder">OBDAdapterFinder</a></li>
             <li><a href="#parameterCatalog">ParameterCatalog</a></li>
             <li><a href="#paramStore">ParameterStore</a></li>
+            <li><a href="#nowPlaying">NowPlaying</a></li>
             <li><a href="#shiftLightManager">ShiftLightManager</a></li>
             <li><a href="#tripRecorder">TripRecorder</a></li>
             <li><a href="#esp32VolumeManager">ESP32VolumeManager</a></li>
@@ -68,6 +69,7 @@
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td></td></tr>
             <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
             <tr><td><a href="#parameterCatalog"><code>parameterCatalog</code></a></td><td><code>ParameterCatalog</code> &mdash; <span class="file-path">src/managers/parametercatalog.h</span></td><td>Title / unit / range / kind of every OBD PID and IMU reading</td></tr>
+            <tr><td><a href="#nowPlaying"><code>nowPlaying</code></a></td><td><code>NowPlaying</code> &mdash; <span class="file-path">src/managers/nowplaying.h</span></td><td>What is playing and its controls, phone or local</td></tr>
             <tr><td><a href="#paramStore"><code>paramStore</code></a></td><td><code>ParameterStore</code> &mdash; <span class="file-path">src/managers/parameterstore.h</span></td><td>Latest value of every OBD PID and IMU reading, one notifying key per id</td></tr>
             <tr><td><a href="#shiftLightManager"><code>shiftLightManager</code></a></td><td><code>ShiftLightManager</code> &mdash; <span class="file-path">src/managers/shiftlightmanager.h</span></td><td>RPM shift light: active flag and flash phase</td></tr>
             <tr><td><a href="#tripRecorder"><code>tripRecorder</code></a></td><td><code>TripRecorder</code> &mdash; <span class="file-path">src/managers/triprecorder.h</span></td><td>Black box: every drive into SQLite + CSV / JSON files</td></tr>
@@ -926,6 +928,40 @@
           </tbody>
         </table>
 
+        <!-- NowPlaying -->
+        <h2 id="nowPlaying">NowPlaying <span class="cmt">&mdash; <code>nowPlaying</code></span></h2>
+        <p><span class="file-path">src/managers/nowplaying.h</span> &mdash; QML context property <code>nowPlaying</code></p>
+        <p>What is playing right now and the controls for it, whichever source has OCTAVE's media controls: the phone (while mirroring, once <code>phoneMirrorManager.mediaActive</code>) or OCTAVE's own player. Frontends bind to this instead of choosing between <code>mediaManager</code> and <code>phoneMirrorManager</code> themselves. The phone reports its position only now and then, so this owns the one clock that extrapolates it (every 500 ms, only while the phone plays). Values are raw: placeholder text such as "Nothing playing" is the frontend's choice (<code>hasTrack</code>). It also holds the hand-off: the phone taking the controls pauses local playback, and a local track starting hands them back (<code>releaseMedia(true)</code>, pausing the phone). Tests: <span class="file-path">tests/cpp/tst_nowplaying.cpp</span>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>source</code></td><td><code>QString</code></td><td>read-only</td><td><code>sourceChanged</code></td><td><code>"local"</code> or <code>"phone"</code></td></tr>
+            <tr><td><code>playing</code></td><td><code>bool</code></td><td>read-only</td><td><code>playingChanged</code></td><td>The live source is playing</td></tr>
+            <tr><td><code>hasTrack</code>, <code>title</code>, <code>artist</code>, <code>album</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>trackInfoChanged</code></td><td>Local: display name, artist, album of the current file. Phone: the media session's metadata (<code>hasTrack</code> false with no media app)</td></tr>
+            <tr><td><code>artUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>artUrlChanged</code></td><td>Album art URL, <code>""</code> when none</td></tr>
+            <tr><td><code>durationMs</code>, <code>positionMs</code></td><td><code>int</code></td><td>read-only</td><td><code>durationChanged</code>, <code>positionChanged</code></td><td>Local: the player's 10 Hz reports. Phone: each report, extrapolated every 500 ms while playing. <code>0</code> duration = unknown</td></tr>
+            <tr><td><code>canSeek</code>, <code>canShuffle</code></td><td><code>bool</code></td><td>read-only</td><td><code>capabilitiesChanged</code></td><td><code>canShuffle</code> is false on the phone (its shuffle belongs to its app)</td></tr>
+            <tr><td><code>shuffled</code></td><td><code>bool</code></td><td>read-only</td><td><code>shuffledChanged</code></td><td>Local shuffle state</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>togglePlay()</code>, <code>next()</code>, <code>previous()</code></td><td><code>void</code></td><td>Routed to the live source (the gesture sensor uses these too)</td></tr>
+            <tr><td><code>seek(int positionMs)</code></td><td><code>void</code></td><td>When <code>canSeek</code>; the position shows at once and the source confirms it</td></tr>
+            <tr><td><code>toggleShuffle()</code></td><td><code>void</code></td><td>Local only; does nothing while the phone is the source</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>trackChanged()</code></td><td>Another track or another source (for track-change animations); not emitted for play/pause, seeks or position</td></tr>
+          </tbody>
+        </table>
+
         <!-- ShiftLightManager -->
         <h2 id="shiftLightManager">ShiftLightManager <span class="cmt">&mdash; <code>shiftLightManager</code></span></h2>
         <p><span class="file-path">src/managers/shiftlightmanager.h</span> &mdash; QML context property <code>shiftLightManager</code></p>
@@ -1359,8 +1395,9 @@
             <tr><td><code>audioPlayingChanged(bool playing)</code></td><td>Sound detected / silence</td></tr>
             <tr><td><code>phoneAsleepChanged(bool asleep)</code></td><td>Phone went to sleep / woke up while mirrored</td></tr>
             <tr><td><code>phoneInUseChanged(bool inUse)</code></td><td>Phone taken in hand / handed back</td></tr>
-            <tr><td><code>mediaChanged()</code> / <code>mediaArtChanged()</code></td><td>Notify for the phone media properties / <code>mediaArtUrl</code></td></tr>
-            <tr><td><code>mediaActiveChanged(bool active)</code></td><td>The phone took / gave back the media controls; <code>main</code> pauses local media when it takes over</td></tr>
+            <tr><td><code>mediaChanged()</code> / <code>mediaArtChanged()</code></td><td>Notify for the phone media properties (every state report) / <code>mediaArtUrl</code></td></tr>
+            <tr><td><code>mediaTrackChanged()</code></td><td>The track itself changed (title, artist or app), or went away on reset; <a href="#nowPlaying"><code>nowPlaying</code></a> turns it into <code>trackChanged</code></td></tr>
+            <tr><td><code>mediaActiveChanged(bool active)</code></td><td>The phone took / gave back the media controls; <a href="#nowPlaying"><code>nowPlaying</code></a> pauses local media when it takes over</td></tr>
             <tr><td><code>duckingChanged(float factor)</code></td><td>Duck factor while the phone makes sound and ducking is on, 1.0 otherwise; <code>main</code> routes it to <code>mediaManager.setDucking</code></td></tr>
             <tr><td><code>wirelessAddressChanged(QString address)</code></td><td>Remembered Wi-Fi phone changed (paired, moved to a new port, forgotten); <code>main</code> saves it with <code>save_scrcpy_wireless_address</code></td></tr>
             <tr><td><code>connectionTypeChanged()</code> / <code>wirelessBusyChanged()</code></td><td>Property notifications</td></tr>

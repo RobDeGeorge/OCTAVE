@@ -203,6 +203,8 @@ qt_add_executable(octave
     src/managers/parametercatalog.cpp
     src/managers/parameterstore.h
     src/managers/parameterstore.cpp
+    src/managers/nowplaying.h
+    src/managers/nowplaying.cpp
     src/managers/shiftlightmanager.h
     src/managers/shiftlightmanager.cpp
     src/managers/mediamanager.h

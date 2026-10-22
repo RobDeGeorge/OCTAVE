@@ -45,6 +45,7 @@ extern "C" {
 #include "managers/shiftlightmanager.h"
 #include "managers/parametercatalog.h"
 #include "managers/parameterstore.h"
+#include "managers/nowplaying.h"
 
 // Phase 2 managers
 #include "managers/mediamanager.h"
@@ -351,18 +352,6 @@ int main(int argc, char *argv[])
                      &phoneMirrorManager, [&phoneMirrorManager](double l) { phoneMirrorManager.setAudioDuckLevel(float(l)); });
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged,
                      &mediaManager, &MediaManager::setDucking);
-    // While mirroring the phone is the media source: when it takes OCTAVE's
-    // media controls local playback pauses; starting a local track hands
-    // the controls back (and pauses the phone).
-    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::mediaActiveChanged,
-                     &mediaManager, [&](bool active) {
-        if (active && mediaManager.is_playing())
-            mediaManager.pause();
-    });
-    QObject::connect(&mediaManager, &MediaManager::playStateChanged, &phoneMirrorManager, [&](bool playing) {
-        if (playing)
-            phoneMirrorManager.releaseMedia(true);
-    });
     // Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
     phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
     QObject::connect(&settingsManager, &SettingsManager::scrcpyPhoneScreenOffChanged,
@@ -373,6 +362,13 @@ int main(int argc, char *argv[])
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::wirelessAddressChanged,
                      &settingsManager, &SettingsManager::save_scrcpy_wireless_address);
 #endif
+
+    // What is playing and its controls, whichever source has them (the phone
+    // while mirroring, else OCTAVE's player); also the handoff between the two.
+    // Outside the desktop block: on mobile the phone stub never takes them, so
+    // the source is always local
+    NowPlaying nowPlaying(&mediaManager, &phoneMirrorManager);
+    ctx->setContextProperty("nowPlaying", &nowPlaying);
 
     // Register custom QML types for video embedding (stub types on mobile)
     qmlRegisterType<EmbeddedDhuItem>("OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem");
@@ -518,12 +514,11 @@ int main(int argc, char *argv[])
 
     // Wire gesture sensor actions -> media control (stub never emits on mobile).
     QObject::connect(&gestureSensor, &GestureManager::actionTriggered,
-                     [&mediaManager, &volumeController, &settingsManager, &phoneMirrorManager](const QString &action) {
-        // Track actions drive the phone while it has the media controls
-        const bool phone = phoneMirrorManager.mediaActive();
-        if (action == "next_track") phone ? phoneMirrorManager.mediaNext() : mediaManager.next_track();
-        else if (action == "previous_track") phone ? phoneMirrorManager.mediaPrevious() : mediaManager.previous_track();
-        else if (action == "play_pause") phone ? phoneMirrorManager.mediaPlayPause() : mediaManager.toggle_play();
+                     [&nowPlaying, &volumeController, &settingsManager](const QString &action) {
+        // Track actions drive whichever source has the media controls
+        if (action == "next_track") nowPlaying.next();
+        else if (action == "previous_track") nowPlaying.previous();
+        else if (action == "play_pause") nowPlaying.togglePlay();
         else if (action == "mute_toggle") volumeController.toggleMute();
         else if (action == "volume_up") {
             int step = settingsManager.gestureVolumeStep();
