@@ -126,7 +126,7 @@ void Runtime::afterLoad()
         m_perf->start();
         m_ui = new UiDriver(m_app.engine, this);
         m_server = new CommandServer(m_port, this);
-        registerCoreActions(*m_server, {m_ui, m_perf, m_app.settings, m_app.media, m_app.volume, m_app.obd});
+        registerCoreActions(*m_server, {m_ui, m_perf, m_app.settings, m_app.media, m_app.volume, m_app.nowPlaying, m_app.obd});
         m_collage = new CollageBridge(m_app.engine, m_app.projectRoot, this);
         m_collage->registerActions(*m_server);
         if (m_dev)

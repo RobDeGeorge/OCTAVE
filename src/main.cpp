@@ -468,7 +468,7 @@ int main(int argc, char *argv[])
 
     // ---- Developer tooling (inactive unless --dev / --profile) ----
 #ifdef OCTAVE_DEV_TOOLS
-    OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &mediaManager, &volumeController, &obdManager, &berryIMU,
+    OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &mediaManager, &volumeController, &nowPlaying, &obdManager, &berryIMU,
                                                     QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
     devRuntime.beforeLoad();
 #else

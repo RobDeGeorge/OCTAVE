@@ -1,12 +1,11 @@
 // NowPlayingWidget.qml
 //
 // Dashboard "Now Playing" card: album art + title + artist + progress bar.
-// Source-aware — mirrors the app-wide rule (the phone while
-// phoneMirrorManager.mediaActive, else local media), and re-resolves
-// whenever the source or track changes.
+// Source-aware through nowPlaying (the phone while it has the media
+// controls, else local media).
 //
 // Self-binding widget: no paramId (WidgetCatalog supportedKinds: []), it
-// reads mediaManager / phoneMirrorManager directly. Display-only — transport
+// reads nowPlaying. Display-only — transport
 // buttons live in MediaControlsWidget.
 
 import QtQuick 2.15
@@ -29,64 +28,15 @@ Item {
     property color progressColor: App.Style.obdBarColor
 
     // ── Now-playing state ───────────────────────────────────────────
-    property bool _usePhone: false
-    property string trackTitle: ""
-    property string trackArtist: ""
-    property string artSource: ""
-    property real position: 0
-    property real duration: 0
-
-    function _computeUsePhone() {
-        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null
-            && phoneMirrorManager.mediaActive
-    }
-
-    function refresh() {
-        _usePhone = _computeUsePhone()
-        if (_usePhone) {
-            trackTitle = phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaTitle : "Phone"
-            trackArtist = phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaArtist : "Nothing playing"
-            artSource = phoneMirrorManager.mediaArtUrl
-            position = phoneMirrorManager.mediaPosition()
-            duration = phoneMirrorManager.mediaDuration
-        } else if (typeof mediaManager !== "undefined" && mediaManager) {
-            var f = mediaManager.get_current_file()
-            trackTitle = f ? mediaManager.get_display_name(f) : ""
-            trackArtist = f ? mediaManager.get_band(f) : ""
-            artSource = f ? (mediaManager.get_album_art(f) || "") : ""
-            position = mediaManager.get_position()
-            duration = mediaManager.get_duration()
-        } else {
-            trackTitle = ""; trackArtist = ""; artSource = ""
-            position = 0; duration = 0
-        }
-    }
-
-    Component.onCompleted: refresh()
-
-    Connections {
-        target: (typeof mediaManager !== "undefined" && mediaManager) ? mediaManager : null
-        ignoreUnknownSignals: true
-        function onCurrentMediaChanged(filename) { if (!root._usePhone) root.refresh() }
-        function onPositionChanged(position) { if (!root._usePhone) root.position = position }
-        function onDurationChanged(duration) { if (!root._usePhone) root.duration = duration }
-    }
-
-    Connections {
-        target: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager) ? phoneMirrorManager : null
-        ignoreUnknownSignals: true
-        function onMediaActiveChanged(active) { root.refresh() }
-        function onMediaChanged() { if (root._usePhone) root.refresh() }
-        function onMediaArtChanged() { if (root._usePhone) root.artSource = phoneMirrorManager.mediaArtUrl }
-    }
-
-    // The phone does not stream its position: read the extrapolated one
-    Timer {
-        interval: 500
-        repeat: true
-        running: root._usePhone && root.visible && root.showProgress && phoneMirrorManager.mediaPlaying
-        onTriggered: root.position = phoneMirrorManager.mediaPosition()
-    }
+    // nowPlaying (C++) follows whichever source has the media controls and
+    // owns the phone's position clock; this only picks the wording
+    readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
+    readonly property bool _phone: !!_np && _np.source === "phone"
+    readonly property string trackTitle: !_np ? "" : (_np.hasTrack ? _np.title : (_phone ? "Phone" : ""))
+    readonly property string trackArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (_phone ? "Nothing playing" : ""))
+    readonly property string artSource: _np ? _np.artUrl : ""
+    readonly property real position: _np ? _np.positionMs : 0
+    readonly property real duration: _np ? _np.durationMs : 0
 
     // ── Layout ──────────────────────────────────────────────────────
     // Shrink typography with the cell, same convention as the gauges.

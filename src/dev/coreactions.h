@@ -15,6 +15,7 @@ struct CoreTargets {
     QObject *settings = nullptr;     // settingsManager
     QObject *media = nullptr;        // mediaManager
     QObject *volume = nullptr;       // volumeController
+    QObject *nowPlaying = nullptr;   // nowPlaying
     QObject *obd = nullptr;          // obdManager
 };
 

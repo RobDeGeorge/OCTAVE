@@ -24,85 +24,19 @@ Item {
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
 
-    // Phone mirror media: while the phone is playing (or played last), show
-    // and drive the phone's media session (any app on the phone)
-    property bool usePhone: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null &&
-                            phoneMirrorManager.mediaActive
-    // Read the manager directly: signal handlers can run before usePhone updates
-    function phoneActive() {
-        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.mediaActive
-    }
-    function syncPhoneProgress() {
-        var duration = phoneMirrorManager.mediaDuration
-        progressSlider.to = duration > 0 ? duration : 1
-        durationText.text = formatTime(duration)
-        if (!progressSlider.userSeeking) {
-            var position = phoneMirrorManager.mediaPosition()
-            progressSlider.value = position
-            positionText.text = formatTime(position)
-        }
-    }
-
-    Connections {
-        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-        function onMediaChanged() { if (mainMenu.phoneActive()) mainMenu.syncPhoneProgress() }
-        function onMediaActiveChanged(active) {
-            if (active) {
-                mainMenu.syncPhoneProgress()
-                return
-            }
-            // Back to OCTAVE's own source
-            mainMenu.updateLocalMedia()
-            if (mediaManager) {
-                var duration = mediaManager.get_duration()
-                progressSlider.to = duration > 0 ? duration : 1
-                durationText.text = formatTime(duration)
-                progressSlider.value = mediaManager.get_position()
-                positionText.text = formatTime(progressSlider.value)
-            }
-        }
-    }
-
-    // The phone does not stream its position: read the extrapolated one
-    Timer {
-        interval: 500
-        repeat: true
-        running: mainMenu.usePhone && phoneMirrorManager.mediaPlaying && mainMenu.visible
-        onTriggered: mainMenu.syncPhoneProgress()
-    }
-
-    // Media content properties - the phone while it has the controls, else local
-    property string currentFile: ""
-    property string currentArt: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaArtUrl || "./assets/missing_art.png"
-        }
-        return _localArt || "./assets/missing_art.png"
-    }
-    property string currentTitle: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaTitle : "Phone"
-        }
-        return _localTitle || ""
-    }
-    property string currentArtist: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaAvailable ? phoneMirrorManager.mediaArtist : "Nothing playing"
-        }
-        return _localArtist || ""
-    }
-    property string currentAlbum: {
-        if (usePhone) {
-            return phoneMirrorManager.mediaAlbum
-        }
-        return _localAlbum || ""
-    }
-
-    // Internal properties for local media (to avoid binding loops)
-    property string _localArt: ""
-    property string _localTitle: ""
-    property string _localArtist: ""
-    property string _localAlbum: ""
+    // What is playing, whichever source has the media controls (the phone
+    // while mirroring, else local media): nowPlaying (C++) follows it and
+    // owns the phone's position clock; this page only words and draws it
+    readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
+    readonly property bool usePhone: !!_np && _np.source === "phone"
+    // Something to show: a track, or the phone (which says "Nothing playing")
+    readonly property bool hasMedia: !!_np && (_np.hasTrack || usePhone)
+    readonly property string currentArt: (_np && _np.artUrl) ? _np.artUrl : "./assets/missing_art.png"
+    readonly property string currentTitle: !_np ? "" : (_np.hasTrack ? _np.title : (usePhone ? "Phone" : ""))
+    readonly property string currentArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (usePhone ? "Nothing playing" : ""))
+    readonly property string currentAlbum: (_np && _np.hasTrack) ? _np.album : ""
+    readonly property int positionMs: _np ? _np.positionMs : 0
+    readonly property int durationMs: _np ? _np.durationMs : 0
 
     function formatTime(ms) {
         var minutes = Math.floor(ms / 60000)
@@ -298,21 +232,21 @@ Item {
                             spacing: dp(8)
 
                             Text {
-                                text: mainMenu.currentFile ? mainMenu.currentArtist : "Select a song"
+                                text: mainMenu.hasMedia ? mainMenu.currentArtist : "Select a song"
                                 color: App.Style.metadataColor
                                 font.pixelSize: App.Spacing.mainMenuArtistTextSize
                                 font.family: mainMenu.globalFont
                                 opacity: 0.7
                             }
                             Text {
-                                text: mainMenu.currentFile ? "•" : ""
+                                text: mainMenu.hasMedia && mainMenu.currentAlbum ? "•" : ""
                                 color: App.Style.metadataColor
                                 font.pixelSize: App.Spacing.mainMenuArtistTextSize
                                 font.family: mainMenu.globalFont
                                 opacity: 0.8
                             }
                             Text {
-                                text: mainMenu.currentFile ? mainMenu.currentAlbum : ""
+                                text: mainMenu.hasMedia ? mainMenu.currentAlbum : ""
                                 color: App.Style.metadataColor
                                 font.pixelSize: App.Spacing.mainMenuArtistTextSize
                                 font.family: mainMenu.globalFont
@@ -358,7 +292,7 @@ Item {
 
                     Text {
                         id: positionText
-                        text: "0:00"
+                        text: mainMenu.formatTime(progressSlider.userSeeking ? progressSlider.value : mainMenu.positionMs)
                         color: App.Style.secondaryTextColor
                         font.pixelSize: App.Spacing.mainMenuTimeTextSize
                         font.family: mainMenu.globalFont
@@ -369,11 +303,16 @@ Item {
                         id: progressSlider
                         Layout.fillWidth: true
                         from: 0
-                        to: 1
-                        value: 0
-                        enabled: mediaManager && mediaManager.get_duration() > 0
+                        to: Math.max(1, mainMenu.durationMs)
+                        enabled: !!mainMenu._np && mainMenu._np.canSeek && mainMenu.durationMs > 0
 
                         property bool userSeeking: false
+                        // Follows the source, except while the user drags
+                        Binding on value {
+                            when: !progressSlider.userSeeking
+                            value: mainMenu.positionMs
+                            restoreMode: Binding.RestoreNone   // pausing must not snap back to 0
+                        }
 
                         background: Rectangle {
                             x: progressSlider.leftPadding
@@ -406,19 +345,16 @@ Item {
                             if (pressed) {
                                 userSeeking = true
                             } else {
+                                if (mainMenu._np)
+                                    mainMenu._np.seek(value)
                                 userSeeking = false
-                                if (mainMenu.phoneActive()) {
-                                    phoneMirrorManager.mediaSeek(value)
-                                } else if (mediaManager) {
-                                    mediaManager.set_position(value)
-                                }
                             }
                         }
                     }
 
                     Text {
                         id: durationText
-                        text: "0:00"
+                        text: mainMenu.formatTime(mainMenu.durationMs)
                         color: App.Style.secondaryTextColor
                         font.pixelSize: App.Spacing.mainMenuTimeTextSize
                         font.family: mainMenu.globalFont
@@ -468,71 +404,9 @@ Item {
         }
     }
 
-    // Timer for initial delayed loading of media data
-    Timer {
-        id: initialLoadTimer
-        interval: 0
-        repeat: false
-        running: false
-        onTriggered: {
-            updateLocalMedia()
-        }
-    }
-
-    // Function to update media information from local media manager
-    function updateLocalMedia() {
-        if (mediaManager) {
-            var filename = mediaManager.get_current_file()
-            if (filename) {
-                mainMenu.currentFile = filename
-                mainMenu._localTitle = mediaManager.get_display_name(filename)
-                mainMenu._localArtist = mediaManager.get_band(filename)
-                mainMenu._localAlbum = mediaManager.get_album(filename)
-                mainMenu._localArt = mediaManager.get_album_art(filename)
-            }
-        }
-    }
-
     Component.onCompleted: {
-        initialLoadTimer.start()
         if (obdManager && obdManager.refresh_values) {
             obdManager.refresh_values()
-        }
-    }
-
-    // Local Media Connections (metadata is cached even while the phone plays)
-    Connections {
-        target: mediaManager
-
-        function onMetadataChanged(title, artist, album) {
-            // Cached even while the phone plays: shown again when it stops
-            mainMenu._localTitle = title
-            mainMenu._localArtist = artist
-            mainMenu._localAlbum = album
-            updateLocalMedia()
-        }
-
-        function onPositionChanged(position) {
-            if (!mainMenu.phoneActive() && !progressSlider.userSeeking) {
-                progressSlider.value = position
-                positionText.text = formatTime(position)
-            }
-        }
-
-        function onDurationChanged(duration) {
-            if (!mainMenu.phoneActive()) {
-                progressSlider.to = duration > 0 ? duration : 1
-                durationText.text = formatTime(duration)
-            }
-        }
-
-        function onCurrentMediaChanged(filename) {
-            if (!mainMenu.phoneActive() && mediaManager) {
-                var duration = mediaManager.get_duration()
-                durationText.text = formatTime(duration)
-                positionText.text = "0:00"
-                updateLocalMedia()
-            }
         }
     }
 

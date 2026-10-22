@@ -18,44 +18,20 @@ Rectangle {
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
 
-    // Phone mirror media: while the phone is playing (or played last), the
-    // media controls drive the phone's media session instead
-    property bool usePhone: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null &&
-                            phoneMirrorManager.mediaActive
+    // What is playing and its controls, whichever source has them (the phone
+    // while mirroring, else local media): nowPlaying (C++) decides and routes
+    readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
+    readonly property bool usePhone: !!_np && _np.source === "phone"
+    readonly property string playIcon: (_np && _np.playing) ? "./assets/pause_button.svg" : "./assets/play_button.svg"
+    function mediaPrevious() { if (_np) _np.previous() }
+    function mediaTogglePlay() { if (_np) _np.togglePlay() }
+    function mediaNext() { if (_np) _np.next() }
+    // The phone's shuffle belongs to its app: nowPlaying ignores it; the
+    // button is dimmed meanwhile
+    function mediaToggleShuffle() { if (_np) _np.toggleShuffle() }
 
-    // Read the manager directly, not usePhone: these run from signal handlers
-    // that can fire before the usePhone binding has caught up
-    function phoneActive() {
-        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.mediaActive
-    }
-    function mediaIsPlaying() {
-        if (phoneActive())
-            return phoneMirrorManager.mediaPlaying
-        return mediaManager && mediaManager.is_playing()
-    }
-    function playIconSource() {
-        return mediaIsPlaying() ? "./assets/pause_button.svg" : "./assets/play_button.svg"
-    }
-    function mediaPrevious() {
-        if (phoneActive()) phoneMirrorManager.mediaPrevious()
-        else mediaManager.previous_track()
-    }
-    function mediaTogglePlay() {
-        if (phoneActive()) phoneMirrorManager.mediaPlayPause()
-        else mediaManager.toggle_play()
-    }
-    function mediaNext() {
-        if (phoneActive()) phoneMirrorManager.mediaNext()
-        else mediaManager.next_track()
-    }
-    // The phone's shuffle belongs to its app; the button is dimmed meanwhile
-    function mediaToggleShuffle() {
-        if (phoneActive()) return
-        mediaManager.toggle_shuffle()
-    }
-
-    // Shared shuffle state - single source of truth for all shuffle buttons
-    property bool isShuffleEnabled: false
+    // Shared shuffle state for both layouts' shuffle buttons
+    readonly property bool isShuffleEnabled: !!_np && _np.shuffled
 
     // Clock text shared by both layouts. Held at bottomBar level (rather than
     // set on each layout's Text from its own Connections) so the layout that
@@ -94,11 +70,7 @@ Rectangle {
         }
     }
 
-    Component.onCompleted: {
-        updateLayout()
-        if (mediaManager)
-            isShuffleEnabled = mediaManager.is_shuffled()
-    }
+    Component.onCompleted: updateLayout()
     
     // Show a sensor page, returning true on success. openPage() logs every
     // failure — a silently-swallowed load error here reads to the user as "the
@@ -577,7 +549,7 @@ Rectangle {
                                     anchors.centerIn: parent
                                     width: App.Spacing.bottomBarPlayButtonWidth
                                     height: App.Spacing.bottomBarPlayButtonHeight
-                                    source: bottomBar.playIconSource()
+                                    source: bottomBar.playIcon
                                     sourceSize: Qt.size(width * 2, height * 2)
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
@@ -828,10 +800,6 @@ Rectangle {
                             Component.onCompleted: {
                                 // (main.cpp applies the startup volume to every output)
                                 updateMuteButtonImage()
-
-                                if (mediaManager) {
-                                    bottomBar.isShuffleEnabled = mediaManager.is_shuffled()
-                                }
                             }
                             Item {
                                 anchors.centerIn: parent
@@ -1431,35 +1399,6 @@ Rectangle {
                     }
                 }
 
-                // Connections and Signal handlers
-                Connections {
-                    target: mediaManager
-                    function onPlayStateChanged(playing) {
-                        // The phone owns the play button while it has the controls
-                        if (!bottomBar.phoneActive()) {
-                            var src = playing ? "./assets/pause_button.svg" : "./assets/play_button.svg"
-                            playButtonImage.source = src
-                            if (typeof playButtonImageVertical !== "undefined" && playButtonImageVertical) {
-                                playButtonImageVertical.source = src
-                            }
-                        }
-                    }
-                    function onShuffleStateChanged(enabled) {
-                        bottomBar.isShuffleEnabled = enabled
-                    }
-                }
-
-                // Phone media: play state while the phone has the controls
-                Connections {
-                    target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-                    function onMediaChanged() {
-                        if (bottomBar.phoneActive())
-                            playButtonImage.source = bottomBar.playIconSource()
-                    }
-                    function onMediaActiveChanged(active) {
-                        playButtonImage.source = bottomBar.playIconSource()
-                    }
-                }
 
 
                 // Helper functions
@@ -1613,7 +1552,7 @@ Rectangle {
                                         anchors.centerIn: parent
                                         width: parent.height
                                         height: parent.height
-                                        source: bottomBar.playIconSource()
+                                        source: bottomBar.playIcon
                                         sourceSize: Qt.size(width * 2, height * 2)
                                         fillMode: Image.PreserveAspectFit
                                         smooth: true
@@ -1854,10 +1793,6 @@ Rectangle {
                             Component.onCompleted: {
                                 // (main.cpp applies the startup volume to every output)
                                 updateMuteButtonImageVertical()
-
-                                if (mediaManager) {
-                                    bottomBar.isShuffleEnabled = mediaManager.is_shuffled()
-                                }
                             }
                             Item {
                                 anchors.centerIn: parent
@@ -2463,30 +2398,6 @@ Rectangle {
                     }
                 }
                 
-                // Connections for vertical layout
-                Connections {
-                    target: mediaManager
-                    function onPlayStateChanged(playing) {
-                        if (!bottomBar.phoneActive())
-                            playButtonImageVertical.source = playing ?
-                                "./assets/pause_button.svg" : "./assets/play_button.svg"
-                    }
-                    function onShuffleStateChanged(enabled) {
-                        bottomBar.isShuffleEnabled = enabled
-                    }
-                }
-
-                // Phone media: play state while the phone has the controls (vertical)
-                Connections {
-                    target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-                    function onMediaChanged() {
-                        if (bottomBar.phoneActive())
-                            playButtonImageVertical.source = bottomBar.playIconSource()
-                    }
-                    function onMediaActiveChanged(active) {
-                        playButtonImageVertical.source = bottomBar.playIconSource()
-                    }
-                }
 
 
             }

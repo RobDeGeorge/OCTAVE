@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <tuple>
+#include <utility>
 
 namespace OctaveDev {
 
@@ -133,6 +134,7 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
     QPointer<QObject> sm = t.settings;
     QPointer<QObject> mm = t.media;
     QPointer<QObject> vc = t.volume;
+    QPointer<QObject> np = t.nowPlaying;
     QPointer<QObject> obd = t.obd;
 
     auto needUi = [ui] {
@@ -408,7 +410,17 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
     });
 
     // ── Media controls ───────────────────────────────────────────
-    for (const char *action : {"next_track", "previous_track", "toggle_play", "pause", "toggle_shuffle"}) {
+    // Track controls drive whichever source has the media controls (the
+    // phone while mirroring), like every other input; pause is local only
+    for (const auto &[action, slot] : {std::pair{"next_track", "next"}, std::pair{"previous_track", "previous"},
+                                       std::pair{"toggle_play", "togglePlay"}, std::pair{"toggle_shuffle", "toggleShuffle"}}) {
+        server.registerAction(QLatin1String(action), [np, need, slot](const QVariantMap &) {
+            QObject *n = need(np, "now playing");
+            Gui::onGui([n, slot] { invokeByName(n, slot); return QVariant(); });
+            return QVariant();
+        });
+    }
+    for (const char *action : {"pause"}) {
         server.registerAction(QLatin1String(action), [mm, need, action](const QVariantMap &) {
             QObject *m = need(mm, "media manager");
             Gui::onGui([m, action] { invokeByName(m, action); return QVariant(); });

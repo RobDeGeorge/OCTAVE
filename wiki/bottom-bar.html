@@ -196,16 +196,9 @@
         </table>
 
         <h3>Play/Pause Button</h3>
-        <p>The play/pause image picks its source from <code>playIconSource()</code>, which reads <code>phoneMirrorManager.mediaPlaying</code> while the phone has the controls and <code>mediaManager.is_playing()</code> otherwise. Because that is a method call and not a property, the binding does not re-evaluate on its own; a <code>Connections</code> on <code>mediaManager</code> listens for <code>playStateChanged(playing)</code> (acting only when the phone does not have the controls) and one on <code>phoneMirrorManager</code> for <code>mediaChanged</code> / <code>mediaActiveChanged</code>, and they assign the source of both the horizontal and the vertical image explicitly:</p>
+        <p>Both layouts' play/pause images bind <code>source: bottomBar.playIcon</code>, a property over <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying.playing</code></a>, which follows whichever source has the media controls (the phone while mirroring, else local media). No <code>Connections</code> are needed:</p>
 
-        <pre><code><span class="kw">function</span> <span class="fn">mediaIsPlaying</span>() {
-    <span class="kw">if</span> (<span class="fn">phoneActive</span>())
-        <span class="kw">return</span> phoneMirrorManager.mediaPlaying
-    <span class="kw">return</span> mediaManager &amp;&amp; mediaManager.<span class="fn">is_playing</span>()
-}
-<span class="kw">function</span> <span class="fn">playIconSource</span>() {
-    <span class="kw">return</span> <span class="fn">mediaIsPlaying</span>() ? <span class="str">"./assets/pause_button.svg"</span> : <span class="str">"./assets/play_button.svg"</span>
-}</code></pre>
+        <pre><code><span class="kw">readonly property string</span> playIcon: (_np &amp;&amp; _np.playing) ? <span class="str">"./assets/pause_button.svg"</span> : <span class="str">"./assets/play_button.svg"</span></code></pre>
 
         <!-- Volume -->
         <h2 id="volume">Volume Slider and Mute</h2>
@@ -393,16 +386,16 @@
         <!-- Manager Communication -->
         <h2 id="managers">Manager Communication</h2>
 
-        <p>Every media action goes to the local player unless the phone has the controls (<code>phoneMirrorManager.mediaActive</code>, see <a href="phone-mirror-android-auto.html#pm-media">phone media</a>). <code>phoneActive()</code> reads the manager directly rather than the <code>usePhone</code> binding, because it runs from signal handlers that can fire before the binding has caught up:</p>
+        <p>Every media action goes through <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>, which routes it to the phone while it has the controls and to the local player otherwise; <code>usePhone</code> (<code>nowPlaying.source === "phone"</code>) only dims the shuffle button, and <code>isShuffleEnabled</code> binds <code>nowPlaying.shuffled</code>:</p>
 
         <ul>
-          <li><code>mediaPrevious()</code> &rarr; <code>phoneMirrorManager.mediaPrevious()</code> or <code>mediaManager.previous_track()</code></li>
-          <li><code>mediaTogglePlay()</code> &rarr; <code>phoneMirrorManager.mediaPlayPause()</code> or <code>mediaManager.toggle_play()</code></li>
-          <li><code>mediaNext()</code> &rarr; <code>phoneMirrorManager.mediaNext()</code> or <code>mediaManager.next_track()</code></li>
-          <li><code>mediaToggleShuffle()</code> &rarr; nothing while the phone has the controls, else <code>mediaManager.toggle_shuffle()</code></li>
+          <li><code>mediaPrevious()</code> &rarr; <code>nowPlaying.previous()</code></li>
+          <li><code>mediaTogglePlay()</code> &rarr; <code>nowPlaying.togglePlay()</code></li>
+          <li><code>mediaNext()</code> &rarr; <code>nowPlaying.next()</code></li>
+          <li><code>mediaToggleShuffle()</code> &rarr; <code>nowPlaying.toggleShuffle()</code> (does nothing while the phone has the controls)</li>
         </ul>
 
-        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>), <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered by <span class="file-path">src/main.cpp</span>.</p>
+        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>nowPlaying</code> (media), <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>; the home button while mirroring), <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered by <span class="file-path">src/main.cpp</span>.</p>
 
         <!-- Visibility popup -->
         <h2 id="visibility-popup">Toggle View Popup</h2>

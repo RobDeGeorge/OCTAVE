@@ -1,8 +1,8 @@
 // MediaControlsWidget.qml
 //
 // Dashboard transport controls: previous / play-pause / next, driving
-// whichever media source is active (the phone while
-// phoneMirrorManager.mediaActive, else local media).
+// whichever media source is active through nowPlaying (the phone while it
+// has the media controls, else local media).
 //
 // Self-binding widget: no paramId (WidgetCatalog supportedKinds: []).
 // Interactive in the rendered dashboard; inside the editor canvas the
@@ -24,41 +24,9 @@ Item {
     property color accentColor: App.Style.obdBarColor
 
     // ── Playback state ──────────────────────────────────────────────
-    property bool _usePhone: false
-    property bool playing: false
-
-    function _mgr() {
-        return (typeof mediaManager !== "undefined" && mediaManager) ? mediaManager : null
-    }
-
-    function _computeUsePhone() {
-        return typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null
-            && phoneMirrorManager.mediaActive
-    }
-
-    function refresh() {
-        _usePhone = _computeUsePhone()
-        if (_usePhone) {
-            playing = phoneMirrorManager.mediaPlaying
-            return
-        }
-        var m = _mgr()
-        playing = m ? m.is_playing() : false
-    }
-
-    Component.onCompleted: refresh()
-
-    Connections {
-        target: (typeof mediaManager !== "undefined" && mediaManager) ? mediaManager : null
-        ignoreUnknownSignals: true
-        function onPlayStateChanged(playing) { if (!root._usePhone) root.playing = playing }
-    }
-    Connections {
-        target: (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager) ? phoneMirrorManager : null
-        ignoreUnknownSignals: true
-        function onMediaActiveChanged(active) { root.refresh() }
-        function onMediaChanged() { if (root._usePhone) root.playing = phoneMirrorManager.mediaPlaying }
-    }
+    // nowPlaying (C++) routes the controls to whichever source has them
+    readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
+    readonly property bool playing: !!_np && _np.playing
 
     // ── Layout ──────────────────────────────────────────────────────
     readonly property real _btn:
@@ -98,17 +66,10 @@ Item {
                     id: btnMouse
                     anchors.fill: parent
                     onClicked: {
-                        if (root._computeUsePhone()) {
-                            if (modelData.action === "prev") phoneMirrorManager.mediaPrevious()
-                            else if (modelData.action === "next") phoneMirrorManager.mediaNext()
-                            else phoneMirrorManager.mediaPlayPause()
-                            return
-                        }
-                        var m = root._mgr()
-                        if (!m) return
-                        if (modelData.action === "prev") m.previous_track()
-                        else if (modelData.action === "next") m.next_track()
-                        else m.toggle_play()
+                        if (!root._np) return
+                        if (modelData.action === "prev") root._np.previous()
+                        else if (modelData.action === "next") root._np.next()
+                        else root._np.togglePlay()
                     }
                 }
             }

@@ -40,6 +40,7 @@ struct AppObjects {
     QObject *settings = nullptr;
     QObject *media = nullptr;
     QObject *volume = nullptr;   // volumeController
+    QObject *nowPlaying = nullptr;
     OBDManager *obd = nullptr;
     BerryIMUManager *imu = nullptr;
     QDir projectRoot;   // checkout root: frontend/, src/dev/qml/, dev/perf/logs/

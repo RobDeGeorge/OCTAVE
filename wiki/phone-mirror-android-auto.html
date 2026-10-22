@@ -495,10 +495,11 @@
             back to local media and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
           <p><strong>Queue:</strong> <code>PhoneMedia</code> follows the selected app’s <code>MediaController</code> queue and active queue ID, sending up to 500 entries. Queue artwork is fetched separately, scaled to 160 px and sent once per URI per session. The manager stores it under <code>&lt;app data&gt;/temp/phone_queue_art/</code> and batches artwork notifications for 150 ms. <code>MediaPlayer.qml</code> shows this queue while the phone is active and a queue is available; selecting an entry calls <code>mediaSkipToQueueItem(id)</code>. The available tracks and skip behavior depend on what the phone app publishes. This is its active queue, not a browsable account library.</p>
           <p><strong>Waveform:</strong> the client emits <code>audioPlayed(pcm, bufferedMs)</code> as audio is handed to the sink. <code>main.cpp</code> routes it to <code>AudioAnalyzer.feed_live_pcm()</code>; QML selects live analysis while phone media is active. Without captured phone audio, the controls can still work but there is no live PCM waveform.</p>
-          <p><strong>QML</strong> picks the phone first in every source switch (<code>phoneMirrorManager.mediaActive</code>, else
-            local). Handlers that can fire while <code>mediaActive</code> is changing read the manager directly
-            (<code>phoneActive()</code>) instead of the <code>usePhone</code> binding. Position is not streamed: views poll
-            <code>mediaPosition()</code> every 500 ms while the phone plays and the view is visible.</p>
+          <p><strong>QML</strong> reads what is playing from <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>, which
+            follows the phone while <code>mediaActive</code> and local media otherwise. Position is not streamed by the phone:
+            <code>nowPlaying</code> extrapolates <code>mediaPosition()</code> every 500 ms while the phone plays (one clock for
+            every view). The bottom bar, the home menu and the dashboard media widgets use it; Media Room and the media player
+            still read <code>phoneMirrorManager</code> directly until they move over.</p>
         </section>
 
         <section id="pm-persist">
