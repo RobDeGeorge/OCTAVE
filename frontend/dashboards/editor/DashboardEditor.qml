@@ -13,8 +13,8 @@
 // honest. DashboardManager already provides save/delete/duplicate, so
 // this page is pure QML.
 // saveDashboard() requires a unique `id`; built-in ids are rejected and user
-// ids overwrite, so we slugify+uniquify the label here (mirrors the manager's
-// internal logic) rather than adding a backend slot.
+// ids overwrite, so a new dashboard takes its id from
+// dashboardManager.uniqueIdForLabel().
 
 import QtQuick 2.15
 import QtQuick.Controls 2.15
@@ -339,26 +339,6 @@ Item {
         pidPicker.open()
     }
 
-    // ── id generation (mirrors DashboardManager::_slugify / _uniqueId) ──
-    function _slugify(s) {
-        var x = (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-        return x.length > 0 ? x : "dashboard"
-    }
-
-    function _uniqueId(label) {
-        var base = _slugify(label)
-        var taken = { "grid": true }       // reserve the parameter-cards sentinel
-        if (typeof dashboardManager !== "undefined" && dashboardManager) {
-            var list = dashboardManager.dashboards
-            for (var i = 0; i < list.length; i++)
-                taken[list[i].id] = true
-        }
-        if (!taken[base]) return base
-        var n = 2
-        while (taken[base + "-" + n]) n++
-        return base + "-" + n
-    }
-
     function save() {
         if (typeof dashboardManager === "undefined" || !dashboardManager) {
             _showError("No dashboard backend available")
@@ -367,7 +347,7 @@ Item {
         var label = nameField.text.trim()
         if (label.length === 0) label = "Untitled"
 
-        var id = editingId.length > 0 ? editingId : _uniqueId(label)
+        var id = editingId.length > 0 ? editingId : dashboardManager.uniqueIdForLabel(label)
         var spec = _withGridGeometry({
             "schema": 1,
             "id": id,

@@ -100,6 +100,7 @@ QVariantMap DashboardManager::findEntry(const QString &id) const
 QSet<QString> DashboardManager::existingIds() const
 {
     QSet<QString> ids = m_builtInIds;   // hidden presets keep their ids
+    ids.insert(QLatin1String(kParameterCardsId));
     for (const QVariant &v : m_dashboards)
         ids.insert(v.toMap().value(QStringLiteral("id")).toString());
     return ids;
@@ -350,6 +351,10 @@ QString DashboardManager::saveDashboard(const QVariantMap &spec)
             << "Cannot save: id" << id << "collides with a built-in preset";
         return {};
     }
+    if (id == QLatin1String(kParameterCardsId)) {
+        qCWarning(lcDashboards) << "Cannot save: id" << id << "is the Parameter Cards entry";
+        return {};
+    }
 
     const QString path = m_userDir + QDir::separator() + id + QStringLiteral(".json");
     if (!writeSpec(path, spec)) return {};
@@ -400,7 +405,7 @@ QString DashboardManager::duplicateDashboard(const QString &sourceId,
     const QString finalLabel = newLabel.isEmpty()
         ? (entry.value(QStringLiteral("label")).toString() + QStringLiteral(" (Copy)"))
         : newLabel;
-    const QString newId = uniqueUserIdFromLabel(finalLabel);
+    const QString newId = uniqueIdForLabel(finalLabel);
 
     spec.insert(QStringLiteral("id"),    newId);
     spec.insert(QStringLiteral("label"), finalLabel);
@@ -422,7 +427,7 @@ QString DashboardManager::slugify(const QString &label)
     return s;
 }
 
-QString DashboardManager::uniqueUserIdFromLabel(const QString &label) const
+QString DashboardManager::uniqueIdForLabel(const QString &label) const
 {
     const QString base = slugify(label);
     const QSet<QString> taken = existingIds();
@@ -546,7 +551,7 @@ QString DashboardManager::importSpec(const QVariantMap &raw)
         setShareError(error);
         return {};
     }
-    const QString id = uniqueUserIdFromLabel(spec.value(QStringLiteral("label")).toString());
+    const QString id = uniqueIdForLabel(spec.value(QStringLiteral("label")).toString());
     spec.insert(QStringLiteral("id"), id);
     const QString saved = saveDashboard(spec);
     if (saved.isEmpty()) {

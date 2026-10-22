@@ -65,9 +65,19 @@ public:
     // True if `id` refers to a built-in preset (read-only).
     Q_INVOKABLE bool isBuiltIn(const QString &id) const;
 
+    // A file-safe id for a new dashboard named `label`: the slug of the
+    // label, with -2, -3, ... appended until it is free. Never a built-in id
+    // (hidden ones included) or kParameterCardsId. The editor calls this
+    // before saving a new dashboard; duplicate and import use it too.
+    Q_INVOKABLE QString uniqueIdForLabel(const QString &label) const;
+
     QString lastShareError() const { return m_lastShareError; }
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
     int supportedSchema() const { return kSupportedSchema; }
+
+    // OBDMenu's built-in Parameter Cards entry. Not a file, but it shares the
+    // id space: no dashboard may take it.
+    static constexpr const char *kParameterCardsId = "grid";
 
     // Highest dashboard `schema` this build understands. Imports declaring a
     // newer schema are refused rather than half-rendered.
@@ -76,7 +86,7 @@ public:
 public slots:
     // Writes a user dashboard JSON file. `spec` must include at least `id`
     // and `label`. Returns the saved id on success, empty string on
-    // failure (id collision with built-in, I/O error, etc.).
+    // failure (id collision with built-in or kParameterCardsId, I/O error, etc.).
     QString saveDashboard(const QVariantMap &spec);
 
     // Deletes a user dashboard file, or hides a built-in preset (persisted
@@ -165,9 +175,6 @@ private:
     // Lookup helpers.
     QVariantMap findEntry(const QString &id) const;
     QSet<QString> existingIds() const;
-
-    // Generate a file-safe, collision-free id from a human label.
-    QString uniqueUserIdFromLabel(const QString &label) const;
     static QString slugify(const QString &label);
 };
 

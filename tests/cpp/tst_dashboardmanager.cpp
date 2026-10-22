@@ -135,6 +135,44 @@ private slots:
         QCOMPARE(m_dm->lastShareError(), QStringLiteral("Could not open the file"));
     }
 
+    // ── id generation (the editor asks uniqueIdForLabel before saving) ──
+
+    void uniqueIdSlugifiesAndCounts()
+    {
+        QCOMPARE(m_dm->uniqueIdForLabel("  Trail Rig! "), QStringLiteral("trail-rig"));
+        QCOMPARE(m_dm->uniqueIdForLabel("***"), QStringLiteral("dashboard"));
+        QCOMPARE(m_dm->uniqueIdForLabel("Minimal"), QStringLiteral("minimal-2"));   // built-in taken
+        QVERIFY(!m_dm->saveDashboard({{"id", "minimal-2"}, {"label", "Minimal"}}).isEmpty());
+        QCOMPARE(m_dm->uniqueIdForLabel("Minimal"), QStringLiteral("minimal-3"));
+    }
+
+    void uniqueIdSkipsHiddenBuiltIns()
+    {
+        // Delete built-in Sport, then make a new "Sport": its id must not be
+        // the hidden preset's, or saveDashboard refuses it
+        QVERIFY(m_dm->deleteDashboard("sport"));
+        QVERIFY(m_dm->loadDashboard("sport").toMap().isEmpty());
+        const QString id = m_dm->uniqueIdForLabel("Sport");
+        QCOMPARE(id, QStringLiteral("sport-2"));
+        QCOMPARE(m_dm->saveDashboard({{"id", id}, {"label", "Sport"}, {"cells", QVariantList{}}}), id);
+    }
+
+    void parameterCardsIdIsReserved()
+    {
+        // "grid" is OBDMenu's Parameter Cards entry: a dashboard with that id
+        // could never be selected
+        QCOMPARE(m_dm->uniqueIdForLabel("Grid"), QStringLiteral("grid-2"));
+        QCOMPARE(m_dm->saveDashboard({{"id", "grid"}, {"label", "Grid"}}), QString());
+
+        const QString copy = m_dm->duplicateDashboard("minimal", "Grid");
+        QCOMPARE(copy, QStringLiteral("grid-2"));
+
+        const QString imported = m_dm->importDashboardFromText(
+            R"json({"schema": 1, "label": "GRID", "cells": []})json");
+        QVERIFY2(!imported.isEmpty(), qPrintable(m_dm->lastShareError()));
+        QVERIFY(imported != QLatin1String("grid"));
+    }
+
 private:
     std::unique_ptr<QTemporaryDir> m_tmp;
     std::unique_ptr<DashboardManager> m_dm;
