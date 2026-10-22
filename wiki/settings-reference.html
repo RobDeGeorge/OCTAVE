@@ -362,16 +362,16 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><th>JSON Key</th><th>Type</th><th>QML default</th><th>Written by</th><th>Read by</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td>rpm_shift_light_enabled</td><td>bool</td><td>true</td><td>OBDMenu RPM popup</td><td>Main.qml, HomeOBDView</td><td>Shift light on/off</td></tr>
-            <tr><td>rpm_show_on_home_card</td><td>bool</td><td>true</td><td>OBDMenu RPM popup</td><td>HomeOBDView, OBDMenu</td><td>Show the shift light on the home RPM card</td></tr>
-            <tr><td>rpm_max_rpm</td><td>int</td><td>8000</td><td>OBDMenu RPM popup</td><td>OBDMenu</td><td>Redline used by the shift-light stages</td></tr>
-            <tr><td>rpm_flags</td><td>string (JSON array)</td><td>"[]"</td><td>OBDMenu (<code>JSON.stringify(flags)</code>)</td><td>Main.qml, HomeOBDView</td><td>Shift-light stage thresholds and colours</td></tr>
-            <tr><td>rpm_fullscreen_flash_opacity</td><td>real</td><td>0.5</td><td>none (read only)</td><td>Main.qml, HomeOBDView</td><td>Opacity of the full-screen shift flash</td></tr>
-            <tr><td>rpm_shift_light_size</td><td>real</td><td>0.5</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Shift-light size factor</td></tr>
-            <tr><td>rpm_glow_size</td><td>real</td><td>0.6</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Glow radius factor</td></tr>
-            <tr><td>rpm_glow_intensity</td><td>real</td><td>0.6</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Glow intensity</td></tr>
-            <tr><td>rpm_color_transition_speed</td><td>int</td><td>100</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Colour transition speed in ms</td></tr>
-            <tr><td>rpm_pulse_enabled</td><td>bool</td><td>false</td><td>none (read only)</td><td>HomeOBDView, OBDMenu</td><td>Pulse the shift light at redline</td></tr>
+            <tr><td>rpm_shift_light_enabled</td><td>bool</td><td>true</td><td>OBDMenu RPM popup</td><td>ShiftLightManager</td><td>Shift light on/off</td></tr>
+            <tr><td>rpm_show_on_home_card</td><td>bool</td><td>true</td><td>OBDMenu RPM popup</td><td>ShiftLightManager, OBDMenu</td><td>Show the shift light on the home RPM card</td></tr>
+            <tr><td>rpm_max_rpm</td><td>int</td><td>8000</td><td>OBDMenu RPM popup</td><td>ShiftLightManager, OBDMenu</td><td>Redline used by the shift-light stages; the high bound given to migrated legacy <code>{rpm}</code> flags</td></tr>
+            <tr><td>rpm_flags</td><td>string (JSON array)</td><td>"[]"</td><td><code>shiftLightManager.setFlags()</code> (OBDMenu)</td><td>ShiftLightManager</td><td>Shift-light stage thresholds and colours</td></tr>
+            <tr><td>rpm_fullscreen_flash_opacity</td><td>real</td><td>0.5</td><td>none (read only)</td><td>ShiftLightManager</td><td>Opacity of the full-screen shift flash (fallback for flags without their own)</td></tr>
+            <tr><td>rpm_shift_light_size</td><td>real</td><td>0.5</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Shift-light size factor</td></tr>
+            <tr><td>rpm_glow_size</td><td>real</td><td>0.6</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Glow radius factor</td></tr>
+            <tr><td>rpm_glow_intensity</td><td>real</td><td>0.6</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Glow intensity</td></tr>
+            <tr><td>rpm_color_transition_speed</td><td>int</td><td>100</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Colour transition speed in ms</td></tr>
+            <tr><td>rpm_pulse_enabled</td><td>bool</td><td>false</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Pulse the shift light at redline</td></tr>
             <tr><td>obdCardStyleCircular</td><td>bool</td><td>false</td><td>OBD page; OBD widget</td><td>OBDMenu, OBD widget</td><td>Circular gauges instead of cards on the OBD grid</td></tr>
             <tr><td>lastOBDPage</td><td>string</td><td>""</td><td><code>OBDHome.pushSubpage()</code></td><td>BottomBar, OBDHome</td><td>OBD sub-page the nav button reopens</td></tr>
             <tr><td>lastSensorPage</td><td>string</td><td>""</td><td>SensorHome (after a successful push); BottomBar clears it when the page fails to load</td><td>BottomBar, SensorHome</td><td>Sensor sub-page the nav button reopens</td></tr>

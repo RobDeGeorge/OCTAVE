@@ -1564,29 +1564,15 @@ Item {
                 glowIntensity = settingsManager.get_setting_with_default("rpm_glow_intensity", 0.6)
                 colorTransitionSpeed = settingsManager.get_setting_with_default("rpm_color_transition_speed", 100)
                 pulseEnabled = settingsManager.get_setting_with_default("rpm_pulse_enabled", false)
-                var savedFlags = settingsManager.get_setting_with_default("rpm_flags", "[]")
-                try {
-                    flags = JSON.parse(savedFlags)
-                    // Migrate old format (single rpm) to new format (rpmLow/rpmHigh)
-                    for (var i = 0; i < flags.length; i++) {
-                        if (flags[i].rpm !== undefined && flags[i].rpmLow === undefined) {
-                            flags[i].rpmLow = flags[i].rpm
-                            flags[i].rpmHigh = maxRpm  // Default high to max
-                            delete flags[i].rpm
-                        }
-                    }
-                } catch(e) {
-                    flags = []
-                }
+                // Already migrated to rpmLow/rpmHigh bands by ShiftLightManager
+                flags = shiftLightManager.flags
                 selectedFlagIndex = -1
             }
         }
 
         // Save flags to settings
         function saveFlags() {
-            if (settingsManager) {
-                settingsManager.save_setting("rpm_flags", JSON.stringify(flags))
-            }
+            shiftLightManager.setFlags(flags)
         }
 
         // Add a new flag at a default position

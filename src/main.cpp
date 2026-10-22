@@ -42,6 +42,7 @@ extern "C" {
 #include "managers/clock.h"
 #include "managers/networkmanager.h"
 #include "managers/volumecontroller.h"
+#include "managers/shiftlightmanager.h"
 
 // Phase 2 managers
 #include "managers/mediamanager.h"
@@ -244,6 +245,12 @@ int main(int argc, char *argv[])
     // OBD Manager — vehicle diagnostics via ELM327
     OBDManager obdManager(&settingsManager);
     ctx->setContextProperty("obdManager", &obdManager);
+
+    // Shift light — which RPM flag is active and its flash phase, fed by OBD
+    ShiftLightManager shiftLightManager(&settingsManager);
+    QObject::connect(&obdManager, &OBDManager::rpmChanged,
+                     &shiftLightManager, &ShiftLightManager::setRpm);
+    ctx->setContextProperty("shiftLightManager", &shiftLightManager);
 
     // Bluetooth OBD adapter discovery + pairing (the "Connect" sheet)
     OBDAdapterFinder obdAdapterFinder(&obdManager, &settingsManager);

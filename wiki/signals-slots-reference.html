@@ -31,6 +31,7 @@
             <li><a href="#audioAnalyzer">AudioAnalyzer</a></li>
             <li><a href="#obdManager">OBDManager</a></li>
             <li><a href="#obdAdapterFinder">OBDAdapterFinder</a></li>
+            <li><a href="#shiftLightManager">ShiftLightManager</a></li>
             <li><a href="#tripRecorder">TripRecorder</a></li>
             <li><a href="#esp32VolumeManager">ESP32VolumeManager</a></li>
             <li><a href="#berryIMU">BerryIMUManager</a></li>
@@ -64,6 +65,7 @@
             <tr><td><a href="#audioAnalyzer"><code>audioAnalyzer</code></a></td><td><code>AudioAnalyzer</code> &mdash; <span class="file-path">src/managers/audioanalyzer.h</span></td><td></td></tr>
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td></td></tr>
             <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
+            <tr><td><a href="#shiftLightManager"><code>shiftLightManager</code></a></td><td><code>ShiftLightManager</code> &mdash; <span class="file-path">src/managers/shiftlightmanager.h</span></td><td>RPM shift light: active flag and flash phase</td></tr>
             <tr><td><a href="#tripRecorder"><code>tripRecorder</code></a></td><td><code>TripRecorder</code> &mdash; <span class="file-path">src/managers/triprecorder.h</span></td><td>Black box: every drive into SQLite + CSV / JSON files</td></tr>
             <tr><td><a href="#esp32VolumeManager"><code>esp32VolumeManager</code></a></td><td><code>ESP32VolumeManager</code> &mdash; <span class="file-path">src/managers/esp32volumemanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#berryIMU"><code>berryIMU</code></a></td><td><code>BerryIMUManager</code> &mdash; <span class="file-path">src/managers/berryimumanager.h</span></td><td>Android build uses a QtSensors implementation</td></tr>
@@ -857,7 +859,51 @@
           </tbody>
         </table>
 
-        <!-- OBDAdapterFinder -->
+        <!-- ShiftLightManager -->
+        <h2 id="shiftLightManager">ShiftLightManager <span class="cmt">&mdash; <code>shiftLightManager</code></span></h2>
+        <p><span class="file-path">src/managers/shiftlightmanager.h</span> &mdash; QML context property <code>shiftLightManager</code></p>
+        <p>The RPM shift light's rules, fed by <code>OBDManager::rpmChanged</code> (wired in <code>main.cpp</code>). A flag is an RPM band (<code>rpmLow</code>..<code>rpmHigh</code>, both inclusive) with a colour and effects, stored in the <code>rpm_flags</code> setting as a JSON string. When bands overlap the <em>last</em> matching flag wins. A legacy flag (<code>{rpm}</code> with no band) is migrated once on load to <code>rpmLow = rpm</code>, <code>rpmHigh = rpm_max_rpm</code> and written back. The flash timer runs here, so every frontend sees the same phase: a UI binds to <code>active</code>, <code>activeFlag</code> and <code>lit</code> and draws. All <code>rpm_*</code> settings are re-read when any of them changes. Tests: <span class="file-path">tests/cpp/tst_shiftlightmanager.cpp</span>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>enabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>settingsChanged</code></td><td><code>rpm_shift_light_enabled</code> (default true). Off means <code>active</code> is always false</td></tr>
+            <tr><td><code>showOnHomeCard</code></td><td><code>bool</code></td><td>read-only</td><td><code>settingsChanged</code></td><td><code>rpm_show_on_home_card</code> (default true)</td></tr>
+            <tr><td><code>maxRpm</code></td><td><code>int</code></td><td>read-only</td><td><code>settingsChanged</code></td><td><code>rpm_max_rpm</code> (default 8000): the redline, and the high bound given to migrated legacy flags</td></tr>
+            <tr><td><code>fullScreenFlashOpacity</code></td><td><code>double</code></td><td>read-only</td><td><code>settingsChanged</code></td><td><code>rpm_fullscreen_flash_opacity</code> (default 0.5): the fallback for flags without their own opacity</td></tr>
+            <tr><td><code>lampSize</code>, <code>glowSize</code>, <code>glowIntensity</code></td><td><code>double</code></td><td>read-only</td><td><code>settingsChanged</code></td><td><code>rpm_shift_light_size</code> (0.5), <code>rpm_glow_size</code> (0.6), <code>rpm_glow_intensity</code> (0.6)</td></tr>
+            <tr><td><code>colorTransitionSpeed</code></td><td><code>int</code></td><td>read-only</td><td><code>settingsChanged</code></td><td><code>rpm_color_transition_speed</code> in ms (default 100)</td></tr>
+            <tr><td><code>pulseEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>settingsChanged</code></td><td><code>rpm_pulse_enabled</code> (default false)</td></tr>
+            <tr><td><code>flags</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>flagsChanged</code></td><td>The flags as stored, already migrated to bands. Write with <code>setFlags()</code></td></tr>
+            <tr><td><code>rpm</code></td><td><code>double</code></td><td>read-only</td><td><code>rpmChanged</code></td><td>Last RPM seen</td></tr>
+            <tr><td><code>active</code></td><td><code>bool</code></td><td>read-only</td><td><code>activeFlagChanged</code></td><td>A flag's band contains the RPM, and the light is enabled and not suppressed</td></tr>
+            <tr><td><code>activeIndex</code></td><td><code>int</code></td><td>read-only</td><td><code>activeFlagChanged</code></td><td>Index into <code>flags</code>, or -1</td></tr>
+            <tr><td><code>activeFlag</code></td><td><code>QVariantMap</code></td><td>read-only</td><td><code>activeFlagChanged</code></td><td>The active flag with every field filled in: <code>color</code> (#FF0000), <code>flash</code> (false), <code>flashSpeed</code> (100 ms), <code>fullScreenFlash</code> (false), <code>fullScreenFlashOpacity</code> (the global one), <code>auraFlash</code> (false), <code>auraFlashOpacity</code> (0.6), <code>auraSpread</code> (0.18). Empty when not active</td></tr>
+            <tr><td><code>lit</code></td><td><code>bool</code></td><td>read-only</td><td><code>litChanged</code></td><td>The light is on right now: <code>active</code>, and in the on phase if the flag flashes. A new flag always starts lit</td></tr>
+            <tr><td><code>suppressed</code></td><td><code>bool</code></td><td>read/write</td><td><code>suppressedChanged</code></td><td>In-memory override that forces the light dark without touching the saved setting (the dev screenshot stories use it)</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>setRpm(double rpm)</code></td><td><code>void</code></td><td>Feed a reading; re-matches the band. Connected to <code>obdManager.rpmChanged</code> in <code>main.cpp</code></td></tr>
+            <tr><td><code>setFlags(QVariantList flags)</code></td><td><code>void</code></td><td>Save the flags to <code>rpm_flags</code> (the RPM editor on OBDMenu calls this); applied live</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>settingsChanged()</code></td><td>Any <code>rpm_*</code> setting was re-read</td></tr>
+            <tr><td><code>flagsChanged()</code></td><td>The stored flags changed</td></tr>
+            <tr><td><code>activeFlagChanged()</code></td><td>Another flag (or none) became active, or the active one was edited. Not emitted while the RPM stays inside the same band</td></tr>
+            <tr><td><code>litChanged()</code></td><td>On/off, including every flash toggle</td></tr>
+            <tr><td><code>rpmChanged()</code>, <code>suppressedChanged()</code></td><td>Property notifies</td></tr>
+          </tbody>
+        </table>
+
+        <!-- TripRecorder -->
         <h2 id="tripRecorder">TripRecorder <span class="cmt">&mdash; <code>tripRecorder</code></span></h2>
         <p><span class="file-path">src/managers/triprecorder.h</span> &mdash; QML context property <code>tripRecorder</code></p>
         <p>The black box: every OBD reading of every drive into <code>&lt;config&gt;/history/blackbox.sqlite</code>, one CSV + JSON per trip under <code>history/trips/</code>. Trip detection and coalescing on the GUI thread, SQLite (<code>TripStore</code>) on its own thread; results come back as signals. See <a href="obd-manager.html#black-box">OBD Manager &rarr; Black Box</a> and <a href="pages.html#triphistory">TripHistory.qml</a>.</p>

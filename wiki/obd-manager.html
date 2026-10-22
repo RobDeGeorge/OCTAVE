@@ -950,25 +950,28 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
         <!-- Shift light -->
         <h2 id="shift-light">Shift Light, Full-Screen Flash and Aura</h2>
         <p>
-          The shift light is pure QML driven by <code>rpmChanged</code>. Its configuration is a list of <em>flags</em>
+          The rules live in <a href="signals-slots-reference.html#shiftLightManager"><code>ShiftLightManager</code></a>
+          (<span class="file-path">src/managers/shiftlightmanager.{h,cpp}</span>), fed by <code>rpmChanged</code> in
+          <code>main.cpp</code>; the QML below only draws its <code>activeFlag</code> and <code>lit</code>. Its configuration is a list of <em>flags</em>
           stored as a JSON string under the <code>rpm_flags</code> setting and edited in the RPM settings popup inside
           <span class="file-path">frontend/OBDMenu.qml</span>. Each flag is
           <code>{rpmLow, rpmHigh, color, flash, flashSpeed, fullScreenFlash, fullScreenFlashOpacity, auraFlash, auraFlashOpacity, auraSpread}</code>
           (new flags default to <code>flash: false</code>, <code>flashSpeed: 100</code>, <code>fullScreenFlashOpacity: 0.5</code>,
           <code>auraFlashOpacity: 0.6</code>, <code>auraSpread: 0.18</code>); the popup keeps the list sorted by
-          <code>rpmLow</code>, keeps <code>rpmLow &lt;= rpmHigh</code>, clamps ranges to <code>rpm_max_rpm</code> (default 8000),
-          and migrates the old single-<code>rpm</code> format to <code>rpmLow</code>/<code>rpmHigh</code> on load.
+          <code>rpmLow</code>, keeps <code>rpmLow &lt;= rpmHigh</code> and clamps ranges to <code>rpm_max_rpm</code> (default 8000).
+          The manager migrates the old single-<code>rpm</code> format once on load to <code>rpmLow = rpm</code>,
+          <code>rpmHigh = rpm_max_rpm</code> (the redline, not "no limit") and writes it back.
         </p>
         <ul>
-          <li><strong>Active flag</strong>: the last flag (highest priority) whose <code>[rpmLow, rpmHigh]</code> range contains the current RPM.</li>
-          <li><strong>Card indicator</strong> (<span class="file-path">HomeOBDView.qml</span>): a disc on the RPM home card (<code>rpm_show_on_home_card</code>) coloured by the active flag, with glow (<code>rpm_glow_size</code>, <code>rpm_glow_intensity</code>), size (<code>rpm_shift_light_size</code>), colour transition (<code>rpm_color_transition_speed</code>), optional 800 ms pulse (<code>rpm_pulse_enabled</code>), and a flash timer at <code>flashSpeed</code> ms when the flag's <code>flash</code> is set.</li>
-          <li><strong>Global full-screen flash</strong> (<span class="file-path">Main.qml</span>, <code>globalFullScreenFlash</code>): a <code>z: 999999</code> rectangle over the whole window in the flag colour at the flag's <code>fullScreenFlashOpacity</code> (fallback <code>rpm_fullscreen_flash_opacity</code>), visible when the flag has <code>fullScreenFlash</code> and <code>rpm_shift_light_enabled</code> is on; <code>enabled: false</code> so touches pass through. A window-level timer toggles it at <code>flashSpeed</code> when <code>flash</code> is set.</li>
+          <li><strong>Active flag</strong>: the last flag (highest priority) whose <code>[rpmLow, rpmHigh]</code> range contains the current RPM, only while <code>rpm_shift_light_enabled</code> is on. <code>activeFlag</code> has every field filled in (defaults above; <code>fullScreenFlashOpacity</code> falls back to <code>rpm_fullscreen_flash_opacity</code>).</li>
+          <li><strong>Flash</strong>: one C++ timer at the flag's <code>flashSpeed</code> toggles <code>lit</code>, so the card disc and both overlays flash in step; a newly active flag always starts lit.</li>
+          <li><strong>Card indicator</strong> (<span class="file-path">HomeOBDView.qml</span>): a disc on the RPM home card (<code>rpm_show_on_home_card</code>) coloured by the active flag, with glow (<code>rpm_glow_size</code>, <code>rpm_glow_intensity</code>), size (<code>rpm_shift_light_size</code>), colour transition (<code>rpm_color_transition_speed</code>), optional 800 ms pulse (<code>rpm_pulse_enabled</code>), dark while not <code>lit</code>.</li>
+          <li><strong>Global full-screen flash</strong> (<span class="file-path">Main.qml</span>, <code>globalFullScreenFlash</code>): a <code>z: 999999</code> rectangle over the whole window in the flag colour at the flag's <code>fullScreenFlashOpacity</code> (fallback <code>rpm_fullscreen_flash_opacity</code>), visible while <code>lit</code> and the flag has <code>fullScreenFlash</code>; <code>enabled: false</code> so touches pass through.</li>
           <li><strong>Aura overlay</strong> (<code>globalAuraFlash</code>): the same trigger with <code>auraFlash</code>, but rendered as four edge gradients (top/bottom/left/right) that fade from the flag colour to transparent over <code>auraSpread</code> of the window (default 18 %) at <code>auraFlashOpacity</code> -- a perimeter glow that leaves the centre readable.</li>
         </ul>
         <p>
-          <code>Main.qml</code> connects <code>obdManager.rpmChanged</code> with an explicit
-          <code>.connect()</code> in <code>Component.onCompleted</code> rather than a <code>Connections</code> element, and reloads the flags whenever <code>settingsManager.genericSettingChanged</code>
-          reports a key starting with <code>rpm_</code>.
+          The manager re-reads every <code>rpm_*</code> setting whenever <code>settingsManager.genericSettingChanged</code>
+          reports one, so editor changes apply live. Tests: <span class="file-path">tests/cpp/tst_shiftlightmanager.cpp</span>.
         </p>
 
         <!-- Demo -->

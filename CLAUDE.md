@@ -61,6 +61,7 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `settingsmanager` — Central settings store, persists JSON to OS-specific config dirs
 - `mediamanager` — Local audio playback via QMediaPlayer
 - `obdmanager` + `elm327protocol` — OBD-II diagnostics
+- `shiftlightmanager` — RPM shift light rules (legacy flag migration, band match, flash phase) fed by `OBDManager::rpmChanged`; the QML overlays and home-card lamp only bind to `active` / `activeFlag` / `lit`
 - `obdadapterfinder` (+ `src/platform/bluezpairer`) — Bluetooth OBD adapter scan / PIN pairing / trust / connect (desktop Linux so far; see `TODO/obd-adapter-discovery.md`)
 - `esp32volumemanager` — Wireless rotary encoder (serial)
 - `berryimumanager` — I²C sensor hub

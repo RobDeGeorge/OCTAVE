@@ -57,38 +57,6 @@ ApplicationWindow {
     }
     function closeNowPlayingStudio() { nowPlayingStudioOpen = false }
 
-    // Global shift light flash properties
-    property real currentRpm: 0
-    property var shiftLightFlags: []
-    property var activeShiftFlag: null
-    property bool shiftLightFlashVisible: true
-    property bool shiftLightEnabled: settingsManager ? settingsManager.get_setting_with_default("rpm_shift_light_enabled", true) : true
-    property real fullScreenFlashOpacity: settingsManager ? settingsManager.get_setting_with_default("rpm_fullscreen_flash_opacity", 0.5) : 0.5
-
-    // Function to find active flag based on current RPM
-    function findActiveFlag() {
-        if (!shiftLightFlags || shiftLightFlags.length === 0) {
-            if (activeShiftFlag !== null)
-                activeShiftFlag = null
-            return
-        }
-        // Check from highest priority (last) to lowest (first)
-        var active = null
-        for (var i = shiftLightFlags.length - 1; i >= 0; i--) {
-            var flag = shiftLightFlags[i]
-            var low = flag.rpmLow !== undefined ? flag.rpmLow : flag.rpm
-            var high = flag.rpmHigh !== undefined ? flag.rpmHigh : 99999
-            if (currentRpm >= low && currentRpm <= high) {
-                active = flag
-                break
-            }
-        }
-        // Assign only on a real change: onActiveShiftFlagChanged restarts the
-        // flash, and RPM updates arrive many times a second
-        if (activeShiftFlag !== active)
-            activeShiftFlag = active
-    }
-
     // Set initial window size. On desktop use the saved user preference so
     // their previous window size persists across runs. On mobile we must NOT
     // set width/height at all — the Qt Android window manager pillarboxes
@@ -203,28 +171,6 @@ ApplicationWindow {
                 // Force update of theme options
                 App.Style.customThemesUpdated()
             })
-        }
-
-        // Load shift light flags for global full screen flash
-        loadShiftLightFlags()
-        console.log("[GlobalFlash] Loaded flags:", JSON.stringify(shiftLightFlags))
-
-        // Debug: Check if obdManager is available and connect signal manually
-        console.log("[GlobalFlash] obdManager available:", obdManager !== null && obdManager !== undefined)
-        if (obdManager) {
-            console.log("[GlobalFlash] obdManager.rpmChanged exists:", obdManager.rpmChanged !== null && obdManager.rpmChanged !== undefined)
-            if (obdManager.rpmChanged) {
-                console.log("[GlobalFlash] Manually connecting to obdManager.rpmChanged signal")
-                obdManager.rpmChanged.connect(function(rpm) {
-                    mainWindow.currentRpm = rpm
-                    mainWindow.findActiveFlag()
-                })
-                console.log("[GlobalFlash] Signal connection established!")
-            } else {
-                console.log("[GlobalFlash] ERROR: obdManager.rpmChanged is null/undefined")
-            }
-        } else {
-            console.log("[GlobalFlash] ERROR: obdManager is null/undefined")
         }
     }
 
@@ -1010,21 +956,15 @@ ApplicationWindow {
             id: globalFullScreenFlash
             anchors.fill: parent
             z: 999999  // High z-index to be above all other content
-            visible: mainWindow.shiftLightEnabled &&
-                     mainWindow.activeShiftFlag !== null &&
-                     mainWindow.activeShiftFlag.fullScreenFlash === true &&
-                     mainWindow.shiftLightFlashVisible
-            color: mainWindow.activeShiftFlag ? mainWindow.activeShiftFlag.color : "transparent"
-            // Use per-flag opacity if available, otherwise fall back to global setting
-            opacity: mainWindow.activeShiftFlag && mainWindow.activeShiftFlag.fullScreenFlashOpacity !== undefined ?
-                     mainWindow.activeShiftFlag.fullScreenFlashOpacity : mainWindow.fullScreenFlashOpacity
+            // ShiftLightManager resolves the flag (per-flag opacity, else the
+            // global one) and runs the flash phase; the null checks cover
+            // shutdown, when the managers go before the engine
+            visible: !!shiftLightManager && shiftLightManager.lit && shiftLightManager.activeFlag.fullScreenFlash === true
+            color: shiftLightManager && shiftLightManager.active ? shiftLightManager.activeFlag.color : "transparent"
+            opacity: shiftLightManager && shiftLightManager.active ? shiftLightManager.activeFlag.fullScreenFlashOpacity : 0
 
             // Allow clicks to pass through
             enabled: false
-
-            Component.onCompleted: {
-                console.log("[GlobalFlash] Overlay Rectangle created inside mainContainer")
-            }
         }
 
         // Aura overlay - perimeter-only color fade (4 edge gradients)
@@ -1033,16 +973,11 @@ ApplicationWindow {
             anchors.fill: parent
             z: 999999
             enabled: false
-            visible: mainWindow.shiftLightEnabled &&
-                     mainWindow.activeShiftFlag !== null &&
-                     mainWindow.activeShiftFlag.auraFlash === true &&
-                     mainWindow.shiftLightFlashVisible
-            opacity: mainWindow.activeShiftFlag && mainWindow.activeShiftFlag.auraFlashOpacity !== undefined ?
-                     mainWindow.activeShiftFlag.auraFlashOpacity : 0.6
+            visible: !!shiftLightManager && shiftLightManager.lit && shiftLightManager.activeFlag.auraFlash === true
+            opacity: shiftLightManager && shiftLightManager.active ? shiftLightManager.activeFlag.auraFlashOpacity : 0
 
-            property color auraColor: mainWindow.activeShiftFlag ? mainWindow.activeShiftFlag.color : "transparent"
-            property real edgeFraction: mainWindow.activeShiftFlag && mainWindow.activeShiftFlag.auraSpread !== undefined ?
-                                        mainWindow.activeShiftFlag.auraSpread : 0.18
+            property color auraColor: shiftLightManager && shiftLightManager.active ? shiftLightManager.activeFlag.color : "transparent"
+            property real edgeFraction: shiftLightManager && shiftLightManager.active ? shiftLightManager.activeFlag.auraSpread : 0.18
 
             // Top edge
             Rectangle {
@@ -1294,43 +1229,6 @@ ApplicationWindow {
         }
     }
 
-    // Load shift light flags from settings
-    function loadShiftLightFlags() {
-        if (settingsManager) {
-            try {
-                var savedFlags = settingsManager.get_setting_with_default("rpm_flags", "[]")
-                shiftLightFlags = JSON.parse(savedFlags)
-            } catch(e) {
-                shiftLightFlags = []
-            }
-            shiftLightEnabled = settingsManager.get_setting_with_default("rpm_shift_light_enabled", true)
-            fullScreenFlashOpacity = settingsManager.get_setting_with_default("rpm_fullscreen_flash_opacity", 0.5)
-        }
-    }
-
-    // Note: OBD manager signal connection is done manually in Component.onCompleted
-
-    // Settings manager connections for shift light settings changes
-    Connections {
-        target: settingsManager
-        function onGenericSettingChanged(key) {
-            if (key.startsWith("rpm_")) {
-                mainWindow.loadShiftLightFlags()
-            }
-        }
-    }
-
-    // Flash timer for global shift light
-    Timer {
-        id: globalFlashTimer
-        interval: mainWindow.activeShiftFlag ? mainWindow.activeShiftFlag.flashSpeed : 100
-        running: mainWindow.activeShiftFlag !== null && mainWindow.activeShiftFlag.flash === true
-        repeat: true
-        onTriggered: {
-            mainWindow.shiftLightFlashVisible = !mainWindow.shiftLightFlashVisible
-        }
-    }
-
     // Pages call this to have a page they lead to built in the background
     // (see pagePrewarmTimer.enqueue)
     function prewarmPageSoon(file) {
@@ -1362,15 +1260,6 @@ ApplicationWindow {
         function onDownloadError(songId, displayName, errorMsg) {
             if (mainWindow._currentPageName() !== "downloadPage")
                 errorToast.show("Download failed" + (displayName ? ": " + displayName : ""))
-        }
-    }
-
-    // Reset flash visibility when flag changes
-    onActiveShiftFlagChanged: {
-        shiftLightFlashVisible = true
-        // Load flags on first activation if not loaded
-        if (shiftLightFlags.length === 0) {
-            loadShiftLightFlags()
         }
     }
 

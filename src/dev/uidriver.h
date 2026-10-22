@@ -63,7 +63,7 @@ public:
     static QVariantMap itemGeometry(QQuickItem *item);
 
 private:
-    QObject *findObject(const QString &name) const;   // "root" = the window itself
+    QObject *findObject(const QString &name) const;   // "root" = the window itself; else an item by objectName, else a context-property manager
     void mouse(int kind, double x, double y);
     void recordTick();
 

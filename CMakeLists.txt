@@ -194,6 +194,8 @@ qt_add_executable(octave
     src/managers/networkmanager.cpp
     src/managers/volumecontroller.h
     src/managers/volumecontroller.cpp
+    src/managers/shiftlightmanager.h
+    src/managers/shiftlightmanager.cpp
     src/managers/mediamanager.h
     src/managers/mediamanager.cpp
     src/managers/audioanalyzer.h

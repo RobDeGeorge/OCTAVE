@@ -7,6 +7,7 @@
 #include <QKeyEvent>
 #include <QProcess>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QStandardPaths>
@@ -283,7 +284,7 @@ QObject *UiDriver::findObject(const QString &name) const
     if (!w)
         return nullptr;
     if (name == QLatin1String("root"))
-        return w;   // the ApplicationWindow (Main.qml properties such as shiftLightEnabled)
+        return w;   // the ApplicationWindow (Main.qml properties)
     QQuickItem *first = nullptr;
     QQuickItem *visible = nullptr;
     walk(w->contentItem(), [&](QQuickItem *it) {
@@ -297,7 +298,11 @@ QObject *UiDriver::findObject(const QString &name) const
             first = it;
         return false;
     });
-    return visible ? visible : first;
+    if (visible || first)
+        return visible ? visible : first;
+    // Not an item: a manager registered as a context property
+    // (e.g. "shiftLightManager"), so its properties can be poked too
+    return m_engine ? m_engine->rootContext()->contextProperty(name).value<QObject *>() : nullptr;
 }
 
 QVariant UiDriver::findItem(const QString &name) const

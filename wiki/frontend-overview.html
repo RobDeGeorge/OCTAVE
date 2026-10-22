@@ -158,8 +158,6 @@
             <tr><td><code>screenWidth</code> / <code>screenHeight</code></td><td><code>settingsManager.screenWidth</code> / <code>screenHeight</code> (defaults 1280&times;720)</td><td>Persisted window dimensions</td></tr>
             <tr><td><code>isVerticalLayout</code></td><td><code>settingsManager.bottomBarOrientation === "side"</code></td><td>Side bar vs bottom bar mode</td></tr>
             <tr><td><code>nowPlayingStudioOpen</code>, <code>nowPlayingStudioOriginRect</code></td><td><code>openNowPlayingStudio(rect)</code> / <code>closeNowPlayingStudio()</code></td><td>Drive the studio overlay and its hero-morph origin</td></tr>
-            <tr><td><code>currentRpm</code></td><td><code>obdManager.rpmChanged</code> (connected by hand)</td><td>Live RPM for the shift-light overlays</td></tr>
-            <tr><td><code>shiftLightFlags</code>, <code>activeShiftFlag</code>, <code>shiftLightFlashVisible</code>, <code>shiftLightEnabled</code>, <code>fullScreenFlashOpacity</code></td><td><code>rpm_flags</code>, <code>rpm_shift_light_enabled</code>, <code>rpm_fullscreen_flash_opacity</code> generic settings</td><td>Shift-light state (see <a href="#shift-light">below</a>)</td></tr>
             <tr><td><code>loadedFonts</code>, <code>fontLoaders</code>, <code>pendingFontLoads</code>, <code>pendingFontData</code></td><td>font scan</td><td>Dynamic <code>FontLoader</code> bookkeeping</td></tr>
           </tbody>
         </table>
@@ -430,15 +428,12 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <!-- Shift Light -->
         <h2 id="shift-light">Shift Light Overlays</h2>
 
-        <p>Main.qml implements the window-wide part of the RPM shift light (the per-card light on the home screen lives in <a href="components.html#home-obd-view">HomeOBDView</a>):</p>
+        <p>Main.qml draws the window-wide part of the RPM shift light (the per-card light on the home screen lives in <a href="components.html#home-obd-view">HomeOBDView</a>). It holds no shift-light state: which flag is active, its resolved fields and the flash phase all come from <a href="signals-slots-reference.html#shiftLightManager"><code>shiftLightManager</code></a>, which is fed by <code>obdManager.rpmChanged</code> in C++.</p>
 
         <ol class="steps">
-          <li><strong>Load flags</strong> &mdash; <code>loadShiftLightFlags()</code> parses the <code>rpm_flags</code> generic setting (JSON array). Each flag may carry <code>rpmLow</code>/<code>rpmHigh</code> (or legacy <code>rpm</code>), <code>color</code>, <code>flash</code>, <code>flashSpeed</code>, <code>fullScreenFlash</code>, <code>fullScreenFlashOpacity</code>, <code>auraFlash</code>, <code>auraFlashOpacity</code>, <code>auraSpread</code>. Flags reload whenever <code>settingsManager.genericSettingChanged(key)</code> fires with a key starting <code>rpm_</code>.</li>
-          <li><strong>Track RPM</strong> &mdash; <code>obdManager.rpmChanged.connect(...)</code> is made by hand in <code>Component.onCompleted</code> and updates <code>currentRpm</code>.</li>
-          <li><strong>Find the active flag</strong> &mdash; <code>findActiveFlag()</code> walks the array from last (highest priority) to first and picks the first whose range contains <code>currentRpm</code>.</li>
-          <li><strong>Full-screen flash</strong> &mdash; <code>globalFullScreenFlash</code> is a <code>Rectangle</code> filling <code>mainContainer</code> at <code>z: 999999</code>, <code>enabled: false</code> so input passes through, colored with the flag's color, opacity from the flag's <code>fullScreenFlashOpacity</code> or the global <code>rpm_fullscreen_flash_opacity</code> (default 0.5).</li>
-          <li><strong>Aura flash</strong> &mdash; <code>globalAuraFlash</code> paints four edge gradients (top/bottom/left/right) whose depth is <code>auraSpread</code> &times; the window size (default 0.18) at <code>auraFlashOpacity</code> (default 0.6), shown when the flag has <code>auraFlash === true</code>.</li>
-          <li><strong>Flash timer</strong> &mdash; <code>globalFlashTimer</code> runs while the active flag has <code>flash === true</code>, toggling <code>shiftLightFlashVisible</code> every <code>flashSpeed</code> ms; <code>onActiveShiftFlagChanged</code> resets visibility to true.</li>
+          <li><strong>Full-screen flash</strong> &mdash; <code>globalFullScreenFlash</code> is a <code>Rectangle</code> filling <code>mainContainer</code> at <code>z: 999999</code>, <code>enabled: false</code> so input passes through. Visible while <code>shiftLightManager.lit</code> and the active flag has <code>fullScreenFlash</code>; colour and opacity from <code>activeFlag.color</code> / <code>activeFlag.fullScreenFlashOpacity</code> (the manager has already applied the global <code>rpm_fullscreen_flash_opacity</code> fallback).</li>
+          <li><strong>Aura flash</strong> &mdash; <code>globalAuraFlash</code> paints four edge gradients (top/bottom/left/right) whose depth is <code>activeFlag.auraSpread</code> &times; the window size at <code>activeFlag.auraFlashOpacity</code>, shown while <code>lit</code> and the flag has <code>auraFlash</code>.</li>
+          <li><strong>Flash</strong> &mdash; nothing to do here: <code>lit</code> toggles at the flag's <code>flashSpeed</code> inside the manager, so the overlays and the home-card lamp flash in step.</li>
         </ol>
 
         <div class="info-box info">
