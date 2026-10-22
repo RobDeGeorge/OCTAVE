@@ -32,6 +32,13 @@ jobs:
       - name: Run ruff (scripts/ and packaging/ Python tools)
         run: ruff check .
 
+      # docs/GAUGE_AUTHORING.md §6 is generated from src/managers/parametercatalog.cpp
+      - name: Parameter table in GAUGE_AUTHORING.md is current
+        run: |
+          python scripts/gen_gauge_param_docs.py
+          git diff --exit-code docs/GAUGE_AUTHORING.md || {
+            echo "::error::Run python scripts/gen_gauge_param_docs.py and commit docs/GAUGE_AUTHORING.md"; exit 1; }
+
   # ---------------------------------------------------------------------------
   # C++ compile check — runs on EVERY push/PR so a C++ break can't land on
   # main unnoticed between release tags. Configure, build, run the C++ tests

@@ -128,6 +128,9 @@ private slots:
         QCOMPARE(coolant.value("first").toDouble(), 80.0);
         QCOMPARE(coolant.value("last").toDouble(), 140.0);
         QCOMPARE(coolant.value("count").toLongLong(), 61);
+        // Units and titles from ParameterCatalog, so the files explain themselves
+        QCOMPARE(coolant.value("unit").toString(), QString::fromUtf8("°C"));
+        QCOMPARE(coolant.value("title").toString(), QStringLiteral("Coolant Temp"));
 
         // Files: CSV with a header and one line per sample, JSON with the summary
         const QString csv = s.value("file").toString();
@@ -135,9 +138,19 @@ private slots:
         QFile f(csv);
         QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
         const QStringList lines = QString::fromUtf8(f.readAll()).split('\n', Qt::SkipEmptyParts);
-        QCOMPARE(lines.first(), QStringLiteral("timestamp_ms,time,elapsed_s,parameter,value"));
+        QCOMPARE(lines.first(), QStringLiteral("timestamp_ms,time,elapsed_s,parameter,value,unit"));
         QCOMPARE(lines.size(), 1 + 185);
         QVERIFY(lines.at(1).startsWith(QString::number(id) + ","));
+        bool sawCoolant = false;
+        for (const QString &line : lines) {
+            const QStringList cols = line.split(',');
+            if (cols.value(3) == QLatin1String("COOLANT_TEMP")) {
+                QCOMPARE(cols.size(), 6);
+                QCOMPARE(cols.at(5), QString::fromUtf8("°C"));
+                sawCoolant = true;
+            }
+        }
+        QVERIFY(sawCoolant);
         const QString json = csv.chopped(4) + ".json";
         QFile j(json);
         QVERIFY(j.open(QIODevice::ReadOnly));

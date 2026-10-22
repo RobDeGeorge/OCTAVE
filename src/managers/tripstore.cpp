@@ -1,7 +1,9 @@
 #include "tripstore.h"
+#include "parametercatalog.h"
 
 #include <QDateTime>
 #include <QDir>
+#include <QHash>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -460,6 +462,10 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
                 p[QStringLiteral("min")] = q.dbl(2);
                 p[QStringLiteral("max")] = q.dbl(3);
                 p[QStringLiteral("avg")] = q.dbl(4);
+                if (const ParameterCatalog::Parameter *meta = ParameterCatalog::find(q.text(0))) {
+                    p[QStringLiteral("title")] = meta->title;
+                    p[QStringLiteral("unit")] = meta->unit;
+                }
                 byName.insert(p.value(QStringLiteral("id")).toString(), p);
             }
         }
@@ -576,18 +582,27 @@ bool TripStore::writeTripFiles(qint64 id, qint64 startMs, const QVariantMap &sum
             return false;
         }
         QTextStream out(&f);
-        out << "timestamp_ms,time,elapsed_s,parameter,value\n";
+        // unit last, so readers that go by position keep working
+        out << "timestamp_ms,time,elapsed_s,parameter,value,unit\n";
+        QHash<QString, QString> units;   // per id, from ParameterCatalog
         Query q(m_db);
         if (q.prepare("SELECT s.ts_ms, p.name, s.value FROM samples s JOIN params p ON p.id = s.param_id "
                       "WHERE s.trip_id = ? ORDER BY s.ts_ms, p.name")) {
             q.bind(1, id);
             while (q.step()) {
                 const qint64 ts = q.int64(0);
+                const QString name = q.text(1);
+                auto unit = units.constFind(name);
+                if (unit == units.constEnd()) {
+                    const ParameterCatalog::Parameter *meta = ParameterCatalog::find(name);
+                    unit = units.insert(name, meta ? meta->unit : QString());
+                }
                 out << ts << ','
                     << QDateTime::fromMSecsSinceEpoch(ts).toString(Qt::ISODateWithMs) << ','
                     << QString::number(static_cast<double>(ts - startMs) / 1000.0, 'f', 3) << ','
-                    << q.text(1) << ','
-                    << QString::number(q.dbl(2), 'g', 7) << '\n';
+                    << name << ','
+                    << QString::number(q.dbl(2), 'g', 7) << ','
+                    << unit.value() << '\n';
             }
         }
         out.flush();
