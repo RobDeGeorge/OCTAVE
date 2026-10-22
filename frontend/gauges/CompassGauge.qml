@@ -26,7 +26,7 @@ Item {
 
     // ── Data binding ────────────────────────────────────────────────
     readonly property real heading:
-        App.OBDParameterModel.paramValues["HEADING"] || 0
+        App.OBDParameterModel.liveValue("HEADING") || 0
 
     // ── Features ────────────────────────────────────────────────────
     property bool showDegrees: true

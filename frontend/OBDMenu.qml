@@ -286,7 +286,7 @@ Item {
     // the render loop near 50 fps and cost ~10% of a Pi core while nothing of
     // it was visible. Hidden, the cards settle once to "--"; on return they
     // pick up the live values. On screen each card listens to its own value
-    // (OBDParameterModel.valueHolder), not to every fold of paramValues.
+    // (OBDParameterModel.liveValue -> paramStore[id]), not to every value.
     readonly property bool _gridLive: obdConnected && activeDashboardId === "grid"
         && (StackView.status === StackView.Active || StackView.status === StackView.Activating)
     
@@ -548,12 +548,12 @@ Item {
                     Layout.preferredWidth: 1     // equal column widths
                     Layout.preferredHeight: 1
 
-                    // This card's own value (OBDParameterModel.valueHolder): it
-                    // re-evaluates only when this PID changes, not on every fold
-                    // of every value. Read only while the grid is live (hidden,
+                    // This card's own value (OBDParameterModel.liveValue): it
+                    // re-evaluates only when this PID changes, not when any
+                    // other value does. Read only while the grid is live (hidden,
                     // the card settles once and stops listening, see _gridLive).
-                    readonly property var _holder: App.OBDParameterModel.valueHolder(modelData.id)
-                    readonly property var liveValue: obdPage._gridLive ? _holder.value : undefined
+                    readonly property var liveValue: obdPage._gridLive
+                        ? App.OBDParameterModel.liveValue(modelData.id) : undefined
 
                     // False until a reading arrives (adapter disconnected or PID
                     // not reported yet) so the card shows "--" instead of a fake 0.0.

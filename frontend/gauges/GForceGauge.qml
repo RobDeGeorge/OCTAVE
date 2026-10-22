@@ -25,9 +25,9 @@ Item {
 
     // ── Data binding ────────────────────────────────────────────────
     readonly property real lateralG:
-        App.OBDParameterModel.paramValues["LATERAL_G"] || 0
+        App.OBDParameterModel.liveValue("LATERAL_G") || 0
     readonly property real longitudinalG:
-        App.OBDParameterModel.paramValues["LONGITUDINAL_G"] || 0
+        App.OBDParameterModel.liveValue("LONGITUDINAL_G") || 0
 
     // ── Features ────────────────────────────────────────────────────
     property real maxG: 1.5         // g at the outer ring

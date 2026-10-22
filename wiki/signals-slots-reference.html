@@ -908,7 +908,7 @@
         <!-- ParameterStore -->
         <h2 id="paramStore">ParameterStore <span class="cmt">&mdash; <code>paramStore</code></span></h2>
         <p><span class="file-path">src/managers/parameterstore.h</span> &mdash; QML context property <code>paramStore</code>, a <code>QQmlPropertyMap</code></p>
-        <p>The latest value of every <a href="#parameterCatalog">catalog</a> id, one notifying key per id: bind <code>paramStore.RPM</code> or <code>paramStore[id]</code> and the binding re-evaluates only when that id changes; an id with no reading yet is <code>undefined</code>. <span class="file-path">src/main.cpp</span> feeds it from <code>obdManager.parameterSampled</code> and the eight <code>berryIMU</code> signals; QML writes are rejected. Writes are coalesced: values land together every 33 ms (<code>kFlushMs</code>). A catalog alias (<code>IGNITION_TIMING</code>) is written whenever its target arrives. <code>OBDParameterModel</code> mirrors it into <code>paramValues</code>. Tests: <span class="file-path">tests/cpp/tst_parameterstore.cpp</span>.</p>
+        <p>The latest value of every <a href="#parameterCatalog">catalog</a> id, one notifying key per id: bind <code>paramStore.RPM</code> or <code>paramStore[id]</code> and the binding re-evaluates only when that id changes; an id with no reading yet is <code>undefined</code>. <span class="file-path">src/main.cpp</span> feeds it from <code>obdManager.parameterSampled</code> and the eight <code>berryIMU</code> signals; QML writes are rejected. Writes are coalesced: values land together every 33 ms (<code>kFlushMs</code>). A catalog alias (<code>IGNITION_TIMING</code>) is written whenever its target arrives. <code>OBDParameterModel.liveValue(id)</code> reads it for every gauge and card. Tests: <span class="file-path">tests/cpp/tst_parameterstore.cpp</span>.</p>
         <h3>Invokables &amp; Slots</h3>
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
@@ -922,7 +922,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>changed(QStringList ids)</code></td><td>After each fold: the ids whose values were written. Per-key bindings do not need it; it is for consumers that want the batch (<code>OBDParameterModel</code>)</td></tr>
+            <tr><td><code>changed(QStringList ids)</code></td><td>After each fold: the ids whose values were written. Per-key bindings do not need it; it is for consumers that want the batch</td></tr>
           </tbody>
         </table>
 

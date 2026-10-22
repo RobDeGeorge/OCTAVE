@@ -83,7 +83,7 @@
             <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td><span class="platform-badge android">Android</span></td><td>Static Java class wrapping <code>BluetoothGatt</code>. Called from C++ via <code>QJniObject</code>: <code>connect</code>, <code>disconnect</code>, <code>write</code>, <code>stateCode</code>, <code>pollResponse</code>, <code>pollLog</code>, <code>lastError</code>, <code>lastEvent</code>, <code>bondedDevices</code> (paired adapters as <code>"MAC|name"</code>).</td></tr>
             <tr><td><span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>, <span class="file-path">src/platform/bluezpairer.{h,cpp}</span></td><td><span class="platform-badge all">All; full flow on Linux</span></td><td><code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>): Bluetooth discovery, PIN pairing through BlueZ, trust, SPP channel lookup, then hand-off to <code>connect_direct()</code>. See <a href="#adapter-finder">Adapter Finder</a>.</td></tr>
             <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td><span class="platform-badge all">QML</span></td><td>The "Connect OBD2 Adapter" sheet the finder drives.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td><span class="platform-badge all">QML</span></td><td>Singleton that maps every <code>*Changed</code> signal to a <code>paramId</code> and holds the live <code>paramValues</code> map every gauge binds to (see <a href="#parameter-model">below</a>).</td></tr>
+            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td><span class="platform-badge all">QML</span></td><td>Singleton every gauge binds to: catalog metadata, <code>liveValue(id)</code> over the C++ <code>paramStore</code>, demo mode and the vehicle gate (see <a href="#parameter-model">below</a>).</td></tr>
             <tr><td><span class="file-path">src/dev/simelm327.{h,cpp}</span>, <span class="file-path">src/dev/carsim.{h,cpp}</span></td><td><span class="platform-badge desktop">Dev mode</span></td><td>Simulated ELM327 <code>QIODevice</code> and car physics for <code>octave --dev</code>, plugged in below the real manager through <code>OBDConnectionWorker::setCustomTransport()</code> + <code>OBDManager::setPortOverride("sim://elm327")</code>. Built only with <code>OCTAVE_DEV_TOOLS</code>.</td></tr>
           </tbody>
         </table>
@@ -116,7 +116,7 @@ Desktop                                   Android
         <table>
           <thead><tr><th>QML file</th><th>What it uses</th></tr></thead>
           <tbody>
-            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Mirrors the C++ <code>paramStore</code> (fed from <code>parameterSampled</code> in <span class="file-path">main.cpp</span>) into <code>paramValues</code> and serves the <code>ParameterCatalog</code> metadata. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Serves the C++ <code>paramStore</code> (fed from <code>parameterSampled</code> in <span class="file-path">main.cpp</span>) as <code>liveValue(id)</code> and the <code>ParameterCatalog</code> metadata. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
             <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the dashboards chooser/renderer, the RPM/shift-light settings popup. While no adapter is connected no dashboard renders at all (<code>obdConnected</code> gates the renderer, the cards grid, swipe and the page dots): the page shows "No vehicle connected" and a "Connect Bluetooth OBD2" button (<code>obdConnectButton</code>) that opens <code>OBDAdapterSheet</code>, whichever dashboard is active.</td></tr>
             <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td>Everything on <code>obdAdapterFinder</code>; in fallback mode <code>availableAdapters</code>, <code>scan()</code> and <code>connect_to_adapter()</code>; <code>connected</code> closes the sheet 1.5 s after the adapter comes up.</td></tr>
             <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code>, a 40-line rolling log fed by <code>connectionLogLineAppended</code>, and the sub-page buttons.</td></tr>
@@ -571,7 +571,7 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
         </p>
         <p>
           Values reach QML through one signal, <code>obdParameterChanged(paramId, value)</code>, instead of a
-          signal per parameter; <code>OBDParameterModel</code> routes it into <code>paramValues</code>. Replies longer
+          signal per parameter; <code>parameterSampled</code> carries it into <code>paramStore</code> like any other id. Replies longer
           than one CAN frame are joined by <code>parseResponseLines()</code>. The vehicle scan reads the
           <code>0160</code>-<code>01C0</code> support bitmaps too, so it can report these PIDs. Boost pressure is absolute; subtract <code>BAROMETRIC_PRESSURE</code>
           for gauge boost.
@@ -935,9 +935,9 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
           <code>LONGITUDINAL_G</code> and <code>BARO_TEMP</code> (see <a href="hardware-managers.html">Hardware Managers</a>). The IMU
           values are ordinary parameters from that point on: any gauge can bind them, the PID picker lists them, demo mode sweeps
           them. An alias (<code>IGNITION_TIMING</code>) is written whenever its target (<code>TIMING_ADVANCE</code>) arrives.
-          <span class="file-path">frontend/OBDParameterModel.qml</span> mirrors the store into its whole-map
-          <code>paramValues</code> with one <code>Connections</code> on <code>paramStore.changed(ids)</code>; it has no per-signal
-          handlers.
+          <span class="file-path">frontend/OBDParameterModel.qml</span> serves it to every reader through
+          <code>liveValue(id)</code> (<code>paramStore[id]</code>, or the demo sweep); it has no per-signal handlers and no copy of the
+          values.
         </p>
         <p>
           <strong>Coalesced writes</strong> (<code>486a809</code>, moved into the store): <code>ingest()</code> only records the
@@ -983,7 +983,7 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
         <table>
           <thead><tr><th>Mechanism</th><th>Scope</th><th>How it works</th></tr></thead>
           <tbody>
-            <tr><td><code>OBDParameterModel.simulationActive</code></td><td>Dashboard editor "Demo data" button</td><td>Pure QML: every parameter sweeps a sine between its min and max with a per-parameter period (4-16 s) and phase, 10 Hz. While active, real backend writes are dropped; on deactivation <code>paramValues</code> is reset so fake readings never linger. The editor forces it off in <code>Component.onDestruction</code>.</td></tr>
+            <tr><td><code>OBDParameterModel.simulationActive</code></td><td>Dashboard editor "Demo data" button</td><td>Pure QML: every parameter sweeps a sine between its min and max with a per-parameter period (4-16 s) and phase, 10 Hz. While active, <code>liveValue()</code> serves the sweep instead of <code>paramStore</code>; on deactivation the real readings are back at once, so fake ones never linger. The editor forces it off in <code>Component.onDestruction</code>.</td></tr>
             <tr><td><code>SimElm327Device</code> + <code>CarSim</code> (<span class="file-path">src/dev/</span>)</td><td>Dev mode (<code>octave --dev</code>, Debug builds)</td><td>Keeps the real manager and swaps the adapter underneath it: a <code>QIODevice</code> answering the AT init, every Mode 01 PID of the protocol tables (encoded with the inverse of the shipped decoders, all reported supported), DTC modes 03/04/07/0A, the freeze-frame DTC and a CAN multi-frame VIN. Bluetooth-like 35&ndash;70 ms replies with 2 % <code>NO DATA</code> in realistic mode; dropouts close the device so the real lost-link and reconnect paths run. Driven by the keyboard and the <code>sim_*</code> command-server actions (<a href="development.html#mock-obd">Development</a>).</td></tr>
           </tbody>
         </table>

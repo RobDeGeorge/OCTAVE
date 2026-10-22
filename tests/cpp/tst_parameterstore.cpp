@@ -95,6 +95,9 @@ private slots:
 
         QCOMPARE(root->property("rpm").toDouble(), -1.0);   // no reading yet: undefined
         QCOMPARE(root->property("hasBoost").toBool(), false);
+        // Reading a key from QML creates it, empty: snapshot() lists values only
+        QVERIFY(store.snapshot().isEmpty());
+        QVERIFY(store.get("RPM").isNull());
         const int before = evaluations(root.get());
 
         store.ingest("RPM", 2500);

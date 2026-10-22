@@ -41,15 +41,20 @@ void ParameterStore::flush()
 
 QVariant ParameterStore::get(const QString &id) const
 {
-    return contains(id) ? value(id) : QVariant();
+    return contains(id) ? value(id) : QVariant();   // invalid for a key QML only read
 }
 
 QVariantMap ParameterStore::snapshot() const
 {
+    // keys() also has ids QML read before their first value (QQmlPropertyMap
+    // creates a key on first access, invalid): leave those out
     QVariantMap map;
     const QStringList ids = keys();
-    for (const QString &id : ids)
-        map.insert(id, value(id));
+    for (const QString &id : ids) {
+        const QVariant v = value(id);
+        if (v.isValid())
+            map.insert(id, v);
+    }
     return map;
 }
 

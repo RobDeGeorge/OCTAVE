@@ -58,56 +58,20 @@ QtObject {
     // The C++ ParameterStore (context property `paramStore`, fed from
     // obdManager.parameterSampled and the berryIMU signals in main.cpp) holds
     // the values, one notifying key per id, and coalesces writes to ~30 Hz.
-    // New code binds `paramStore[id]` directly: only that id's change
-    // re-evaluates it.
     //
-    // paramValues is the older whole-map view, kept while consumers move to
-    // paramStore: a plain object replaced once per store fold (so anything
-    // reading it re-evaluates whichever value changed). Demo mode owns it.
+    // Readers bind liveValue(id): a binding depends only on the branch that
+    // ran, so outside demo mode it re-evaluates only when that id changes.
+    // undefined until the first reading (readouts show "--"), and at
+    // shutdown, when the store goes before the engine.
     readonly property var _store: (typeof paramStore !== "undefined" && paramStore) ? paramStore : null
-    property var paramValues: _store ? _store.snapshot() : ({})
-
-    property var _storeConnections: Connections {
-        target: root._store
-        function onChanged(ids) {
-            if (root.simulationActive) return;   // demo mode owns paramValues
-            var changed = {};
-            for (var i = 0; i < ids.length; i++)
-                changed[ids[i]] = root._store.get(ids[i]);
-            root.paramValues = Object.assign({}, root.paramValues, changed);   // fresh object: bindings re-evaluate
-            for (var id in changed) {
-                if (root._holders[id])
-                    root._holders[id].value = changed[id];
-            }
-        }
-    }
-
-    // ── Per-parameter value holders ───────────────────────────────────
-    // A view with many values on screen (OBDMenu's Parameter Cards: one card
-    // per supported PID) binds to valueHolder(id).value instead of
-    // paramValues: only the holders whose value was in the fold change.
-    // (paramStore[id] does the same with no holder; the cards move to it with
-    // the other consumers.) Created on first use and kept for the session.
-    property var _holders: ({})
-    property Component _holderComponent: Component {
-        QtObject { property var value }
-    }
-    function valueHolder(paramId) {
-        var h = _holders[paramId];
-        if (!h) {
-            h = _holderComponent.createObject(root, { value: paramValues[paramId] });
-            _holders[paramId] = h;
-        }
-        return h;
-    }
-    // After paramValues was replaced wholesale (demo mode, reset)
-    function _syncAllHolders() {
-        for (var id in _holders)
-            _holders[id].value = paramValues[id];
+    function liveValue(paramId) {
+        if (simulationActive)
+            return _simValues[paramId];
+        return _store ? _store[paramId] : undefined;
     }
 
     function getParamValue(paramId) {
-        return paramValues[paramId] || 0;
+        return liveValue(paramId) || 0;
     }
 
     // Decimal places for a plain-text readout (catalog `decimals`: 0 for
@@ -121,19 +85,18 @@ QtObject {
     // Pure-QML fake data so dashboards can be built/tested without a live
     // OBD connection: every parameter sweeps a sine between its min/max,
     // with period and phase varied per parameter so the screen doesn't
-    // pulse in lockstep. While active, real backend updates are ignored
-    // (see guard above); on deactivation paramValues resets so stale fake
-    // readings can never linger in the real OBD views.
+    // pulse in lockstep. While active, liveValue() serves these instead of
+    // the store; switching off puts the real readings back at once, so fake
+    // ones never linger in the real OBD views.
     property bool simulationActive: false
+    property var _simValues: ({})
 
     onSimulationActiveChanged: {
         if (simulationActive) {
             _simEpoch = Date.now();
             _simTick();
         } else {
-            // Back to the real readings; the fake ones never linger
-            paramValues = _store ? _store.snapshot() : ({});
-            _syncAllHolders();
+            _simValues = ({});
         }
     }
 
@@ -151,8 +114,7 @@ QtObject {
             // Round the big-range integers so readouts look like real data
             newValues[p.id] = (p.max - p.min) > 20 ? Math.round(v) : Math.round(v * 100) / 100;
         }
-        paramValues = newValues;
-        _syncAllHolders();
+        _simValues = newValues;   // fresh object: every demo reader re-evaluates
     }
 
     property var _simTimer: Timer {

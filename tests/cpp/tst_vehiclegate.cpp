@@ -79,7 +79,12 @@ Item {
         return it ? it.visible : null
     }
     function vehicleIds() { return App.OBDParameterModel.vehicleParameters.map(function(p) { return p.id }) }
-    function holder(id) { return App.OBDParameterModel.valueHolder(id) }
+    // What every gauge, home card and Parameter Card binds: liveValue(id).
+    // The counters are plain JS (not properties) so counting is not a loop.
+    readonly property var _evals: ({ rpm: 0, speed: 0 })
+    readonly property var rpmLive: { _evals.rpm++; return App.OBDParameterModel.liveValue("RPM") }
+    readonly property var speedLive: { _evals.speed++; return App.OBDParameterModel.liveValue("SPEED") }
+    function evals(which) { return _evals[which] }
     function push(id, value) { paramStore.ingest(id, value) }   // as obdManager.parameterSampled does
     function setDemo(on) { App.OBDParameterModel.simulationActive = on }
 }
@@ -139,10 +144,11 @@ private slots:
         m_root = nullptr;
     }
 
-    void valueHoldersChangeOnlyForTheirOwnPid()
+    void liveValuesChangeOnlyForTheirOwnPid()
     {
-        // Parameter Cards bind each card to OBDParameterModel.valueHolder(id),
-        // so a fold must touch only the holders whose value was in it
+        // Every reader binds OBDParameterModel.liveValue(id), which reads
+        // paramStore[id]: a value arriving for one PID re-evaluates only that
+        // PID's readers (the whole-map paramValues re-evaluated them all)
         QQmlEngine engine;
         engine.addImportPath(kFrontend);
         FakeObd obd;
@@ -157,29 +163,31 @@ private slots:
         QVERIFY2(root, qPrintable(comp.errorString()));
         m_root = root.get();
 
-        QObject *rpm = call("holder", "RPM").value<QObject *>();
-        QObject *speed = call("holder", "SPEED").value<QObject *>();
-        QVERIFY(rpm && speed);
-        QVERIFY(call("holder", "RPM").value<QObject *>() == rpm);   // one per PID
-        QSignalSpy rpmChanged(rpm, SIGNAL(valueChanged()));
-        QSignalSpy speedChanged(speed, SIGNAL(valueChanged()));
+        QVERIFY(!m_root->property("rpmLive").isValid());    // never reported: "--"
+        QVERIFY(!m_root->property("speedLive").isValid());
+        const int speed0 = call("evals", "speed").toInt();
 
         QMetaObject::invokeMethod(m_root, "push", Q_ARG(QVariant, "RPM"), Q_ARG(QVariant, 2500));
-        QTRY_COMPARE(rpm->property("value").toInt(), 2500);   // after the ~33 ms fold
-        QCOMPARE(rpmChanged.count(), 1);
-        QCOMPARE(speedChanged.count(), 0);
-        QVERIFY(!speed->property("value").isValid());          // never reported: "--"
+        QTRY_COMPARE(m_root->property("rpmLive").toInt(), 2500);   // after the ~33 ms fold
+        const int rpm1 = call("evals", "rpm").toInt();
+        for (int i = 0; i < 4; ++i) {
+            QMetaObject::invokeMethod(m_root, "push", Q_ARG(QVariant, "PITCH"), Q_ARG(QVariant, i));
+            QTest::qWait(ParameterStore::kFlushMs + 10);
+        }
+        QCOMPARE(call("evals", "rpm").toInt(), rpm1);       // other PIDs: RPM readers untouched
+        QCOMPARE(call("evals", "speed").toInt(), speed0);
+        QVERIFY(!m_root->property("speedLive").isValid());
 
-        // Demo mode replaces every value at once: holders follow; on exit the
-        // fake values go and the real readings come back
+        // Demo mode serves its sweep instead; on exit the fake values go and
+        // the real readings are back
         QMetaObject::invokeMethod(m_root, "setDemo", Q_ARG(QVariant, true));
-        QVERIFY(speed->property("value").isValid());
+        QVERIFY(m_root->property("speedLive").isValid());
         QMetaObject::invokeMethod(m_root, "push", Q_ARG(QVariant, "RPM"), Q_ARG(QVariant, 3100));
         QTest::qWait(3 * ParameterStore::kFlushMs);
-        QVERIFY(rpm->property("value").toInt() != 3100);   // demo owns the values meanwhile
+        QVERIFY(m_root->property("rpmLive").toInt() != 3100);   // demo owns the values meanwhile
         QMetaObject::invokeMethod(m_root, "setDemo", Q_ARG(QVariant, false));
-        QVERIFY(!speed->property("value").isValid());
-        QCOMPARE(rpm->property("value").toInt(), 3100);
+        QVERIFY(!m_root->property("speedLive").isValid());
+        QCOMPARE(m_root->property("rpmLive").toInt(), 3100);
         m_root = nullptr;
     }
 

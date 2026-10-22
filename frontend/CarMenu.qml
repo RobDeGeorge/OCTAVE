@@ -65,8 +65,8 @@ Item {
     // requested only while this page is on screen (demand-driven polling).
     readonly property bool liveDrive: (typeof obdManager !== "undefined" && obdManager !== null && obdManager.connected === true)
         || App.OBDParameterModel.simulationActive
-    readonly property real liveRpm: Number(App.OBDParameterModel.paramValues["RPM"]) || 0
-    readonly property real liveSpeedKph: (Number(App.OBDParameterModel.paramValues["SPEED"]) || 0) * 1.609344
+    readonly property real liveRpm: Number(App.OBDParameterModel.liveValue("RPM")) || 0
+    readonly property real liveSpeedKph: (Number(App.OBDParameterModel.liveValue("SPEED")) || 0) * 1.609344
     Binding { target: jeep; property: "engineRpm"; value: carMenu.liveRpm; when: carMenu.liveDrive }
     Binding { target: jeep; property: "wheelSpeedKph"; value: carMenu.liveSpeedKph; when: carMenu.liveDrive }
     readonly property var _obdDemandIds: visible ? ["RPM", "SPEED"] : []

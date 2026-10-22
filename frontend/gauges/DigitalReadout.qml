@@ -39,7 +39,7 @@ Item {
 
     property string title: _pInfo ? _pInfo.title : ""
     property string unit: _pInfo ? _pInfo.unit : ""
-    property real value: paramId ? (App.OBDParameterModel.paramValues[paramId] || 0) : 0
+    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
 
     // ── Style ───────────────────────────────────────────────────────
     property color labelColor: App.Style.obdLabelColor

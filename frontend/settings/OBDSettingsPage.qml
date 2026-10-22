@@ -1237,7 +1237,7 @@ Item {
                                         readonly property bool isEnabled: true
                                         property bool onHome: parametersCard.isOnHomeGrid(paramId)
                                         property var info: App.OBDParameterModel.getParamInfo(paramId)
-                                        property real liveValue: App.OBDParameterModel.paramValues[paramId] || 0
+                                        property real liveValue: App.OBDParameterModel.liveValue(paramId) || 0
 
                                         color: onHome ?
                                             Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.12) :
@@ -1602,7 +1602,7 @@ Item {
 
                                         property string paramId: modelData
                                         property var info: App.OBDParameterModel.getParamInfo(paramId)
-                                        property real liveValue: App.OBDParameterModel.paramValues[paramId] || 0
+                                        property real liveValue: App.OBDParameterModel.liveValue(paramId) || 0
                                         property int cardIndex: index
 
                                         opacity: (pageRoot.draggedParam === paramId && pageRoot.dragSource === "right") ? 0.3 : 1.0

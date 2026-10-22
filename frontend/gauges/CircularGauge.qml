@@ -50,7 +50,7 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: paramId ? (App.OBDParameterModel.paramValues[paramId] || 0) : 0
+    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
 
     // ── Geometry ────────────────────────────────────────────────────
     property real startAngle: 135    // PathAngleArc degrees, 0=3 o'clock CW

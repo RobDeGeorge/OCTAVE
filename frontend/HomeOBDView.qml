@@ -51,10 +51,10 @@ Item {
                 property var info: homeOBDView.parameterInfo[param] ||
                                 {title: param, unit: "", minValue: 0, maxValue: 100}
                 // Live value from centralized singleton
-                property real value: App.OBDParameterModel.paramValues[param] || 0
+                property real value: App.OBDParameterModel.liveValue(param) || 0
                 // False until a reading arrives, so the card shows "--"
                 // rather than a misleading 0.0 while OBD is disconnected.
-                readonly property bool hasValue: App.OBDParameterModel.paramValues[param] !== undefined
+                readonly property bool hasValue: App.OBDParameterModel.liveValue(param) !== undefined
 
                 // Animated display value - fast rolling effect
                 property real displayValue: value

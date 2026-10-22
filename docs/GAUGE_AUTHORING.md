@@ -12,7 +12,7 @@ actual code, **the code wins** — update this file.
 An OBD value in OCTAVE flows like this:
 
 ```
-OBDManager ─ parameterSampled ─▶ paramStore (C++) ─▶ OBDParameterModel.qml ─ paramValues[id] ─▶ your gauge
+OBDManager ─ parameterSampled ─▶ paramStore (C++) ─▶ OBDParameterModel.qml ─ liveValue(id) ─▶ your gauge
 (polls PIDs)  (every value)      (one key per id,     (singleton: metadata,
 berryIMU ─ 8 signals ─────────▶   33 ms fold)          gate, demo mode)
 ```
@@ -22,11 +22,11 @@ in `src/main.cpp` as the `obdManager` context property.
 
 You do **not** wire signals yourself. `main.cpp` feeds every decoded value
 (and the IMU readings) into the C++ `paramStore`, keyed by a short `paramId`
-(e.g. `"RPM"`, `"SPEED"`, `"COOLANT_TEMP"`), and the `OBDParameterModel`
-singleton mirrors it into `paramValues`. Any QML that binds
-`App.OBDParameterModel.paramValues[paramId]` gets live, animated updates for
-free; binding `paramStore[paramId]` directly is cheaper (it re-evaluates only
-when that id changes, and is `undefined` until the first reading).
+(e.g. `"RPM"`, `"SPEED"`, `"COOLANT_TEMP"`). Any QML that binds
+`App.OBDParameterModel.liveValue(paramId)` gets live, animated updates for
+free: it reads `paramStore[paramId]` (or the dashboard editor's demo sweep),
+re-evaluates only when that id changes, and is `undefined` until the first
+reading (show "--", not 0) and at shutdown.
 
 Every gauge primitive takes a `paramId` and handles the rest — title, unit,
 min, max, and current value all come from the model. You can override any
@@ -415,8 +415,8 @@ an id is missing here).
 
 **Multi-value PIDs.** Newer PIDs (0x61 and up) pack several sensors into one
 reply, so they do not get a signal each: `OBDManager` emits
-`obdManager.obdParameterChanged(paramId, value)` and `OBDParameterModel`
-routes it into `paramValues` like any other id. Gauges bind them by `paramId`
+`obdManager.obdParameterChanged(paramId, value)` and `parameterSampled`,
+which puts it in `paramStore` like any other id. Gauges bind them by `paramId`
 exactly the same. All are off by default; the vehicle scan enables the ones
 the car reports. Decoders live in `ELM327Protocol::extendedPidTable()` in
 `src/managers/elm327protocol.cpp`; `everyExtendedParameterIsWired` in
@@ -424,7 +424,7 @@ the car reports. Decoders live in `ELM327Protocol::extendedPidTable()` in
 default and a catalog entry. Boost pressure is absolute (subtract
 `BAROMETRIC_PRESSURE` for gauge boost).
 
-**Sensor parameters** are fed into `paramStore` (and so `paramValues`) by the
+**Sensor parameters** are fed into `paramStore` by the
 `berryIMU` manager instead of `obdManager`, but are otherwise identical: any
 gauge can bind them by `paramId`, the PID picker lists them, and the
 editor's demo mode sweeps them. The vehicle gate never applies to them.
@@ -647,7 +647,7 @@ So an arc from `startAngle=135, sweepAngle=270`:
   you still see wasted space. Wrap it in an `Item` and force a square
   inside, anchored center.
 - **Never touch `obdManager.*` signals directly from a gauge.** Everything
-  goes through `OBDParameterModel.paramValues[paramId]`. A new PID needs a
+  goes through `OBDParameterModel.liveValue(paramId)`. A new PID needs a
   decoder in `elm327protocol.cpp` and a row in `parametercatalog.cpp`
   (`tst_parametercatalog` fails if either is missing); its values reach
   the C++ `paramStore` through `obdManager.parameterSampled` with no
