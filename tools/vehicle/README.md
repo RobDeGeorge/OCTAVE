@@ -137,8 +137,16 @@ contact and coil-end seating in four poses; the fit audit also checks springs
 against frame, floor and tires. These remain provisional mount dimensions,
 not a verified lift-kit or suspension kinematics model.
 
-Wheel wells and exhaust: `wheel_wells.py` adds thick dark inner arches and
-inboard liner walls at all four wheels. The exhaust retains its downpipe
+Wheel wells and exhaust: `wheel_wells.py` adds continuous dark wheel housings
+with joined ceilings, inboard walls and end returns at all four wheels.
+Their mouths use the actual flare underside vertices, rather than a separate
+elliptical outline. Lower walls use localized spring-tower recesses and clear
+the engine-bay and steering hardware. Solid floor/body joints, fog-lamp recesses
+and roll-bar mounts are trimmed with a small clearance. The front solids are
+mirrored after trimming to keep the two openings consistent.
+Flat wall normals preserve corners. The rig check verifies the upper flare
+seam and closed material thickness; clearance checks include engine-bay parts,
+rear-seat supports, frame and exhaust. The exhaust retains its downpipe
 connection, moves the muffler inward, and passes inboard of the rear spring
 and shock before exiting behind the tank. The fit audit checks liner/tire and
 liner/spring clearance, plus exhaust clearance to the suspension, frame,

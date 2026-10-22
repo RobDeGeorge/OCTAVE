@@ -16,6 +16,28 @@ scene = bpy.context.scene
 scene.frame_set(1)
 objects = bpy.data.objects
 ctrl = objects["JEEP_CONTROLS"]
+liners = [o for o in objects if o.name.startswith("Inner wheel well")]
+if liners:
+    assert len(liners) == 4
+    for obj in liners:
+        assert obj.parent == objects["body"]
+        # The visible upper mouth must land on the real flare underside;
+        # lower ends may be trimmed into existing solid body panels.
+        flare = objects[obj["flare"]]
+        mouth = [flare.matrix_world @ v.co for v in list(flare.data.vertices)[6::7]]
+        vertices = [obj.matrix_world @ v.co for v in obj.data.vertices]
+        assert vertices, f"Empty housing: {obj.name}"
+        for point in mouth:
+            if point.z > .80-.9+.0889:
+                assert min((v-point).length for v in vertices) < .006, f"Gap at flare: {obj.name}"
+        evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        data = evaluated.to_mesh()
+        bm = bmesh.new()
+        bm.from_mesh(data)
+        assert all(e.is_manifold for e in bm.edges), f"Unclosed liner thickness: {obj.name}"
+        assert all(f.calc_area() > 1e-12 for f in bm.faces), obj.name
+        bm.free()
+        evaluated.to_mesh_clear()
 # New catches must remain solid and keep the fixed lower assembly on the
 # fender while only the upper catch follows the opening hood.
 latches = [o for o in objects if o.name.startswith("Hood latch fender foot")]

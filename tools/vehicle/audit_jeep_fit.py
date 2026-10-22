@@ -16,6 +16,13 @@ scene = bpy.context.scene
 checks = [
     ("liners_tires", ("Inner wheel well",), ("31 inch tire carcass",)),
     ("liners_springs", ("Inner wheel well",), ("Compressing lift spring", "Lift spring seat", "Coil mount ")),
+    ("liners_engine_cabin", ("Inner wheel well",),
+     ("Alternator housing", "Engine mount bracket", "Air cleaner box", "Battery",
+      "Coolant and washer bottle", "Exhaust downpipe", "Steering gear box",
+      "Drag link neutral", "Pitman arm neutral", "Fog lamp shell", "Fog light foot",
+      "Rear bench floor foot", "Rear bench support leg", "Rear bench anchor bolt",
+      "Control arm POSE ONLY", "Track bar POSE ONLY", "Boxed frame rail", "Frame crossmember")),
+    ("liners_exhaust", ("Inner wheel well",), ("Exhaust pipe", "Exhaust muffler")),
     ("exhaust_drivetrain", ("Exhaust pipe", "Exhaust muffler"), ("Driveshaft tube", "Driveshaft slip yoke", "NP231", "NV3550")),
     ("exhaust_clearance", ("Exhaust pipe",), ("Compressing lift spring", "Lift spring seat", "Coil mount ", "Boxed frame rail", "Dana 44 axle tube", "Rear fuel tank skid", "Rear passenger floor pan", "Raised cargo floor", "Fox style shock body", "Telescoping shock shaft")),
     ("springs_frame", ("Compressing lift spring",), ("Boxed frame rail",)),
