@@ -228,9 +228,10 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
+                        // Self-binding cells (media widgets) have no paramId
                         text: (modelData.props && modelData.props.title)
                               ? modelData.props.title
-                              : App.OBDParameterModel.getParamInfo(modelData.paramId).title
+                              : (modelData.paramId ? App.OBDParameterModel.getParamInfo(modelData.paramId).title : "")
                         color: App.Style.obdLabelColor
                         font.family: App.Style.fontFamily
                         font.pixelSize: Math.max(9, Math.min(App.Spacing.overallText, cell.height * 0.18))
