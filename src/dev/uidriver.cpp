@@ -10,6 +10,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QStandardPaths>
+#include <QWheelEvent>
 #include <QTest>
 
 #include <algorithm>
@@ -416,6 +417,21 @@ void UiDriver::drag(double x1, double y1, double x2, double y2, int steps)
         QCoreApplication::processEvents();
     }
     mouse(QEvent::MouseButtonRelease, x2, y2);
+}
+
+void UiDriver::wheel(double x, double y, int notches)
+{
+    QQuickWindow *w = window();
+    if (!w)
+        return;
+    // One 120-unit event per mouse-wheel notch; positive scrolls up / away.
+    const QPointF p(x, y);
+    for (int i = 0; i < std::abs(notches); ++i) {
+        QWheelEvent ev(p, w->mapToGlobal(p), QPoint(), QPoint(0, notches > 0 ? 120 : -120), Qt::NoButton,
+                       Qt::NoModifier, Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(w, &ev);
+        QCoreApplication::processEvents();
+    }
 }
 
 QVariant UiDriver::typeText(const QString &text, bool enter, const QString &field)

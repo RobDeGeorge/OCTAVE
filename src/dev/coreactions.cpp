@@ -291,6 +291,12 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
         const int steps = int(num(a, "steps", 12));
         return Gui::onGui([=] { u->drag(x1, y1, x2, y2, steps); return QVariant(true); });
     });
+    server.registerAction("wheel", [needUi](const QVariantMap &a) {
+        UiDriver *u = needUi();
+        const double x = num(a, "x"), y = num(a, "y");
+        const int notches = int(num(a, "notches", 1));
+        return Gui::onGui([=] { u->wheel(x, y, notches); return QVariant(true); });
+    });
     server.registerAction("type_text", [needUi](const QVariantMap &a) {
         UiDriver *u = needUi();
         const QString text = str(a, "text"), field = str(a, "field");

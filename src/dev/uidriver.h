@@ -56,6 +56,7 @@ public:
     void click(double x, double y);
     void longPress(double x, double y, int ms);
     void drag(double x1, double y1, double x2, double y2, int steps);
+    void wheel(double x, double y, int notches);
     QVariant typeText(const QString &text, bool enter, const QString &field);
 
     // Geometry + effective visibility of an item

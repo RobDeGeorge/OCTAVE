@@ -331,6 +331,8 @@ Item {
                 }
                 WheelHandler {
                     target: null
+                    // Hyprland's Qt Wayland labels mouse wheels as touchpads.
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: (event) => carMenu.zoomCamera(Math.pow(1.0015, event.angleDelta.y))
                 }
             }

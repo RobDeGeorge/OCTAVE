@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QPoint, QPointF, Property, QMetaObject, Qt, QTimer, QUrl, Signal, Slot
-from PySide6.QtGui import QGuiApplication, QVector3D
+from PySide6.QtGui import QGuiApplication, QInputDevice, QPointingDevice, QVector3D, QWheelEvent
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtTest import QTest
@@ -161,6 +161,27 @@ def camera_gestures():
     assert camera.property("position").z() > close*1.15, "Pinch in did not zoom out"
     assert abs(menu.property("cameraYaw")-yaw) < .01, "Pinch also changed yaw"
     assert abs(menu.property("cameraPitch")-pitch) < .01, "Pinch also changed pitch"
+
+    # Hyprland's Qt Wayland reports mouse wheels as a touchpad, so cover both devices.
+    touchpad = QPointingDevice("touchpad", 8589934592, QInputDevice.DeviceType.TouchPad,
+                               QPointingDevice.PointerType.Finger, QInputDevice.Capability.Position, 10, 0)
+
+    def wheel(notches, device=None):
+        for _ in range(abs(notches)):
+            event = QWheelEvent(QPointF(center), QPointF(window.mapToGlobal(center)), QPoint(0, 0),
+                                QPoint(0, 120 if notches > 0 else -120), Qt.NoButton, Qt.NoModifier,
+                                Qt.NoScrollPhase, False, Qt.MouseEventNotSynthesized,
+                                device or QPointingDevice.primaryPointingDevice())
+            QGuiApplication.sendEvent(window, event)
+            QTest.qWait(10)
+
+    before = camera.property("position").z()
+    wheel(3)
+    near = camera.property("position").z()
+    assert near < before*.85, ("Wheel up did not zoom in", before, near)
+    wheel(-3, touchpad)
+    assert camera.property("position").z() > near*1.15, "Wheel down (touchpad-labelled) did not zoom out"
+    assert abs(menu.property("cameraYaw")-yaw) < .01, "Wheel also changed yaw"
     touch = QTest.touchEvent(window, device)
     touch.press(0, center, window).commit()
     for dx in (20, 40, 60):
@@ -521,7 +542,7 @@ def narrow():
     capture("narrow")
     camera_gestures()
     print(
-        "PASS: pinch zoom in/out without rotation, touch/mouse orbit in wide and narrow views, asset loading, IMU quaternion mapping, hinges, lights, steering, wheel/engine/driveshaft spin, and live OBD drive"
+        "PASS: pinch and scroll-wheel zoom in/out without rotation, touch/mouse orbit in wide and narrow views, asset loading, IMU quaternion mapping, hinges, lights, steering, wheel/engine/driveshaft spin, and live OBD drive"
     )
     app.quit()
 
