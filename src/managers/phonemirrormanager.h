@@ -98,6 +98,12 @@ class PhoneMirrorManager : public QObject
     // (the phone or its link: worth retrying) | "setup" (OCTAVE's side) |
     // "fatal" (the phone cannot do it); "" after a successful start
     Q_PROPERTY(QString lastErrorKind READ lastErrorKind NOTIFY lastErrorKindChanged)
+    // Where the session is: "idle" | "starting" | "streaming" | "reconnecting"
+    // (a drop after streaming: hold the last frame while the manager retries,
+    // up to kReconnectGraceMs) | "waitingForPhone" (a phone / link error: the
+    // manager restarts the moment adb reports the phone) | "failed" (setup or
+    // fatal: nothing to retry). Retries only run while setViewActive(true).
+    Q_PROPERTY(QString sessionState READ sessionState NOTIFY sessionStateChanged)
     // Extra context for a phone that is not usable: an iPhone on USB, another
     // adb server fighting this one. "" when there is nothing to add.
     Q_PROPERTY(QString deviceHint READ deviceHint NOTIFY deviceStateChanged)
@@ -148,6 +154,10 @@ public:
     QString mediaQueueTitle() const { return m_mediaQueueTitle; }
     QString deviceState() const { return m_deviceState; }
     QString lastErrorKind() const { return m_lastErrorKind; }
+    QString sessionState() const { return m_sessionState; }
+    static constexpr int kReconnectGraceMs = 10000;   // a USB blip is back well within this
+    static constexpr int kReconnectPollMs = 1000;
+    static constexpr int kWaitPollMs = 2000;
     // The kind of an error message, decided next to the strings that make it
     static QString errorKindFor(const QString &message);
     static const QString kEncoderGaveUp;
@@ -217,6 +227,7 @@ signals:
     void scrcpyStopped();
     void scrcpyError(const QString &message);   // lastErrorKind is set first
     void lastErrorKindChanged();
+    void sessionStateChanged();
     void isRunningChanged();
     void displaySizeChanged();
     void frameSizeChanged(int width, int height);
@@ -293,6 +304,9 @@ public slots:
     QString getDeviceState();
     // Probe `adb devices` on the probe thread; deviceStateChanged follows
     void refreshDeviceState();
+    // The mirror page is on screen: the automatic restarts (and their adb
+    // probes) run only then
+    void setViewActive(bool active);
     static QString describeDeviceState(const QString &state);
     bool hasConnectedDevice();
     // Mirror this phone (from `devices`); restarts a session on another phone
@@ -458,6 +472,15 @@ private:
     QString m_lastErrorKind;
     void reportError(const QString &message);
     void setLastErrorKind(const QString &kind);
+    QString m_sessionState = QStringLiteral("idle");
+    bool m_viewActive = false;
+    bool m_hadStream = false;          // streamed since the last start / give-up
+    qint64 m_reconnectSinceMs = 0;
+    QTimer m_retryTimer;
+    void setSessionState(const QString &state);
+    void updateRetryTimer();
+    void onRetryTick();
+    void restartIfPhoneBack();
     QString m_deviceHint;
     QList<QPair<QString, QString>> m_deviceRows;
     QHash<QString, QString> m_deviceModels;
@@ -526,6 +549,7 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool audioPlaying READ audioPlaying CONSTANT)
     Q_PROPERTY(bool phoneAsleep READ phoneAsleep CONSTANT)
     Q_PROPERTY(QString lastErrorKind READ lastErrorKind CONSTANT)
+    Q_PROPERTY(QString sessionState READ sessionState CONSTANT)
     Q_PROPERTY(bool phoneInUse READ phoneInUse CONSTANT)
     Q_PROPERTY(QString wirelessAddress READ wirelessAddress CONSTANT)
     Q_PROPERTY(QString connectionType READ connectionType CONSTANT)
@@ -559,6 +583,8 @@ public:
     QString mediaArtUrl() const { return {}; }
     bool mediaActive() const { return false; }
     QString lastErrorKind() const { return {}; }
+    QString sessionState() const { return QStringLiteral("idle"); }
+    void setViewActive(bool) {}
     QVariantList mediaQueue() const { return {}; }
     qint64 mediaQueueActiveId() const { return -1; }
     QString mediaQueueTitle() const { return {}; }

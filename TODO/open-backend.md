@@ -2,7 +2,7 @@
 
 **Goal:** make the C++ managers a documented, language-neutral service so that anyone can write an OCTAVE frontend in whatever language or toolkit they like, with the QML UI in `frontend/` becoming the reference client rather than the only one.
 
-**Status:** in progress (audit done 2026-10-21; #1, #2, #4, #5, #7, #8 and #11 moved 2026-10-22)
+**Status:** in progress (audit done 2026-10-21; #1, #2, #4, #5, #6, #7, #8 and #11 moved 2026-10-22)
 **Last updated:** 2026-10-22
 
 This absorbed the earlier `backend-service-split.md` plan (2026-10-18), which was about running the managers as a separate process so a UI crash never stops the music. That benefit falls out of `--headless` once the contract exists, so the two plans are one; the process-specific constraints are in "Running the core as its own process" below.
@@ -49,10 +49,11 @@ Done: #8 value store. `src/managers/parameterstore.{h,cpp}` (`paramStore`, QQmlP
 
 Done: #5 NowPlaying. `src/managers/nowplaying.{h,cpp}` (`nowPlaying`): source / playing / track / art / duration / position / capabilities, the controls, the one phone-position clock, the phone/local hand-off and the Album Art Capture rule; every page and widget binds it (`tst_nowplaying`). `PhoneMirrorManager` gained `mediaTrackChanged`; Media Room's double seek is fixed; `Main.qml`'s dead `updateTheme()` is gone. Needs a phone to verify: Media Room's phone-side track animation and the phone-art theme on a real session.
 
+Done: #6 phone-mirror recovery. `PhoneMirrorManager` publishes `lastErrorKind` (noPhone | device | setup | fatal, `errorKindFor`) and `sessionState` (idle | starting | streaming | reconnecting | waitingForPhone | failed) and owns the quiet reconnect (1 s polls, 10 s grace) and the wait-for-phone restart (2 s polls), gated by `setViewActive`; `PhoneMirrorView` draws the state and has no timers or text matching (`tst_phonemirror`, `tst_phonemirrorview`). Verified on a real phone over Wi-Fi 2026-10-22: a drop with the phone back in 3 s reconnects quietly (reattached to the running server, frame held), a drop with no return gives up to the error page after 10 s. Still for the Orange Pi rig: a USB pull mid-stream (badge after 2 s, back within the grace, then one past it), unplug on the error page and replug (waitingForPhone -> starting), leaving the page while reconnecting and returning after >10 s, an unauthorized prompt accepted late, and a Wi-Fi drop with the stale-serial retry.
+
 | # | Item | Where today | Target | Effort |
 |---|---|---|---|---|
 | 3 | **Dashboard spec sanitising** is split three ways: C++ `sanitizeImportedSpec` runs only on import, `DashboardEditor._sanitizeCells` on edit-load, `DashboardRenderer` per cell at render. Overlap is checked nowhere but the editor's drag path (`EditorCanvas.qml:66-81`). `saveDashboard` writes whatever QML hands it. | `dashboardmanager.cpp:735-823`, `DashboardEditor.qml:164-191`, `DashboardRenderer.qml:141-163` | One `DashboardManager::normalizeSpec()` applied on save, load and import, with overlap detection; the grid placement helper (`canPlace`, shrink-to-fit) as a small C++ value type the editor also calls. Renderer keeps a last-line guard for widgets removed from the catalog. | M |
-| 6 | **Phone-mirror auto-reconnect** keys on a regex over error prose (`/disconnected|No Android device|not authorized|offline|USB permissions/i`) and two polling timers with a 10 s grace window. `phonemirrormanager.cpp:476` explicitly preserves the wording for it. | `frontend/PhoneMirrorView.qml:26-62, 662-788` | `PhoneMirrorManager`: `Q_PROPERTY(QString sessionState)` (`idle | starting | streaming | reconnecting | waitingForPhone | failed`), `lastErrorKind` (`device | setup | fatal`), `scrcpyError(kind, text)`; grace window and device polling as one QTimer in the manager, gated by `setViewActive(bool)`. | M |
 
 ### Tables duplicated between QML and C++
 
@@ -117,7 +118,7 @@ Never as one large update. Every item above can land as its own small change tha
 
 1. ~~The S items #1, #2, #4, #11~~ (all done 2026-10-22).
 2. ~~#7 and #8~~ (done 2026-10-22; Pi CPU comparison still to run).
-3. #5 and #6 (NowPlaying facade, phone-mirror session state).
+3. ~~#5 and #6~~ (done 2026-10-22; hardware checks listed in the Done notes).
 4. #3, #9, #10, #12, #13 as they come up; none blocks the bridge.
 5. Contract steps 1–5, then 7 and 8.
 6. Contract step 6 (media streams) last, after a prototype.

@@ -553,6 +553,86 @@ private slots:
         m.stopScrcpy();
     }
 
+    // ── Session state and recovery (the manager's, not the view's) ──────
+    // The view used to poll adb and restart from two timers and a 10 s
+    // grace window; the manager owns that now, gated by setViewActive.
+
+    void noPhoneWaitsAndRestartsWhenItAppears()
+    {
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        if (!m.nativeAvailable())
+            QSKIP("built without libavcodec");
+        QCOMPARE(m.sessionState(), QStringLiteral("idle"));
+        QStringList states;
+        connect(&m, &PhoneMirrorManager::sessionStateChanged, this, [&] { states << m.sessionState(); });
+        m.setViewActive(true);
+        m.startScrcpy();
+        QTRY_COMPARE_WITH_TIMEOUT(m.sessionState(), QStringLiteral("waitingForPhone"), 5000);
+        QCOMPARE(m.lastErrorKind(), QStringLiteral("noPhone"));
+        QCOMPARE(states, (QStringList{"starting", "waitingForPhone"}));
+
+        setDevices(USB + "\tdevice\n");   // the phone is plugged in
+        QTRY_VERIFY_WITH_TIMEOUT(adbCalls("app_process") == 1, 8000);   // restarted on its own
+        QVERIFY(states.contains("starting"));
+        m.stopScrcpy();
+        QCOMPARE(m.sessionState(), QStringLiteral("idle"));
+    }
+
+    void noProbesWhileTheViewIsHidden()
+    {
+        // On the Pi every probe spawns adb: nothing while nobody is looking
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        PhoneMirrorManager::StartPrep prep;   // a start found no phone
+        prep.probe.state = QStringLiteral("none");
+        m.continueStart(prep, m.m_startGeneration);
+        QCOMPARE(m.sessionState(), QStringLiteral("waitingForPhone"));
+        QVERIFY(!m.m_retryTimer.isActive());
+        QTest::qWait(2 * PhoneMirrorManager::kWaitPollMs + 200);
+        QCOMPARE(adbCalls("devices"), 0);
+        m.setViewActive(true);
+        QVERIFY(m.m_retryTimer.isActive());
+        QTRY_VERIFY_WITH_TIMEOUT(adbCalls("devices") >= 1, 2 * PhoneMirrorManager::kWaitPollMs + 1000);
+        m.setViewActive(false);
+        QVERIFY(!m.m_retryTimer.isActive());
+    }
+
+    void dropMidStreamReconnectsQuietlyThenGivesUp()
+    {
+        PhoneMirrorManager m;
+        m.setViewActive(true);
+        m.m_hadStream = true;   // a stream was up (onConnected needs a client)
+        m.setSessionState(QStringLiteral("streaming"));
+        QSignalSpy states(&m, &PhoneMirrorManager::sessionStateChanged);
+
+        m.reportError(ScrcpyClient::disconnectedMessage(USB));      // cable pulled
+        QCOMPARE(m.sessionState(), QStringLiteral("reconnecting"));   // hold the last frame
+        QCOMPARE(m.m_retryTimer.interval(), PhoneMirrorManager::kReconnectPollMs);
+        m.reportError(m.describeDeviceState("none"));              // a retry found no phone yet
+        QCOMPARE(m.sessionState(), QStringLiteral("reconnecting"));   // still inside the grace
+
+        m.m_reconnectSinceMs -= PhoneMirrorManager::kReconnectGraceMs + 1;   // ... time passes
+        m.onRetryTick();
+        QCOMPARE(m.sessionState(), QStringLiteral("waitingForPhone"));   // the error page
+        QCOMPARE(m.m_retryTimer.interval(), PhoneMirrorManager::kWaitPollMs);
+        QVERIFY(!m.m_hadStream);
+        QCOMPARE(states.count(), 2);
+    }
+
+    void setupErrorsFailWithoutRetrying()
+    {
+        PhoneMirrorManager m;
+        m.setViewActive(true);
+        m.reportError(QStringLiteral("Bundled scrcpy server could not be extracted"));
+        QCOMPARE(m.sessionState(), QStringLiteral("failed"));
+        QVERIFY(!m.m_retryTimer.isActive());
+        m.m_hadStream = true;
+        m.setSessionState(QStringLiteral("streaming"));
+        m.reportError(PhoneMirrorManager::kEncoderGaveUp);   // not a link problem: no quiet reconnect
+        QCOMPARE(m.sessionState(), QStringLiteral("failed"));
+    }
+
     void deviceStateHandlerCannotStartASecondSession()
     {
         // PhoneMirrorView restarts the mirror from onDeviceStateChanged; the

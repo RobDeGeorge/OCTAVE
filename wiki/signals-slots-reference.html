@@ -1326,6 +1326,7 @@
             <tr><td><code>mediaQueue</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Phone queue entries: <code>{id, title, artist, art_uri, art}</code>; <code>art</code> is a local JPEG URL, initially empty</td></tr>
             <tr><td><code>mediaQueueActiveId</code></td><td><code>qint64</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Playing queue item ID; <code>-1</code> when absent</td></tr>
             <tr><td><code>mediaQueueTitle</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Queue title supplied by the phone app</td></tr>
+            <tr><td><code>sessionState</code></td><td><code>QString</code></td><td>read-only</td><td><code>sessionStateChanged</code></td><td><code>"idle"</code> | <code>"starting"</code> | <code>"streaming"</code> | <code>"reconnecting"</code> (a drop after streaming: retried every second, the view holds the last frame, up to 10 s) | <code>"waitingForPhone"</code> (a phone / link error: retried every 2 s, restarted the moment adb reports the phone) | <code>"failed"</code> (setup or fatal: not retried). Retries run only while <code>setViewActive(true)</code></td></tr>
             <tr><td><code>lastErrorKind</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorKindChanged</code></td><td>What the last <code>scrcpyError</code> was about: <code>"noPhone"</code> (no phone at all: the QR screen), <code>"device"</code> (the phone or its link: worth retrying), <code>"setup"</code> (OCTAVE's side: adb, the server, the decoder), <code>"fatal"</code> (the phone cannot do it: its encoder failed even in software); <code>""</code> after a successful start. Decided by <code>errorKindFor(message)</code> next to the strings that make the messages</td></tr>
             <tr><td><code>deviceState</code></td><td><code>QString</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td>Last <code>adb devices</code> probe (run off the GUI thread): <code>"device"</code> / <code>"unauthorized"</code> / <code>"no-permissions"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code></td></tr>
             <tr><td><code>deviceHint</code></td><td><code>QString</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td>iPhone on USB / adb server clash text, <code>""</code> otherwise</td></tr>
@@ -1356,6 +1357,7 @@
             <tr><td><code>getInstallInstructions()</code></td><td><code>QString</code></td><td>User-facing setup help text</td></tr>
             <tr><td><code>getDeviceState()</code></td><td><code>QString</code></td><td>The cached <code>deviceState</code>; schedules a refresh, never blocks</td></tr>
             <tr><td><code>refreshDeviceState()</code></td><td><code>void</code></td><td>Probe <code>adb devices</code> off the GUI thread; <code>deviceStateChanged</code> follows</td></tr>
+            <tr><td><code>setViewActive(bool active)</code></td><td><code>void</code></td><td>The mirror page is on screen; the automatic restarts and their adb probes run only then (the page calls it from its <code>StackView</code> status)</td></tr>
             <tr><td><code>selectDevice(QString serial)</code></td><td><code>void</code></td><td>Mirror this phone; restarts a session running on another one</td></tr>
             <tr><td><code>dismissNotice()</code></td><td><code>void</code></td><td>Hide <code>mirrorNotice</code></td></tr>
             <tr><td><code>describeDeviceState(QString state)</code></td><td><code>QString</code></td><td>Human-readable explanation of a device state</td></tr>
@@ -1389,6 +1391,7 @@
             <tr><td><code>scrcpyStopped()</code></td><td>Session ended</td></tr>
             <tr><td><code>scrcpyError(QString message)</code></td><td>Session failed to start / died; carries <code>describeDeviceState()</code>-style text for showing. <code>lastErrorKind</code> is set just before it</td></tr>
             <tr><td><code>lastErrorKindChanged()</code></td><td>Notify for <code>lastErrorKind</code></td></tr>
+            <tr><td><code>sessionStateChanged()</code></td><td>Notify for <code>sessionState</code>; set before the <code>scrcpyError</code> that caused it</td></tr>
             <tr><td><code>isRunningChanged()</code></td><td>Notify for <code>isRunning</code></td></tr>
             <tr><td><code>displaySizeChanged()</code></td><td>Notify for <code>displaySize</code></td></tr>
             <tr><td><code>frameSizeChanged(int width, int height)</code></td><td>Decoded size changed (also notifies <code>activeDisplaySize</code>, <code>frameWidth</code>, <code>frameHeight</code>)</td></tr>

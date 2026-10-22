@@ -51,11 +51,14 @@ Item {
     // not authorized) — those are worth retrying automatically.
     property bool deviceError: false
     // A USB blip (the phone re-enumerates when picked up / put down) kills
-    // the session; the manager restarts it within a couple of seconds. Keep
-    // the last frame on screen meanwhile instead of flashing the error page.
-    property bool reconnecting: false
-    readonly property int reconnectGraceMs: 10000
-    property double reconnectSince: 0
+    // the session; the manager restarts it quietly ("reconnecting", up to
+    // its grace window). Keep the last frame on screen meanwhile instead of
+    // flashing the error page.
+    readonly property bool reconnecting: !!phoneMirrorManager && phoneMirrorManager.sessionState === "reconnecting"
+    // The manager's automatic restarts (and their adb probes) run only while
+    // this page is on screen
+    readonly property bool _pageActive: StackView.status === StackView.Active
+    on_PageActiveChanged: if (phoneMirrorManager) phoneMirrorManager.setViewActive(_pageActive)
     // No phone at all (not a cable blip or an unauthorized prompt): the page
     // becomes the QR pairing screen, the default way to connect. With a
     // phone already remembered over Wi-Fi it waits for that one and offers
@@ -319,8 +322,7 @@ Item {
             MouseArea {
                 anchors.fill: parent
                 onClicked: {
-                    if (phoneMirrorManager) phoneMirrorManager.stopScrcpy()
-                    reconnecting = false
+                    if (phoneMirrorManager) phoneMirrorManager.stopScrcpy()   // back to idle: no reconnecting
                     mirrorRunning = false
                     stackView.pop()
                 }
@@ -686,25 +688,24 @@ Item {
             console.log("Phone Mirror: stream started" + (reconnecting ? " (reconnected)" : ""))
             mirrorRunning = true
             launchFailed = false
-            reconnecting = false
         }
 
-        // The timers below only ask for a probe (it runs off the GUI thread);
-        // the answer lands here
-        function onDeviceStateChanged() {
-            if (!phoneMirrorManager || phoneMirrorManager.isRunning
-                    || phoneMirrorManager.deviceState !== "device"
-                    || phoneMirrorView.StackView.status !== StackView.Active)
-                return
-            if (reconnecting) {
-                startMirror()
-            } else if (launchFailed && setupOk && deviceError && !mirrorRunning) {
-                console.log("Phone Mirror: phone is back, restarting")
+        // The manager restarts on its own (recovery); the page follows
+        function onSessionStateChanged() {
+            var st = phoneMirrorManager.sessionState
+            if (st === "starting" && launchFailed) {
+                // The phone is back: from the error page to "Connecting..."
                 launchFailed = false
                 deviceError = false
                 errorMessage = ""
                 frameCounter = 0
-                startMirror()
+            } else if (st === "waitingForPhone" && !launchFailed && mirrorRunning) {
+                // The quiet reconnect ran out of time: show the error page
+                // (a first start without a phone gets there via onScrcpyError)
+                console.log("Phone Mirror: reconnect timed out")
+                mirrorRunning = false
+                launchFailed = true
+                deviceError = true
             }
         }
 
@@ -720,75 +721,20 @@ Item {
 
         function onScrcpyError(error) {
             console.log("Phone Mirror: error -", error)
-            var isDeviceError = _isDeviceError()   // lastErrorKind is set before the signal
-            if (isDeviceError && mirrorRunning && hasVideo && !reconnecting) {
-                // Link dropped mid-stream: hold the picture and try to come back quietly
-                console.log("Phone Mirror: link dropped, holding the last frame while reconnecting")
-                reconnecting = true
-                reconnectSince = Date.now()
+            // lastErrorKind and sessionState are set before the signal
+            var isDeviceError = _isDeviceError()
+            if (reconnecting) {
+                // Link dropped mid-stream (or a quiet retry failed): the
+                // manager keeps trying; hold the picture
+                console.log("Phone Mirror: holding the last frame while the manager reconnects")
                 errorMessage = error
                 deviceError = true
                 return
             }
-            if (reconnecting && Date.now() - reconnectSince < reconnectGraceMs) {
-                errorMessage = error   // a restart attempt failed; keep trying until the grace runs out
-                return
-            }
-            reconnecting = false
             mirrorRunning = false
             launchFailed = true
             errorMessage = error
             deviceError = isDeviceError
-        }
-    }
-
-    // Quiet reconnect: the last frame stays up; poll the phone every second
-    // and restart the moment it is back. After reconnectGraceMs give up and
-    // show the error page (whose own recovery timer takes over).
-    Timer {
-        interval: 1000
-        repeat: true
-        running: reconnecting && phoneMirrorView.StackView.status === StackView.Active
-        onTriggered: {
-            if (!phoneMirrorManager || phoneMirrorManager.isRunning)
-                return
-            if (Date.now() - reconnectSince >= reconnectGraceMs) {
-                console.log("Phone Mirror: reconnect timed out")
-                reconnecting = false
-                mirrorRunning = false
-                launchFailed = true
-                return
-            }
-            // A short blip may never show up as a state change: the start
-            // probes the phone itself, and a failure keeps the grace running
-            if (phoneMirrorManager.deviceState === "device")
-                startMirror()
-            else
-                phoneMirrorManager.refreshDeviceState()   // onDeviceStateChanged restarts
-        }
-    }
-
-    // Auto-recovery: while the error screen is up and the setup is fine, poll
-    // the phone and restart mirroring the moment it is back (a nudged cable in
-    // a vehicle is the normal case). Stops when the view is left.
-    Timer {
-        interval: 2000
-        repeat: true
-        running: launchFailed && setupOk && deviceError && !mirrorRunning && !reconnecting
-                 && phoneMirrorView.StackView.status === StackView.Active
-        onTriggered: {
-            if (!phoneMirrorManager || phoneMirrorManager.isRunning)
-                return
-            if (phoneMirrorManager.deviceState === "device") {
-                console.log("Phone Mirror: phone is back, restarting")
-                launchFailed = false
-                deviceError = false
-                errorMessage = ""
-                frameCounter = 0
-                startMirror()
-                return
-            }
-            phoneMirrorManager.refreshDeviceState()   // onDeviceStateChanged restarts
         }
     }
 

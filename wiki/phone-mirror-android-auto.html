@@ -528,11 +528,15 @@
             <code>adb logcat -v raw -T 1 -s scrcpy:I</code> (its stdout went with the old shell). The reattached stream uses the lenient
             black test for its first 3 s so the handover never shows black. If the attach fails, the manager starts fresh on the
             next event-loop turn (which kills the old server). A deliberate <code>stopScrcpy()</code> always kills the server.</p>
-          <p><strong>View</strong>: <code>PhoneMirrorView</code> treats a device error that arrives mid-stream (<code>lastErrorKind</code> <code>"device"</code> or
-            <code>"noPhone"</code>, while a frame has been shown) as a quiet reconnect:
-            the last frame stays up, the view polls <code>getDeviceState()</code> every second and restarts the moment it is
-            <code>"device"</code> again (typically 2 s), shows a "Reconnecting to phone..." badge only after 2 s, and falls back to the
-            error page after 10 s. Because the keeper is process-wide, in-use / panel state survives the reconnect too.</p>
+          <p><strong>Recovery</strong> is the manager's (<code>sessionState</code>): a device error (<code>lastErrorKind</code>
+            <code>"device"</code> or <code>"noPhone"</code>) after the stream had been up is a quiet reconnect (<code>"reconnecting"</code>):
+            it polls every second (<code>kReconnectPollMs</code>) and restarts the moment adb reports the phone (typically 2 s), keeps
+            reconnecting through failed retries, and moves to <code>"waitingForPhone"</code> after <code>kReconnectGraceMs</code> (10 s).
+            Any other device error goes straight to <code>"waitingForPhone"</code>, which polls every 2 s (<code>kWaitPollMs</code>)
+            and restarts when the phone is back; setup and fatal errors are <code>"failed"</code> and never retried. Polling runs only
+            while <code>setViewActive(true)</code> (the mirror page is on screen), so nothing spawns adb in the background. The page
+            holds the last frame while <code>"reconnecting"</code> (a "Reconnecting to phone..." badge after 2 s) and shows the
+            error page otherwise. A dropped session's server persists for 55 s, so a phone back after the 10 s grace still reattaches. Because the keeper is process-wide, in-use / panel state survives the reconnect too.</p>
         </section>
 
         <section id="pm-wifi">

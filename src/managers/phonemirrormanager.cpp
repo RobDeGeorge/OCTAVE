@@ -59,6 +59,9 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     m_queueArtTimer.setSingleShot(true);
     m_queueArtTimer.setInterval(150);
     connect(&m_queueArtTimer, &QTimer::timeout, this, &PhoneMirrorManager::publishMediaQueue);
+    connect(&m_retryTimer, &QTimer::timeout, this, &PhoneMirrorManager::onRetryTick);
+    // A probe saying the phone is back restarts a waiting session at once
+    connect(this, &PhoneMirrorManager::deviceStateChanged, this, &PhoneMirrorManager::restartIfPhoneBack);
     connect(&m_resizeTimer, &QTimer::timeout, this, [this]() {
         if (isRunning() && m_displaySize == kAutoDisplaySize && !m_startedAutoSize.isEmpty()
             && autoDisplaySize(m_viewWidth, m_viewHeight) != m_startedAutoSize) {
@@ -503,8 +506,90 @@ void PhoneMirrorManager::setLastErrorKind(const QString &kind)
 
 void PhoneMirrorManager::reportError(const QString &message)
 {
-    setLastErrorKind(errorKindFor(message));
+    const QString kind = errorKindFor(message);
+    setLastErrorKind(kind);
+    if (kind == QLatin1String("device") || kind == QLatin1String("noPhone")) {
+        // The phone or its link: retry. Right after a stream, quietly (the
+        // view keeps the last frame) until the grace runs out.
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (m_sessionState == QLatin1String("reconnecting")) {
+            if (now - m_reconnectSinceMs >= kReconnectGraceMs) {
+                m_hadStream = false;
+                setSessionState(QStringLiteral("waitingForPhone"));
+            }
+        } else if (m_hadStream) {
+            m_reconnectSinceMs = now;
+            setSessionState(QStringLiteral("reconnecting"));
+        } else {
+            setSessionState(QStringLiteral("waitingForPhone"));
+        }
+    } else {
+        m_hadStream = false;
+        setSessionState(QStringLiteral("failed"));
+    }
     emit scrcpyError(message);
+}
+
+void PhoneMirrorManager::setSessionState(const QString &state)
+{
+    if (state != m_sessionState) {
+        qCInfo(lcPhoneMirror) << "Session:" << m_sessionState << "->" << state;
+        m_sessionState = state;
+        emit sessionStateChanged();
+    }
+    updateRetryTimer();
+}
+
+void PhoneMirrorManager::setViewActive(bool active)
+{
+    if (active == m_viewActive)
+        return;
+    m_viewActive = active;
+    updateRetryTimer();
+    if (active)
+        restartIfPhoneBack();
+}
+
+void PhoneMirrorManager::updateRetryTimer()
+{
+    const bool reconnecting = m_sessionState == QLatin1String("reconnecting");
+    const bool waiting = m_sessionState == QLatin1String("waitingForPhone");
+    if (!m_viewActive || (!reconnecting && !waiting)) {
+        m_retryTimer.stop();
+        return;
+    }
+    const int interval = reconnecting ? kReconnectPollMs : kWaitPollMs;
+    if (!m_retryTimer.isActive() || m_retryTimer.interval() != interval)
+        m_retryTimer.start(interval);
+}
+
+void PhoneMirrorManager::onRetryTick()
+{
+    if (m_sessionState == QLatin1String("reconnecting")
+            && QDateTime::currentMSecsSinceEpoch() - m_reconnectSinceMs >= kReconnectGraceMs) {
+        qCInfo(lcPhoneMirror) << "Reconnect timed out";
+        m_hadStream = false;
+        setSessionState(QStringLiteral("waitingForPhone"));
+        return;
+    }
+    if (isRunning() || m_isStarting)
+        return;
+    // A short blip may never show up as a state change: a start probes the
+    // phone itself, and its failure keeps the grace running
+    if (m_deviceState == QLatin1String("device"))
+        startScrcpy();
+    else
+        refreshDeviceState();   // restartIfPhoneBack answers
+}
+
+void PhoneMirrorManager::restartIfPhoneBack()
+{
+    if (!m_viewActive || isRunning() || m_isStarting || m_deviceState != QLatin1String("device"))
+        return;
+    if (m_sessionState == QLatin1String("reconnecting") || m_sessionState == QLatin1String("waitingForPhone")) {
+        qCInfo(lcPhoneMirror) << "The phone is back: restarting";
+        startScrcpy();
+    }
 }
 
 QString PhoneMirrorManager::describeProblem(const QString &state, const QList<QPair<QString, QString>> &rows) const
@@ -782,6 +867,8 @@ void PhoneMirrorManager::startScrcpy()
     // Everything that talks to adb runs on the probe thread: a dead Wi-Fi
     // link, an adb server restart or a box64 adb must never freeze the dash.
     m_isStarting = true;
+    if (m_sessionState != QLatin1String("reconnecting"))
+        setSessionState(QStringLiteral("starting"));   // a quiet reconnect stays quiet
     const int gen = ++m_startGeneration;
     QString attachScid;
     if (!m_persistScid.isEmpty() && QDateTime::currentMSecsSinceEpoch() < m_persistUntilMs)
@@ -1025,6 +1112,8 @@ void PhoneMirrorManager::onConnected(int w, int h)
     m_persistScid.clear();
     m_frameWidth = w; m_frameHeight = h;
     setLastErrorKind(QString());
+    m_hadStream = true;
+    setSessionState(QStringLiteral("streaming"));
     if (!m_activeDisplaySize.isEmpty())
         m_activeDisplaySize = QStringLiteral("%1x%2").arg(w).arg(h);
     emit frameSizeChanged(w, h);
@@ -1120,10 +1209,13 @@ void PhoneMirrorManager::onDisconnected(const QString &disconnectReason)
     }
     m_staleRetried = false;
     emit isRunningChanged();
-    if (reason.isEmpty())
+    if (reason.isEmpty()) {
+        m_hadStream = false;
+        setSessionState(QStringLiteral("idle"));
         emit scrcpyStopped();
-    else
+    } else {
         reportError(reason);
+    }
 }
 
 void PhoneMirrorManager::stopScrcpy()
@@ -1139,6 +1231,8 @@ void PhoneMirrorManager::stopScrcpy()
     m_activeDisplaySize.clear();
     m_startedAutoSize.clear();
     m_resizeTimer.stop();
+    m_hadStream = false;
+    setSessionState(QStringLiteral("idle"));
     if (m_currentBitRate != 0) {
         m_currentBitRate = 0;
         emit currentBitRateChanged();

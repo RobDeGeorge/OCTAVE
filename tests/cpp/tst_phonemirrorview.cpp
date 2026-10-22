@@ -21,6 +21,7 @@ class FakeMirror : public QObject
     Q_OBJECT
     Q_PROPERTY(QString deviceState MEMBER state NOTIFY deviceStateChanged)
     Q_PROPERTY(QString lastErrorKind MEMBER errorKind NOTIFY lastErrorKindChanged)
+    Q_PROPERTY(QString sessionState MEMBER session NOTIFY sessionStateChanged)
     Q_PROPERTY(QString deviceHint MEMBER hint NOTIFY deviceStateChanged)
     Q_PROPERTY(QVariantList devices MEMBER deviceRows NOTIFY deviceStateChanged)
     Q_PROPERTY(QString mirrorNotice MEMBER notice NOTIFY mirrorNoticeChanged)
@@ -38,6 +39,8 @@ class FakeMirror : public QObject
 public:
     QString state = QStringLiteral("none");
     QString errorKind;
+    QString session = QStringLiteral("idle");
+    bool viewActive = false;
     QString hint;
     QString notice;
     QVariantList deviceRows;
@@ -58,6 +61,7 @@ public:
     Q_INVOKABLE bool environmentOk() { return true; }
     Q_INVOKABLE QString getInstallInstructions() { return QString(); }
     Q_INVOKABLE void startScrcpy() { ++starts; }
+    Q_INVOKABLE void setViewActive(bool active) { viewActive = active; }
     Q_INVOKABLE void stopScrcpy() { running = false; }
     Q_INVOKABLE void refreshDeviceState() {}
     Q_INVOKABLE void selectDevice(const QString &) {}
@@ -77,16 +81,23 @@ public:
             deviceRows = *rows;
         emit deviceStateChanged();
     }
-    // As the manager does: the kind first (errorKindFor), then the signal
-    void fail(const QString &kind, const QString &message)
+    // As the manager does: kind and session state first, then the signal
+    void fail(const QString &kind, const QString &message, const QString &state)
     {
         errorKind = kind;
         emit lastErrorKindChanged();
+        setSession(state);
         emit scrcpyError(message);
+    }
+    void setSession(const QString &state)
+    {
+        session = state;
+        emit sessionStateChanged();
     }
     void goLive()
     {
         running = true;
+        setSession(QStringLiteral("streaming"));
         emit isRunningChanged();
         emit scrcpyStarted(1);
         emit frameReady();
@@ -100,6 +111,7 @@ signals:
     void scrcpyStopped();
     void scrcpyError(const QString &message);
     void lastErrorKindChanged();
+    void sessionStateChanged();
     void frameReady();
     void frameSizeChanged(int width, int height);
     void wirelessAddressChanged(const QString &address);
@@ -162,10 +174,19 @@ private slots:
         m_fake.reset();
     }
 
-    void noPhoneShowsQrWithHintAndRestartsWhenPhoneAppears()
+    // The manager decides when to retry and restarts on its own
+    // (tst_phonemirror covers that); the page shows its state.
+
+    void pageTellsTheManagerWhenItIsOnScreen()
     {
+        QVERIFY(m_fake->viewActive);
         QCOMPARE(m_fake->starts, 1);   // activation starts the mirror
-        m_fake->fail("noPhone", "No Android device connected. Connect via USB and enable USB debugging.");
+    }
+
+    void noPhoneShowsQrWithHintThenConnectingWhenThePhoneIsBack()
+    {
+        m_fake->fail("noPhone", "No Android device connected. Connect via USB and enable USB debugging.",
+                     "waitingForPhone");
         m_fake->probe("none", "An iPhone is plugged in. Phone mirroring works with Android phones only.");
         QCoreApplication::processEvents();
         QCOMPARE(prop("noPhone").toBool(), true);
@@ -173,33 +194,54 @@ private slots:
         QVERIFY(m_fake->qrActive);   // QR pairing started for the screen
         QVERIFY(prop("deviceHint").toString().startsWith("An iPhone"));
 
-        // A probe (run off the GUI thread by the backend) reports the phone: restart
-        m_fake->probe("device");
+        // The manager saw the phone and restarts: the page goes to "Connecting..."
+        m_fake->setSession("starting");
         QCoreApplication::processEvents();
-        QCOMPARE(m_fake->starts, 2);
         QCOMPARE(prop("launchFailed").toBool(), false);
-    }
-
-    void usbPermissionsErrorIsRetried()
-    {
-        m_fake->fail("device", "A phone is plugged in, but this computer's USB permissions keep adb from opening it.");
-        QCoreApplication::processEvents();
-        QCOMPARE(prop("deviceError").toBool(), true);   // auto-recovery stays on
         QCOMPARE(prop("showQr").toBool(), false);
-        m_fake->probe("device");
-        QCoreApplication::processEvents();
-        QCOMPARE(m_fake->starts, 2);
+        QCOMPARE(m_fake->starts, 1);   // the page itself does not restart
     }
 
-    void encoderFailureIsNotRetried()
+    void usbPermissionsErrorWaitsForThePhone()
     {
-        m_fake->fail("fatal", "The phone's video encoder failed, even in software mode. Try a smaller virtual display size.");
+        m_fake->fail("device", "A phone is plugged in, but this computer's USB permissions keep adb from opening it.",
+                     "waitingForPhone");
+        QCoreApplication::processEvents();
+        QCOMPARE(prop("launchFailed").toBool(), true);
+        QCOMPARE(prop("deviceError").toBool(), true);
+        QCOMPARE(prop("showQr").toBool(), false);
+    }
+
+    void encoderFailureShowsTheError()
+    {
+        m_fake->fail("fatal", "The phone's video encoder failed, even in software mode. Try a smaller virtual display size.",
+                     "failed");
         QCoreApplication::processEvents();
         QCOMPARE(prop("launchFailed").toBool(), true);
         QCOMPARE(prop("deviceError").toBool(), false);
         m_fake->probe("device");
         QCoreApplication::processEvents();
         QCOMPARE(m_fake->starts, 1);   // no restart loop
+    }
+
+    void dropHoldsTheFrameUntilTheManagerGivesUp()
+    {
+        m_fake->goLive();
+        QCoreApplication::processEvents();
+        m_fake->fail("device", "Phone disconnected. Reconnect the USB cable.", "reconnecting");
+        QCoreApplication::processEvents();
+        QCOMPARE(prop("reconnecting").toBool(), true);
+        QCOMPARE(prop("launchFailed").toBool(), false);   // the last frame stays up
+        QCOMPARE(prop("mirrorRunning").toBool(), true);
+        m_fake->fail("noPhone", "No Android device connected.", "reconnecting");   // a quiet retry failed
+        QCoreApplication::processEvents();
+        QCOMPARE(prop("launchFailed").toBool(), false);
+
+        m_fake->setSession("waitingForPhone");   // the grace ran out
+        QCoreApplication::processEvents();
+        QCOMPARE(prop("reconnecting").toBool(), false);
+        QCOMPARE(prop("launchFailed").toBool(), true);
+        QCOMPARE(prop("deviceError").toBool(), true);
     }
 
     void touchThatStartsInTheLetterboxIsIgnored()
