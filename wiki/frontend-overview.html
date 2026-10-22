@@ -409,20 +409,18 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 
         <p>When the "Album Art Capture" theme is active, colors extracted from the current album art become the UI palette. The extraction is triggered in C++ (<code>nowPlaying</code> follows the live source's art, see <a href="theme-system.html#album-art-capture">Theme System</a>); Main.qml only applies the result and sets the transition length:</p>
 
-        <pre><code><span class="cmt">// settingsManager.albumArtColorsChanged — reads the property, not the argument</span>
-<span class="kw">function</span> <span class="fn">onAlbumArtColorsChanged</span>(themeJson) {
+        <pre><code><span class="cmt">// settingsManager.albumArtColorsChanged — the palette is a theme object</span>
+<span class="kw">function</span> <span class="fn">onAlbumArtColorsChanged</span>() {
     <span class="kw">var</span> colors = settingsManager.albumArtColors
-    <span class="kw">if</span> (colors &amp;&amp; colors.length &gt; <span class="num">0</span>) App.Style.<span class="fn">updateAlbumArtTheme</span>(colors)
+    <span class="kw">if</span> (Object.<span class="fn">keys</span>(colors).length &gt; <span class="num">0</span>) App.Style.<span class="fn">updateAlbumArtTheme</span>(colors)
 }
-<span class="cmt">// mediaManager.albumColorsExtracted</span>
-<span class="kw">function</span> <span class="fn">onAlbumColorsExtracted</span>(themeJson) { App.Style.<span class="fn">updateAlbumArtTheme</span>(themeJson) }
 <span class="cmt">// nowPlaying.durationChanged — "transition = song length", the live source's duration</span>
 <span class="kw">function</span> <span class="fn">onDurationChanged</span>() {
     <span class="kw">if</span> (settingsManager.songLengthTransition &amp;&amp; nowPlaying.durationMs &gt; <span class="num">0</span>)
         App.Style.colorTransitionMs = nowPlaying.durationMs
 }</code></pre>
 
-        <p>At startup, if the saved theme is Album Art Capture and <code>settingsManager.albumArtColors</code> is non-empty, Main.qml primes <code>Style.updateAlbumArtTheme()</code> <em>before</em> <code>setThemeInstant()</code> so the placeholder palette never paints. Manual theme switches are always instant (<code>Style.setThemeInstant</code>); the transition duration only applies to album-art-driven shifts. The settings handler reads the <code>albumArtColors</code> property instead of using the signal argument.</p>
+        <p>At startup, if the saved theme is Album Art Capture and <code>settingsManager.albumArtColors</code> is non-empty, Main.qml primes <code>Style.updateAlbumArtTheme()</code> <em>before</em> <code>setThemeInstant()</code> so the placeholder palette never paints. Manual theme switches are always instant (<code>Style.setThemeInstant</code>); the transition duration only applies to album-art-driven shifts. The palette arrives as an object (<code>albumArtColors</code> is a map; the file keeps a JSON string), so QML parses nothing.</p>
 
         <!-- Shift Light -->
         <h2 id="shift-light">Shift Light Overlays</h2>
@@ -537,7 +535,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
 
         <ol class="steps">
           <li><strong>Capture system font</strong> &mdash; <code>systemDefaultFont = font.family</code>, mirrored to <code>Style.systemDefaultFont</code>.</li>
-          <li><strong>Load custom themes</strong> &mdash; every name in <code>settingsManager.customThemes</code> is fetched with <code>get_custom_theme()</code> and added via <code>Style.addCustomTheme()</code>; this must precede <code>setTheme</code> so a saved custom theme resolves.</li>
+          <li><strong>Load custom themes</strong> &mdash; <code>Style.customThemes = settingsManager.customThemeData</code> (every saved theme, name &rarr; object, in one assignment); this must precede <code>setTheme</code> so a saved custom theme resolves.</li>
           <li><strong>Prime album-art palette</strong> if the saved theme is Album Art Capture, then <strong>apply the theme</strong> with <code>Style.setThemeInstant()</code>.</li>
           <li><strong>Load dimensions</strong> &mdash; width/height from settings (skipped on Android).</li>
           <li><strong>Initialize Spacing</strong> &mdash; <code>Spacing.updateDimensions(width, height)</code>, then <code>autoScaleFactor = screenAutoScale</code>, then <code>globalScale = settingsManager.uiScale</code>.</li>

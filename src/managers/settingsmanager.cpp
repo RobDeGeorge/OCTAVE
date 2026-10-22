@@ -918,7 +918,10 @@ int     SettingsManager::backgroundBlurRadius() const { return m_backgroundBlurR
 QString SettingsManager::bottomBarOrientation() const  { return m_bottomBarOrientation; }
 bool    SettingsManager::showBottomBarMediaControls() const { return m_showBottomBarMediaControls; }
 QString SettingsManager::settingsLayoutStyle() const { return m_settingsLayoutStyle; }
-QString SettingsManager::albumArtColors() const    { return m_albumArtColors; }
+QVariantMap SettingsManager::albumArtColors() const
+{
+    return QJsonDocument::fromJson(m_albumArtColors.toUtf8()).object().toVariantMap();
+}
 
 QString SettingsManager::settingsMenuVisibility() const
 {
@@ -981,6 +984,12 @@ QVariantList SettingsManager::customThemes() const
             names.append(it.key());
     }
     return names;
+}
+
+QVariantMap SettingsManager::customThemeData() const
+{
+    QJsonObject settings = const_cast<SettingsManager *>(this)->loadSettings();
+    return settings.value(QStringLiteral("customThemes")).toObject().toVariantMap();
 }
 
 QVariantList SettingsManager::directoryHistory() const { return m_directoryHistory; }
@@ -1188,7 +1197,7 @@ void SettingsManager::set_album_art_colors(const QString &colorsJson)
     qCDebug(lcSettings) << "set_album_art_colors called, length:" << colorsJson.length();
     m_albumArtColors = colorsJson;
     updateSetting(QStringLiteral("albumArtColors"), colorsJson);
-    emit albumArtColorsChanged(colorsJson);
+    emit albumArtColorsChanged();
 }
 
 // --- Media ---
@@ -1602,7 +1611,7 @@ void SettingsManager::remove_from_directory_history(const QString &folderPath)
 }
 
 // --- Custom themes ---
-void SettingsManager::save_custom_theme(const QString &name, const QString &themeJson,
+void SettingsManager::save_custom_theme(const QString &name, const QVariantMap &themeData,
                                          const QString &albumArtSource)
 {
     qCDebug(lcSettings) << "Saving custom theme:" << name;
@@ -1610,8 +1619,7 @@ void SettingsManager::save_custom_theme(const QString &name, const QString &them
     if (!settings.contains(QStringLiteral("customThemes")))
         settings[QStringLiteral("customThemes")] = QJsonObject();
 
-    QJsonParseError err;
-    QJsonObject theme = QJsonDocument::fromJson(themeJson.toUtf8(), &err).object();
+    QJsonObject theme = QJsonObject::fromVariantMap(themeData);
 
     QString artDir = m_appDataDir + QStringLiteral("/theme_art");
     QString safeName = name;
@@ -2134,15 +2142,6 @@ QVariantList SettingsManager::get_home_obd_parameters()
     return m_homeObdParameters;
 }
 
-QString SettingsManager::get_custom_theme(const QString &name)
-{
-    QJsonObject settings = loadSettings();
-    QJsonObject themes = settings.value(QStringLiteral("customThemes")).toObject();
-    if (themes.contains(name))
-        return QString::fromUtf8(QJsonDocument(themes.value(name).toObject()).toJson(QJsonDocument::Compact));
-    return QStringLiteral("{}");
-}
-
 bool    SettingsManager::get_auto_play_on_startup()    { return m_autoPlayOnStartup; }
 bool    SettingsManager::get_persist_shuffle_state()   { return m_persistShuffleState; }
 bool    SettingsManager::get_last_shuffle_state()      { return m_lastShuffleState; }
@@ -2368,7 +2367,7 @@ void SettingsManager::reset_to_defaults()
     emit sideCardAngleChanged(m_sideCardAngle);
     emit buttonTiltDurationChanged(m_buttonTiltDuration);
     emit textScrollSpeedChanged(m_textScrollSpeed);
-    emit albumArtColorsChanged(m_albumArtColors);
+    emit albumArtColorsChanged();
     emit settingsLayoutStyleChanged(m_settingsLayoutStyle);
     emit imuEnabledChanged(m_imuEnabled);
     emit sensorEmitRateChanged(m_sensorEmitRate);

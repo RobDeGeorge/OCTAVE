@@ -12,8 +12,6 @@
 #include <QWindow>
 #include <QTimer>
 #include <QColor>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QtQml/qqml.h>
 #ifdef OCTAVE_HAVE_WEBENGINE
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
@@ -598,11 +596,10 @@ int main(int argc, char *argv[])
         else if (fallbackOnError)
             esp32VolumeManager.send_theme_color(0, 255, 255);
     };
-    auto accentFromAlbumArt = [](const QString &colorsJson) -> QString {
-        const QJsonDocument doc = QJsonDocument::fromJson(colorsJson.toUtf8());
-        if (!doc.isObject())
+    auto accentFromAlbumArt = [](const QVariantMap &colors) -> QString {
+        if (colors.isEmpty())
             return QString();
-        return doc.object().value(QStringLiteral("accent")).toString(QStringLiteral("#00FFFF"));
+        return colors.value(QStringLiteral("accent"), QStringLiteral("#00FFFF")).toString();
     };
     auto sendCurrentLedColor = [&]() {
         if (settingsManager.esp32LedColorMode() == QLatin1String("static")) {
@@ -616,10 +613,10 @@ int main(int argc, char *argv[])
             sendEsp32Rgb(accent, true);
     };
     QObject::connect(&settingsManager, &SettingsManager::albumArtColorsChanged,
-                     &esp32VolumeManager, [&, accentFromAlbumArt, sendEsp32Rgb](const QString &colorsJson) {
-        if (settingsManager.esp32LedColorMode() != QLatin1String("theme") || colorsJson.isEmpty())
+                     &esp32VolumeManager, [&, accentFromAlbumArt, sendEsp32Rgb]() {
+        if (settingsManager.esp32LedColorMode() != QLatin1String("theme"))
             return;
-        const QString accent = accentFromAlbumArt(colorsJson);
+        const QString accent = accentFromAlbumArt(settingsManager.albumArtColors());
         if (!accent.isEmpty())
             sendEsp32Rgb(accent, false);
     });

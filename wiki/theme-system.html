@@ -85,7 +85,7 @@
 
         <p>Two setters exist. <code>setTheme(name)</code> validates the name against <code>themes</code> and <code>customThemes</code>, records <code>lastStaticTheme</code> (unless the name is Album Art Capture, in which case it arms <code>_firstAlbumArtUpdate</code>) and assigns <code>currentTheme</code>, letting the <code>Behavior</code>s animate. <code>setThemeInstant(name)</code> does the same but zeroes <code>colorTransitionMs</code> for the duration of the switch and restores it with <code>Qt.callLater</code>. Main.qml uses <code>setThemeInstant</code> for the startup load and for every manual theme change; the Display page's chips call <code>setTheme</code> after persisting through <code>settingsManager.save_theme_setting()</code>.</p>
 
-        <p>Other public members: <code>getAllThemeNames()</code> (built-ins minus "Album Art Capture", plus custom names), <code>getLightThemeNames()</code> / <code>getDarkThemeNames()</code>, <code>addCustomTheme(name, obj)</code> (emits <code>customThemesUpdated</code>), <code>updateAlbumArtTheme(json)</code>, <code>isAlbumArtCaptureActive</code>, <code>lastStaticTheme</code>, and the read-only URL <code>assetBase</code> (<code>Qt.resolvedUrl("assets/")</code>).</p>
+        <p>Other public members: <code>getAllThemeNames()</code> (built-ins minus "Album Art Capture", plus custom names), <code>getLightThemeNames()</code> / <code>getDarkThemeNames()</code>, <code>customThemes</code> (assigned whole from <code>settingsManager.customThemeData</code>), <code>updateAlbumArtTheme(themeObject)</code>, <code>isAlbumArtCaptureActive</code>, <code>lastStaticTheme</code>, and the read-only URL <code>assetBase</code> (<code>Qt.resolvedUrl("assets/")</code>).</p>
 
         <!-- Built-in Themes -->
         <h2 id="builtin-themes">Built-in Themes</h2>
@@ -176,19 +176,15 @@
 
         <p>Custom themes are created from the Media Room: while Album Art Capture is active, the album-art popup's "Save as Theme" button (<span class="file-path">frontend/MediaRoom.qml</span>) calls</p>
 
-        <pre><code>settingsManager.<span class="fn">save_custom_theme</span>(themeName, JSON.<span class="fn">stringify</span>(App.Style.albumArtTheme), mediaRoom.currentAlbumArt)</code></pre>
+        <pre><code>settingsManager.<span class="fn">save_custom_theme</span>(themeName, App.Style.albumArtTheme, mediaRoom.currentAlbumArt)</code></pre>
 
-        <p>using the album name (or the track name, or "Custom Theme") as the key. <code>SettingsManager::save_custom_theme()</code> copies the cover image into the app data directory, add its <code>file://</code> URL as the theme's <code>albumArt</code> key, and store the object under <code>customThemes</code> in <span class="file-path">settingsConfigure.json</span>. <code>get_custom_theme(name)</code> returns the JSON and <code>delete_custom_theme(name)</code> removes it (and its copied art).</p>
+        <p>using the album name (or the track name, or "Custom Theme") as the key. <code>SettingsManager::save_custom_theme()</code> copies the cover image into the app data directory, add its <code>file://</code> URL as the theme's <code>albumArt</code> key, and store the object under <code>customThemes</code> in <span class="file-path">settingsConfigure.json</span>. The <code>customThemeData</code> property holds every saved theme (name &rarr; object, as on disk) and <code>delete_custom_theme(name)</code> removes one (and its copied art).</p>
 
         <p>Main.qml loads them <em>before</em> applying the saved theme so that a custom theme selected last session passes the <code>setTheme</code> guard:</p>
 
-        <pre><code><span class="kw">let</span> customThemes = settingsManager.customThemes
-customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(themeName) {
-    <span class="kw">let</span> themeObj = JSON.<span class="fn">parse</span>(settingsManager.<span class="fn">get_custom_theme</span>(themeName))
-    App.Style.<span class="fn">addCustomTheme</span>(themeName, themeObj)
-})</code></pre>
+        <pre><code>App.Style.customThemes = settingsManager.customThemeData</code></pre>
 
-        <p>On <code>settingsManager.customThemesChanged</code> the whole map is rebuilt into a new object and assigned in one shot &mdash; the comment explains that clearing and refilling would briefly make <code>activeTheme</code> fall back to SolarizedLight if a custom theme is active. The Display page listens to <code>App.Style.customThemesUpdated</code> to refresh chip options, palettes, images and the deletable list.</p>
+        <p>On <code>settingsManager.customThemesChanged</code> the same assignment runs again, in one shot &mdash; the comment explains that clearing and refilling would briefly make <code>activeTheme</code> fall back to SolarizedLight if a custom theme is active. The Display page listens to <code>App.Style.customThemesUpdated</code> to refresh chip options, palettes, images and the deletable list.</p>
 
         <!-- Album Art Capture -->
         <h2 id="album-art-capture">Album Art Capture</h2>
@@ -214,11 +210,10 @@ customThemes.<span class="fn">forEach</span>(<span class="kw">function</span>(th
         <h3>Threading and Delivery</h3>
         <p><code>MediaManager</code> runs the extraction off the GUI thread with <code>QtConcurrent::run</code> and a <code>QFutureWatcher</code>. A job counter (<code>m_colorJob</code>) makes a newer request supersede an older one, so a fast skip through several tracks applies only the last palette, and a repeat request for the same file within 2&nbsp;s is ignored (the restore-playback path and the 1&nbsp;s startup timer ask for the same track).</p>
 
-        <p>When the manager has a settings manager attached (Main.qml calls <code>mediaManager.connect_settings_manager(settingsManager)</code> at startup) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as <code>albumArtColors</code> and emits <code>albumArtColorsChanged</code>. Main.qml's handler reads the <code>albumArtColors</code> property rather than the signal argument and calls <code>App.Style.updateAlbumArtTheme(json)</code>. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> is the fallback when no settings manager is connected; Main.qml handles it too.</p>
+        <p>When the manager has a settings manager attached (Main.qml calls <code>mediaManager.connect_settings_manager(settingsManager)</code> at startup) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as the <code>albumArtColors</code> string and emits <code>albumArtColorsChanged</code>. The <code>albumArtColors</code> property is that palette as an object, so Main.qml's handler passes it straight to <code>App.Style.updateAlbumArtTheme(colors)</code> and <span class="file-path">src/main.cpp</span> reads the LED accent from it, with no JSON parsing in either. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> is only emitted when no settings manager is connected (the tests); nothing in the app listens to it.</p>
 
         <h3>Applying in Style.qml</h3>
-        <pre><code><span class="kw">function</span> <span class="fn">updateAlbumArtTheme</span>(themeJson) {
-    <span class="kw">let</span> newTheme = JSON.<span class="fn">parse</span>(themeJson)
+        <pre><code><span class="kw">function</span> <span class="fn">updateAlbumArtTheme</span>(newTheme) {
     albumArtTheme = newTheme
     <span class="kw">if</span> (currentTheme === <span class="str">"Album Art Capture"</span>) {
         <span class="cmt">// First paint after entering Album Art mode is instant — only</span>

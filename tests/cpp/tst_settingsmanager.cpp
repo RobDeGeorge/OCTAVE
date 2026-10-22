@@ -118,6 +118,34 @@ private slots:
         QCOMPARE(sm.obdSavedAdapters().size(), 1);
     }
 
+    void themesReachQmlAsObjectsStoredAsBefore()
+    {
+        // Album Art Capture palette: QML gets the object, the file keeps the string
+        SettingsManager sm;
+        QSignalSpy art(&sm, &SettingsManager::albumArtColorsChanged);
+        QCOMPARE(sm.albumArtColors(), QVariantMap{});
+        const QString json = QStringLiteral(R"({"accent":"#ff8800","base":"#101010","text":{"primary":"#ffffff"}})");
+        sm.set_album_art_colors(json);
+        QCOMPARE(art.count(), 1);
+        QCOMPARE(sm.m_settings.value("albumArtColors").toString(), json);
+        const QVariantMap colors = sm.property("albumArtColors").toMap();
+        QCOMPARE(colors.value("accent").toString(), QStringLiteral("#ff8800"));
+        QCOMPARE(colors.value("text").toMap().value("primary").toString(), QStringLiteral("#ffffff"));
+
+        // Custom themes: saved from an object, read back whole, in one map
+        QSignalSpy themes(&sm, &SettingsManager::customThemesChanged);
+        sm.save_custom_theme(QStringLiteral("Dusk"), colors);
+        QCOMPARE(themes.count(), 1);
+        QCOMPARE(sm.customThemes(), QVariantList{QStringLiteral("Dusk")});
+        const QVariantMap data = sm.property("customThemeData").toMap();
+        QCOMPARE(data.keys(), QStringList{QStringLiteral("Dusk")});
+        QCOMPARE(data.value("Dusk").toMap(), colors);
+        QCOMPARE(sm.m_settings.value("customThemes").toObject().value("Dusk").toObject(),
+                 QJsonDocument::fromJson(json.toUtf8()).object());
+        sm.delete_custom_theme(QStringLiteral("Dusk"));
+        QVERIFY(sm.customThemeData().isEmpty());
+    }
+
     void everySettingSurvivesARestart()
     {
         QJsonObject saved;
@@ -134,7 +162,7 @@ private slots:
             first.save_obd_saved_adapters(QStringLiteral("[{\"mac\":\"AA:BB:CC:DD:EE:FF\",\"name\":\"NEXAS\"}]"));
             first.save_home_obd_parameters({QStringLiteral("RPM"), QStringLiteral("SPEED")});
             first.save_obd_parameter_enabled(QStringLiteral("COOLANT_TEMP"), false);
-            first.save_custom_theme(QStringLiteral("Mine"), QStringLiteral("{\"accent\":\"#ff0000\"}"));
+            first.save_custom_theme(QStringLiteral("Mine"), QVariantMap{{"accent", "#ff0000"}});
             first.save_gesture_action(QStringLiteral("up"), QStringLiteral("volume_up"));
             first.save_scrcpy_bit_rate_wifi(6);
             first.save_settings_section_visibility(QStringLiteral("obd"), false);

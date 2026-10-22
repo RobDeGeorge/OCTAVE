@@ -44,7 +44,10 @@ class SettingsManager : public QObject
     Q_PROPERTY(QString bottomBarOrientation READ bottomBarOrientation NOTIFY bottomBarOrientationChanged)
     Q_PROPERTY(bool showBottomBarMediaControls READ showBottomBarMediaControls NOTIFY showBottomBarMediaControlsChanged)
     Q_PROPERTY(QString settingsLayoutStyle READ settingsLayoutStyle NOTIFY settingsLayoutStyleChanged)
-    Q_PROPERTY(QString albumArtColors READ albumArtColors NOTIFY albumArtColorsChanged)
+    // The Album Art Capture palette extracted from the playing art, as a theme
+    // object ({base, baseAlt, accent, text, ...}; empty before the first
+    // extraction). Stored as a JSON string under the same key.
+    Q_PROPERTY(QVariantMap albumArtColors READ albumArtColors NOTIFY albumArtColorsChanged)
     Q_PROPERTY(QString settingsMenuVisibility READ settingsMenuVisibility NOTIFY settingsMenuVisibilityChanged)
 
     // --- Media ---
@@ -90,7 +93,9 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool blackBoxSweepAll READ blackBoxSweepAll NOTIFY blackBoxSweepAllChanged)
     Q_PROPERTY(int blackBoxMaxMB READ blackBoxMaxMB NOTIFY blackBoxMaxMBChanged)
     Q_PROPERTY(QVariantList homeOBDParameters READ homeOBDParameters NOTIFY homeOBDParametersChanged)
-    Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)
+    Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)   // names
+    // Every saved custom theme, name -> theme object (as on disk)
+    Q_PROPERTY(QVariantMap customThemeData READ customThemeData NOTIFY customThemesChanged)
     Q_PROPERTY(QVariantList directoryHistory READ directoryHistory NOTIFY directoryHistoryChanged)
 
     // --- Window ---
@@ -175,7 +180,7 @@ public:
     QString bottomBarOrientation() const;
     bool showBottomBarMediaControls() const;
     QString settingsLayoutStyle() const;
-    QString albumArtColors() const;
+    QVariantMap albumArtColors() const;
     QString settingsMenuVisibility() const;
 
     // Media
@@ -218,6 +223,7 @@ public:
     int blackBoxMaxMB() const;
     QVariantList homeOBDParameters() const;
     QVariantList customThemes() const;
+    QVariantMap customThemeData() const;
     QVariantList directoryHistory() const;
 
     // Window
@@ -290,7 +296,7 @@ signals:
     void bottomBarOrientationChanged(const QString &value);
     void showBottomBarMediaControlsChanged(bool value);
     void settingsLayoutStyleChanged(const QString &value);
-    void albumArtColorsChanged(const QString &value);
+    void albumArtColorsChanged();
     void settingsMenuVisibilityChanged();
 
     // Media
@@ -466,7 +472,7 @@ public slots:
     void remove_from_directory_history(const QString &folderPath);
 
     // Custom themes
-    void save_custom_theme(const QString &name, const QString &themeJson, const QString &albumArtSource = QString());
+    void save_custom_theme(const QString &name, const QVariantMap &theme, const QString &albumArtSource = QString());
     void delete_custom_theme(const QString &name);
 
     // Window / Settings navigation
@@ -536,7 +542,6 @@ public slots:
     Q_INVOKABLE QVariantList get_supported_obd_parameters();
     Q_INVOKABLE QVariantList get_directory_history();
     Q_INVOKABLE QVariantList get_home_obd_parameters();
-    Q_INVOKABLE QString get_custom_theme(const QString &name);
     Q_INVOKABLE bool get_auto_play_on_startup();
     Q_INVOKABLE bool get_persist_shuffle_state();
     Q_INVOKABLE bool get_last_shuffle_state();

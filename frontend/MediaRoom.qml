@@ -1578,8 +1578,7 @@ Item {
                         if (!themeName || themeName === "Unknown Album") {
                             themeName = mediaRoom.currentTrackName || "Custom Theme"
                         }
-                        var themeJson = JSON.stringify(App.Style.albumArtTheme)
-                        settingsManager.save_custom_theme(themeName, themeJson, mediaRoom.currentAlbumArt)
+                        settingsManager.save_custom_theme(themeName, App.Style.albumArtTheme, mediaRoom.currentAlbumArt)
                         albumArtPopup.themeSaved = true
                     }
                 }

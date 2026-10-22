@@ -988,10 +988,10 @@ QtObject {
     }
 
     // Function to update the Album Art Capture theme with new colors
-    function updateAlbumArtTheme(themeJson) {
+    // (settingsManager.albumArtColors, a theme object)
+    function updateAlbumArtTheme(newTheme) {
         console.log("[AlbumArtCapture QML] updateAlbumArtTheme called")
         try {
-            let newTheme = JSON.parse(themeJson)
             console.log("[AlbumArtCapture QML] Parsed theme, base color:", newTheme.base, "accent:", newTheme.accent)
 
             // Store the new theme - this should trigger activeTheme to re-evaluate
@@ -1023,19 +1023,12 @@ QtObject {
                 console.log("[AlbumArtCapture QML] UI refresh complete")
             }
         } catch (e) {
-            console.log("[AlbumArtCapture QML] Error parsing album art theme:", e)
+            console.log("[AlbumArtCapture QML] Error applying album art theme:", e)
         }
     }
 
     // Signal emitted when album art theme colors are updated
     signal albumArtThemeUpdated()
-    
-    // Function to add a custom theme
-    function addCustomTheme(name, themeObject) {
-        customThemes[name] = themeObject
-        // Emit a signal that themes have changed
-        customThemesUpdated()
-    }
     
     // Last non–Album-Art theme the user had selected — used by the Album Art
     // Capture toggle so that turning it off restores the prior choice.

@@ -92,12 +92,7 @@ ApplicationWindow {
         if (settingsManager) {
             // Load custom themes BEFORE setTheme so saved custom themes
             // are available when the theme guard checks customThemes[theme]
-            let customThemes = settingsManager.customThemes
-            customThemes.forEach(function(themeName) {
-                let themeJSON = settingsManager.get_custom_theme(themeName)
-                let themeObj = JSON.parse(themeJSON)
-                App.Style.addCustomTheme(themeName, themeObj)
-            })
+            App.Style.customThemes = settingsManager.customThemeData
 
             // Load theme — startup is always instant, transition speed only
             // applies to album-art-driven shifts on song change.
@@ -108,7 +103,7 @@ ApplicationWindow {
                 // currentTheme so the placeholder Album Art colors never
                 // paint — `activeTheme` resolves straight to the saved one.
                 if (settingsManager.themeSetting === "Album Art Capture"
-                        && settingsManager.albumArtColors) {
+                        && Object.keys(settingsManager.albumArtColors).length > 0) {
                     App.Style.updateAlbumArtTheme(settingsManager.albumArtColors)
                 }
                 App.Style.setThemeInstant(settingsManager.themeSetting)
@@ -152,21 +147,12 @@ ApplicationWindow {
             }
         }
 
-        // Note: albumColorsExtracted signal is connected via Connections component below
-        
         // Update theme list when custom themes change
         if (settingsManager) {
             settingsManager.customThemesChanged.connect(function() {
-                // Build new custom themes object and assign in one shot
-                // (avoids briefly clearing customThemes which would make activeTheme
-                // fall back to SolarizedLight if a custom theme is currently active)
-                var newCustomThemes = {}
-                let customThemes = settingsManager.customThemes
-                customThemes.forEach(function(themeName) {
-                    let themeJSON = settingsManager.get_custom_theme(themeName)
-                    newCustomThemes[themeName] = JSON.parse(themeJSON)
-                })
-                App.Style.customThemes = newCustomThemes
+                // Assigned in one shot (clearing first would make activeTheme
+                // fall back to SolarizedLight if a custom theme is active)
+                App.Style.customThemes = settingsManager.customThemeData
 
                 // Force update of theme options
                 App.Style.customThemesUpdated()
@@ -261,28 +247,11 @@ ApplicationWindow {
             }
         }
 
-        function onAlbumArtColorsChanged(themeJson) {
-            console.log("[AlbumArtCapture] settingsManager received albumArtColorsChanged!")
-            // Read the colours from the property rather than the signal argument
+        function onAlbumArtColorsChanged() {
             var colors = settingsManager.albumArtColors
-            console.log("[AlbumArtCapture] Colors from property, length:", colors ? colors.length : "null")
-            if (colors && colors.length > 0) {
-                console.log("[AlbumArtCapture] Updating theme with new colors...")
+            if (Object.keys(colors).length > 0)
                 App.Style.updateAlbumArtTheme(colors)
-            }
         }
-    }
-
-    // Media manager connections for Album Art Capture (backup)
-    Connections {
-        target: mediaManager
-
-        function onAlbumColorsExtracted(themeJson) {
-            console.log("[AlbumArtCapture] Connections received albumColorsExtracted!")
-            console.log("[AlbumArtCapture] themeJson:", themeJson ? themeJson.substring(0, 100) : "null")
-            App.Style.updateAlbumArtTheme(themeJson)
-        }
-
     }
 
     // "Theme transition = song length": the live source's duration (the

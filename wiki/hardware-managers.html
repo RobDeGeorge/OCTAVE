@@ -314,7 +314,7 @@ QObject::connect(&amp;esp32VolumeManager, &amp;ESP32VolumeManager::muteToggleReq
 
           <h4>Colour source (application wiring in <span class="file-path">src/main.cpp</span>)</h4>
           <ul>
-            <li><code>esp32LedColorMode == "theme"</code> (default): <code>settingsManager.albumArtColorsChanged</code> &rarr; a lambda that parses the album-art colour JSON and sends its <code>accent</code> colour.</li>
+            <li><code>esp32LedColorMode == "theme"</code> (default): <code>settingsManager.albumArtColorsChanged</code> &rarr; a lambda that reads the <code>accent</code> of the <code>albumArtColors</code> map and sends it.</li>
             <li><code>esp32LedColorMode == "static"</code>: <code>esp32LedStaticColorChanged</code> &rarr; the chosen hex colour (default <code>#00FFFF</code>).</li>
             <li>Switching modes (<code>esp32LedColorModeChanged</code>) re-sends the current colour; a missing or unparsable colour falls back to cyan <code>(0, 255, 255)</code>.</li>
             <li>On every transition to "Connected", a 500 ms single-shot timer sends the current volume (<code>settingsManager.currentVolume</code>), mute state (<code>volumeController.muted()</code>) and colour so a freshly plugged dongle matches the app; the delay gives the firmware time to finish booting after the port opens.</li>

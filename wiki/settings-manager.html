@@ -190,9 +190,10 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           (<code>sideCardOpacity</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckLevel</code>,
           <code>esp32VolumeStepSize</code>) and <code>QVariantList</code> for <code>homeOBDParameters</code>, <code>directoryHistory</code>,
           <code>customThemes</code> (a list of theme <em>names</em>), <code>pinnedSettings</code> and <code>obdSavedAdapters</code>
-          (the remembered adapters as <code>{name, mac}</code> maps, though the file stores a JSON string). Two properties are
-          JSON <em>strings</em> rather than maps or lists so QML parses them with <code>JSON.parse</code>:
-          <code>settingsMenuVisibility</code> and <code>albumArtColors</code>. Object-valued settings
+          (the remembered adapters as <code>{name, mac}</code> maps, though the file stores a JSON string). One property is
+          a JSON <em>string</em> QML parses with <code>JSON.parse</code>: <code>settingsMenuVisibility</code>.
+          <code>albumArtColors</code> is a <code>QVariantMap</code> (the palette object; the file keeps a string) and
+          <code>customThemeData</code> holds every custom theme as name &rarr; object. Object-valued settings
           (<code>obdParameters</code>, <code>gestureMapping</code>, <code>expandedCards</code>,
           <code>customThemes</code> contents) have no property at all; QML reads them through dedicated getters or
           <code>get_setting_with_default()</code>.
@@ -484,10 +485,10 @@ reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span clas
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>save_custom_theme(name, themeJson, albumArtSource = QString())</code></td><td>Slot. Parses the theme JSON, stores it under <code>customThemes[name]</code> and emits <code>customThemesChanged</code> immediately. A local <code>albumArtSource</code> (path or <code>file://</code> URL) is copied synchronously to <code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code> and recorded as <code>theme["albumArt"]</code>; an <code>http(s)://</code> source is downloaded on a background thread and patched in afterwards. The safe name replaces every character outside <code>[\w-]</code> with <code>_</code>.</td></tr>
+            <tr><td><code>save_custom_theme(name, theme, albumArtSource = QString())</code></td><td>Slot. Takes the theme object (a <code>QVariantMap</code>; MediaRoom passes <code>App.Style.albumArtTheme</code>), stores it under <code>customThemes[name]</code> and emits <code>customThemesChanged</code> immediately. A local <code>albumArtSource</code> (path or <code>file://</code> URL) is copied synchronously to <code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code> and recorded as <code>theme["albumArt"]</code>; an <code>http(s)://</code> source is downloaded on a background thread and patched in afterwards. The safe name replaces every character outside <code>[\w-]</code> with <code>_</code>.</td></tr>
             <tr><td><code>downloadThemeArtAsync()</code> (private)</td><td>Runs the external <code>curl -sL -o</code> through <code>QProcess</code> (30&nbsp;s timeout) in a <code>QThread</code>, saving to <code>theme_art/theme_&lt;safe name&gt;.jpg</code>. The result is handed back through a 100&nbsp;ms <code>QTimer</code> poll on the GUI thread rather than a cross-thread signal, then save and emit <code>customThemesChanged</code> again.</td></tr>
             <tr><td><code>delete_custom_theme(name)</code></td><td>Slot. Removes the entry and deletes its art file if the stored URL resolves to a local file.</td></tr>
-            <tr><td><code>get_custom_theme(name)</code></td><td>Invokable returning the theme as a JSON string (<code>"{}"</code> if unknown). The <code>customThemes</code> property only lists names.</td></tr>
+            <tr><td><code>customThemeData</code></td><td>Property: every saved theme, name &rarr; object, as on disk (notify <code>customThemesChanged</code>). The <code>customThemes</code> property only lists names. Replaced the <code>get_custom_theme(name)</code> JSON-string getter.</td></tr>
           </tbody>
         </table>
 
@@ -648,12 +649,12 @@ QVariant SettingsManager::<span class="fn">get_setting_with_default</span>(<span
         <p>
           When the <code>"Album Art Capture"</code> theme is active, the palette extracted from the current cover is
           pushed to SettingsManager as a JSON string. This is the single distribution point: <code>MediaManager</code>
-          calls <code>set_album_art_colors()</code>, QML binds
-          <code>settingsManager.albumArtColors</code> (see <a href="theme-system.html">Theme System</a>), and
-          <span class="file-path">src/main.cpp</span> forwards the same signal to the ESP32 knob's LEDs when
+          calls <code>set_album_art_colors()</code>, QML reads
+          <code>settingsManager.albumArtColors</code> as a theme object (see <a href="theme-system.html">Theme System</a>), and
+          <span class="file-path">src/main.cpp</span> sends its <code>accent</code> to the ESP32 knob's LEDs when
           <code>esp32LedColorMode</code> is <code>"theme"</code>.
         </p>
-        <pre><code>Q_PROPERTY(QString albumArtColors READ albumArtColors NOTIFY albumArtColorsChanged)
+        <pre><code>Q_PROPERTY(QVariantMap albumArtColors READ albumArtColors NOTIFY albumArtColorsChanged)   <span class="cmt">// parsed from the stored string</span>
 
 <span class="kw">public slots</span>:
     <span class="kw">void</span> <span class="fn">set_album_art_colors</span>(<span class="kw">const</span> QString &amp;colorsJson);</code></pre>
@@ -759,9 +760,9 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
         <h3>Snake_case slots, camelCase properties, string-typed JSON properties</h3>
         <p>
           Properties use the JSON key name so QML bindings read like the file, and slots are snake_case
-          <code>save_*</code> verbs, which keeps the two easy to tell apart at a QML call site. Some structured state (<code>settingsMenuVisibility</code>,
-          <code>albumArtColors</code>) still crosses to QML as JSON strings, which QML parses with <code>JSON.parse</code>;
-          <code>obdSavedAdapters</code> crosses as a list of maps (open-backend #9 is removing the rest). On disk,
+          <code>save_*</code> verbs, which keeps the two easy to tell apart at a QML call site. One piece of structured state (<code>settingsMenuVisibility</code>) still crosses to QML as a JSON string, which QML
+          parses with <code>JSON.parse</code>; <code>obdSavedAdapters</code>, <code>albumArtColors</code> and
+          <code>customThemeData</code> cross as lists and maps (open-backend #9). On disk,
           <code>settingsMenuVisibility</code> is an object, while the palette and adapter list remain string values.
         </p>
 
@@ -837,7 +838,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <tr><td><code>obdSavedAdaptersChanged</code></td><td>&mdash;</td><td>Adapter list changed</td></tr>
             <tr><td><code>directoryHistoryChanged</code>, <code>customThemesChanged</code>, <code>gestureMappingChanged</code>, <code>pinnedSettingsChanged</code>, <code>settingsMenuVisibilityChanged</code></td><td>none</td><td>Their object/list changed; QML re-queries the getter</td></tr>
             <tr><td><code>genericSettingChanged</code></td><td>QString (key)</td><td><code>save_setting()</code> called</td></tr>
-            <tr><td><code>albumArtColorsChanged</code></td><td>QString (JSON)</td><td>New palette pushed by MediaManager; also drives the ESP32 LEDs in theme mode</td></tr>
+            <tr><td><code>albumArtColorsChanged</code></td><td>&mdash;</td><td>New palette pushed by MediaManager; also drives the ESP32 LEDs in theme mode</td></tr>
             <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyAutoWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code></td><td>double / bool / double / bool / int / int / int / bool / bool</td><td>Connected directly to <code>PhoneMirrorManager</code> setters at startup</td></tr>
             <tr><td><code>esp32LedColorModeChanged</code>, <code>esp32LedStaticColorChanged</code></td><td>QString</td><td><span class="file-path">src/main.cpp</span> connects these to the ESP32 LED sync lambdas</td></tr>
           </tbody>
