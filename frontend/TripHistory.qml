@@ -35,7 +35,6 @@ Item {
     property var detail: ({})                // full summary with params + events
     property string selectedParam: ""
     property var seriesPoints: []
-    property string notice: ""
 
     // Chart time window in seconds since trip start; -1 / -1 = the whole trip.
     // Pinch, drag and wheel change it; every change re-queries the store for
@@ -160,16 +159,11 @@ Item {
             if (paramId !== tripHistoryPage.selectedParam) return
             tripHistoryPage.seriesPoints = points
         }
-        function onExportFinished(id, path) {
-            tripHistoryPage.notice = path ? "Exported to " + path : "Export failed"
-            noticeTimer.restart()
-        }
         function onTripEnded(id, summary) {
             if (tripHistoryPage.selectedTrip && tripHistoryPage.selectedTrip.id === id)
                 tripHistoryPage.selectTrip(tripHistoryPage.selectedTrip)
         }
     }
-    Timer { id: noticeTimer; interval: 6000; onTriggered: tripHistoryPage.notice = "" }
     // The live trip keeps growing: refresh its detail and chart while shown
     Timer {
         interval: 5000; repeat: true
@@ -431,17 +425,6 @@ Item {
                             text: "End trip"
                             visible: selectedTrip !== null && selectedTrip.open === true
                             onClicked: tripRecorder.endTripNow()
-                        }
-                        TripActionButton {
-                            text: "Export"
-                            visible: selectedTrip !== null && selectedTrip.open !== true
-                            onClicked: tripRecorder.exportTrip(selectedTrip.id)
-                        }
-                        TripActionButton {
-                            text: "Delete"
-                            danger: true
-                            visible: selectedTrip !== null
-                            onClicked: deleteConfirm.open()
                         }
                     }
 
@@ -786,13 +769,12 @@ Item {
                         elide: Text.ElideRight
                     }
 
-                    // File path / notice
+                    // File path
                     Text {
                         Layout.fillWidth: true
-                        text: tripHistoryPage.notice !== "" ? tripHistoryPage.notice
-                            : (selectedTrip && selectedTrip.file) ? selectedTrip.file : ""
+                        text: (selectedTrip && selectedTrip.file) ? selectedTrip.file : ""
                         visible: text !== ""
-                        color: tripHistoryPage.notice !== "" ? accentColor : labelColor
+                        color: labelColor
                         font.pixelSize: App.Spacing.overallText * 0.62
                         font.family: globalFont
                         elide: Text.ElideMiddle
@@ -806,19 +788,18 @@ Item {
     component TripActionButton: Rectangle {
         id: btn
         property string text: ""
-        property bool danger: false
         signal clicked()
         implicitWidth: btnText.implicitWidth + dp(20)
         implicitHeight: btnText.implicitHeight + dp(10)
         radius: dpMin(6, 2)
         color: btnMouse.pressed ? Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.3) : "transparent"
-        border.color: danger ? "#FF6666" : accentColor
+        border.color: accentColor
         border.width: 1
         Text {
             id: btnText
             anchors.centerIn: parent
             text: btn.text
-            color: btn.danger ? "#FF6666" : accentColor
+            color: accentColor
             font.pixelSize: App.Spacing.overallText * 0.75
             font.bold: true
             font.family: tripHistoryPage.globalFont
@@ -831,26 +812,4 @@ Item {
         }
     }
 
-    Dialog {
-        id: deleteConfirm
-        title: "Delete this drive?"
-        anchors.centerIn: parent
-        width: dp(400)
-        modal: true
-        standardButtons: Dialog.Yes | Dialog.No
-        background: Rectangle {
-            color: App.Style.backgroundColor
-            radius: dpMin(8, 2)
-            border.color: accentColor
-            border.width: 2
-        }
-        contentItem: Text {
-            text: selectedTrip ? fmtDate(selectedTrip.startMs) + "\n\nIts samples, summary and files are removed for good." : ""
-            font.pixelSize: dp(15)
-            font.family: globalFont
-            color: textColor
-            wrapMode: Text.WordWrap
-        }
-        onAccepted: if (selectedTrip) tripRecorder.deleteTrip(selectedTrip.id)
-    }
 }
