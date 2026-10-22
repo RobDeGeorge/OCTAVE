@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-10-18 (folder audited against the code; finished and obsolete plans deleted)
+**Last updated:** 2026-10-21 (open-backend.md added from the frontend logic audit)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -37,7 +37,8 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [trip-history.md](trip-history.md) | Health trends across the drives the black box now records (recorder + Trip History page shipped 2026-10-21) | M | desktop (sim), Jeep |
 | [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML so first launch doesn't stall | L | Win11 VM, Pi, S22 |
 | [user-primitives.md](user-primitives.md) | Save and share your own styled gauges and gauge groups | L (code widgets XL) | desktop |
-| [backend-service-split.md](backend-service-split.md) | Headless core process any frontend connects to | M–L … XL | desktop, Pi |
+| [open-backend.md](open-backend.md) | Move the rules still in QML into the managers, then publish the manager contract so anyone can write a frontend in any language | S items first, then M … L | desktop, Pi for the headless test |
+| [backend-service-split.md](backend-service-split.md) | Headless core process any frontend connects to (process isolation; do open-backend.md first) | M–L … XL | desktop, Pi |
 
 ## 4. New subsystems (XL)
 

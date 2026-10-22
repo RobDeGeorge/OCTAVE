@@ -3,7 +3,7 @@
 **Goal:** run the C++ managers in a headless core process that the QML UI (or any other frontend) connects to, so a UI crash never stops music, OBD or the volume knob.
 
 **Status:** deferred until after v1.0. Only the starting point exists (the dev command server).
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-21
 
 ## What it is
 
@@ -60,22 +60,15 @@ On the Pi, run the core as a systemd user unit (or under Hyprland's exec-once, s
 
 ## Move logic out of QML before any non-QML frontend
 
-Some logic that acts like backend code lives in QML today. A second frontend would have to reimplement it, so move the **data** parts into the core first and leave only presentation in QML:
-
-- `frontend/OBDParameterModel.qml` (489 lines): per-PID metadata (title, unit, min, max, `kind`) and the vehicle support gate. Move it to a core-side model and expose it as data.
-- `frontend/dashboards/WidgetCatalog.qml` (257 lines): widget types, default spans, `supportedKinds`, `editableProps`. Make it a data file both the core and the clients read (the validation logic belongs in `DashboardManager`).
-- `frontend/dashboards/DashboardRenderer.qml` (231 lines): spec → grid rendering. Rendering stays per-frontend, but the core should hand out **validated** specs, so each client doesn't re-implement the "bad cells are skipped" rules.
-- Volume and navigation glue in `BottomBar.qml` and the page files: audit them for state that should belong to the core.
+The full, verified list (2026-10-21 audit of all 105 QML files) lives in [open-backend.md](open-backend.md): the shift-light engine, dashboard id generation and spec sanitising, the volume and mute rules, the phone-vs-local media arbitration, the phone-mirror reconnect state machine, the PID catalog and live value store, the JSON-string properties, and the settings the IMU and gesture managers never subscribe to. Do that file's prerequisites before step 2 below; they all help the single-process app too.
 
 Album colours are already computed in C++ (`MediaManager::_extract_album_colors`, `albumColorsExtracted`), and `EnvironmentTheme.qml` is now fixed style tokens, so neither needs to move.
-
-Update `docs/GAUGE_AUTHORING.md` when the PID metadata and catalog move.
 
 ## Recommended order of operations
 
 Done: the C++ command server (`src/dev/commandserver.cpp`, JSON lines on `localhost:9876`, `--profile` only, behind `OCTAVE_DEV_TOOLS`) is the seed of the service API; it has to leave the dev-only build option first.
 
-1. Move the data logic out of QML (the list above): `OBDParameterModel` and `WidgetCatalog` become core-side data, `DashboardManager` validates loaded specs (today it only sanitizes imports, `sanitizeImportedSpec`). Helps even with a single process. **Effort:** M–L
+1. Move the rules and data out of QML: the prerequisite list in [open-backend.md](open-backend.md). Helps even with a single process. **Effort:** M–L in total
 2. Refactor `src/main.cpp` so the managers live in a core library, with an in-process transport for mobile. **Effort:** L
 3. Split the process on desktop/Pi with QtRO for the QML UI. Keep video decode in the UI. Road-test in the Jeep. **Effort:** XL
 4. Add the WebSocket/JSON gateway, grown from the command-server protocol. Build a first small non-QML client (an OBD gauges web page or a media remote) to prove the API. **Effort:** L
