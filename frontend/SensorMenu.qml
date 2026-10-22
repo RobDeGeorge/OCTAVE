@@ -29,16 +29,18 @@ Item {
     property real currentBaroTemp: 0
     property bool imuConnected: false
 
-    // Display settings
-    property int decimalPlaces: 1
-    property bool useFahrenheit: true
-    property bool useImperial: false
-    property bool showPitch: true
-    property bool showRoll: true
-    property bool showHeading: true
-    property bool showGForce: true
-    property bool showAltitude: true
-    property bool showTemperature: true
+    // Display settings: bound, so a change in Settings shows on return even
+    // though the page stack keeps this page alive (null-checked for shutdown)
+    readonly property int decimalPlaces: settingsManager ? settingsManager.sensorDecimalPlaces : 1
+    readonly property bool useFahrenheit: settingsManager ? settingsManager.sensorTempUnit === "F" : true
+    readonly property bool useImperial: settingsManager ? settingsManager.sensorAltitudeUnit === "ft" : false
+    readonly property var _cards: settingsManager ? settingsManager.sensorCards : ({})
+    readonly property bool showPitch: _cards.Pitch !== false
+    readonly property bool showRoll: _cards.Roll !== false
+    readonly property bool showHeading: _cards.Heading !== false
+    readonly property bool showGForce: _cards.GForce !== false
+    readonly property bool showAltitude: _cards.Altitude !== false
+    readonly property bool showTemperature: _cards.Temperature !== false
 
     function headingToCardinal(h) {
         var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -60,15 +62,6 @@ Item {
 
     Component.onCompleted: {
         imuConnected = berryIMU.connected
-        decimalPlaces = settingsManager.get_setting_with_default("sensorDecimalPlaces", 1)
-        useFahrenheit = settingsManager.get_setting_with_default("sensorTempUnit", "F") === "F"
-        useImperial = settingsManager.get_setting_with_default("sensorAltitudeUnit", "m") === "ft"
-        showPitch = settingsManager.get_setting_with_default("sensorShowPitch", true)
-        showRoll = settingsManager.get_setting_with_default("sensorShowRoll", true)
-        showHeading = settingsManager.get_setting_with_default("sensorShowHeading", true)
-        showGForce = settingsManager.get_setting_with_default("sensorShowGForce", true)
-        showAltitude = settingsManager.get_setting_with_default("sensorShowAltitude", true)
-        showTemperature = settingsManager.get_setting_with_default("sensorShowTemperature", true)
     }
 
     Connections {

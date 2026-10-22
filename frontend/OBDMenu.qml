@@ -28,7 +28,7 @@ Item {
     property color labelColor: App.Style.obdLabelColor     // For parameter labels - calculated for OBD box background
     
     // Card style setting - true for circular gauges, false for square cards
-    property bool useCircularCards: settingsManager ? settingsManager.get_setting_with_default("obdCardStyleCircular", false) : false
+    readonly property bool useCircularCards: settingsManager ? settingsManager.obdCardStyleCircular : false
 
     // Active dashboard: "grid" = default parameter cards, or one of the registered dashboards
     property string activeDashboardId: settingsManager
@@ -935,12 +935,6 @@ Item {
         function onObdParametersChanged() {
             // Use timer to debounce multiple rapid changes
             updateTimer.restart();
-        }
-        function onGenericSettingChanged(key) {
-            // Update card style when setting changes
-            if (key === "obdCardStyleCircular") {
-                obdPage.useCircularCards = settingsManager.get_setting_with_default("obdCardStyleCircular", false)
-            }
         }
     }
     

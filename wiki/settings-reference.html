@@ -257,15 +257,15 @@ EV_BATTERY_HEALTH</code></pre>
           <tbody>
             <tr><td><code>imuEnabled</code> property</td><td>imuEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the BerryIMU v3 I²C sensor. Pinnable; also on the Accessories widget</td></tr>
             <tr><td><code>sensorEmitRate</code> / <code>save_sensor_emit_rate()</code></td><td>sensorEmitRate</td><td>int</td><td>60</td><td>10 – 120 Hz (clamped on save and load), UI step 5</td><td>IMU emit rate in Hz; <code>BerryIMUManager</code> applies it at startup and on every change</td></tr>
-            <tr><td>generic</td><td>sensorDecimalPlaces</td><td>int</td><td>1</td><td>UI 0 – 4</td><td>Decimal places on the Sensors page readouts</td></tr>
-            <tr><td>generic</td><td>sensorTempUnit</td><td>string</td><td>"F"</td><td>"F", "C" (toggle)</td><td>Barometer temperature unit</td></tr>
-            <tr><td>generic</td><td>sensorAltitudeUnit</td><td>string</td><td>"m"</td><td>"m", "ft" (toggle)</td><td>Barometric altitude unit</td></tr>
-            <tr><td>generic</td><td>sensorShowPitch</td><td>bool</td><td>true</td><td>true/false</td><td>Show the pitch readout on the Sensors page</td></tr>
-            <tr><td>generic</td><td>sensorShowRoll</td><td>bool</td><td>true</td><td>true/false</td><td>Show the roll readout</td></tr>
-            <tr><td>generic</td><td>sensorShowHeading</td><td>bool</td><td>true</td><td>true/false</td><td>Show the heading / compass readout</td></tr>
-            <tr><td>generic</td><td>sensorShowGForce</td><td>bool</td><td>true</td><td>true/false</td><td>Show the G-force readout</td></tr>
-            <tr><td>generic</td><td>sensorShowAltitude</td><td>bool</td><td>true</td><td>true/false</td><td>Show the altitude readout</td></tr>
-            <tr><td>generic</td><td>sensorShowTemperature</td><td>bool</td><td>true</td><td>true/false</td><td>Show the temperature readout</td></tr>
+            <tr><td><code>sensorDecimalPlaces</code> / <code>save_sensor_decimal_places()</code></td><td>sensorDecimalPlaces</td><td>int</td><td>1</td><td>0 – 4 (clamped)</td><td>Decimal places on the Sensors page readouts</td></tr>
+            <tr><td><code>sensorTempUnit</code> / <code>save_sensor_temp_unit()</code></td><td>sensorTempUnit</td><td>string</td><td>"F"</td><td>"F", "C" (other values ignored)</td><td>Barometer temperature unit</td></tr>
+            <tr><td><code>sensorAltitudeUnit</code> / <code>save_sensor_altitude_unit()</code></td><td>sensorAltitudeUnit</td><td>string</td><td>"m"</td><td>"m", "ft" (other values ignored)</td><td>Barometric altitude unit</td></tr>
+            <tr><td><code>sensorCards.Pitch</code> / <code>save_sensor_card_visible("Pitch", v)</code></td><td>sensorShowPitch</td><td>bool</td><td>true</td><td>true/false</td><td>Show the pitch readout on the Sensors page</td></tr>
+            <tr><td><code>sensorCards.Roll</code> / <code>save_sensor_card_visible("Roll", v)</code></td><td>sensorShowRoll</td><td>bool</td><td>true</td><td>true/false</td><td>Show the roll readout</td></tr>
+            <tr><td><code>sensorCards.Heading</code> / <code>save_sensor_card_visible("Heading", v)</code></td><td>sensorShowHeading</td><td>bool</td><td>true</td><td>true/false</td><td>Show the heading / compass readout</td></tr>
+            <tr><td><code>sensorCards.GForce</code> / <code>save_sensor_card_visible("GForce", v)</code></td><td>sensorShowGForce</td><td>bool</td><td>true</td><td>true/false</td><td>Show the G-force readout</td></tr>
+            <tr><td><code>sensorCards.Altitude</code> / <code>save_sensor_card_visible("Altitude", v)</code></td><td>sensorShowAltitude</td><td>bool</td><td>true</td><td>true/false</td><td>Show the altitude readout</td></tr>
+            <tr><td><code>sensorCards.Temperature</code> / <code>save_sensor_card_visible("Temperature", v)</code></td><td>sensorShowTemperature</td><td>bool</td><td>true</td><td>true/false</td><td>Show the temperature readout</td></tr>
           </tbody>
         </table>
 
@@ -372,7 +372,7 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td>rpm_glow_intensity</td><td>real</td><td>0.6</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Glow intensity</td></tr>
             <tr><td>rpm_color_transition_speed</td><td>int</td><td>100</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Colour transition speed in ms</td></tr>
             <tr><td>rpm_pulse_enabled</td><td>bool</td><td>false</td><td>none (read only)</td><td>ShiftLightManager, OBDMenu</td><td>Pulse the shift light at redline</td></tr>
-            <tr><td>obdCardStyleCircular</td><td>bool</td><td>false</td><td>OBD page; OBD widget</td><td>OBDMenu, OBD widget</td><td>Circular gauges instead of cards on the OBD grid</td></tr>
+            <tr><td>obdCardStyleCircular</td><td>bool</td><td>false</td><td><code>save_obd_card_style_circular()</code> (OBD page; OBD widget)</td><td><code>settingsManager.obdCardStyleCircular</code> property (OBDMenu, OBD widget)</td><td>Circular gauges instead of cards on the OBD grid</td></tr>
             <tr><td>lastOBDPage</td><td>string</td><td>""</td><td><code>OBDHome.pushSubpage()</code></td><td>BottomBar, OBDHome</td><td>OBD sub-page the nav button reopens</td></tr>
             <tr><td>lastSensorPage</td><td>string</td><td>""</td><td>SensorHome (after a successful push); BottomBar clears it when the page fails to load</td><td>BottomBar, SensorHome</td><td>Sensor sub-page the nav button reopens</td></tr>
             <tr><td>activeDashboard</td><td>string</td><td>"grid"</td><td>OBDMenu</td><td>OBDMenu</td><td>Dashboard ID shown in the OBD view (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>

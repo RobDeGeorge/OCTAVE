@@ -108,10 +108,10 @@ Item {
             compact: true
             text: "Circular Gauges"
             font.pixelSize: App.Spacing.overallText * 0.85
-            checked: settingsManager ? settingsManager.get_setting_with_default("obdCardStyleCircular", false) : false
+            checked: settingsManager ? settingsManager.obdCardStyleCircular : false
             onToggled: {
                 if (settingsManager)
-                    settingsManager.save_setting("obdCardStyleCircular", checked)
+                    settingsManager.save_obd_card_style_circular(checked)
             }
         }
 

@@ -724,7 +724,7 @@ tz = yw*qz - yz*qw</code></pre>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/SensorMenu.qml</span></td>
-                <td>3&times;2 grid: <code>SensorCard</code>s for PITCH, ROLL, HEADING, ALTITUDE, TEMPERATURE plus a <code>GForceDisplay</code> (lateral / longitudinal dot with a trail, <code>maxG</code> 1.5). Reads <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code> (F/C), <code>sensorAltitudeUnit</code> (m/ft) and the six <code>sensorShow*</code> flags (the emit rate is the manager's own setting). The temperature card is additionally gated on <code>berryIMU.hasTemperature !== false</code>. ZERO / RESET buttons.</td>
+                <td>3&times;2 grid: <code>SensorCard</code>s for PITCH, ROLL, HEADING, ALTITUDE, TEMPERATURE plus a <code>GForceDisplay</code> (lateral / longitudinal dot with a trail, <code>maxG</code> 1.5). Binds to <code>settingsManager.sensorDecimalPlaces</code>, <code>sensorTempUnit</code> (F/C), <code>sensorAltitudeUnit</code> (m/ft) and <code>sensorCards</code> (the six <code>sensorShow*</code> keys), so changes in Settings show on return although the page is cached (the emit rate is the manager's own setting). The temperature card is additionally gated on <code>berryIMU.hasTemperature !== false</code>. ZERO / RESET buttons.</td>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/SensorHome.qml</span></td>

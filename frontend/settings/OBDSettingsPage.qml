@@ -1059,13 +1059,13 @@ Item {
                     Layout.fillWidth: false
                     Layout.alignment: Qt.AlignLeft
                     text: "Circular gauges"
-                    checked: settingsManager ? settingsManager.get_setting_with_default("obdCardStyleCircular", false) : false
+                    checked: settingsManager ? settingsManager.obdCardStyleCircular : false
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
 
                     onToggled: function(checked) {
                         if (settingsManager) {
-                            settingsManager.save_setting("obdCardStyleCircular", checked)
+                            settingsManager.save_obd_card_style_circular(checked)
                         }
                     }
                 }

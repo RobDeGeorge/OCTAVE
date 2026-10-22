@@ -234,7 +234,7 @@
           <li>Polling is demand-driven: while Parameter Cards is showing, the page registers every card's id with <code>obdManager.setParameterDemand("cards", &hellip;)</code>; while a dashboard is showing it registers the renderer's <code>paramIds</code> as <code>"dashboard"</code>; both are withdrawn when the page stops being the active StackView page.</li>
           <li><code>Behavior on displayValue { NumberAnimation { duration: 50; easing.type: Easing.Linear } }</code> &mdash; "fast rolling effect".</li>
           <li>Each card reads its value through <code>OBDParameterModel.valueHolder(id)</code>, and only while <code>_gridLive</code> (the grid is the active dashboard and the page is active): on screen a card re-evaluates only when its own PID changes; hidden, it stops listening and shows "--".</li>
-          <li>Two card styles from the <code>obdCardStyleCircular</code> setting (live-switched via <code>genericSettingChanged</code>): a square card with title and value centred above a progress bar pinned to the card's bottom edge (the card clips, so a short card can't push the bar out; 100&nbsp;ms <code>OutCubic</code> width behaviour), or a circular card whose 270&deg; background/value arcs are <code>QtQuick.Shapes</code> <code>PathAngleArc</code>s ("GPU-accelerated Shape (no layer overhead)").</li>
+          <li>Two card styles from the <code>settingsManager.obdCardStyleCircular</code> property (live): a square card with title and value centred above a progress bar pinned to the card's bottom edge (the card clips, so a short card can't push the bar out; 100&nbsp;ms <code>OutCubic</code> width behaviour), or a circular card whose 270&deg; background/value arcs are <code>QtQuick.Shapes</code> <code>PathAngleArc</code>s ("GPU-accelerated Shape (no layer overhead)").</li>
           <li>Until a PID has reported (<code>paramValues[id] === undefined</code>), both styles show "--" in the label colour and hide the bar or arc, instead of a fake 0.0. Values use <code>OBDParameterModel.decimalsFor(id)</code>: whole numbers for speed, RPM, run times, distances and counters, one decimal otherwise. Signed ranges (fuel trims, timing) fill the square card's bar outward from the zero point.</li>
           <li>Colours come from the OBD tokens <code>obdBoxBackground</code>, <code>obdBarColor</code>, <code>obdValueColor</code>, <code>obdLabelColor</code>.</li>
           <li>Only the RPM card is clickable: it opens the shift-light popup.</li>
@@ -305,14 +305,15 @@
 
         <p><span class="file-path">frontend/SensorMenu.qml</span> is a 3&times;2 grid of BerryIMU readouts: <a href="components.html#sensor-card">SensorCard</a>s for PITCH, ROLL (bar = (value + 90) / 180), HEADING (value plus cardinal from <code>headingToCardinal()</code>, bar = value / 360), ALTITUDE and TEMPERATURE, and a <a href="components.html#gforce-display">GForceDisplay</a> for lateral / longitudinal / magnitude. Below the grid, ZERO (<code>berryIMU.calibrateTare()</code>) and RESET (<code>resetTare()</code>) buttons appear while the IMU is connected.</p>
 
-        <h3>Settings read in <code>Component.onCompleted</code></h3>
+        <h3>Display settings (bound to <code>settingsManager</code>, live)</h3>
+        <p>The page binds to typed <code>SettingsManager</code> properties, so a change in Settings &rarr; Accessories &rarr; IMU shows as soon as you return, although the page stack keeps this page alive. (It used to read them once in <code>Component.onCompleted</code> and show the old values until a restart.)</p>
         <table>
           <thead><tr><th>Key</th><th>Default</th><th>Effect</th></tr></thead>
           <tbody>
-            <tr><td><code>sensorDecimalPlaces</code></td><td>1</td><td><code>toFixed()</code> precision everywhere</td></tr>
+            <tr><td><code>sensorDecimalPlaces</code> (0&ndash;4)</td><td>1</td><td><code>toFixed()</code> precision everywhere</td></tr>
             <tr><td><code>sensorTempUnit</code></td><td><code>"F"</code></td><td>Celsius &rarr; Fahrenheit conversion in <code>tempDisplay()</code></td></tr>
             <tr><td><code>sensorAltitudeUnit</code></td><td><code>"m"</code></td><td><code>"ft"</code> multiplies by 3.28084 in <code>altDisplay()</code></td></tr>
-            <tr><td><code>sensorShowPitch</code>, <code>sensorShowRoll</code>, <code>sensorShowHeading</code>, <code>sensorShowGForce</code>, <code>sensorShowAltitude</code>, <code>sensorShowTemperature</code></td><td>true</td><td>Card visibility; the temperature card is also hidden when <code>berryIMU.hasTemperature === false</code></td></tr>
+            <tr><td><code>sensorCards</code> map (<code>Pitch</code>, <code>Roll</code>, <code>Heading</code>, <code>GForce</code>, <code>Altitude</code>, <code>Temperature</code>; saved as <code>sensorShow&lt;card&gt;</code>)</td><td>true</td><td>Card visibility; the temperature card is also hidden when <code>berryIMU.hasTemperature === false</code></td></tr>
             <tr><td><code>sensorEmitRate</code></td><td>60</td><td>Not read here: <code>BerryIMUManager</code> follows <code>settingsManager.sensorEmitRate</code> from startup</td></tr>
           </tbody>
         </table>

@@ -79,6 +79,7 @@ class SettingsManager : public QObject
     Q_PROPERTY(QString obdBluetoothPort READ obdBluetoothPort NOTIFY obdBluetoothPortChanged)
     Q_PROPERTY(QString obdSavedAdapters READ obdSavedAdapters NOTIFY obdSavedAdaptersChanged)
     Q_PROPERTY(bool obdFastMode READ obdFastMode NOTIFY obdFastModeChanged)
+    Q_PROPERTY(bool obdCardStyleCircular READ obdCardStyleCircular NOTIFY obdCardStyleCircularChanged)
     Q_PROPERTY(int obdAutoReconnectAttempts READ obdAutoReconnectAttempts NOTIFY obdAutoReconnectAttemptsChanged)
     Q_PROPERTY(float fuelTankCapacity READ fuelTankCapacity NOTIFY fuelTankCapacityChanged)
     // Black box (TripRecorder): record every drive, also sweep PIDs that are
@@ -126,6 +127,12 @@ class SettingsManager : public QObject
     // --- IMU ---
     Q_PROPERTY(bool imuEnabled READ imuEnabled NOTIFY imuEnabledChanged)
     Q_PROPERTY(int sensorEmitRate READ sensorEmitRate NOTIFY sensorEmitRateChanged)   // Hz, 10-120
+    // Sensors page display (SensorMenu binds to these)
+    Q_PROPERTY(int sensorDecimalPlaces READ sensorDecimalPlaces NOTIFY sensorDecimalPlacesChanged)     // 0-4
+    Q_PROPERTY(QString sensorTempUnit READ sensorTempUnit NOTIFY sensorTempUnitChanged)               // "F" | "C"
+    Q_PROPERTY(QString sensorAltitudeUnit READ sensorAltitudeUnit NOTIFY sensorAltitudeUnitChanged)   // "m" | "ft"
+    // Which readouts show: {Pitch, Roll, Heading, GForce, Altitude, Temperature} -> bool
+    Q_PROPERTY(QVariantMap sensorCards READ sensorCards NOTIFY sensorCardsChanged)
 
     // --- Gesture Sensor ---
     Q_PROPERTY(bool gestureSensorEnabled READ gestureSensorEnabled NOTIFY gestureSensorEnabledChanged)
@@ -201,6 +208,7 @@ public:
     QString obdBluetoothPort() const;
     QString obdSavedAdapters() const;
     bool obdFastMode() const;
+    bool obdCardStyleCircular() const;
     int obdAutoReconnectAttempts() const;
     float fuelTankCapacity() const;
     bool blackBoxEnabled() const;
@@ -241,6 +249,10 @@ public:
     // IMU
     bool imuEnabled() const;
     int sensorEmitRate() const;
+    int sensorDecimalPlaces() const;
+    QString sensorTempUnit() const;
+    QString sensorAltitudeUnit() const;
+    QVariantMap sensorCards() const;
 
     // Gesture
     bool gestureSensorEnabled() const;
@@ -311,6 +323,7 @@ signals:
     void obdBluetoothPortChanged(const QString &value);
     void obdSavedAdaptersChanged(const QString &value);
     void obdFastModeChanged(bool value);
+    void obdCardStyleCircularChanged(bool value);
     void obdAutoReconnectAttemptsChanged(int value);
     void fuelTankCapacityChanged(float value);
     void blackBoxEnabledChanged(bool value);
@@ -357,6 +370,10 @@ signals:
     // IMU
     void imuEnabledChanged(bool value);
     void sensorEmitRateChanged(int value);
+    void sensorDecimalPlacesChanged(int value);
+    void sensorTempUnitChanged(const QString &value);
+    void sensorAltitudeUnitChanged(const QString &value);
+    void sensorCardsChanged();
 
     // Gesture
     void gestureSensorEnabledChanged(bool value);
@@ -433,6 +450,7 @@ public slots:
     void add_obd_saved_adapter(const QString &name, const QString &mac);
     void remove_obd_saved_adapter(const QString &mac);
     void save_obd_fast_mode(bool enabled);
+    void save_obd_card_style_circular(bool circular);
     void save_obd_auto_reconnect_attempts(int attempts);
     void save_fuel_tank_capacity(float capacity);
     void save_black_box_enabled(bool enabled);
@@ -484,6 +502,11 @@ public slots:
     // IMU
     void save_imu_enabled(bool enabled);
     void save_sensor_emit_rate(int hz);
+    void save_sensor_decimal_places(int places);
+    void save_sensor_temp_unit(const QString &unit);       // ignored unless "F" or "C"
+    void save_sensor_altitude_unit(const QString &unit);   // ignored unless "m" or "ft"
+    // card: Pitch, Roll, Heading, GForce, Altitude or Temperature (saved as sensorShow<card>)
+    void save_sensor_card_visible(const QString &card, bool visible);
 
     // Gesture
     void save_gesture_sensor_enabled(bool enabled);
@@ -635,6 +658,7 @@ private:
     QString m_obdBluetoothPort;
     QString m_obdSavedAdapters = QStringLiteral("[]");
     bool m_obdFastMode = true;
+    bool m_obdCardStyleCircular = false;
     int m_obdAutoReconnectAttempts = 0;
     QString m_mediaFolder;
     float m_fuelTankCapacity = 15.0f;
@@ -708,6 +732,10 @@ private:
     // IMU
     bool m_imuEnabled = true;
     int m_sensorEmitRate = 60;
+    int m_sensorDecimalPlaces = 1;
+    QString m_sensorTempUnit = QStringLiteral("F");
+    QString m_sensorAltitudeUnit = QStringLiteral("m");
+    QVariantMap m_sensorCards;
 
     // Gesture
     bool m_gestureSensorEnabled = true;

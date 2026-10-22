@@ -949,19 +949,17 @@ Flickable {
 
                         ValueDisplay {
                             id: imuDecimalsValue
-                            text: settingsManager ? settingsManager.get_setting_with_default("sensorDecimalPlaces", 1) : "1"
+                            text: settingsManager ? settingsManager.sensorDecimalPlaces : "1"
                         }
                     }
 
                     SettingsSlider {
                         id: imuDecimalsSlider
                         from: 0; to: 4; stepSize: 1
-                        value: settingsManager ? settingsManager.get_setting_with_default("sensorDecimalPlaces", 1) : 1
+                        value: settingsManager ? settingsManager.sensorDecimalPlaces : 1
                         onMoved: {
-                            if (settingsManager) {
-                                settingsManager.save_setting("sensorDecimalPlaces", value)
-                                imuDecimalsValue.text = value
-                            }
+                            if (settingsManager)
+                                settingsManager.save_sensor_decimal_places(value)
                         }
                     }
 
@@ -970,12 +968,12 @@ Flickable {
                         Layout.fillWidth: false
                         Layout.alignment: Qt.AlignLeft
                         text: "Temperature in °F"
-                        checked: settingsManager ? settingsManager.get_setting_with_default("sensorTempUnit", "F") === "F" : true
+                        checked: settingsManager ? settingsManager.sensorTempUnit === "F" : true
                         activeColor: App.Style.accent
                         inactiveColor: App.Style.hoverColor
                         onToggled: function(checked) {
                             if (settingsManager) {
-                                settingsManager.save_setting("sensorTempUnit", checked ? "F" : "C")
+                                settingsManager.save_sensor_temp_unit(checked ? "F" : "C")
                             }
                         }
                     }
@@ -985,12 +983,12 @@ Flickable {
                         Layout.fillWidth: false
                         Layout.alignment: Qt.AlignLeft
                         text: "Altitude in Feet"
-                        checked: settingsManager ? settingsManager.get_setting_with_default("sensorAltitudeUnit", "m") === "ft" : false
+                        checked: settingsManager ? settingsManager.sensorAltitudeUnit === "ft" : false
                         activeColor: App.Style.accent
                         inactiveColor: App.Style.hoverColor
                         onToggled: function(checked) {
                             if (settingsManager) {
-                                settingsManager.save_setting("sensorAltitudeUnit", checked ? "ft" : "m")
+                                settingsManager.save_sensor_altitude_unit(checked ? "ft" : "m")
                             }
                         }
                     }
@@ -1054,26 +1052,24 @@ Flickable {
 
                     Repeater {
                         model: [
-                            { key: "sensorShowPitch",       label: "Pitch",       defaultOn: true },
-                            { key: "sensorShowRoll",        label: "Roll",        defaultOn: true },
-                            { key: "sensorShowHeading",     label: "Heading",     defaultOn: true },
-                            { key: "sensorShowGForce",      label: "G-Force",     defaultOn: true },
-                            { key: "sensorShowAltitude",    label: "Altitude",    defaultOn: true },
-                            { key: "sensorShowTemperature", label: "Temperature", defaultOn: true }
+                            { card: "Pitch",       label: "Pitch" },
+                            { card: "Roll",        label: "Roll" },
+                            { card: "Heading",     label: "Heading" },
+                            { card: "GForce",      label: "G-Force" },
+                            { card: "Altitude",    label: "Altitude" },
+                            { card: "Temperature", label: "Temperature" }
                         ]
                         delegate: SettingsToggle {
                             compact: true
                             Layout.fillWidth: false
                             Layout.alignment: Qt.AlignLeft
                             text: modelData.label
-                            checked: settingsManager
-                                     ? settingsManager.get_setting_with_default(modelData.key, modelData.defaultOn)
-                                     : modelData.defaultOn
+                            checked: settingsManager ? settingsManager.sensorCards[modelData.card] !== false : true
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
                             onToggled: function(checked) {
                                 if (settingsManager) {
-                                    settingsManager.save_setting(modelData.key, checked)
+                                    settingsManager.save_sensor_card_visible(modelData.card, checked)
                                 }
                             }
                         }

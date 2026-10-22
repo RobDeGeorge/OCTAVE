@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -165,6 +166,76 @@ private slots:
         }
         QVERIFY2(missing.isEmpty(), qPrintable(missing.join(", ")));
         QVERIFY(!QFile::exists(dir + "/settingsConfigure.json.corrupt"));
+    }
+
+    // ── sensor display + OBD card style: typed, notifying (open-backend #11) ──
+    // SensorMenu used to read these once and is cached by the page stack, so
+    // a change in Settings showed only after a restart. They keep their old
+    // on-disk key names so existing files load.
+
+    void sensorDisplaySettingsNotifyAndPersist()
+    {
+        {
+            SettingsManager first;
+            QCOMPARE(first.sensorDecimalPlaces(), 1);
+            QCOMPARE(first.sensorTempUnit(), QStringLiteral("F"));
+            QCOMPARE(first.sensorAltitudeUnit(), QStringLiteral("m"));
+            QCOMPARE(first.sensorCards().value("Pitch").toBool(), true);
+            QCOMPARE(first.obdCardStyleCircular(), false);
+
+            QSignalSpy decimals(&first, &SettingsManager::sensorDecimalPlacesChanged);
+            QSignalSpy temp(&first, &SettingsManager::sensorTempUnitChanged);
+            QSignalSpy alt(&first, &SettingsManager::sensorAltitudeUnitChanged);
+            QSignalSpy cards(&first, &SettingsManager::sensorCardsChanged);
+            QSignalSpy circ(&first, &SettingsManager::obdCardStyleCircularChanged);
+
+            first.save_sensor_decimal_places(3);
+            first.save_sensor_temp_unit(QStringLiteral("C"));
+            first.save_sensor_altitude_unit(QStringLiteral("ft"));
+            first.save_sensor_card_visible(QStringLiteral("Roll"), false);
+            first.save_obd_card_style_circular(true);
+            QCOMPARE(decimals.count(), 1);
+            QCOMPARE(temp.count(), 1);
+            QCOMPARE(alt.count(), 1);
+            QCOMPARE(cards.count(), 1);
+            QCOMPARE(circ.count(), 1);
+            QCOMPARE(first.sensorCards().value("Roll").toBool(), false);
+            QCOMPARE(first.sensorCards().value("Pitch").toBool(), true);
+
+            // Same names on disk as before
+            QCOMPARE(first.m_settings.value("sensorDecimalPlaces").toInt(), 3);
+            QCOMPARE(first.m_settings.value("sensorTempUnit").toString(), QStringLiteral("C"));
+            QCOMPARE(first.m_settings.value("sensorAltitudeUnit").toString(), QStringLiteral("ft"));
+            QCOMPARE(first.m_settings.value("sensorShowRoll").toBool(), false);
+            QCOMPARE(first.m_settings.value("obdCardStyleCircular").toBool(), true);
+            first.flushPendingSave();
+        }
+        SettingsManager second;
+        QCOMPARE(second.sensorDecimalPlaces(), 3);
+        QCOMPARE(second.sensorTempUnit(), QStringLiteral("C"));
+        QCOMPARE(second.sensorAltitudeUnit(), QStringLiteral("ft"));
+        QCOMPARE(second.sensorCards().value("Roll").toBool(), false);
+        QCOMPARE(second.obdCardStyleCircular(), true);
+    }
+
+    void sensorDisplaySettingsRejectBadValues()
+    {
+        SettingsManager mgr;
+        QSignalSpy temp(&mgr, &SettingsManager::sensorTempUnitChanged);
+        QSignalSpy cards(&mgr, &SettingsManager::sensorCardsChanged);
+        mgr.save_sensor_decimal_places(9);
+        QCOMPARE(mgr.sensorDecimalPlaces(), 4);   // the settings slider's range
+        mgr.save_sensor_decimal_places(-2);
+        QCOMPARE(mgr.sensorDecimalPlaces(), 0);
+        mgr.save_sensor_temp_unit(QStringLiteral("K"));
+        QCOMPARE(mgr.sensorTempUnit(), QStringLiteral("F"));
+        QCOMPARE(temp.count(), 0);
+        mgr.save_sensor_altitude_unit(QStringLiteral("yards"));
+        QCOMPARE(mgr.sensorAltitudeUnit(), QStringLiteral("m"));
+        mgr.save_sensor_card_visible(QStringLiteral("Warp"), false);
+        QVERIFY(!mgr.sensorCards().contains("Warp"));
+        QCOMPARE(cards.count(), 0);
+        QCOMPARE(mgr.sensorCards().size(), 6);
     }
 
 private:

@@ -35,6 +35,13 @@
 
 Q_LOGGING_CATEGORY(lcSettings, "octave.settings")
 
+namespace {
+// The Sensors page readouts; each is saved as sensorShow<card>
+const QStringList kSensorCards = {
+    QStringLiteral("Pitch"), QStringLiteral("Roll"), QStringLiteral("Heading"),
+    QStringLiteral("GForce"), QStringLiteral("Altitude"), QStringLiteral("Temperature")};
+}
+
 // ---------------------------------------------------------------------------
 // Static registry (populated once)
 // ---------------------------------------------------------------------------
@@ -145,6 +152,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("obdBluetoothPort")]     = QString();
     d[QStringLiteral("obdSavedAdapters")]     = QStringLiteral("[]");
     d[QStringLiteral("obdFastMode")]          = true;
+    d[QStringLiteral("obdCardStyleCircular")] = false;
     d[QStringLiteral("obdAutoReconnectAttempts")] = 0;
     d[QStringLiteral("bottomBarOrientation")]  = QStringLiteral("bottom");
     d[QStringLiteral("showBottomBarMediaControls")] = true;
@@ -465,6 +473,7 @@ void SettingsManager::populateMembers()
     m_obdSavedAdapters  = s(QStringLiteral("obdSavedAdapters")).toString();
     if (m_obdSavedAdapters.isEmpty()) m_obdSavedAdapters = QStringLiteral("[]");
     m_obdFastMode       = s(QStringLiteral("obdFastMode")).toBool();
+    m_obdCardStyleCircular = s(QStringLiteral("obdCardStyleCircular")).toBool();
     m_obdAutoReconnectAttempts = s(QStringLiteral("obdAutoReconnectAttempts")).toInt();
 
     // Media folder: default to the OS-standard music location if empty.
@@ -570,6 +579,14 @@ void SettingsManager::populateMembers()
     // IMU
     m_imuEnabled = s(QStringLiteral("imuEnabled")).toBool();
     m_sensorEmitRate = qBound(10, s(QStringLiteral("sensorEmitRate")).toInt(), 120);
+    m_sensorDecimalPlaces = qBound(0, s(QStringLiteral("sensorDecimalPlaces")).toInt(), 4);
+    m_sensorTempUnit = s(QStringLiteral("sensorTempUnit")).toString() == QLatin1String("C")
+                           ? QStringLiteral("C") : QStringLiteral("F");
+    m_sensorAltitudeUnit = s(QStringLiteral("sensorAltitudeUnit")).toString() == QLatin1String("ft")
+                               ? QStringLiteral("ft") : QStringLiteral("m");
+    m_sensorCards.clear();
+    for (const QString &card : kSensorCards)
+        m_sensorCards.insert(card, s(QStringLiteral("sensorShow") + card).toBool());
 
     // Gesture
     m_gestureSensorEnabled = s(QStringLiteral("gestureSensorEnabled")).toBool();
@@ -943,6 +960,7 @@ int     SettingsManager::textScrollSpeed() const         { return m_textScrollSp
 QString SettingsManager::obdBluetoothPort() const        { return m_obdBluetoothPort; }
 QString SettingsManager::obdSavedAdapters() const        { return m_obdSavedAdapters; }
 bool    SettingsManager::obdFastMode() const             { return m_obdFastMode; }
+bool    SettingsManager::obdCardStyleCircular() const    { return m_obdCardStyleCircular; }
 int     SettingsManager::obdAutoReconnectAttempts() const { return m_obdAutoReconnectAttempts; }
 float   SettingsManager::fuelTankCapacity() const        { return m_fuelTankCapacity; }
 bool    SettingsManager::blackBoxEnabled() const         { return m_blackBoxEnabled; }
@@ -995,6 +1013,10 @@ QString SettingsManager::esp32LedStaticColor() const   { return m_esp32LedStatic
 // --- IMU ---
 bool    SettingsManager::imuEnabled() const            { return m_imuEnabled; }
 int     SettingsManager::sensorEmitRate() const        { return m_sensorEmitRate; }
+int     SettingsManager::sensorDecimalPlaces() const   { return m_sensorDecimalPlaces; }
+QString SettingsManager::sensorTempUnit() const        { return m_sensorTempUnit; }
+QString SettingsManager::sensorAltitudeUnit() const    { return m_sensorAltitudeUnit; }
+QVariantMap SettingsManager::sensorCards() const       { return m_sensorCards; }
 
 // --- Gesture ---
 bool    SettingsManager::gestureSensorEnabled() const  { return m_gestureSensorEnabled; }
@@ -1440,6 +1462,13 @@ void SettingsManager::save_obd_fast_mode(bool enabled)
     m_obdFastMode = enabled;
     updateSetting(QStringLiteral("obdFastMode"), enabled);
     emit obdFastModeChanged(enabled);
+}
+
+void SettingsManager::save_obd_card_style_circular(bool circular)
+{
+    m_obdCardStyleCircular = circular;
+    updateSetting(QStringLiteral("obdCardStyleCircular"), circular);
+    emit obdCardStyleCircularChanged(circular);
 }
 
 void SettingsManager::save_obd_auto_reconnect_attempts(int attempts)
@@ -1935,6 +1964,40 @@ void SettingsManager::save_sensor_emit_rate(int hz)
     emit sensorEmitRateChanged(m_sensorEmitRate);
 }
 
+void SettingsManager::save_sensor_decimal_places(int places)
+{
+    m_sensorDecimalPlaces = qBound(0, places, 4);
+    updateSetting(QStringLiteral("sensorDecimalPlaces"), m_sensorDecimalPlaces);
+    emit sensorDecimalPlacesChanged(m_sensorDecimalPlaces);
+}
+
+void SettingsManager::save_sensor_temp_unit(const QString &unit)
+{
+    if (unit != QLatin1String("F") && unit != QLatin1String("C"))
+        return;
+    m_sensorTempUnit = unit;
+    updateSetting(QStringLiteral("sensorTempUnit"), unit);
+    emit sensorTempUnitChanged(unit);
+}
+
+void SettingsManager::save_sensor_altitude_unit(const QString &unit)
+{
+    if (unit != QLatin1String("m") && unit != QLatin1String("ft"))
+        return;
+    m_sensorAltitudeUnit = unit;
+    updateSetting(QStringLiteral("sensorAltitudeUnit"), unit);
+    emit sensorAltitudeUnitChanged(unit);
+}
+
+void SettingsManager::save_sensor_card_visible(const QString &card, bool visible)
+{
+    if (!kSensorCards.contains(card))
+        return;
+    m_sensorCards.insert(card, visible);
+    updateSetting(QStringLiteral("sensorShow") + card, visible);
+    emit sensorCardsChanged();
+}
+
 // --- Gesture ---
 void SettingsManager::save_gesture_sensor_enabled(bool enabled)
 {
@@ -2245,6 +2308,7 @@ void SettingsManager::reset_to_defaults()
     emit obdBluetoothPortChanged(m_obdBluetoothPort);
     emit obdSavedAdaptersChanged(m_obdSavedAdapters);
     emit obdFastModeChanged(m_obdFastMode);
+    emit obdCardStyleCircularChanged(m_obdCardStyleCircular);
     emit obdAutoReconnectAttemptsChanged(m_obdAutoReconnectAttempts);
     emit obdParametersChanged();
     emit homeOBDParametersChanged();
@@ -2305,6 +2369,10 @@ void SettingsManager::reset_to_defaults()
     emit settingsLayoutStyleChanged(m_settingsLayoutStyle);
     emit imuEnabledChanged(m_imuEnabled);
     emit sensorEmitRateChanged(m_sensorEmitRate);
+    emit sensorDecimalPlacesChanged(m_sensorDecimalPlaces);
+    emit sensorTempUnitChanged(m_sensorTempUnit);
+    emit sensorAltitudeUnitChanged(m_sensorAltitudeUnit);
+    emit sensorCardsChanged();
     emit gestureSensorEnabledChanged(m_gestureSensorEnabled);
     emit gestureMappingChanged();
     emit gestureVolumeStepChanged(m_gestureVolumeStep);
