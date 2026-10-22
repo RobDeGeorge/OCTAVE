@@ -94,6 +94,10 @@ class PhoneMirrorManager : public QObject
     // Last `adb devices` probe, refreshed off the GUI thread (refreshDeviceState):
     // "device" | "unauthorized" | "offline" | "no-permissions" | "none" | "no-adb"
     Q_PROPERTY(QString deviceState READ deviceState NOTIFY deviceStateChanged)
+    // What the last scrcpyError was about (errorKindFor): "noPhone" | "device"
+    // (the phone or its link: worth retrying) | "setup" (OCTAVE's side) |
+    // "fatal" (the phone cannot do it); "" after a successful start
+    Q_PROPERTY(QString lastErrorKind READ lastErrorKind NOTIFY lastErrorKindChanged)
     // Extra context for a phone that is not usable: an iPhone on USB, another
     // adb server fighting this one. "" when there is nothing to add.
     Q_PROPERTY(QString deviceHint READ deviceHint NOTIFY deviceStateChanged)
@@ -143,6 +147,10 @@ public:
     qint64 mediaQueueActiveId() const { return m_mediaQueueActiveId; }
     QString mediaQueueTitle() const { return m_mediaQueueTitle; }
     QString deviceState() const { return m_deviceState; }
+    QString lastErrorKind() const { return m_lastErrorKind; }
+    // The kind of an error message, decided next to the strings that make it
+    static QString errorKindFor(const QString &message);
+    static const QString kEncoderGaveUp;
     QString deviceHint() const { return m_deviceHint; }
     QVariantList deviceList() const;
     QString mirrorNotice() const { return m_notices.join(QLatin1Char('\n')); }
@@ -207,7 +215,8 @@ signals:
     // PhoneMirrorView.qml depends on them)
     void scrcpyStarted(int handle);
     void scrcpyStopped();
-    void scrcpyError(const QString &message);
+    void scrcpyError(const QString &message);   // lastErrorKind is set first
+    void lastErrorKindChanged();
     void isRunningChanged();
     void displaySizeChanged();
     void frameSizeChanged(int width, int height);
@@ -446,6 +455,9 @@ private:
     bool m_attaching = false;
 
     QString m_deviceState = QStringLiteral("none");
+    QString m_lastErrorKind;
+    void reportError(const QString &message);
+    void setLastErrorKind(const QString &kind);
     QString m_deviceHint;
     QList<QPair<QString, QString>> m_deviceRows;
     QHash<QString, QString> m_deviceModels;
@@ -513,6 +525,7 @@ class PhoneMirrorManager : public QObject
     Q_PROPERTY(bool audioActive READ audioActive CONSTANT)
     Q_PROPERTY(bool audioPlaying READ audioPlaying CONSTANT)
     Q_PROPERTY(bool phoneAsleep READ phoneAsleep CONSTANT)
+    Q_PROPERTY(QString lastErrorKind READ lastErrorKind CONSTANT)
     Q_PROPERTY(bool phoneInUse READ phoneInUse CONSTANT)
     Q_PROPERTY(QString wirelessAddress READ wirelessAddress CONSTANT)
     Q_PROPERTY(QString connectionType READ connectionType CONSTANT)
@@ -545,6 +558,7 @@ public:
     bool mediaCanSeek() const { return false; }
     QString mediaArtUrl() const { return {}; }
     bool mediaActive() const { return false; }
+    QString lastErrorKind() const { return {}; }
     QVariantList mediaQueue() const { return {}; }
     qint64 mediaQueueActiveId() const { return -1; }
     QString mediaQueueTitle() const { return {}; }

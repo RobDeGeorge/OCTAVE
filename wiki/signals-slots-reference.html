@@ -1326,6 +1326,7 @@
             <tr><td><code>mediaQueue</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Phone queue entries: <code>{id, title, artist, art_uri, art}</code>; <code>art</code> is a local JPEG URL, initially empty</td></tr>
             <tr><td><code>mediaQueueActiveId</code></td><td><code>qint64</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Playing queue item ID; <code>-1</code> when absent</td></tr>
             <tr><td><code>mediaQueueTitle</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaQueueChanged</code></td><td>Queue title supplied by the phone app</td></tr>
+            <tr><td><code>lastErrorKind</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorKindChanged</code></td><td>What the last <code>scrcpyError</code> was about: <code>"noPhone"</code> (no phone at all: the QR screen), <code>"device"</code> (the phone or its link: worth retrying), <code>"setup"</code> (OCTAVE's side: adb, the server, the decoder), <code>"fatal"</code> (the phone cannot do it: its encoder failed even in software); <code>""</code> after a successful start. Decided by <code>errorKindFor(message)</code> next to the strings that make the messages</td></tr>
             <tr><td><code>deviceState</code></td><td><code>QString</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td>Last <code>adb devices</code> probe (run off the GUI thread): <code>"device"</code> / <code>"unauthorized"</code> / <code>"no-permissions"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code></td></tr>
             <tr><td><code>deviceHint</code></td><td><code>QString</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td>iPhone on USB / adb server clash text, <code>""</code> otherwise</td></tr>
             <tr><td><code>devices</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>deviceStateChanged</code></td><td><code>[{serial, state, wireless, model, selected}]</code>; feeds the phone picker</td></tr>
@@ -1386,7 +1387,8 @@
             <tr><td><code>mediaQueueChanged()</code></td><td>Phone queue, current item, title or loaded queue artwork changed</td></tr>
             <tr><td><code>scrcpyStarted(int handle)</code></td><td>Session started (the handle is always 1 with the built-in client)</td></tr>
             <tr><td><code>scrcpyStopped()</code></td><td>Session ended</td></tr>
-            <tr><td><code>scrcpyError(QString message)</code></td><td>Session failed to start / died; carries <code>describeDeviceState()</code>-style text</td></tr>
+            <tr><td><code>scrcpyError(QString message)</code></td><td>Session failed to start / died; carries <code>describeDeviceState()</code>-style text for showing. <code>lastErrorKind</code> is set just before it</td></tr>
+            <tr><td><code>lastErrorKindChanged()</code></td><td>Notify for <code>lastErrorKind</code></td></tr>
             <tr><td><code>isRunningChanged()</code></td><td>Notify for <code>isRunning</code></td></tr>
             <tr><td><code>displaySizeChanged()</code></td><td>Notify for <code>displaySize</code></td></tr>
             <tr><td><code>frameSizeChanged(int width, int height)</code></td><td>Decoded size changed (also notifies <code>activeDisplaySize</code>, <code>frameWidth</code>, <code>frameHeight</code>)</td></tr>

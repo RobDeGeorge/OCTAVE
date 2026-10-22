@@ -37,8 +37,12 @@ Item {
         return out
     }
     readonly property string deviceHint: phoneMirrorManager && phoneMirrorManager.deviceHint ? phoneMirrorManager.deviceHint : ""
-    // Failures worth retrying on our own: the phone, not the setup
-    readonly property var deviceErrorPattern: /disconnected|No Android device|not authorized|offline|USB permissions/i
+    // Failures worth retrying on our own are the phone's, not the setup's:
+    // the manager says which (lastErrorKind "device" or "noPhone")
+    function _isDeviceError() {
+        var k = phoneMirrorManager ? phoneMirrorManager.lastErrorKind : ""
+        return k === "device" || k === "noPhone"
+    }
 
     // True when everything OCTAVE needs is present (decoder, server, adb), so
     // any failure is about the phone; the setup text is shown only otherwise.
@@ -56,7 +60,8 @@ Item {
     // becomes the QR pairing screen, the default way to connect. With a
     // phone already remembered over Wi-Fi it waits for that one and offers
     // the QR code on request ("Connect a different phone").
-    readonly property bool noPhone: launchFailed && setupOk && deviceError && /^No Android device/.test(errorMessage)
+    readonly property bool noPhone: launchFailed && setupOk && deviceError
+                                    && !!phoneMirrorManager && phoneMirrorManager.lastErrorKind === "noPhone"
     readonly property bool phoneRemembered: phoneMirrorManager ? phoneMirrorManager.wirelessAddress !== "" : false
     property bool wantQr: false
     readonly property bool showQr: noPhone && (!phoneRemembered || wantQr)
@@ -715,7 +720,7 @@ Item {
 
         function onScrcpyError(error) {
             console.log("Phone Mirror: error -", error)
-            var isDeviceError = deviceErrorPattern.test(error)
+            var isDeviceError = _isDeviceError()   // lastErrorKind is set before the signal
             if (isDeviceError && mirrorRunning && hasVideo && !reconnecting) {
                 // Link dropped mid-stream: hold the picture and try to come back quietly
                 console.log("Phone Mirror: link dropped, holding the last frame while reconnecting")

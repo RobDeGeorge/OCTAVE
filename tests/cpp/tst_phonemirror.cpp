@@ -226,6 +226,45 @@ private slots:
         QVERIFY(ScrcpyClient::disconnectedMessage(USB).contains("USB"));
     }
 
+    void everyMessageHasItsKind()
+    {
+        // The view retries on kind "device" / "noPhone" and shows the QR
+        // pairing screen on "noPhone"; it no longer pattern-matches the text.
+        // Same split as the regex it used: /disconnected|No Android device|
+        // not authorized|offline|USB permissions/i, plus the final encoder
+        // failure, which is the phone's limit, not a link problem.
+        PhoneMirrorManager m;
+        auto kind = &PhoneMirrorManager::errorKindFor;
+        QCOMPARE(kind(m.describeDeviceState("none")), QStringLiteral("noPhone"));
+        QCOMPARE(kind(m.describeDeviceState("unauthorized")), QStringLiteral("device"));
+        QCOMPARE(kind(m.describeDeviceState("offline")), QStringLiteral("device"));
+        QCOMPARE(kind(m.describeDeviceState("no-permissions")), QStringLiteral("device"));
+        QCOMPARE(kind(m.describeDeviceState("no-adb")), QStringLiteral("setup"));
+        QCOMPARE(kind(m.describeProblem("offline", {{TCP, "offline"}})), QStringLiteral("device"));
+        QCOMPARE(kind(m.describeProblem("unauthorized", {{TCP, "unauthorized"}})), QStringLiteral("device"));
+        m.m_wirelessAddress = TCP;
+        QCOMPARE(kind(m.describeProblem("none", {})), QStringLiteral("noPhone"));
+        QCOMPARE(kind(ScrcpyClient::disconnectedMessage(TCP)), QStringLiteral("device"));
+        QCOMPARE(kind(ScrcpyClient::disconnectedMessage(USB)), QStringLiteral("device"));
+        QCOMPARE(kind(QStringLiteral("Phone mirroring needs adb (install it).")), QStringLiteral("setup"));
+        QCOMPARE(kind(QStringLiteral("Bundled scrcpy server could not be extracted")), QStringLiteral("setup"));
+        QCOMPARE(kind(QStringLiteral("could not open H.264 decoder")), QStringLiteral("setup"));
+        QCOMPARE(kind(QStringLiteral("could not push scrcpy server: error: device offline")), QStringLiteral("device"));
+        QCOMPARE(kind(PhoneMirrorManager::kEncoderGaveUp), QStringLiteral("fatal"));
+    }
+
+    void startWithoutPhoneSetsTheKind()
+    {
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        QSignalSpy error(&m, &PhoneMirrorManager::scrcpyError);
+        PhoneMirrorManager::StartPrep prep;   // the probe found nothing
+        prep.probe.state = QStringLiteral("none");
+        m.continueStart(prep, m.m_startGeneration);
+        QCOMPARE(error.count(), 1);
+        QCOMPARE(m.lastErrorKind(), QStringLiteral("noPhone"));
+    }
+
     void qrPairingPayloadAndCancel()
     {
         QCOMPARE(PhoneMirrorManager::qrPairingPayload("octave-abc", "pw123"),

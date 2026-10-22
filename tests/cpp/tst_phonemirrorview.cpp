@@ -20,6 +20,7 @@ class FakeMirror : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString deviceState MEMBER state NOTIFY deviceStateChanged)
+    Q_PROPERTY(QString lastErrorKind MEMBER errorKind NOTIFY lastErrorKindChanged)
     Q_PROPERTY(QString deviceHint MEMBER hint NOTIFY deviceStateChanged)
     Q_PROPERTY(QVariantList devices MEMBER deviceRows NOTIFY deviceStateChanged)
     Q_PROPERTY(QString mirrorNotice MEMBER notice NOTIFY mirrorNoticeChanged)
@@ -36,6 +37,7 @@ class FakeMirror : public QObject
 
 public:
     QString state = QStringLiteral("none");
+    QString errorKind;
     QString hint;
     QString notice;
     QVariantList deviceRows;
@@ -75,6 +77,13 @@ public:
             deviceRows = *rows;
         emit deviceStateChanged();
     }
+    // As the manager does: the kind first (errorKindFor), then the signal
+    void fail(const QString &kind, const QString &message)
+    {
+        errorKind = kind;
+        emit lastErrorKindChanged();
+        emit scrcpyError(message);
+    }
     void goLive()
     {
         running = true;
@@ -90,6 +99,7 @@ signals:
     void scrcpyStarted(int handle);
     void scrcpyStopped();
     void scrcpyError(const QString &message);
+    void lastErrorKindChanged();
     void frameReady();
     void frameSizeChanged(int width, int height);
     void wirelessAddressChanged(const QString &address);
@@ -155,7 +165,7 @@ private slots:
     void noPhoneShowsQrWithHintAndRestartsWhenPhoneAppears()
     {
         QCOMPARE(m_fake->starts, 1);   // activation starts the mirror
-        emit m_fake->scrcpyError("No Android device connected. Connect via USB and enable USB debugging.");
+        m_fake->fail("noPhone", "No Android device connected. Connect via USB and enable USB debugging.");
         m_fake->probe("none", "An iPhone is plugged in. Phone mirroring works with Android phones only.");
         QCoreApplication::processEvents();
         QCOMPARE(prop("noPhone").toBool(), true);
@@ -172,7 +182,7 @@ private slots:
 
     void usbPermissionsErrorIsRetried()
     {
-        emit m_fake->scrcpyError("A phone is plugged in, but this computer's USB permissions keep adb from opening it.");
+        m_fake->fail("device", "A phone is plugged in, but this computer's USB permissions keep adb from opening it.");
         QCoreApplication::processEvents();
         QCOMPARE(prop("deviceError").toBool(), true);   // auto-recovery stays on
         QCOMPARE(prop("showQr").toBool(), false);
@@ -183,8 +193,7 @@ private slots:
 
     void encoderFailureIsNotRetried()
     {
-        emit m_fake->scrcpyError(
-            "The phone's video encoder failed, even in software mode. Try a smaller virtual display size.");
+        m_fake->fail("fatal", "The phone's video encoder failed, even in software mode. Try a smaller virtual display size.");
         QCoreApplication::processEvents();
         QCOMPARE(prop("launchFailed").toBool(), true);
         QCOMPARE(prop("deviceError").toBool(), false);

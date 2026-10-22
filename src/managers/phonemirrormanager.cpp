@@ -471,6 +471,42 @@ bool PhoneMirrorManager::hasConnectedDevice()
     return getDeviceState() == QLatin1String("device");
 }
 
+const QString PhoneMirrorManager::kEncoderGaveUp = QStringLiteral(
+    "The phone's video encoder failed, even in software mode. Try a smaller virtual display size "
+    "(Settings > Accessories > Phone Mirror), or mirror the phone screen.");
+
+QString PhoneMirrorManager::errorKindFor(const QString &message)
+{
+    // Kept in step with the messages above and in ScrcpyClient: a phone or
+    // link problem names it (disconnected / not authorized / offline / USB
+    // permissions; adb's own "device offline" too), no phone at all starts
+    // with "No Android device", everything else is OCTAVE's setup.
+    static const QRegularExpression devicePattern(
+        QStringLiteral("disconnected|not authorized|offline|USB permissions"),
+        QRegularExpression::CaseInsensitiveOption);
+    if (message.startsWith(QLatin1String("No Android device")))
+        return QStringLiteral("noPhone");
+    if (message == kEncoderGaveUp)
+        return QStringLiteral("fatal");
+    if (devicePattern.match(message).hasMatch())
+        return QStringLiteral("device");
+    return QStringLiteral("setup");
+}
+
+void PhoneMirrorManager::setLastErrorKind(const QString &kind)
+{
+    if (kind == m_lastErrorKind)
+        return;
+    m_lastErrorKind = kind;
+    emit lastErrorKindChanged();
+}
+
+void PhoneMirrorManager::reportError(const QString &message)
+{
+    setLastErrorKind(errorKindFor(message));
+    emit scrcpyError(message);
+}
+
 QString PhoneMirrorManager::describeProblem(const QString &state, const QList<QPair<QString, QString>> &rows) const
 {
     // describeDeviceState() with the Wi-Fi case spelled out. The phrases the
@@ -740,7 +776,7 @@ void PhoneMirrorManager::startScrcpy()
     if (m_isStarting)
         return;
     if (!nativeAvailable()) {
-        emit scrcpyError(getInstallInstructions());
+        reportError(getInstallInstructions());
         return;
     }
     // Everything that talks to adb runs on the probe thread: a dead Wi-Fi
@@ -785,7 +821,7 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
     applyProbe(prep.probe);
     m_isStarting = false;
     if (prep.serial.isEmpty()) {
-        emit scrcpyError(describeProblem(prep.probe.state, prep.probe.rows));
+        reportError(describeProblem(prep.probe.state, prep.probe.rows));
         return;
     }
     const QString serial = prep.serial;
@@ -815,7 +851,7 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
     m_tcpipChecked = false;
     const QString jar = ScrcpyClient::bundledServerJar();
     if (jar.isEmpty()) {
-        emit scrcpyError(QStringLiteral("Bundled scrcpy server could not be extracted"));
+        reportError(QStringLiteral("Bundled scrcpy server could not be extracted"));
         return;
     }
 
@@ -988,6 +1024,7 @@ void PhoneMirrorManager::onConnected(int w, int h)
     m_attaching = false;
     m_persistScid.clear();
     m_frameWidth = w; m_frameHeight = h;
+    setLastErrorKind(QString());
     if (!m_activeDisplaySize.isEmpty())
         m_activeDisplaySize = QStringLiteral("%1x%2").arg(w).arg(h);
     emit frameSizeChanged(w, h);
@@ -1027,8 +1064,7 @@ void PhoneMirrorManager::onDisconnected(const QString &disconnectReason)
             return;
         }
         // Not a link problem, so not something the view should keep retrying
-        reason = QStringLiteral("The phone's video encoder failed, even in software mode. Try a smaller virtual "
-                                "display size (Settings > Accessories > Phone Mirror), or mirror the phone screen.");
+        reason = kEncoderGaveUp;
     }
     resetPhoneState();
     resetMedia();
@@ -1087,7 +1123,7 @@ void PhoneMirrorManager::onDisconnected(const QString &disconnectReason)
     if (reason.isEmpty())
         emit scrcpyStopped();
     else
-        emit scrcpyError(reason);
+        reportError(reason);
 }
 
 void PhoneMirrorManager::stopScrcpy()

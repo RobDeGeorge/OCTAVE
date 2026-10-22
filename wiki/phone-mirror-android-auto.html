@@ -166,6 +166,7 @@
               <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<code>&lt;app data&gt;/temp/phone_media_art_{0,1}.jpg</code>, alternating so QML reloads), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
               <tr><td><code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td><td><code>list</code>, <code>qint64</code>, <code>str</code></td><td>Phone app’s published play queue, current item ID (<code>-1</code> for none), and queue title; notify <code>mediaQueueChanged</code>. Each entry has <code>id</code>, <code>title</code>, <code>artist</code>, <code>art_uri</code> and a local <code>art</code> URL</td></tr>
               <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>The phone is the source OCTAVE's media controls drive; notify <code>mediaActiveChanged(bool)</code></td></tr>
+              <tr><td><code>lastErrorKind</code></td><td><code>str</code></td><td>What the last <code>scrcpyError</code> was about: <code>"noPhone"</code> / <code>"device"</code> (both retried by the view) / <code>"setup"</code> / <code>"fatal"</code>; <code>""</code> after a successful start</td></tr>
               <tr><td><code>deviceState</code></td><td><code>str</code></td><td>Last <code>adb devices</code> probe: <code>"device"</code> / <code>"unauthorized"</code> / <code>"no-permissions"</code> / <code>"offline"</code> / <code>"none"</code> / <code>"no-adb"</code> (best usable state wins when several phones are listed). Probes run on a one-thread probe pool, never on the GUI thread; notify <code>deviceStateChanged</code></td></tr>
               <tr><td><code>deviceHint</code></td><td><code>str</code></td><td>Extra context the probe found: an iPhone on USB (Linux sysfs, Apple vendor <code>05ac</code>, product <code>0x1290</code>&ndash;<code>0x12af</code>), or another adb server fighting this one (<code>"doesn't match this client"</code>). <code>""</code> otherwise; shown under the QR screen and the error text</td></tr>
               <tr><td><code>devices</code></td><td><code>list</code></td><td><code>[{serial, state, wireless, model, selected}]</code> for every phone adb lists. <code>model</code> (<code>ro.product.model</code>) is fetched only when more than one is usable; <code>selected</code> marks the running session's phone. Drives the phone picker</td></tr>
@@ -527,8 +528,8 @@
             <code>adb logcat -v raw -T 1 -s scrcpy:I</code> (its stdout went with the old shell). The reattached stream uses the lenient
             black test for its first 3 s so the handover never shows black. If the attach fails, the manager starts fresh on the
             next event-loop turn (which kills the old server). A deliberate <code>stopScrcpy()</code> always kills the server.</p>
-          <p><strong>View</strong>: <code>PhoneMirrorView</code> treats a device error that arrives mid-stream (regex
-            <code>/disconnected|No Android device|not authorized|offline/i</code>, while a frame has been shown) as a quiet reconnect:
+          <p><strong>View</strong>: <code>PhoneMirrorView</code> treats a device error that arrives mid-stream (<code>lastErrorKind</code> <code>"device"</code> or
+            <code>"noPhone"</code>, while a frame has been shown) as a quiet reconnect:
             the last frame stays up, the view polls <code>getDeviceState()</code> every second and restarts the moment it is
             <code>"device"</code> again (typically 2 s), shows a "Reconnecting to phone..." badge only after 2 s, and falls back to the
             error page after 10 s. Because the keeper is process-wide, in-use / panel state survives the reconnect too.</p>
@@ -589,7 +590,7 @@
               existing mDNS fallback still finds a Wireless-debugging port on the same host.</li>
             <li><strong>Messages</strong>: a dropped Wi-Fi link reports "Phone disconnected. Check that it is on the same Wi-Fi network and
               Wireless debugging is on." instead of the USB-cable text; offline / unauthorized network devices and "no device while a Wi-Fi
-              phone is remembered" get Wi-Fi wording. All keep the phrases the view's retry regex matches.</li>
+              phone is remembered" get Wi-Fi wording. All are classified by <code>PhoneMirrorManager::errorKindFor()</code> (<code>tst_phonemirror::everyMessageHasItsKind</code> pins each message's kind).</li>
           </ul>
           <p>When <code>adb mdns services</code> returns no usable services, the manager tries <code>avahi-browse</code> on Linux. This supports distro adb builds without working mDNS; the fallback requires <code>avahi-browse</code> to be installed.</p>
           <p><strong>Threading</strong>: QR waits and reconnects block on adb, so they run on one worker (a <code>QThreadPool</code> with
