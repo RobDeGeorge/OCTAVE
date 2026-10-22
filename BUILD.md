@@ -161,6 +161,17 @@ CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7
 > decoder for the built-in phone-mirror client (`phoneMirrorManager.nativeAvailable`).
 > Without it OCTAVE still builds, but phone mirroring is unavailable (there is no external-scrcpy fallback any more).
 > CMake prints `Built-in phone mirror decoder (libavcodec): ON/OFF` at configure time.
+>
+> **Release builds link their own decoder, not the system FFmpeg.** The distro and Homebrew
+> FFmpeg packages are GPL builds that pull x264, x265, xvid and a dozen codec libraries into the
+> package. The Linux and macOS release jobs instead run
+> `bash packaging/ffmpeg/build-h264-decoder.sh <prefix>` (FFmpeg 9.0.2, pinned by SHA-256 and
+> checked against FFmpeg's signing key; H.264 decoder only, static, LGPL-2.1-or-later; needs
+> `nasm` on x86_64) and configure with `-DOCTAVE_FFMPEG_ROOT=<prefix>`. Windows uses vcpkg's
+> `ffmpeg[core,avcodec]`, which is LGPL too. `--smoke` logs `libavcodec <version> license: …` and
+> the Windows job fails unless it starts with `LGPL`; the x86_64 AppImage and macOS jobs fail if
+> any GPL codec library ends up in the package. The aarch64 AppImage still bundles Ubuntu's
+> FFmpeg 4.4 because the arm64 Qt package's media plugin links it (see `NOTICE`).
 
 ```powershell
 # Visual Studio 2022 with "Desktop development with C++" workload required.

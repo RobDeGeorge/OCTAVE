@@ -288,7 +288,8 @@ Flickable {
                     ]
                     if (!isAndroid) {
                         all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art" })
-                        all.push({ name: "FFmpeg (libavcodec, libavutil)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video" })
+                        all.push({ name: "FFmpeg (libavcodec, libavutil; H.264 decoder only)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video" })
+                        all.push({ name: "FFmpeg (inside Qt Multimedia)", license: "LGPL-2.1+; GPL-2.0+ in the aarch64 AppImage (Ubuntu's build)", use: "Playing local music" })
                         all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)" })
                     } else {
                         all.push({ name: "OpenSSL 3", license: "Apache-2.0", use: "HTTPS" })

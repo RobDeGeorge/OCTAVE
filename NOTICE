@@ -24,3 +24,23 @@ Third-party code bundled in this repository:
   - OCTAVE Symbols, a subset of Noto Sans Symbols / Symbols 2, Copyright 2022
     The Noto Project Authors, renamed per the Reserved Font Name clause
     (built by tools/fonts/build_symbol_font.py)
+
+Third-party libraries in the release packages (not in this repository):
+
+- FFmpeg 9.0.2 libavcodec + libavutil, LGPL-2.1-or-later, linked statically
+  into the Linux and macOS releases for the phone mirror's video. Built with
+  the H.264 decoder only (no GPL parts, no external codec libraries) by
+  packaging/ffmpeg/build-h264-decoder.sh from the signed release tarball
+  https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz; that script holds the exact
+  configure flags. To relink OCTAVE against another FFmpeg, build from this
+  repository with -DOCTAVE_FFMPEG_ROOT=<prefix> or without it (system FFmpeg).
+  The Windows release ships vcpkg's ffmpeg[core,avcodec] DLLs (LGPL-2.1-or-later).
+- Qt 6 (LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline), linked
+  dynamically. Qt Multimedia's FFmpeg backend carries its own FFmpeg, which
+  Qt builds LGPL, except in the Linux aarch64 AppImage: there the Qt package
+  links Ubuntu 22.04's FFmpeg 4.4 (libavcodec58 and friends, GPL-2.0-or-later
+  with x264 / x265 / xvid), and the AppImage bundles those libraries. Their
+  source: https://launchpad.net/ubuntu/+source/ffmpeg (jammy-updates) and the
+  x264, x265 and xvidcore source packages of the same release.
+- TagLib (LGPL-2.1 / MPL-1.1), linked dynamically, desktop only.
+- Android platform-tools (adb), Apache-2.0, shipped next to the binary.

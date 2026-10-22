@@ -105,9 +105,23 @@ endif()
 # Release CI passes -DOCTAVE_REQUIRE_FFMPEG=ON so a desktop build can't ship
 # without the decoder again (v0.9.4 Windows did, silently).
 option(OCTAVE_REQUIRE_FFMPEG "Fail configure when libavcodec/libavutil are missing" OFF)
+# Release builds on Linux / macOS link a static, LGPL, H.264-decoder-only
+# FFmpeg built by packaging/ffmpeg/build-h264-decoder.sh instead of the
+# distro / Homebrew one (GPL, with x264 / x265 / xvid and a dozen codec
+# libraries bundled into the package). Empty = use whatever pkg-config finds.
+set(OCTAVE_FFMPEG_ROOT "" CACHE PATH "Install prefix of packaging/ffmpeg/build-h264-decoder.sh (static LGPL decoder)")
 set(OCTAVE_HAVE_FFMPEG OFF)
 if(NOT ANDROID)
-    if(WIN32)
+    if(OCTAVE_FFMPEG_ROOT)
+        if(WIN32)
+            message(FATAL_ERROR "OCTAVE_FFMPEG_ROOT is for Linux / macOS; Windows uses vcpkg's ffmpeg[core,avcodec]")
+        endif()
+        # Its .pc files list -lm / -latomic / -pthread for the static libs; the
+        # prefix holds only .a files, so pkg-config resolves to those.
+        set(ENV{PKG_CONFIG_PATH} "${OCTAVE_FFMPEG_ROOT}/lib/pkgconfig")
+        pkg_check_modules(FFMPEG_DECODER REQUIRED IMPORTED_TARGET libavcodec libavutil)
+        set(OCTAVE_HAVE_FFMPEG ON)
+    elseif(WIN32)
         # vcpkg's FindFFMPEG wrapper prints the DLLs but leaves FFMPEG_FOUND
         # false, so look the headers and import libs up directly (vcpkg's
         # toolchain puts installed/<triplet>/{include,lib} on the search path).
@@ -125,7 +139,11 @@ if(NOT ANDROID)
         endif()
     endif()
 endif()
-message(STATUS "Built-in phone mirror decoder (libavcodec): ${OCTAVE_HAVE_FFMPEG}")
+if(OCTAVE_FFMPEG_ROOT)
+    message(STATUS "Built-in phone mirror decoder (libavcodec): ${OCTAVE_HAVE_FFMPEG} (static, ${OCTAVE_FFMPEG_ROOT})")
+else()
+    message(STATUS "Built-in phone mirror decoder (libavcodec): ${OCTAVE_HAVE_FFMPEG}")
+endif()
 if(OCTAVE_REQUIRE_FFMPEG AND NOT OCTAVE_HAVE_FFMPEG)
     message(FATAL_ERROR "OCTAVE_REQUIRE_FFMPEG is ON but libavcodec/libavutil were not found "
                         "(Windows: vcpkg install ffmpeg[core,avcodec]; Debian/Ubuntu: libavcodec-dev libavutil-dev; "
@@ -287,7 +305,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
     target_compile_definitions(octave PRIVATE OCTAVE_BLUEZ)
 endif()
 if(OCTAVE_HAVE_FFMPEG)
-    if(WIN32)
+    if(OCTAVE_FFMPEG_ROOT)
+        target_link_libraries(octave PRIVATE PkgConfig::FFMPEG_DECODER)
+        # Keep the static avcodec_* / av_* symbols out of the dynamic symbol
+        # table: on aarch64 Qt's media plugin loads the distro's shared FFmpeg
+        # into the same process, and must not bind to ours.
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            target_link_options(octave PRIVATE "LINKER:--exclude-libs,libavcodec.a:libavutil.a")
+        endif()
+    elseif(WIN32)
         target_include_directories(octave PRIVATE ${FFMPEG_INCLUDE_DIRS})
         target_link_libraries(octave PRIVATE ${FFMPEG_LIBRARIES})
     else()

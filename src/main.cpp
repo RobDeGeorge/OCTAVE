@@ -21,6 +21,11 @@
 #ifdef OCTAVE_HAVE_WEBVIEW
 #include <QtWebView/QtWebView>
 #endif
+#ifdef OCTAVE_HAVE_FFMPEG
+extern "C" {
+#include <libavcodec/avcodec.h>
+}
+#endif
 
 #ifdef Q_OS_ANDROID
 #include <QtCore/private/qandroidextras_p.h>
@@ -455,6 +460,11 @@ int main(int argc, char *argv[])
         qInfo("Smoke test: Main.qml loaded, exiting in 5 s");
         // CI greps this line: release builds must ship the phone-mirror decoder + adb
         qInfo("Smoke test: phone mirror native: %d", int(phoneMirrorManager.nativeAvailable()));
+#ifdef OCTAVE_HAVE_FFMPEG
+        // ... and CI greps this one: the decoder release builds link must be LGPL
+        // (packaging/ffmpeg/build-h264-decoder.sh, vcpkg's ffmpeg on Windows)
+        qInfo("Smoke test: libavcodec %s license: %s", av_version_info(), avcodec_license());
+#endif
         QTimer::singleShot(5000, &app, [&app]() { app.exit(0); });
     }
 

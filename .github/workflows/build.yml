@@ -280,6 +280,12 @@ jobs:
             Write-Host "::error::Phone mirror is not available in the packaged app (no libavcodec or no bundled adb)"
             exit 1
           }
+          # ... and the libavcodec it ships must be LGPL (vcpkg's ffmpeg without the gpl feature).
+          $lic = Select-String -Path (Join-Path $logs "octave-cpp.log") -Pattern "libavcodec \S+ license: (.+)$" | Select-Object -Last 1
+          if (-not $lic -or $lic.Matches[0].Groups[1].Value -notmatch '^LGPL') {
+            Write-Host "::error::The bundled libavcodec is not LGPL: $($lic.Line)"
+            exit 1
+          }
           Write-Host "Smoke test passed: the packaged app starts, loads Main.qml and has phone mirroring on a clean PATH"
 
       - name: Build Windows installer (Inno Setup)
@@ -326,14 +332,17 @@ jobs:
           # qtquicktimeline: QtQuick3D depends on it; windeployqt/macdeployqt fail without the module
           modules: 'qtmultimedia qtserialport qtconnectivity qtquick3d qt5compat qtshadertools qtquicktimeline'
 
-      - name: Install TagLib and FFmpeg
-        run: brew install taglib ffmpeg pkg-config
+      - name: Install TagLib
+        run: brew install taglib pkg-config
+
+      - name: Build the H.264 decoder (static LGPL FFmpeg)
+        run: bash packaging/ffmpeg/build-h264-decoder.sh "$RUNNER_TEMP/ffmpeg"
 
       - name: Fetch platform-tools (adb) for bundling
         run: python3 scripts/fetch_platform_tools.py --os darwin
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_REQUIRE_FFMPEG=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_REQUIRE_FFMPEG=ON -DOCTAVE_FFMPEG_ROOT="$RUNNER_TEMP/ffmpeg"
 
       - name: Build
         run: cmake --build build -j
@@ -347,6 +356,10 @@ jobs:
           mkdir -p dist/OCTAVE.app/Contents/Resources/platform-tools
           cp tools/platform-tools/darwin/* dist/OCTAVE.app/Contents/Resources/platform-tools/
           macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg
+          # The only FFmpeg in the bundle is Qt's own (LGPL, for media playback);
+          # OCTAVE links the static decoder. No codec libraries belong here.
+          bad="$(ls dist/OCTAVE.app/Contents/Frameworks | grep -E '^lib(x264|x265|xvidcore|SvtAv1|aom|vpx|mp3lame|dav1d)' || true)"
+          if [ -n "$bad" ]; then echo "::error::App bundle carries $bad"; exit 1; fi
           # Rename to the unified scheme: OCTAVE-<version>-macos.dmg.
           # Workflow runs on tag pushes only, so GITHUB_REF_NAME is always vX.Y.
           VERSION="${GITHUB_REF_NAME#v}"
@@ -380,10 +393,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake ninja-build pkg-config \
-            libtag1-dev libavcodec-dev libavutil-dev libgl1-mesa-dev libegl1-mesa-dev \
+            build-essential cmake ninja-build pkg-config nasm \
+            libtag1-dev libgl1-mesa-dev libegl1-mesa-dev \
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
             libpulse-dev libfuse2 libssl-dev wget file
+
+      - name: Build the H.264 decoder (static LGPL FFmpeg)
+        run: bash packaging/ffmpeg/build-h264-decoder.sh "$RUNNER_TEMP/ffmpeg"
 
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4
@@ -404,10 +420,17 @@ jobs:
           # so it picks up Qt 6 modules instead of any system Qt 5 stub.
           QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake6
           OCTAVE_VERSION: ${{ github.ref_name }}
-          OCTAVE_CMAKE_ARGS: -DOCTAVE_REQUIRE_FFMPEG=ON
+          OCTAVE_CMAKE_ARGS: -DOCTAVE_REQUIRE_FFMPEG=ON -DOCTAVE_FFMPEG_ROOT=${{ runner.temp }}/ffmpeg
         run: |
           python3 scripts/fetch_platform_tools.py --os linux
           bash packaging/linux/build-appimage.sh
+
+      - name: Check the AppImage carries no GPL FFmpeg
+        run: |
+          # Qt's media plugin has its FFmpeg built in on x86_64 and OCTAVE links
+          # the static decoder, so no shared FFmpeg or codec library belongs here.
+          bad="$(ls AppDir/usr/lib | grep -E '^lib(avcodec|avformat|avutil|swscale|swresample|postproc|x264|x265|xvidcore)\.' || true)"
+          if [ -n "$bad" ]; then echo "::error::AppImage bundles $bad"; exit 1; fi
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
@@ -440,6 +463,12 @@ jobs:
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
             libpulse-dev libfuse2 libssl-dev wget file
 
+      # The distro FFmpeg above is for Qt's media plugin, which the arm64 Qt
+      # package links against libavcodec.so.58 (linuxdeploy bundles it);
+      # OCTAVE's own phone-mirror decoder is this static LGPL build.
+      - name: Build the H.264 decoder (static LGPL FFmpeg)
+        run: bash packaging/ffmpeg/build-h264-decoder.sh "$RUNNER_TEMP/ffmpeg"
+
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4
         with:
@@ -462,7 +491,7 @@ jobs:
           # so it picks up Qt 6 modules instead of any system Qt 5 stub.
           QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake6
           OCTAVE_VERSION: ${{ github.ref_name }}
-          OCTAVE_CMAKE_ARGS: -DOCTAVE_REQUIRE_FFMPEG=ON
+          OCTAVE_CMAKE_ARGS: -DOCTAVE_REQUIRE_FFMPEG=ON -DOCTAVE_FFMPEG_ROOT=${{ runner.temp }}/ffmpeg
           # OCTAVE uses Qt's FFmpeg media backend; the arm64 Qt package's
           # GStreamer plugin needs libgstphotography, which jammy does not
           # ship, and linuxdeploy-plugin-qt aborts on the unresolved
