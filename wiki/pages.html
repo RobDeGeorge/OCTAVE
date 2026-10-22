@@ -27,6 +27,7 @@
             <li><a href="#obdhome">OBDHome</a></li>
             <li><a href="#obdmenu">OBDMenu</a></li>
             <li><a href="#obddiagnostics">OBDDiagnostics</a></li>
+            <li><a href="#triphistory">TripHistory</a></li>
             <li><a href="#sensorhome">SensorHome</a></li>
             <li><a href="#sensormenu">SensorMenu</a></li>
             <li><a href="#carmenu">CarMenu</a></li>
@@ -55,6 +56,7 @@
             <tr><td><a href="#obdhome">OBDHome</a></td><td><code>obdHome</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>BottomBar OBD</td></tr>
             <tr><td><a href="#obdmenu">OBDMenu</a></td><td><code>obdMenu</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>OBDHome "Dashboards" card, MainMenu OBD panel, BottomBar OBD via <code>lastOBDPage</code></td></tr>
             <tr><td><a href="#obddiagnostics">OBDDiagnostics</a></td><td><code>obdDiagnostics</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>OBDHome "Trouble Codes" card, BottomBar OBD via <code>lastOBDPage</code></td></tr>
+            <tr><td><a href="#triphistory">TripHistory</a></td><td><code>tripHistory</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>OBDHome "Trip History" card, Black Box settings card, BottomBar OBD via <code>lastOBDPage</code></td></tr>
             <tr><td><a href="#sensorhome">SensorHome</a></td><td><code>sensorHome</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>BottomBar Sensor button</td></tr>
             <tr><td><a href="#sensormenu">SensorMenu</a></td><td><code>sensorMenu</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>SensorHome "Sensors" card, BottomBar Sensor via <code>lastSensorPage</code></td></tr>
             <tr><td><a href="#carmenu">CarMenu</a></td><td><code>carMenu</code></td><td><code>stackView</code> (required), <code>mainWindow</code> (plain)</td><td>SensorHome "3D View" card, BottomBar Sensor via <code>lastSensorPage</code></td></tr>
@@ -201,6 +203,7 @@
           <tbody>
             <tr><td>Dashboards</td><td>Live gauges &amp; parameters</td><td><code>pushSubpage("OBDMenu.qml")</code></td></tr>
             <tr><td>Trouble Codes</td><td>Read &amp; clear DTCs</td><td><code>pushSubpage("OBDDiagnostics.qml")</code></td></tr>
+            <tr><td>Trip History</td><td>"Recording this drive" / "<i>n</i> drives logged" / "Black box drive logs"</td><td><code>pushSubpage("TripHistory.qml")</code></td></tr>
           </tbody>
         </table>
 
@@ -269,6 +272,15 @@
 
         <h3>Backend managers used</h3>
         <p><code>obdManager</code> only.</p>
+
+        <!-- TripHistory -->
+        <h2 id="triphistory">TripHistory.qml</h2>
+
+        <p><span class="file-path">frontend/TripHistory.qml</span> is the black box viewer, reached from the OBD Home "Trip History" card (and the Black Box settings card). Two panels: the <strong>drive list</strong> on the left (newest first; the trip being recorded on top with a <code>LIVE</code> badge, a trip closed after a power cut with <code>RECOVERED</code>; each row shows the start, duration, distance and max speed) under a recording pill (<code>REC m:ss · samples</code>, "Waiting for engine", or "Off"), with the drive count and storage used against the cap in the footer and a <strong>Folder</strong> button on desktop. The <strong>selected drive</strong> on the right: start &rarr; end, vehicle / VIN, eight stat tiles (duration, distance, max speed, max RPM, peak coolant, voltage range, fuel used, samples · PIDs), a chip row of every parameter recorded in that drive, a <code>Canvas</code> chart of the chosen parameter (min&ndash;max band per bucket and the bucket average, time axis in m:ss) with its min / avg / max / count line, the first events (dropouts, MIL, DTCs), and the CSV path. Buttons: <strong>End trip</strong> (open trip), <strong>Export</strong> (copies the CSV + JSON to <code>Downloads/OCTAVE-trips/</code>; the result shows in place of the path for a few seconds) and <strong>Delete</strong> (confirm <code>Dialog</code>).</p>
+        <p>Everything is asynchronous: selecting a drive calls <code>tripRecorder.requestDetail(id)</code> and <code>requestSeries(id, param, 360)</code> and the page fills in on <code>detailReady</code> / <code>seriesReady</code>; the live trip re-requests both every 5 s while shown. The parameter defaults to <code>SPEED</code>, then <code>RPM</code>, then the first recorded one; titles and units come from <code>OBDParameterModel.allParameters</code>.</p>
+
+        <h3>Backend managers used</h3>
+        <p><code>tripRecorder</code> (<code>trips</code>, <code>recording</code>, <code>currentTripStartMs</code>, <code>currentSampleCount</code>, <code>storageBytes</code>, <code>canOpenFolder</code>, <code>refresh()</code>, <code>requestDetail()</code>, <code>requestSeries()</code>, <code>endTripNow()</code>, <code>exportTrip()</code>, <code>deleteTrip()</code>, <code>openHistoryFolder()</code>), <code>settingsManager</code> (<code>blackBoxMaxMB</code>), <code>OBDParameterModel</code>.</p>
 
         <!-- SensorHome -->
         <h2 id="sensorhome">SensorHome.qml</h2>

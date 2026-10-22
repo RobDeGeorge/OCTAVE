@@ -9,6 +9,9 @@ Item {
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
 
     id: pageRoot
+    // Set by the Sidebar layout; other layouts leave it null and the Black
+    // Box card falls back to the attached ApplicationWindow
+    property var mainWindow: null
 
     // Expose Flickable properties for SettingsMenu.qml scroll rail
     property alias contentHeight: rootFlickable.contentHeight
@@ -76,20 +79,176 @@ Item {
               if (!Array.isArray(saved) || saved.length === 0) return {}
               return { state: saved.length === 1 ? (saved[0].name || "1 saved") : saved.length + " saved" }
           } },
-        { cardId: "obd_tuning", title: "Tuning", component: tuningContent,
-          summary: function() {
-              if (!settingsManager) return {}
-              var retries = settingsManager.obdAutoReconnectAttempts
-              return { state: (settingsManager.obdFastMode ? "Fast" : "Standard")
-                              + (retries > 0 ? " · " + retries + "×" : "") }
-          } },
         { cardId: "obd_parameters", title: "Parameters", component: parametersContent,
           summary: function() {
               if (!settingsManager) return {}
               var n = (settingsManager.homeOBDParameters || []).length
               return { state: n + (n === 1 ? " gauge" : " gauges") }
+          } },
+        { cardId: "obd_black_box", title: "Black Box", component: blackBoxContent,
+          summary: function() {
+              if (typeof tripRecorder === "undefined" || !tripRecorder || !settingsManager) return {}
+              if (!settingsManager.blackBoxEnabled) return { state: "Off" }
+              if (tripRecorder.recording)
+                  return { state: "Recording", active: true, status: App.Style.statusConnected }
+              var n = tripRecorder.trips.length
+              return { state: n + (n === 1 ? " drive" : " drives") }
           } }
     ]
+
+    // ── Black box (TripRecorder) card ─────────────────────────────────
+    // Recording on/off, the background PID sweep, the on-disk cap, what is
+    // stored where, and the way to the Trip History page / the files.
+    Component {
+        id: blackBoxContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+
+            readonly property bool recorderReady: typeof tripRecorder !== "undefined" && tripRecorder !== null
+            property bool clearArmed: false
+
+            function fmtBytes(b) {
+                b = b || 0
+                if (b >= 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + " MB"
+                if (b >= 1024) return Math.round(b / 1024) + " KB"
+                return b + " B"
+            }
+
+            SettingsToggle {
+                text: "Record every drive"
+                compact: true
+                Layout.fillWidth: false
+                Layout.alignment: Qt.AlignLeft
+                checked: settingsManager ? settingsManager.blackBoxEnabled : true
+                onToggled: function(checked) { if (settingsManager) settingsManager.save_black_box_enabled(checked) }
+            }
+            SettingDescription {
+                text: "Every OBD reading of every drive goes into the black box database, and each drive is written out as a CSV + JSON file when it ends"
+            }
+
+            SettingsDivider {}
+
+            SettingsToggle {
+                text: "Record all supported PIDs"
+                compact: true
+                Layout.fillWidth: false
+                Layout.alignment: Qt.AlignLeft
+                checked: settingsManager ? settingsManager.blackBoxSweepAll : true
+                onToggled: function(checked) { if (settingsManager) settingsManager.save_black_box_sweep_all(checked) }
+            }
+            SettingDescription {
+                text: "Also polls parameters that are not on screen, one per pass of the live gauges, so the record is complete without slowing them"
+            }
+
+            SettingsDivider {}
+
+            SettingLabel { text: "Storage cap" }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.overallSpacing
+                SettingsSlider {
+                    id: blackBoxCapSlider
+                    Layout.fillWidth: true
+                    from: 50
+                    to: 5000
+                    stepSize: 50
+                    value: settingsManager ? settingsManager.blackBoxMaxMB : 500
+                    valueDisplay: Math.round(value) + " MB"
+                    onMoved: if (settingsManager) settingsManager.save_black_box_max_mb(Math.round(value))
+                }
+                Text {
+                    text: Math.round(blackBoxCapSlider.value) + " MB"
+                    color: App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.overallText
+                    font.family: App.Style.fontFamily
+                    font.bold: true
+                    Layout.preferredWidth: dp(80)
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+            SettingDescription {
+                text: "The oldest drives are deleted first once the database and trip files pass this size"
+            }
+
+            SettingsDivider {}
+
+            SettingLabel { text: "Status" }
+            Text {
+                Layout.fillWidth: true
+                text: !parent.recorderReady ? "Trip recorder unavailable"
+                    : tripRecorder.recording
+                        ? "Recording · " + tripRecorder.currentSampleCount + " samples this drive"
+                        : (settingsManager && settingsManager.blackBoxEnabled ? "Waiting for the engine" : "Off")
+                color: App.Style.primaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.85
+                font.family: App.Style.fontFamily
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: parent.recorderReady
+                text: parent.recorderReady
+                      ? tripRecorder.trips.length + (tripRecorder.trips.length === 1 ? " drive · " : " drives · ")
+                        + parent.fmtBytes(tripRecorder.storageBytes) + " used"
+                      : ""
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.8
+                font.family: App.Style.fontFamily
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: parent.recorderReady
+                text: parent.recorderReady ? tripRecorder.tripsDir : ""
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.7
+                font.family: App.Style.fontFamily
+                wrapMode: Text.WrapAnywhere
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: parent.recorderReady && tripRecorder.lastError !== ""
+                text: parent.recorderReady ? tripRecorder.lastError : ""
+                color: App.Style.statusDisconnected
+                font.pixelSize: App.Spacing.overallText * 0.75
+                font.family: App.Style.fontFamily
+                wrapMode: Text.WordWrap
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.overallSpacing
+                SettingsButton {
+                    text: "Trip history"
+                    enabled: parent.parent.recorderReady
+                    onClicked: {
+                        var win = pageRoot.mainWindow || pageRoot.ApplicationWindow.window
+                        if (win && typeof win.navigateTo === "function") win.navigateTo("TripHistory.qml")
+                    }
+                }
+                SettingsButton {
+                    text: "Open folder"
+                    visible: parent.parent.recorderReady && tripRecorder.canOpenFolder
+                    onClicked: tripRecorder.openHistoryFolder()
+                }
+                SettingsButton {
+                    text: parent.parent.clearArmed ? "Tap again to clear" : "Clear history"
+                    buttonColor: parent.parent.clearArmed ? App.Style.statusDisconnected : App.Style.accent
+                    enabled: parent.parent.recorderReady && tripRecorder.trips.length > 0
+                    onClicked: {
+                        if (parent.parent.clearArmed) {
+                            tripRecorder.clearHistory()
+                            parent.parent.clearArmed = false
+                        } else {
+                            parent.parent.clearArmed = true
+                            clearArmTimer.restart()
+                        }
+                    }
+                }
+                Timer { id: clearArmTimer; interval: 4000; onTriggered: parent.parent.clearArmed = false }
+            }
+        }
+    }
 
     // ── Card body components — shared between the Flickable rendering (below)
     //    and the SettingsCardPopup in the Sidebar layout.
@@ -332,6 +491,10 @@ Item {
                 }
             }
 
+            SettingDescription {
+                text: "Tap status bar to reconnect"
+            }
+
             // ── Vehicle identity (VIN read at connect, Mode 09 PID 02) ──
             SettingLabel {
                 text: "Vehicle"
@@ -356,6 +519,82 @@ Item {
                 font.family: App.Style.fontFamily
                 wrapMode: Text.WrapAnywhere
             }
+
+            SettingsDivider {}
+
+            // Fast Mode Toggle
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.rowSpacing
+
+                SettingsToggle {
+                    text: "Fast mode"
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    checked: settingsManager ? settingsManager.obdFastMode : true
+
+                    onToggled: function(checked) {
+                        if (settingsManager) {
+                            settingsManager.save_obd_fast_mode(checked)
+                        }
+                    }
+                }
+
+                SettingDescription {
+                    text: "Faster polling, may not work with all vehicles"
+                }
+            }
+
+            SettingsDivider {}
+
+            // Auto-Reconnect Attempts
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.rowSpacing
+
+                SettingLabel {
+                    text: "Reconnect Retries"
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.overallSpacing
+
+                    SettingsSlider {
+                        id: autoReconnectSlider
+                        Layout.fillWidth: true
+                        from: 0
+                        to: 10
+                        stepSize: 1
+                        value: settingsManager ? settingsManager.obdAutoReconnectAttempts : 0
+
+                        valueDisplay: value === 0 ? "Off" : value.toString()
+
+                        onMoved: {
+                            if (settingsManager) {
+                                settingsManager.save_obd_auto_reconnect_attempts(Math.round(value))
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: autoReconnectSlider.value === 0 ? "Off" : autoReconnectSlider.value.toString()
+                        color: App.Style.primaryTextColor
+                        font.pixelSize: App.Spacing.overallText
+                        font.family: App.Style.fontFamily
+                        font.bold: true
+                        Layout.preferredWidth: dp(30)
+                        horizontalAlignment: Text.AlignRight
+                    }
+                }
+
+                SettingDescription {
+                    text: "Retry attempts after disconnect (0 = off)"
+                }
+            }
+
+            SettingsDivider {}
 
             // ── Live OBD log ──────────────────────────────────
             SettingLabel {
@@ -428,10 +667,6 @@ Item {
                     running: deviceNotFoundNotification.visible
                     onTriggered: deviceNotFoundNotification.close()
                 }
-            }
-
-            SettingDescription {
-                text: "Tap status bar to reconnect"
             }
         }
     }
@@ -754,115 +989,6 @@ Item {
     }
 
     Component {
-        id: tuningContent
-        ColumnLayout {
-            width: parent ? parent.width : 0
-            spacing: App.Spacing.sectionSpacing
-
-            // Fast Mode Toggle
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingsToggle {
-                    text: "Fast mode"
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    checked: settingsManager ? settingsManager.obdFastMode : true
-
-                    onToggled: function(checked) {
-                        if (settingsManager) {
-                            settingsManager.save_obd_fast_mode(checked)
-                        }
-                    }
-                }
-
-                SettingDescription {
-                    text: "Faster polling, may not work with all vehicles"
-                }
-            }
-
-            SettingsDivider {}
-
-            // Auto-Reconnect Attempts
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingLabel {
-                    text: "Reconnect Retries"
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing
-
-                    SettingsSlider {
-                        id: autoReconnectSlider
-                        Layout.fillWidth: true
-                        from: 0
-                        to: 10
-                        stepSize: 1
-                        value: settingsManager ? settingsManager.obdAutoReconnectAttempts : 0
-
-                        valueDisplay: value === 0 ? "Off" : value.toString()
-
-                        onMoved: {
-                            if (settingsManager) {
-                                settingsManager.save_obd_auto_reconnect_attempts(Math.round(value))
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: autoReconnectSlider.value === 0 ? "Off" : autoReconnectSlider.value.toString()
-                        color: App.Style.primaryTextColor
-                        font.pixelSize: App.Spacing.overallText
-                        font.family: App.Style.fontFamily
-                        font.bold: true
-                        Layout.preferredWidth: dp(30)
-                        horizontalAlignment: Text.AlignRight
-                    }
-                }
-
-                SettingDescription {
-                    text: "Retry attempts after disconnect (0 = off)"
-                }
-            }
-
-            SettingsDivider {}
-
-            // OBD Card Style
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingsToggle {
-                    id: obdCardStyleToggle
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Circular gauges"
-                    checked: settingsManager ? settingsManager.get_setting_with_default("obdCardStyleCircular", false) : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        if (settingsManager) {
-                            settingsManager.save_setting("obdCardStyleCircular", checked)
-                        }
-                    }
-                }
-
-                SettingDescription {
-                    text: "Square cards or circular gauges (OBD page only)"
-                }
-            }
-        }
-    }
-
-    Component {
         id: parametersContent
         ColumnLayout {
             id: parametersCard
@@ -919,6 +1045,35 @@ Item {
                 if (typeof obdManager !== "undefined" && obdManager && obdManager.setParameterDemand)
                     obdManager.setParameterDemand("settings", []);
             }
+
+            // OBD Card Style
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.rowSpacing
+
+                SettingsToggle {
+                    id: obdCardStyleToggle
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: "Circular gauges"
+                    checked: settingsManager ? settingsManager.get_setting_with_default("obdCardStyleCircular", false) : false
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+
+                    onToggled: function(checked) {
+                        if (settingsManager) {
+                            settingsManager.save_setting("obdCardStyleCircular", checked)
+                        }
+                    }
+                }
+
+                SettingDescription {
+                    text: "Square cards or circular gauges (OBD page only)"
+                }
+            }
+
+            SettingsDivider {}
 
             // ── Parameter count ──────────────────────────────────
             Text {

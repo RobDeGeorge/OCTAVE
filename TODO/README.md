@@ -34,7 +34,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 
 | File | Goal | Effort | Needs |
 |---|---|---|---|
-| [trip-history.md](trip-history.md) | Record drives and engine health on the box and show a Trip History page | M–L | desktop (sim), Jeep |
+| [trip-history.md](trip-history.md) | Health trends across the drives the black box now records (recorder + Trip History page shipped 2026-10-21) | M | desktop (sim), Jeep |
 | [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML so first launch doesn't stall | L | Win11 VM, Pi, S22 |
 | [user-primitives.md](user-primitives.md) | Save and share your own styled gauges and gauge groups | L (code widgets XL) | desktop |
 | [backend-service-split.md](backend-service-split.md) | Headless core process any frontend connects to | M–L … XL | desktop, Pi |

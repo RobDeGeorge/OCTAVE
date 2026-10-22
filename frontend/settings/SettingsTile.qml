@@ -64,15 +64,17 @@ Rectangle {
             Layout.fillWidth: true
             text: tile.title
             color: App.Style.primaryTextColor
-            // About fourteen characters ("Gesture Sensor") fit.
+            // About fourteen characters ("Gesture Sensor") fit on a line;
+            // longer titles ("Library & Playback") wrap to a second.
             font.pixelSize: Math.max(App.Spacing.overallText * 0.8,
                 Math.min(App.Spacing.overallText * 1.5, (tile.width - 2 * tile._pad) / 9))
             font.family: App.Style.fontFamily
             font.weight: Font.Medium
             font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
             font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
+            wrapMode: Text.WordWrap
             elide: Text.ElideRight
-            maximumLineCount: 1
+            maximumLineCount: 2
         }
 
         RowLayout {

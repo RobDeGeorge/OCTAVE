@@ -383,6 +383,7 @@ ApplicationWindow {
             "OBDHome.qml":          { file: "OBDHome.qml",          props: { stackView: stackView, mainWindow: mainWindow } },
             "OBDMenu.qml":          { file: "OBDMenu.qml",          props: { stackView: stackView, mainWindow: mainWindow } },
             "OBDDiagnostics.qml":   { file: "OBDDiagnostics.qml",   props: { stackView: stackView, mainWindow: mainWindow } },
+            "TripHistory.qml":      { file: "TripHistory.qml",      props: { stackView: stackView, mainWindow: mainWindow } },
             "SettingsMenu.qml":     { file: "SettingsMenu.qml",     props: { stackView: stackView, mainWindow: mainWindow, initialSection: "displaySettings" } },
             "PhoneMirrorView.qml":  { file: "PhoneMirrorView.qml",  props: { stackView: stackView } },
             "AndroidAutoView.qml":  { file: "AndroidAutoView.qml",  props: { stackView: stackView } },

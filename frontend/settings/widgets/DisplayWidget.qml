@@ -59,11 +59,6 @@ Item {
             }
 
             WidgetChip {
-                text: "Window"
-                onClicked: widgetRoot.navigateToSubSection("Window")
-            }
-
-            WidgetChip {
                 text: "Appearance"
                 onClicked: widgetRoot.navigateToSubSection("Appearance")
             }

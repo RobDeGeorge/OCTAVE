@@ -219,7 +219,7 @@ Item {
                     model: [
                         {label: "Driver door", key: "driverDoorOpen"},
                         {label: "Passenger door", key: "passengerDoorOpen"},
-                        {label: "Rear glass", key: "rearGlassOpen"},
+                        {label: "Rear glass", key: "rearGlassOpen", glass: true},
                         {label: "Tailgate", key: "tailgateOpen"},
                         {label: "Hood", key: "hoodOpen"},
                         {label: "Headlights", key: "headlightsOn"},
@@ -230,6 +230,7 @@ Item {
                     delegate: Button {
                         required property var modelData
                         objectName: "jeepControl_" + modelData.key
+                        visible: !modelData.glass || jeep.hasRearGlass
                         text: modelData.label
                         checkable: true
                         checked: jeep[modelData.key]

@@ -58,12 +58,7 @@ Item {
 
             WidgetChip {
                 text: "Library"
-                onClicked: widgetRoot.navigateToSubSection("Library")
-            }
-
-            WidgetChip {
-                text: "Playback"
-                onClicked: widgetRoot.navigateToSubSection("Playback")
+                onClicked: widgetRoot.navigateToSubSection("Library & Playback")
             }
 
             WidgetChip {

@@ -25,19 +25,13 @@ Flickable {
     property int _albumCount: -1
 
     property var tileModel: [
-        { cardId: "media_library", title: "Library", component: libraryContent,
+        { cardId: "media_library", title: "Library & Playback", component: libraryContent,
           summary: function() {
               if (!settingsManager) return {}
               var path = String(settingsManager.mediaFolder || "").replace(/[\\/]+$/, "")
               var name = path.substring(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1)
-              if (!name) return { state: "No folder" }
-              return { state: pageRoot._albumCount >= 0 ? pageRoot._albumCount + " albums" : name }
-          } },
-        { cardId: "media_playback", title: "Playback", component: playbackContent,
-          summary: function() {
-              if (!settingsManager) return {}
-              return { state: (settingsManager.autoPlayOnStartup ? "Autoplay" : "Manual")
-                              + " · " + Math.round(settingsManager.startUpVolume * 100) + "%" }
+              var lib = !name ? "No folder" : pageRoot._albumCount >= 0 ? pageRoot._albumCount + " albums" : name
+              return { state: lib + " · " + (settingsManager.autoPlayOnStartup ? "Autoplay" : "Manual") }
           } },
         { cardId: "media_now_playing", title: "Now Playing", component: nowPlayingContent,
           summary: function() {
@@ -99,7 +93,7 @@ Flickable {
     // ── Card body components — shared between the Flickable rendering (below)
     //    and the SettingsCardPopup in the Sidebar layout.
 
-    // ─────────────────────────────────────────── Library
+    // ─────────────────────────────────────────── Library & Playback
     Component {
         id: libraryContent
         ColumnLayout {
@@ -159,32 +153,8 @@ Flickable {
                             }
                         }
                     }
-
-                    App.TerminalFeedback {
-                        id: scanTerminal
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: pageRoot.dp(300)
-                        Layout.topMargin: App.Spacing.rowSpacing
-                        title: "Library Scan Terminal Output"
-
-                        Connections {
-                            target: mediaManager
-                            function onScanProgress(message) {
-                                scanTerminal.appendLine(message)
-                            }
-                        }
-                    }
                 }
             }
-        }
-    }
-
-    // ─────────────────────────────────────────── Playback
-    Component {
-        id: playbackContent
-        ColumnLayout {
-            width: parent ? parent.width : 0
-            spacing: App.Spacing.sectionSpacing
 
             SettingCategory {
                 title: "Startup Volume"
@@ -337,6 +307,20 @@ Flickable {
                 }
             }
 
+            // Scan output last, like the OBD connection log: it is tall.
+            App.TerminalFeedback {
+                id: scanTerminal
+                Layout.fillWidth: true
+                Layout.preferredHeight: pageRoot.dp(300)
+                title: "Library Scan Terminal Output"
+
+                Connections {
+                    target: mediaManager
+                    function onScanProgress(message) {
+                        scanTerminal.appendLine(message)
+                    }
+                }
+            }
         }
     }
 

@@ -206,6 +206,11 @@ signals:
     // through this one signal instead of a signal per parameter; QML's
     // OBDParameterModel routes it into paramValues by id.
     void obdParameterChanged(const QString &paramId, float value);
+    // Every decoded value, base or multi-value, keyed by its OBDParameterModel
+    // id ("COOLANT_TEMP", "BOOST_PRESSURE_A", ...). One emission per reading,
+    // in arrival order; the black-box recorder (TripRecorder) taps this so it
+    // never has to know about the 84 per-parameter signals above.
+    void parameterSampled(const QString &paramId, float value);
     void vinChanged(const QString &vin);
 
     // Live log line for the QML OBD page's connection log/terminal element.
@@ -238,11 +243,23 @@ public:
     // 250 ms debounce.
     Q_INVOKABLE void setParameterDemand(const QString &consumer, const QStringList &paramIds);
 
+    // Low-priority demand: ids wanted "eventually", not on screen. They are
+    // polled one PID per pass of the foreground list (half the bandwidth when
+    // nothing but the heartbeat is in the foreground), so a long background
+    // sweep never slows the live gauges. Same consumer / empty-list rules as
+    // setParameterDemand(); ids already in the foreground are polled there.
+    Q_INVOKABLE void setBackgroundDemand(const QString &consumer, const QStringList &paramIds);
+
     // The poll list for a demand set (consumer -> parameter ids) and this
     // session's scan result: what buildPidsToWatch() uses. Static so the
     // rules can be tested without a connection.
     static QList<PidKey> pidsToWatch(const QHash<QString, QSet<QString>> &demand,
                                      const QStringList &vehicleSupported);
+    // The background poll list for a background demand set: the same rules,
+    // minus the heartbeat and minus every PID already in `foreground`.
+    static QList<PidKey> backgroundPidsToWatch(const QHash<QString, QSet<QString>> &demand,
+                                               const QList<PidKey> &foreground,
+                                               const QStringList &vehicleSupported);
 
     // Use `port` instead of the saved obdBluetoothPort, without writing it
     // to settings (dev tooling points this at the simulated adapter, see
@@ -439,8 +456,13 @@ private:
     // session's scan result, plus the heartbeat. Used on connect and live
     // from applyPollList().
     QList<PidKey> buildPidsToWatch() const;
+    QList<PidKey> buildBackgroundPids(const QList<PidKey> &foreground) const;
 
     QHash<QString, QSet<QString>> m_paramDemand;
+    QHash<QString, QSet<QString>> m_backgroundDemand;
+    // signalName ("coolantTempChanged") -> parameter id ("COOLANT_TEMP"),
+    // from the PID table; feeds parameterSampled()
+    QHash<QString, QString> m_signalToParamId;
     QTimer m_demandDebounce;
     QStringList m_vehicleSupportedParameters;
     bool m_vehicleScanComplete = false;
@@ -644,6 +666,11 @@ private:
     bool m_androidElmInitialized = false;
     QList<PidKey> m_androidEnabledPids;
     int m_androidPollIndex = 0;
+    // Background sweep (see setBackgroundDemand): one of these after each
+    // full pass of m_androidEnabledPids
+    QList<PidKey> m_androidBackgroundPids;
+    int m_androidBackgroundIndex = 0;
+    bool m_androidBackgroundNext = false;
     bool m_androidPolling = false;
     int m_androidStaleCount = 0;
     int m_androidReconnectAttempts = 0;
@@ -677,7 +704,7 @@ public:
     void setPort(const QString &portName);
     void setFastMode(bool fast);
     void setTimeout(int seconds);
-    void setPidsToWatch(const QList<PidKey> &pids);
+    void setPidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background = {});
 
     // Extra transport for ports the serial / RFCOMM paths don't handle:
     // `claims` says whether it serves a port, `create` returns an unopened
@@ -720,7 +747,7 @@ public slots:
     void startPolling();
     void stopPolling();
     // Swap the poll list without reconnecting (settings toggles).
-    void updatePidsToWatch(const QList<PidKey> &pids);
+    void updatePidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background);
     void doReadDtc();
     void doReadCurrentDtc();
     void doClearDtc();
@@ -759,9 +786,16 @@ private:
     bool m_fastMode = true;
     int m_timeout = 5;
 
-    // PIDs to poll
+    // PIDs to poll: the foreground list round-robin, with one background
+    // PID slipped in after every full pass (or plain round-robin over the
+    // background list when the foreground is empty)
     QList<PidKey> m_pidsToWatch;
     int m_currentPidIndex = 0;
+    QList<PidKey> m_backgroundPids;
+    int m_backgroundIndex = 0;
+    bool m_backgroundNext = false;
+    // The PID for this poll slot, advancing the cursors
+    PidKey nextPollPid();
 
     // Poll timer
     QTimer m_pollTimer;

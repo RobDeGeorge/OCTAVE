@@ -76,13 +76,32 @@ blender -b --python-exit-code 1 --python tools/vehicle/check_jeep_twin.py -- \
   --blend /new/candidate/jeep-twin.blend
 ```
 
-This is not the app export yet. It assumes a suspension lift and framed black
+## App export
+
+The app now shows the twin. `export_jeep_twin.py` poses a twin `.blend` at rest,
+bakes every object to world space, assigns each to the rig part of its nearest
+named ancestor (else the body), takes pivots from the twin's joints and writes
+the app's GLB set and `Rig.js`/`rig.json` through `rig_export.py`. There is no
+`rear_glass` part, and `bodyLift` raises the body-mounted lamps and steering box:
+
+```sh
+blender -b --python-exit-code 1 --python tools/vehicle/export_jeep_twin.py -- \
+  --blend dev/jeep-twin/<candidate>/jeep-twin.blend --output /new/dir/jeep_tj_2003.glb
+venv/bin/python tools/vehicle/check_jeep_asset.py /new/dir
+cp /new/dir/jeep_tj_2003.glb frontend/assets/ && cp /new/dir/jeep_tj/* frontend/assets/jeep_tj/
+```
+
+In the app the suspension, soft top and cabin are static body geometry; only the
+existing hinges, wheels and spinners move. Driveshafts keep the twin's rigid lift
+and are not re-aimed at the axles.
+
+The twin itself still assumes a suspension lift and framed black
 squareback top pending confirmation. Links currently stretch under prescribed
 axle poses; the nine-pose sweep reports the maximum length error. Steering is a
 pose control, not the existing Qt linkage solver; driveshaft articulation and
 powertrain coupling remain unfinished. Wheels remain generic, shock dimensions
 are provisional, and the soft top does not yet fold. Do not certify the prototype
-as mechanically accurate or replace the app's GLBs with it.
+as mechanically accurate.
 
 Soft-top component layout is informed by the
 [Bestop TJ Supertop installation diagrams](https://www.bestop.com/wp-content/uploads/Installation%20Instructions/BDKW_51709-INS_001.pdf).

@@ -61,8 +61,12 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 0
-                Layout.preferredHeight: grid.tileHeight
-                Layout.maximumHeight: grid.tileHeight
+                // Tiles may span several rows (rowSpan in the model entry).
+                readonly property int span: modelData && modelData.rowSpan > 0 ? modelData.rowSpan : 1
+                readonly property real spanHeight: span * grid.tileHeight + (span - 1) * grid.rowSpacing
+                Layout.rowSpan: span
+                Layout.preferredHeight: spanHeight
+                Layout.maximumHeight: spanHeight
                 cardId: modelData && modelData.cardId !== undefined ? modelData.cardId : ""
                 title: modelData && modelData.title !== undefined ? modelData.title : ""
                 // `summary` is a function on the page's tileModel entry, so

@@ -18,8 +18,7 @@ Item {
     property var settingsMenu: null
     property var hubModel: []
 
-    // The grid always has this many rows, one section per column: 5x4 on
-    // desktop, 4x4 on Android (no Accessories).
+    // At most this many tiles per column, one section per column.
     readonly property int gridRows: 4
 
     function openTileId() {
@@ -51,12 +50,12 @@ Item {
             info.status = "#FF9800"
         return info
     }
-    // Each section fills one column, top to bottom. A section with fewer
-    // tiles than gridRows (Media) goes after the full ones, so About's single
-    // tile finishes that column and lands in the bottom-right corner.
+    // Each section fills one column, top to bottom, in page order. About's
+    // single tile finishes the last column (Device) when it has room, so it
+    // lands in the bottom-right corner.
     readonly property var sectionColumns: {
         var _ = _allPagesLoaded
-        var full = [], partial = [], about = null
+        var cols = [], about = null
         for (var i = 0; i < hubModel.length; i++) {
             var entry = hubModel[i]
             if (entry.section === "about") {
@@ -75,10 +74,8 @@ Item {
                 tiles.push({ cardId: t.cardId, title: t.title, summary: t.summary,
                              component: t.component, section: entry.section })
             }
-            var col = { name: entry.name, tiles: tiles }
-            if (tiles.length < gridRows) partial.push(col); else full.push(col)
+            cols.push({ name: entry.name, tiles: tiles })
         }
-        var cols = full.concat(partial)
         if (about) {
             var last = cols.length > 0 ? cols[cols.length - 1] : null
             if (last && last.tiles.length < gridRows) last.tiles.push(about)
@@ -86,10 +83,21 @@ Item {
         }
         return cols
     }
+    // A column with fewer than gridRows tiles stretches them to fill it, so
+    // short sections leave no gaps: the grid has gridSlots rows and each tile
+    // spans its share (12 divides evenly by 1-4 tiles per column).
+    readonly property int gridSlots: 12
     readonly property var allTiles: {
         var tiles = []
-        for (var i = 0; i < sectionColumns.length; i++)
-            tiles = tiles.concat(sectionColumns[i].tiles)
+        for (var i = 0; i < sectionColumns.length; i++) {
+            var col = sectionColumns[i].tiles
+            for (var j = 0; j < col.length; j++) {
+                var t = col[j]
+                tiles.push({ cardId: t.cardId, title: t.title, summary: t.summary,
+                             component: t.component, section: t.section,
+                             rowSpan: gridSlots / col.length })
+            }
+        }
         return tiles
     }
 
@@ -266,7 +274,7 @@ Item {
             }
             z: 2
             tileModel: sidebarLayout.allTiles
-            rows: sidebarLayout.gridRows
+            rows: sidebarLayout.gridSlots
             onTileSelected: function(cardId, rect) { sidebarLayout.selectTile(cardId, rect) }
         }
 

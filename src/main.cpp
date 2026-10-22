@@ -48,6 +48,7 @@
 // Phase 4 managers
 #include "managers/obdmanager.h"
 #include "managers/obdadapterfinder.h"
+#include "managers/triprecorder.h"
 #include "managers/esp32volumemanager.h"  // desktop-only; empty on Q_OS_MOBILE
 #include "managers/berryimumanager.h"     // desktop-only; empty on Q_OS_MOBILE
 #include "managers/gesturemanager.h"      // desktop-only; empty on Q_OS_MOBILE
@@ -242,6 +243,13 @@ int main(int argc, char *argv[])
     // Bluetooth OBD adapter discovery + pairing (the "Connect" sheet)
     OBDAdapterFinder obdAdapterFinder(&obdManager, &settingsManager);
     ctx->setContextProperty("obdAdapterFinder", &obdAdapterFinder);
+
+    // Trip Recorder — the black box: every OBD reading of every drive into
+    // <config>/history/blackbox.sqlite, one CSV + JSON per trip
+    TripRecorder tripRecorder(&settingsManager);
+    tripRecorder.attach(&obdManager);
+    tripRecorder.start();
+    ctx->setContextProperty("tripRecorder", &tripRecorder);
 
     // Hardware managers (USB-serial / I2C on desktop, stubbed on mobile via header).
     ESP32VolumeManager esp32VolumeManager;
@@ -581,6 +589,7 @@ int main(int argc, char *argv[])
         esp32VolumeManager.cleanup();
         berryIMU.cleanup();
         gestureSensor.cleanup();
+        tripRecorder.shutdown();   // closes the trip and writes its files before the adapter goes
         obdManager.close();
         downloadManager.cleanup();
         networkManager.cleanup();

@@ -1,57 +1,41 @@
-# Trip and health history on the box (first step toward car profiles)
+# Trip history: health trends across drives
 
-**Goal:** record each drive and the engine's long-term health numbers on the head unit, and show them on a Trip History page, with no network involved.
+**Goal:** show long-term engine health (coolant, voltage, fuel trims, oil temp) across weeks of recorded drives on top of the black box that now records every drive.
 
-**Status:** parked until after v1.0. No work started: OCTAVE has no trip or history recording today (`OBDManager` only exposes live values plus a few counters like `distanceWithMIL`), and no GPS source on the Jeep box.
+**Status:** parked until after v1.0. The recorder itself shipped on 2026-10-21: `TripRecorder` + `TripStore` (`src/managers/triprecorder.{h,cpp}`, `tripstore.{h,cpp}`) record every OBD reading of every drive into `<config>/history/blackbox.sqlite` and write one CSV + JSON per trip to `history/trips/`; `frontend/TripHistory.qml` lists drives, shows per-drive stats and a per-parameter chart, exports and deletes; settings `blackBoxEnabled` / `blackBoxSweepAll` / `blackBoxMaxMB`; `tst_triprecorder` covers it. What is left is the cross-drive view.
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-21
 
 ---
 
 ## Why it's parked
 
-v1.0 first. It's also a new persistent data store on a daily-driven box, so it needs care (SD-card writes, size caps, power cut mid-write).
+v1.0 first. The per-drive data is on the box now, so this is a query + a page, with no new storage to get right.
 
 ## Plan
 
-### 1. `TripRecorder` manager (C++)
+### 1. Health aggregates (C++)
 
-**Effort:** M–L
+**Effort:** M — desktop (sim) for the query, Jeep for the numbers
 
-1. New `src/managers/triprecorder.{h,cpp}`, listed in `CMakeLists.txt`, instantiated in `src/main.cpp`, registered as the `tripRecorder` context property.
-2. **Demand:** polling is demand-driven, so the recorder must register its own PIDs with `obdManager.setParameterDemand("tripRecorder", ids)` (`obdmanager.h:234`), or nothing gets polled when no OBD page is open. Keep the list short (speed, RPM, coolant, oil temp, voltage, fuel level, short/long fuel trims, engine load) so it doesn't slow the live gauges; check poll rate on the Orange Pi.
-3. **Inputs:** connect to `OBDManager`'s per-parameter signals (`speedMPHChanged`, `rpmChanged`, `coolantTempChanged`, `engineOilTempChanged`, `voltageChanged`, `fuelLevelChanged`, `shortTermFuelTrimChanged`, `longTermFuelTrimChanged`, `engineLoadChanged`, ...) and `connectionStatusChanged`.
-4. **Trip detection:** start when connected and RPM > 0; end after N minutes of RPM 0 or a disconnect (a short OBD dropout must not split a trip).
-5. **Per trip, summarise:** start/end time, duration, distance (integrate speed), max speed, peak coolant and oil temps, min/max voltage, fuel used (fuel-level delta). Store the summary, plus a downsampled time series (e.g. 1 sample / 5 s).
-6. **Storage:** `<config>/history/` (`SettingsManager::getAppDataDir()`), one JSON file per trip plus a daily health-aggregate file. Write with the same atomic-write approach `SettingsManager` uses. Cap total size; downsample, then delete, the oldest trips.
-7. **QML API:** `trips` (list of summaries), `loadTrip(id)` (series), `healthTrend(paramId, days)`, `deleteTrip(id)`, `clearHistory()`, `exportHistory()` (to Downloads, like `DiagnosticsManager::exportLogs()`).
+1. `TripStore::healthTrend(paramId, days)`: one row per trip (`trips.start_ms`, min / max / avg of the parameter, from `samples` or from the stored summary JSON) for the last N days; add a `TripRecorder::requestHealthTrend(paramId, days)` → `healthTrendReady(paramId, rows)` pair like `requestSeries`.
+2. Derived numbers worth a trend: warm-up time (seconds from trip start until `COOLANT_TEMP` ≥ 80 °C), idle voltage (`CONTROL_MODULE_VOLTAGE` while `RPM` < 1000), long-term fuel trim average. Compute per trip at `endTrip()` and keep them in the summary JSON so the trend query is a JSON read, not a full scan.
+3. Test in `tst_triprecorder`: three fake trips, the trend rows come back in date order with the right peaks.
 
-### 2. Settings
+### 2. Trends view (QML)
 
-**Effort:** S
+**Effort:** M — desktop (sim)
 
-`tripHistoryEnabled` (default on, local only), `tripHistoryRetentionDays`, `tripHistoryMaxMB` in `buildDefaultSettings()` / the settings registry, with an OBD settings card (toggle, retention, "Clear history").
+A "Trends" tab or section on `TripHistory.qml`: parameter chips, a bar/line per trip over the chosen window (7 / 30 / 90 days), the derived numbers above as small sparklines. Reuse the page's `Canvas` chart.
 
-### 3. Tests
-
-**Effort:** M
-
-`tests/cpp/tst_triprecorder.cpp`: drive the recorder with the simulated car (`tst_obdsim` pattern, `src/dev/carsim` scenarios); assert trip start/stop, a dropout not splitting a trip, summary maths, retention pruning, and a truncated file being skipped. Temp `XDG_CONFIG_HOME`.
-
-### 4. Trip History page
-
-**Effort:** M
-
-New page reached from `CarMenu.qml` or `OBDMenu.qml`: trip list (date, distance, duration, peaks), a trip detail view with `SparklineGauge`-style charts, and a health-trends view (coolant, voltage, fuel trims over weeks).
-
-### 5. Docs
+### 3. Docs
 
 **Effort:** S
 
-Wiki: new section on `obd-manager.html` (or its own page), `settings-reference.html`, `settings-manager.html`, `pages.html`, `signals-slots-reference.html`; rebuild the search index.
+`wiki/obd-manager.html#black-box`, `pages.html#triphistory`, `signals-slots-reference.html#tripRecorder`; rebuild the search index.
 
 ## Later (not planned yet)
 
-Once local history exists: shareable car cards and trip summaries exported as images, a gallery of shared dashboards (reusing `DashboardManager`'s export/import), and maybe a self-hostable, federated (ActivityPub) "OCTAVE hub" for car profiles. Anything online must be off by default, opt-in per category, stats-only, with privacy zones around home, never VIN/plates/speed traces publicly, and real deletion. It depends on `TODO/backend-service-split.md` (gateway) and a GPS source (`TODO/octave-companion-app.md`). Write it up as its own plan when step 4 above ships.
+Shareable car cards and trip summaries exported as images, a gallery of shared dashboards (reusing `DashboardManager`'s export/import), and maybe a self-hostable, federated (ActivityPub) "OCTAVE hub" for car profiles. Anything online must be off by default, opt-in per category, stats-only, with privacy zones around home, never VIN/plates/speed traces publicly, and real deletion. It depends on `TODO/backend-service-split.md` (gateway) and a GPS source (`TODO/octave-companion-app.md`). Write it up as its own plan when step 2 above ships.
 
-Delete this file when steps 1–5 have landed.
+Delete this file when steps 1–3 have landed.

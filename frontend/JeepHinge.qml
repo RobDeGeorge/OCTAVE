@@ -28,7 +28,7 @@ Node {
         id: loader
         // assetStore hands Assimp a real file (extracted from the APK on Android)
         // (null-guarded: at shutdown the backend drops assetStore before the scene dies)
-        source: assetStore ? assetStore.localUrl("jeep_tj/" + hinge.part.file) : ""
+        source: assetStore && hinge.part.file ? assetStore.localUrl("jeep_tj/" + hinge.part.file) : ""
         onStatusChanged: if (status === RuntimeLoader.Error) console.warn("Jeep asset:", source, errorString)
     }
 }

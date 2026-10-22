@@ -81,6 +81,11 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool obdFastMode READ obdFastMode NOTIFY obdFastModeChanged)
     Q_PROPERTY(int obdAutoReconnectAttempts READ obdAutoReconnectAttempts NOTIFY obdAutoReconnectAttemptsChanged)
     Q_PROPERTY(float fuelTankCapacity READ fuelTankCapacity NOTIFY fuelTankCapacityChanged)
+    // Black box (TripRecorder): record every drive, also sweep PIDs that are
+    // not on screen, and the on-disk cap for the history (database + files)
+    Q_PROPERTY(bool blackBoxEnabled READ blackBoxEnabled NOTIFY blackBoxEnabledChanged)
+    Q_PROPERTY(bool blackBoxSweepAll READ blackBoxSweepAll NOTIFY blackBoxSweepAllChanged)
+    Q_PROPERTY(int blackBoxMaxMB READ blackBoxMaxMB NOTIFY blackBoxMaxMBChanged)
     Q_PROPERTY(QVariantList homeOBDParameters READ homeOBDParameters NOTIFY homeOBDParametersChanged)
     Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)
     Q_PROPERTY(QVariantList directoryHistory READ directoryHistory NOTIFY directoryHistoryChanged)
@@ -197,6 +202,9 @@ public:
     bool obdFastMode() const;
     int obdAutoReconnectAttempts() const;
     float fuelTankCapacity() const;
+    bool blackBoxEnabled() const;
+    bool blackBoxSweepAll() const;
+    int blackBoxMaxMB() const;
     QVariantList homeOBDParameters() const;
     QVariantList customThemes() const;
     QVariantList directoryHistory() const;
@@ -303,6 +311,9 @@ signals:
     void obdFastModeChanged(bool value);
     void obdAutoReconnectAttemptsChanged(int value);
     void fuelTankCapacityChanged(float value);
+    void blackBoxEnabledChanged(bool value);
+    void blackBoxSweepAllChanged(bool value);
+    void blackBoxMaxMBChanged(int value);
     void obdParametersChanged();
     void homeOBDParametersChanged();
     void supportedOBDParametersChanged();
@@ -421,6 +432,9 @@ public slots:
     void save_obd_fast_mode(bool enabled);
     void save_obd_auto_reconnect_attempts(int attempts);
     void save_fuel_tank_capacity(float capacity);
+    void save_black_box_enabled(bool enabled);
+    void save_black_box_sweep_all(bool enabled);
+    void save_black_box_max_mb(int megabytes);
     void save_obd_parameter_enabled(const QString &parameter, bool enabled);
     void save_supported_obd_parameters(const QVariantList &parameters);
     void save_home_obd_parameters(const QVariantList &parameters);
@@ -620,6 +634,9 @@ private:
     int m_obdAutoReconnectAttempts = 0;
     QString m_mediaFolder;
     float m_fuelTankCapacity = 15.0f;
+    bool m_blackBoxEnabled = true;
+    bool m_blackBoxSweepAll = true;
+    int m_blackBoxMaxMB = 500;
     QVariantList m_homeObdParameters;
     QString m_bottomBarOrientation;
     bool m_showBottomBarMediaControls = true;

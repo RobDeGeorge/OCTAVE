@@ -30,6 +30,11 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
     , m_settingsManager(settingsManager)
 {
     buildSignalDispatch();
+    {
+        const auto &table = ELM327Protocol::pidTable();
+        for (auto it = table.constBegin(); it != table.constEnd(); ++it)
+            m_signalToParamId.insert(it.value().signalName, it.value().commandName);
+    }
 
     // Cache the latest status / detail / progress so the Q_PROPERTY readers
     // reflect whatever was last emitted (emit sites are numerous; hook once
@@ -453,6 +458,9 @@ void OBDManager::emitParameterSignal(const QString &signalName, float value)
     auto it = m_signalDispatch.constFind(signalName);
     if (it != m_signalDispatch.constEnd())
         it.value()(value);
+    const auto id = m_signalToParamId.constFind(signalName);
+    if (id != m_signalToParamId.constEnd())
+        emit parameterSampled(id.value(), value);
 }
 
 // ---------------------------------------------------------------------------
@@ -654,8 +662,9 @@ void OBDManager::startConnection()
     m_worker->setTimeout(m_connectionTimeout);
 
     const QList<PidKey> pidsToWatch = buildPidsToWatch();
-    m_hasActiveWatchers = !pidsToWatch.isEmpty();
-    m_worker->setPidsToWatch(pidsToWatch);
+    const QList<PidKey> backgroundPids = buildBackgroundPids(pidsToWatch);
+    m_hasActiveWatchers = !pidsToWatch.isEmpty() || !backgroundPids.isEmpty();
+    m_worker->setPidsToWatch(pidsToWatch, backgroundPids);
 
     // No parent: cleanupWorkerThread() hands the thread its own deleteLater,
     // so a busy thread is never destroyed with the manager while running
@@ -845,6 +854,46 @@ void OBDManager::setParameterDemand(const QString &consumer, const QStringList &
     m_demandDebounce.start();
 }
 
+void OBDManager::setBackgroundDemand(const QString &consumer, const QStringList &paramIds)
+{
+    QSet<QString> ids;
+    for (const QString &id : paramIds) {
+        if (!id.isEmpty())
+            ids.insert(id);
+    }
+    if (ids.isEmpty()) {
+        if (m_backgroundDemand.remove(consumer) == 0)
+            return;
+    } else {
+        if (m_backgroundDemand.value(consumer) == ids)
+            return;
+        m_backgroundDemand.insert(consumer, ids);
+    }
+    m_demandDebounce.start();
+}
+
+QList<PidKey> OBDManager::backgroundPidsToWatch(const QHash<QString, QSet<QString>> &demand,
+                                                const QList<PidKey> &foreground,
+                                                const QStringList &vehicleSupported)
+{
+    if (demand.isEmpty())
+        return {};
+    QList<PidKey> pids = pidsToWatch(demand, vehicleSupported);
+    // pidsToWatch() always appends the heartbeat; the foreground list has it
+    const QSet<QString> supported(vehicleSupported.cbegin(), vehicleSupported.cend());
+    const PidKey heartbeat = (supported.isEmpty() || supported.contains(QStringLiteral("RPM")))
+                                 ? kRpmKey : kElmVoltageKey;
+    pids.removeAll(heartbeat);
+    for (const PidKey &fg : foreground)
+        pids.removeAll(fg);
+    return pids;
+}
+
+QList<PidKey> OBDManager::buildBackgroundPids(const QList<PidKey> &foreground) const
+{
+    return backgroundPidsToWatch(m_backgroundDemand, foreground, m_vehicleSupportedParameters);
+}
+
 void OBDManager::setVehicleSupport(const QStringList &names, bool complete)
 {
     QStringList sorted = names;
@@ -974,6 +1023,7 @@ void OBDManager::onWorkerExtendedData(const QString &paramId, float value)
 {
     m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
     emit obdParameterChanged(paramId, value);
+    emit parameterSampled(paramId, value);
 }
 
 void OBDManager::onWorkerVin(const QString &vin)
@@ -1175,10 +1225,11 @@ void OBDManager::applyPollList()
     if (!m_worker)
         return;
     const QList<PidKey> pids = buildPidsToWatch();
-    m_hasActiveWatchers = !pids.isEmpty();
-    qDebug() << "[OBD] Poll set refreshed live," << pids.size() << "PIDs";
+    const QList<PidKey> background = buildBackgroundPids(pids);
+    m_hasActiveWatchers = !pids.isEmpty() || !background.isEmpty();
+    qDebug() << "[OBD] Poll set refreshed live," << pids.size() << "PIDs +" << background.size() << "background";
     OBDConnectionWorker *worker = m_worker;
-    QMetaObject::invokeMethod(worker, [worker, pids]() { worker->updatePidsToWatch(pids); },
+    QMetaObject::invokeMethod(worker, [worker, pids, background]() { worker->updatePidsToWatch(pids, background); },
                               Qt::QueuedConnection);
 #endif
 }
@@ -1949,7 +2000,31 @@ OBDConnectionWorker::~OBDConnectionWorker()
 void OBDConnectionWorker::setPort(const QString &portName) { m_portName = portName; }
 void OBDConnectionWorker::setFastMode(bool fast) { m_fastMode = fast; }
 void OBDConnectionWorker::setTimeout(int seconds) { m_timeout = seconds; }
-void OBDConnectionWorker::setPidsToWatch(const QList<PidKey> &pids) { m_pidsToWatch = pids; }
+void OBDConnectionWorker::setPidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background)
+{
+    m_pidsToWatch = pids;
+    m_backgroundPids = background;
+    m_currentPidIndex = 0;
+    m_backgroundIndex = 0;
+    m_backgroundNext = false;
+}
+
+PidKey OBDConnectionWorker::nextPollPid()
+{
+    if (!m_backgroundPids.isEmpty() && (m_pidsToWatch.isEmpty() || m_backgroundNext)) {
+        m_backgroundNext = false;
+        if (m_backgroundIndex >= m_backgroundPids.size())
+            m_backgroundIndex = 0;
+        return m_backgroundPids[m_backgroundIndex++];
+    }
+    if (m_currentPidIndex >= m_pidsToWatch.size())
+        m_currentPidIndex = 0;
+    const PidKey pid = m_pidsToWatch[m_currentPidIndex];
+    m_currentPidIndex = (m_currentPidIndex + 1) % m_pidsToWatch.size();
+    if (m_currentPidIndex == 0)
+        m_backgroundNext = true;   // one background PID after each full pass
+    return pid;
+}
 
 namespace {
 struct CustomTransport {
@@ -1974,13 +2049,12 @@ bool OBDConnectionWorker::transportClaims(const QString &port)
     return t.claims && t.create && t.claims(port);
 }
 
-void OBDConnectionWorker::updatePidsToWatch(const QList<PidKey> &pids)
+void OBDConnectionWorker::updatePidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background)
 {
-    m_pidsToWatch = pids;
-    m_currentPidIndex = 0;
+    setPidsToWatch(pids, background);
     if (!m_initialized)
         return;  // doConnect() still running; startPolling() picks the list up
-    if (m_pidsToWatch.isEmpty()) {
+    if (m_pidsToWatch.isEmpty() && m_backgroundPids.isEmpty()) {
         if (m_polling) {
             stopPolling();
             qDebug() << "[OBD Worker] Poll list emptied -- polling paused";
@@ -1988,7 +2062,8 @@ void OBDConnectionWorker::updatePidsToWatch(const QList<PidKey> &pids)
     } else if (!m_polling) {
         startPolling();
     } else {
-        qDebug() << "[OBD Worker] Poll list updated," << m_pidsToWatch.size() << "PIDs";
+        qDebug() << "[OBD Worker] Poll list updated," << m_pidsToWatch.size() << "PIDs +"
+                 << m_backgroundPids.size() << "background";
     }
 }
 
@@ -2275,11 +2350,13 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
 
 void OBDConnectionWorker::startPolling()
 {
-    if (m_pidsToWatch.isEmpty()) {
+    if (m_pidsToWatch.isEmpty() && m_backgroundPids.isEmpty()) {
         qDebug() << "[OBD Worker] No PIDs to watch";
         return;
     }
     m_currentPidIndex = 0;
+    m_backgroundIndex = 0;
+    m_backgroundNext = false;
     m_polling = true;
 
     if (m_fastMode) {
@@ -2288,7 +2365,8 @@ void OBDConnectionWorker::startPolling()
         m_pollTimer.setInterval(50);
     }
     m_pollTimer.start();
-    qDebug() << "[OBD Worker] Polling started," << m_pidsToWatch.size() << "PIDs";
+    qDebug() << "[OBD Worker] Polling started," << m_pidsToWatch.size() << "PIDs +"
+             << m_backgroundPids.size() << "background";
 }
 
 void OBDConnectionWorker::stopPolling()
@@ -2302,12 +2380,11 @@ void OBDConnectionWorker::onPollTimer()
     if (!m_polling || !m_io || !m_io->isOpen())
         return;
 
-    if (m_pidsToWatch.isEmpty())
+    if (m_pidsToWatch.isEmpty() && m_backgroundPids.isEmpty())
         return;
 
     // Get next PID to poll
-    const PidKey pid = m_pidsToWatch[m_currentPidIndex];
-    m_currentPidIndex = (m_currentPidIndex + 1) % m_pidsToWatch.size();
+    const PidKey pid = nextPollPid();
 
     if (pid == kElmVoltageKey) {
         // ELM_VOLTAGE is the adapter's own "ATRV" -- a text reply, not a PID.
@@ -2895,22 +2972,30 @@ void OBDManager::finalizeAndroidConnection()
 void OBDManager::rebuildAndroidPollList()
 {
     QList<PidKey> pids = buildPidsToWatch();
+    QList<PidKey> background = buildBackgroundPids(pids);
     // If the vehicle reported a supported set, filter to only those PIDs
     // (mode-1 PID number is the second of the pair; ELM_VOLTAGE is the
     // adapter's own ATRV and always available).
     if (!m_androidSupportedPids.isEmpty()) {
-        QList<PidKey> filtered;
-        for (const PidKey &k : pids) {
-            if (k == kElmVoltageKey || m_androidSupportedPids.contains(k.second))
-                filtered.append(k);
-        }
-        pids = filtered;
+        auto filter = [this](const QList<PidKey> &in) {
+            QList<PidKey> filtered;
+            for (const PidKey &k : in) {
+                if (k == kElmVoltageKey || m_androidSupportedPids.contains(k.second))
+                    filtered.append(k);
+            }
+            return filtered;
+        };
+        pids = filter(pids);
+        background = filter(background);
     }
     if (pids.isEmpty())
         pids.append(kElmVoltageKey);  // heartbeat filtered out: ATRV always answers
     m_androidEnabledPids = pids;
+    m_androidBackgroundPids = background;
     if (m_androidPollIndex >= m_androidEnabledPids.size())
         m_androidPollIndex = 0;
+    if (m_androidBackgroundIndex >= m_androidBackgroundPids.size())
+        m_androidBackgroundIndex = 0;
     m_hasActiveWatchers = !m_androidEnabledPids.isEmpty();
 }
 
@@ -2929,8 +3014,19 @@ void OBDManager::pollNextAndroidPid()
     }
     if (m_androidEnabledPids.isEmpty())
         return;
-    const PidKey pid = m_androidEnabledPids[m_androidPollIndex];
-    m_androidPollIndex = (m_androidPollIndex + 1) % m_androidEnabledPids.size();
+    PidKey pid;
+    if (m_androidBackgroundNext && !m_androidBackgroundPids.isEmpty()) {
+        // One background PID after each full pass of the foreground list
+        m_androidBackgroundNext = false;
+        if (m_androidBackgroundIndex >= m_androidBackgroundPids.size())
+            m_androidBackgroundIndex = 0;
+        pid = m_androidBackgroundPids[m_androidBackgroundIndex++];
+    } else {
+        pid = m_androidEnabledPids[m_androidPollIndex];
+        m_androidPollIndex = (m_androidPollIndex + 1) % m_androidEnabledPids.size();
+        if (m_androidPollIndex == 0)
+            m_androidBackgroundNext = true;
+    }
     // ELM_VOLTAGE is the adapter's "ATRV": text reply, parsed separately.
     m_androidAwaitingElmVoltage = (pid == kElmVoltageKey);
     if (m_androidAwaitingElmVoltage)

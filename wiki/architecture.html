@@ -194,6 +194,7 @@
             <tr><td>PhoneMirrorManager</td><td><code>phonemirrormanager.{h,cpp}</code> + <code>src/phone_mirror/scrcpyclient.{h,cpp}</code></td><td><code>phoneMirrorManager</code></td><td>Built-in scrcpy-protocol client; stub on mobile</td></tr>
             <tr><td>DownloadManager</td><td><code>downloadmanager.{h,cpp}</code></td><td><code>downloadManager</code></td><td>Music search + yt-dlp download; disabled with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
             <tr><td>DashboardManager</td><td><code>dashboardmanager.{h,cpp}</code></td><td><code>dashboardManager</code></td><td>Built-in preset + user JSON dashboards, save / delete / duplicate, hot reload</td></tr>
+            <tr><td>TripRecorder</td><td><code>triprecorder.{h,cpp}</code>, <code>tripstore.{h,cpp}</code></td><td><code>tripRecorder</code></td><td>Black box: every OBD reading of every drive into SQLite (own thread) and one CSV + JSON per trip; see <a href="obd-manager.html#black-box">OBD Manager &rarr; Black Box</a></td></tr>
             <tr><td>UiWatchdog</td><td><code>src/util/uiwatchdog.{h,cpp}</code></td><td><em>none</em> (internal)</td><td>Logs a blocked GUI thread</td></tr>
           </tbody>
         </table>
@@ -571,12 +572,13 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         <!-- 3D vehicle -->
         <h2 id="vehicle-3d">The 3D Vehicle (CarMenu)</h2>
         <p>
-          <code>frontend/CarMenu.qml</code> shows a rigged 2003 Jeep TJ (<code>frontend/JeepVehicle.qml</code>) in a
-          Qt Quick 3D scene, rolled and pitched live by <code>berryIMU</code>, with working doors, hood, rear glass,
+          <code>frontend/CarMenu.qml</code> shows a rigged, lifted soft-top 2003 Jeep TJ (<code>frontend/JeepVehicle.qml</code>) in a
+          Qt Quick 3D scene, rolled and pitched live by <code>berryIMU</code>, with working doors, hood,
           tailgate, lights, steering and spinning wheels. The model is an original reconstruction: the full
           <code>frontend/assets/jeep_tj_2003.glb</code> plus per-part GLBs under <code>frontend/assets/jeep_tj/</code>
           with generated <code>Rig.js</code> / <code>rig.json</code> pivot metadata, built by
-          <code>tools/vehicle/build_jeep_tj.py</code> (Blender 4.2, not needed at runtime). The photo references and
+          <code>tools/vehicle/build_jeep_tj.py</code> and <code>build_jeep_twin.py</code>, then exported by
+          <code>export_jeep_twin.py</code> (Blender, not needed at runtime). The photo references and
           the corrections they informed are catalogued in <span class="file-path">docs/vehicle/references.md</span>.
         </p>
         <p>

@@ -130,7 +130,13 @@ assert np.linalg.norm(joined, axis=1).max() <= rig["bounds"]["closedRadius"] + 1
 assert 3.8 < np.ptp(joined[:, 2]) < 4.2
 assert rig["parts"]["driver_door"]["pivot"][0] > 0 > rig["parts"]["passenger_door"]["pivot"][0]
 body = rig["parts"]["body"]["components"]
-assert sum(n.startswith("Shock absorber body") for n in body) == 4
+if "bodyLift" in rig:
+    # Lifted soft-top twin (export_jeep_twin.py): its own shocks, no hardtop.
+    assert sum(n.startswith("Fox style shock body") for n in body) == 4
+    assert any(n.startswith("Soft top") for n in body)
+    assert not any(n.startswith("Hardtop ") for n in body) and "rear_glass" not in rig["parts"]
+else:
+    assert sum(n.startswith("Shock absorber body") for n in body) == 4
 for required in ("4.0 inline six cylinder block", "Cylinder head", "Valve cover", "Clutch bellhousing",
                  "NV3550 five speed case", "NP231 chain case", "Serpentine belt", "Exhaust downpipe"):
     assert any(n.startswith(required) for n in body), required

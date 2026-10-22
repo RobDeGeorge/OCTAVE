@@ -154,7 +154,7 @@ Item {
             GridLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                columns: 2
+                columns: 3
                 rowSpacing: dp(16)
                 columnSpacing: dp(16)
 
@@ -277,6 +277,81 @@ Item {
 
                         Text {
                             text: "Read & clear DTCs"
+                            color: labelColor
+                            font.pixelSize: App.Spacing.overallText * 0.85
+                            font.family: obdHome.globalFont
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                    }
+                }
+
+                // --- Trip History (black box) card ---
+                Rectangle {
+                    id: tripCard
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: dpMin(12, 4)
+                    color: tripMouse.containsMouse
+                           ? Qt.lighter(Qt.darker(backgroundColor, 0.85), 1.08)
+                           : Qt.darker(backgroundColor, 0.85)
+                    border.color: lastSubpage === "TripHistory.qml" ? accentColor : "transparent"
+                    border.width: lastSubpage === "TripHistory.qml" ? 2 : 0
+
+                    readonly property bool recording: typeof tripRecorder !== "undefined" && tripRecorder && tripRecorder.recording
+                    readonly property int tripCount: typeof tripRecorder !== "undefined" && tripRecorder ? tripRecorder.trips.length : 0
+
+                    Behavior on color { ColorAnimation { duration: 150 } }
+
+                    MouseArea {
+                        id: tripMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: obdHome.pushSubpage("TripHistory.qml")
+                    }
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: dp(12)
+
+                        // Icon — a black box: rounded square with a recording dot
+                        Rectangle {
+                            Layout.alignment: Qt.AlignHCenter
+                            width: dp(56)
+                            height: width
+                            radius: dpMin(10, 4)
+                            color: "transparent"
+                            border.color: accentColor
+                            border.width: 3
+
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.width * 0.32
+                                height: width
+                                radius: width / 2
+                                color: tripCard.recording ? "#FF4444" : accentColor
+                                SequentialAnimation on opacity {
+                                    running: tripCard.recording && obdHome.visible
+                                    loops: Animation.Infinite
+                                    NumberAnimation { to: 0.3; duration: 700 }
+                                    NumberAnimation { to: 1.0; duration: 700 }
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "Trip History"
+                            color: textColor
+                            font.pixelSize: App.Spacing.overallText * 1.2
+                            font.bold: true
+                            font.family: obdHome.globalFont
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+
+                        Text {
+                            text: tripCard.recording ? "Recording this drive"
+                                : tripCard.tripCount > 0 ? tripCard.tripCount + (tripCard.tripCount === 1 ? " drive logged" : " drives logged")
+                                : "Black box drive logs"
                             color: labelColor
                             font.pixelSize: App.Spacing.overallText * 0.85
                             font.family: obdHome.globalFont

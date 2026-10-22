@@ -145,7 +145,14 @@ def rear_sequence():
     def click():
         QTest.mouseClick(window, Qt.LeftButton, pos=point)
 
+    def wait_for_gate(opening):
+        state = "opened" if opening else "closed"
+        assert settle(lambda: hinge("gate").property(state), 4000), "Tailgate did not finish"
+        assert not vehicle.property("rearGlassOpen"), "Soft top has no rear glass to open"
+
     def wait_for_sequence(opening):
+        if not vehicle.property("hasRearGlass"):
+            return wait_for_gate(opening)
         observed_first_stage = False
         observed_second_stage = False
         deadline = time.monotonic() + 4
@@ -244,14 +251,16 @@ def initial():
     assert isinstance(button, QQuickItem)
     center = button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint()
     QTest.mouseClick(window, Qt.LeftButton, pos=center)
+    glass = vehicle.property("hasRearGlass")
     assert all(
         vehicle.property(key)
-        for key in ("driverDoorOpen", "passengerDoorOpen", "hoodOpen", "rearGlassOpen", "tailgateOpen")
+        for key in ("driverDoorOpen", "passengerDoorOpen", "hoodOpen", "tailgateOpen")
     )
+    assert vehicle.property("rearGlassOpen") == glass
     assert not vehicle.property("headlightsOn"), "Open all should only open panels"
     for key in ("headlightsOn", "fogLightsOn", "brakeLightsOn", "reverseLightsOn"):
         vehicle.setProperty(key, True)
-    assert vehicle.property("rearGlassOpen")
+    assert vehicle.property("rearGlassOpen") == glass
     assert hinge("glass").property("closed"), "Glass must wait for gate"
     QTimer.singleShot(2200, opened)
 
@@ -277,7 +286,8 @@ def rear():
     capture("rear-open")
     QMetaObject.invokeMethod(vehicle, "closeAll")
     assert not vehicle.property("tailgateOpen")
-    assert hinge("gate").property("open"), "Gate must wait for glass on closing"
+    if vehicle.property("hasRearGlass"):
+        assert hinge("gate").property("open"), "Gate must wait for glass on closing"
     vehicle.setProperty("headlightsOn", False)
     QTimer.singleShot(2200, closed)
 

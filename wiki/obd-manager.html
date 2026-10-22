@@ -35,6 +35,7 @@
             <li><a href="#data-watchdog">Data Watchdog</a></li>
             <li><a href="#supported-parameters">Supported OBD Parameters</a></li>
             <li><a href="#watcher-system">Which PIDs Get Polled</a></li>
+            <li><a href="#black-box">Black Box: Trip Recorder</a></li>
             <li><a href="#vehicle-scanning">Vehicle Scanning</a></li>
             <li><a href="#diagnostics">Diagnostics (DTC)</a></li>
             <li><a href="#android-ble">Android: BLE via OctaveOBDBridge</a></li>
@@ -624,6 +625,15 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           <li><strong>Heartbeat</strong>: <code>RPM</code> is always polled (<code>ELM_VOLTAGE</code> when the car has no RPM), which keeps the data watchdog fed and the global RPM shift light working on every screen.</li>
         </ul>
         <p>
+          A second, low-priority list comes from <code>setBackgroundDemand(consumer, ids)</code>: the same rules
+          (<code>OBDManager::backgroundPidsToWatch()</code>) minus the heartbeat and minus anything already in the
+          foreground. The worker polls <strong>one background PID after each full pass of the foreground list</strong>
+          (plain round-robin over the background list when the foreground is empty), so a 40-PID sweep costs the live
+          gauges one request per cycle instead of slowing every gauge to a crawl. The only consumer is the
+          <a href="#black-box">black box</a>, which asks for every PID the vehicle scan found. Android interleaves the
+          same way in <code>pollNextAndroidPid()</code>.
+        </p>
+        <p>
           Changes are debounced for <strong>250 ms</strong> (one re-watch per page switch) and applied live, without a
           reconnect. A scan completing also re-applies the set, since the supported filter changed.
         </p>
@@ -648,6 +658,61 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
         </p>
 
         <!-- Vehicle Scanning -->
+        <!-- Black box -->
+        <h2 id="black-box">Black Box: Trip Recorder</h2>
+        <p>
+          <code>TripRecorder</code> (<span class="file-path">src/managers/triprecorder.{h,cpp}</span>, QML context
+          property <code>tripRecorder</code>) records every decoded OBD value of every drive, with its time, into a
+          SQLite database, and writes each drive out as a CSV + JSON pair when it ends. It is the vehicle's black box:
+          the pages on screen decide what is polled fast, the recorder makes sure everything the car supports is
+          recorded at least slowly, and a power cut loses at most the last two seconds.
+        </p>
+        <h3>Data path</h3>
+        <ul>
+          <li><code>OBDManager::parameterSampled(paramId, value)</code> fires once for every decoded reading (base PIDs,
+            multi-value PIDs and <code>ELM_VOLTAGE</code>), keyed by the <code>OBDParameterModel</code> id. The recorder
+            is its only consumer today; it never touches the 84 per-parameter signals.</li>
+          <li>On top of the on-screen demand, the recorder registers a <strong>background demand</strong>
+            (<code>setBackgroundDemand("blackbox", vehicleSupportedParameters)</code>, see
+            <a href="#watcher-system">Which PIDs Get Polled</a>) so every PID the scan found is swept, one per pass of the
+            foreground list. Off with the <code>blackBoxSweepAll</code> setting.</li>
+          <li>Readings are coalesced on the GUI thread (a value that has not changed is stored again only every 5 s, so a
+            held value still shows as held) and handed to <code>TripStore</code>
+            (<span class="file-path">src/managers/tripstore.{h,cpp}</span>) on its own thread every 2 s or 1000 samples,
+            one transaction per batch.</li>
+          <li>Trip boundaries: a trip <strong>starts</strong> on the first <code>RPM &gt; 0</code> reading (any reading
+            when the scan says the car has no RPM PID) and <strong>ends</strong> after 2 min of RPM 0, 2 min without the
+            adapter (a shorter dropout is logged as an event and does not split the trip), when recording is switched
+            off, on "End trip" in the viewer, or at shutdown (<code>shutdown()</code> blocks until the files are written,
+            before <code>obdManager.close()</code>). Within a trip, sample times are start + monotonic elapsed, so an NTP
+            step on the head unit cannot fold the trace.</li>
+          <li>Events (<code>disconnected</code> / <code>reconnected</code> / <code>connection_lost</code>, <code>mil</code>,
+            <code>dtc</code>, <code>dtc_clear</code>, <code>trip_end</code> with its reason) go into the same trip.</li>
+        </ul>
+        <h3>On disk</h3>
+        <table>
+          <thead><tr><th>Path (under <code>&lt;config&gt;/history/</code>)</th><th>What</th></tr></thead>
+          <tbody>
+            <tr><td><code>blackbox.sqlite</code> (+ <code>-wal</code>)</td><td>Tables <code>trips</code> (id = start time in ms, start/end, VIN, make, year, sample count, summary JSON, file base), <code>params</code> (interned ids), <code>samples(trip_id, ts_ms, param_id, value)</code> indexed by trip / parameter / time, <code>events</code>, <code>meta</code> (schema 1). WAL, <code>synchronous=NORMAL</code>, incremental auto-vacuum.</td></tr>
+            <tr><td><code>trips/&lt;yyyy-MM-dd_HH-mm-ss&gt;.csv</code></td><td>Every sample of the drive in time order: <code>timestamp_ms,time,elapsed_s,parameter,value</code>. Written with <code>QSaveFile</code> when the trip ends.</td></tr>
+            <tr><td><code>trips/&lt;stamp&gt;.json</code></td><td>The summary: start/end, duration, sample and parameter counts, distance (trapezoid over the speed trace, gaps over 10 s skipped), max speed / RPM / coolant / oil temp, min and max voltage, fuel level first / last / used, per-parameter <code>{id, count, min, max, avg, first, last}</code>, the events, <code>clean</code> (false when recovered after a power cut).</td></tr>
+          </tbody>
+        </table>
+        <p>
+          On start the store finalises any trip left open (<code>recoverOpenTrips()</code>: end = last sample, empty
+          shells dropped), then prunes the oldest closed trips until the database and files fit the
+          <code>blackBoxMaxMB</code> cap (default 500 MB; about 3 MB per hour of driving with the full sweep). "Export"
+          copies a drive's pair into <code>Downloads/OCTAVE-trips/</code> (the way to get a file off a phone); on desktop
+          "Open folder" opens <code>trips/</code>.
+        </p>
+        <p>
+          The viewer is <a href="pages.html#triphistory">TripHistory.qml</a> (OBD Home &rarr; Trip History); the controls
+          are the <strong>Black Box</strong> card in the OBD settings. Settings: <code>blackBoxEnabled</code>,
+          <code>blackBoxSweepAll</code>, <code>blackBoxMaxMB</code>. QML API:
+          <a href="signals-slots-reference.html#tripRecorder">Signals &amp; Slots &rarr; TripRecorder</a>. Tests:
+          <code>tst_triprecorder</code>.
+        </p>
+
         <h2 id="vehicle-scanning">Vehicle Scanning</h2>
         <p>
           On desktop, <code>scan_vehicle()</code> runs automatically 2 s after a successful connection. The API is also
@@ -918,6 +983,9 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
           <tbody>
             <tr><td><code>obdBluetoothPort</code></td><td>empty -&gt; per-platform default <code>/dev/rfcomm0</code>, <code>COM3</code>, <code>/dev/tty.OBD</code>, Android: none (MAC required)</td><td>Configured port/MAC; <code>obdBluetoothPortChanged</code> triggers the 1 s debounced reconnect, which is skipped when the new port is already the one the live or in-flight connection uses (<code>m_activePort</code>). <code>connect_to_adapter()</code> saves the port and connects at once, so without the skip the debounce killed its fresh attempt mid-handshake.</td></tr>
             <tr><td><code>obdFastMode</code></td><td><code>true</code></td><td>Poll timer interval: 0 ms when on, 50 ms when off.</td></tr>
+            <tr><td><code>blackBoxEnabled</code></td><td><code>true</code></td><td><a href="#black-box">Trip recorder</a> on / off; turning it off ends the trip being recorded.</td></tr>
+            <tr><td><code>blackBoxSweepAll</code></td><td><code>true</code></td><td>Register every scanned PID as background demand so the record covers PIDs not on screen.</td></tr>
+            <tr><td><code>blackBoxMaxMB</code></td><td><code>500</code></td><td>Cap (50&ndash;5000 MB) for the database plus trip files; oldest closed trips are pruned first.</td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td><code>0</code></td><td>Backoff attempts, clamped 0-10.</td></tr>
             <tr><td><code>obdParameters</code></td><td>map, filled lazily with defaults</td><td><code>get_obd_parameter_enabled</code> / <code>save_obd_parameter_enabled</code> (800 ms debounce, then <code>obdParametersChanged</code>).</td></tr>
             <tr><td><code>supportedOBDParameters</code></td><td><code>[]</code></td><td>Last scan result.</td></tr>
@@ -968,6 +1036,7 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
             <tr><td><code>freezeFrameChanged</code></td><td>QVariantList</td><td>Freeze-frame DTCs, same map shape.</td></tr>
             <tr><td><code>vinChanged</code></td><td>QString</td><td>VIN read (or cleared); <code>vin</code>, <code>vehicleMake</code>, <code>vehicleModelYear</code> notify on it.</td></tr>
             <tr><td><code>obdParameterChanged</code></td><td>QString, float</td><td>A value from a <a href="#multi-value-pids">multi-value PID</a>: parameter id and value.</td></tr>
+            <tr><td><code>parameterSampled</code></td><td>QString, float</td><td>Every decoded reading (base, multi-value and <code>ELM_VOLTAGE</code>) by parameter id, one emission per reading. Consumed by the <a href="#black-box">black box</a>.</td></tr>
           </tbody>
         </table>
 
@@ -1014,6 +1083,7 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
             <tr><td><code>scan_vehicle</code>, <code>is_scanning</code>, <code>get_all_parameter_names</code>, <code>get_supported_commands</code>, <code>enable_scanned_parameters</code>, <code>enable_all_supported</code></td><td>various</td><td>See <a href="#vehicle-scanning">Vehicle Scanning</a>.</td></tr>
             <tr><td><code>enter_diagnostic_mode</code>, <code>exit_diagnostic_mode</code>, <code>is_diagnostic_mode</code>, <code>read_dtc</code>, <code>read_current_dtc</code>, <code>read_status</code>, <code>clear_dtc</code>, <code>read_freeze_frame</code>, <code>get_dtc_codes</code>, <code>get_dtc_count</code>, <code>get_mil_status</code>, <code>get_freeze_frame</code></td><td>various</td><td>See <a href="#diagnostics">Diagnostics</a>.</td></tr>
             <tr><td><code>setParameterDemand</code></td><td>(QString consumer, QStringList ids)</td><td>Register a consumer's visible parameters; an empty list removes its demand. Applied after 250 ms.</td></tr>
+            <tr><td><code>setBackgroundDemand</code></td><td>(QString consumer, QStringList ids)</td><td>Low-priority demand: polled one PID per pass of the foreground list (the <a href="#black-box">black box</a> sweep). Same consumer / empty-list rules.</td></tr>
             <tr><td><code>read_vin</code></td><td>()</td><td>Request vehicle identity again.</td></tr>
             <tr><td><code>connect_direct</code></td><td>(QString mac, int channel = 1)</td><td>Connect by RFCOMM URL on Linux.</td></tr>
             <tr><td><code>refresh_values</code></td><td>()</td><td>Re-emit current values by queueing one extra poll tick (desktop, while connected).</td></tr>

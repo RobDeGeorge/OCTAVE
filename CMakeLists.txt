@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 # ---- Qt 6 ----
-set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Concurrent SerialPort Bluetooth)
+set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Concurrent SerialPort Bluetooth Sql)
 if(ANDROID)
     list(APPEND OCTAVE_QT_COMPONENTS Sensors)
 endif()
@@ -182,6 +182,10 @@ qt_add_executable(octave
     src/managers/androidautomanager.cpp
     src/managers/dashboardmanager.h
     src/managers/dashboardmanager.cpp
+    src/managers/tripstore.h
+    src/managers/tripstore.cpp
+    src/managers/triprecorder.h
+    src/managers/triprecorder.cpp
     src/phone_mirror/scrcpyclient.h
     src/phone_mirror/adaptivebitrate.h
     src/phone_mirror/scrcpyclient.cpp
@@ -246,6 +250,7 @@ target_link_libraries(octave PRIVATE
     Qt6::Concurrent
     Qt6::SerialPort
     Qt6::Bluetooth
+    Qt6::Sql
 )
 # Desktop Linux pairs OBD adapters through BlueZ over D-Bus (PIN agent +
 # trust), see src/platform/bluezpairer.h. Qt Bluetooth already depends on

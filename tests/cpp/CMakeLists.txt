@@ -36,6 +36,12 @@ octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp LIBS Qt6::Gui)
+octave_add_test(tst_triprecorder
+    SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
+            managers/obdmanager.h managers/obdmanager.cpp
+            managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui Qt6::SerialPort Qt6::Sql)
 octave_add_test(tst_esp32readbuffer SOURCES managers/esp32volumemanager.h managers/esp32volumemanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui Qt6::SerialPort)
 # Port selection and the no-writes-before-the-knob-speaks rule, over a pty (Linux)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

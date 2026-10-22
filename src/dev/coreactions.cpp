@@ -56,6 +56,7 @@ struct NumSetting {
 const QList<QPair<QString, QString>> kPages = {
     {"home", "MainMenu.qml"}, {"media_room", "MediaRoom.qml"}, {"media_player", "MediaPlayer.qml"},
     {"obd", "OBDMenu.qml"}, {"obd_home", "OBDHome.qml"}, {"obd_diagnostics", "OBDDiagnostics.qml"},
+    {"trip_history", "TripHistory.qml"},
     {"sensor_home", "SensorHome.qml"}, {"settings", "SettingsMenu.qml"}, {"phone_mirror", "PhoneMirrorView.qml"},
     {"android_auto", "AndroidAutoView.qml"}, {"sensors", "SensorMenu.qml"}, {"car", "CarMenu.qml"},
     {"download", "DownloadPage.qml"}, {"clock", "ClockMenu.qml"},

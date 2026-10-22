@@ -16,6 +16,10 @@ Node {
     property bool fogLightsOn: false
     property bool brakeLightsOn: false
     property bool reverseLightsOn: false
+    // The soft top has no lifting rear glass; the hardtop rig does.
+    readonly property bool hasRearGlass: Rig.parts.rear_glass !== undefined
+    // Body-mounted lamps rise with the lifted body (lifted twin rig only).
+    readonly property real bodyLift: Rig.bodyLift !== undefined ? Rig.bodyLift : 0
     property real wheelSpeedKph: 0
     property real wheelSpinAngle: 0
     readonly property real wheelDegreesPerSecond: Math.max(-30, Math.min(30, wheelSpeedKph)) / 3.6 / 0.3937 * 180 / Math.PI
@@ -57,7 +61,7 @@ Node {
     Behavior on animatedSteering { NumberAnimation { duration: 180 } }
     readonly property var steeringPose: Steering.solve(animatedSteering, Rig.steering)
     readonly property var tiePoints: Steering.tiePoints(steeringPose, Rig.steering)
-    readonly property bool ready: body.ready && driver.ready && passenger.ready && glass.ready && gate.ready && hood.ready && driverWheel.ready && passengerWheel.ready && driverFrontSpin.ready && passengerFrontSpin.ready && driverRearSpin.ready && passengerRearSpin.ready
+    readonly property bool ready: body.ready && driver.ready && passenger.ready && (glass.ready || !hasRearGlass) && gate.ready && hood.ready && driverWheel.ready && passengerWheel.ready && driverFrontSpin.ready && passengerFrontSpin.ready && driverRearSpin.ready && passengerRearSpin.ready
         && crankPulley.ready && engineFan.ready && frontDriveshaft.ready && rearDriveshaft.ready
     readonly property string error: body.error || driver.error || passenger.error || glass.error || gate.error || hood.error || driverWheel.error || passengerWheel.error || driverFrontSpin.error || passengerFrontSpin.error || driverRearSpin.error || passengerRearSpin.error
         || crankPulley.error || engineFan.error || frontDriveshaft.error || rearDriveshaft.error
@@ -67,13 +71,13 @@ Node {
 
     // Open the swing gate fully before raising the glass; reverse this on closing.
     // The Tailgate button requests the complete two-panel sequence in both directions.
-    onTailgateOpenChanged: rearGlassOpen = tailgateOpen
+    onTailgateOpenChanged: if (hasRearGlass) rearGlassOpen = tailgateOpen
     onRearGlassOpenChanged: if (rearGlassOpen) tailgateOpen = true
     function openAll() {
         driverDoorOpen = true
         passengerDoorOpen = true
         hoodOpen = true
-        rearGlassOpen = true
+        rearGlassOpen = hasRearGlass
         tailgateOpen = true
     }
     function closeAll() {
@@ -86,7 +90,12 @@ Node {
     JeepHinge { id: body; part: Rig.parts.body }
     JeepHinge { id: driver; objectName: "driverHinge"; part: Rig.parts.driver_door; open: vehicle.driverDoorOpen }
     JeepHinge { id: passenger; objectName: "passengerHinge"; part: Rig.parts.passenger_door; open: vehicle.passengerDoorOpen }
-    JeepHinge { id: glass; objectName: "glassHinge"; part: Rig.parts.rear_glass; open: vehicle.rearGlassOpen && gate.opened }
+    // Without rear glass this stays an empty, closed node (no file to load).
+    JeepHinge {
+        id: glass; objectName: "glassHinge"
+        part: vehicle.hasRearGlass ? Rig.parts.rear_glass : ({file: "", pivot: [0, 0, 0], axis: "X", openAngle: 0})
+        open: vehicle.hasRearGlass && vehicle.rearGlassOpen && gate.opened
+    }
     JeepHinge {
         id: gate; objectName: "gateHinge"; part: Rig.parts.tailgate
         open: vehicle.tailgateOpen || !glass.closed
@@ -94,7 +103,7 @@ Node {
         JeepLamp {
             objectName: "thirdBrakeLight"
             on: vehicle.brakeLightsOn
-            position: Qt.vector3d(-gate.part.pivot[0], 0.59 - gate.part.pivot[1], -1.899 - gate.part.pivot[2])
+            position: Qt.vector3d(-gate.part.pivot[0], 0.59 + vehicle.bodyLift - gate.part.pivot[1], -1.899 - gate.part.pivot[2])
             lensSize: Qt.vector3d(0.180, 0.038, 0.004)
             tint: "#ff2410"; emission: Qt.vector3d(2.0, 0.025, 0.008)
             beamBrightness: 0.5; beamAngle: 110; beamInnerAngle: 65
@@ -182,7 +191,7 @@ Node {
             JeepLamp {
                 objectName: "fogLight"
                 on: vehicle.fogLightsOn
-                position: Qt.vector3d(lamps.modelData * 0.495, -0.13, 1.877)
+                position: Qt.vector3d(lamps.modelData * 0.495, -0.13 + vehicle.bodyLift, 1.877)
                 eulerRotation: Qt.vector3d(-8, 180, 0)
                 round: true; lensSize: Qt.vector3d(0.142, 0.142, 0.005)
                 beamBrightness: 5; beamAngle: 80; beamInnerAngle: 50
@@ -190,7 +199,7 @@ Node {
             JeepLamp {
                 objectName: "brakeLight"
                 on: vehicle.brakeLightsOn
-                position: Qt.vector3d(lamps.modelData * 0.61, 0.145, -1.842)
+                position: Qt.vector3d(lamps.modelData * 0.61, 0.145 + vehicle.bodyLift, -1.842)
                 lensSize: Qt.vector3d(0.131, 0.126, 0.004)
                 tint: "#ff2410"; emission: Qt.vector3d(2.0, 0.025, 0.008)
                 beamBrightness: 0.8; beamAngle: 110; beamInnerAngle: 65
@@ -198,7 +207,7 @@ Node {
             JeepLamp {
                 objectName: "reverseLight"
                 on: vehicle.reverseLightsOn
-                position: Qt.vector3d(lamps.modelData * 0.61, 0.051, -1.845)
+                position: Qt.vector3d(lamps.modelData * 0.61, 0.051 + vehicle.bodyLift, -1.845)
                 lensSize: Qt.vector3d(0.125, 0.018, 0.003)
                 tint: "#fff9ec"; emission: Qt.vector3d(1.6, 1.5, 1.3)
                 beamBrightness: 3; beamAngle: 100; beamInnerAngle: 55
@@ -210,7 +219,7 @@ Node {
         model: [-0.423, 0.423]
         delegate: Node {
             required property real modelData
-            position: Qt.vector3d(modelData, 0.197, 1.797)
+            position: Qt.vector3d(modelData, 0.197 + vehicle.bodyLift, 1.797)
             Model {
                 objectName: "headlightGlow"
                 visible: vehicle.headlightsOn

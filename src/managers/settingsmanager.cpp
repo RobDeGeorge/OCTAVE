@@ -108,6 +108,9 @@ QJsonObject SettingsManager::buildSettingsRegistry()
     reg[QStringLiteral("background_blur_radius")]     = entry("backgroundBlurRadius", "Album Art Blur", "mediaSettings", "slider", "save_background_blur_radius", sliderParams(0, 100, 1));
     reg[QStringLiteral("color_transition_ms")]        = entry("colorTransitionMs", "Theme Transition Speed", "displaySettings", "slider", "save_color_transition_ms", sliderParams(0, 2000, 50));
     reg[QStringLiteral("obd_fast_mode")]              = entry("obdFastMode", "OBD Fast Mode", "obdSettings", "toggle", "save_obd_fast_mode");
+    reg[QStringLiteral("black_box_enabled")]          = entry("blackBoxEnabled", "Black Box Recording", "obdSettings", "toggle", "save_black_box_enabled");
+    reg[QStringLiteral("black_box_sweep_all")]        = entry("blackBoxSweepAll", "Black Box Records All PIDs", "obdSettings", "toggle", "save_black_box_sweep_all");
+    reg[QStringLiteral("black_box_max_mb")]           = entry("blackBoxMaxMB", "Black Box Storage Cap", "obdSettings", "slider", "save_black_box_max_mb", sliderParams(50, 5000, 50));
     reg[QStringLiteral("gesture_sensor_enabled")]     = entry("gestureSensorEnabled", "Gesture Sensor", "gestureSensorSettings", "toggle", "save_gesture_sensor_enabled");
     reg[QStringLiteral("imu_enabled")]                = entry("imuEnabled", "IMU Sensor", "imuSettings", "toggle", "save_imu_enabled");
 
@@ -144,6 +147,9 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("bottomBarOrientation")]  = QStringLiteral("bottom");
     d[QStringLiteral("showBottomBarMediaControls")] = true;
     d[QStringLiteral("fuelTankCapacity")]      = 15.0;
+    d[QStringLiteral("blackBoxEnabled")]       = true;
+    d[QStringLiteral("blackBoxSweepAll")]      = true;
+    d[QStringLiteral("blackBoxMaxMB")]         = 500;
 
     // OBD parameters
     QJsonObject obdParams;
@@ -475,6 +481,9 @@ void SettingsManager::populateMembers()
 #endif
 
     m_fuelTankCapacity      = static_cast<float>(s(QStringLiteral("fuelTankCapacity")).toDouble());
+    m_blackBoxEnabled       = s(QStringLiteral("blackBoxEnabled")).toBool();
+    m_blackBoxSweepAll      = s(QStringLiteral("blackBoxSweepAll")).toBool();
+    m_blackBoxMaxMB         = qBound(50, s(QStringLiteral("blackBoxMaxMB")).toInt(), 5000);
     m_bottomBarOrientation  = s(QStringLiteral("bottomBarOrientation")).toString();
     m_showBottomBarMediaControls = s(QStringLiteral("showBottomBarMediaControls")).toBool();
 
@@ -933,6 +942,9 @@ QString SettingsManager::obdSavedAdapters() const        { return m_obdSavedAdap
 bool    SettingsManager::obdFastMode() const             { return m_obdFastMode; }
 int     SettingsManager::obdAutoReconnectAttempts() const { return m_obdAutoReconnectAttempts; }
 float   SettingsManager::fuelTankCapacity() const        { return m_fuelTankCapacity; }
+bool    SettingsManager::blackBoxEnabled() const         { return m_blackBoxEnabled; }
+bool    SettingsManager::blackBoxSweepAll() const        { return m_blackBoxSweepAll; }
+int     SettingsManager::blackBoxMaxMB() const           { return m_blackBoxMaxMB; }
 QVariantList SettingsManager::homeOBDParameters() const  { return m_homeObdParameters; }
 
 QVariantList SettingsManager::customThemes() const
@@ -1440,6 +1452,30 @@ void SettingsManager::save_fuel_tank_capacity(float capacity)
     m_fuelTankCapacity = capacity;
     updateSetting(QStringLiteral("fuelTankCapacity"), static_cast<double>(capacity));
     emit fuelTankCapacityChanged(capacity);
+}
+
+void SettingsManager::save_black_box_enabled(bool enabled)
+{
+    qCDebug(lcSettings) << "Saving black box enabled:" << enabled;
+    m_blackBoxEnabled = enabled;
+    updateSetting(QStringLiteral("blackBoxEnabled"), enabled);
+    emit blackBoxEnabledChanged(enabled);
+}
+
+void SettingsManager::save_black_box_sweep_all(bool enabled)
+{
+    qCDebug(lcSettings) << "Saving black box sweep-all:" << enabled;
+    m_blackBoxSweepAll = enabled;
+    updateSetting(QStringLiteral("blackBoxSweepAll"), enabled);
+    emit blackBoxSweepAllChanged(enabled);
+}
+
+void SettingsManager::save_black_box_max_mb(int megabytes)
+{
+    m_blackBoxMaxMB = qBound(50, megabytes, 5000);
+    qCDebug(lcSettings) << "Saving black box cap (MB):" << m_blackBoxMaxMB;
+    updateSetting(QStringLiteral("blackBoxMaxMB"), m_blackBoxMaxMB);
+    emit blackBoxMaxMBChanged(m_blackBoxMaxMB);
 }
 
 void SettingsManager::save_obd_parameter_enabled(const QString &parameter, bool enabled)
@@ -2112,6 +2148,9 @@ QString SettingsManager::get_pinned_settings_metadata()
         else if (attr == QStringLiteral("background_blur_radius")) val = QVariant(m_backgroundBlurRadius);
         else if (attr == QStringLiteral("color_transition_ms"))  val = QVariant(m_colorTransitionMs);
         else if (attr == QStringLiteral("obd_fast_mode"))        val = QVariant(m_obdFastMode);
+        else if (attr == QStringLiteral("black_box_enabled"))    val = QVariant(m_blackBoxEnabled);
+        else if (attr == QStringLiteral("black_box_sweep_all"))  val = QVariant(m_blackBoxSweepAll);
+        else if (attr == QStringLiteral("black_box_max_mb"))     val = QVariant(m_blackBoxMaxMB);
         else if (attr == QStringLiteral("imu_enabled"))          val = QVariant(m_imuEnabled);
         else if (attr == QStringLiteral("gesture_sensor_enabled")) val = QVariant(m_gestureSensorEnabled);
         else if (attr == QStringLiteral("settings_layout_style")) val = QVariant(m_settingsLayoutStyle);
@@ -2153,6 +2192,9 @@ QString SettingsManager::keyToAttr(const QString &key) const
         {QStringLiteral("backgroundBlurRadius"),        QStringLiteral("background_blur_radius")},
         {QStringLiteral("colorTransitionMs"),           QStringLiteral("color_transition_ms")},
         {QStringLiteral("obdFastMode"),                 QStringLiteral("obd_fast_mode")},
+        {QStringLiteral("blackBoxEnabled"),             QStringLiteral("black_box_enabled")},
+        {QStringLiteral("blackBoxSweepAll"),            QStringLiteral("black_box_sweep_all")},
+        {QStringLiteral("blackBoxMaxMB"),               QStringLiteral("black_box_max_mb")},
         {QStringLiteral("imuEnabled"),                  QStringLiteral("imu_enabled")},
         {QStringLiteral("gestureSensorEnabled"),        QStringLiteral("gesture_sensor_enabled")},
         {QStringLiteral("settingsLayoutStyle"),         QStringLiteral("settings_layout_style")},
@@ -2197,6 +2239,9 @@ void SettingsManager::reset_to_defaults()
     emit mediaFolderChanged(m_mediaFolder);
     emit directoryHistoryChanged();
     emit fuelTankCapacityChanged(m_fuelTankCapacity);
+    emit blackBoxEnabledChanged(m_blackBoxEnabled);
+    emit blackBoxSweepAllChanged(m_blackBoxSweepAll);
+    emit blackBoxMaxMBChanged(m_blackBoxMaxMB);
     emit bottomBarOrientationChanged(m_bottomBarOrientation);
     emit showBottomBarMediaControlsChanged(m_showBottomBarMediaControls);
     emit autoPlayOnStartupChanged(m_autoPlayOnStartup);

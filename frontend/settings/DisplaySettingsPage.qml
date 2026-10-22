@@ -46,14 +46,10 @@ Flickable {
         { cardId: "display_layout", title: "Layout", component: layoutContent,
           summary: function() {
               if (!settingsManager) return {}
-              return { state: pageRoot.layoutLabel(settingsManager.settingsLayoutStyle) }
-          } },
-        { cardId: "display_window", title: "Window", component: windowContent,
-          summary: function() {
-              if (!settingsManager) return {}
-              return { state: settingsManager.windowState === "windowed"
-                              ? settingsManager.screenWidth + "×" + settingsManager.screenHeight
-                              : pageRoot._cap(settingsManager.windowState) }
+              var win = settingsManager.windowState === "windowed"
+                      ? settingsManager.screenWidth + "×" + settingsManager.screenHeight
+                      : pageRoot._cap(settingsManager.windowState)
+              return { state: pageRoot.layoutLabel(settingsManager.settingsLayoutStyle) + " · " + win }
           } },
         { cardId: "display_appearance", title: "Appearance", component: appearanceContent,
           summary: function() {
@@ -181,107 +177,6 @@ Flickable {
             }
 
             SettingCategory {
-                title: "Nav Bar Position"
-                description: "Bottom or side placement"
-
-                SettingsSegmentedControl {
-                    id: bottomBarOrientation
-                    Layout.fillWidth: true
-                    currentValue: settingsManager ? settingsManager.bottomBarOrientation : "bottom"
-                    options: ["bottom", "side"]
-
-                    onSelected: function(value) {
-                        if (settingsManager)
-                            settingsManager.save_bottom_bar_orientation(value)
-                    }
-                }
-            }
-
-            SettingCategory {
-                title: "Nav Bar Media Controls"
-                description: "Show play/pause and track skip buttons in the navigation bar."
-
-                SettingsToggle {
-                    id: bottomBarMediaControlsToggle
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
-                    checked: settingsManager ? settingsManager.showBottomBarMediaControls : true
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        if (settingsManager) {
-                            settingsManager.save_show_bottom_bar_media_controls(checked)
-                        }
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onShowBottomBarMediaControlsChanged() {
-                            bottomBarMediaControlsToggle.checked = settingsManager.showBottomBarMediaControls
-                        }
-                    }
-                }
-            }
-
-            SettingCategory {
-                id: layoutCategory
-                title: "Settings Layout"
-                description: "Grid is the default. The other layouts are experimental."
-
-                readonly property var experimentalLayouts: ["Carousel", "Hub", "Dashboard"]
-
-                // Reveal the experimental layouts if the user is already on one,
-                // or opts in via the toggle below. Derived from the active layout
-                // so the picker is always consistent — no extra persisted setting.
-                property bool showExperimental: settingsManager
-                    ? experimentalLayouts.indexOf(settingsManager.settingsLayoutStyle) !== -1
-                    : false
-
-                SettingsChips {
-                    Layout.fillWidth: true
-                    options: layoutCategory.showExperimental
-                             ? ["Grid", "Carousel", "Hub", "Dashboard"]
-                             : ["Grid"]
-                    currentValue: pageRoot.layoutLabel(settingsManager ? settingsManager.settingsLayoutStyle : "Sidebar")
-                    onSelected: function(value) {
-                        if (settingsManager)
-                            settingsManager.save_settings_layout_style(pageRoot.layoutStyleFor(value))
-                    }
-                }
-
-                SettingsToggle {
-                    compact: true
-                    Layout.alignment: Qt.AlignLeft
-                    Layout.topMargin: App.Spacing.rowSpacing
-                    text: "Show experimental layouts"
-                    checked: layoutCategory.showExperimental
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        layoutCategory.showExperimental = checked
-                        // Hiding them while one is active would strand the user on
-                        // a now-invisible choice — fall back to the default.
-                        if (!checked && settingsManager
-                            && layoutCategory.experimentalLayouts.indexOf(settingsManager.settingsLayoutStyle) !== -1) {
-                            settingsManager.save_settings_layout_style("Sidebar")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: windowContent
-        ColumnLayout {
-            width: parent ? parent.width : 0
-            spacing: App.Spacing.sectionSpacing
-
-            SettingCategory {
                 title: "Screen Dimensions"
 
                 RowLayout {
@@ -404,6 +299,99 @@ Flickable {
                     }
 
                     Item { Layout.fillWidth: true } // Spacer
+                }
+            }
+
+            SettingCategory {
+                title: "Nav Bar Position"
+                description: "Bottom or side placement"
+
+                SettingsSegmentedControl {
+                    id: bottomBarOrientation
+                    Layout.fillWidth: true
+                    currentValue: settingsManager ? settingsManager.bottomBarOrientation : "bottom"
+                    options: ["bottom", "side"]
+
+                    onSelected: function(value) {
+                        if (settingsManager)
+                            settingsManager.save_bottom_bar_orientation(value)
+                    }
+                }
+            }
+
+            SettingCategory {
+                title: "Nav Bar Media Controls"
+                description: "Show play/pause and track skip buttons in the navigation bar."
+
+                SettingsToggle {
+                    id: bottomBarMediaControlsToggle
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: checked ? "On" : "Off"
+                    checked: settingsManager ? settingsManager.showBottomBarMediaControls : true
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+
+                    onToggled: function(checked) {
+                        if (settingsManager) {
+                            settingsManager.save_show_bottom_bar_media_controls(checked)
+                        }
+                    }
+
+                    Connections {
+                        target: settingsManager
+                        function onShowBottomBarMediaControlsChanged() {
+                            bottomBarMediaControlsToggle.checked = settingsManager.showBottomBarMediaControls
+                        }
+                    }
+                }
+            }
+
+            SettingCategory {
+                id: layoutCategory
+                title: "Settings Layout"
+                description: "Grid is the default. The other layouts are experimental."
+
+                readonly property var experimentalLayouts: ["Carousel", "Hub", "Dashboard"]
+
+                // Reveal the experimental layouts if the user is already on one,
+                // or opts in via the toggle below. Derived from the active layout
+                // so the picker is always consistent — no extra persisted setting.
+                property bool showExperimental: settingsManager
+                    ? experimentalLayouts.indexOf(settingsManager.settingsLayoutStyle) !== -1
+                    : false
+
+                SettingsChips {
+                    Layout.fillWidth: true
+                    options: layoutCategory.showExperimental
+                             ? ["Grid", "Carousel", "Hub", "Dashboard"]
+                             : ["Grid"]
+                    currentValue: pageRoot.layoutLabel(settingsManager ? settingsManager.settingsLayoutStyle : "Sidebar")
+                    onSelected: function(value) {
+                        if (settingsManager)
+                            settingsManager.save_settings_layout_style(pageRoot.layoutStyleFor(value))
+                    }
+                }
+
+                SettingsToggle {
+                    compact: true
+                    Layout.alignment: Qt.AlignLeft
+                    Layout.topMargin: App.Spacing.rowSpacing
+                    text: "Show experimental layouts"
+                    checked: layoutCategory.showExperimental
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+
+                    onToggled: function(checked) {
+                        layoutCategory.showExperimental = checked
+                        // Hiding them while one is active would strand the user on
+                        // a now-invisible choice — fall back to the default.
+                        if (!checked && settingsManager
+                            && layoutCategory.experimentalLayouts.indexOf(settingsManager.settingsLayoutStyle) !== -1) {
+                            settingsManager.save_settings_layout_style("Sidebar")
+                        }
+                    }
                 }
             }
         }

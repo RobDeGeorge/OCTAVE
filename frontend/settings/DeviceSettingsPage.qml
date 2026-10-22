@@ -32,18 +32,13 @@ Flickable {
     readonly property var _diag: typeof diagnosticsManager !== "undefined" ? diagnosticsManager : null
 
     property var tileModel: [
-        { cardId: "device_name", title: "Device Name", component: deviceNameContent,
+        { cardId: "device_name", title: "Device", component: deviceContent,
           summary: function() {
-              return { state: settingsManager ? (settingsManager.deviceName || "OCTAVE") : "OCTAVE" }
-          } },
-        { cardId: "device_network", title: "Network", component: networkContent,
-          summary: function() {
+              // The dot shows the network; the name alone fits the tile.
               var on = !!(networkManager && networkManager.isConnected)
-              return { state: on ? (networkManager.networkName || "Connected") : "Offline", active: on,
+              return { state: settingsManager ? (settingsManager.deviceName || "OCTAVE") : "OCTAVE",
                        status: on ? App.Style.statusConnected : App.Style.statusDisconnected }
           } },
-        // No state to report: the title stands alone.
-        { cardId: "device_power", title: "Power", component: powerContent },
         { cardId: "device_diagnostics", title: "Diagnostics", component: diagnosticsContent,
           summary: function() {
               var d = pageRoot._diag
@@ -55,143 +50,132 @@ Flickable {
     //    and the SettingsCardPopup in the Sidebar layout.
 
     Component {
-        id: deviceNameContent
+        id: deviceContent
         ColumnLayout {
             width: parent ? parent.width : 0
-            spacing: App.Spacing.rowSpacing
+            spacing: App.Spacing.sectionSpacing
 
-            SettingsTextField {
-                id: deviceName
-                Layout.fillWidth: true
-                text: settingsManager ? settingsManager.deviceName : ""
+            SettingCategory {
+                title: "Name"
 
-                onEditingFinished: {
-                    if (text.trim() !== "" && settingsManager && pageRoot.mainWindow) {
-                        pageRoot.mainWindow.updateDeviceName(text)
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: networkContent
-        ColumnLayout {
-            width: parent ? parent.width : 0
-            spacing: App.Spacing.rowSpacing
-
-            SettingDescription {
-                text: "Current network connection status"
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.overallSpacing
-
-                // Connection status dot
-                Rectangle {
-                    width: pageRoot.dp(10)
-                    height: pageRoot.dp(10)
-                    radius: width / 2
-                    color: networkManager && networkManager.isConnected ? "#4CAF50" : "#F44336"
-                    Layout.alignment: Qt.AlignVCenter
-                }
-
-                ColumnLayout {
+                SettingsTextField {
+                    id: deviceName
                     Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing * 0.25
+                    text: settingsManager ? settingsManager.deviceName : ""
 
-                    Text {
-                        text: {
-                            if (!networkManager) return "Unknown"
-                            if (!networkManager.isConnected) return "Not Connected"
-                            return networkManager.networkName || "Connected"
+                    onEditingFinished: {
+                        if (text.trim() !== "" && settingsManager && pageRoot.mainWindow) {
+                            pageRoot.mainWindow.updateDeviceName(text)
                         }
-                        color: App.Style.primaryTextColor
-                        font.pixelSize: App.Spacing.overallText
-                        font.family: App.Style.fontFamily
-                        font.bold: true
+                    }
+                }
+            }
+
+            SettingCategory {
+                title: "Network"
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.overallSpacing
+
+                    // Connection status dot
+                    Rectangle {
+                        width: pageRoot.dp(10)
+                        height: pageRoot.dp(10)
+                        radius: width / 2
+                        color: networkManager && networkManager.isConnected ? "#4CAF50" : "#F44336"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing * 0.25
+
+                        Text {
+                            text: {
+                                if (!networkManager) return "Unknown"
+                                if (!networkManager.isConnected) return "Not Connected"
+                                return networkManager.networkName || "Connected"
+                            }
+                            color: App.Style.primaryTextColor
+                            font.pixelSize: App.Spacing.overallText
+                            font.family: App.Style.fontFamily
+                            font.bold: true
+                        }
+
+                        Text {
+                            text: {
+                                if (!networkManager) return ""
+                                if (!networkManager.isConnected) return "No internet access"
+                                return "Internet connected"
+                            }
+                            color: App.Style.secondaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.8
+                            font.family: App.Style.fontFamily
+                        }
+                    }
+
+                    SettingsButton {
+                        text: "Refresh"
+                        height: pageRoot.dp(28)
+                        onClicked: {
+                            if (networkManager)
+                                networkManager.refreshNetwork()
+                        }
+                    }
+                }
+            }
+
+            SettingCategory {
+                title: "Power"
+                description: "Shut down OCTAVE and power off the device."
+
+                RowLayout {
+                    id: shutdownRow
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.overallSpacing
+
+                    property bool confirmingShutdown: false
+
+                    // Reset confirmation after 5 seconds
+                    Timer {
+                        id: shutdownResetTimer
+                        interval: 5000
+                        onTriggered: shutdownRow.confirmingShutdown = false
+                    }
+
+                    SettingsButton {
+                        text: shutdownRow.confirmingShutdown ? "Confirm Shutdown" : "Shut Down"
+                        buttonColor: shutdownRow.confirmingShutdown ? "#F44336" : App.Style.accent
+                        height: pageRoot.dp(34)
+                        onClicked: {
+                            if (shutdownRow.confirmingShutdown) {
+                                if (networkManager)
+                                    networkManager.shutdown_device()
+                            } else {
+                                shutdownRow.confirmingShutdown = true
+                                shutdownResetTimer.restart()
+                            }
+                        }
                     }
 
                     Text {
-                        text: {
-                            if (!networkManager) return ""
-                            if (!networkManager.isConnected) return "No internet access"
-                            return "Internet connected"
-                        }
-                        color: App.Style.secondaryTextColor
+                        text: "Press again to confirm"
+                        color: "#F44336"
                         font.pixelSize: App.Spacing.overallText * 0.8
                         font.family: App.Style.fontFamily
-                    }
-                }
+                        visible: shutdownRow.confirmingShutdown
+                        Layout.alignment: Qt.AlignVCenter
 
-                SettingsButton {
-                    text: "Refresh"
-                    height: pageRoot.dp(28)
-                    onClicked: {
-                        if (networkManager)
-                            networkManager.refreshNetwork()
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: powerContent
-        ColumnLayout {
-            width: parent ? parent.width : 0
-            spacing: App.Spacing.rowSpacing
-
-            SettingDescription {
-                text: "Shut down OCTAVE and power off the device."
-            }
-
-            RowLayout {
-                id: shutdownRow
-                Layout.fillWidth: true
-                spacing: App.Spacing.overallSpacing
-
-                property bool confirmingShutdown: false
-
-                // Reset confirmation after 5 seconds
-                Timer {
-                    id: shutdownResetTimer
-                    interval: 5000
-                    onTriggered: shutdownRow.confirmingShutdown = false
-                }
-
-                SettingsButton {
-                    text: shutdownRow.confirmingShutdown ? "Confirm Shutdown" : "Shut Down"
-                    buttonColor: shutdownRow.confirmingShutdown ? "#F44336" : App.Style.accent
-                    height: pageRoot.dp(34)
-                    onClicked: {
-                        if (shutdownRow.confirmingShutdown) {
-                            if (networkManager)
-                                networkManager.shutdown_device()
-                        } else {
-                            shutdownRow.confirmingShutdown = true
-                            shutdownResetTimer.restart()
+                        // Bound to shutdownRow by id: the previous parent.parent
+                        // chain resolved to undefined and logged a binding warning
+                        // every time the Device page loaded.
+                        SequentialAnimation on opacity {
+                            running: shutdownRow.confirmingShutdown && shutdownRow.visible  // visible includes hidden pages/sections
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 1.0; to: 0.4; duration: 800 }
+                            NumberAnimation { from: 0.4; to: 1.0; duration: 800 }
                         }
-                    }
-                }
-
-                Text {
-                    text: "Press again to confirm"
-                    color: "#F44336"
-                    font.pixelSize: App.Spacing.overallText * 0.8
-                    font.family: App.Style.fontFamily
-                    visible: shutdownRow.confirmingShutdown
-                    Layout.alignment: Qt.AlignVCenter
-
-                    // Bound to shutdownRow by id: the previous parent.parent
-                    // chain resolved to undefined and logged a binding warning
-                    // every time the Device page loaded.
-                    SequentialAnimation on opacity {
-                        running: shutdownRow.confirmingShutdown && shutdownRow.visible  // visible includes hidden pages/sections
-                        loops: Animation.Infinite
-                        NumberAnimation { from: 1.0; to: 0.4; duration: 800 }
-                        NumberAnimation { from: 0.4; to: 1.0; duration: 800 }
                     }
                 }
             }

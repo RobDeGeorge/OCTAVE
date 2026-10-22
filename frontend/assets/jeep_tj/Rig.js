@@ -5,7 +5,7 @@ var parts = {
     "file": "body.glb",
     "pivot": [
       0.0,
-      0.0,
+      0.08889997005462646,
       -0.0
     ],
     "axis": "Y",
@@ -15,7 +15,7 @@ var parts = {
     "file": "driver_door.glb",
     "pivot": [
       0.7670000195503235,
-      0.06000000238418579,
+      0.14890003204345703,
       0.39399999380111694
     ],
     "axis": "Y",
@@ -25,7 +25,7 @@ var parts = {
     "file": "passenger_door.glb",
     "pivot": [
       -0.7670000195503235,
-      0.06000000238418579,
+      0.14890003204345703,
       0.39399999380111694
     ],
     "axis": "Y",
@@ -35,27 +35,17 @@ var parts = {
     "file": "tailgate.glb",
     "pivot": [
       -0.45500001311302185,
-      0.050000011920928955,
+      0.1389000415802002,
       -1.7899999618530273
     ],
     "axis": "Y",
     "openAngle": 95
   },
-  "rear_glass": {
-    "file": "rear_glass.glb",
-    "pivot": [
-      0.0,
-      0.8200000524520874,
-      -1.7170000076293945
-    ],
-    "axis": "X",
-    "openAngle": 100
-  },
   "hood": {
     "file": "hood.glb",
     "pivot": [
       0.0,
-      0.38499999046325684,
+      0.4738999605178833,
       0.6349999904632568
     ],
     "axis": "X",
@@ -125,7 +115,7 @@ var parts = {
     "file": "steering_links.glb",
     "pivot": [
       0.0,
-      0.0,
+      0.08889997005462646,
       -0.0
     ],
     "axis": "Y",
@@ -135,14 +125,14 @@ var parts = {
     "file": "crank_pulley.glb",
     "pivot": [
       0.0,
-      -0.17973828315734863,
+      -0.09083831310272217,
       1.504993200302124
     ],
     "axis": "Z",
     "openAngle": 0,
     "orient": [
       0.9996573328971863,
-      -0.026176920160651207,
+      -0.026176918298006058,
       0.0,
       -0.0
     ]
@@ -151,14 +141,14 @@ var parts = {
     "file": "engine_fan.glb",
     "pivot": [
       0.0,
-      0.06375330686569214,
+      0.15265333652496338,
       1.5653325319290161
     ],
     "axis": "Z",
     "openAngle": 0,
     "orient": [
       0.9996573328971863,
-      -0.026176920160651207,
+      -0.026176918298006058,
       0.0,
       -0.0
     ]
@@ -167,7 +157,7 @@ var parts = {
     "file": "front_driveshaft.glb",
     "pivot": [
       0.20000000298023224,
-      -0.48295819759368896,
+      -0.3940582275390625,
       0.5614038705825806
     ],
     "axis": "Z",
@@ -183,18 +173,20 @@ var parts = {
     "file": "rear_driveshaft.glb",
     "pivot": [
       0.0,
-      -0.40038731694221497,
+      -0.3114873170852661,
       -0.6492459774017334
     ],
     "axis": "Z",
     "openAngle": 0,
     "orient": [
       0.9829819202423096,
-      -0.18370234966278076,
-      -0.0,
-      0.0
+      -0.18370233476161957,
+      0.0,
+      -0.0
     ]
   }
 };
-var bounds = {"closedRadius": 2.1418139295439933, "sweptRadius": 2.798192150458209};
-var steering = {"driverPivot": [0.64, -0.5, 1.186], "passengerPivot": [-0.64, -0.5, 1.186], "driverEnd": [0.69, -0.47, 1.358], "passengerEnd": [-0.69, -0.47, 1.358], "pitmanPivot": [0.48, -0.21, 1.61], "pitmanEnd": [0.48, -0.28, 1.425], "pickupFraction": 0.15, "pitmanTravel": 22, "tieBend": 0.08, "damperStart": [-0.35, -0.4, 1.18], "damperFraction": 0.45};
+var bounds = {"closedRadius": 2.1286343829649157, "sweptRadius": 2.816346561055898};
+var steering = {"driverPivot": [0.64, -0.5, 1.186], "passengerPivot": [-0.64, -0.5, 1.186], "driverEnd": [0.69, -0.47, 1.358], "passengerEnd": [-0.69, -0.47, 1.358], "pitmanPivot": [0.48, -0.1211, 1.61], "pitmanEnd": [0.48, -0.19110000000000005, 1.425], "pickupFraction": 0.15, "pitmanTravel": 22, "tieBend": 0.08, "damperStart": [-0.35, -0.4, 1.18], "damperFraction": 0.45};
+// Sprung-body lift (metres); body-mounted lamps rise by this.
+var bodyLift = 0.08889999999999999;
