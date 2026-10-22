@@ -1058,11 +1058,10 @@ for s in (-1, 1):
         lambda y, z, s=s: (s * 0.879, y, z),
         amber,
     )
-    box("Hood latch base", (s * 0.591, -1.51, 1.117), (0.029, 0.054, 0.042), black, 0.006)
-    ACTIVE_PART = "hood"
-    box("Hood latch strap", (s * 0.594, -1.51, 1.16), (0.026, 0.029, 0.102), black, 0.006)
-    cylinder("Latch hinge", (s * 0.61, -1.51, 1.194), 0.012, 0.022, steel, (1, 0, 0), 16)
-    ACTIVE_PART = "body"
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hood_latches import build_hood_latches
+build_hood_latches()
 
 # Headlamps are inset into the narrow grille, with fog lamps above the bumper.
 for s in (-1, 1):

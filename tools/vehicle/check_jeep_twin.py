@@ -16,6 +16,27 @@ scene = bpy.context.scene
 scene.frame_set(1)
 objects = bpy.data.objects
 ctrl = objects["JEEP_CONTROLS"]
+# New catches must remain solid and keep the fixed lower assembly on the
+# fender while only the upper catch follows the opening hood.
+latches = [o for o in objects if o.name.startswith("Hood latch fender foot")]
+if latches:
+    assert len(latches) == 2
+    for obj in [o for o in objects if o.name.startswith("Hood latch ")]:
+        moving = obj.name.startswith(("Hood latch hood backing", "Hood latch upper catch", "Hood latch catch cross"))
+        assert obj.parent == objects["hood" if moving else "body"], obj.name
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        assert all(e.is_manifold for e in bm.edges), f"Open latch mesh: {obj.name}"
+        bm.free()
+    caps = [o for o in objects if o.name.startswith("Hood latch upper catch cap")]
+    assert len(caps) == 2
+    closed = {o.name: o.matrix_world.translation.copy() for o in latches+caps}
+    scene.frame_set(120)
+    for obj in latches:
+        assert (obj.matrix_world.translation-closed[obj.name]).length < 1e-6, "Fender latch moved with hood"
+    for obj in caps:
+        assert (obj.matrix_world.translation-closed[obj.name]).length > .2, "Upper catch did not follow hood"
+    scene.frame_set(1)
 assert not any(o.name.startswith(("Hardtop ", "Rear liftgate glass", "Liftglass hinge", "Rear wiper")) for o in objects)
 assert sum(o.name.startswith("Soft top tubular support bow") for o in objects) == 2
 shell = objects["Soft top continuous shell"]

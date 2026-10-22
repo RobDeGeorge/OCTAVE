@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QPointF, Property, QMetaObject, Qt, QTimer, QUrl, Signal, Slot
+from PySide6.QtCore import QObject, QPoint, QPointF, Property, QMetaObject, Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QVector3D
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
@@ -136,9 +136,53 @@ def capture(label):
     assert window.grabWindow().save(f"/tmp/jeep-rig-{label}.png")
 
 
+def camera_gestures():
+    scene = visual_item(window.contentItem(), "jeepScene")
+    camera = window.findChild(QObject, "jeepCamera")
+    center = scene.mapToScene(QPointF(scene.width()/2, scene.height()/2)).toPoint()
+    device = QTest.createTouchDevice()
+    yaw, pitch = menu.property("cameraYaw"), menu.property("cameraPitch")
+    initial = camera.property("position").z()
+
+    def pinch(start, end):
+        touch = QTest.touchEvent(window, device)
+        touch.press(0, center-QPoint(start,0), window).press(1, center+QPoint(start,0), window).commit()
+        for step in range(1, 9):
+            distance = round(start+(end-start)*step/8)
+            touch.move(0, center-QPoint(distance,0), window).move(1, center+QPoint(distance,0), window).commit()
+            QTest.qWait(25)
+        touch.release(0, center-QPoint(end,0), window).release(1, center+QPoint(end,0), window).commit()
+        QTest.qWait(50)
+
+    pinch(45, 130)
+    close = camera.property("position").z()
+    assert close < initial*.85, ("Pinch out did not zoom in", initial, close)
+    pinch(130, 45)
+    assert camera.property("position").z() > close*1.15, "Pinch in did not zoom out"
+    assert abs(menu.property("cameraYaw")-yaw) < .01, "Pinch also changed yaw"
+    assert abs(menu.property("cameraPitch")-pitch) < .01, "Pinch also changed pitch"
+    touch = QTest.touchEvent(window, device)
+    touch.press(0, center, window).commit()
+    for dx in (20, 40, 60):
+        touch.move(0, center+QPoint(dx,0), window).commit()
+        QTest.qWait(25)
+    touch.release(0, center+QPoint(60,0), window).commit()
+    assert abs(menu.property("cameraYaw")-yaw) > 5, "Single-finger orbit stopped working"
+    menu.setProperty("cameraYaw", yaw)
+    QTest.mousePress(window, Qt.LeftButton, pos=center)
+    for dx in (20, 40, 60):
+        QTest.mouseMove(window, center+QPoint(dx,0), 25)
+    QTest.mouseRelease(window, Qt.LeftButton, pos=center+QPoint(60,0))
+    assert abs(menu.property("cameraYaw")-yaw) > 5, "Mouse orbit stopped working"
+    menu.setProperty("cameraYaw", yaw)
+    menu.setProperty("cameraPitch", pitch)
+    menu.setProperty("cameraZoom", 1)
+
+
 @check
 def rear_sequence():
     assert vehicle.property("ready"), vehicle.property("error")
+    camera_gestures()
     button = visual_item(window.contentItem(), "jeepControl_tailgateOpen")
     point = button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint()
 
@@ -475,8 +519,9 @@ def steering_centered():
 @check
 def narrow():
     capture("narrow")
+    camera_gestures()
     print(
-        "PASS: asset loading, IMU quaternion mapping, five hinges, rear interlock, four lighting circuits and tailgate lamp attachment, steering, wheel spin/reverse/stop, engine and driveshaft spin, live OBD drive, and narrow view"
+        "PASS: pinch zoom in/out without rotation, touch/mouse orbit in wide and narrow views, asset loading, IMU quaternion mapping, hinges, lights, steering, wheel/engine/driveshaft spin, and live OBD drive"
     )
     app.quit()
 

@@ -38,6 +38,11 @@ Item {
     property real cameraYaw: -35
     property real cameraPitch: -25
     property real cameraDistance: 200
+    property real cameraZoom: 1
+    function zoomCamera(factor) {
+        if (isFinite(factor) && factor > 0)
+            cameraZoom = Math.max(0.4, Math.min(3, cameraZoom * factor))
+    }
 
     // Helper: convert heading to cardinal direction
     function headingToCardinal(h) {
@@ -157,6 +162,7 @@ Item {
 
             View3D {
                 id: view3d
+                objectName: "jeepScene"
                 anchors { top: vehicleControls.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
 
                 environment: SceneEnvironment {
@@ -175,13 +181,17 @@ Item {
 
                     PerspectiveCamera {
                         id: camera
-                        // Fit the vehicle's rotation envelope even in a narrow view.
-                        position: Qt.vector3d(0, 0, Math.max(cameraDistance,
+                        objectName: "jeepCamera"
+                        // Start fitted even in narrow views; zoom operates on
+                        // that distance while keeping the camera outside the rig.
+                        readonly property real fittedDistance: Math.max(cameraDistance,
                             (jeep.radius * 30 + 3) / Math.sin(Math.atan(Math.tan(Math.PI / 8)
-                                * Math.min(1, view3d.width / Math.max(1, view3d.height))))))
+                                * Math.min(1, view3d.width / Math.max(1, view3d.height)))))
+                        position: Qt.vector3d(0, 0, Math.max(jeep.radius * 30 + clipNear + 2,
+                            fittedDistance / carMenu.cameraZoom))
                         fieldOfView: 45
                         clipNear: 10
-                        clipFar: 1000
+                        clipFar: Math.max(1000, position.z + jeep.radius * 30 + 100)
                     }
                 }
 
@@ -294,27 +304,34 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
             }
 
-            // Mouse area for orbiting the camera around the model
-            MouseArea {
+            // Separate one-point orbit and two-point zoom gestures so a pinch
+            // does not also rotate the vehicle. Controls above remain separate.
+            Item {
                 anchors.fill: view3d
-                acceptedButtons: Qt.LeftButton
-                property real lastX: 0
-                property real lastY: 0
-
-                onPressed: (event) => {
-                    lastX = event.x
-                    lastY = event.y
+                PinchHandler {
+                    id: scenePinch
+                    target: null
+                    minimumPointCount: 2
+                    maximumPointCount: 2
+                    onScaleChanged: (delta) => carMenu.zoomCamera(delta)
                 }
-
-                onPositionChanged: (event) => {
-                    if (pressed) {
-                        let dx = event.x - lastX
-                        let dy = event.y - lastY
-                        cameraYaw -= dx * 0.5
-                        cameraPitch = Math.max(-89, Math.min(89, cameraPitch + dy * 0.3))
-                        lastX = event.x
-                        lastY = event.y
+                DragHandler {
+                    target: null
+                    maximumPointCount: 1
+                    property vector2d previousTranslation: Qt.vector2d(0, 0)
+                    onActiveChanged: previousTranslation = Qt.vector2d(0, 0)
+                    onActiveTranslationChanged: {
+                        if (active && !scenePinch.active) {
+                            var delta = activeTranslation.minus(previousTranslation)
+                            cameraYaw -= delta.x * 0.5
+                            cameraPitch = Math.max(-89, Math.min(89, cameraPitch + delta.y * 0.3))
+                        }
+                        previousTranslation = activeTranslation
                     }
+                }
+                WheelHandler {
+                    target: null
+                    onWheel: (event) => carMenu.zoomCamera(Math.pow(1.0015, event.angleDelta.y))
                 }
             }
 

@@ -10,12 +10,19 @@ import bmesh
 def build_top(top_mesh, top_tube, fabric, vinyl, black):
     def roof(t, y):
         blend = min(1., max(0., (y + .275) / .30))
-        return 1.792 + blend * (.018 + .045 * (1-t*t))
+        # Tensioned cloth hangs slightly between the header and the two bows.
+        # Keep all attachment edges fixed; these are visual estimates in metres.
+        sag = 0.
+        for start, end, depth in ((-.275, .64, .009), (.64, 1.66, .012)):
+            if start < y < end:
+                sag = depth * math.sin(math.pi * (y-start)/(end-start))**2
+        return 1.792 + blend * (.018 + .045 * (1-t*t)) - sag * (1-t*t)**2
 
     xs = [-1 + i/16 for i in range(33)]
-    ys = sorted(set([-.275 + 1.99*j/40 for j in range(41)] + [.61, .75, 1.60]))
+    ys = sorted(set([-.275 + 1.99*j/40 for j in range(41)] + [.61, .64, .75, 1.60, 1.66]))
     vdoor = (1.77 - 1.26)/(roof(1, .61)-1.26)
-    vs = sorted(set([0., .18, .25, .45, .65, .80, vdoor, (1+vdoor)/2, 1.]))
+    # Above the windows, retain the valance's three matching edge vertices.
+    vs = sorted(set([i/30 for i in range(25)] + [.18, .25, .45, .65, .80, vdoor, (1+vdoor)/2, 1.]))
     verts, faces, materials, smoothing = [], [], [], []
 
     def grid(rows, material_at, smooth=False):
@@ -31,29 +38,37 @@ def build_top(top_mesh, top_tube, fabric, vinyl, black):
     grid([[(.705*t,y,roof(t,y)) for t in xs] for y in ys], lambda j,i:0, True)
 
     def side(s,y,v):
-        return (s*(.75-.045*v), y + .055*(1-v)*(y-.61)/(1.715-.61),
+        # A shallow billow breaks the rigid planar reflection, fading to zero
+        # at every sewn boundary so the welded envelope and zipper still meet.
+        billow = .006 * math.sin(math.pi * (y-.61)/(1.715-.61))**2 * math.sin(math.pi*v)**2
+        return (s*(.75-.045*v + billow), y + .055*(1-v)*(y-.61)/(1.715-.61),
                 1.26 + v*(roof(1,y)-1.26))
 
     for s in (-1,1):
         side_ys = [y for y in ys if y >= .61]
         grid([[side(s,y,v) for v in vs] for y in side_ys],
              lambda j,i: int(.75 <= (side_ys[j]+side_ys[j+1])/2 <= 1.60
-                             and .18 < (vs[i]+vs[i+1])/2 < .80))
+                             and .18 < (vs[i]+vs[i+1])/2 < .80), True)
         # Door-top valance uses the same roof edge and meets the quarter panel
         # exactly. It is fabric above an intentionally open door aperture.
         door_ys = [y for y in ys if y <= .61]
         grid([[(s*(.75-.045*(vdoor+(1-vdoor)*w)), y,
                 1.77+w*(roof(1,y)-1.77)) for w in (0.,.5,1.)] for y in door_ys], lambda j,i:0)
-        outline = [side(s,.75,.18),side(s,1.60,.18),side(s,1.60,.80),side(s,.75,.80)]
+        window_ys = [y for y in side_ys if .75 <= y <= 1.60]
+        outline = [side(s,y,.18) for y in window_ys]
+        outline += [side(s,1.60,v) for v in vs if .18 < v <= .80]
+        outline += [side(s,y,.80) for y in reversed(window_ys[:-1])]
+        outline += [side(s,.75,v) for v in reversed(vs) if .18 < v < .80]
         top_tube("Side window zipper piping", [(x+s*.002,y,z) for x,y,z in outline+[outline[0]]], .0025)
         top_tube("Door surround rail", [(s*.697,-.275,1.772),(s*.697,.61,1.772),(s*.735,.61,1.27)], .009)
         top_tube("Soft top lower retainer", [(s*.749,.61,1.26),(s*.749,1.77,1.26)], .006)
 
     def rear(t,v):
-        return (t*(.75-.045*v),1.77-.055*v,1.26+v*(roof(t,1.715)-1.26))
+        billow = .006 * (1-t*t)**2 * math.sin(math.pi*v)**2
+        return (t*(.75-.045*v),1.77-.055*v+billow,1.26+v*(roof(t,1.715)-1.26))
 
     grid([[rear(t,v) for t in xs] for v in vs],
-         lambda j,i:int(abs((xs[i]+xs[i+1])/2)<.8125 and .18<(vs[j]+vs[j+1])/2<.80))
+         lambda j,i:int(abs((xs[i]+xs[i+1])/2)<.8125 and .18<(vs[j]+vs[j+1])/2<.80), True)
     # Rear window trim follows its curved top edge instead of cutting across it.
     loop = [rear(t,.18) for t in xs if abs(t)<=.8125]
     loop += [rear(.8125,v) for v in vs if .18<v<=.80]

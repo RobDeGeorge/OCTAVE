@@ -292,6 +292,14 @@ def top_tube(name, points, radius, mat=black):
 
 # Build connected cloth/window surfaces from shared edge coordinates.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from chassis import correct_frame_height
+correct_frame_height(body, LIFT)
+from spring_mounts import build_spring_mounts
+build_spring_mounts(body, LIFT)
+from wheel_wells import build_wheel_wells
+build_wheel_wells(body, LIFT)
+from hood_latches import build_hood_latches
+build_hood_latches(body, bpy.data.objects["hood"], -.9+LIFT)
 from soft_top import build_top
 soft_top = build_top(top_mesh, top_tube, fabric, vinyl, black)
 from cabin import rebuild_cabin

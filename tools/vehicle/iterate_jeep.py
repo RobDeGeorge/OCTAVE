@@ -101,6 +101,9 @@ def main():
             if run("twin_build", command):
                 twin_ok = run("twin_controls", [args.blender, "--background", "--python-exit-code", "1",
                               "--python", TOOLS / "check_jeep_twin.py", "--", "--blend", output / "twin/jeep-twin.blend"])
+                springs_ok = run("twin_spring_mounts", [args.blender, "--background", "--python-exit-code", "1",
+                                 "--python", TOOLS / "check_jeep_spring_mounts.py", "--", "--blend", output / "twin/jeep-twin.blend"])
+                twin_ok = twin_ok and springs_ok
                 fit_ok = run("twin_fit", [args.blender, "--background", "--python-exit-code", "1",
                              "--python", TOOLS / "audit_jeep_fit.py", "--", "--blend", output / "twin/jeep-twin.blend",
                              "--output", output / "twin/fit-audit.json"])

@@ -31,6 +31,11 @@ The soft top now uses a shared, welded fabric/vinyl envelope, including the rear
 roof closure and door-top valances. Seams follow the roof surface and bows sit
 below it. The control check also verifies connected topology, closed thickness,
 absence of roof-join boundaries and nonadjacent surface crossings.
+The fabric realism pass adds 9/12 mm maximum roof sag between supports and
+up to 6 mm outward curvature in the quarter/rear panels. These are visual
+estimates, not measured fabric deflection. Attachment edges stay fixed, and
+window piping follows the curved surface. This geometry survives GLB export;
+the Blender fabric bump shader still requires separate baking for app parity.
 `audit_jeep_fit.py` checks roof/bows, tires/flares, shocks/springs, shocks/tires,
 shocks/frame and hood/engine surface intersections at frames 1, 40, 80 and 120.
 The candidate loop fails when these selected intersection checks fail. This is
@@ -102,6 +107,45 @@ pose control, not the existing Qt linkage solver; driveshaft articulation and
 powertrain coupling remain unfinished. Wheels remain generic, shock dimensions
 are provisional, and the soft top does not yet fold. Do not certify the prototype
 as mechanically accurate.
+
+Frame-height correction: `chassis.py` raises the twin's provisional
+rails and crossmembers 80 mm relative to the original body geometry, shortening
+the body-mount stack to fit below the floor. This corrects visual packaging;
+it does not increase the configured suspension lift. A dropped transfer-case
+skid has raised mounting flanges and retains clearance below the drivetrain.
+These dimensions are estimates, not factory frame measurements. The rails have
+provisional underside relief over the axles; their profile still needs a
+reference-based chassis reconstruction. The fit
+audit includes rail/floor, rail/axle and skid/powertrain surface checks.
+
+Hood catches: `hood_latches.py` replaces the buried rectangular blocks with
+fender-mounted feet/pivots, a narrow rubber strap, an open pull handle and a
+separate hood-mounted backing/catch. Shape and placement follow
+[reference photo 028](https://bringatrailer.com/wp-content/uploads/2026/03/IMG_7900-71284-scaled.jpeg);
+assembly identity is cross-checked against the
+[Mopar 2003 hood catalog](https://store.mopar.com/v-2003-jeep-wrangler--sport--4-0l-l6-gas/body-sheet-metal-except-doors--hood-and-hood-release).
+Dimensions are photographic estimates. The lower strap stays on the fender
+when the hood opens; unlatching and rubber flex are not animated.
+
+Spring support correction: `spring_mounts.py` adds axle pedestals and frame
+brackets to the four coil seats. Rear upper seats fit below the floor; upper
+seats lean inward for tire clearance. The frame narrows around the axle
+stations so it no longer runs through the coils, and provisional shocks move
+inboard of the rails. Spring compression changes curve points instead of
+scaling the wire cross-section. `check_jeep_spring_mounts.py` checks bracket
+contact and coil-end seating in four poses; the fit audit also checks springs
+against frame, floor and tires. These remain provisional mount dimensions,
+not a verified lift-kit or suspension kinematics model.
+
+Wheel wells and exhaust: `wheel_wells.py` adds thick dark inner arches and
+inboard liner walls at all four wheels. The exhaust retains its downpipe
+connection, moves the muffler inward, and passes inboard of the rear spring
+and shock before exiting behind the tank. The fit audit checks liner/tire and
+liner/spring clearance, plus exhaust clearance to the suspension, frame,
+tank, floor and driveline in four articulation poses at three steering angles.
+These are visual packaging dimensions, not a fabrication-ready exhaust design.
+The legacy suspension audit retains straight-ahead steering: full lock combined
+with axle roll can still contact the provisional front coil/seat brackets.
 
 Soft-top component layout is informed by the
 [Bestop TJ Supertop installation diagrams](https://www.bestop.com/wp-content/uploads/Installation%20Instructions/BDKW_51709-INS_001.pdf).

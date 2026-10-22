@@ -14,6 +14,18 @@ args = parser.parse_args(sys.argv[sys.argv.index("--")+1:])
 bpy.ops.wm.open_mainfile(filepath=args.blend)
 scene = bpy.context.scene
 checks = [
+    ("liners_tires", ("Inner wheel well",), ("31 inch tire carcass",)),
+    ("liners_springs", ("Inner wheel well",), ("Compressing lift spring", "Lift spring seat", "Coil mount ")),
+    ("exhaust_drivetrain", ("Exhaust pipe", "Exhaust muffler"), ("Driveshaft tube", "Driveshaft slip yoke", "NP231", "NV3550")),
+    ("exhaust_clearance", ("Exhaust pipe",), ("Compressing lift spring", "Lift spring seat", "Coil mount ", "Boxed frame rail", "Dana 44 axle tube", "Rear fuel tank skid", "Rear passenger floor pan", "Raised cargo floor", "Fox style shock body", "Telescoping shock shaft")),
+    ("springs_frame", ("Compressing lift spring",), ("Boxed frame rail",)),
+    ("springs_floor", ("Compressing lift spring", "Lift spring seat"), ("Front footwell pan", "Rear passenger floor pan", "Raised cargo floor")),
+    ("springs_tires", ("Compressing lift spring", "Lift spring seat"), ("31 inch tire carcass",)),
+    ("spring_mounts_tires", ("Coil mount ",), ("31 inch tire carcass",)),
+    ("spring_mounts_floor", ("Coil mount ",), ("Front footwell pan", "Rear passenger floor pan", "Raised cargo floor")),
+    ("frame_floor", ("Boxed frame rail",), ("Front footwell pan", "Rear passenger floor pan", "Raised cargo floor")),
+    ("frame_axles", ("Boxed frame rail",), ("Dana 44 axle tube",)),
+    ("skid_powertrain", ("Transfer case skid",), ("NV3550", "NP231", "Front output seal", "Rear output housing")),
     ("parking_brake_console", ("Parking brake",), ("Cupholder console", "Console rear bridge", "Console storage", "Center armrest", "Shifter console")),
     ("roof_bows", ("Soft top continuous shell",), ("Soft top tubular support bow",)),
     ("tires_flares", ("31 inch tire carcass",), ("Front flare", "Rear flare")),
@@ -36,8 +48,12 @@ checks = [
     ("column_aperture", ("Cabin steering column",), ("Dashboard lower", "Dashboard upper", "Dashboard fascia backing", "Driver instrument binnacle")),
 ]
 report = {"scope":"Selected surface intersections, not exhaustive vehicle clearance", "poses":[]}
-for frame in (1,40,80,120):
+for frame, steering in [(f,s) for f in (1,40,80,120) for s in (-28,0,28)]:
     scene.frame_set(frame)
+    controls = bpy.data.objects["JEEP_CONTROLS"]
+    controls["steering_deg"] = steering
+    controls.update_tag()
+    bpy.context.view_layer.update()
     dg = bpy.context.evaluated_depsgraph_get()
     cache = {}
     def tree(obj):
@@ -50,6 +66,10 @@ for frame in (1,40,80,120):
         return cache[obj.name]
     intersections = []
     for label, left, right in checks:
+        # Combined lock/articulation sweep covers this liner/exhaust revision.
+        # Legacy suspension contacts retain their original straight-ahead scope.
+        if steering and not label.startswith(("liners_", "exhaust_")):
+            continue
         a = [o for o in scene.objects if o.type in {"MESH","CURVE"} and o.name.startswith(left)]
         b = [o for o in scene.objects if o.type in {"MESH","CURVE"} and o.name.startswith(right)]
         assert a and b, (label, "Empty audit selection")
@@ -58,7 +78,7 @@ for frame in (1,40,80,120):
                 count = len(tree(x).overlap(tree(y)))
                 if count:
                     intersections.append({"check":label,"a":x.name,"b":y.name,"triangle_pairs":count})
-    report["poses"].append({"frame":frame,"intersections":intersections})
+    report["poses"].append({"frame":frame,"steering_deg":steering,"intersections":intersections})
 args.output.write_text(json.dumps(report,indent=2)+"\n")
 print(json.dumps(report,indent=2))
 raise SystemExit(1 if any(p["intersections"] for p in report["poses"]) else 0)
