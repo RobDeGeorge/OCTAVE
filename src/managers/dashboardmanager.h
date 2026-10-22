@@ -71,6 +71,20 @@ public:
     // before saving a new dashboard; duplicate and import use it too.
     Q_INVOKABLE QString uniqueIdForLabel(const QString &label) const;
 
+    // A spec as save and load would leave it (see normalizeSpec), for specs
+    // that don't come from a file: the editor's rescued draft. Empty if it
+    // isn't a usable dashboard. An absent id stays absent.
+    Q_INVOKABLE QVariantMap normalizedSpec(const QVariantMap &spec) const;
+
+    // Grid placement for the editor (src/util/dashboardgrid.h): whether a
+    // rectangle fits without covering another cell (`exceptIndex` = the cell
+    // being moved, -1 for none), and the span a new widget shrinks to at
+    // (col, row) as {col, row, colSpan, rowSpan}.
+    Q_INVOKABLE bool canPlace(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
+                              int colSpan, int rowSpan, int exceptIndex) const;
+    Q_INVOKABLE QVariantMap fitAt(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
+                                  int colSpan, int rowSpan) const;
+
     QString lastShareError() const { return m_lastShareError; }
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
     int supportedSchema() const { return kSupportedSchema; }
@@ -84,9 +98,10 @@ public:
     static constexpr int kSupportedSchema = 1;
 
 public slots:
-    // Writes a user dashboard JSON file. `spec` must include at least `id`
-    // and `label`. Returns the saved id on success, empty string on
-    // failure (id collision with built-in or kParameterCardsId, I/O error, etc.).
+    // Writes a user dashboard JSON file, normalised first (normalizeSpec).
+    // `spec` must include at least `id` and `label`. Returns the saved id on
+    // success, empty string on failure (no id or label, id collision with a
+    // built-in or kParameterCardsId, newer schema, I/O error, etc.).
     QString saveDashboard(const QVariantMap &spec);
 
     // Deletes a user dashboard file, or hides a built-in preset (persisted
@@ -113,7 +128,7 @@ public slots:
     // Import a shared dashboard as a NEW user dashboard (never overwrites:
     // the id is always regenerated from the label). Accepts a local path,
     // a file:// URL or an Android content:// URL. The spec is validated and
-    // reduced to the known schema-1 keys first (see sanitizeImportedSpec).
+    // reduced to the known schema-1 keys first (see normalizeSpec).
     // Returns the new id, or "" with lastShareError set.
     QString importDashboard(const QString &fileOrUrl);
     QString importDashboardFromClipboard();
@@ -131,9 +146,20 @@ private:
     QString m_lastShareError;
     void setShareError(const QString &message);
 
-    // Validate an imported spec and reduce it to known keys. Returns an
-    // empty map (and sets *error) when the data isn't a usable dashboard.
-    static QVariantMap sanitizeImportedSpec(const QVariantMap &raw, QString *error);
+    // The one set of spec rules, applied on import, save and load: known
+    // schema-1 keys only (JSON numbers, strings and bools are not numbers),
+    // the caps above, a cell off the grid moved back in (shrunk only if wider
+    // than the grid), props scalar, and no two cells overlapping (in file
+    // order the earlier wins; a later one shrinks toward 1x1, else is
+    // dropped). Unknown widget types and paramIds are kept: the QML
+    // WidgetCatalog knows the types, the renderer skips or leaves them
+    // unbound, and a newer build may know them. Import drops the id (the
+    // caller makes a new one) and refuses a bad schema or no cell list; save
+    // and load keep the id and need it, a save only a file-safe one. A newer
+    // schema is refused (loadDashboard passes such a file through untouched).
+    // Returns an empty map (and sets *error) when the data isn't usable.
+    enum class SpecUse { Import, Save, Load };
+    static QVariantMap normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error);
     QString importSpec(const QVariantMap &raw);
 
     QString m_presetsDir;

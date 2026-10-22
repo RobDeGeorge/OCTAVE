@@ -1,6 +1,7 @@
 // dashboardmanager.cpp
 
 #include "dashboardmanager.h"
+#include "../util/dashboardgrid.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -174,7 +175,18 @@ QVariant DashboardManager::loadDashboard(const QString &id)
         qCWarning(lcDashboards) << "loadDashboard: unknown id" << id;
         return QVariantMap{};
     }
-    return readFullSpec(entry.value(QStringLiteral("path")).toString());
+    const QVariantMap raw = readFullSpec(entry.value(QStringLiteral("path")).toString());
+    // A newer schema goes through untouched: the renderer shows its "needs a
+    // newer OCTAVE" placeholder for it
+    if (raw.isEmpty() || raw.value(QStringLiteral("schema"), 1).toDouble() > kSupportedSchema)
+        return raw;
+    QString error;
+    const QVariantMap spec = normalizeSpec(raw, SpecUse::Load, &error);
+    if (spec.isEmpty()) {
+        qCWarning(lcDashboards) << "loadDashboard:" << id << error;
+        return QVariantMap{};
+    }
+    return spec;
 }
 
 // ---------------------------------------------------------------------------
@@ -333,15 +345,15 @@ bool DashboardManager::writeSpec(const QString &absolutePath, const QVariantMap 
 // Mutations
 // ---------------------------------------------------------------------------
 
-QString DashboardManager::saveDashboard(const QVariantMap &spec)
+QString DashboardManager::saveDashboard(const QVariantMap &raw)
 {
-    const QString id    = spec.value(QStringLiteral("id")).toString();
-    const QString label = spec.value(QStringLiteral("label")).toString();
-
-    if (id.isEmpty() || label.isEmpty()) {
-        qCWarning(lcDashboards) << "saveDashboard requires id and label";
+    QString error;
+    const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error);
+    if (spec.isEmpty()) {
+        qCWarning(lcDashboards) << "saveDashboard:" << error;
         return {};
     }
+    const QString id = spec.value(QStringLiteral("id")).toString();
     if (m_userDir.isEmpty()) {
         qCWarning(lcDashboards) << "User dashboards dir not configured";
         return {};
@@ -548,7 +560,7 @@ QString DashboardManager::importDashboardFromText(const QString &json)
 QString DashboardManager::importSpec(const QVariantMap &raw)
 {
     QString error;
-    QVariantMap spec = sanitizeImportedSpec(raw, &error);
+    QVariantMap spec = normalizeSpec(raw, SpecUse::Import, &error);
     if (spec.isEmpty()) {
         setShareError(error);
         return {};
@@ -565,7 +577,7 @@ QString DashboardManager::importSpec(const QVariantMap &raw)
     return saved;
 }
 
-QVariantMap DashboardManager::sanitizeImportedSpec(const QVariantMap &raw, QString *error)
+QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error)
 {
     auto fail = [error](const QString &msg) { if (error) *error = msg; return QVariantMap{}; };
 
@@ -581,32 +593,59 @@ QVariantMap DashboardManager::sanitizeImportedSpec(const QVariantMap &raw, QStri
         }
     };
 
+    // Missing = 1; a bad one is refused on import and read as 1 otherwise
     const int schema = intIn(raw.value(QStringLiteral("schema"), 1), -1, 1000, 0);
     if (schema > kSupportedSchema)
         return fail(QStringLiteral("This dashboard needs a newer version of OCTAVE"));
-    if (schema < 1)
+    if (schema < 1 && use == SpecUse::Import)
         return fail(QStringLiteral("Not an OCTAVE dashboard (bad schema)"));
 
+    // No cell list: refused on import, an empty dashboard otherwise
     const QVariant cellsVar = raw.value(QStringLiteral("cells"));
-    if (cellsVar.typeId() != QMetaType::QVariantList)
+    if (cellsVar.typeId() != QMetaType::QVariantList && use == SpecUse::Import)
         return fail(QStringLiteral("Not an OCTAVE dashboard (no cells)"));
-    const QVariantList rawCells = cellsVar.toList();
-    if (rawCells.size() > kMaxCells)
-        return fail(QStringLiteral("Dashboard has too many widgets"));
+    QVariantList rawCells = cellsVar.toList();
+    // Too many: refused when shared or saved; a file already on disk shows
+    // its first kMaxCells rather than nothing
+    if (rawCells.size() > kMaxCells) {
+        if (use != SpecUse::Load)
+            return fail(QStringLiteral("Dashboard has too many widgets"));
+        rawCells = rawCells.mid(0, kMaxCells);
+    }
 
     QVariantMap out;
     out.insert(QStringLiteral("schema"), kSupportedSchema);
 
+    // The id names the file: imports get a new one from the caller, a save
+    // or a load keeps it. A save writes <id>.json, so it must be a plain file
+    // name (letters, digits, '-' and '_'; new ids are slugs); a load only
+    // needs one.
+    if (use != SpecUse::Import) {
+        const QString id = raw.value(QStringLiteral("id")).toString();
+        static const QRegularExpression fileSafe(QStringLiteral("^[A-Za-z0-9_-]{1,64}$"));
+        if (id.isEmpty() || (use == SpecUse::Save && !fileSafe.match(id).hasMatch()))
+            return fail(QStringLiteral("Dashboard has no usable id"));
+        out.insert(QStringLiteral("id"), id);
+    }
+
     QString label = raw.value(QStringLiteral("label")).toString().simplified().left(kMaxLabelLength);
-    if (label.isEmpty()) label = QStringLiteral("Imported dashboard");
+    if (label.isEmpty()) {
+        if (use == SpecUse::Save)
+            return fail(QStringLiteral("Dashboard has no name"));
+        label = use == SpecUse::Import ? QStringLiteral("Imported dashboard") : out.value(QStringLiteral("id")).toString();
+    }
     out.insert(QStringLiteral("label"), label);
 
-    const int cols = intIn(raw.value(QStringLiteral("gridColumns")), 1, kMaxGrid, 12);
-    const int rows = intIn(raw.value(QStringLiteral("gridRows")), 1, kMaxGrid, 6);
+    // Not a positive number = the 12 x 6 default, as the renderer reads it
+    int cols = intIn(raw.value(QStringLiteral("gridColumns")), 0, kMaxGrid, 0);
+    int rows = intIn(raw.value(QStringLiteral("gridRows")), 0, kMaxGrid, 0);
+    if (cols < 1) cols = 12;
+    if (rows < 1) rows = 6;
     out.insert(QStringLiteral("gridColumns"), cols);
     out.insert(QStringLiteral("gridRows"), rows);
     for (const QString key : {QStringLiteral("margins"), QStringLiteral("spacing")}) {
-        if (raw.contains(key))
+        // Absent (or null / undefined from QML) = the renderer's default
+        if (!raw.value(key).isNull())
             out.insert(key, intIn(raw.value(key), 0, 200, 0));
     }
 
@@ -620,12 +659,28 @@ QVariantMap DashboardManager::sanitizeImportedSpec(const QVariantMap &raw, QStri
         QVariantMap cell;
         cell.insert(QStringLiteral("type"), type);
         cell.insert(QStringLiteral("paramId"), c.value(QStringLiteral("paramId")).toString().left(64));
-        const int col = intIn(c.value(QStringLiteral("col")), 0, cols - 1, 0);
-        const int row = intIn(c.value(QStringLiteral("row")), 0, rows - 1, 0);
-        cell.insert(QStringLiteral("col"), col);
-        cell.insert(QStringLiteral("row"), row);
-        cell.insert(QStringLiteral("colSpan"), intIn(c.value(QStringLiteral("colSpan")), 1, cols - col, 1));
-        cell.insert(QStringLiteral("rowSpan"), intIn(c.value(QStringLiteral("rowSpan")), 1, rows - row, 1));
+        // Off the grid: the widget keeps its size and moves back in (as a
+        // drag does); only a span wider than the grid shrinks
+        DashboardGrid::Rect r;
+        r.colSpan = intIn(c.value(QStringLiteral("colSpan")), 1, cols, 1);
+        r.rowSpan = intIn(c.value(QStringLiteral("rowSpan")), 1, rows, 1);
+        r.col = intIn(c.value(QStringLiteral("col")), 0, cols - r.colSpan, 0);
+        r.row = intIn(c.value(QStringLiteral("row")), 0, rows - r.rowSpan, 0);
+        // Cells never overlap. In file order the earlier cell wins; a later
+        // one covering it shrinks toward 1x1 (as a new widget does) and is
+        // dropped only if even that is taken.
+        if (!DashboardGrid::canPlace(cells, cols, rows, r)) {
+            r = DashboardGrid::fitAt(cells, cols, rows, r.col, r.row, r.colSpan, r.rowSpan);
+            if (!DashboardGrid::canPlace(cells, cols, rows, r)) {
+                qCWarning(lcDashboards) << "Dropping" << type << "at" << r.col << r.row
+                                        << "in" << label << ": it overlaps another widget";
+                continue;
+            }
+        }
+        cell.insert(QStringLiteral("col"), r.col);
+        cell.insert(QStringLiteral("row"), r.row);
+        cell.insert(QStringLiteral("colSpan"), r.colSpan);
+        cell.insert(QStringLiteral("rowSpan"), r.rowSpan);
 
         // Props: scalar values only (bool / number / short string). Nested
         // objects or arrays have no meaning to any widget — drop them.
@@ -653,4 +708,32 @@ QVariantMap DashboardManager::sanitizeImportedSpec(const QVariantMap &raw, QStri
     }
     out.insert(QStringLiteral("cells"), cells);
     return out;
+}
+
+QVariantMap DashboardManager::normalizedSpec(const QVariantMap &spec) const
+{
+    QVariantMap withId = spec;
+    if (withId.value(QStringLiteral("id")).toString().isEmpty())
+        withId.insert(QStringLiteral("id"), QStringLiteral("draft"));
+    const QVariantMap out = normalizeSpec(withId, SpecUse::Load, nullptr);
+    if (out.isEmpty())
+        return {};
+    QVariantMap result = out;
+    if (spec.value(QStringLiteral("id")).toString().isEmpty())
+        result.remove(QStringLiteral("id"));
+    return result;
+}
+
+bool DashboardManager::canPlace(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
+                                int colSpan, int rowSpan, int exceptIndex) const
+{
+    return DashboardGrid::canPlace(cells, gridColumns, gridRows, {col, row, colSpan, rowSpan}, exceptIndex);
+}
+
+QVariantMap DashboardManager::fitAt(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
+                                    int colSpan, int rowSpan) const
+{
+    const DashboardGrid::Rect r = DashboardGrid::fitAt(cells, gridColumns, gridRows, col, row, colSpan, rowSpan);
+    return {{QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
+            {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
 }

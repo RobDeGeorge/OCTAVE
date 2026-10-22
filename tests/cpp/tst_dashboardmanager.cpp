@@ -1,6 +1,9 @@
-// Dashboard sharing: imports are sanitized to the known schema-1 keys and
-// clamped into the grid, bad input is refused with a reason, and export /
-// import round-trips without overwriting anything.
+// Dashboard specs: one set of rules (DashboardManager::normalizeSpec) on
+// import, save and load: known schema-1 keys, cells inside the grid and never
+// overlapping, scalar props, a file-safe id on save. Bad imports are refused
+// with a reason, export / import round-trips without overwriting anything,
+// and the shipped presets already satisfy every rule. The grid placement the
+// editor calls (src/util/dashboardgrid.h) is pinned at the end.
 
 #include <QDir>
 #include <QFile>
@@ -45,7 +48,7 @@ private slots:
             "schema": 1, "id": "../../evil", "label": "  My   Dash  ", "source": "Evil.qml",
             "gridColumns": 4, "gridRows": 2, "extra": {"x": 1},
             "cells": [
-                {"type": "BarGauge", "paramId": "RPM", "col": 9, "row": -3, "colSpan": 50, "rowSpan": 1,
+                {"type": "BarGauge", "paramId": "RPM", "col": 9, "row": 5, "colSpan": 50, "rowSpan": 1,
                  "props": {"warnAbove": 6000, "title": "Revs", "nested": {"a": 1}, "list": [1]},
                  "onClicked": "Qt.quit()"},
                 "not-a-cell",
@@ -71,10 +74,10 @@ private slots:
         const QStringList barKeys = bar.keys();
         QCOMPARE(QSet<QString>(barKeys.cbegin(), barKeys.cend()),
                  (QSet<QString>{"type", "paramId", "col", "row", "colSpan", "rowSpan", "props"}));
-        // Clamped into a 4x2 grid
-        QCOMPARE(bar.value("col").toInt(), 3);
-        QCOMPARE(bar.value("row").toInt(), 0);
-        QCOMPARE(bar.value("colSpan").toInt(), 1);
+        // Into a 4x2 grid: too wide for it, so as wide as the grid
+        QCOMPARE(bar.value("col").toInt(), 0);
+        QCOMPARE(bar.value("row").toInt(), 1);
+        QCOMPARE(bar.value("colSpan").toInt(), 4);
         // Scalars only
         QCOMPARE(bar.value("props").toMap(), (QVariantMap{{"warnAbove", 6000}, {"title", "Revs"}}));
         // Strings and bools aren't numbers
@@ -188,7 +191,181 @@ private slots:
             QVERIFY(v.toMap().value("id").toString() != QLatin1String("grid"));
     }
 
+    // ── one set of rules on save and load ───────────────────────────────
+
+    void presetsAreAlreadyNormal()
+    {
+        // Every shipped dashboard renders exactly as written
+        const QDir presets(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
+        const QStringList files = presets.entryList({"*.json"}, QDir::Files);
+        QVERIFY(files.size() >= 5);
+        for (const QString &name : files) {
+            QFile f(presets.filePath(name));
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            QJsonObject raw = QJsonDocument::fromJson(f.readAll()).object();
+            raw.insert("schema", 1);
+            const QJsonObject loaded =
+                QJsonObject::fromVariantMap(m_dm->loadDashboard(raw.value("id").toString()).toMap());
+            QVERIFY2(loaded == raw, qPrintable(name));
+        }
+    }
+
+    void offGridCellsMoveBeforeShrinking()
+    {
+        // A drag keeps the widget's size: so does a hand-edited file
+        const QVariantMap spec = saveAndLoad(R"json({"gridColumns": 12, "gridRows": 6, "cells": [
+            {"type": "CircularGauge", "col": 9, "row": 5, "colSpan": 6, "rowSpan": 2},
+            {"type": "BarGauge", "col": -4, "row": 0, "colSpan": 30, "rowSpan": 1}]})json");
+        const QVariantList cells = spec.value("cells").toList();
+        QCOMPARE(cells.size(), 2);
+        QCOMPARE(rect(cells.at(0)), (QList<int>{6, 4, 6, 2}));
+        QCOMPARE(rect(cells.at(1)), (QList<int>{0, 0, 12, 1}));
+    }
+
+    void overlapsShrinkThenDrop()
+    {
+        // File order: the earlier cell wins; a later one shrinks toward 1x1
+        // (wider side first) and is dropped only if its corner is taken
+        const QVariantMap spec = saveAndLoad(R"json({"gridColumns": 4, "gridRows": 4, "cells": [
+            {"type": "A", "col": 2, "row": 0, "colSpan": 2, "rowSpan": 2},
+            {"type": "B", "col": 0, "row": 0, "colSpan": 4, "rowSpan": 1},
+            {"type": "C", "col": 3, "row": 1, "colSpan": 1, "rowSpan": 1},
+            {"type": "D", "col": 0, "row": 2, "colSpan": 2, "rowSpan": 2}]})json");
+        const QVariantList cells = spec.value("cells").toList();
+        QCOMPARE(cells.size(), 3);
+        QCOMPARE(cells.at(1).toMap().value("type").toString(), QStringLiteral("B"));
+        QCOMPARE(rect(cells.at(1)), (QList<int>{0, 0, 2, 1}));
+        QCOMPARE(cells.at(2).toMap().value("type").toString(), QStringLiteral("D"));   // C dropped
+    }
+
+    void gridAndGeometryDefaults()
+    {
+        const QVariantMap spec = saveAndLoad(R"json({"gridColumns": 0, "gridRows": "8",
+            "margins": null, "spacing": 500, "cells": []})json");
+        QCOMPARE(spec.value("gridColumns").toInt(), 12);   // not 1
+        QCOMPARE(spec.value("gridRows").toInt(), 6);       // a string isn't a number
+        QVERIFY(!spec.contains("margins"));                // null = the renderer's default
+        QCOMPARE(spec.value("spacing").toInt(), 200);
+    }
+
+    void saveKeepsUnknownTypesAndPidsDropsNestedProps()
+    {
+        // A newer build's widget or PID survives an older build's save
+        const QVariantMap spec = saveAndLoad(R"json({"cells": [
+            {"type": "FutureGauge", "paramId": "FUTURE_PID", "props": {"a": {"b": 1}, "c": [1], "d": "NaN"}}]})json");
+        const QVariantMap cell = spec.value("cells").toList().value(0).toMap();
+        QCOMPARE(cell.value("type").toString(), QStringLiteral("FutureGauge"));
+        QCOMPARE(cell.value("paramId").toString(), QStringLiteral("FUTURE_PID"));
+        QCOMPARE(cell.value("props").toMap(), (QVariantMap{{"d", "NaN"}}));
+    }
+
+    void saveRefusesAPathAsId()
+    {
+        for (const char *id : {"../escape", "a/b", ".hidden", "x y"})
+            QCOMPARE(m_dm->saveDashboard({{"id", id}, {"label", "X"}, {"cells", QVariantList{}}}), QString());
+        QVERIFY(!QFile::exists(m_tmp->path() + "/escape.json"));
+        QCOMPARE(m_dm->saveDashboard({{"id", "Old_Name-2"}, {"label", "X"}}), QStringLiteral("Old_Name-2"));
+        QCOMPARE(m_dm->saveDashboard({{"id", "nolabel"}, {"label", "   "}}), QString());
+    }
+
+    void loadNormalizesHandEditedFiles()
+    {
+        writeUserFile("hand", R"json({"id": "hand", "label": "Hand", "gridColumns": 4, "gridRows": 2,
+            "cells": [{"type": "BarGauge", "col": 3, "row": 0, "colSpan": 3, "rowSpan": 1, "x": 1}]})json");
+        const QVariantMap cell = m_dm->loadDashboard("hand").toMap().value("cells").toList().value(0).toMap();
+        QCOMPARE(rect(cell), (QList<int>{1, 0, 3, 1}));
+        QVERIFY(!cell.contains("x"));
+
+        // Over the cap: the first 256 show (import and save refuse it)
+        QString many = QStringLiteral(R"({"id": "many", "label": "Many", "gridColumns": 48, "gridRows": 48, "cells": [)");
+        for (int i = 0; i < 300; ++i)
+            many += QStringLiteral(R"(%1{"type": "X", "col": %2, "row": %3})").arg(i ? "," : "").arg(i % 48).arg(i / 48);
+        many += "]}";
+        writeUserFile("many", many.toUtf8().constData());
+        QCOMPARE(m_dm->loadDashboard("many").toMap().value("cells").toList().size(), 256);
+
+        // No cell list: an empty dashboard, not a crash in the editor
+        writeUserFile("empty", R"json({"id": "empty", "label": "Empty"})json");
+        QCOMPARE(m_dm->loadDashboard("empty").toMap().value("cells").toList(), QVariantList{});
+    }
+
+    void newerSchemaPassesThroughLoadAndIsNotSaved()
+    {
+        // The renderer shows "needs a newer OCTAVE" for it; saving it here
+        // would strip what this build doesn't know
+        writeUserFile("future", R"json({"schema": 2, "id": "future", "label": "Future",
+            "cells": [{"type": "X", "col": 99, "wild": true}]})json");
+        const QVariantMap spec = m_dm->loadDashboard("future").toMap();
+        QCOMPARE(spec.value("schema").toInt(), 2);
+        QCOMPARE(spec.value("cells").toList().value(0).toMap().value("col").toInt(), 99);
+        QCOMPARE(m_dm->saveDashboard(spec), QString());
+    }
+
+    void normalizedSpecForDrafts()
+    {
+        // The editor's rescued draft has no id: it stays without one
+        const QVariantMap spec = m_dm->normalizedSpec({{"gridColumns", 4}, {"gridRows", 2},
+            {"cells", QVariantList{QVariantMap{{"type", "BarGauge"}, {"col", 8}}}}});
+        QVERIFY(!spec.contains("id"));
+        QCOMPARE(rect(spec.value("cells").toList().value(0)), (QList<int>{3, 0, 1, 1}));
+    }
+
+    // ── grid placement (the editor's tap / drag / resize) ───────────────
+
+    void gridCanPlace()
+    {
+        const QVariantList cells{QVariantMap{{"col", 2}, {"row", 0}, {"colSpan", 2}, {"rowSpan", 2}}};
+        QVERIFY(m_dm->canPlace(cells, 4, 4, 0, 0, 2, 2, -1));
+        QVERIFY(!m_dm->canPlace(cells, 4, 4, 1, 1, 2, 1, -1));   // covers (2,1)
+        QVERIFY(m_dm->canPlace(cells, 4, 4, 1, 1, 2, 1, 0));     // ...unless that's the one moving
+        QVERIFY(!m_dm->canPlace(cells, 4, 4, 3, 2, 2, 1, -1));   // off the right edge
+        QVERIFY(!m_dm->canPlace(cells, 4, 4, -1, 0, 1, 1, -1));
+        QVERIFY(!m_dm->canPlace(cells, 4, 4, 0, 0, 0, 1, -1));   // no zero spans
+        // A cell with no position keys sits at (0,0), 1x1
+        QVERIFY(!m_dm->canPlace({QVariantMap{}}, 4, 4, 0, 0, 1, 1, -1));
+    }
+
+    void gridFitAtShrinksWiderSideFirst()
+    {
+        const QVariantList cells{QVariantMap{{"col", 2}, {"row", 0}, {"colSpan", 2}, {"rowSpan", 4}}};
+        // Wanted 4x3 at (0,0): cut to the free 2 columns, height kept
+        QCOMPARE(m_dm->fitAt(cells, 4, 4, 0, 0, 4, 3),
+                 (QVariantMap{{"col", 0}, {"row", 0}, {"colSpan", 2}, {"rowSpan", 3}}));
+        // Off the grid edge: cut to it
+        QCOMPARE(m_dm->fitAt({}, 4, 4, 3, 3, 6, 6),
+                 (QVariantMap{{"col", 3}, {"row", 3}, {"colSpan", 1}, {"rowSpan", 1}}));
+    }
+
 private:
+    // Saved under a fresh id, then read back
+    QVariantMap saveAndLoad(const char *json)
+    {
+        QVariantMap spec = QJsonDocument::fromJson(json).object().toVariantMap();
+        spec.insert("id", QStringLiteral("t%1").arg(++m_n));
+        spec.insert("label", QStringLiteral("T"));
+        const QString id = m_dm->saveDashboard(spec);
+        if (id.isEmpty())
+            return {};
+        return m_dm->loadDashboard(id).toMap();
+    }
+
+    void writeUserFile(const QString &id, const char *json)
+    {
+        QFile f(m_tmp->path() + "/dashboards/" + id + ".json");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(json);
+        f.close();
+        m_dm->refresh();
+    }
+
+    static QList<int> rect(const QVariant &cell)
+    {
+        const QVariantMap c = cell.toMap();
+        return {c.value("col").toInt(), c.value("row").toInt(), c.value("colSpan").toInt(),
+                c.value("rowSpan").toInt()};
+    }
+
+    int m_n = 0;
     std::unique_ptr<QTemporaryDir> m_tmp;
     std::unique_ptr<DashboardManager> m_dm;
 };

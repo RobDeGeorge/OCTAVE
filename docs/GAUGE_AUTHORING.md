@@ -364,18 +364,23 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 - Built-in preset ids must be unique. User ids colliding with a built-in are rejected at load time (logged).
 - Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` drives the chooser's "Restore defaults" button. Parameter Cards (`grid`) can't be deleted. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id. New ids come from `dashboardManager.uniqueIdForLabel(label)` (editor, Duplicate and Import alike); it never returns a built-in id (hidden ones included) or `grid`, and `saveDashboard` refuses both.
 - **Newer schema.** A spec whose `schema` is above `dashboardManager.supportedSchema` (`kSupportedSchema`, 1) renders no cells, demands no PIDs, and shows one centred "This dashboard needs a newer version of OCTAVE" message. Import refuses such files; this covers one dropped into the folder by hand.
-- **Validation.** `DashboardRenderer` checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`; failures are `console.warn`ed with the dashboard id and never crash the view. The editor applies the same checks when loading a spec (`_sanitizeCells`) — unknown types are dropped, unknown PIDs cleared so the panel shows "Choose PID…".
-- **Import sanitizing.** `importDashboard` / `importDashboardFromClipboard` /
-  `importDashboardFromText` refuse a spec whose
-  `schema` is newer than `kSupportedSchema` (1) with
-  "This dashboard needs a newer version of OCTAVE", keep only `schema`,
-  `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `cells` and per
-  cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`
-  (scalar props only; strings capped at 200 chars), clamp geometry into the
-  grid, and cap input at 512 KB / 256 cells / 48×48 grid. Anything else (an
-  `id`, a `source` field, nested objects) is dropped. The id is always
-  regenerated from the label, so an import never overwrites an existing
-  dashboard. Failures set `dashboardManager.lastShareError`.
+- **One set of spec rules** (`DashboardManager::normalizeSpec`, applied by `saveDashboard`, `loadDashboard` and every import, so the editor, Duplicate, Import and the renderer all see the same thing):
+  - Kept keys: `schema`, `id`, `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `cells` and per cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`; anything else is dropped. `props` keeps scalars only (bool, number, string ≤ 200 chars; `"NaN"` survives).
+  - Numbers must be JSON numbers (a string or bool gets the default). Grid size: not a positive number = 12 × 6, else capped at 48. `margins` / `spacing`: 0..200, absent or `null` = the renderer's 20 / 16. Caps: 256 cells (refused on save and import; a file on disk shows its first 256), label 80 chars (whitespace collapsed).
+  - A cell off the grid keeps its size and moves back in (as a drag does); only a span wider than the grid shrinks.
+  - Cells never overlap. In file order the earlier cell wins; a later one shrinks toward 1×1 (wider side first, as a newly placed widget does) and is dropped, logged, only if its corner is taken.
+  - Unknown widget types and PIDs are **kept**, so a newer build's dashboard survives an older build's save: the renderer skips an unknown type (its grid area stays empty) and leaves an unknown PID unbound; the editor shows an unknown type inert ("needs a newer OCTAVE", Delete works) and doesn't bind an unknown PID.
+  - Schema: missing = 1. A newer schema is refused by save and import, and `loadDashboard` passes such a file through untouched so the renderer can show its placeholder; the editor won't open it.
+  - `saveDashboard` needs a label and a file-safe id (`[A-Za-z0-9_-]`, ≤ 64; new ids are slugs from `uniqueIdForLabel`). A file with no `cells` loads as an empty dashboard.
+  - Grid placement (`src/util/dashboardgrid.{h,cpp}`) is the same code in the editor: `dashboardManager.canPlace(cells, cols, rows, col, row, colSpan, rowSpan, exceptIndex)` for drag / resize, `dashboardManager.fitAt(cells, cols, rows, col, row, colSpan, rowSpan)` for the span a new widget shrinks to. The rescued editor draft goes through `dashboardManager.normalizedSpec(spec)`.
+  - Every shipped preset already satisfies these rules (`presetsAreAlreadyNormal` in `tests/cpp/tst_dashboardmanager.cpp`).
+- **Validation in QML.** `DashboardRenderer` still checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()` (the catalog is QML), `console.warn`s failures with the dashboard id and never crashes the view.
+- **Import.** `importDashboard` / `importDashboardFromClipboard` /
+  `importDashboardFromText` apply the rules above and also refuse a spec
+  with a bad `schema` or no `cells` list, and input over 512 KB. The id is
+  always regenerated from the label (`label` defaults to "Imported
+  dashboard"), so an import never overwrites an existing dashboard.
+  Failures set `dashboardManager.lastShareError`.
 - **Hot reload.** `DashboardManager` watches the user dashboards directory (`QFileSystemWatcher`, 300 ms debounce, rescans only when the file-name/mtime/size signature changed). Drop a JSON in from a terminal or sync client and it appears in the chooser without restarting; delete one and it disappears. If the deleted file was the active dashboard, `OBDMenu` falls back to Parameter Cards.
 
 ### 5.5 Vehicle gate and polling demand

@@ -189,6 +189,8 @@ qt_add_executable(octave
     src/util/uiwatchdog.h
     src/util/uiwatchdog.cpp
     src/util/perfscope.h
+    src/util/dashboardgrid.h
+    src/util/dashboardgrid.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
     src/managers/diagnosticsmanager.h

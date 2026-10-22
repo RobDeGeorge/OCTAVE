@@ -62,22 +62,11 @@ Item {
 
     // True if a cell of the given span fits at (col, row) without leaving the
     // grid or overlapping any placed cell (other than `exceptIndex`, used
-    // while moving/resizing an existing cell).
+    // while moving/resizing an existing cell). The rule lives in C++
+    // (src/util/dashboardgrid.h), shared with save / load / import.
     function canPlace(col, row, colSpan, rowSpan, exceptIndex) {
-        if (col < 0 || row < 0) return false
-        if (col + colSpan > gridColumns || row + rowSpan > gridRows) return false
-        for (var i = 0; i < cells.length; i++) {
-            if (i === exceptIndex) continue
-            var c = cells[i]
-            var cc = c.col     !== undefined ? c.col     : 0
-            var cr = c.row     !== undefined ? c.row     : 0
-            var cs = c.colSpan !== undefined ? c.colSpan : 1
-            var rs = c.rowSpan !== undefined ? c.rowSpan : 1
-            if (col < cc + cs && cc < col + colSpan &&
-                row < cr + rs && cr < row + rowSpan)
-                return false
-        }
-        return true
+        if (typeof dashboardManager === "undefined" || !dashboardManager) return false
+        return dashboardManager.canPlace(cells, gridColumns, gridRows, col, row, colSpan, rowSpan, exceptIndex)
     }
 
     // Occupancy map: index (row * gridColumns + col) → true when covered by a
@@ -218,8 +207,11 @@ Item {
                     if (!item) return
                     item.width  = Qt.binding(function() { return widgetLoader.width  })
                     item.height = Qt.binding(function() { return widgetLoader.height })
+                    // An unknown PID (a newer build's) stays in the spec
+                    // but unbound, as in the renderer
                     if (modelData.paramId !== undefined && modelData.paramId !== ""
-                            && item.paramId !== undefined)
+                            && item.paramId !== undefined
+                            && App.OBDParameterModel.hasParameter(modelData.paramId))
                         item.paramId = modelData.paramId
                     var props = modelData.props || {}
                     for (var key in props) {

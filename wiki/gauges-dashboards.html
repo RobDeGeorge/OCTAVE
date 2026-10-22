@@ -99,10 +99,11 @@ frontend/
       PIDPicker.qml              searchable, kind-filtered, vehicle-gated PID list
       PropertiesPanel.qml        PID / position &amp; size / options / label &amp; range / color inspector
 src/managers/dashboardmanager.{h,cpp}   DashboardManager
+src/util/dashboardgrid.{h,cpp}          grid placement (canPlace, fitAt), shared with the editor
 docs/GAUGE_AUTHORING.md                 authoring spec (source of truth for the API)
 dev/tests/drive_dashboard_editor.py     end-to-end editor scenario (command server)
 dev/tests/drive_dashboard_features.py   overrides, resize, swipe, sharing scenario (command server)
-tests/cpp/tst_dashboardmanager.cpp      import sanitizer + export/import round trip (QtTest)
+tests/cpp/tst_dashboardmanager.cpp      spec rules, import, export/import round trip, grid placement (QtTest)
 tests/cpp/tst_vehiclegate.cpp           headless QML gate test with a fake obdManager (QtTest)
         </pre>
 
@@ -428,15 +429,15 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
         <table>
           <thead><tr><th>Field</th><th>Required</th><th>Read by</th><th>Rules</th></tr></thead>
           <tbody>
-            <tr><td><code>id</code></td><td>yes</td><td>DashboardManager, OBDMenu</td><td>Missing id: file skipped (logged). Duplicate of a built-in: user file skipped. <code>"grid"</code> is reserved for the Parameter Cards entry (<code>DashboardManager::kParameterCardsId</code>): <code>uniqueIdForLabel</code> never returns it, <code>saveDashboard</code> refuses it, and a user file carrying it is skipped on scan (logged). <code>saveDashboard</code> writes <code>&lt;id&gt;.json</code>.</td></tr>
-            <tr><td><code>label</code></td><td>yes (for save)</td><td>DashboardManager, OBDMenu</td><td><code>saveDashboard</code> rejects an empty label; a preset with an empty label loads with a blank name.</td></tr>
-            <tr><td><code>schema</code></td><td>by convention</td><td>DashboardManager import</td><td>Written by the editor and every preset. The <a href="#sharing">import sanitizer</a> refuses a spec newer than <code>kSupportedSchema</code> (1) with "This dashboard needs a newer version of OCTAVE"; a newer file dropped into the folder by hand is listed, and <code>DashboardRenderer</code> shows that message instead of its cells (and demands no PIDs). It reads the limit from <code>dashboardManager.supportedSchema</code>, or 1 with no manager. A missing <code>schema</code> imports as 1.</td></tr>
-            <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>no</td><td>Renderer, Editor</td><td>Falsy values (0, missing) fall back to 12 / 6.</td></tr>
-            <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>Renderer and editor</td><td>Applied through <code>App.Spacing.dp()</code>. The editor keeps a loaded spec's values (<code>specMargins</code> / <code>specSpacing</code>), renders its canvas with them and writes them back into saves and drafts (<code>_withGridGeometry()</code>), but only when the spec had them &mdash; a dashboard without the keys keeps relying on the 20 / 16 defaults and its JSON stays minimal.</td></tr>
-            <tr><td><code>cells[].type</code></td><td>yes</td><td>Renderer, Editor, WidgetCatalog</td><td>Unknown type: renderer logs and skips the cell; editor drops it on load.</td></tr>
-            <tr><td><code>cells[].paramId</code></td><td>no</td><td>Renderer, Editor</td><td>Unknown id: renderer logs and leaves the widget unbound; editor clears it to <code>""</code>. Ignored for widgets without a <code>paramId</code> property.</td></tr>
-            <tr><td><code>cells[].col/row/colSpan/rowSpan</code></td><td>no</td><td>Renderer, Editor</td><td>Renderer trusts them; editor clamps into the grid on load.</td></tr>
-            <tr><td><code>cells[].props</code></td><td>no</td><td>Renderer, Editor</td><td>Applied after <code>paramId</code> so overrides win over model defaults. This is also where the editor's per-widget overrides live: <code>title</code>, <code>unit</code>, <code>min</code>, <code>max</code> and the color keys from the catalog's <code>colorProps</code>; omit a key to follow the PID metadata / live theme. Keys the widget does not declare are silently skipped. The string <code>"NaN"</code> is coerced to <code>NaN</code> (JSON cannot encode it; used to un-set thresholds).</td></tr>
+            <tr><td><code>id</code></td><td>yes</td><td>DashboardManager, OBDMenu</td><td>Missing id: file skipped (logged). Duplicate of a built-in: user file skipped. <code>"grid"</code> is reserved for the Parameter Cards entry (<code>DashboardManager::kParameterCardsId</code>): <code>uniqueIdForLabel</code> never returns it, <code>saveDashboard</code> refuses it, and a user file carrying it is skipped on scan (logged). <code>saveDashboard</code> writes <code>&lt;id&gt;.json</code> and refuses an id that isn't file-safe (<code>[A-Za-z0-9_-]</code>, &le; 64 chars).</td></tr>
+            <tr><td><code>label</code></td><td>yes (for save)</td><td>DashboardManager, OBDMenu</td><td>Whitespace collapsed, capped at 80 chars. <code>saveDashboard</code> rejects an empty label; a file with none loads named after its id.</td></tr>
+            <tr><td><code>schema</code></td><td>by convention</td><td>DashboardManager</td><td>Written by the editor and every preset. Save and the <a href="#sharing">import sanitizer</a> refuse a spec newer than <code>kSupportedSchema</code> (1) with "This dashboard needs a newer version of OCTAVE"; a newer file dropped into the folder by hand is listed, and <code>DashboardRenderer</code> shows that message instead of its cells (and demands no PIDs). It reads the limit from <code>dashboardManager.supportedSchema</code>, or 1 with no manager; <code>loadDashboard</code> passes such a file through untouched and the editor won't open it. A missing <code>schema</code> is 1.</td></tr>
+            <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>no</td><td>Renderer, Editor</td><td>Not a positive JSON number (0, missing, a string) = 12 / 6; capped at 48.</td></tr>
+            <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>Renderer and editor</td><td>Applied through <code>App.Spacing.dp()</code>; 0..200, <code>null</code> = absent. The editor keeps a loaded spec's values (<code>specMargins</code> / <code>specSpacing</code>), renders its canvas with them and writes them back into saves and drafts (<code>_withGridGeometry()</code>), but only when the spec had them &mdash; a dashboard without the keys keeps relying on the 20 / 16 defaults and its JSON stays minimal.</td></tr>
+            <tr><td><code>cells[].type</code></td><td>yes</td><td>Renderer, Editor, WidgetCatalog</td><td>Kept in the file whatever it is (a newer build's widget survives a save). Unknown type: renderer logs and skips the cell (its area stays empty); editor shows it inert as "needs a newer OCTAVE", and Delete works.</td></tr>
+            <tr><td><code>cells[].paramId</code></td><td>no</td><td>Renderer, Editor</td><td>Kept in the file. Unknown id: renderer logs and leaves the widget unbound; the editor canvas doesn't bind it either. Ignored for widgets without a <code>paramId</code> property.</td></tr>
+            <tr><td><code>cells[].col/row/colSpan/rowSpan</code></td><td>no</td><td>Renderer, Editor</td><td>Normalised on save and load (<code>DashboardManager::normalizeSpec</code>): a cell off the grid keeps its size and moves back in, shrinking only if wider than the grid; cells never overlap (the earlier cell in file order wins, a later one shrinks toward 1&times;1 and is dropped only if its corner is taken). The editor's tap / drag / resize use the same placement code (<code>canPlace</code>, <code>fitAt</code>, <span class="file-path">src/util/dashboardgrid.{h,cpp}</span>).</td></tr>
+            <tr><td><code>cells[].props</code></td><td>no</td><td>Renderer, Editor</td><td>Scalars only (bool, number, string &le; 200 chars); nested objects and arrays are dropped on save and load. Applied after <code>paramId</code> so overrides win over model defaults. This is also where the editor's per-widget overrides live: <code>title</code>, <code>unit</code>, <code>min</code>, <code>max</code> and the color keys from the catalog's <code>colorProps</code>; omit a key to follow the PID metadata / live theme. Keys the widget does not declare are silently skipped. The string <code>"NaN"</code> is coerced to <code>NaN</code> (JSON cannot encode it; used to un-set thresholds).</td></tr>
           </tbody>
         </table>
 
@@ -467,9 +468,9 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
           <thead><tr><th>Member</th><th>Kind</th><th>Behavior</th></tr></thead>
           <tbody>
             <tr><td><code>dashboards</code></td><td>Property (list), notify <code>dashboardsChanged</code></td><td>Headers <code>{ id, label, builtIn, path }</code>: presets first in file-name order, then user files in file-name order.</td></tr>
-            <tr><td><code>loadDashboard(id)</code></td><td>Invokable -&gt; map</td><td>Full parsed spec, or an empty map for an unknown id / unreadable file (logged).</td></tr>
+            <tr><td><code>loadDashboard(id)</code></td><td>Invokable -&gt; map</td><td>The spec normalised by the <a href="#schema">spec rules</a> (a newer-schema file untouched), or an empty map for an unknown id / unreadable file (logged).</td></tr>
             <tr><td><code>isBuiltIn(id)</code></td><td>Invokable -&gt; bool</td><td></td></tr>
-            <tr><td><code>saveDashboard(spec)</code></td><td>Slot -&gt; id or <code>""</code></td><td>Requires non-empty <code>id</code> and <code>label</code> and a configured user dir; refuses an id that belongs to a built-in (hidden ones included) or is <code>"grid"</code>; otherwise writes <code>&lt;userDir&gt;/&lt;id&gt;.json</code> (overwriting an existing user file with that id) and rescans.</td></tr>
+            <tr><td><code>saveDashboard(spec)</code></td><td>Slot -&gt; id or <code>""</code></td><td>Normalises the spec first (<a href="#schema">spec rules</a>; refuses a newer schema, an empty label or an id that isn't file-safe) and needs a configured user dir; refuses an id that belongs to a built-in (hidden ones included) or is <code>"grid"</code>; otherwise writes <code>&lt;userDir&gt;/&lt;id&gt;.json</code> (overwriting an existing user file with that id) and rescans.</td></tr>
             <tr><td><code>deleteDashboard(id)</code></td><td>Slot -&gt; bool</td><td>Removes the user file. A built-in is hidden instead: its id is added to <code>&lt;userDir&gt;/.hidden-builtins</code> (a JSON array) and it drops out of <code>dashboards</code>, but its id stays reserved. False for unknown ids.</td></tr>
             <tr><td><code>hiddenBuiltInCount</code></td><td>Property (int), notify <code>dashboardsChanged</code></td><td>Number of built-ins the user has deleted (hidden).</td></tr>
             <tr><td><code>supportedSchema</code></td><td>Property (int), constant</td><td><code>kSupportedSchema</code> (1): the highest dashboard <code>schema</code> this build reads; DashboardRenderer shows "needs a newer OCTAVE" above it.</td></tr>
@@ -510,19 +511,19 @@ sweepAngle = sweepAngle * (1 - _t)</code></pre>
         <p>
           <strong>Imports never overwrite.</strong> The incoming <code>id</code> is discarded and a new one is generated from the
           label with the same <code>uniqueIdForLabel</code> rule as Duplicate, so importing the same file twice gives
-          <code>name</code> and <code>name-2</code>. The sanitizer
-          (<code>DashboardManager::sanitizeImportedSpec</code>) runs first:
+          <code>name</code> and <code>name-2</code>. The spec rules every save and load apply
+          (<code>DashboardManager::normalizeSpec</code>, see the field table above) run first, plus the import-only refusals:
         </p>
         <ul>
           <li>Root must be a JSON object with a <code>cells</code> array; <code>schema</code> (default 1) must be 1 -- newer is refused with "This dashboard needs a newer version of OCTAVE".</li>
           <li>Only <code>schema</code>, <code>label</code>, <code>gridColumns</code>, <code>gridRows</code>, <code>margins</code>, <code>spacing</code>, <code>cells</code> survive; per cell only <code>type</code>, <code>paramId</code>, <code>col</code>, <code>row</code>, <code>colSpan</code>, <code>rowSpan</code>, <code>props</code>. Anything else -- an <code>id</code>, a <code>source</code> field, unknown keys -- is dropped.</li>
           <li><code>props</code> keeps scalar values only (bool, number, string &le; 200 chars); nested objects and arrays are dropped.</li>
-          <li>Numbers must be JSON numbers (no bools, no numeric strings); geometry is clamped into the grid, grid size into 1..48, margins/spacing into 0..200. Label is whitespace-collapsed, capped at 80 chars, default "Imported dashboard".</li>
+          <li>Numbers must be JSON numbers (no bools, no numeric strings); geometry is moved into the grid and overlaps resolved as for any save, grid size 1..48, margins/spacing 0..200. Label is whitespace-collapsed, capped at 80 chars, default "Imported dashboard".</li>
           <li>Caps: 512 KB of text, 256 cells. Cells with an empty or over-long <code>type</code> are skipped; unknown types are kept (the renderer skips them, so a newer catalog's widgets survive a round trip).</li>
         </ul>
         <p>
           Shared dashboards are pure data -- no QML or script is ever loaded from an import. Covered by
-          <span class="file-path">tests/cpp/tst_dashboardmanager.cpp</span> (sanitizer rules, rejections, export/import round trip).
+          <span class="file-path">tests/cpp/tst_dashboardmanager.cpp</span> (spec rules on save, load and import, the presets already satisfying them, rejections, export/import round trip, grid placement).
         </p>
 
         <h2 id="renderer">DashboardRenderer: Spec to QML</h2>
@@ -637,7 +638,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <table>
           <thead><tr><th>Function</th><th>Behaviour</th></tr></thead>
           <tbody>
-            <tr><td><code>addCellAt(type, col, row)</code></td><td>Starts from the catalog's default span, clamps to the grid, then shrinks toward 1 × 1 (wider side first) until <code>canPlace()</code> succeeds; the tapped cell itself is guaranteed free. Selects the new cell and opens the PID picker unless the widget is self-binding.</td></tr>
+            <tr><td><code>addCellAt(type, col, row)</code></td><td>Starts from the catalog's default span; <code>dashboardManager.fitAt()</code> cuts it to the grid, then shrinks it toward 1 × 1 (wider side first) until it fits; the tapped cell itself is guaranteed free. Selects the new cell and opens the PID picker unless the widget is self-binding.</td></tr>
             <tr><td><code>moveCell(index, col, row)</code></td><td>Clamps, checks <code>canPlace</code> excluding the cell itself, patches -- or, on a rejected drop, reassigns <code>cells = cells.slice()</code> so the dragged delegate is rebuilt at its origin.</td></tr>
             <tr><td><code>nudgeCell</code>, <code>resizeCell</code></td><td>Stepper helpers (±1 column/row/span) built on the same checks.</td></tr>
             <tr><td><code>resizeCellTo(index, colSpan, rowSpan)</code></td><td>Absolute resize for the drag grip: clamps into the grid, applies if <code>canPlace</code> passes, otherwise reassigns <code>cells</code> so the canvas snaps back.</td></tr>
@@ -645,7 +646,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
             <tr><td><code>setCellProps(index, keys, value)</code></td><td>Writes one value to several props in a single mutation (the Color row's <code>colorProps</code>); <code>value === undefined</code> removes them all (back to theme).</td></tr>
             <tr><td><code>save()</code></td><td>Label defaults to "Untitled"; id = <code>editingId</code> or <code>dashboardManager.uniqueIdForLabel(label)</code>; builds <code>{ schema: 1, id, label, gridColumns, gridRows, cells }</code> plus <code>margins</code> / <code>spacing</code> when the loaded spec carried them; on success clears <code>dirty</code>, clears the stored draft if this session resumed one, calls <code>callerPage.setActiveDashboard(savedId)</code> and pops. Failure shows a 3 s error banner.</td></tr>
             <tr><td><code>cancel()</code></td><td>First tap with unsaved work arms "Discard?" for 3 s; the second tap clears <code>dirty</code>, clears a resumed draft and pops. "Editing in a car -- accidental data loss hurts."</td></tr>
-            <tr><td><code>_sanitizeCells(raw)</code></td><td>Applied to every spec arriving from disk or a draft: drops unknown types, clamps col/row/span into the grid, clears unknown <code>paramId</code>s (the panel then shows "Choose PID…").</td></tr>
+            <tr><td>Loading</td><td><code>dashboardManager.loadDashboard()</code> (or <code>normalizedSpec()</code> for a rescued draft) already returns the spec in the grid with no overlaps, so the editor takes the cells as they are. Unknown types stay as inert cells ("needs a newer OCTAVE" in the panel, Delete works) and unknown PIDs stay unbound, so saving keeps them. A spec with a newer <code>schema</code> is not opened.</td></tr>
           </tbody>
         </table>
         <p>
@@ -668,7 +669,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <h3>EditorCanvas.qml</h3>
         <ul>
           <li>Geometry mirrors the renderer exactly: the canvas takes the spec's optional <code>margins</code> / <code>spacing</code> (<code>undefined</code> keeps the 20 dp / 16 dp defaults) and uses the same cell formulas, so the layout you edit is the layout that renders.</li>
-          <li><code>canPlace(col, row, colSpan, rowSpan, exceptIndex)</code>: inside the grid and no rectangle overlap with any other cell.</li>
+          <li><code>canPlace(col, row, colSpan, rowSpan, exceptIndex)</code>: inside the grid and no rectangle overlap with any other cell; it calls <code>dashboardManager.canPlace()</code>, the rule save and load use too.</li>
           <li><code>_occupied</code>: a flat <code>row * cols + col</code> boolean map recomputed whenever <code>cells</code> is reassigned; a <code>Repeater</code> over <code>gridColumns * gridRows</code> shows a <code>[+]</code> target on every free index (dimmed while dragging).</li>
           <li>Placed cells: a synchronous <code>Loader</code> (synchronous so panel tweaks, which rebuild the Repeater, do not flicker) with the same bind/props logic as the renderer, a "no PID" hint for unbound PID widgets, a selection frame, and a <code>MouseArea</code> with <code>drag.target: cellRoot</code>. <code>onPressed</code> selects; while dragging, <code>_updateDragCandidate()</code> rounds the item position to the nearest cell, clamps, and sets <code>dragCol/dragRow/dragValid</code> for the highlight rectangle (accent when valid, <code>statusDanger</code> when not); <code>onReleased</code> emits <code>cellMoveRequested</code>.</li>
           <li><strong>Resize grip</strong> (<code>editorResizeGrip_&lt;index&gt;</code>): on the selected cell only, a 22 dp accent square on the bottom-right corner with a 44 dp touch target. Its <code>MouseArea</code> (<code>preventStealing</code>) maps the pointer into canvas coordinates, snaps the far corner to the cell under it, and drives the same drop highlight (accent = valid, <code>statusDanger</code> = overlap / out of bounds); release emits <code>cellResizeRequested</code>. The selected cell gets <code>z: 5</code> so the grip, which pokes past the corner, stays above neighbours.</li>
@@ -699,13 +700,12 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <tbody>
             <tr><td>DashboardManager</td><td>JSON parses to an object; <code>id</code> present; unique vs presets</td><td>File skipped with a warning; the rest of the list still loads.</td></tr>
             <tr><td>DashboardRenderer</td><td><code>WidgetCatalog.isKnownType(type)</code>; <code>OBDParameterModel.hasParameter(paramId)</code></td><td>Unknown type: cell skipped, <code>console.warn</code> with dashboard id. Unknown PID: widget rendered unbound (shows 0 / placeholder), warned.</td></tr>
-            <tr><td>DashboardEditor <code>_sanitizeCells</code></td><td>Same two checks plus geometry clamping</td><td>Unknown type dropped; unknown PID cleared; out-of-grid cells pulled inside.</td></tr>
-            <tr><td>DashboardManager import</td><td>Schema version, allowed keys, scalar props, number types, geometry, size caps</td><td>Refused with a <code>lastShareError</code> reason, or reduced to the known keys and clamped (see <a href="#sharing">Sharing</a>).</td></tr>
+            <tr><td>DashboardManager save / load / import (<code>normalizeSpec</code>)</td><td>Schema version, allowed keys, scalar props, number types, geometry, overlaps, size caps, file-safe id on save</td><td>Reduced to the known keys, moved into the grid, overlaps shrunk or dropped (see the <a href="#schema">field table</a>); a save that fails returns <code>""</code>; an import is refused with a <code>lastShareError</code> reason (see <a href="#sharing">Sharing</a>). A newer-schema file loads untouched for the renderer's placeholder.</td></tr>
             <tr><td>OBDMenu</td><td>Active id still exists after <code>dashboardsChanged</code></td><td>Falls back to Parameter Cards.</td></tr>
             <tr><td>Hot reload</td><td>Watcher + 300 ms debounce + signature</td><td>A spec dropped into or removed from the user dir from a terminal or sync client shows up in the chooser within about a second, no restart.</td></tr>
           </tbody>
         </table>
-        <p>Not validated for presets and hand-dropped files: <code>props</code> types (an invalid value is assigned as-is and the QML property coerces or ignores it), overlapping cells in hand-written specs (rendered overlapping; the editor will refuse to move them onto each other but does not repair them on load).</p>
+        <p>Not validated: a <code>props</code> value's type against the widget (a scalar of the wrong type is assigned as-is and the QML property coerces or ignores it). Unknown types and PIDs are only checked in QML, since the widget catalog is QML.</p>
 
         <h2 id="testing">Testing</h2>
         <p><strong>Headless (QtTest under <span class="file-path">tests/cpp/</span>, run by <code>ctest</code> in CI):</strong></p>

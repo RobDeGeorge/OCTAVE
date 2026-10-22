@@ -276,7 +276,9 @@ Rectangle {
                 }
                 Text {
                     Layout.fillWidth: true
-                    text: panel.meta ? panel.meta.displayName : ""
+                    // A type this build doesn't have stays in the file, inert
+                    text: panel.meta ? panel.meta.displayName
+                                     : (panel.cell ? panel.cell.type + " (needs a newer OCTAVE)" : "")
                     color: App.Style.primaryTextColor
                     font.family: App.Style.fontFamily
                     font.pixelSize: App.Spacing.overallText * 1.1

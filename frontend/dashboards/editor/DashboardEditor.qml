@@ -94,11 +94,19 @@ Item {
             _showError("Could not load dashboard \"" + editingId + "\"")
             return
         }
-        gridColumns = spec.gridColumns ? spec.gridColumns : 12
-        gridRows = spec.gridRows ? spec.gridRows : 6
+        // A newer build's file: saving it from here would strip what this
+        // build doesn't know
+        if (spec.schema > dashboardManager.supportedSchema) {
+            _showError("\"" + (spec.label || editingId) + "\" needs a newer version of OCTAVE to edit")
+            editingId = ""
+            return
+        }
+        // Already normalised by the manager: in the grid, no overlaps
+        gridColumns = spec.gridColumns
+        gridRows = spec.gridRows
         specMargins = spec.margins
         specSpacing = spec.spacing
-        cells = _sanitizeCells(spec.cells)
+        cells = spec.cells
         nameField.text = spec.label ? spec.label : ""
     }
 
@@ -134,12 +142,19 @@ Item {
     function _restoreDraft(json) {
         try {
             var draft = JSON.parse(json)
+            // The same rules a save applies; the label is kept as typed
+            var spec = dashboardManager.normalizedSpec({
+                "gridColumns": draft.gridColumns, "gridRows": draft.gridRows,
+                "margins": draft.margins, "spacing": draft.spacing,
+                "cells": draft.cells || []
+            })
+            if (!spec.cells) return false
             editingId = draft.editingId ? draft.editingId : ""
-            gridColumns = draft.gridColumns ? draft.gridColumns : 12
-            gridRows = draft.gridRows ? draft.gridRows : 6
-            specMargins = draft.margins
-            specSpacing = draft.spacing
-            cells = _sanitizeCells(draft.cells || [])
+            gridColumns = spec.gridColumns
+            gridRows = spec.gridRows
+            specMargins = spec.margins
+            specSpacing = spec.spacing
+            cells = spec.cells
             nameField.text = draft.label ? draft.label : ""
             dirty = true
             return true
@@ -158,38 +173,6 @@ Item {
             settingsManager.save_setting("dashboardEditorDraft", "")
     }
 
-    // Clamp loaded cells into the grid and drop unknown widget types, so a
-    // hand-edited or older JSON file can't put the canvas math out of bounds.
-    // Editor mutations already clamp; this covers what arrives from disk.
-    function _sanitizeCells(rawCells) {
-        var out = []
-        for (var i = 0; i < rawCells.length; i++) {
-            var c = rawCells[i]
-            if (!c || !App.WidgetCatalog.isKnownType(c.type)) {
-                console.warn("DashboardEditor: dropping cell with unknown type:",
-                             c ? c.type : "<null>")
-                continue
-            }
-            var col = Math.max(0, Math.min(gridColumns - 1, c.col !== undefined ? c.col : 0))
-            var row = Math.max(0, Math.min(gridRows - 1, c.row !== undefined ? c.row : 0))
-            var cs = Math.max(1, Math.min(gridColumns - col, c.colSpan !== undefined ? c.colSpan : 1))
-            var rs = Math.max(1, Math.min(gridRows - row, c.rowSpan !== undefined ? c.rowSpan : 1))
-            var pid = c.paramId !== undefined ? c.paramId : ""
-            if (pid !== "" && !App.OBDParameterModel.hasParameter(pid)) {
-                console.warn("DashboardEditor: dropping unknown paramId:", pid)
-                pid = ""
-            }
-            out.push({
-                "type": c.type,
-                "paramId": pid,
-                "col": col, "row": row,
-                "colSpan": cs, "rowSpan": rs,
-                "props": c.props || {}
-            })
-        }
-        return out
-    }
-
     // ── Cell mutations (single owner of the working spec) ───────────────
 
     // Replace cells[index] with a shallow-merged copy. Reassigns the array.
@@ -206,14 +189,12 @@ Item {
     function addCellAt(type, col, row) {
         var meta = App.WidgetCatalog.metaFor(type)
         if (!meta) return
-        var cs = Math.min(meta.defaultColSpan, gridColumns - col)
-        var rs = Math.min(meta.defaultRowSpan, gridRows - row)
-        // Shrink toward 1×1 until the widget fits the free space around the
-        // tapped cell (the tapped cell itself is guaranteed free).
-        while (!editorCanvas.canPlace(col, row, cs, rs, -1) && (cs > 1 || rs > 1)) {
-            if (cs >= rs && cs > 1) cs--
-            else rs--
-        }
+        // Shrunk toward 1×1 until it fits the free space around the tapped
+        // cell (the tapped cell itself is guaranteed free)
+        var fit = dashboardManager.fitAt(cells, gridColumns, gridRows, col, row,
+                                         meta.defaultColSpan, meta.defaultRowSpan)
+        var cs = fit.colSpan
+        var rs = fit.rowSpan
         var next = cells.slice()
         next.push({
             "type": type, "paramId": "",
@@ -344,7 +325,7 @@ Item {
             _showError("No dashboard backend available")
             return
         }
-        var label = nameField.text.trim()
+        var label = nameField.text.trim().replace(/\s+/g, " ")   // as the manager stores it
         if (label.length === 0) label = "Untitled"
 
         var id = editingId.length > 0 ? editingId : dashboardManager.uniqueIdForLabel(label)
@@ -365,7 +346,7 @@ Item {
                 callerPage.setActiveDashboard(savedId)
             if (stackView) stackView.pop()
         } else {
-            _showError("Save failed (check the id isn't a built-in)")
+            _showError("Save failed (the id is a built-in's or has unusual characters)")
         }
     }
 

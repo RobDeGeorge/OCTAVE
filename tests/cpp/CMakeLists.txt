@@ -42,7 +42,8 @@ octave_add_test(tst_parametercatalog
 octave_add_test(tst_parameterstore
     SOURCES managers/parameterstore.h managers/parameterstore.cpp managers/parametercatalog.h managers/parametercatalog.cpp
     LIBS Qt6::Gui Qt6::Qml)
-octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp LIBS Qt6::Gui)
+octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp
+                util/dashboardgrid.h util/dashboardgrid.cpp LIBS Qt6::Gui)
 octave_add_test(tst_triprecorder
     SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
             managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
