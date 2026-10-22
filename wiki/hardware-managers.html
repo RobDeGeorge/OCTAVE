@@ -617,8 +617,7 @@ m_reconnectAttempts++;
             <code>Connections { target: stackView }</code> calls <code>updateSensorConsumers()</code> on
             <code>onCurrentItemChanged</code> and on completion, and inspects <code>stackView.currentItem.objectName</code>:
           </p>
-          <pre><code><span class="kw">readonly property var</span> _imuParamIds: [<span class="str">"PITCH"</span>, <span class="str">"ROLL"</span>, <span class="str">"HEADING"</span>, <span class="str">"ALTITUDE"</span>,
-                                      <span class="str">"ACCEL_MAG"</span>, <span class="str">"LATERAL_G"</span>, <span class="str">"LONGITUDINAL_G"</span>, <span class="str">"BARO_TEMP"</span>]
+          <pre><code><span class="kw">readonly property var</span> _imuParamIds: App.OBDParameterModel.sensorParameters   <span class="cmt">// the catalog's source: "imu" ids</span>
 <span class="kw">function</span> <span class="fn">updateSensorConsumers</span>() {
     <span class="kw">var</span> n = stackView.currentItem.objectName
     berryIMU.setActive(n === <span class="str">"carMenu"</span> || n === <span class="str">"sensorMenu"</span> || n === <span class="str">"sensorHome"</span>

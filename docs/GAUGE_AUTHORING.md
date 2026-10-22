@@ -403,8 +403,10 @@ The pre-Phase-2 path — create `frontend/dashboards/MyDashboard.qml` and regist
 ## 6. All 129 parameter IDs (18 core + 66 extended OBD + 37 multi-value OBD + 8 IMU)
 
 Copy `id` verbatim into `paramId`. `min`/`max` listed are what the primitive
-will default to. **Source of truth:** `frontend/OBDParameterModel.qml` —
-update this table when that file changes.
+will default to. **Source of truth:** `src/managers/parametercatalog.cpp`
+(the C++ `ParameterCatalog`, served to QML as `parameterCatalog.parameters`
+and unchanged through `OBDParameterModel.allParameters`) — update this table
+when that file changes.
 
 ### Core 18 (default-enabled)
 
@@ -530,8 +532,8 @@ the PID picker lists them, and the editor's demo mode sweeps them.
 | `LONGITUDINAL_G` | Longitudinal G  | g    |   -2 |    2 | bidirectional |
 | `BARO_TEMP`      | Cabin Baro Temp | °C   |  -20 |   60 | temperature   |
 
-Full metadata (units, min, max) lives in `frontend/OBDParameterModel.qml`
-— grep there when in doubt.
+Full metadata (title, short title, unit, min, max, kind, decimals) lives in
+`src/managers/parametercatalog.cpp` — grep there when in doubt.
 
 ---
 
@@ -595,8 +597,11 @@ So an arc from `startAngle=135, sweepAngle=270`:
   you still see wasted space. Wrap it in an `Item` and force a square
   inside, anchored center.
 - **Never touch `obdManager.*` signals directly from a gauge.** Everything
-  goes through `OBDParameterModel.paramValues[paramId]`. If you add a new
-  backend signal, register it in `OBDParameterModel.qml` too.
+  goes through `OBDParameterModel.paramValues[paramId]`. A new PID needs a
+  decoder in `elm327protocol.cpp` and a row in `parametercatalog.cpp`
+  (`tst_parametercatalog` fails if either is missing), plus its handler in
+  `OBDParameterModel.qml` until the value store replaces the per-signal
+  handlers.
 
 ---
 
@@ -634,7 +639,8 @@ frontend/
 │       ├── fullgrid.json      4×2 grid of compact round gauges
 │       ├── performance.json   arc speed + sparklines + warning lights
 │       └── tj-wrangler.json   "TJ Wrangler 4.0": 17-cell board from the Orange Pi rig
-├── OBDParameterModel.qml      singleton aggregator (SOURCE OF TRUTH for PIDs)
+├── OBDParameterModel.qml      singleton aggregator: values, gate, demo mode;
+│                              metadata from parameterCatalog (src/managers/parametercatalog.cpp)
 └── OBDMenu.qml                hosts DashboardRenderer, Parameter Cards, swipe
                                between dashboards, and the chooser popup
                                (Import / Share)

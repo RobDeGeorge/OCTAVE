@@ -31,7 +31,7 @@ function(octave_add_test name)
         TIMEOUT 120)
 endfunction()
 
-octave_add_test(tst_elm327protocol SOURCES managers/elm327protocol.cpp)
+octave_add_test(tst_elm327protocol SOURCES managers/elm327protocol.cpp managers/parametercatalog.h managers/parametercatalog.cpp)
 octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
@@ -42,7 +42,7 @@ octave_add_test(tst_parametercatalog
 octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_triprecorder
     SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
-            managers/obdmanager.h managers/obdmanager.cpp
+            managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort octave_sqlite)
@@ -61,7 +61,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 octave_add_test(tst_downloadutil SOURCES managers/downloadutil.cpp)
 octave_add_test(tst_obdmanager
-    SOURCES managers/obdmanager.h managers/obdmanager.cpp
+    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort)
@@ -69,7 +69,7 @@ octave_add_test(tst_obdmanager
 # Integration: the real OBD stack against the simulated adapter (src/dev/)
 if(OCTAVE_DEV_TOOLS)
     octave_add_test(tst_obdsim
-        SOURCES managers/obdmanager.h managers/obdmanager.cpp
+        SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
                 managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
                 managers/settingsmanager.h managers/settingsmanager.cpp
                 dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
@@ -88,7 +88,7 @@ if(OCTAVE_DEV_TOOLS)
     endif()
     octave_add_test(tst_obdadapterfinder
         SOURCES ${_finder_sources}
-                managers/obdmanager.h managers/obdmanager.cpp
+                managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
                 managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
                 managers/settingsmanager.h managers/settingsmanager.cpp
                 dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
@@ -108,7 +108,7 @@ octave_add_test(tst_mediamanager
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
 octave_add_test(tst_musicdeviceassets)
-octave_add_test(tst_vehiclegate LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_vehiclegate SOURCES managers/parametercatalog.h managers/parametercatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 
 octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
 octave_add_test(tst_errortoast LIBS Qt6::Gui Qt6::Qml Qt6::Quick)

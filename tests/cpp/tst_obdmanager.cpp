@@ -97,6 +97,28 @@ private slots:
         QVERIFY(extendedKeys(OBDManager::pidsToWatch(demand, {"RPM"})).isEmpty());
     }
 
+    // IGNITION_TIMING is TIMING_ADVANCE under its old name (ParameterCatalog
+    // aliasOf): wanting it polls 0x0E, and a car that reports timing advance
+    // supports it. Before, a dashboard showing only IGNITION_TIMING polled
+    // nothing and the gate called it unsupported.
+    void aliasDemandPollsItsTarget()
+    {
+        QCOMPARE(baseNames(OBDManager::pidsToWatch({{"dashboard", {"IGNITION_TIMING"}}}, {})),
+                 (QStringList{"RPM", "TIMING_ADVANCE"}));
+        QCOMPARE(baseNames(OBDManager::pidsToWatch({{"dashboard", {"IGNITION_TIMING"}}},
+                                                   {"RPM", "TIMING_ADVANCE"})),
+                 (QStringList{"RPM", "TIMING_ADVANCE"}));
+        QCOMPARE(baseNames(OBDManager::pidsToWatch({{"dashboard", {"IGNITION_TIMING"}}}, {"RPM"})),
+                 QStringList{"RPM"});
+    }
+
+    void aliasSupportedWithItsTarget()
+    {
+        QVERIFY(OBDManager::withAliases({"RPM", "TIMING_ADVANCE"}).contains("IGNITION_TIMING"));
+        QVERIFY(!OBDManager::withAliases({"RPM", "SPEED"}).contains("IGNITION_TIMING"));
+        QCOMPARE(OBDManager::withAliases({}), QStringList{});
+    }
+
     // ── connect_to_adapter(MAC): async rfcomm bind (Linux) ──────────
     void bindFailureReportsErrorWithoutBlocking()
     {

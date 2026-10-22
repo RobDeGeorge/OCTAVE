@@ -494,9 +494,9 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           <tbody>
             <tr><td>Parameter signals on <code>OBDManager</code></td><td><strong>84</strong> <code>float</code> signals</td><td>83 base command names + <code>ignitionTimingChanged</code>, which is emitted together with <code>timingAdvanceChanged</code> from the same PID (one entry of the signal dispatch table).</td></tr>
             <tr><td>Base PID-table entries</td><td><strong>83</strong></td><td><code>ELM327Protocol::pidTable()</code> has 82 Mode-01 entries from OCTAVE's base command set, at their standard SAE J1979 PID numbers, plus <code>ELM_VOLTAGE</code> under the pseudo-key <code>kElmVoltageKey</code> <code>{0, 0}</code> (the adapter's own <code>ATRV</code>). Each <code>PidEntry</code> carries a <code>commandName</code> (the established OBD command name, e.g. <code>COOLANT_TEMP</code>), so the settings names, scan vocabulary and poll list all come from the one table.</td></tr>
-            <tr><td>Legacy parameter-setting names</td><td><strong>83</strong></td><td><code>get_all_parameter_names()</code> returns the same 83 base names. This list excludes the 37 extended values offered by the shared parameter model.</td></tr>
+            <tr><td>Legacy parameter-setting names</td><td><strong>83</strong></td><td><code>get_all_parameter_names()</code> returns the same 83 base names, derived from <code>pidTable()</code> and sorted. This list excludes the 37 extended values.</td></tr>
             <tr><td>Extended PID table</td><td><strong>23 PIDs / 37 values</strong></td><td>Multi-value entries in <code>extendedPidTable()</code>; values use <code>obdParameterChanged(paramId, value)</code>.</td></tr>
-            <tr><td><code>OBDParameterModel.allParameters</code></td><td><strong>129</strong></td><td>84 base OBD ids (83 commands plus <code>IGNITION_TIMING</code>) + 37 extended values + 8 BerryIMU ids.</td></tr>
+            <tr><td><code>ParameterCatalog</code> (= <code>OBDParameterModel.allParameters</code>)</td><td><strong>129</strong></td><td>84 base OBD ids (83 commands plus the alias <code>IGNITION_TIMING</code>, <code>aliasOf: "TIMING_ADVANCE"</code>) + 37 extended values + 8 BerryIMU ids. Its 120 polled OBD ids equal the decoder ids (<code>tst_parametercatalog</code>). The alias is polled as its target and published in <code>vehicleSupportedParameters</code> whenever the target is (<code>OBDManager::withAliases</code>).</td></tr>
           </tbody>
         </table>
 
@@ -943,7 +943,7 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
           whole dictionary on each one pegged the QML thread at 100 % on an idle Orange Pi (V4 string allocation + GC churn,
           found with py-spy). Bindings now re-evaluate at most ~30 times a second and only while data arrives.
           <code>hasParameter(id)</code>, <code>getParamInfo(id)</code>, <code>parameterInfo</code> (with short titles for the
-          home cards) and <code>allParameters</code> (id, title, unit, min, max, <code>kind</code>) are documented on the
+          home cards) and <code>allParameters</code> (the C++ <code>ParameterCatalog</code>: id, title, short title, unit, min, max, <code>kind</code>, decimals) are documented on the
           <a href="gauges-dashboards.html#parameter-model">Gauges &amp; Dashboards</a> page.
         </p>
 

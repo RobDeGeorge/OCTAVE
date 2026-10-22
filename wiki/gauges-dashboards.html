@@ -114,23 +114,23 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
         </pre>
         <p>
           <span class="file-path">frontend/OBDParameterModel.qml</span> (registered as a singleton in
-          <span class="file-path">frontend/qmldir</span>) declares:
+          <span class="file-path">frontend/qmldir</span>) declares the members below. The parameter metadata comes from the C++ <a href="signals-slots-reference.html#parameterCatalog"><code>parameterCatalog</code></a> (<span class="file-path">src/managers/parametercatalog.cpp</span>); the singleton has no table of its own.
         </p>
         <table>
           <thead><tr><th>Member</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>allParameters</code></td><td>Array of <code>{ id, title, unit, min, max, kind }</code>: <strong>129</strong> entries: 121 OBD entries (including the <code>IGNITION_TIMING</code> alias and adapter voltage) and 8 BerryIMU readings. Of the OBD entries, 37 newer values arrive through <code>obdParameterChanged(paramId, value)</code>.</td></tr>
+            <tr><td><code>allParameters</code></td><td><code>parameterCatalog.parameters</code>: array of <code>{ id, title, shortTitle, unit, min, max, kind, decimals, source, aliasOf }</code>, <strong>129</strong> entries: 121 OBD entries (including the <code>IGNITION_TIMING</code> alias, <code>aliasOf: "TIMING_ADVANCE"</code>, and adapter voltage) and 8 BerryIMU readings. Of the OBD entries, 37 newer values arrive through <code>obdParameterChanged(paramId, value)</code>.</td></tr>
             <tr><td><code>kind</code></td><td>One of <code>percentage</code> (0-100 %), <code>temperature</code> (°C), <code>voltage</code>, <code>pressure</code> (kPa/Pa), <code>bidirectional</code> (signed, straddles zero: trims, timing, EGR error, WR currents, pitch/roll/G), <code>numeric</code> (everything else). Widgets declare which kinds they accept; the PID picker filters on it.</td></tr>
             <tr><td><code>originalParameters</code>, <code>isOriginalParameter(id)</code></td><td>The historical group of 18 ids, also used as the settings list fallback before a supported-PID list is available.</td></tr>
-            <tr><td><code>shortTitles</code>, <code>parameterInfo</code>, <code>getParamInfo(id)</code></td><td>Compact metadata (<code>SPD</code>, <code>CLT</code>, <code>AFR</code>...) keyed by id for the home cards; <code>getParamInfo</code> returns a permissive fallback for unknown ids.</td></tr>
+            <tr><td><code>parameterInfo</code>, <code>getParamInfo(id)</code>, <code>decimalsFor(id)</code></td><td>Compact metadata (catalog <code>shortTitle</code>: <code>SPD</code>, <code>CLT</code>, <code>AFR</code>...) keyed by id for the home cards; <code>decimalsFor</code> is the catalog <code>decimals</code> (1 for an unknown id); <code>getParamInfo</code> returns a permissive fallback for unknown ids.</td></tr>
             <tr><td><code>hasParameter(id)</code></td><td>Strict membership test, added for renderer/editor validation precisely because <code>getParamInfo</code> never fails.</td></tr>
             <tr><td><code>paramValues</code>, <code>getParamValue(id)</code></td><td>Live values. A plain object that is <em>replaced</em> (never mutated) so bindings re-evaluate; missing ids read as 0.</td></tr>
             <tr><td><code>updateParamValue(id, v)</code></td><td>Writes into <code>_pendingValues</code> and arms the one-shot 33 ms <code>_flushTimer</code>; the flush does <code>Object.assign({}, paramValues, _pendingValues)</code> once. This coalescing landed in <code>486a809</code> after the IMU's ~440 signals/s pegged the QML thread at 100 % on an idle Orange Pi.</td></tr>
             <tr><td><code>simulationActive</code></td><td>Demo mode: a 100 ms timer sweeps every parameter along a sine between min and max (period 4-16 s and phase vary per index so the screen does not pulse in lockstep; big ranges are rounded to integers). While on, backend writes are ignored; switching off clears both maps.</td></tr>
-            <tr><td><code>sensorParameters</code>, <code>isSensorParameter(id)</code></td><td>The eight BerryIMU ids. They are not OBD PIDs, so the vehicle gate never applies to them.</td></tr>
+            <tr><td><code>sensorParameters</code>, <code>isSensorParameter(id)</code></td><td>The eight BerryIMU ids (catalog <code>source: "imu"</code>). They are not OBD PIDs, so the vehicle gate never applies to them.</td></tr>
             <tr><td><code>vehicleKnown</code>, <code>vehicleSupportedParameters</code></td><td>Mirrors of <code>obdManager.vehicleScanComplete</code> / <code>vehicleSupportedParameters</code>: this session's supported-PID scan, cleared on disconnect, never loaded from the saved list. Guarded with <code>typeof obdManager</code>.</td></tr>
             <tr><td><code>isSupported(id)</code></td><td>True for sensor ids, and for OBD ids the scanned vehicle reported. False otherwise, including when no vehicle is known (callers wanting "anything goes offline", like the PID picker, check <code>vehicleKnown</code> first).</td></tr>
-            <tr><td><code>vehicleParameters</code></td><td>The supported OBD entries of <code>allParameters</code>, in <code>allParameters</code> order; empty until a vehicle has been scanned. Feeds Parameter Cards.</td></tr>
+            <tr><td><code>vehicleParameters</code></td><td>The supported OBD entries of <code>allParameters</code>, in <code>allParameters</code> order, without aliases (no second Timing Advance card); empty until a vehicle has been scanned. Feeds Parameter Cards.</td></tr>
             <tr><td><code>_obdConnections</code>, <code>_imuConnections</code></td><td>Two <code>Connections</code> blocks, dedicated handlers plus the generic <code>onObdParameterChanged(paramId, value)</code> handler. The IMU one is guarded with <code>typeof berryIMU !== "undefined"</code> and <code>ignoreUnknownSignals</code> so stripped builds still load.</td></tr>
           </tbody>
         </table>
@@ -148,7 +148,7 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>BARO_TEMP</code></td><td>Cabin Baro Temp</td><td>°C</td><td>-20</td><td>60</td><td>temperature</td></tr>
           </tbody>
         </table>
-        <p>The full OBD metadata list is in <span class="file-path">docs/GAUGE_AUTHORING.md</span> &sect;6 and <span class="file-path">frontend/OBDParameterModel.qml</span>. A model entry describes a displayable value; availability depends on the vehicle, adapter and decoding path. See <a href="obd-manager.html">OBD Manager</a> for backend polling and supported-PID behavior.</p>
+        <p>The full OBD metadata list is in <span class="file-path">docs/GAUGE_AUTHORING.md</span> &sect;6 and <span class="file-path">src/managers/parametercatalog.cpp</span>. A model entry describes a displayable value; availability depends on the vehicle, adapter and decoding path. See <a href="obd-manager.html">OBD Manager</a> for backend polling and supported-PID behavior.</p>
 
         <h2 id="vehicle-gate">Vehicle Gate and Polling Demand</h2>
         <p>
@@ -749,7 +749,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <ul>
           <li><strong>New dashboard</strong>: build it in the editor, or write a schema-1 JSON by hand and drop it into <span class="file-path">frontend/dashboards/presets/</span> (ships as a read-only built-in, picked up at the next start) or the user dashboards directory (picked up live).</li>
           <li><strong>New primitive</strong>: create <span class="file-path">frontend/gauges/MyGauge.qml</span>, paste the shared binding preamble verbatim, animate <code>_animNorm</code> (not <code>value</code>), use <code>Shape</code>/<code>PathAngleArc</code> for curves and rotated <code>Rectangle</code>s for marks, declare <code>octaveSupportedKinds</code>, scale typography with the cell, and register it in <code>WidgetCatalog</code> with a url, display name, glyph, default span, matching <code>supportedKinds</code> and curated <code>editableProps</code> with honest defaults. Without the catalog entry it will neither render nor be placeable. Then document it in §3 of the authoring guide and on this page.</li>
-          <li><strong>New backend parameter</strong>: add the signal to <code>OBDManager</code>, the handler in <code>OBDParameterModel._obdConnections</code>, and the <code>allParameters</code> entry with a <code>kind</code>; gauges pick it up with no further work.</li>
+          <li><strong>New backend parameter</strong>: add the decoder to <span class="file-path">elm327protocol.cpp</span> (and the signal to <code>OBDManager</code>), the row with a <code>kind</code> to <span class="file-path">parametercatalog.cpp</span> (<code>tst_parametercatalog</code> fails without it), and the handler in <code>OBDParameterModel._obdConnections</code>; gauges pick it up with no further work.</li>
         </ul>
 
         <h2 id="design-decisions">Design Decisions</h2>

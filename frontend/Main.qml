@@ -914,8 +914,7 @@ ApplicationWindow {
             // consumers of the 60 Hz IMU stream; everywhere else 5 Hz keeps the
             // settings status fresh without seven queued signals per frame into
             // idle bindings.
-            readonly property var _imuParamIds: ["PITCH", "ROLL", "HEADING", "ALTITUDE",
-                                                 "ACCEL_MAG", "LATERAL_G", "LONGITUDINAL_G", "BARO_TEMP"]
+            readonly property var _imuParamIds: App.OBDParameterModel.sensorParameters
             function _homeShowsImuParam() {
                 if (!settingsManager || !settingsManager.get_home_obd_parameters)
                     return false

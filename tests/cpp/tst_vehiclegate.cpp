@@ -14,6 +14,8 @@
 
 #include <memory>
 
+#include "managers/parametercatalog.h"
+
 class FakeObd : public QObject
 {
     Q_OBJECT
@@ -94,6 +96,8 @@ private slots:
         engine.addImportPath(kFrontend);
         FakeObd obd;
         engine.rootContext()->setContextProperty("obdManager", &obd);
+        ParameterCatalog catalog;   // as main.cpp registers it
+        engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
@@ -116,6 +120,13 @@ private slots:
         QCOMPARE(placeholder(2), false);   // PITCH is a sensor
         QCOMPARE(call("vehicleIds").toStringList(), (QStringList{"SPEED", "RPM"}));   // allParameters order, OBD only
 
+        // OBDManager publishes an alias with its target (withAliases):
+        // supported for dashboards, but no second Parameter Card
+        obd.scan({"RPM", "SPEED", "TIMING_ADVANCE", "IGNITION_TIMING"});
+        QCoreApplication::processEvents();
+        QCOMPARE(call("supported", "IGNITION_TIMING").toBool(), true);
+        QCOMPARE(call("vehicleIds").toStringList(), (QStringList{"SPEED", "RPM", "TIMING_ADVANCE"}));
+
         // Disconnect: gate lifts, list empties again
         obd.scan({}, false);
         QCoreApplication::processEvents();
@@ -133,6 +144,8 @@ private slots:
         engine.addImportPath(kFrontend);
         FakeObd obd;
         engine.rootContext()->setContextProperty("obdManager", &obd);
+        ParameterCatalog catalog;   // as main.cpp registers it
+        engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
@@ -169,6 +182,8 @@ private slots:
         engine.addImportPath(kFrontend);
         FakeObd obd;
         engine.rootContext()->setContextProperty("obdManager", &obd);
+        ParameterCatalog catalog;   // as main.cpp registers it
+        engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());

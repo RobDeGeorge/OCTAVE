@@ -1,4 +1,5 @@
 #include "obdmanager.h"
+#include "parametercatalog.h"
 #include "elm327protocol.h"
 #include "rfcommsocket.h"
 #include "../util/perfscope.h"
@@ -780,12 +781,22 @@ void OBDManager::cleanupWorkerThread()
 // berryIMU, not the adapter -- demand for them never reaches the poll set.
 static const QSet<QString> &imuParamIds()
 {
-    static const QSet<QString> ids = {
-        QStringLiteral("PITCH"), QStringLiteral("ROLL"), QStringLiteral("HEADING"),
-        QStringLiteral("ALTITUDE"), QStringLiteral("ACCEL_MAG"), QStringLiteral("LATERAL_G"),
-        QStringLiteral("LONGITUDINAL_G"), QStringLiteral("BARO_TEMP"),
-    };
+    static const QSet<QString> ids = [] {
+        const QStringList l = ParameterCatalog::imuIds();
+        return QSet<QString>(l.cbegin(), l.cend());
+    }();
     return ids;
+}
+
+QStringList OBDManager::withAliases(const QStringList &names)
+{
+    // An alias (IGNITION_TIMING) is supported wherever its target is
+    QStringList out = names;
+    for (const ParameterCatalog::Parameter &p : ParameterCatalog::all()) {
+        if (!p.aliasOf.isEmpty() && names.contains(p.aliasOf) && !out.contains(p.id))
+            out.append(p.id);
+    }
+    return out;
 }
 
 static const PidKey kRpmKey{1, 0x0C};
@@ -802,6 +813,12 @@ QList<PidKey> OBDManager::pidsToWatch(const QHash<QString, QSet<QString>> &deman
     for (auto it = demand.constBegin(); it != demand.constEnd(); ++it)
         wanted.unite(it.value());
     wanted.subtract(imuParamIds());
+    // An alias is polled as its target
+    for (const QString &id : QSet<QString>(wanted)) {
+        const ParameterCatalog::Parameter *p = ParameterCatalog::find(id);
+        if (p && !p->aliasOf.isEmpty())
+            wanted.insert(p->aliasOf);
+    }
 
     // Filter to this session's scan once it produced a result; an unknown or
     // empty result filters nothing (the adapter answers NO DATA, which the
@@ -896,7 +913,7 @@ QList<PidKey> OBDManager::buildBackgroundPids(const QList<PidKey> &foreground) c
 
 void OBDManager::setVehicleSupport(const QStringList &names, bool complete)
 {
-    QStringList sorted = names;
+    QStringList sorted = withAliases(names);
     sorted.sort();
     if (sorted == m_vehicleSupportedParameters && complete == m_vehicleScanComplete)
         return;
@@ -1658,50 +1675,15 @@ bool OBDManager::is_scanning() const
 
 QStringList OBDManager::get_all_parameter_names() const
 {
-    // Every base command name (python-obd naming)
-    static const QStringList names = {
-        QStringLiteral("COOLANT_TEMP"), QStringLiteral("CONTROL_MODULE_VOLTAGE"),
-        QStringLiteral("ENGINE_LOAD"), QStringLiteral("THROTTLE_POS"),
-        QStringLiteral("INTAKE_TEMP"), QStringLiteral("TIMING_ADVANCE"),
-        QStringLiteral("MAF"), QStringLiteral("SPEED"), QStringLiteral("RPM"),
-        QStringLiteral("COMMANDED_EQUIV_RATIO"), QStringLiteral("FUEL_LEVEL"),
-        QStringLiteral("INTAKE_PRESSURE"), QStringLiteral("SHORT_FUEL_TRIM_1"),
-        QStringLiteral("LONG_FUEL_TRIM_1"), QStringLiteral("O2_B1S1"),
-        QStringLiteral("FUEL_PRESSURE"), QStringLiteral("OIL_TEMP"),
-        QStringLiteral("RUN_TIME"), QStringLiteral("DISTANCE_W_MIL"),
-        QStringLiteral("FUEL_RAIL_PRESSURE_VAC"), QStringLiteral("FUEL_RAIL_PRESSURE_DIRECT"),
-        QStringLiteral("BAROMETRIC_PRESSURE"), QStringLiteral("AMBIANT_AIR_TEMP"),
-        QStringLiteral("RELATIVE_THROTTLE_POS"), QStringLiteral("THROTTLE_POS_B"),
-        QStringLiteral("ACCELERATOR_POS_D"), QStringLiteral("CATALYST_TEMP_B1S1"),
-        QStringLiteral("CATALYST_TEMP_B1S2"), QStringLiteral("EVAP_VAPOR_PRESSURE"),
-        QStringLiteral("SHORT_FUEL_TRIM_2"), QStringLiteral("LONG_FUEL_TRIM_2"),
-        QStringLiteral("O2_B1S2"), QStringLiteral("O2_B2S1"), QStringLiteral("O2_B2S2"),
-        QStringLiteral("DISTANCE_SINCE_DTC_CLEAR"), QStringLiteral("WARMUPS_SINCE_DTC_CLEAR"),
-        QStringLiteral("ABSOLUTE_LOAD"), QStringLiteral("COMMANDED_EGR"),
-        QStringLiteral("EGR_ERROR"), QStringLiteral("ETHANOL_PERCENT"),
-        QStringLiteral("O2_B1S3"), QStringLiteral("O2_B1S4"),
-        QStringLiteral("O2_B2S3"), QStringLiteral("O2_B2S4"),
-        QStringLiteral("O2_S1_WR_VOLTAGE"), QStringLiteral("O2_S2_WR_VOLTAGE"),
-        QStringLiteral("O2_S3_WR_VOLTAGE"), QStringLiteral("O2_S4_WR_VOLTAGE"),
-        QStringLiteral("O2_S5_WR_VOLTAGE"), QStringLiteral("O2_S6_WR_VOLTAGE"),
-        QStringLiteral("O2_S7_WR_VOLTAGE"), QStringLiteral("O2_S8_WR_VOLTAGE"),
-        QStringLiteral("O2_S1_WR_CURRENT"), QStringLiteral("O2_S2_WR_CURRENT"),
-        QStringLiteral("O2_S3_WR_CURRENT"), QStringLiteral("O2_S4_WR_CURRENT"),
-        QStringLiteral("O2_S5_WR_CURRENT"), QStringLiteral("O2_S6_WR_CURRENT"),
-        QStringLiteral("O2_S7_WR_CURRENT"), QStringLiteral("O2_S8_WR_CURRENT"),
-        QStringLiteral("CATALYST_TEMP_B2S1"), QStringLiteral("CATALYST_TEMP_B2S2"),
-        QStringLiteral("THROTTLE_POS_C"), QStringLiteral("ACCELERATOR_POS_E"),
-        QStringLiteral("ACCELERATOR_POS_F"), QStringLiteral("THROTTLE_ACTUATOR"),
-        QStringLiteral("EVAPORATIVE_PURGE"), QStringLiteral("FUEL_RAIL_PRESSURE_ABS"),
-        QStringLiteral("FUEL_INJECT_TIMING"), QStringLiteral("FUEL_RATE"),
-        QStringLiteral("RUN_TIME_MIL"), QStringLiteral("TIME_SINCE_DTC_CLEARED"),
-        QStringLiteral("MAX_MAF"), QStringLiteral("FUEL_TYPE"),
-        QStringLiteral("EVAP_VAPOR_PRESSURE_ABS"), QStringLiteral("EVAP_VAPOR_PRESSURE_ALT"),
-        QStringLiteral("SHORT_O2_TRIM_B1"), QStringLiteral("LONG_O2_TRIM_B1"),
-        QStringLiteral("SHORT_O2_TRIM_B2"), QStringLiteral("LONG_O2_TRIM_B2"),
-        QStringLiteral("RELATIVE_ACCEL_POS"), QStringLiteral("HYBRID_BATTERY_REMAINING"),
-        QStringLiteral("ELM_VOLTAGE"),
-    };
+    // Every single-value command name (python-obd naming), from the decoder
+    // table; the multi-value 0x61+ ids are not included
+    static const QStringList names = [] {
+        QStringList l;
+        for (const PidEntry &e : ELM327Protocol::pidTable())
+            l.append(e.commandName);
+        l.sort();
+        return l;
+    }();
     return names;
 }
 

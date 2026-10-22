@@ -8,6 +8,7 @@
 #include <QTest>
 
 #include "managers/elm327protocol.h"
+#include "managers/parametercatalog.h"
 
 using StringMap = QMap<QString, double>;
 Q_DECLARE_METATYPE(StringMap)
@@ -202,7 +203,8 @@ void TstElm327Protocol::decodeVin()
 
 void TstElm327Protocol::everyExtendedParameterIsWired()
 {
-    // Each multi-value id needs a settings default and QML metadata
+    // Each multi-value id needs a settings default and catalog metadata
+    // (tst_parametercatalog checks the catalog against every decoder id)
     QSet<QString> ids;
     for (const auto &sigs : ELM327Protocol::extendedPidTable())
         for (const ExtendedSignal &s : sigs)
@@ -210,12 +212,10 @@ void TstElm327Protocol::everyExtendedParameterIsWired()
     QVERIFY(!ids.isEmpty());
 
     const QString settings = readSource("src/managers/settingsmanager.cpp");
-    const QString qml = readSource("frontend/OBDParameterModel.qml");
     QVERIFY(!settings.isEmpty());
-    QVERIFY(!qml.isEmpty());
     for (const QString &id : std::as_const(ids)) {
         QVERIFY2(settings.contains(QLatin1Char('"') + id + QLatin1Char('"')), qPrintable(id + " has no settings default"));
-        QVERIFY2(qml.contains(QStringLiteral("id: \"%1\"").arg(id)), qPrintable(id + " has no OBDParameterModel entry"));
+        QVERIFY2(ParameterCatalog::find(id), qPrintable(id + " has no ParameterCatalog entry"));
     }
 }
 

@@ -4,9 +4,11 @@ import QtQuick 2.15
 QtObject {
     id: root
 
-    // ── All OBD parameters with display metadata + semantic `kind` ───
-    //
-    // `kind` is used by widgets to declare PID compatibility. Recognized kinds:
+    // ── All parameters with display metadata ─────────────────────────
+    // From the C++ ParameterCatalog (src/managers/parametercatalog.h), the
+    // one table for every frontend: {id, title, shortTitle, unit, min, max,
+    // kind, decimals, source ("obd" | "imu"), aliasOf}. `kind` declares
+    // widget compatibility:
     //   "percentage"    — 0–100 % unidirectional
     //   "temperature"   — °C temperature (may go negative, but treated by theme)
     //   "voltage"       — volts
@@ -16,162 +18,16 @@ QtObject {
     // Widgets declare `octaveSupportedKinds` as an array (e.g. ["bidirectional"]
     // for LinearGauge, ["*"] for generic numeric widgets). The PID picker in the
     // dashboard editor filters based on this.
-    readonly property var allParameters: [
-        // Original 18 parameters
-        { id: "SPEED", title: "Speed", unit: "MPH", min: 0, max: 160, kind: "numeric" },
-        { id: "RPM", title: "Engine RPM", unit: "RPM", min: 0, max: 8000, kind: "numeric" },
-        { id: "COOLANT_TEMP", title: "Coolant Temp", unit: "°C", min: 0, max: 120, kind: "temperature" },
-        { id: "OIL_TEMP", title: "Oil Temp", unit: "°C", min: 0, max: 150, kind: "temperature" },
-        { id: "COMMANDED_EQUIV_RATIO", title: "Air-Fuel Ratio", unit: ":1", min: 10, max: 18, kind: "numeric" },
-        { id: "ENGINE_LOAD", title: "Engine Load", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "THROTTLE_POS", title: "Throttle", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "FUEL_LEVEL", title: "Fuel Level", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "SHORT_FUEL_TRIM_1", title: "Short Fuel Trim 1", unit: "%", min: -25, max: 25, kind: "bidirectional" },
-        { id: "LONG_FUEL_TRIM_1", title: "Long Fuel Trim 1", unit: "%", min: -25, max: 25, kind: "bidirectional" },
-        { id: "INTAKE_TEMP", title: "Intake Temp", unit: "°C", min: 0, max: 80, kind: "temperature" },
-        { id: "INTAKE_PRESSURE", title: "Intake Pressure", unit: "kPa", min: 0, max: 255, kind: "pressure" },
-        { id: "MAF", title: "Mass Air Flow", unit: "g/s", min: 0, max: 100, kind: "numeric" },
-        { id: "TIMING_ADVANCE", title: "Timing Advance", unit: "°", min: -35, max: 35, kind: "bidirectional" },
-        { id: "CONTROL_MODULE_VOLTAGE", title: "System Voltage", unit: "V", min: 10, max: 15, kind: "voltage" },
-        { id: "O2_B1S1", title: "O2 Bank 1 Sensor 1", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        { id: "FUEL_PRESSURE", title: "Fuel Pressure", unit: "kPa", min: 0, max: 765, kind: "pressure" },
-        { id: "IGNITION_TIMING", title: "Ignition Timing", unit: "°", min: -10, max: 60, kind: "bidirectional" },
-        // Additional parameters
-        { id: "RUN_TIME", title: "Run Time", unit: "sec", min: 0, max: 65535, kind: "numeric" },
-        { id: "DISTANCE_W_MIL", title: "Distance w/ MIL", unit: "km", min: 0, max: 65535, kind: "numeric" },
-        { id: "FUEL_RAIL_PRESSURE_VAC", title: "Fuel Rail Pressure", unit: "kPa", min: 0, max: 5177, kind: "pressure" },
-        { id: "FUEL_RAIL_PRESSURE_DIRECT", title: "Fuel Rail Direct", unit: "kPa", min: 0, max: 655350, kind: "pressure" },
-        { id: "BAROMETRIC_PRESSURE", title: "Barometric", unit: "kPa", min: 0, max: 255, kind: "pressure" },
-        { id: "AMBIANT_AIR_TEMP", title: "Ambient Air", unit: "°C", min: -40, max: 215, kind: "temperature" },
-        { id: "RELATIVE_THROTTLE_POS", title: "Rel. Throttle", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "THROTTLE_POS_B", title: "Throttle Pos B", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "ACCELERATOR_POS_D", title: "Accel. Pedal", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "CATALYST_TEMP_B1S1", title: "Cat Temp B1S1", unit: "°C", min: 0, max: 6513, kind: "temperature" },
-        { id: "CATALYST_TEMP_B1S2", title: "Cat Temp B1S2", unit: "°C", min: 0, max: 6513, kind: "temperature" },
-        { id: "EVAP_VAPOR_PRESSURE", title: "EVAP Pressure", unit: "Pa", min: -8192, max: 8191, kind: "bidirectional" },
-        { id: "SHORT_FUEL_TRIM_2", title: "Short Fuel Trim 2", unit: "%", min: -25, max: 25, kind: "bidirectional" },
-        { id: "LONG_FUEL_TRIM_2", title: "Long Fuel Trim 2", unit: "%", min: -25, max: 25, kind: "bidirectional" },
-        { id: "O2_B1S2", title: "O2 Bank 1 Sensor 2", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        { id: "O2_B2S1", title: "O2 Bank 2 Sensor 1", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        { id: "O2_B2S2", title: "O2 Bank 2 Sensor 2", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        { id: "DISTANCE_SINCE_DTC_CLEAR", title: "Dist Since Clear", unit: "km", min: 0, max: 65535, kind: "numeric" },
-        { id: "WARMUPS_SINCE_DTC_CLEAR", title: "Warmups Since Clear", unit: "", min: 0, max: 255, kind: "numeric" },
-        { id: "ABSOLUTE_LOAD", title: "Absolute Load", unit: "%", min: 0, max: 25700, kind: "numeric" },
-        { id: "COMMANDED_EGR", title: "Commanded EGR", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "EGR_ERROR", title: "EGR Error", unit: "%", min: -100, max: 100, kind: "bidirectional" },
-        { id: "ETHANOL_PERCENT", title: "Ethanol %", unit: "%", min: 0, max: 100, kind: "percentage" },
-        // Batch 2 - Additional O2 sensors
-        { id: "O2_B1S3", title: "O2 Bank 1 Sensor 3", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        { id: "O2_B1S4", title: "O2 Bank 1 Sensor 4", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        { id: "O2_B2S3", title: "O2 Bank 2 Sensor 3", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        { id: "O2_B2S4", title: "O2 Bank 2 Sensor 4", unit: "V", min: 0, max: 1.0, kind: "voltage" },
-        // Wide-range O2 sensors voltage
-        { id: "O2_S1_WR_VOLTAGE", title: "O2 S1 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        { id: "O2_S2_WR_VOLTAGE", title: "O2 S2 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        { id: "O2_S3_WR_VOLTAGE", title: "O2 S3 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        { id: "O2_S4_WR_VOLTAGE", title: "O2 S4 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        { id: "O2_S5_WR_VOLTAGE", title: "O2 S5 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        { id: "O2_S6_WR_VOLTAGE", title: "O2 S6 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        { id: "O2_S7_WR_VOLTAGE", title: "O2 S7 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        { id: "O2_S8_WR_VOLTAGE", title: "O2 S8 WR Voltage", unit: "V", min: 0, max: 5.0, kind: "voltage" },
-        // Wide-range O2 sensors current
-        { id: "O2_S1_WR_CURRENT", title: "O2 S1 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        { id: "O2_S2_WR_CURRENT", title: "O2 S2 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        { id: "O2_S3_WR_CURRENT", title: "O2 S3 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        { id: "O2_S4_WR_CURRENT", title: "O2 S4 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        { id: "O2_S5_WR_CURRENT", title: "O2 S5 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        { id: "O2_S6_WR_CURRENT", title: "O2 S6 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        { id: "O2_S7_WR_CURRENT", title: "O2 S7 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        { id: "O2_S8_WR_CURRENT", title: "O2 S8 WR Current", unit: "mA", min: -128, max: 128, kind: "bidirectional" },
-        // Bank 2 catalyst temps
-        { id: "CATALYST_TEMP_B2S1", title: "Cat Temp B2S1", unit: "°C", min: 0, max: 6513, kind: "temperature" },
-        { id: "CATALYST_TEMP_B2S2", title: "Cat Temp B2S2", unit: "°C", min: 0, max: 6513, kind: "temperature" },
-        // Additional throttle/accelerator
-        { id: "THROTTLE_POS_C", title: "Throttle Pos C", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "ACCELERATOR_POS_E", title: "Accel. Pos E", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "ACCELERATOR_POS_F", title: "Accel. Pos F", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "THROTTLE_ACTUATOR", title: "Throttle Actuator", unit: "%", min: 0, max: 100, kind: "percentage" },
-        // Fuel system
-        { id: "EVAPORATIVE_PURGE", title: "EVAP Purge", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "FUEL_RAIL_PRESSURE_ABS", title: "Fuel Rail Abs", unit: "kPa", min: 0, max: 655350, kind: "pressure" },
-        { id: "FUEL_INJECT_TIMING", title: "Fuel Inject Timing", unit: "°", min: -210, max: 302, kind: "bidirectional" },
-        { id: "FUEL_RATE", title: "Fuel Rate", unit: "L/h", min: 0, max: 3212, kind: "numeric" },
-        // Time-based
-        { id: "RUN_TIME_MIL", title: "Run Time w/ MIL", unit: "min", min: 0, max: 65535, kind: "numeric" },
-        { id: "TIME_SINCE_DTC_CLEARED", title: "Time Since Clear", unit: "min", min: 0, max: 65535, kind: "numeric" },
-        // Other
-        { id: "MAX_MAF", title: "Max MAF", unit: "g/s", min: 0, max: 2550, kind: "numeric" },
-        { id: "FUEL_TYPE", title: "Fuel Type", unit: "", min: 0, max: 23, kind: "numeric" },
-        { id: "EVAP_VAPOR_PRESSURE_ABS", title: "EVAP Pressure Abs", unit: "kPa", min: 0, max: 327, kind: "pressure" },
-        { id: "EVAP_VAPOR_PRESSURE_ALT", title: "EVAP Pressure Alt", unit: "Pa", min: -32768, max: 32767, kind: "bidirectional" },
-        { id: "SHORT_O2_TRIM_B1", title: "Short O2 Trim B1", unit: "%", min: -100, max: 100, kind: "bidirectional" },
-        { id: "LONG_O2_TRIM_B1", title: "Long O2 Trim B1", unit: "%", min: -100, max: 100, kind: "bidirectional" },
-        { id: "SHORT_O2_TRIM_B2", title: "Short O2 Trim B2", unit: "%", min: -100, max: 100, kind: "bidirectional" },
-        { id: "LONG_O2_TRIM_B2", title: "Long O2 Trim B2", unit: "%", min: -100, max: 100, kind: "bidirectional" },
-        { id: "RELATIVE_ACCEL_POS", title: "Rel. Accel Pos", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "HYBRID_BATTERY_REMAINING", title: "Hybrid Battery", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "ELM_VOLTAGE", title: "ELM Voltage", unit: "V", min: 0, max: 65, kind: "voltage" },
-        // Torque (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "DEMAND_ENGINE_TORQUE", title: "Demand Torque", unit: "%", min: -125, max: 130, kind: "bidirectional" },
-        { id: "ACTUAL_ENGINE_TORQUE", title: "Actual Torque", unit: "%", min: -125, max: 130, kind: "bidirectional" },
-        { id: "ENGINE_FRICTION_TORQUE", title: "Friction Torque", unit: "%", min: -125, max: 130, kind: "bidirectional" },
-        { id: "REFERENCE_TORQUE", title: "Reference Torque", unit: "Nm", min: 0, max: 2000, kind: "numeric" },
-        // Boost (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "BOOST_PRESSURE_A", title: "Boost Pressure (abs)", unit: "kPa", min: 0, max: 300, kind: "pressure" },
-        { id: "BOOST_PRESSURE_A_COMMANDED", title: "Boost Commanded (abs)", unit: "kPa", min: 0, max: 300, kind: "pressure" },
-        { id: "WASTEGATE_A", title: "Wastegate Position", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "WASTEGATE_A_COMMANDED", title: "Wastegate Commanded", unit: "%", min: 0, max: 100, kind: "percentage" },
-        // Air (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "MAF_SENSOR_A", title: "MAF Sensor A", unit: "g/s", min: 0, max: 655, kind: "numeric" },
-        { id: "MAF_SENSOR_B", title: "MAF Sensor B", unit: "g/s", min: 0, max: 655, kind: "numeric" },
-        { id: "INTAKE_TEMP_B1S1", title: "Intake Temp B1S1", unit: "°C", min: -20, max: 100, kind: "temperature" },
-        { id: "INTAKE_TEMP_B1S2", title: "Intake Temp B1S2", unit: "°C", min: -20, max: 100, kind: "temperature" },
-        { id: "INTAKE_TEMP_B2S1", title: "Intake Temp B2S1", unit: "°C", min: -20, max: 100, kind: "temperature" },
-        { id: "MANIFOLD_SURFACE_TEMP", title: "Manifold Surface Temp", unit: "°C", min: -40, max: 215, kind: "temperature" },
-        // Temperature (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "COOLANT_TEMP_SENSOR_1", title: "Coolant Temp 1", unit: "°C", min: 0, max: 130, kind: "temperature" },
-        { id: "COOLANT_TEMP_SENSOR_2", title: "Coolant Temp 2", unit: "°C", min: 0, max: 130, kind: "temperature" },
-        // Throttle (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "THROTTLE_POS_G", title: "Throttle Pos G", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "THROTTLE_ACTUATOR_A_COMMANDED", title: "Throttle A Commanded", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "RELATIVE_THROTTLE_A", title: "Rel. Throttle A", unit: "%", min: 0, max: 100, kind: "percentage" },
-        // EGR (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "EGR_A_COMMANDED", title: "EGR A Commanded", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "EGR_A_ACTUAL", title: "EGR A Actual", unit: "%", min: 0, max: 100, kind: "percentage" },
-        { id: "EGR_A_ERROR", title: "EGR A Error", unit: "%", min: -100, max: 100, kind: "bidirectional" },
-        // Fuel (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "FUEL_RAIL_PRESSURE_A", title: "Fuel Rail Pressure A", unit: "kPa", min: 0, max: 250000, kind: "pressure" },
-        { id: "FUEL_RAIL_PRESSURE_A_COMMANDED", title: "Fuel Rail A Commanded", unit: "kPa", min: 0, max: 250000, kind: "pressure" },
-        { id: "FUEL_RAIL_TEMP_A", title: "Fuel Rail Temp A", unit: "°C", min: -40, max: 150, kind: "temperature" },
-        { id: "ENGINE_FUEL_RATE_GS", title: "Engine Fuel Rate", unit: "g/s", min: 0, max: 100, kind: "numeric" },
-        { id: "VEHICLE_FUEL_RATE_GS", title: "Vehicle Fuel Rate", unit: "g/s", min: 0, max: 100, kind: "numeric" },
-        { id: "CYLINDER_FUEL_RATE", title: "Cylinder Fuel Rate", unit: "mg/stroke", min: 0, max: 200, kind: "numeric" },
-        { id: "EXHAUST_FLOW_RATE", title: "Exhaust Flow", unit: "kg/h", min: 0, max: 2000, kind: "numeric" },
-        // Drivetrain (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "TRANSMISSION_GEAR_RATIO", title: "Gear Ratio", unit: ":1", min: 0, max: 6, kind: "numeric" },
-        { id: "RECOMMENDED_GEAR", title: "Recommended Gear", unit: "", min: 0, max: 10, kind: "numeric" },
-        // Distance and time (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "ODOMETER", title: "Odometer", unit: "km", min: 0, max: 1000000, kind: "numeric" },
-        { id: "ENGINE_RUN_TIME_TOTAL", title: "Total Engine Run Time", unit: "sec", min: 0, max: 360000000, kind: "numeric" },
-        { id: "ENGINE_IDLE_TIME_TOTAL", title: "Total Idle Time", unit: "sec", min: 0, max: 360000000, kind: "numeric" },
-        // Hybrid / EV (PIDs 0x61+, obdManager.obdParameterChanged)
-        { id: "HYBRID_BATTERY_VOLTAGE", title: "Hybrid Battery Voltage", unit: "V", min: 0, max: 900, kind: "voltage" },
-        { id: "HYBRID_BATTERY_CURRENT", title: "Hybrid Battery Current", unit: "A", min: -500, max: 500, kind: "bidirectional" },
-        { id: "EV_BATTERY_HEALTH", title: "EV Battery Health", unit: "%", min: 0, max: 100, kind: "percentage" },
-        // ── Sensor (BerryIMU) parameters ──────────────────────────────
-        // Fed by the berryIMU manager (see _imuConnections below), not
-        // obdManager. They flow through paramValues like any OBD PID, so
-        // every gauge, the PID picker, and the editor's demo mode all work
-        // with them unchanged.
-        { id: "PITCH", title: "Pitch", unit: "°", min: -90, max: 90, kind: "bidirectional" },
-        { id: "ROLL", title: "Roll", unit: "°", min: -180, max: 180, kind: "bidirectional" },
-        { id: "HEADING", title: "Heading", unit: "°", min: 0, max: 360, kind: "numeric" },
-        { id: "ALTITUDE", title: "Altitude", unit: "m", min: 0, max: 3000, kind: "numeric" },
-        { id: "ACCEL_MAG", title: "G Magnitude", unit: "g", min: 0, max: 3, kind: "numeric" },
-        { id: "LATERAL_G", title: "Lateral G", unit: "g", min: -2, max: 2, kind: "bidirectional" },
-        { id: "LONGITUDINAL_G", title: "Longitudinal G", unit: "g", min: -2, max: 2, kind: "bidirectional" },
-        { id: "BARO_TEMP", title: "Cabin Baro Temp", unit: "°C", min: -20, max: 60, kind: "temperature" }
-    ]
+    readonly property var allParameters:
+        (typeof parameterCatalog !== "undefined" && parameterCatalog) ? parameterCatalog.parameters : []
+
+    // id -> parameter, for the per-id helpers below
+    readonly property var _byId: {
+        var m = {};
+        for (var i = 0; i < allParameters.length; i++)
+            m[allParameters[i].id] = allParameters[i];
+        return m;
+    }
 
     // ── Original 18 parameter IDs (default-enabled) ──────────────────
     readonly property var originalParameters: [
@@ -182,23 +38,14 @@ QtObject {
         "OIL_TEMP", "IGNITION_TIMING"
     ]
 
-    // ── Abbreviated titles for compact display ───────────────────────
-    readonly property var shortTitles: ({
-        "SPEED": "SPD", "RPM": "RPM", "COOLANT_TEMP": "CLT", "OIL_TEMP": "OIL",
-        "COMMANDED_EQUIV_RATIO": "AFR", "ENGINE_LOAD": "LOAD", "THROTTLE_POS": "TPS",
-        "FUEL_LEVEL": "FUEL", "SHORT_FUEL_TRIM_1": "STFT1", "LONG_FUEL_TRIM_1": "LTFT1",
-        "INTAKE_TEMP": "IAT", "INTAKE_PRESSURE": "MAP", "MAF": "MAF",
-        "TIMING_ADVANCE": "TIM", "CONTROL_MODULE_VOLTAGE": "VOLT",
-        "O2_B1S1": "O2", "FUEL_PRESSURE": "FP", "IGNITION_TIMING": "IGN"
-    })
-
     // ── parameterInfo map (keyed by ID) for HomeOBDView compatibility ─
+    // Home cards show the short title where there is one ("SPD", "CLT")
     property var parameterInfo: {
         var info = {};
         for (var i = 0; i < allParameters.length; i++) {
             var p = allParameters[i];
             info[p.id] = {
-                title: shortTitles[p.id] || p.title,
+                title: p.shortTitle || p.title,
                 unit: p.unit,
                 minValue: p.min,
                 maxValue: p.max
@@ -273,17 +120,11 @@ QtObject {
         return paramValues[paramId] || 0;
     }
 
-    // Decimal places for a plain-text readout. Whole-number readings
-    // (speed, RPM, distances, counters) gain nothing from ".0" and read
-    // slower at a glance; everything else keeps one decimal.
-    readonly property var _integerParams: ({
-        "SPEED": true, "RPM": true, "RUN_TIME": true, "RUN_TIME_MIL": true,
-        "DISTANCE_W_MIL": true, "DISTANCE_SINCE_DTC_CLEAR": true,
-        "WARMUPS_SINCE_DTC_CLEAR": true, "TIME_SINCE_DTC_CLEARED": true,
-        "ENGINE_RUN_TIME_TOTAL": true
-    })
+    // Decimal places for a plain-text readout (catalog `decimals`: 0 for
+    // whole-number readings like speed, RPM and counters, else 1)
     function decimalsFor(paramId) {
-        return _integerParams[paramId] === true ? 0 : 1;
+        var p = _byId[paramId];
+        return p ? p.decimals : 1;
     }
 
     // ── Simulated data (dashboard-editor demo mode) ───────────────────
@@ -361,12 +202,11 @@ QtObject {
     //                     known (callers that want "anything goes while
     //                     offline", like the editor's PID picker, check
     //                     vehicleKnown first).
-    readonly property var sensorParameters: [
-        "PITCH", "ROLL", "HEADING", "ALTITUDE", "ACCEL_MAG",
-        "LATERAL_G", "LONGITUDINAL_G", "BARO_TEMP"
-    ]
+    readonly property var sensorParameters:
+        allParameters.filter(function(p) { return p.source === "imu" }).map(function(p) { return p.id })
     function isSensorParameter(paramId) {
-        return sensorParameters.indexOf(paramId) !== -1;
+        var p = _byId[paramId];
+        return p !== undefined && p.source === "imu";
     }
 
     readonly property bool _obdAvailable: typeof obdManager !== "undefined" && obdManager !== null
@@ -388,11 +228,12 @@ QtObject {
     }
 
     // Parameters a live vehicle can actually feed: the scanned OBD set in
-    // allParameters order. Empty until a vehicle has been scanned.
+    // allParameters order, without aliases (IGNITION_TIMING would be a second
+    // Timing Advance card). Empty until a vehicle has been scanned.
     readonly property var vehicleParameters: {
         if (!vehicleKnown) return [];
         return allParameters.filter(function(p) {
-            return !root.isSensorParameter(p.id) && root._supportedSet[p.id] === true;
+            return !root.isSensorParameter(p.id) && !p.aliasOf && root._supportedSet[p.id] === true;
         });
     }
 

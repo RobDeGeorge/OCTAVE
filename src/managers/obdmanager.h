@@ -260,6 +260,10 @@ public:
     static QList<PidKey> backgroundPidsToWatch(const QHash<QString, QSet<QString>> &demand,
                                                const QList<PidKey> &foreground,
                                                const QStringList &vehicleSupported);
+    // A scan result plus every catalog alias whose target it contains
+    // (TIMING_ADVANCE -> also IGNITION_TIMING); vehicleSupportedParameters
+    // is published through this
+    static QStringList withAliases(const QStringList &names);
 
     // Use `port` instead of the saved obdBluetoothPort, without writing it
     // to settings (dev tooling points this at the simulated adapter, see
