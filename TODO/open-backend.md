@@ -93,6 +93,19 @@ Once `--headless` exists (contract step 2), the QML UI can run as a client of it
 - **Lifecycle on the Pi.** Run the core as a systemd user unit or under Hyprland's `exec-once` (see `deployment/orange-pi-5-plus/`); the UI reconnects with backoff. On desktop the UI binary can spawn the core if none is running.
 - **Road time first.** The Jeep box needs time on v1.0 before the process model changes under it.
 
+## How to do it safely
+
+Never as one large update. Every item above can land as its own small change that leaves the QML UI behaving identically; that is the whole safety story.
+
+- **One rule per change, strangler style.** For each item: add the C++ owner, point the QML at it, delete the QML copy, all in one commit. Never leave two sources of truth across commits; that is exactly how the shift-light copies drifted. Where the QML consumers are many (the value store #8, the NowPlaying facade #5), keep the old QML shape as a thin compatibility layer over the new C++ object, migrate consumers over a few commits, then remove the layer.
+- **Write the test before the move.** Each rule gets a QtTest in `tests/cpp/` that pins the current behaviour first (`octave_add_test()`, temp `XDG_CONFIG_HOME` for anything touching settings). That forces the decision a refactor hides: when the copies disagree, which one is right? For the shift light: a legacy flag's high bound is redline, not 99999. Decide it in the test, then move the code to satisfy it. The test is the spec the next frontend author reads.
+- **Keep the car on a tag.** The Jeep box runs a tagged release; this work happens on `main`; nothing reaches the Pi except through the release-candidate path (CI dispatch, Dropbox `_OCTAVE_rc` staging, kora VMs, then the Pi). Do not deploy `main` mid-refactor. If a step needs a road test, cut an rc for it.
+- **Use the existing tooling as the regression harness.** Run `./build/octave --dev --profile` with the simulated car before and after each move: the screenshot stories (`python -m dev.screenshots`) catch visual regressions, the perf MCP catches what this refactor is most likely to change, idle CPU and redraw rate. The value-store move should show the home-screen redraw dropping; if it does not, something still binds to the whole map.
+- **Order by blast radius.** The S items first (#1, #2, #4, #11): each fixes a real bug and touches one page. Then the catalog and value store (#7, #8): every gauge, but mechanical. Then the facades (#5, #6). The bridge is additive and inert without a flag, like the command server today, so it is near zero risk to the car. The process split goes last, after road time, with the single-process binary kept as the fallback.
+- **Commit so bisect works.** Pre-1.0 commits are bundled during scaffolding, which is fine, but for this stretch make it one logical move per commit: the first time a drive behaves oddly you will want `git bisect` to name the move.
+- **Coordinate parallel sessions.** When another session is editing the same QML pages (the Jeep work touches `CarMenu.qml`, for example), run the moves when it is not mid-edit on those files, and keep the review gate: the auditing session reads the diff before the other commits.
+- **Wiki in the same commit.** Each move changes a manager's public surface, so `signals-slots-reference.html` and the manager page move with it (and `docs/GAUGE_AUTHORING.md` for #7). Stale docs are worse than missing docs, and the published schema in contract step 3 will eventually replace the hand-kept page.
+
 ## Recommended order of operations
 
 1. Prerequisites #1, #2, #4, #11 (all S, each fixes a bug users can hit today).
