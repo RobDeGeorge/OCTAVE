@@ -36,6 +36,6 @@ A "Trends" tab or section on `TripHistory.qml`: parameter chips, a bar/line per 
 
 ## Later (not planned yet)
 
-Shareable car cards and trip summaries exported as images, a gallery of shared dashboards (reusing `DashboardManager`'s export/import), and maybe a self-hostable, federated (ActivityPub) "OCTAVE hub" for car profiles. Anything online must be off by default, opt-in per category, stats-only, with privacy zones around home, never VIN/plates/speed traces publicly, and real deletion. It depends on `TODO/backend-service-split.md` (gateway) and a GPS source (`TODO/octave-companion-app.md`). Write it up as its own plan when step 2 above ships.
+Shareable car cards and trip summaries exported as images, a gallery of shared dashboards (reusing `DashboardManager`'s export/import), and maybe a self-hostable, federated (ActivityPub) "OCTAVE hub" for car profiles. Anything online must be off by default, opt-in per category, stats-only, with privacy zones around home, never VIN/plates/speed traces publicly, and real deletion. It depends on `TODO/open-backend.md` (gateway) and a GPS source (`TODO/octave-companion-app.md`). Write it up as its own plan when step 2 above ships.
 
 Delete this file when steps 1–3 have landed.

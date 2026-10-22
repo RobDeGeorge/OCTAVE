@@ -5,7 +5,7 @@
 **Status:** parked (audit done 2026-10-21, no code moved yet)
 **Last updated:** 2026-10-21
 
-Companion to [backend-service-split.md](backend-service-split.md), which is about running the managers as a separate process so a UI crash never stops the music. This file is about the **contract**: what the backend has to own and publish before an outside author can build against it. Do this one first; the process split then becomes a transport detail.
+This absorbed the earlier `backend-service-split.md` plan (2026-10-18), which was about running the managers as a separate process so a UI crash never stops the music. That benefit falls out of `--headless` once the contract exists, so the two plans are one; the process-specific constraints are in "Running the core as its own process" below.
 
 ---
 
@@ -82,6 +82,17 @@ Once the prerequisites are in, the backend is property-and-slot shaped end to en
 7. **Conformance test.** Keep the QML UI in-process for latency, but add a test that everything QML touches is reachable through the bridge, so the reference UI cannot quietly use a private path. **Effort:** M.
 8. **Wiki and CLAUDE.md.** `architecture.html`, `development.html`, `building.html`, the generated reference page, and a new "Writing a frontend" page. **Effort:** S.
 
+## Running the core as its own process
+
+Once `--headless` exists (contract step 2), the QML UI can run as a client of it on desktop and the Pi. The payoff is in-car reliability: a UI crash or freeze no longer stops music, OBD polling or the volume knob; the UI reconnects and the core keeps its state. Constraints that survive from the old plan:
+
+- **Transport for the QML UI.** Qt Remote Objects was the easy option for QML (replicas bind almost unchanged) but it is Qt-only, which is the opposite of the goal. The QML UI should speak the same bridge as everyone else, or stay in-process with the conformance test (step 7) guaranteeing it could. Decide after the bridge exists and the Pi latency is measured; do not build a second transport for one client.
+- **Mobile stays single-process.** iOS does not allow a separate background daemon and Android would need a foreground service plus binder or local-socket IPC. Build the managers as a core library with an in-process transport so the Android and iOS binaries link it directly; split the process only on desktop and Pi. This is the `src/main.cpp` refactor: managers constructed and wired in one function a library can own, rather than inline in `main()`. **Effort:** L.
+- **Latency-sensitive paths stay in the core.** The ESP32 knob to `VolumeController::applyVolume`, the gesture sensor and the IMU at 200 Hz must never round-trip through a UI. After a split, measure slider-to-volume and knob-to-UI-feedback on the Orange Pi; local IPC should be well under a frame, but verify.
+- **Video stays with whoever renders it.** Phone mirror (`src/phone_mirror/`, decoded H.264 into a `QVideoSink`) and Android Auto (`dhuframe` image provider) cannot go through a JSON socket. Keep the decode in the UI process at first: the core manages the session (adb, connection state, control messages) and hands the UI the stream. Shared memory or a dmabuf hand-off on Linux is the later option; re-streaming the H.264 for non-Qt clients is contract step 6.
+- **Lifecycle on the Pi.** Run the core as a systemd user unit or under Hyprland's `exec-once` (see `deployment/orange-pi-5-plus/`); the UI reconnects with backoff. On desktop the UI binary can spawn the core if none is running.
+- **Road time first.** The Jeep box needs time on v1.0 before the process model changes under it.
+
 ## Recommended order of operations
 
 1. Prerequisites #1, #2, #4, #11 (all S, each fixes a bug users can hit today).
@@ -91,6 +102,8 @@ Once the prerequisites are in, the backend is property-and-slot shaped end to en
 5. Contract steps 1–5, then 7 and 8.
 6. Contract step 6 (media streams) last, after a prototype.
 
-Prerequisites: v1.0 shipped. Step 2 of the contract benefits from the core-library refactor in [backend-service-split.md](backend-service-split.md) step 2 but does not require it. `TODO/octave-companion-app.md` item 2 (phone data link) and `TODO/user-primitives.md` (data-only widget presets) should target the same bridge rather than their own sockets.
+7. The process split on desktop and Pi (section above), after a road test on v1.0.
 
-Delete this file when contract step 5 lands (a non-Qt reference client works against the published schema); move anything left into [backend-service-split.md](backend-service-split.md).
+Prerequisites: v1.0 shipped. Contract step 2 benefits from the core-library refactor but does not require it. `TODO/octave-companion-app.md` item 2 (phone data link) and `TODO/user-primitives.md` (data-only widget presets) should target the same bridge rather than their own sockets. Contract step 6 and the three XL plans in the README share the "pull the H.264 decoder out of `scrcpyclient.cpp`" prerequisite.
+
+Delete this file when contract step 5 lands (a non-Qt reference client works against the published schema) and the process split either has landed or has its own plan.

@@ -15,7 +15,7 @@
 // thread and use onGui() / postGui() for anything that touches Qt objects.
 //
 // This is meant to grow into the service API sketched in
-// TODO/backend-service-split.md, not to stay a throwaway dev hook.
+// TODO/open-backend.md, not to stay a throwaway dev hook.
 
 #include <QHash>
 #include <QObject>
