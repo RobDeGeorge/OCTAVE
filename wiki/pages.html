@@ -313,7 +313,7 @@
             <tr><td><code>sensorTempUnit</code></td><td><code>"F"</code></td><td>Celsius &rarr; Fahrenheit conversion in <code>tempDisplay()</code></td></tr>
             <tr><td><code>sensorAltitudeUnit</code></td><td><code>"m"</code></td><td><code>"ft"</code> multiplies by 3.28084 in <code>altDisplay()</code></td></tr>
             <tr><td><code>sensorShowPitch</code>, <code>sensorShowRoll</code>, <code>sensorShowHeading</code>, <code>sensorShowGForce</code>, <code>sensorShowAltitude</code>, <code>sensorShowTemperature</code></td><td>true</td><td>Card visibility; the temperature card is also hidden when <code>berryIMU.hasTemperature === false</code></td></tr>
-            <tr><td><code>sensorEmitRate</code></td><td>60</td><td><code>berryIMU.setEmitRate(hz)</code> on page load</td></tr>
+            <tr><td><code>sensorEmitRate</code></td><td>60</td><td>Not read here: <code>BerryIMUManager</code> follows <code>settingsManager.sensorEmitRate</code> from startup</td></tr>
           </tbody>
         </table>
 

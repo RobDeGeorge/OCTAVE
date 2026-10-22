@@ -501,7 +501,7 @@ m_reconnectAttempts++;
         <section id="imu-startup">
           <h3>Startup &amp; Reconnection</h3>
           <ol class="steps">
-            <li>The constructor schedules <code>startSensor()</code> with a 1 s single-shot timer; <code>connect_settings_manager()</code> reads <code>imuEnabled</code> first.</li>
+            <li>The constructor schedules <code>startSensor()</code> with a 1 s single-shot timer; <code>connect_settings_manager()</code> reads <code>imuEnabled</code> and <code>sensorEmitRate</code> first, then follows both live (<code>imuEnabledChanged</code> &rarr; <code>setEnabled</code>, <code>sensorEmitRateChanged</code> &rarr; <code>setEmitRate</code>), as the ESP32 manager does: a page or widget only saves.</li>
             <li>If disabled: log "disabled in settings, skipping start", emit <code>connectionStatusChanged("Disabled")</code>, stop.</li>
             <li>Any previous worker is stopped (<code>stopWorker()</code>, 2 s wait) before a (re)connect.</li>
             <li>Open the bus, initialise LSM6DSL, LIS3MDL, BMP388 in that order.</li>
@@ -633,8 +633,9 @@ m_reconnectAttempts++;
           </p>
           <p>
             <code>setEmitRate(hz)</code> clamps to 10&ndash;120 Hz and sets the active interval to <code>1 / hz</code>.
-            <code>SensorMenu.qml</code> calls it on load with the <code>sensorEmitRate</code> setting (default 60), and the
-            Accessories settings slider (10&ndash;120, step 5) saves the setting and calls it live. The
+            The manager applies the <code>sensorEmitRate</code> setting (default 60) when the settings manager is attached and on
+            every <code>sensorEmitRateChanged</code>; the Accessories settings slider (10&ndash;120, step 5) only saves it
+            (<code>save_sensor_emit_rate</code>). The
             interval is stored on the manager (<code>m_emitInterval</code>) and applied to every
             worker that is created, so a call before the sensor starts or across a retry is not lost.
           </p>
@@ -723,7 +724,7 @@ tz = yw*qz - yz*qw</code></pre>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/SensorMenu.qml</span></td>
-                <td>3&times;2 grid: <code>SensorCard</code>s for PITCH, ROLL, HEADING, ALTITUDE, TEMPERATURE plus a <code>GForceDisplay</code> (lateral / longitudinal dot with a trail, <code>maxG</code> 1.5). Reads <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code> (F/C), <code>sensorAltitudeUnit</code> (m/ft), the six <code>sensorShow*</code> flags and <code>sensorEmitRate</code>; calls <code>berryIMU.setEmitRate(emitRate)</code> on load. The temperature card is additionally gated on <code>berryIMU.hasTemperature !== false</code>. ZERO / RESET buttons.</td>
+                <td>3&times;2 grid: <code>SensorCard</code>s for PITCH, ROLL, HEADING, ALTITUDE, TEMPERATURE plus a <code>GForceDisplay</code> (lateral / longitudinal dot with a trail, <code>maxG</code> 1.5). Reads <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code> (F/C), <code>sensorAltitudeUnit</code> (m/ft) and the six <code>sensorShow*</code> flags (the emit rate is the manager's own setting). The temperature card is additionally gated on <code>berryIMU.hasTemperature !== false</code>. ZERO / RESET buttons.</td>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/SensorHome.qml</span></td>
@@ -753,7 +754,7 @@ tz = yw*qz - yz*qw</code></pre>
               </tr>
               <tr>
                 <td><span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td>
-                <td>"IMU Sensor" tile: status dot + text from <code>getConnectionStatus()</code> / <code>connectionStatusChanged</code>; enable toggle calls <code>save_imu_enabled()</code> and <code>berryIMU.setEnabled()</code>; display settings; emit-rate slider.</td>
+                <td>"IMU Sensor" tile: status dot + text from <code>getConnectionStatus()</code> / <code>connectionStatusChanged</code>; enable toggle calls <code>save_imu_enabled()</code> (the manager follows the setting); display settings; emit-rate slider.</td>
               </tr>
             </tbody>
           </table>
@@ -772,7 +773,7 @@ tz = yw*qz - yz*qw</code></pre>
             <li>Heading = compass azimuth, normalised to &ge; 0 because some Android devices report &minus;180&hellip;180.</li>
             <li>Altitude from the pressure sensor (Pa, against 101 325 Pa) at 10 Hz; <code>baroTempChanged</code> and <code>hasTemperature</code> only turn on once a non-zero temperature arrives (most phones report 0).</li>
             <li>Rates: accelerometer and compass run at <code>setEmitRate()</code> (default 60, clamped 10&ndash;120 like desktop) and drop to 5 Hz when <code>setActive(false)</code> &mdash; the requested sensor rate drops to 5 Hz, and <code>idleThrottled()</code> separately caps accelerometer and compass emission at once per 200 ms because Android may treat the requested rate as a hint. Pressure remains requested at 10 Hz.</li>
-            <li>Status is "Connected" if the accelerometer starts, otherwise <strong>"Unavailable"</strong>. <code>setEnabled()</code> persists <code>imuEnabled</code> through <code>save_imu_enabled</code> exactly like desktop, starts/stops the sensors and emits "Connected" / "Unavailable" / "Disabled"; because the phone sensors are started in the constructor, <code>connect_settings_manager()</code> stops them again when the persisted value is <code>false</code>.</li>
+            <li>Status is "Connected" if the accelerometer starts, otherwise <strong>"Unavailable"</strong>. <code>setEnabled()</code> (driven by <code>imuEnabledChanged</code>, as on desktop; it does not save) starts/stops the sensors and emits "Connected" / "Unavailable" / "Disabled"; because the phone sensors are started in the constructor, <code>connect_settings_manager()</code> stops them again when the persisted value is <code>false</code>.</li>
           </ul>
         </section>
 
@@ -807,7 +808,7 @@ tz = yw*qz - yz*qw</code></pre>
           <table>
             <thead><tr><th>Slot</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>setEnabled(bool)</code></td><td>Persists <code>imuEnabled</code> (<code>save_imu_enabled</code>), then starts (retry counter reset) or stops the worker and emits "Disabled"</td></tr>
+              <tr><td><code>setEnabled(bool)</code></td><td>Runtime switch, called on <code>imuEnabledChanged</code>; does not save. Starts (retry counter reset) or stops the worker and emits "Disabled"</td></tr>
               <tr><td><code>isEnabled()</code></td><td>Current enabled flag</td></tr>
               <tr><td><code>setEmitRate(int hz)</code></td><td>Clamp 10&ndash;120, interval = 1/hz; stored on the manager and applied to every worker</td></tr>
               <tr><td><code>setActive(bool)</code></td><td>Called by <code>Main.qml</code> on every page change; <code>false</code> drops emission to 5 Hz</td></tr>
@@ -943,10 +944,10 @@ tz = yw*qz - yz*qw</code></pre>
           <table>
             <thead><tr><th>Key</th><th>Default</th><th>UI range</th><th>Read by</th></tr></thead>
             <tbody>
-              <tr><td><code>gestureSensorEnabled</code></td><td><code>true</code></td><td>toggle</td><td><code>connect_settings_manager()</code>; toggle calls <code>save_gesture_sensor_enabled()</code> + <code>setEnabled()</code></td></tr>
+              <tr><td><code>gestureSensorEnabled</code></td><td><code>true</code></td><td>toggle</td><td><code>connect_settings_manager()</code>, then live on <code>gestureSensorEnabledChanged</code>; the settings toggle and the dashboard Accessories widget only call <code>save_gesture_sensor_enabled()</code></td></tr>
               <tr><td><code>gestureMapping</code></td><td>table above</td><td>chip picker per gesture</td><td><code>get_gesture_mapping_dict()</code> at startup; <code>setGestureAction()</code> / <code>resetMappingToDefaults()</code> write back through <code>save_gesture_mapping()</code></td></tr>
               <tr><td><code>gestureVolumeStep</code></td><td><code>5</code></td><td>1&ndash;100</td><td>The action handler in <span class="file-path">src/main.cpp</span></td></tr>
-              <tr><td><code>gestureCooldown</code></td><td><code>300</code> ms</td><td>100&ndash;2000, step 50</td><td><code>connect_settings_manager()</code>; slider calls <code>save_gesture_cooldown()</code> + <code>setCooldown(ms)</code></td></tr>
+              <tr><td><code>gestureCooldown</code></td><td><code>300</code> ms</td><td>100&ndash;2000, step 50</td><td><code>connect_settings_manager()</code>, then live on <code>gestureCooldownChanged</code>; slider and chips only call <code>save_gesture_cooldown()</code></td></tr>
             </tbody>
           </table>
           <p>
@@ -981,8 +982,8 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td><code>setGestureAction(gesture, action)</code></td><td>Remap one gesture and persist the whole mapping</td></tr>
               <tr><td><code>getGestureAction(gesture)</code></td><td>Current action, <code>"none"</code> if unmapped</td></tr>
               <tr><td><code>resetMappingToDefaults()</code></td><td>Restore the default table and persist it</td></tr>
-              <tr><td><code>setEnabled(bool)</code></td><td>Persist <code>gestureSensorEnabled</code>; start (retry counter reset) or stop the worker and emit "Disabled"</td></tr>
-              <tr><td><code>setCooldown(int ms)</code></td><td>Runtime cooldown (not persisted here; the slider saves the setting separately)</td></tr>
+              <tr><td><code>setEnabled(bool)</code></td><td>Runtime switch, called on <code>gestureSensorEnabledChanged</code>; does not save. Start (retry counter reset) or stop the worker and emit "Disabled"</td></tr>
+              <tr><td><code>setCooldown(int ms)</code></td><td>Runtime cooldown, called on <code>gestureCooldownChanged</code>; does not save. <code>cooldownMs()</code> reads it back</td></tr>
               <tr><td><code>isEnabled()</code></td><td>Current enabled flag</td></tr>
               <tr><td><code>getConnectionStatus()</code></td><td>"Connected" / "Disconnected" ("Disabled on mobile" from the Android stub)</td></tr>
               <tr><td><code>cleanup()</code></td><td>Set shutting-down, stop the worker, close the bus</td></tr>

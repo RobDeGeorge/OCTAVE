@@ -33,7 +33,6 @@ Item {
     property int decimalPlaces: 1
     property bool useFahrenheit: true
     property bool useImperial: false
-    property int emitRate: 60
     property bool showPitch: true
     property bool showRoll: true
     property bool showHeading: true
@@ -64,14 +63,12 @@ Item {
         decimalPlaces = settingsManager.get_setting_with_default("sensorDecimalPlaces", 1)
         useFahrenheit = settingsManager.get_setting_with_default("sensorTempUnit", "F") === "F"
         useImperial = settingsManager.get_setting_with_default("sensorAltitudeUnit", "m") === "ft"
-        emitRate = settingsManager.get_setting_with_default("sensorEmitRate", 60)
         showPitch = settingsManager.get_setting_with_default("sensorShowPitch", true)
         showRoll = settingsManager.get_setting_with_default("sensorShowRoll", true)
         showHeading = settingsManager.get_setting_with_default("sensorShowHeading", true)
         showGForce = settingsManager.get_setting_with_default("sensorShowGForce", true)
         showAltitude = settingsManager.get_setting_with_default("sensorShowAltitude", true)
         showTemperature = settingsManager.get_setting_with_default("sensorShowTemperature", true)
-        berryIMU.setEmitRate(emitRate)
     }
 
     Connections {

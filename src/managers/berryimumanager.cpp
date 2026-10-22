@@ -807,9 +807,14 @@ BerryIMUManager::~BerryIMUManager()
 void BerryIMUManager::connect_settings_manager(SettingsManager *settingsManager)
 {
     m_settingsManager = settingsManager;
-    QVariant v = settingsManager->property("imuEnabled");
-    if (v.isValid())
-        m_enabled = v.toBool();
+    // Read before the delayed first start, then follow the settings live:
+    // any page (or widget) only saves
+    m_enabled = settingsManager->imuEnabled();
+    setEmitRate(settingsManager->sensorEmitRate());
+    connect(settingsManager, &SettingsManager::imuEnabledChanged,
+            this, &BerryIMUManager::setEnabled);
+    connect(settingsManager, &SettingsManager::sensorEmitRateChanged,
+            this, &BerryIMUManager::setEmitRate);
 }
 
 bool BerryIMUManager::getConnected() const
@@ -933,10 +938,6 @@ void BerryIMUManager::setEnabled(bool enabled)
     if (enabled == m_enabled)
         return;
     m_enabled = enabled;
-    if (m_settingsManager) {
-        QMetaObject::invokeMethod(m_settingsManager, "save_imu_enabled",
-                                  Q_ARG(bool, enabled));
-    }
     if (enabled && !m_running) {
         m_retryCount = 0;
         startSensor();
@@ -958,6 +959,11 @@ void BerryIMUManager::setEmitRate(int hz)
     if (m_worker)
         m_worker->setEmitInterval(m_emitInterval);
     qCInfo(lcImu) << "emit rate set to" << hz << "Hz (interval=" << m_emitInterval << "s)";
+}
+
+int BerryIMUManager::emitRate() const
+{
+    return qRound(1.0 / m_emitInterval);
 }
 
 void BerryIMUManager::setActive(bool active)
@@ -1061,8 +1067,7 @@ void BerryIMUManager::connect_settings_manager(SettingsManager *sm)
     // Desktop reads imuEnabled before its delayed start; the phone sensors
     // were already started in the constructor, so honour a persisted "off"
     // here by stopping them again.
-    QVariant v = sm->property("imuEnabled");
-    if (v.isValid() && !v.toBool() && m_enabled) {
+    if (!sm->imuEnabled() && m_enabled) {
         m_enabled = false;
         m_accel->stop();
         m_compass->stop();
@@ -1071,6 +1076,10 @@ void BerryIMUManager::connect_settings_manager(SettingsManager *sm)
         qCInfo(lcImuMobile) << "disabled in settings, sensors stopped";
         emit connectionStatusChanged(QStringLiteral("Disabled"));
     }
+    setEmitRate(sm->sensorEmitRate());
+    // Then follow the settings live: any page (or widget) only saves
+    connect(sm, &SettingsManager::imuEnabledChanged, this, &BerryIMUManager::setEnabled);
+    connect(sm, &SettingsManager::sensorEmitRateChanged, this, &BerryIMUManager::setEmitRate);
 }
 
 bool BerryIMUManager::getConnected() const
@@ -1176,11 +1185,6 @@ void BerryIMUManager::setEnabled(bool enabled)
 {
     if (enabled == m_enabled) return;
     m_enabled = enabled;
-    // Persist exactly like the desktop branch so the toggle survives restart.
-    if (m_settingsManager) {
-        QMetaObject::invokeMethod(m_settingsManager, "save_imu_enabled",
-                                  Q_ARG(bool, enabled));
-    }
     if (enabled) {
         // start() is also the availability probe; while no page uses the
         // values, stop again straight away (see setActive)
@@ -1211,6 +1215,11 @@ void BerryIMUManager::setEmitRate(int hz)
     m_emitRate = hz;
     m_accel->setDataRate(m_emitRate);   // only running while active
     m_compass->setDataRate(m_emitRate);
+}
+
+int BerryIMUManager::emitRate() const
+{
+    return m_emitRate;
 }
 
 // No page shows the values: stop the phone's sensors rather than only

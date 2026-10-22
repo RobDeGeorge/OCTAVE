@@ -125,6 +125,7 @@ class SettingsManager : public QObject
 
     // --- IMU ---
     Q_PROPERTY(bool imuEnabled READ imuEnabled NOTIFY imuEnabledChanged)
+    Q_PROPERTY(int sensorEmitRate READ sensorEmitRate NOTIFY sensorEmitRateChanged)   // Hz, 10-120
 
     // --- Gesture Sensor ---
     Q_PROPERTY(bool gestureSensorEnabled READ gestureSensorEnabled NOTIFY gestureSensorEnabledChanged)
@@ -239,6 +240,7 @@ public:
 
     // IMU
     bool imuEnabled() const;
+    int sensorEmitRate() const;
 
     // Gesture
     bool gestureSensorEnabled() const;
@@ -354,6 +356,7 @@ signals:
 
     // IMU
     void imuEnabledChanged(bool value);
+    void sensorEmitRateChanged(int value);
 
     // Gesture
     void gestureSensorEnabledChanged(bool value);
@@ -480,6 +483,7 @@ public slots:
 
     // IMU
     void save_imu_enabled(bool enabled);
+    void save_sensor_emit_rate(int hz);
 
     // Gesture
     void save_gesture_sensor_enabled(bool enabled);
@@ -703,6 +707,7 @@ private:
 
     // IMU
     bool m_imuEnabled = true;
+    int m_sensorEmitRate = 60;
 
     // Gesture
     bool m_gestureSensorEnabled = true;

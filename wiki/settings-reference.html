@@ -256,7 +256,7 @@ EV_BATTERY_HEALTH</code></pre>
           </thead>
           <tbody>
             <tr><td><code>imuEnabled</code> property</td><td>imuEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the BerryIMU v3 I²C sensor. Pinnable; also on the Accessories widget</td></tr>
-            <tr><td>generic</td><td>sensorEmitRate</td><td>int</td><td>60</td><td>UI 10 – 120 Hz, step 5</td><td>Sensor sampling / emit rate in Hz</td></tr>
+            <tr><td><code>sensorEmitRate</code> / <code>save_sensor_emit_rate()</code></td><td>sensorEmitRate</td><td>int</td><td>60</td><td>10 – 120 Hz (clamped on save and load), UI step 5</td><td>IMU emit rate in Hz; <code>BerryIMUManager</code> applies it at startup and on every change</td></tr>
             <tr><td>generic</td><td>sensorDecimalPlaces</td><td>int</td><td>1</td><td>UI 0 – 4</td><td>Decimal places on the Sensors page readouts</td></tr>
             <tr><td>generic</td><td>sensorTempUnit</td><td>string</td><td>"F"</td><td>"F", "C" (toggle)</td><td>Barometer temperature unit</td></tr>
             <tr><td>generic</td><td>sensorAltitudeUnit</td><td>string</td><td>"m"</td><td>"m", "ft" (toggle)</td><td>Barometric altitude unit</td></tr>

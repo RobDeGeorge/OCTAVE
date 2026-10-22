@@ -96,9 +96,12 @@ public slots:
     void setGestureAction(const QString &gesture, const QString &action);
     QString getGestureAction(const QString &gesture);
     void resetMappingToDefaults();
+    // Runtime switches; they do not save. connect_settings_manager() makes the
+    // gestureSensorEnabled / gestureCooldown settings drive them.
     void setEnabled(bool enabled);
     void setCooldown(int ms);
     bool isEnabled();
+    int cooldownMs() const { return qRound(m_cooldown * 1000.0); }
     void cleanup();
 
 private slots:
@@ -153,6 +156,7 @@ public slots:
     void setEnabled(bool) {}
     void setCooldown(int) {}
     bool isEnabled() { return false; }
+    int cooldownMs() const { return 0; }
     void cleanup() {}
 };
 

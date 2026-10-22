@@ -170,6 +170,7 @@
             <tr><td><code>esp32LedColorMode</code></td><td><code>QString</code></td><td>read-only</td><td><code>esp32LedColorModeChanged</code></td><td><code>"theme"</code> / <code>"static"</code> LED colour source &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>esp32LedStaticColor</code></td><td><code>QString</code></td><td>read-only</td><td><code>esp32LedStaticColorChanged</code></td><td>Hex colour used when <code>esp32LedColorMode</code> is static &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>imuEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>imuEnabledChanged</code></td><td>Enable the BerryIMU sensor &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>sensorEmitRate</code></td><td><code>int</code></td><td>read-only</td><td><code>sensorEmitRateChanged</code></td><td>IMU emit rate in Hz (10&ndash;120, default 60); BerryIMUManager follows it &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>gestureSensorEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>gestureSensorEnabledChanged</code></td><td>Enable the PAJ7620U2 gesture sensor &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>gestureVolumeStep</code></td><td><code>int</code></td><td>read-only</td><td><code>gestureVolumeStepChanged</code></td><td>Volume percent per volume gesture &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>gestureCooldown</code></td><td><code>int</code></td><td>read-only</td><td><code>gestureCooldownChanged</code></td><td>Minimum ms between accepted gestures &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -258,6 +259,7 @@
             <tr><td><code>save_esp32_led_color_mode(QString mode)</code></td><td><code>void</code></td><td>Save <code>esp32LedColorMode</code>, then emit <code>esp32LedColorModeChanged</code></td></tr>
             <tr><td><code>save_esp32_led_static_color(QString color)</code></td><td><code>void</code></td><td>Save <code>esp32LedStaticColor</code>, then emit <code>esp32LedStaticColorChanged</code></td></tr>
             <tr><td><code>save_imu_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>imuEnabled</code>, then emit <code>imuEnabledChanged</code></td></tr>
+            <tr><td><code>save_sensor_emit_rate(int hz)</code></td><td><code>void</code></td><td>Save <code>sensorEmitRate</code> clamped to 10&ndash;120, then emit <code>sensorEmitRateChanged</code> (BerryIMUManager follows it)</td></tr>
             <tr><td><code>save_gesture_sensor_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>gestureSensorEnabled</code>, then emit <code>gestureSensorEnabledChanged</code></td></tr>
             <tr><td><code>save_gesture_action(QString gesture, QString action)</code></td><td><code>void</code></td><td>Map one gesture (e.g. <code>"RIGHT"</code>) to an action (e.g. <code>"next_track"</code>); emits <code>gestureMappingChanged</code></td></tr>
             <tr><td><code>save_gesture_mapping(QVariantMap mapping)</code></td><td><code>void</code></td><td>Replace the whole gesture &rarr; action map</td></tr>
@@ -1050,7 +1052,7 @@
         <h2 id="berryIMU">BerryIMUManager <span class="cmt">&mdash; <code>berryIMU</code></span></h2>
         <p><span class="file-path">src/managers/berryimumanager.h</span> &mdash; QML context property <code>berryIMU</code></p>
         <p>BerryIMU v3 (LSM6DSL accel/gyro, LIS3MDL mag, BMP388 baro) over I2C with a Madgwick AHRS on a worker thread (accel + gyro fusion only; the magnetometer feeds the heading readout). The Android build reads Qt Sensors instead. Five consecutive failed I2C block reads mark the bus dead: status <code>"Error"</code>, then the usual retry / back-off. A permission-denied bus (<code>EACCES</code> / <code>EPERM</code>) logs a warning once (<code>permission denied on /dev/i2c-N - add the user to the i2c group; not retrying</code>), emits <code>"Disconnected"</code> and does not retry.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>The Android build is a full QtSensors implementation with the identical API: <code>setEnabled()</code> persists <code>imuEnabled</code> like desktop (a persisted &ldquo;off&rdquo; stops the sensors when the SettingsManager is attached), <code>connectionStatusChanged</code> reports <code>"Connected"</code>, <code>"Unavailable"</code> or <code>"Disabled"</code>, <code>setEmitRate()</code> clamps to the same 10&ndash;120 Hz, and <code>orientationChanged</code> is synthesised as a yaw-stripped quaternion from the tared pitch / roll so CarMenu sees one convention.</div>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>The Android build is a full QtSensors implementation with the identical API: <code>setEnabled()</code> follows <code>imuEnabled</code> like desktop (a persisted &ldquo;off&rdquo; stops the sensors when the SettingsManager is attached), <code>connectionStatusChanged</code> reports <code>"Connected"</code>, <code>"Unavailable"</code> or <code>"Disabled"</code>, <code>setEmitRate()</code> clamps to the same 10&ndash;120 Hz, and <code>orientationChanged</code> is synthesised as a yaw-stripped quaternion from the tared pitch / roll so CarMenu sees one convention.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1064,9 +1066,10 @@
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>Status text</td></tr>
-            <tr><td><code>setEnabled(bool enabled)</code></td><td><code>void</code></td><td>Start/stop the sensor and persist <code>imuEnabled</code></td></tr>
+            <tr><td><code>setEnabled(bool enabled)</code></td><td><code>void</code></td><td>Start/stop the sensor (runtime only, not saved). The manager calls it on <code>settingsManager.imuEnabledChanged</code>: QML saves with <code>save_imu_enabled</code> instead</td></tr>
             <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>Enabled flag</td></tr>
-            <tr><td><code>setEmitRate(int hz)</code></td><td><code>void</code></td><td>Signal rate in Hz (clamped 10&ndash;120); the value is kept and applied to every worker the manager creates, so a call before start or across a retry is not lost</td></tr>
+            <tr><td><code>setEmitRate(int hz)</code></td><td><code>void</code></td><td>Signal rate in Hz (clamped 10&ndash;120); the value is kept and applied to every worker the manager creates, so a call before start or across a retry is not lost. Driven by <code>settingsManager.sensorEmitRate</code> from startup</td></tr>
+            <tr><td><code>emitRate()</code></td><td><code>int</code></td><td>The rate in Hz currently requested (C++ only)</td></tr>
             <tr><td><code>setActive(bool active)</code></td><td><code>void</code></td><td>Main.qml sets <code>true</code> while a sensor page is showing; <code>false</code> drops the worker to a 5 Hz idle rate</td></tr>
             <tr><td><code>calibrateTare()</code></td><td><code>void</code></td><td>Take the current orientation as the zero reference (CarMenu ZERO). Raises a request that the read thread services on its next pass; ignored with a log line when the loop is not running</td></tr>
             <tr><td><code>resetTare()</code></td><td><code>void</code></td><td>Clear the tare (CarMenu RESET); serviced on the read thread while running, applied immediately otherwise</td></tr>
@@ -1111,8 +1114,8 @@
             <tr><td><code>setGestureAction(QString gesture, QString action)</code></td><td><code>void</code></td><td>Map a gesture to an action and persist it</td></tr>
             <tr><td><code>getGestureAction(QString gesture)</code></td><td><code>QString</code></td><td>Action mapped to a gesture</td></tr>
             <tr><td><code>resetMappingToDefaults()</code></td><td><code>void</code></td><td>Restore the default map (RIGHT&rarr;next_track, UP/CLOCKWISE&rarr;volume_up, FORWARD/WAVE&rarr;play_pause, BACKWARD&rarr;mute_toggle, &hellip;)</td></tr>
-            <tr><td><code>setEnabled(bool enabled)</code></td><td><code>void</code></td><td>Start/stop the sensor and persist <code>gestureSensorEnabled</code></td></tr>
-            <tr><td><code>setCooldown(int ms)</code></td><td><code>void</code></td><td>Minimum ms between accepted gestures</td></tr>
+            <tr><td><code>setEnabled(bool enabled)</code></td><td><code>void</code></td><td>Start/stop the sensor (runtime only, not saved). The manager calls it on <code>settingsManager.gestureSensorEnabledChanged</code>: QML saves with <code>save_gesture_sensor_enabled</code> instead</td></tr>
+            <tr><td><code>setCooldown(int ms)</code></td><td><code>void</code></td><td>Minimum ms between accepted gestures (runtime; follows <code>gestureCooldownChanged</code>). <code>cooldownMs()</code> reads it back (C++ only)</td></tr>
             <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>Enabled flag</td></tr>
             <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Stop the worker thread and close the I2C bus</td></tr>
           </tbody>

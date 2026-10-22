@@ -575,13 +575,10 @@ void GestureManager::connect_settings_manager(SettingsManager *settingsManager)
 {
     m_settingsManager = settingsManager;
 
-    QVariant enabledVar = settingsManager->property("gestureSensorEnabled");
-    if (enabledVar.isValid())
-        m_enabled = enabledVar.toBool();
-
-    QVariant cooldownVar = settingsManager->property("gestureCooldown");
-    if (cooldownVar.isValid())
-        m_cooldown = cooldownVar.toInt() / 1000.0;
+    // Read before the delayed first start, then follow the settings live
+    // (below): any page or widget only saves
+    m_enabled = settingsManager->gestureSensorEnabled();
+    m_cooldown = settingsManager->gestureCooldown() / 1000.0;
 
     // Try to load gesture mapping from settings
     QVariantMap vmap;
@@ -602,6 +599,11 @@ void GestureManager::connect_settings_manager(SettingsManager *settingsManager)
         m_worker->setCooldown(m_cooldown);
         m_worker->setGestureMapping(m_gestureMapping);
     }
+
+    connect(settingsManager, &SettingsManager::gestureSensorEnabledChanged,
+            this, &GestureManager::setEnabled);
+    connect(settingsManager, &SettingsManager::gestureCooldownChanged,
+            this, &GestureManager::setCooldown);
 }
 
 void GestureManager::stopWorker()
@@ -739,10 +741,6 @@ void GestureManager::setEnabled(bool enabled)
     if (enabled == m_enabled)
         return;
     m_enabled = enabled;
-    if (m_settingsManager) {
-        QMetaObject::invokeMethod(m_settingsManager, "save_gesture_sensor_enabled",
-                                  Q_ARG(bool, enabled));
-    }
     if (enabled && !m_running) {
         m_retryCount = 0;
         startSensor();

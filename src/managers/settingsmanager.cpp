@@ -114,6 +114,7 @@ QJsonObject SettingsManager::buildSettingsRegistry()
     reg[QStringLiteral("black_box_max_mb")]           = entry("blackBoxMaxMB", "Black Box Storage Cap", "obdSettings", "slider", "save_black_box_max_mb", sliderParams(50, 5000, 50));
     reg[QStringLiteral("gesture_sensor_enabled")]     = entry("gestureSensorEnabled", "Gesture Sensor", "gestureSensorSettings", "toggle", "save_gesture_sensor_enabled");
     reg[QStringLiteral("imu_enabled")]                = entry("imuEnabled", "IMU Sensor", "imuSettings", "toggle", "save_imu_enabled");
+    reg[QStringLiteral("sensor_emit_rate")]           = entry("sensorEmitRate", "IMU Update Rate", "imuSettings", "slider", "save_sensor_emit_rate", sliderParams(10, 120, 5));
 
     s_settingsRegistry = reg;
     return reg;
@@ -568,6 +569,7 @@ void SettingsManager::populateMembers()
 
     // IMU
     m_imuEnabled = s(QStringLiteral("imuEnabled")).toBool();
+    m_sensorEmitRate = qBound(10, s(QStringLiteral("sensorEmitRate")).toInt(), 120);
 
     // Gesture
     m_gestureSensorEnabled = s(QStringLiteral("gestureSensorEnabled")).toBool();
@@ -992,6 +994,7 @@ QString SettingsManager::esp32LedStaticColor() const   { return m_esp32LedStatic
 
 // --- IMU ---
 bool    SettingsManager::imuEnabled() const            { return m_imuEnabled; }
+int     SettingsManager::sensorEmitRate() const        { return m_sensorEmitRate; }
 
 // --- Gesture ---
 bool    SettingsManager::gestureSensorEnabled() const  { return m_gestureSensorEnabled; }
@@ -1925,6 +1928,13 @@ void SettingsManager::save_imu_enabled(bool enabled)
     emit imuEnabledChanged(enabled);
 }
 
+void SettingsManager::save_sensor_emit_rate(int hz)
+{
+    m_sensorEmitRate = qBound(10, hz, 120);   // BerryIMUManager::setEmitRate's range
+    updateSetting(QStringLiteral("sensorEmitRate"), m_sensorEmitRate);
+    emit sensorEmitRateChanged(m_sensorEmitRate);
+}
+
 // --- Gesture ---
 void SettingsManager::save_gesture_sensor_enabled(bool enabled)
 {
@@ -2153,6 +2163,7 @@ QString SettingsManager::get_pinned_settings_metadata()
         else if (attr == QStringLiteral("black_box_sweep_all"))  val = QVariant(m_blackBoxSweepAll);
         else if (attr == QStringLiteral("black_box_max_mb"))     val = QVariant(m_blackBoxMaxMB);
         else if (attr == QStringLiteral("imu_enabled"))          val = QVariant(m_imuEnabled);
+        else if (attr == QStringLiteral("sensor_emit_rate"))     val = QVariant(m_sensorEmitRate);
         else if (attr == QStringLiteral("gesture_sensor_enabled")) val = QVariant(m_gestureSensorEnabled);
         else if (attr == QStringLiteral("settings_layout_style")) val = QVariant(m_settingsLayoutStyle);
         else {
@@ -2197,6 +2208,7 @@ QString SettingsManager::keyToAttr(const QString &key) const
         {QStringLiteral("blackBoxSweepAll"),            QStringLiteral("black_box_sweep_all")},
         {QStringLiteral("blackBoxMaxMB"),               QStringLiteral("black_box_max_mb")},
         {QStringLiteral("imuEnabled"),                  QStringLiteral("imu_enabled")},
+        {QStringLiteral("sensorEmitRate"),              QStringLiteral("sensor_emit_rate")},
         {QStringLiteral("gestureSensorEnabled"),        QStringLiteral("gesture_sensor_enabled")},
         {QStringLiteral("settingsLayoutStyle"),         QStringLiteral("settings_layout_style")},
     };
@@ -2292,6 +2304,7 @@ void SettingsManager::reset_to_defaults()
     emit albumArtColorsChanged(m_albumArtColors);
     emit settingsLayoutStyleChanged(m_settingsLayoutStyle);
     emit imuEnabledChanged(m_imuEnabled);
+    emit sensorEmitRateChanged(m_sensorEmitRate);
     emit gestureSensorEnabledChanged(m_gestureSensorEnabled);
     emit gestureMappingChanged();
     emit gestureVolumeStepChanged(m_gestureVolumeStep);

@@ -48,6 +48,14 @@ octave_add_test(tst_esp32readbuffer SOURCES managers/esp32volumemanager.h manage
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     octave_add_test(tst_esp32volumemanager SOURCES managers/esp32volumemanager.h managers/esp32volumemanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui Qt6::SerialPort)
 endif()
+# The IMU / gesture managers follow their settings (desktop Linux builds use I2C)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    octave_add_test(tst_sensorsettings
+        SOURCES managers/berryimumanager.h managers/berryimumanager.cpp
+                managers/gesturemanager.h managers/gesturemanager.cpp
+                managers/settingsmanager.h managers/settingsmanager.cpp
+        LIBS Qt6::Gui)
+endif()
 octave_add_test(tst_downloadutil SOURCES managers/downloadutil.cpp)
 octave_add_test(tst_obdmanager
     SOURCES managers/obdmanager.h managers/obdmanager.cpp

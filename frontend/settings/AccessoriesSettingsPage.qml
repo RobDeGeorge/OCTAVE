@@ -914,12 +914,10 @@ Flickable {
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
 
+                    // BerryIMUManager follows the setting
                     onToggled: function(checked) {
                         if (settingsManager) {
                             settingsManager.save_imu_enabled(checked)
-                        }
-                        if (typeof berryIMU !== "undefined" && berryIMU) {
-                            berryIMU.setEnabled(checked)
                         }
                     }
 
@@ -1012,7 +1010,7 @@ Flickable {
 
                         ValueDisplay {
                             id: imuEmitRateValue
-                            text: (settingsManager ? settingsManager.get_setting_with_default("sensorEmitRate", 60) : 60) + " Hz"
+                            text: (settingsManager ? settingsManager.sensorEmitRate : 60) + " Hz"
                         }
                     }
 
@@ -1023,7 +1021,7 @@ Flickable {
                     SettingsSlider {
                         id: imuEmitRateSlider
                         from: 10; to: 120; stepSize: 5
-                        value: settingsManager ? settingsManager.get_setting_with_default("sensorEmitRate", 60) : 60
+                        value: settingsManager ? settingsManager.sensorEmitRate : 60
                         onMoved: {
                             imuEmitRateValue.text = value + " Hz"
                             imuEmitRateApply.restart()
@@ -1034,11 +1032,9 @@ Flickable {
                         id: imuEmitRateApply
                         interval: 200
                         onTriggered: {
+                            // BerryIMUManager follows the setting
                             if (settingsManager) {
-                                settingsManager.save_setting("sensorEmitRate", imuEmitRateSlider.value)
-                            }
-                            if (typeof berryIMU !== "undefined" && berryIMU) {
-                                berryIMU.setEmitRate(imuEmitRateSlider.value)
+                                settingsManager.save_sensor_emit_rate(imuEmitRateSlider.value)
                             }
                         }
                     }
@@ -1142,12 +1138,10 @@ Flickable {
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
 
+                    // GestureManager follows the setting
                     onToggled: function(checked) {
                         if (settingsManager) {
                             settingsManager.save_gesture_sensor_enabled(checked)
-                        }
-                        if (typeof gestureSensor !== "undefined" && gestureSensor) {
-                            gestureSensor.setEnabled(checked)
                         }
                     }
 
@@ -1304,10 +1298,7 @@ Flickable {
 
                         onMoved: {
                             if (settingsManager) {
-                                settingsManager.save_gesture_cooldown(value)
-                            }
-                            if (typeof gestureSensor !== "undefined" && gestureSensor) {
-                                gestureSensor.setCooldown(value)
+                                settingsManager.save_gesture_cooldown(value)   // GestureManager follows
                             }
                         }
 
@@ -1372,10 +1363,7 @@ Flickable {
                         onSelected: function(value) {
                             var ms = parseInt(value)
                             if (settingsManager) {
-                                settingsManager.save_gesture_cooldown(ms)
-                            }
-                            if (typeof gestureSensor !== "undefined" && gestureSensor) {
-                                gestureSensor.setCooldown(ms)
+                                settingsManager.save_gesture_cooldown(ms)   // GestureManager follows
                             }
                         }
                     }

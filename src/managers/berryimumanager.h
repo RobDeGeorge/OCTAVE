@@ -182,9 +182,12 @@ signals:
 
 public slots:
     QString getConnectionStatus();
+    // Runtime switch; does not save. connect_settings_manager() makes the
+    // imuEnabled / sensorEmitRate settings drive this and setEmitRate().
     void setEnabled(bool enabled);
     bool isEnabled();
     void setEmitRate(int hz);
+    int emitRate() const;   // Hz actually requested of the sensor
     // Called by Main.qml on page changes: true while a sensor page is showing
     void setActive(bool active);
     void calibrateTare();
@@ -259,9 +262,12 @@ signals:
 
 public slots:
     QString getConnectionStatus();
+    // Runtime switch; does not save. connect_settings_manager() makes the
+    // imuEnabled / sensorEmitRate settings drive this and setEmitRate().
     void setEnabled(bool enabled);
     bool isEnabled();
     void setEmitRate(int hz);
+    int emitRate() const;   // Hz actually requested of the sensor
     // Called by Main.qml on page changes: true while a sensor page is showing
     void setActive(bool active);
     void calibrateTare();
