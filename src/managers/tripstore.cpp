@@ -93,7 +93,9 @@ bool TripStore::createSchema()
     // auto_vacuum only takes effect on a fresh file; set before any table
     exec(QStringLiteral("PRAGMA auto_vacuum=INCREMENTAL"));
     exec(QStringLiteral("PRAGMA journal_mode=WAL"));
-    exec(QStringLiteral("PRAGMA synchronous=NORMAL"));
+    // FULL: every commit (one per 2 s batch) is fsynced, so a hard power cut
+    // at ignition-off loses at most that batch, not the page cache's backlog
+    exec(QStringLiteral("PRAGMA synchronous=FULL"));
     const QStringList ddl = {
         QStringLiteral("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS trips("

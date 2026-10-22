@@ -11,6 +11,8 @@
 #include <QThread>
 #include <QUrl>
 
+#include <algorithm>
+
 Q_LOGGING_CATEGORY(lcTrip, "octave.triprecorder")
 
 namespace {
@@ -335,7 +337,7 @@ void TripRecorder::tick()
         return;
     const qint64 now = nowMs();
     if (!m_connected) {
-        if (now - m_disconnectedAtMs >= m_reconnectGraceMs)
+        if (now - std::max(m_disconnectedAtMs, m_lastSampleMs) >= m_reconnectGraceMs)
             closeTrip(QStringLiteral("connection lost"));
         return;
     }

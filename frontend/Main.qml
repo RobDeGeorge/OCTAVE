@@ -1347,7 +1347,7 @@ ApplicationWindow {
     function _pageShowsObdStatus() {
         var item = stackView.currentItem
         var name = _currentPageName()
-        return name === "obdMenu" || name === "obdHome" || name === "obdDiagnostics"
+        return name === "obdMenu" || name === "obdHome" || name === "obdDiagnostics" || name === "obdTripHistory"
             || (name === "settingsMenu" && item.currentSection === "obdSettings")
     }
     Connections {

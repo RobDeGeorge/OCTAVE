@@ -102,6 +102,7 @@ Item {
     Component {
         id: blackBoxContent
         ColumnLayout {
+            id: blackBoxColumn
             width: parent ? parent.width : 0
             spacing: App.Spacing.rowSpacing
 
@@ -245,7 +246,7 @@ Item {
                         }
                     }
                 }
-                Timer { id: clearArmTimer; interval: 4000; onTriggered: parent.parent.clearArmed = false }
+                Timer { id: clearArmTimer; interval: 4000; onTriggered: blackBoxColumn.clearArmed = false }
             }
         }
     }

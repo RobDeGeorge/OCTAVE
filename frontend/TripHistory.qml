@@ -14,7 +14,8 @@ Item {
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
 
     id: tripHistoryPage
-    objectName: "tripHistory"
+    // "obd" prefix: BottomBar.openOBDSection() steps OBD subpages back to OBD Home
+    objectName: "obdTripHistory"
     required property StackView stackView
     required property ApplicationWindow mainWindow
 
