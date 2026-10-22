@@ -541,7 +541,9 @@ Item {
                     onValueChanged: {
                         // Single dispatch to settings + every audio output;
                         // raising it while muted unmutes (VolumeController)
-                        volumeController.applyVolume(Math.round(value))
+                        // null at shutdown: the binding to percent drops to 0 as the managers go
+                        if (volumeController)
+                            volumeController.applyVolume(Math.round(value))
 
                         // Update icon
                         topVolumeControl.updateVolumeIcon()
@@ -570,7 +572,7 @@ Item {
             
             // Functions
             function getVolumeIconSource() {
-                if (volumeController.effectivelyMuted) {
+                if (!volumeController || volumeController.effectivelyMuted) {   // null at shutdown
                     return "./assets/mute_on.svg"
                 }
                 if (volumeControl.currentValue < 20) return "./assets/mute_off_med.svg"

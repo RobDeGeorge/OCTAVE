@@ -931,7 +931,9 @@ Rectangle {
                                             onValueChanged: {
                                                 // Single dispatch to settings + every audio output;
                                                 // raising it while muted unmutes (VolumeController)
-                                                volumeController.applyVolume(Math.round(value))
+                                                // null at shutdown: the binding to percent drops to 0 as the managers go
+                                                if (volumeController)
+                                                    volumeController.applyVolume(Math.round(value))
                                             }
                                         }
                                         
@@ -1462,7 +1464,7 @@ Rectangle {
 
                 // Helper functions
                 function getUpdatedMuteSource() {
-                    if (volumeController.effectivelyMuted) {
+                    if (!volumeController || volumeController.effectivelyMuted) {   // null at shutdown
                         return "./assets/mute_on.svg"
                     }
                     var volume = volumeControl.currentValue
@@ -1955,7 +1957,9 @@ Rectangle {
                                             onValueChanged: {
                                                 // Single dispatch to settings + every audio output;
                                                 // raising it while muted unmutes (VolumeController)
-                                                volumeController.applyVolume(Math.round(value))
+                                                // null at shutdown: the binding to percent drops to 0 as the managers go
+                                                if (volumeController)
+                                                    volumeController.applyVolume(Math.round(value))
                                             }
                                         }
 
@@ -2446,7 +2450,7 @@ Rectangle {
                 }
                 
                 function getUpdatedMuteSourceVertical() {
-                    if (volumeController.effectivelyMuted) {
+                    if (!volumeController || volumeController.effectivelyMuted) {   // null at shutdown
                         return "./assets/mute_on.svg"
                     }
                     const volume = volumeControlVertical.currentValue
