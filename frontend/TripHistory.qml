@@ -750,35 +750,6 @@ Item {
                         }
                     }
 
-                    // Events
-                    Text {
-                        Layout.fillWidth: true
-                        visible: text !== ""
-                        text: {
-                            var ev = (tripHistoryPage.detail && tripHistoryPage.detail.events) ? tripHistoryPage.detail.events : []
-                            var out = []
-                            for (var i = 0; i < ev.length && out.length < 6; i++) {
-                                if (ev[i].kind === "trip_end") continue
-                                out.push(fmtClock(ev[i].t) + " " + ev[i].kind + (ev[i].detail ? " " + ev[i].detail : ""))
-                            }
-                            return out.length ? "Events: " + out.join("  ·  ") : ""
-                        }
-                        color: labelColor
-                        font.pixelSize: App.Spacing.overallText * 0.65
-                        font.family: globalFont
-                        elide: Text.ElideRight
-                    }
-
-                    // File path
-                    Text {
-                        Layout.fillWidth: true
-                        text: (selectedTrip && selectedTrip.file) ? selectedTrip.file : ""
-                        visible: text !== ""
-                        color: labelColor
-                        font.pixelSize: App.Spacing.overallText * 0.62
-                        font.family: globalFont
-                        elide: Text.ElideMiddle
-                    }
                 }
             }
         }
