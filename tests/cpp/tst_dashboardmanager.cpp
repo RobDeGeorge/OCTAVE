@@ -173,6 +173,21 @@ private slots:
         QVERIFY(imported != QLatin1String("grid"));
     }
 
+    void strayGridFileIsSkipped()
+    {
+        // A grid.json from outside the app (hand edit, synced config, an
+        // import from before the reservation) must not load: OBDMenu always
+        // resolves "grid" to Parameter Cards, so it would be a card that can
+        // never be shown, edited or deleted
+        QFile f(m_tmp->path() + "/dashboards/grid.json");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"json({"schema": 1, "id": "grid", "label": "Stray", "cells": []})json");
+        f.close();
+        m_dm->refresh();
+        for (const QVariant &v : m_dm->dashboards())
+            QVERIFY(v.toMap().value("id").toString() != QLatin1String("grid"));
+    }
+
 private:
     std::unique_ptr<QTemporaryDir> m_tmp;
     std::unique_ptr<DashboardManager> m_dm;

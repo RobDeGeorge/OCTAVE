@@ -192,6 +192,8 @@ void DashboardManager::rescanAll()
     m_dashboards.clear();
     m_builtInIds.clear();
     QSet<QString> takenIds;
+    // Parameter Cards: a user file with this id is skipped like a built-in clash
+    takenIds.insert(QLatin1String(kParameterCardsId));
     loadHiddenBuiltIns();
 
     // Built-in presets first — these are authoritative; any user JSON that
