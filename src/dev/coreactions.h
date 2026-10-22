@@ -14,6 +14,7 @@ struct CoreTargets {
     PerfMonitor *perf = nullptr;     // null: get_metrics reports "perf monitor not active"
     QObject *settings = nullptr;     // settingsManager
     QObject *media = nullptr;        // mediaManager
+    QObject *volume = nullptr;       // volumeController
     QObject *obd = nullptr;          // obdManager
 };
 

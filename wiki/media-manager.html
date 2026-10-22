@@ -492,8 +492,6 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
 {
     volume = <span class="fn">qBound</span>(<span class="num">0.0f</span>, volume, <span class="num">1.0f</span>);
     m_volume = volume;
-    <span class="kw">if</span> (m_isMuted)
-        m_previousVolume = volume;      <span class="cmt">// slider moved while muted: remember it for unmute</span>
     <span class="fn">applyOutputVolume</span>();
     <span class="kw">emit</span> <span class="fn">volumeChanged</span>(volume);
 }
@@ -516,37 +514,19 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           and mute keep working while ducked.
         </p>
 
-        <h3>Mute Toggle with Guard</h3>
+        <h3>Mute</h3>
         <p>
-          <code>toggle_mute()</code> uses a lock flag with a 150&nbsp;ms single-shot unlock so a bouncing hardware
-          button or a double tap cannot flip the state twice and lose the remembered volume:
+          MediaManager does not own mute. The rules (toggle, the 150&nbsp;ms debounce, "raising the volume unmutes",
+          "unmute at 0 restores the startup volume") live in
+          <a href="signals-slots-reference.html#volumeController">VolumeController</a>; <span class="file-path">main.cpp</span>
+          connects <code>VolumeController::mutedChanged</code> to <code>setMuted(bool)</code>, which only stores the flag
+          and calls <code>applyOutputVolume()</code>. <code>is_muted()</code> reports that mirrored flag. Because mute is
+          applied by <code>applyOutputVolume()</code> rather than by overwriting the volume, a volume change while muted
+          updates <code>m_volume</code> silently and unmuting plays at exactly the level every slider shows.
         </p>
-        <pre><code><span class="cmt">// src/managers/mediamanager.cpp</span>
-<span class="kw">void</span> <span class="cls">MediaManager</span>::<span class="fn">toggle_mute</span>()
-{
-    <span class="kw">if</span> (m_muteToggleLocked)
-        <span class="kw">return</span>;
-    m_muteToggleLocked = <span class="kw">true</span>;
-
-    <span class="kw">if</span> (m_isMuted) {
-        <span class="cmt">// Unmuting: m_volume tracked the slider while muted; fall back if it is 0</span>
-        <span class="kw">if</span> (m_volume &lt;= <span class="num">0.0f</span>)
-            m_volume = (m_previousVolume &gt; <span class="num">0.0f</span>) ? m_previousVolume : <span class="num">0.5f</span>;
-    } <span class="kw">else if</span> (m_volume &gt; <span class="num">0.0f</span>) {
-        m_previousVolume = m_volume;       <span class="cmt">// muting: remember the meaningful volume</span>
-    }
-
-    m_isMuted = !m_isMuted;
-    <span class="fn">applyOutputVolume</span>();
-    <span class="kw">emit</span> <span class="fn">muteChanged</span>(m_isMuted);
-
-    <span class="cls">QTimer</span>::<span class="fn">singleShot</span>(<span class="num">150</span>, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_unlock_mute_toggle);
-}</code></pre>
         <p>
-          Because mute is applied by <code>applyOutputVolume()</code> rather than by overwriting the volume, a slider
-          move while muted updates <code>m_volume</code> silently and unmute uses it when positive; a zero value falls back to the previous positive volume or 0.5. <code>play_file()</code>,
-          <code>toggle_play()</code> and recovery re-apply <code>setVolume(0)</code> on the output after
-          <code>setSource()</code>, which can reset the output level.
+          <code>play_file()</code>, <code>toggle_play()</code> and recovery re-apply <code>setVolume(0)</code> on the
+          output after <code>setSource()</code>, which can reset the output level.
         </p>
 
         <!-- Playback Resume -->
@@ -674,7 +654,6 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>durationFormatChanged</code></td><td>str</td><td>Duration formatted as "M:SS" (emitted by <code>get_formatted_duration</code>)</td></tr>
             <tr><td><code>positionChanged</code></td><td>int</td><td>Playback position in milliseconds (QMediaPlayer plus the 100 ms timer while playing)</td></tr>
             <tr><td><code>volumeChanged</code></td><td>float</td><td>User volume level (0.0-1.0, linear)</td></tr>
-            <tr><td><code>muteChanged</code></td><td>bool</td><td>Mute state changed</td></tr>
             <tr><td><code>shuffleStateChanged</code></td><td>bool</td><td>Shuffle toggled on/off (or restored at startup)</td></tr>
             <tr><td><code>albumColorsExtracted</code></td><td>str</td><td>Theme JSON; only used when no SettingsManager is wired (normally the colors go through <code>settingsManager.albumArtColors</code>)</td></tr>
             <tr><td><code>playlistsChanged</code></td><td>(none)</td><td>Playlist list rebuilt by a scan</td></tr>
@@ -701,7 +680,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>set_position</code></td><td>(int)</td><td>Seek to position in ms</td></tr>
             <tr><td><code>get_position</code> / <code>get_duration</code></td><td>() -&gt; float</td><td>Position / duration in ms</td></tr>
             <tr><td><code>is_playing</code> / <code>is_paused</code> / <code>is_muted</code> / <code>is_shuffled</code></td><td>() -&gt; bool</td><td>State flags</td></tr>
-            <tr><td><code>toggle_mute</code></td><td>()</td><td>Toggle mute with a 150 ms guard</td></tr>
+            <tr><td><code>setMuted</code></td><td>(bool)</td><td>Follow <code>VolumeController::mutedChanged</code> (wired in <span class="file-path">main.cpp</span>); call <code>volumeController.toggleMute()</code> instead from QML and handlers</td></tr>
             <tr><td><code>toggle_shuffle</code></td><td>()</td><td>Toggle shuffle, persist via SettingsManager</td></tr>
             <tr><td><code>setVolume</code></td><td>(float)</td><td>Set the user volume (0.0-1.0 linear); call <code>volumeController.applyVolume(percent)</code> instead from QML and handlers</td></tr>
             <tr><td><code>getVolume</code></td><td>() -&gt; float</td><td>User's volume (ignores mute and ducking)</td></tr>

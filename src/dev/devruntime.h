@@ -39,6 +39,7 @@ struct AppObjects {
     QQmlApplicationEngine *engine = nullptr;
     QObject *settings = nullptr;
     QObject *media = nullptr;
+    QObject *volume = nullptr;   // volumeController
     OBDManager *obd = nullptr;
     BerryIMUManager *imu = nullptr;
     QDir projectRoot;   // checkout root: frontend/, src/dev/qml/, dev/perf/logs/

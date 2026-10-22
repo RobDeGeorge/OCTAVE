@@ -110,7 +110,7 @@ Custom QML types (for embedded video frames) are registered with `qmlRegisterTyp
 
 ### Volume System
 
-Volume uses a **quadratic curve** (`(volume/100)^2.0`) for the UI percent → linear audio mapping. `src/managers/volumecontroller.{h,cpp}` owns the curve math and the `VolumeController` QObject, which is the single entry point for routing a 0–100 percent to every output (local media, phone mirror, ESP32 LED). All handlers (gesture sensor, ESP32 knob) and QML slider widgets call `volume_controller.applyVolume(percent)` — never touch the individual manager `setVolume` methods or hardcode the curve. Changing the curve only requires editing `toLinear()` in one place.
+Volume uses a **quadratic curve** (`(volume/100)^2.0`) for the UI percent → linear audio mapping. `src/managers/volumecontroller.{h,cpp}` owns the curve math and the `VolumeController` QObject, which is the single entry point for routing a 0–100 percent to every output (local media, phone mirror, ESP32 LED). All handlers (gesture sensor, ESP32 knob, command server) and QML slider widgets call `volumeController.applyVolume(percent)` and `volumeController.toggleMute()` — never touch the individual manager `setVolume` / `setMuted` methods or hardcode the curve. `VolumeController` also owns mute (in memory) and its rules: raising the volume while muted unmutes from any input, and the mute toggle at 0 % restores the startup volume. QML binds to `volumeController.percent` / `muted` / `effectivelyMuted` and never does curve math; the inverse is `toPercent()`. Changing the curve only requires editing `toLinearStatic()` and `toPercentStatic()` in `src/managers/volumecontroller.{h,cpp}`.
 
 ### Threading
 

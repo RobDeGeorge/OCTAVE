@@ -471,15 +471,8 @@ Item {
                     
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: {
-                            // If volume is 0, restore to startup volume instead of toggling mute
-                            if (volumeControl.currentValue === 0 && settingsManager) {
-                                var startupVol = Math.round(settingsManager.startUpVolume * 100)
-                                volumeSlider.value = startupVol
-                            } else {
-                                mediaManager.toggle_mute()
-                            }
-                        }
+                        // At 0 % this restores the startup volume instead
+                        onClicked: volumeController.toggleMute()
                     }
                 }
                 
@@ -546,14 +539,9 @@ Item {
                     
                     // Volume change logic
                     onValueChanged: {
-                        volumeControl.currentValue = value
-                        // Single dispatch to settings + every audio output.
+                        // Single dispatch to settings + every audio output;
+                        // raising it while muted unmutes (VolumeController)
                         volumeController.applyVolume(Math.round(value))
-
-                        // Unmute if volume was raised while user is dragging the slider
-                        if (mediaManager && volumeSlider.pressed && value > 0 && volumeControl.isMuted) {
-                            mediaManager.toggle_mute()
-                        }
 
                         // Update icon
                         topVolumeControl.updateVolumeIcon()
@@ -574,25 +562,15 @@ Item {
             // Volume control state properties
             QtObject {
                 id: volumeControl
-                property int currentValue: 0
-                property bool isMuted: mediaManager ? mediaManager.is_muted() : false
+                // null at shutdown, when the managers go before the engine
+                readonly property int currentValue: volumeController ? volumeController.percent : 0
 
-                Component.onCompleted: {
-                    // Use the unified volume from Octave settings
-                    if (settingsManager) {
-                        currentValue = settingsManager.currentVolume
-                    } else if (mediaManager) {
-                        var volume = mediaManager.getVolume()
-                        currentValue = Math.round(Math.sqrt(volume) * 100)
-                    }
-                    isMuted = mediaManager ? mediaManager.is_muted() : false
-                    topVolumeControl.updateVolumeIcon()
-                }
+                Component.onCompleted: topVolumeControl.updateVolumeIcon()
             }
             
             // Functions
             function getVolumeIconSource() {
-                if (volumeControl.isMuted || volumeControl.currentValue === 0) {
+                if (volumeController.effectivelyMuted) {
                     return "./assets/mute_on.svg"
                 }
                 if (volumeControl.currentValue < 20) return "./assets/mute_off_med.svg"
@@ -606,20 +584,13 @@ Item {
             
             // Connections for volume sync
             Connections {
-                target: mediaManager
-                function onMuteChanged(muted) {
-                    volumeControl.isMuted = muted
+                target: volumeController
+                function onPercentChanged(percent) {
+                    if (!volumeSlider.pressed)
+                        volumeSlider.value = percent
                     topVolumeControl.updateVolumeIcon()
                 }
-                
-                function onVolumeChanged(volume) {
-                    if (!volumeSlider.pressed) {
-                        var volumePercent = Math.round(Math.sqrt(volume) * 100)
-                        volumeControl.currentValue = volumePercent
-                        volumeSlider.value = volumePercent
-                    }
-                    topVolumeControl.updateVolumeIcon()
-                }
+                function onEffectivelyMutedChanged() { topVolumeControl.updateVolumeIcon() }
             }
         }
 
@@ -1728,23 +1699,6 @@ Item {
             isShuffleEnabled = enabled
             // Shuffle reorders the playlist — neighbors changed
             sideCardRefreshTimer.restart()
-        }
-    }
-
-    Connections {
-        target: mediaManager
-        function onMuteChanged(muted) {
-            volumeControl.isMuted = muted
-            topVolumeControl.updateVolumeIcon()
-        }
-
-        function onVolumeChanged(volume) {
-            if (!volumeSlider.pressed) {
-                var volumePercent = Math.round(Math.sqrt(volume) * 100)
-                volumeControl.currentValue = volumePercent
-                volumeSlider.value = volumePercent
-            }
-            topVolumeControl.updateVolumeIcon()
         }
     }
 

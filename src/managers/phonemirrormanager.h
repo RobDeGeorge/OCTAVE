@@ -243,7 +243,7 @@ public slots:
     // Called by VolumeController on every volume change (0..1 linear);
     // phone audio, always played through OCTAVE while mirroring, follows it.
     void setVolume(float volume);
-    // OCTAVE's mute (MediaManager::muteChanged) silences phone audio too
+    // OCTAVE's mute (VolumeController::mutedChanged) silences phone audio too
     void setMuted(bool muted);
     // Linear gain on phone PCM before OCTAVE's volume (setting scrcpyAudioGain)
     void setAudioGain(float gain);

@@ -216,7 +216,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           </li>
           <li>Every backing member is populated from the loaded object with the default as fallback (<code>populateMembers()</code>, which <code>reset_to_defaults()</code> reuses).</li>
           <li><code>mediaFolder</code> defaults to <code>""</code> on disk and is resolved at load to <code>QStandardPaths::MusicLocation</code> (falling back to <code>~/Music</code>); the directory is created on desktop only, never on Android.</li>
-          <li><code>currentVolume</code> (never persisted) is derived from <code>startUpVolume</code> by inverting the volume curve: <code>round(sqrt(startUpVolume) * 100)</code>, e.g. the default 0.1 gives 32&nbsp;%. See <a href="architecture.html">Architecture</a> for the quadratic curve.</li>
+          <li><code>currentVolume</code> (never persisted) is derived from <code>startUpVolume</code> by inverting the volume curve: <code>VolumeController::toPercentStatic(startUpVolume)</code> (<code>round(sqrt(x) * 100)</code>), e.g. the default 0.1 gives 32&nbsp;%. See <a href="architecture.html">Architecture</a> for the quadratic curve.</li>
           <li>Two single-shot timers are created: the 500&nbsp;ms settings write timer and the 800&nbsp;ms OBD-parameter debounce timer.</li>
         </ol>
 

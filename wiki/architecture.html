@@ -677,14 +677,17 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
 Gesture Sensor                       ESP32 Volume Knob
     │ actionTriggered                     │ volumeChangeRequested(delta) / muteToggleRequested
     ▼                                     ▼
-gesture lambda                   volume lambda / mute lambda (toggle_mute + send_mute_state)
+gesture lambda                   volume lambda / muteToggleRequested ─► volumeController.toggleMute()
     ├── next_track ──► mediaManager*      ├── accumulate ≥ 1.0
     ├── previous_track ► mediaManager*    └── volumeController.applyVolume()
     ├── play_pause ──► mediaManager*                ├── settingsManager.setCurrentVolume()
-    ├── mute_toggle ─► mediaManager                 ├── mediaManager.setVolume(linear)
+    ├── mute_toggle ─► volumeController             ├── mediaManager.setVolume(linear)
     ├── volume_up ───► volumeController              ├── phoneMirrorManager.setVolume(linear)
     └── volume_down ─► volumeController              │
                                                     └── esp32VolumeManager.send_volume_update(percent)
+                                     volumeController.mutedChanged ─► mediaManager.setMuted()
+                                       (raise while muted unmutes)  ├► phoneMirrorManager.setMuted()
+                                                                    └► esp32VolumeManager.send_mute_state()
   * phoneMirrorManager.mediaNext() / mediaPrevious() / mediaPlayPause()
     instead while phoneMirrorManager.mediaActive()
 

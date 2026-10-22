@@ -382,7 +382,7 @@
 
         <section id="pm-audio">
           <h3>Audio and ducking</h3>
-          <p>Phone audio always plays through OCTAVE while mirroring (the <code>scrcpyAudioEnabled</code> toggle was removed): the server is started with <code>audio=true audio_codec=raw</code>, and the stream follows OCTAVE's volume (<code>setVolume</code>) and mute (<code>setMuted</code>, wired from <code>MediaManager.muteChanged</code>); the server's
+          <p>Phone audio always plays through OCTAVE while mirroring (the <code>scrcpyAudioEnabled</code> toggle was removed): the server is started with <code>audio=true audio_codec=raw</code>, and the stream follows OCTAVE's volume (<code>setVolume</code>) and mute (<code>setMuted</code>, wired from <code>VolumeController.mutedChanged</code>); the server's
             default source is <code>AudioSource.OUTPUT</code>, i.e. <code>REMOTE_SUBMIX</code>, which captures every app and mutes playback
             on the handset. Raw PCM means no decoder on our side. The audio socket is read on its own thread
             (<code>scrcpy-audio</code>) so video never waits on it:</p>

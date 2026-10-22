@@ -160,7 +160,7 @@ YYYY-MM-DD HH:MM:SS.zzz | LEVEL   | octave.elm327 | obdmanager.cpp:1772 | messag
         <h3>No or very quiet audio</h3>
         <ul>
           <li>The volume slider is mapped through a <strong>quadratic</strong> curve, <code>(volume/100)^2.0</code> (<span class="file-path">src/managers/volumecontroller.cpp</span>): 50 % on the slider is 25 % linear gain, 10 % is 1 %. Low slider values are genuinely quiet.</li>
-          <li>Mute: <code>mediaManager.is_muted()</code>. <code>toggle_mute()</code> is guarded by a 150 ms lock (<code>m_muteToggleLocked</code>) so a bouncing ESP32 button or gesture cannot double-toggle; a mute press within 150 ms of the previous one is ignored.</li>
+          <li>Mute: <code>volumeController.muted</code> (the command server's <code>get_media_status</code> reports it as <code>muted</code>). <code>toggleMute()</code> ignores a press within 150 ms of the previous one, so a bouncing ESP32 button cannot double-toggle. Turning the volume up from any input unmutes.</li>
           <li>Phone-mirror ducking: while the phone is producing sound, local playback is ducked to <code>scrcpyAudioDuckLevel</code> (default 0.1) and released 1.5 s after the phone goes quiet (<code>scrcpyAudioDuckEnabled</code>, default on). If music seems to drop out during mirroring, this is why.</li>
           <li>Verify the output device in the system mixer.</li>
         </ul>

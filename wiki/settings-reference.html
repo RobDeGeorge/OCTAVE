@@ -123,7 +123,7 @@
             <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float</td><td>0.1</td><td>– (registry 0 – 1, step 0.01, logarithmic)</td><td>Media page; <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default. Pinnable</td></tr>
+            <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float</td><td>0.1</td><td>– (registry 0 – 1, step 0.01, logarithmic)</td><td>Media page (its slider runs 0&ndash;100&nbsp;% and saves <code>volumeController.toLinear()</code>); <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default, which is also what the mute button restores at 0&nbsp;%. Pinnable</td></tr>
             <tr><td><code>mediaFolder</code></td><td>mediaFolder</td><td>QString</td><td>"" (resolved at load to <code>QStandardPaths::MusicLocation</code>, falling back to <code>~/Music</code>)</td><td>Any directory; saving the current value is a no-op</td><td>Media page (Library)</td><td>Root of the local music library; MediaManager connects <code>mediaFolderChanged</code> to <code>set_library_root</code></td></tr>
             <tr><td><code>autoPlayOnStartup</code></td><td>autoPlayOnStartup</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Library &amp; Playback); Media widget</td><td>Resume the last song at launch. Pinnable</td></tr>
             <tr><td><code>persistShuffleState</code></td><td>persistShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Library &amp; Playback)</td><td>Restore <code>lastShuffleState</code> at launch. Pinnable</td></tr>
@@ -388,7 +388,7 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><th>Property</th><th>Type</th><th>Initial value</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. <code>VolumeController.applyVolume()</code> updates it during normal volume changes; it is also initialized on load/reset and is never written to the file</td></tr>
+            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>VolumeController::toPercentStatic(startUpVolume)</code> = <code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. <code>VolumeController.applyVolume()</code> updates it during normal volume changes; it is also initialized on load/reset and is never written to the file</td></tr>
           </tbody>
         </table>
 

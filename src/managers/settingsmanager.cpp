@@ -1,6 +1,7 @@
 // OCTAVE Settings Manager
 
 #include "settingsmanager.h"
+#include "volumecontroller.h"
 #include "../util/perfscope.h"
 
 #include "buildinfo.h"
@@ -585,8 +586,8 @@ void SettingsManager::populateMembers()
             m_pinnedSettings.append(v.toString());
     }
 
-    // Current volume: from startUpVolume, converted to 0-100 scale
-    m_currentVolume = static_cast<int>(std::round(std::sqrt(static_cast<double>(m_startVolume)) * 100.0));
+    // Current volume: from startUpVolume (linear), converted to 0-100 scale
+    m_currentVolume = VolumeController::toPercentStatic(m_startVolume);
 
     // Last settings section (migrate clockSettings -> displaySettings)
     m_lastSettingsSection = s(QStringLiteral("lastSettingsSection")).toString();

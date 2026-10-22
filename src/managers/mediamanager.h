@@ -58,7 +58,6 @@ signals:
     void playStateChanged(bool playing);
     void currentMediaChanged(const QString &filename);
     void mediaListChanged(const QStringList &files);
-    void muteChanged(bool muted);
     void durationChanged(qint64 durationMs);
     void positionChanged(qint64 positionMs);
     void metadataChanged(const QString &title, const QString &artist, const QString &album);
@@ -92,7 +91,9 @@ public slots:
     void previous_track();
     void pause();
     void toggle_play();
-    void toggle_mute();
+    // Follows VolumeController::mutedChanged (wired in main.cpp); the mute
+    // rules live there
+    void setMuted(bool muted);
     void toggle_shuffle();
     void setVolume(float volume);
     // Temporarily attenuate the output (1.0 = none, 0.1 = -20 dB) while another
@@ -168,7 +169,6 @@ private slots:
     void _handle_player_error(QMediaPlayer::Error error, const QString &errorString);
     void _save_playback_state_now();
     void _precache_neighbors_start();
-    void _unlock_mute_toggle();
     void _on_theme_changed(const QString &theme);
     void _on_media_changed_for_theme(const QString &filename);
     void _extract_colors_on_startup();
@@ -257,7 +257,6 @@ private:
     int m_currentIndex = 0;
     bool m_isMuted = false;
     float m_volume = 0.5f;          // user's volume (linear), before ducking and mute
-    float m_previousVolume = 0.5f;
     float m_duckTarget = 1.0f;      // requested ducking factor
     float m_duckCurrent = 1.0f;     // ramped factor actually applied
     QVariantAnimation m_duckAnim;
@@ -305,9 +304,6 @@ private:
     // All Music playlist support
     QHash<QString, QString> m_allMusicFilePaths;  // filename -> directory path
     bool m_isAllMusicActive = false;
-
-    // Mute toggle guard
-    bool m_muteToggleLocked = false;
 
     // Scan guard
     bool m_scanInProgress = false;

@@ -1747,8 +1747,6 @@ void MediaManager::pause()
     m_isPlaying = false;
     emit playStateChanged(false);
     _save_playback_state_debounced();
-    if (!m_isMuted && m_volume > 0.0f)
-        m_previousVolume = m_volume;
 }
 
 void MediaManager::toggle_play()
@@ -1825,31 +1823,13 @@ void MediaManager::set_position(int positionMs) { m_player->setPosition(position
 
 // ─── Mute ──────────────────────────────────────────────────────────
 
-void MediaManager::toggle_mute()
+void MediaManager::setMuted(bool muted)
 {
-    if (m_muteToggleLocked)
+    if (muted == m_isMuted)
         return;
-    m_muteToggleLocked = true;
-
-    if (m_isMuted) {
-        // Unmuting: m_volume tracked the slider while muted; fall back if it is 0
-        if (m_volume <= 0.0f)
-            m_volume = (m_previousVolume > 0.0f) ? m_previousVolume : 0.5f;
-    } else if (m_volume > 0.0f) {
-        m_previousVolume = m_volume;
-    }
-
-    m_isMuted = !m_isMuted;
+    m_isMuted = muted;
     applyOutputVolume();
-    emit muteChanged(m_isMuted);
-    qCInfo(lcMedia) << "Mute toggled:" << m_isMuted;
-
-    QTimer::singleShot(150, this, &MediaManager::_unlock_mute_toggle);
-}
-
-void MediaManager::_unlock_mute_toggle()
-{
-    m_muteToggleLocked = false;
+    qCInfo(lcMedia) << "Muted:" << m_isMuted;
 }
 
 bool MediaManager::is_muted() { return m_isMuted; }
@@ -1860,8 +1840,6 @@ void MediaManager::setVolume(float volume)
 {
     volume = qBound(0.0f, volume, 1.0f);
     m_volume = volume;
-    if (m_isMuted)
-        m_previousVolume = volume;
     applyOutputVolume();
     emit volumeChanged(volume);
 }

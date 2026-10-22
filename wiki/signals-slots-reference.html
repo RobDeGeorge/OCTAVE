@@ -517,19 +517,32 @@
         <!-- VolumeController -->
         <h2 id="volumeController">VolumeController <span class="cmt">&mdash; <code>volumeController</code></span></h2>
         <p><span class="file-path">src/managers/volumecontroller.h</span> &mdash; QML context property <code>volumeController</code></p>
-        <p>The single entry point for volume. Every slider, knob and gesture calls <code>applyVolume(percent)</code>; the quadratic curve lives in one place (<code>toLinear</code>).</p>
+        <p>The single entry point for volume and mute. Every slider, knob and gesture calls <code>applyVolume(percent)</code> or <code>toggleMute()</code>; the quadratic curve and its inverse live here (<code>toLinear</code> / <code>toPercent</code>), and UIs bind to <code>percent</code> / <code>muted</code> / <code>effectivelyMuted</code> without doing curve math. Rules (<span class="file-path">tests/cpp/tst_volumecontroller.cpp</span>): raising the volume while muted unmutes, from any input (judged on the request, so &ldquo;up&rdquo; at 100&nbsp;% counts); a UI that echoes <code>percentChanged</code> back into <code>applyVolume</code> does not re-dispatch; lowering or re-applying the same level stays muted; the mute toggle at 0&nbsp;% restores the startup volume and unmutes instead of toggling; presses within 150&nbsp;ms are ignored. Mute is in memory only.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>percent</code></td><td><code>int</code></td><td>read-only</td><td><code>percentChanged</code></td><td>The live volume 0&ndash;100 (also <code>settingsManager.currentVolume</code>). Sliders bind to this</td></tr>
+            <tr><td><code>muted</code></td><td><code>bool</code></td><td>read/write</td><td><code>mutedChanged</code></td><td>Mute flag; <code>main.cpp</code> forwards it to <code>mediaManager.setMuted</code>, <code>phoneMirrorManager.setMuted</code> and the ESP32 mute LED</td></tr>
+            <tr><td><code>effectivelyMuted</code></td><td><code>bool</code></td><td>read-only</td><td><code>effectivelyMutedChanged</code></td><td><code>muted</code> or <code>percent == 0</code>: what the mute icons show</td></tr>
+          </tbody>
+        </table>
         <h3>Invokables &amp; Slots</h3>
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>applyVolume(int percent)</code></td><td><code>void</code></td><td>Clamp to 0&ndash;100, store in <code>settingsManager.currentVolume</code>, compute the quadratic-curve linear value and fan it out to every output: media and phone mirror take the linear value, the ESP32 LED ring takes the percent. Dispatched via <code>volumeApplied</code></td></tr>
+            <tr><td><code>applyVolume(int percent)</code></td><td><code>void</code></td><td>Clamp to 0&ndash;100, store in <code>percent</code> and <code>settingsManager.currentVolume</code>, compute the quadratic-curve linear value and fan it out to every output: media and phone mirror take the linear value, the ESP32 LED ring takes the percent. Dispatched via <code>volumeApplied</code>. If the percent went up while muted, also unmutes</td></tr>
             <tr><td><code>toLinear(float percent)</code></td><td><code>float</code></td><td>Pure curve math (<code>(percent/100)^2</code>) for QML previews; does not dispatch</td></tr>
+            <tr><td><code>toPercent(float linear)</code></td><td><code>int</code></td><td>The inverse (<code>round(sqrt(linear) * 100)</code>), e.g. for the startup volume setting, which is stored linear. <code>toPercentStatic</code> is the inline C++ form SettingsManager uses</td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>Mute or unmute without touching the level</td></tr>
+            <tr><td><code>toggleMute()</code></td><td><code>void</code></td><td>The mute button (screen, ESP32 knob, gesture, command server). At 0&nbsp;% restores <code>toPercent(startUpVolume)</code> and unmutes; otherwise flips. 150&nbsp;ms debounce</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
+            <tr><td><code>percentChanged(int percent)</code>, <code>mutedChanged(bool muted)</code>, <code>effectivelyMutedChanged()</code></td><td>Property notifies; <code>volumeApplied</code> still fires on every <code>applyVolume()</code> except an echo of <code>percentChanged</code>, <code>percentChanged</code> only on a real change</td></tr>
             <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>main.cpp</code> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code></td></tr>
           </tbody>
         </table>
@@ -551,7 +564,7 @@
             <tr><td><code>previous_track()</code></td><td><code>void</code></td><td>Go to the previous track</td></tr>
             <tr><td><code>pause()</code></td><td><code>void</code></td><td>Pause playback</td></tr>
             <tr><td><code>toggle_play()</code></td><td><code>void</code></td><td>Play/pause; starts the first track if nothing is loaded</td></tr>
-            <tr><td><code>toggle_mute()</code></td><td><code>void</code></td><td>Mute/unmute (guarded against rapid double toggles)</td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>Follows <code>volumeController.mutedChanged</code> (wired in <code>main.cpp</code>); call <code>volumeController.toggleMute()</code> from QML</td></tr>
             <tr><td><code>toggle_shuffle()</code></td><td><code>void</code></td><td>Toggle shuffle and rebuild the queue</td></tr>
             <tr><td><code>setVolume(float volume)</code></td><td><code>void</code></td><td>Set the linear output volume 0.0&ndash;1.0 (called by VolumeController, not QML)</td></tr>
             <tr><td><code>setDucking(float factor)</code></td><td><code>void</code></td><td>Temporarily attenuate the output (1.0 = none, 0.1 = -20 dB) while the mirrored phone makes sound; independent of the user volume</td></tr>
@@ -584,7 +597,7 @@
             <tr><td><code>is_paused()</code></td><td><code>bool</code></td><td>Currently paused</td></tr>
             <tr><td><code>get_duration()</code></td><td><code>float</code></td><td>Duration in ms of the current track</td></tr>
             <tr><td><code>get_position()</code></td><td><code>float</code></td><td>Position in ms</td></tr>
-            <tr><td><code>is_muted()</code></td><td><code>bool</code></td><td>Mute state</td></tr>
+            <tr><td><code>is_muted()</code></td><td><code>bool</code></td><td>Mirror of <code>volumeController.muted</code></td></tr>
             <tr><td><code>getVolume()</code></td><td><code>float</code></td><td>Linear output volume 0.0&ndash;1.0</td></tr>
             <tr><td><code>is_shuffled()</code></td><td><code>bool</code></td><td>Shuffle state</td></tr>
             <tr><td><code>get_playlist_names()</code></td><td><code>QStringList</code></td><td>All playlist names including the combined "All Music"</td></tr>
@@ -611,7 +624,6 @@
             <tr><td><code>playStateChanged(bool playing)</code></td><td><code>true</code> when playing, <code>false</code> on pause/stop</td></tr>
             <tr><td><code>currentMediaChanged(QString filename)</code></td><td>Filename of the track that just started</td></tr>
             <tr><td><code>mediaListChanged(QStringList files)</code></td><td>The visible song list (current playlist) was replaced</td></tr>
-            <tr><td><code>muteChanged(bool muted)</code></td><td>Mute toggled</td></tr>
             <tr><td><code>durationChanged(qint64 durationMs)</code></td><td>Track length in ms became known</td></tr>
             <tr><td><code>positionChanged(qint64 positionMs)</code></td><td>Playback position in ms (100 ms timer)</td></tr>
             <tr><td><code>metadataChanged(QString title, QString artist, QString album)</code></td><td>Title / artist / album of the current track loaded from tags</td></tr>
@@ -1234,7 +1246,7 @@
           <tbody>
             <tr><td><code>setVolume(float volume)</code></td><td><code>void</code></td><td>Called by VolumeController (0&ndash;1 linear); phone audio follows OCTAVE volume</td></tr>
             <tr><td><code>setAudioGain(float gain)</code></td><td><code>void</code></td><td>Linear gain on phone PCM before OCTAVE volume (setting <code>scrcpyAudioGain</code>)</td></tr>
-            <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>OCTAVE's mute (<code>MediaManager.muteChanged</code>) silences phone audio too; phone audio always plays through OCTAVE while mirroring</td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>OCTAVE's mute (<code>volumeController.mutedChanged</code>) silences phone audio too; phone audio always plays through OCTAVE while mirroring</td></tr>
             <tr><td><code>setAudioDuckEnabled(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckEnabled</code></td></tr>
             <tr><td><code>setAudioDuckLevel(float level)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckLevel</code> (linear factor)</td></tr>
             <tr><td><code>setDisplaySize(QString size)</code></td><td><code>void</code></td><td>Virtual display size (snapped to multiples of 8, or <code>"auto"</code>); restarts a running session</td></tr>

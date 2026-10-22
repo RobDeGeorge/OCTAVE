@@ -227,25 +227,17 @@
         ...
     }
 
-    <span class="prop">onValueChanged</span>: {
-        volumeControl.currentValue = value
-        <span class="cmt">// Single dispatch to settings + every audio output.</span>
-        volumeController.<span class="fn">applyVolume</span>(Math.<span class="fn">round</span>(value))
-
-        <span class="kw">if</span> (value &gt; <span class="num">0</span> &amp;&amp; muteButton.isMuted) {
-            muteButton.isMuted = <span class="kw">false</span>
-            mediaManager.<span class="fn">toggle_mute</span>()
-        }
-        <span class="fn">updateMuteButtonImage</span>()
-    }
+    <span class="cmt">// Single dispatch to settings + every audio output; raising it</span>
+    <span class="cmt">// while muted unmutes (VolumeController)</span>
+    <span class="prop">onValueChanged</span>: volumeController.<span class="fn">applyVolume</span>(Math.<span class="fn">round</span>(value))
 }</code></pre>
 
         <h3>Volume Routing: VolumeController</h3>
-        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly (except for a fallback when <code>settingsManager</code> is missing). Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered in <span class="file-path">src/main.cpp</span>. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
+        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly. Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered in <span class="file-path">src/main.cpp</span>. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
 
         <p><code>VolumeController</code> (<span class="file-path">src/managers/volumecontroller.{h,cpp}</span>) clamps the percent to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <span class="file-path">src/main.cpp</span> connects that signal to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code>, so the ESP32 LED ring gets the raw percent and the audio outputs get the curved value.</p>
 
-        <p>At startup <code>volumeControl.Component.onCompleted</code> reads <code>settingsManager.currentVolume</code> and calls <code>volumeController.applyVolume(currentValue)</code> so every output starts at the persisted level (<span class="file-path">src/main.cpp</span> also applies it once before QML loads). The reverse direction is handled by a <code>Connections</code> on <code>mediaManager.volumeChanged(volume)</code>, which converts the linear value back to a percent with the inverse curve &mdash; <code>Math.round(Math.sqrt(volume) * 100)</code> &mdash; and updates the label and slider, but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). The vertical layout's handler does the same for <code>volumeControlVertical</code> / <code>volumeSliderVertical</code>, guarded by <code>!volumeSliderVertical.pressed</code>.</p>
+        <p><span class="file-path">src/main.cpp</span> applies the startup volume to every output before QML loads. The bar reads the level back from <code>volumeController.percent</code> (<code>volumeControl.currentValue</code> is a read-only binding to it), and a <code>Connections</code> on <code>volumeController.percentChanged</code> moves the slider to a level set anywhere else (knob, gesture, media room), but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). The vertical layout does the same for <code>volumeControlVertical</code> / <code>volumeSliderVertical</code>. No curve math happens in QML.</p>
 
         <div class="info-box info">
           <div class="info-box-title">One Curve, One Entry Point</div>
@@ -274,15 +266,10 @@
 }</code></pre>
 
         <h3>Mute Button</h3>
-        <p>Tapping Mute normally calls <code>mediaManager.toggle_mute()</code>. If the volume is already 0 the tap instead restores the persisted startup volume (<code>Math.round(settingsManager.startUpVolume * 100)</code>) by assigning the slider, which routes through <code>applyVolume</code>. Mute state comes back from <code>mediaManager.muteChanged(muted)</code>:</p>
+        <p>Tapping Mute calls <code>volumeController.toggleMute()</code>; the rules live there (<a href="signals-slots-reference.html#volumeController">VolumeController</a>). At 0&nbsp;% the tap restores the startup volume (<code>toPercent(startUpVolume)</code>, e.g. 32&nbsp;% for the default 0.1) and unmutes instead of toggling; presses within 150&nbsp;ms of the last are ignored. Mute is in memory only, never saved.</p>
 
-        <pre><code><span class="prop">onClicked</span>: {
-    <span class="kw">if</span> (volumeControl.currentValue === <span class="num">0</span> &amp;&amp; settingsManager) {
-        volumeSlider.value = Math.<span class="fn">round</span>(settingsManager.startUpVolume * <span class="num">100</span>)
-    } <span class="kw">else</span> {
-        mediaManager.<span class="fn">toggle_mute</span>()
-    }
-}</code></pre>
+        <pre><code><span class="cmt">// At 0 % this restores the startup volume instead</span>
+<span class="prop">onClicked</span>: volumeController.<span class="fn">toggleMute</span>()</code></pre>
 
         <!-- Mute Icon States -->
         <h2 id="mute-states">Mute Icon States</h2>
@@ -292,14 +279,14 @@
         <table>
           <thead><tr><th>Condition</th><th>Icon file</th></tr></thead>
           <tbody>
-            <tr><td><code>mediaManager.is_muted()</code>, local <code>isMuted</code>, or volume 0</td><td><code>mute_on.svg</code></td></tr>
+            <tr><td><code>volumeController.effectivelyMuted</code> (muted, or volume 0)</td><td><code>mute_on.svg</code></td></tr>
             <tr><td>volume &lt; 33</td><td><code>mute_off_low.svg</code></td></tr>
             <tr><td>volume &lt; 66</td><td><code>mute_off_med.svg</code></td></tr>
             <tr><td>66 and above</td><td><code>mute_off_high.svg</code></td></tr>
           </tbody>
         </table>
 
-        <p>The icon is tinted with <code>bottomBarVolumeButton</code>. It is refreshed explicitly from <code>onValueChanged</code>, <code>onMuteChanged</code>, <code>onVolumeChanged</code> and at startup.</p>
+        <p>The icon is tinted with <code>bottomBarVolumeButton</code>. It is refreshed from the <code>Connections</code> on <code>volumeController.percentChanged</code> / <code>effectivelyMutedChanged</code> and in <code>Component.onCompleted</code>.</p>
 
         <!-- Navigation Buttons -->
         <h2 id="navigation">Navigation Buttons</h2>
@@ -392,14 +379,14 @@
         <!-- External Volume -->
         <h2 id="external-volume">External Volume Sources</h2>
 
-        <p>Volume can change without the slider being touched. All of these end in <code>volumeController.applyVolume()</code> on the C++ side, so the bar simply reacts to <code>mediaManager.volumeChanged</code>:</p>
+        <p>Volume can change without the slider being touched. All of these end in <code>volumeController.applyVolume()</code> on the C++ side, so the bar simply reacts to <code>volumeController.percentChanged</code>; turning the volume up from any of them while muted unmutes:</p>
 
         <table>
           <thead><tr><th>Source</th><th>Path</th></tr></thead>
           <tbody>
-            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span>). The knob's mute button toggles <code>mediaManager</code> mute and the bar's icon follows via <code>muteChanged</code>.</td></tr>
+            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span>). The knob's mute button calls <code>volumeController.toggleMute()</code> and the bar's icon follows <code>effectivelyMutedChanged</code>.</td></tr>
             <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
-            <tr><td>Startup</td><td>Persisted <code>currentVolume</code> is applied by <span class="file-path">src/main.cpp</span> and again by the bar's <code>Component.onCompleted</code>.</td></tr>
+            <tr><td>Startup</td><td><code>currentVolume</code> (from <code>startUpVolume</code>) is applied once by <span class="file-path">src/main.cpp</span>.</td></tr>
           </tbody>
         </table>
 
@@ -533,8 +520,8 @@
               <td><code>is_playing()</code> is a method, so the image <code>source</code> binding is evaluated once; the signal handlers are what actually flip the icon.</td>
             </tr>
             <tr>
-              <td>Inverse curve on <code>volumeChanged</code></td>
-              <td>The bar stores percent, the player reports linear; <code>Math.sqrt(volume) * 100</code> is the exact inverse of the quadratic in <code>VolumeController</code>, so external changes display the same number the user would have set.</td>
+              <td>Percent from <code>volumeController</code>, not <code>mediaManager.volumeChanged</code></td>
+              <td>The player reports linear volume; the bar used to invert the curve itself (<code>sqrt</code>) in six places across QML. <code>VolumeController.percent</code> is the number the user set, and <code>toPercent()</code> is the one inverse.</td>
             </tr>
             <tr>
               <td>StackView transitions disabled in Main.qml</td>

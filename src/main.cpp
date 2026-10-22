@@ -325,9 +325,6 @@ int main(int argc, char *argv[])
                      &phoneMirrorManager, [&phoneMirrorManager](double l) { phoneMirrorManager.setAudioDuckLevel(float(l)); });
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged,
                      &mediaManager, &MediaManager::setDucking);
-    // OCTAVE's mute silences phone audio too (volume arrives via VolumeController)
-    phoneMirrorManager.setMuted(mediaManager.is_muted());
-    QObject::connect(&mediaManager, &MediaManager::muteChanged, &phoneMirrorManager, &PhoneMirrorManager::setMuted);
     // While mirroring the phone is the media source: when it takes OCTAVE's
     // media controls local playback pauses; starting a local track hands
     // the controls back (and pauses the phone).
@@ -379,6 +376,19 @@ int main(int argc, char *argv[])
 #endif
     });
     volumeController.applyVolume(settingsManager.currentVolume());
+    // Mute is VolumeController's too (in memory): it silences local media,
+    // phone audio and lights the knob's mute LED
+    QObject::connect(&volumeController, &VolumeController::mutedChanged,
+                     [&mediaManager, &phoneMirrorManager, &esp32VolumeManager](bool muted) {
+        mediaManager.setMuted(muted);
+        phoneMirrorManager.setMuted(muted);
+#ifndef Q_OS_MOBILE
+        esp32VolumeManager.send_mute_state(muted);
+#else
+        Q_UNUSED(esp32VolumeManager);
+#endif
+    });
+    phoneMirrorManager.setMuted(volumeController.muted());
 
     // ---- QML import path: frontend/ ----
 #ifdef Q_OS_ANDROID
@@ -436,7 +446,7 @@ int main(int argc, char *argv[])
 
     // ---- Developer tooling (inactive unless --dev / --profile) ----
 #ifdef OCTAVE_DEV_TOOLS
-    OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &mediaManager, &obdManager, &berryIMU,
+    OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &mediaManager, &volumeController, &obdManager, &berryIMU,
                                                     QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
     devRuntime.beforeLoad();
 #else
@@ -488,7 +498,7 @@ int main(int argc, char *argv[])
         if (action == "next_track") phone ? phoneMirrorManager.mediaNext() : mediaManager.next_track();
         else if (action == "previous_track") phone ? phoneMirrorManager.mediaPrevious() : mediaManager.previous_track();
         else if (action == "play_pause") phone ? phoneMirrorManager.mediaPlayPause() : mediaManager.toggle_play();
-        else if (action == "mute_toggle") mediaManager.toggle_mute();
+        else if (action == "mute_toggle") volumeController.toggleMute();
         else if (action == "volume_up") {
             int step = settingsManager.gestureVolumeStep();
             volumeController.applyVolume(settingsManager.currentVolume() + step);
@@ -509,10 +519,13 @@ int main(int argc, char *argv[])
             volumeController.applyVolume(settingsManager.currentVolume() + change);
         }
     });
+    // The LED follows mutedChanged, but answer every press too: a press the
+    // debounce drops changes nothing here, and the knob may have flipped its
+    // LED locally
     QObject::connect(&esp32VolumeManager, &ESP32VolumeManager::muteToggleRequested,
-                     [&mediaManager, &esp32VolumeManager]() {
-        mediaManager.toggle_mute();
-        esp32VolumeManager.send_mute_state(mediaManager.is_muted());
+                     [&volumeController, &esp32VolumeManager]() {
+        volumeController.toggleMute();
+        esp32VolumeManager.send_mute_state(volumeController.muted());
     });
 
 #ifndef Q_OS_MOBILE
@@ -570,7 +583,7 @@ int main(int argc, char *argv[])
             return;
         QTimer::singleShot(500, &esp32VolumeManager, [&, sendCurrentLedColor]() {
             esp32VolumeManager.send_volume_update(settingsManager.currentVolume());
-            esp32VolumeManager.send_mute_state(mediaManager.is_muted());
+            esp32VolumeManager.send_mute_state(volumeController.muted());
             sendCurrentLedColor();
         });
     });

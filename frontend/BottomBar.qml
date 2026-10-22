@@ -733,7 +733,6 @@ Rectangle {
                         // Mute button
                         Control {
                             id: muteButton
-                            property bool isMuted: false
                             implicitWidth: App.Spacing.bottomBarMuteButtonWidth
                             implicitHeight: App.Spacing.bottomBarMuteButtonHeight
                             Layout.alignment: Qt.AlignVCenter
@@ -785,15 +784,8 @@ Rectangle {
                                 MouseArea {
                                     id: mouseAreaMute
                                     anchors.fill: parent
-                                    onClicked: {
-                                        // If volume is 0, restore to startup volume instead of toggling mute
-                                        if (volumeControl.currentValue === 0 && settingsManager) {
-                                            var startupVol = Math.round(settingsManager.startUpVolume * 100)
-                                            volumeSlider.value = startupVol
-                                        } else {
-                                            mediaManager.toggle_mute()
-                                        }
-                                    }
+                                    // At 0 % this restores the startup volume instead
+                                    onClicked: volumeController.toggleMute()
                                 }
                             }
                         }
@@ -830,19 +822,11 @@ Rectangle {
                                 font.family: bottomBar.globalFont
                             }
                             
-                            property int currentValue: 0
+                            // null at shutdown, when the managers go before the engine
+                            readonly property int currentValue: volumeController ? volumeController.percent : 0
 
                             Component.onCompleted: {
-                                if (settingsManager) {
-                                    currentValue = settingsManager.currentVolume
-                                    // Route startup volume to every audio output via
-                                    // the shared VolumeController (src/managers/volumecontroller.h).
-                                    volumeController.applyVolume(currentValue)
-                                } else {
-                                    currentValue = 10
-                                    mediaManager.setVolume(0.1)
-                                }
-
+                                // (main.cpp applies the startup volume to every output)
                                 updateMuteButtonImage()
 
                                 if (mediaManager) {
@@ -945,15 +929,9 @@ Rectangle {
                                             
                                             // The core functionality
                                             onValueChanged: {
-                                                volumeControl.currentValue = value
-                                                // Single dispatch to settings + every audio output.
+                                                // Single dispatch to settings + every audio output;
+                                                // raising it while muted unmutes (VolumeController)
                                                 volumeController.applyVolume(Math.round(value))
-
-                                                if (value > 0 && muteButton.isMuted) {
-                                                    muteButton.isMuted = false
-                                                    mediaManager.toggle_mute()
-                                                }
-                                                updateMuteButtonImage()
                                             }
                                         }
                                         
@@ -1464,20 +1442,6 @@ Rectangle {
                             }
                         }
                     }
-                    function onMuteChanged(muted) {
-                        muteButton.isMuted = muted
-                        updateMuteButtonImage()
-                    }
-                    function onVolumeChanged(volume) {
-                        // Only update if not being changed by the slider itself
-                        if (!volumeSlider.pressed) {
-                            // Convert from raw volume to percentage (0-100)
-                            var volumePercentage = Math.round(Math.sqrt(volume) * 100)
-                            volumeControl.currentValue = volumePercentage
-                            volumeSlider.value = volumePercentage
-                        }
-                        updateMuteButtonImage()
-                    }
                     function onShuffleStateChanged(enabled) {
                         bottomBar.isShuffleEnabled = enabled
                     }
@@ -1498,7 +1462,7 @@ Rectangle {
 
                 // Helper functions
                 function getUpdatedMuteSource() {
-                    if (mediaManager.is_muted() || muteButton.isMuted || volumeControl.currentValue === 0) {
+                    if (volumeController.effectivelyMuted) {
                         return "./assets/mute_on.svg"
                     }
                     var volume = volumeControl.currentValue
@@ -1513,6 +1477,17 @@ Rectangle {
 
                 function updateMuteButtonImage() {
                     muteButtonImage.source = getUpdatedMuteSource()
+                }
+
+                // Volume set anywhere else (knob, gesture, media room)
+                Connections {
+                    target: volumeController
+                    function onPercentChanged(percent) {
+                        if (!volumeSlider.pressed)
+                            volumeSlider.value = percent
+                        updateMuteButtonImage()
+                    }
+                    function onEffectivelyMutedChanged() { updateMuteButtonImage() }
                 }
             }
         }
@@ -1796,7 +1771,6 @@ Rectangle {
                         // Mute button
                         Control {
                             id: muteButtonVertical
-                            property bool isMuted: false
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: App.Spacing.bottomBarMuteButtonWidth
                             Layout.preferredHeight: App.Spacing.bottomBarMuteButtonHeight
@@ -1848,15 +1822,8 @@ Rectangle {
                                 MouseArea {
                                     id: mouseAreaMuteVertical
                                     anchors.fill: parent
-                                    onClicked: {
-                                        // If volume is 0, restore to startup volume instead of toggling mute
-                                        if (volumeControlVertical.currentValue === 0 && settingsManager) {
-                                            var startupVol = Math.round(settingsManager.startUpVolume * 100)
-                                            volumeSliderVertical.value = startupVol
-                                        } else {
-                                            mediaManager.toggle_mute()
-                                        }
-                                    }
+                                    // At 0 % this restores the startup volume instead
+                                    onClicked: volumeController.toggleMute()
                                 }
                             }
                         }
@@ -1868,7 +1835,8 @@ Rectangle {
                             Layout.preferredWidth: App.Spacing.bottomBarVolumeSliderWidth * 0.8
                             Layout.preferredHeight: App.Spacing.bottomBarVolumeSliderHeight
                             
-                            property int currentValue: 0
+                            // null at shutdown, when the managers go before the engine
+                            readonly property int currentValue: volumeController ? volumeController.percent : 0
                             
                             Text {
                                 id: volumeTextVertical
@@ -1882,16 +1850,7 @@ Rectangle {
                             }
                             
                             Component.onCompleted: {
-                                if (settingsManager) {
-                                    currentValue = settingsManager.currentVolume
-                                    // Route startup volume to every audio output via
-                                    // the shared VolumeController (src/managers/volumecontroller.h).
-                                    volumeController.applyVolume(currentValue)
-                                } else {
-                                    currentValue = 10
-                                    mediaManager.setVolume(0.1)
-                                }
-
+                                // (main.cpp applies the startup volume to every output)
                                 updateMuteButtonImageVertical()
 
                                 if (mediaManager) {
@@ -1994,15 +1953,9 @@ Rectangle {
                                             
                                             // The core functionality
                                             onValueChanged: {
-                                                volumeControlVertical.currentValue = value
-                                                // Single dispatch to settings + every audio output.
+                                                // Single dispatch to settings + every audio output;
+                                                // raising it while muted unmutes (VolumeController)
                                                 volumeController.applyVolume(Math.round(value))
-
-                                                if (value > 0 && muteButtonVertical.isMuted) {
-                                                    muteButtonVertical.isMuted = false
-                                                    mediaManager.toggle_mute()
-                                                }
-                                                updateMuteButtonImageVertical()
                                             }
                                         }
 
@@ -2480,9 +2433,20 @@ Rectangle {
                 function updateMuteButtonImageVertical() {
                     muteButtonImageVertical.source = getUpdatedMuteSourceVertical()
                 }
+
+                // Volume set anywhere else (knob, gesture, media room)
+                Connections {
+                    target: volumeController
+                    function onPercentChanged(percent) {
+                        if (!volumeSliderVertical.pressed)
+                            volumeSliderVertical.value = percent
+                        updateMuteButtonImageVertical()
+                    }
+                    function onEffectivelyMutedChanged() { updateMuteButtonImageVertical() }
+                }
                 
                 function getUpdatedMuteSourceVertical() {
-                    if (mediaManager.is_muted() || muteButtonVertical.isMuted || volumeControlVertical.currentValue === 0) {
+                    if (volumeController.effectivelyMuted) {
                         return "./assets/mute_on.svg"
                     }
                     const volume = volumeControlVertical.currentValue
@@ -2502,20 +2466,6 @@ Rectangle {
                         if (!bottomBar.phoneActive())
                             playButtonImageVertical.source = playing ?
                                 "./assets/pause_button.svg" : "./assets/play_button.svg"
-                    }
-                    function onMuteChanged(muted) {
-                        muteButtonVertical.isMuted = muted
-                        updateMuteButtonImageVertical()
-                    }
-                    function onVolumeChanged(volume) {
-                        // Only update if not being changed by the slider itself
-                        if (!volumeSliderVertical.pressed) {
-                            // Convert from raw volume to percentage (0-100)
-                            var volumePercentage = Math.round(Math.sqrt(volume) * 100)
-                            volumeControlVertical.currentValue = volumePercentage
-                            volumeSliderVertical.value = volumePercentage
-                        }
-                        updateMuteButtonImageVertical()
                     }
                     function onShuffleStateChanged(enabled) {
                         bottomBar.isShuffleEnabled = enabled

@@ -132,6 +132,7 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
     QPointer<PerfMonitor> perf = t.perf;
     QPointer<QObject> sm = t.settings;
     QPointer<QObject> mm = t.media;
+    QPointer<QObject> vc = t.volume;
     QPointer<QObject> obd = t.obd;
 
     auto needUi = [ui] {
@@ -407,17 +408,27 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
     });
 
     // ── Media controls ───────────────────────────────────────────
-    for (const char *action : {"next_track", "previous_track", "toggle_play", "pause", "toggle_mute", "toggle_shuffle"}) {
+    for (const char *action : {"next_track", "previous_track", "toggle_play", "pause", "toggle_shuffle"}) {
         server.registerAction(QLatin1String(action), [mm, need, action](const QVariantMap &) {
             QObject *m = need(mm, "media manager");
             Gui::onGui([m, action] { invokeByName(m, action); return QVariant(); });
             return QVariant();
         });
     }
-    server.registerAction("set_volume", [mm, need](const QVariantMap &a) {
-        QObject *m = need(mm, "media manager");
-        const double v = num(a, "volume", 0.5);
-        Gui::onGui([m, v] { invokeByName(m, "setVolume", {v}); return QVariant(); });
+    // Volume and mute go through the volume controller like every other input
+    server.registerAction("toggle_mute", [vc, need](const QVariantMap &) {
+        QObject *v = need(vc, "volume controller");
+        Gui::onGui([v] { invokeByName(v, "toggleMute"); return QVariant(); });
+        return QVariant();
+    });
+    server.registerAction("set_volume", [vc, need](const QVariantMap &a) {
+        QObject *v = need(vc, "volume controller");
+        const double linear = num(a, "volume", 0.5);   // 0.0-1.0, as before
+        Gui::onGui([v, linear] {
+            const int percent = invokeByName(v, "toPercent", {linear}).toInt();
+            invokeByName(v, "applyVolume", {percent});
+            return QVariant();
+        });
         return QVariant();
     });
     server.registerAction("get_media_status", [mm, need](const QVariantMap &) {
@@ -426,7 +437,7 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
             return QVariant(QVariantMap{
                 {"playing", invokeByName(m, "is_playing")},
                 {"paused", invokeByName(m, "is_paused")},
-                {"muted", invokeByName(m, "is_muted")},
+                {"muted", invokeByName(m, "is_muted")},   // follows volumeController.muted
                 {"shuffled", invokeByName(m, "is_shuffled")},
                 {"current_file", invokeByName(m, "get_current_file")},
                 {"position_ms", invokeByName(m, "get_position")},

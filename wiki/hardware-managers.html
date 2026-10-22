@@ -270,9 +270,10 @@
     }
 });
 QObject::connect(&amp;esp32VolumeManager, &amp;ESP32VolumeManager::muteToggleRequested,
-                 [&amp;mediaManager, &amp;esp32VolumeManager]() {
-    mediaManager.toggle_mute();
-    esp32VolumeManager.send_mute_state(mediaManager.is_muted());
+                 [&amp;volumeController, &amp;esp32VolumeManager]() {
+    volumeController.toggleMute();
+    <span class="cmt">// answer every press, even one the 150 ms debounce drops</span>
+    esp32VolumeManager.send_mute_state(volumeController.muted());
 });</code></pre>
 
           <h4>Outgoing (OCTAVE &rarr; ESP32)</h4>
@@ -315,7 +316,7 @@ QObject::connect(&amp;esp32VolumeManager, &amp;ESP32VolumeManager::muteToggleReq
             <li><code>esp32LedColorMode == "theme"</code> (default): <code>settingsManager.albumArtColorsChanged</code> &rarr; a lambda that parses the album-art colour JSON and sends its <code>accent</code> colour.</li>
             <li><code>esp32LedColorMode == "static"</code>: <code>esp32LedStaticColorChanged</code> &rarr; the chosen hex colour (default <code>#00FFFF</code>).</li>
             <li>Switching modes (<code>esp32LedColorModeChanged</code>) re-sends the current colour; a missing or unparsable colour falls back to cyan <code>(0, 255, 255)</code>.</li>
-            <li>On every transition to "Connected", a 500 ms single-shot timer sends the current volume (<code>settingsManager.currentVolume</code>), mute state (<code>mediaManager.is_muted()</code>) and colour so a freshly plugged dongle matches the app; the delay gives the firmware time to finish booting after the port opens.</li>
+            <li>On every transition to "Connected", a 500 ms single-shot timer sends the current volume (<code>settingsManager.currentVolume</code>), mute state (<code>volumeController.muted()</code>) and colour so a freshly plugged dongle matches the app; the delay gives the firmware time to finish booting after the port opens.</li>
           </ul>
           <p>
             The whole block sits inside <code>#ifndef Q_OS_MOBILE</code> because the
@@ -933,7 +934,7 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td><code>next_track</code></td><td><code>mediaManager.next_track()</code> (phone: <code>phoneMirrorManager.mediaNext()</code>)</td></tr>
               <tr><td><code>previous_track</code></td><td><code>mediaManager.previous_track()</code> (phone: <code>phoneMirrorManager.mediaPrevious()</code>)</td></tr>
               <tr><td><code>play_pause</code></td><td><code>mediaManager.toggle_play()</code> (phone: <code>phoneMirrorManager.mediaPlayPause()</code>)</td></tr>
-              <tr><td><code>mute_toggle</code></td><td><code>mediaManager.toggle_mute()</code></td></tr>
+              <tr><td><code>mute_toggle</code></td><td><code>volumeController.toggleMute()</code></td></tr>
               <tr><td><code>volume_up</code> / <code>volume_down</code></td><td><code>volumeController.applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></td></tr>
               <tr><td><code>none</code></td><td>Gesture disabled (the settings UI labels it "Disabled")</td></tr>
             </tbody>

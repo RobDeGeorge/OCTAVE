@@ -166,12 +166,13 @@ Flickable {
 
                     SettingsSlider {
                         id: volumeSlider
+                        // Percent, like every other volume slider; the setting
+                        // is stored linear (VolumeController owns the curve)
                         from: 0
-                        to: 1
-                        stepSize: 0.01
-                        value: settingsManager ? settingsManager.startUpVolume : 0.5
-                        visualValue: Math.round(Math.sqrt(value) * 100)
-                        valueDisplay: visualValue + "%"
+                        to: 100
+                        stepSize: 1
+                        value: settingsManager && volumeController ? volumeController.toPercent(settingsManager.startUpVolume) : 50
+                        valueDisplay: Math.round(value) + "%"
                         activeColor: App.Style.volumeSliderColor
                         Layout.fillWidth: true
 
@@ -182,7 +183,7 @@ Flickable {
                             repeat: false
                             onTriggered: {
                                 if (settingsManager) {
-                                    settingsManager.save_start_volume(volumeSlider.value)
+                                    settingsManager.save_start_volume(volumeController.toLinear(volumeSlider.value))
                                 }
                             }
                         }
