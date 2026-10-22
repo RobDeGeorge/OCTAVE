@@ -146,7 +146,8 @@ bool TripStore::open(const QString &dir)
         emit storeOpened(false, msg);
         return false;
     }
-    qCInfo(lcTripStore) << "Black box open at" << databasePath() << "(SQLite" << SQLITE_VERSION << ")";
+    qCInfo(lcTripStore).noquote() << "Black box open at" << databasePath()
+                                  << QStringLiteral("(SQLite %1)").arg(QLatin1String(SQLITE_VERSION));
     emit storeOpened(true, QString());
     return true;
 }
