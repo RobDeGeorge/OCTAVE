@@ -15,6 +15,7 @@
 #include <memory>
 
 #include "managers/parametercatalog.h"
+#include "managers/parameterstore.h"
 
 class FakeObd : public QObject
 {
@@ -79,7 +80,7 @@ Item {
     }
     function vehicleIds() { return App.OBDParameterModel.vehicleParameters.map(function(p) { return p.id }) }
     function holder(id) { return App.OBDParameterModel.valueHolder(id) }
-    function push(id, value) { App.OBDParameterModel.updateParamValue(id, value) }
+    function push(id, value) { paramStore.ingest(id, value) }   // as obdManager.parameterSampled does
     function setDemo(on) { App.OBDParameterModel.simulationActive = on }
 }
 )qml";
@@ -96,8 +97,10 @@ private slots:
         engine.addImportPath(kFrontend);
         FakeObd obd;
         engine.rootContext()->setContextProperty("obdManager", &obd);
-        ParameterCatalog catalog;   // as main.cpp registers it
+        ParameterCatalog catalog;   // as main.cpp registers them
         engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
+        ParameterStore store;
+        engine.rootContext()->setContextProperty("paramStore", &store);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
@@ -144,8 +147,10 @@ private slots:
         engine.addImportPath(kFrontend);
         FakeObd obd;
         engine.rootContext()->setContextProperty("obdManager", &obd);
-        ParameterCatalog catalog;   // as main.cpp registers it
+        ParameterCatalog catalog;   // as main.cpp registers them
         engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
+        ParameterStore store;
+        engine.rootContext()->setContextProperty("paramStore", &store);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
@@ -165,12 +170,16 @@ private slots:
         QCOMPARE(speedChanged.count(), 0);
         QVERIFY(!speed->property("value").isValid());          // never reported: "--"
 
-        // Demo mode replaces every value at once: holders follow, and clear on exit
+        // Demo mode replaces every value at once: holders follow; on exit the
+        // fake values go and the real readings come back
         QMetaObject::invokeMethod(m_root, "setDemo", Q_ARG(QVariant, true));
         QVERIFY(speed->property("value").isValid());
+        QMetaObject::invokeMethod(m_root, "push", Q_ARG(QVariant, "RPM"), Q_ARG(QVariant, 3100));
+        QTest::qWait(3 * ParameterStore::kFlushMs);
+        QVERIFY(rpm->property("value").toInt() != 3100);   // demo owns the values meanwhile
         QMetaObject::invokeMethod(m_root, "setDemo", Q_ARG(QVariant, false));
         QVERIFY(!speed->property("value").isValid());
-        QVERIFY(!rpm->property("value").isValid());
+        QCOMPARE(rpm->property("value").toInt(), 3100);
         m_root = nullptr;
     }
 
@@ -182,8 +191,10 @@ private slots:
         engine.addImportPath(kFrontend);
         FakeObd obd;
         engine.rootContext()->setContextProperty("obdManager", &obd);
-        ParameterCatalog catalog;   // as main.cpp registers it
+        ParameterCatalog catalog;   // as main.cpp registers them
         engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
+        ParameterStore store;
+        engine.rootContext()->setContextProperty("paramStore", &store);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());

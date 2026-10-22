@@ -54,44 +54,40 @@ QtObject {
         return info;
     }
 
-    // ── Live parameter values (updated via signal connections) ────────
-    // Using a plain object that gets replaced to trigger QML bindings.
+    // ── Live parameter values ─────────────────────────────────────────
+    // The C++ ParameterStore (context property `paramStore`, fed from
+    // obdManager.parameterSampled and the berryIMU signals in main.cpp) holds
+    // the values, one notifying key per id, and coalesces writes to ~30 Hz.
+    // New code binds `paramStore[id]` directly: only that id's change
+    // re-evaluates it.
     //
-    // Writes are coalesced: incoming values land in _pendingValues and are
-    // folded into paramValues by _flushTimer at most ~30x/sec. Replacing
-    // paramValues re-evaluates every gauge binding that reads it, and the
-    // IMU alone fires ~440 updates/sec (7 signals at 60 Hz). Copying the
-    // whole dict and rebinding on each one pegged the QML thread at 100%
-    // CPU while idle on the Orange Pi (V4 string-alloc + GC churn), so the
-    // per-write path must stay allocation-free.
-    property var paramValues: ({})
-    property var _pendingValues: ({})
+    // paramValues is the older whole-map view, kept while consumers move to
+    // paramStore: a plain object replaced once per store fold (so anything
+    // reading it re-evaluates whichever value changed). Demo mode owns it.
+    readonly property var _store: (typeof paramStore !== "undefined" && paramStore) ? paramStore : null
+    property var paramValues: _store ? _store.snapshot() : ({})
 
-    function updateParamValue(paramId, value) {
-        if (simulationActive) return;   // demo mode owns paramValues
-        _pendingValues[paramId] = value;
-        if (!_flushTimer.running) _flushTimer.start();
-    }
-
-    function _flushPendingValues() {
-        if (simulationActive) { _pendingValues = ({}); return; }
-        var changed = _pendingValues;
-        var newValues = Object.assign({}, paramValues, changed);
-        _pendingValues = ({});
-        paramValues = newValues;   // fresh object so bindings re-evaluate
-        for (var id in changed) {
-            if (_holders[id])
-                _holders[id].value = changed[id];
+    property var _storeConnections: Connections {
+        target: root._store
+        function onChanged(ids) {
+            if (root.simulationActive) return;   // demo mode owns paramValues
+            var changed = {};
+            for (var i = 0; i < ids.length; i++)
+                changed[ids[i]] = root._store.get(ids[i]);
+            root.paramValues = Object.assign({}, root.paramValues, changed);   // fresh object: bindings re-evaluate
+            for (var id in changed) {
+                if (root._holders[id])
+                    root._holders[id].value = changed[id];
+            }
         }
     }
 
     // ── Per-parameter value holders ───────────────────────────────────
-    // paramValues is replaced as a whole, so anything that reads it
-    // re-evaluates on every fold, whichever value changed. A view with many
-    // values on screen (OBDMenu's Parameter Cards: one card per supported
-    // PID) binds to valueHolder(id).value instead: only the holders whose
-    // value was in the fold change, so only those cards re-evaluate and
-    // animate. Created on first use and kept for the session.
+    // A view with many values on screen (OBDMenu's Parameter Cards: one card
+    // per supported PID) binds to valueHolder(id).value instead of
+    // paramValues: only the holders whose value was in the fold change.
+    // (paramStore[id] does the same with no holder; the cards move to it with
+    // the other consumers.) Created on first use and kept for the session.
     property var _holders: ({})
     property Component _holderComponent: Component {
         QtObject { property var value }
@@ -108,12 +104,6 @@ QtObject {
     function _syncAllHolders() {
         for (var id in _holders)
             _holders[id].value = paramValues[id];
-    }
-
-    property var _flushTimer: Timer {
-        interval: 33            // ~30 Hz; plenty for needle animation
-        repeat: false           // re-armed by the next write, idle otherwise
-        onTriggered: root._flushPendingValues()
     }
 
     function getParamValue(paramId) {
@@ -141,8 +131,8 @@ QtObject {
             _simEpoch = Date.now();
             _simTick();
         } else {
-            _pendingValues = ({});
-            paramValues = ({});
+            // Back to the real readings; the fake ones never linger
+            paramValues = _store ? _store.snapshot() : ({});
             _syncAllHolders();
         }
     }
@@ -235,128 +225,5 @@ QtObject {
         return allParameters.filter(function(p) {
             return !root.isSensorParameter(p.id) && !p.aliasOf && root._supportedSet[p.id] === true;
         });
-    }
-
-    // ── Signal connections to berryIMU for the sensor parameters ─────
-    // Same pattern as _obdConnections below; guarded because the IMU
-    // manager may legitimately be absent (e.g. stripped-down builds).
-    property var _imuConnections: Connections {
-        target: (typeof berryIMU !== "undefined" && berryIMU) ? berryIMU : null
-        ignoreUnknownSignals: true
-
-        function onPitchChanged(v) { root.updateParamValue("PITCH", v); }
-        function onRollChanged(v) { root.updateParamValue("ROLL", v); }
-        function onHeadingChanged(v) { root.updateParamValue("HEADING", v); }
-        function onAltitudeChanged(v) { root.updateParamValue("ALTITUDE", v); }
-        function onAccelMagnitudeChanged(v) { root.updateParamValue("ACCEL_MAG", v); }
-        function onLateralGChanged(v) { root.updateParamValue("LATERAL_G", v); }
-        function onLongitudinalGChanged(v) { root.updateParamValue("LONGITUDINAL_G", v); }
-        function onBaroTempChanged(v) { root.updateParamValue("BARO_TEMP", v); }
-    }
-
-    // ── Signal connections to obdManager for all 92 parameters (84 OBD + 8 IMU) ───────
-    property var _obdConnections: Connections {
-        target: obdManager
-
-        // Original 18 parameters
-        function onCoolantTempChanged(value) { root.updateParamValue("COOLANT_TEMP", value); }
-        function onVoltageChanged(value) { root.updateParamValue("CONTROL_MODULE_VOLTAGE", value); }
-        function onEngineLoadChanged(value) { root.updateParamValue("ENGINE_LOAD", value); }
-        function onThrottlePositionChanged(value) { root.updateParamValue("THROTTLE_POS", value); }
-        function onIntakeAirTempChanged(value) { root.updateParamValue("INTAKE_TEMP", value); }
-        function onTimingAdvanceChanged(value) { root.updateParamValue("TIMING_ADVANCE", value); }
-        function onMassAirFlowChanged(value) { root.updateParamValue("MAF", value); }
-        function onSpeedMPHChanged(value) { root.updateParamValue("SPEED", value); }
-        function onRpmChanged(value) { root.updateParamValue("RPM", value); }
-        function onAirFuelRatioChanged(value) { root.updateParamValue("COMMANDED_EQUIV_RATIO", value); }
-        function onFuelLevelChanged(value) { root.updateParamValue("FUEL_LEVEL", value); }
-        function onIntakeManifoldPressureChanged(value) { root.updateParamValue("INTAKE_PRESSURE", value); }
-        function onShortTermFuelTrimChanged(value) { root.updateParamValue("SHORT_FUEL_TRIM_1", value); }
-        function onLongTermFuelTrimChanged(value) { root.updateParamValue("LONG_FUEL_TRIM_1", value); }
-        function onOxygenSensorVoltageChanged(value) { root.updateParamValue("O2_B1S1", value); }
-        function onFuelPressureChanged(value) { root.updateParamValue("FUEL_PRESSURE", value); }
-        function onEngineOilTempChanged(value) { root.updateParamValue("OIL_TEMP", value); }
-        function onIgnitionTimingChanged(value) { root.updateParamValue("IGNITION_TIMING", value); }
-
-        // Multi-value PIDs 0x61+ (torque, boost, odometer, ...): one generic
-        // signal carries the parameter id with the value
-        function onObdParameterChanged(paramId, value) { root.updateParamValue(paramId, value); }
-
-        // Additional parameters - Batch 1
-        function onRunTimeChanged(value) { root.updateParamValue("RUN_TIME", value); }
-        function onDistanceWithMILChanged(value) { root.updateParamValue("DISTANCE_W_MIL", value); }
-        function onFuelRailPressureChanged(value) { root.updateParamValue("FUEL_RAIL_PRESSURE_VAC", value); }
-        function onFuelRailPressureDirectChanged(value) { root.updateParamValue("FUEL_RAIL_PRESSURE_DIRECT", value); }
-        function onBarometricPressureChanged(value) { root.updateParamValue("BAROMETRIC_PRESSURE", value); }
-        function onAmbientAirTempChanged(value) { root.updateParamValue("AMBIANT_AIR_TEMP", value); }
-        function onRelativeThrottlePosChanged(value) { root.updateParamValue("RELATIVE_THROTTLE_POS", value); }
-        function onAbsoluteThrottlePosBChanged(value) { root.updateParamValue("THROTTLE_POS_B", value); }
-        function onAcceleratorPosChanged(value) { root.updateParamValue("ACCELERATOR_POS_D", value); }
-        function onCatalystTempB1S1Changed(value) { root.updateParamValue("CATALYST_TEMP_B1S1", value); }
-        function onCatalystTempB1S2Changed(value) { root.updateParamValue("CATALYST_TEMP_B1S2", value); }
-        function onEvapVaporPressureChanged(value) { root.updateParamValue("EVAP_VAPOR_PRESSURE", value); }
-        function onShortFuelTrim2Changed(value) { root.updateParamValue("SHORT_FUEL_TRIM_2", value); }
-        function onLongFuelTrim2Changed(value) { root.updateParamValue("LONG_FUEL_TRIM_2", value); }
-        function onO2SensorB1S2Changed(value) { root.updateParamValue("O2_B1S2", value); }
-        function onO2SensorB2S1Changed(value) { root.updateParamValue("O2_B2S1", value); }
-        function onO2SensorB2S2Changed(value) { root.updateParamValue("O2_B2S2", value); }
-        function onDistanceSinceCodesCleared(value) { root.updateParamValue("DISTANCE_SINCE_DTC_CLEAR", value); }
-        function onWarmupsSinceCodesCleared(value) { root.updateParamValue("WARMUPS_SINCE_DTC_CLEAR", value); }
-        function onAbsoluteLoadChanged(value) { root.updateParamValue("ABSOLUTE_LOAD", value); }
-        function onCommandedEGRChanged(value) { root.updateParamValue("COMMANDED_EGR", value); }
-        function onEgrErrorChanged(value) { root.updateParamValue("EGR_ERROR", value); }
-        function onEthanoPercentChanged(value) { root.updateParamValue("ETHANOL_PERCENT", value); }
-
-        // Batch 2 - Additional O2 sensors
-        function onO2SensorB1S3Changed(value) { root.updateParamValue("O2_B1S3", value); }
-        function onO2SensorB1S4Changed(value) { root.updateParamValue("O2_B1S4", value); }
-        function onO2SensorB2S3Changed(value) { root.updateParamValue("O2_B2S3", value); }
-        function onO2SensorB2S4Changed(value) { root.updateParamValue("O2_B2S4", value); }
-        // Wide-range O2 sensors voltage
-        function onO2S1WRVoltageChanged(value) { root.updateParamValue("O2_S1_WR_VOLTAGE", value); }
-        function onO2S2WRVoltageChanged(value) { root.updateParamValue("O2_S2_WR_VOLTAGE", value); }
-        function onO2S3WRVoltageChanged(value) { root.updateParamValue("O2_S3_WR_VOLTAGE", value); }
-        function onO2S4WRVoltageChanged(value) { root.updateParamValue("O2_S4_WR_VOLTAGE", value); }
-        function onO2S5WRVoltageChanged(value) { root.updateParamValue("O2_S5_WR_VOLTAGE", value); }
-        function onO2S6WRVoltageChanged(value) { root.updateParamValue("O2_S6_WR_VOLTAGE", value); }
-        function onO2S7WRVoltageChanged(value) { root.updateParamValue("O2_S7_WR_VOLTAGE", value); }
-        function onO2S8WRVoltageChanged(value) { root.updateParamValue("O2_S8_WR_VOLTAGE", value); }
-        // Wide-range O2 sensors current
-        function onO2S1WRCurrentChanged(value) { root.updateParamValue("O2_S1_WR_CURRENT", value); }
-        function onO2S2WRCurrentChanged(value) { root.updateParamValue("O2_S2_WR_CURRENT", value); }
-        function onO2S3WRCurrentChanged(value) { root.updateParamValue("O2_S3_WR_CURRENT", value); }
-        function onO2S4WRCurrentChanged(value) { root.updateParamValue("O2_S4_WR_CURRENT", value); }
-        function onO2S5WRCurrentChanged(value) { root.updateParamValue("O2_S5_WR_CURRENT", value); }
-        function onO2S6WRCurrentChanged(value) { root.updateParamValue("O2_S6_WR_CURRENT", value); }
-        function onO2S7WRCurrentChanged(value) { root.updateParamValue("O2_S7_WR_CURRENT", value); }
-        function onO2S8WRCurrentChanged(value) { root.updateParamValue("O2_S8_WR_CURRENT", value); }
-        // Bank 2 catalyst temps
-        function onCatalystTempB2S1Changed(value) { root.updateParamValue("CATALYST_TEMP_B2S1", value); }
-        function onCatalystTempB2S2Changed(value) { root.updateParamValue("CATALYST_TEMP_B2S2", value); }
-        // Additional throttle/accelerator
-        function onThrottlePosCChanged(value) { root.updateParamValue("THROTTLE_POS_C", value); }
-        function onAcceleratorPosEChanged(value) { root.updateParamValue("ACCELERATOR_POS_E", value); }
-        function onAcceleratorPosFChanged(value) { root.updateParamValue("ACCELERATOR_POS_F", value); }
-        function onThrottleActuatorChanged(value) { root.updateParamValue("THROTTLE_ACTUATOR", value); }
-        // Fuel system
-        function onEvaporativePurgeChanged(value) { root.updateParamValue("EVAPORATIVE_PURGE", value); }
-        function onFuelRailPressureAbsChanged(value) { root.updateParamValue("FUEL_RAIL_PRESSURE_ABS", value); }
-        function onFuelInjectTimingChanged(value) { root.updateParamValue("FUEL_INJECT_TIMING", value); }
-        function onFuelRateChanged(value) { root.updateParamValue("FUEL_RATE", value); }
-        // Time-based
-        function onRunTimeMILChanged(value) { root.updateParamValue("RUN_TIME_MIL", value); }
-        function onTimeSinceDTCClearedChanged(value) { root.updateParamValue("TIME_SINCE_DTC_CLEARED", value); }
-        // Other
-        function onMaxMAFChanged(value) { root.updateParamValue("MAX_MAF", value); }
-        function onFuelTypeChanged(value) { root.updateParamValue("FUEL_TYPE", value); }
-        function onEvapVaporPressureAbsChanged(value) { root.updateParamValue("EVAP_VAPOR_PRESSURE_ABS", value); }
-        function onEvapVaporPressureAltChanged(value) { root.updateParamValue("EVAP_VAPOR_PRESSURE_ALT", value); }
-        function onShortO2TrimB1Changed(value) { root.updateParamValue("SHORT_O2_TRIM_B1", value); }
-        function onLongO2TrimB1Changed(value) { root.updateParamValue("LONG_O2_TRIM_B1", value); }
-        function onShortO2TrimB2Changed(value) { root.updateParamValue("SHORT_O2_TRIM_B2", value); }
-        function onLongO2TrimB2Changed(value) { root.updateParamValue("LONG_O2_TRIM_B2", value); }
-        function onRelativeAccelPosChanged(value) { root.updateParamValue("RELATIVE_ACCEL_POS", value); }
-        function onHybridBatteryRemainingChanged(value) { root.updateParamValue("HYBRID_BATTERY_REMAINING", value); }
-        function onElmVoltageChanged(value) { root.updateParamValue("ELM_VOLTAGE", value); }
     }
 }

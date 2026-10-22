@@ -370,30 +370,15 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
 
         <p><code>valueHolder(id)</code> returns a small per-PID <code>QtObject</code> with a <code>value</code> property, created on first use and kept for the session. <code>paramValues</code> is replaced as a whole on every fold, so anything reading it re-evaluates whichever value changed; a holder's <code>value</code> changes only when its own PID was in the fold (and is resynced when demo mode replaces every value or resets). The Parameter Cards bind to holders, so with dozens of cards on screen only the ones whose value moved re-evaluate and animate. Covered by <span class="file-path">tests/cpp/tst_vehiclegate.cpp</span>.</p>
 
-        <h3>Live values and write coalescing</h3>
+        <h3>Live values: the C++ ParameterStore</h3>
 
-        <pre><code><span class="prop">property var</span> paramValues: ({})       <span class="cmt">// { "SPEED": 65, "RPM": 3200, ... }</span>
-<span class="prop">property var</span> _pendingValues: ({})
+        <p>The values live in C++: <a href="signals-slots-reference.html#paramStore"><code>paramStore</code></a> (<span class="file-path">src/managers/parameterstore.{h,cpp}</span>, a <code>QQmlPropertyMap</code>) holds the latest value of every id, one notifying key per id. <span class="file-path">src/main.cpp</span> feeds it from <code>obdManager.parameterSampled(id, value)</code> (every decoded PID, single- and multi-value, on desktop and Android) and the eight <code>berryIMU</code> signals; an alias (<code>IGNITION_TIMING</code>) is written whenever its target arrives. Writes are coalesced in the store: <code>ingest()</code> only records the value and arms a one-shot 33&nbsp;ms timer, and the fold inserts every pending value and emits <code>changed(ids)</code>. The reason is the Orange Pi lesson: the IMU alone sends ~440 values/s, and copying a whole dictionary on each one "pegged the QML thread at 100% CPU while idle".</p>
 
-<span class="kw">function</span> <span class="fn">updateParamValue</span>(paramId, value) {
-    <span class="kw">if</span> (simulationActive) <span class="kw">return</span>;         <span class="cmt">// demo mode owns paramValues</span>
-    _pendingValues[paramId] = value;
-    <span class="kw">if</span> (!_flushTimer.running) _flushTimer.<span class="fn">start</span>();   <span class="cmt">// 33 ms, single-shot</span>
-}
-<span class="kw">function</span> <span class="fn">_flushPendingValues</span>() {
-    paramValues = Object.<span class="fn">assign</span>({}, paramValues, _pendingValues);  <span class="cmt">// fresh object → bindings re-evaluate</span>
-    _pendingValues = ({});
-}</code></pre>
-
-        <p>The comment gives the reason: replacing <code>paramValues</code> re-evaluates every gauge binding that reads it, and the IMU alone fires ~440 updates/s (7 signals at 60&nbsp;Hz). Copying the dict on each write "pegged the QML thread at 100% CPU while idle on the Orange Pi (V4 string-alloc + GC churn), so the per-write path must stay allocation-free". Writes now land in <code>_pendingValues</code> and are folded in at most ~30&times;/s by a single-shot 33&nbsp;ms timer that is re-armed by the next write and idle otherwise.</p>
-
-        <h3>Signal wiring</h3>
-
-        <p>Two <code>Connections</code> objects held as properties do the feeding. <code>_obdConnections</code> targets <code>obdManager</code> with dedicated handlers for the earlier readings (<code>onRpmChanged</code>, <code>onCoolantTempChanged</code>, &hellip; <code>onElmVoltageChanged</code>) plus <code>onObdParameterChanged(paramId, value)</code> for the extended entries, so the signal names on <code>OBDManager</code> are part of the contract (see <a href="obd-manager.html#signals">OBD Manager &rarr; Signals</a>). <code>_imuConnections</code> targets <code>berryIMU</code> only if it exists (<code>typeof berryIMU !== "undefined"</code>, <code>ignoreUnknownSignals: true</code>) and maps <code>onPitchChanged</code> &rarr; <code>PITCH</code>, &hellip; <code>onBaroTempChanged</code> &rarr; <code>BARO_TEMP</code>. The comment on the IMU block explains why the sensor values are modelled as parameters at all: "They flow through paramValues like any OBD PID, so every gauge, the PID picker, and the editor's demo mode all work with them unchanged."</p>
+        <p>A binding on <code>paramStore[id]</code> re-evaluates only when that id changes, and an id with no reading yet is <code>undefined</code> (the "--" readouts rely on it). The singleton keeps the older whole-map view for its consumers until they move to the store: one <code>Connections</code> on <code>paramStore.changed(ids)</code> folds the batch into a fresh <code>paramValues</code> object (so anything reading <code>paramValues</code> re-evaluates whichever value changed) and updates the holders of the changed ids. There are no per-signal handlers any more; <code>OBDManager</code>'s typed signals still exist for other consumers.</p>
 
         <h3>Demo mode</h3>
 
-        <p><code>simulationActive</code> switches the singleton to "pure-QML fake data so dashboards can be built/tested without a live OBD connection": every parameter sweeps a sine between its <code>min</code> and <code>max</code> with a 4&ndash;16&nbsp;s period and a per-parameter phase (so the screen "doesn't pulse in lockstep"), driven by a 100&nbsp;ms timer; big-range values are rounded to integers. While active, real backend updates are dropped; on deactivation <code>paramValues</code> is reset so stale fake readings never linger in the real OBD views. The dashboard editor toggles this (see <a href="gauges-dashboards.html#editor">Gauges &amp; Dashboards &rarr; Editor</a>).</p>
+        <p><code>simulationActive</code> switches the singleton to "pure-QML fake data so dashboards can be built/tested without a live OBD connection": every parameter sweeps a sine between its <code>min</code> and <code>max</code> with a 4&ndash;16&nbsp;s period and a per-parameter phase (so the screen "doesn't pulse in lockstep"), driven by a 100&nbsp;ms timer; big-range values are rounded to integers. While active, store folds are ignored; on deactivation <code>paramValues</code> is rebuilt from <code>paramStore.snapshot()</code>, so the fake readings go and the real ones come back at once. The dashboard editor toggles this (see <a href="gauges-dashboards.html#editor">Gauges &amp; Dashboards &rarr; Editor</a>).</p>
 
         <!-- Jeep rig -->
         <h2 id="jeep-rig">The Jeep TJ Rig</h2>

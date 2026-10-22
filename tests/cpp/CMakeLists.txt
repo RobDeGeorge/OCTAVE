@@ -39,6 +39,9 @@ octave_add_test(tst_shiftlightmanager SOURCES managers/shiftlightmanager.h manag
 octave_add_test(tst_parametercatalog
     SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/elm327protocol.cpp
     LIBS Qt6::Gui Qt6::Qml)
+octave_add_test(tst_parameterstore
+    SOURCES managers/parameterstore.h managers/parameterstore.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+    LIBS Qt6::Gui Qt6::Qml)
 octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_triprecorder
     SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
@@ -108,7 +111,7 @@ octave_add_test(tst_mediamanager
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
 octave_add_test(tst_musicdeviceassets)
-octave_add_test(tst_vehiclegate SOURCES managers/parametercatalog.h managers/parametercatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_vehiclegate SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 
 octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
 octave_add_test(tst_errortoast LIBS Qt6::Gui Qt6::Qml Qt6::Quick)

@@ -3090,8 +3090,12 @@ void OBDManager::processAndroidResponse(const QString &response)
         const auto ext = ELM327Protocol::parseResponseLines(m_btResponseBuffer.lastLines(),
                                                             parsed->mode, parsed->pid);
         if (ext.has_value()) {
-            for (const auto &v : ELM327Protocol::decodeExtendedPid(ext->mode, ext->pid, ext->dataBytes))
+            // Same two signals as the desktop worker path (onWorkerExtendedData):
+            // the black box and the value store listen to parameterSampled
+            for (const auto &v : ELM327Protocol::decodeExtendedPid(ext->mode, ext->pid, ext->dataBytes)) {
                 emit obdParameterChanged(v.first, static_cast<float>(v.second));
+                emit parameterSampled(v.first, static_cast<float>(v.second));
+            }
             m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
         }
         if (m_androidPolling)

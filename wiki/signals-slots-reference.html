@@ -32,6 +32,7 @@
             <li><a href="#obdManager">OBDManager</a></li>
             <li><a href="#obdAdapterFinder">OBDAdapterFinder</a></li>
             <li><a href="#parameterCatalog">ParameterCatalog</a></li>
+            <li><a href="#paramStore">ParameterStore</a></li>
             <li><a href="#shiftLightManager">ShiftLightManager</a></li>
             <li><a href="#tripRecorder">TripRecorder</a></li>
             <li><a href="#esp32VolumeManager">ESP32VolumeManager</a></li>
@@ -67,6 +68,7 @@
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td></td></tr>
             <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
             <tr><td><a href="#parameterCatalog"><code>parameterCatalog</code></a></td><td><code>ParameterCatalog</code> &mdash; <span class="file-path">src/managers/parametercatalog.h</span></td><td>Title / unit / range / kind of every OBD PID and IMU reading</td></tr>
+            <tr><td><a href="#paramStore"><code>paramStore</code></a></td><td><code>ParameterStore</code> &mdash; <span class="file-path">src/managers/parameterstore.h</span></td><td>Latest value of every OBD PID and IMU reading, one notifying key per id</td></tr>
             <tr><td><a href="#shiftLightManager"><code>shiftLightManager</code></a></td><td><code>ShiftLightManager</code> &mdash; <span class="file-path">src/managers/shiftlightmanager.h</span></td><td>RPM shift light: active flag and flash phase</td></tr>
             <tr><td><a href="#tripRecorder"><code>tripRecorder</code></a></td><td><code>TripRecorder</code> &mdash; <span class="file-path">src/managers/triprecorder.h</span></td><td>Black box: every drive into SQLite + CSV / JSON files</td></tr>
             <tr><td><a href="#esp32VolumeManager"><code>esp32VolumeManager</code></a></td><td><code>ESP32VolumeManager</code> &mdash; <span class="file-path">src/managers/esp32volumemanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
@@ -877,7 +879,7 @@
             <tr><td><code>dtcClearResult(bool success, QString message)</code></td><td>Clear-codes result (success, message)</td></tr>
             <tr><td><code>freezeFrameChanged(QVariantList data)</code></td><td>Freeze-frame DTCs read</td></tr>
             <tr><td><code>obdParameterChanged(QString paramId, float value)</code></td><td>One value from a multi-value PID (0x61 and up: torque, boost, odometer, &hellip;); <code>OBDParameterModel</code> routes it by id</td></tr>
-            <tr><td><code>parameterSampled(QString paramId, float value)</code></td><td>Every decoded reading, base or multi-value, by parameter id; the <a href="#tripRecorder">black box</a> taps this</td></tr>
+            <tr><td><code>parameterSampled(QString paramId, float value)</code></td><td>Every decoded reading, base or multi-value, by parameter id, on desktop and Android; the <a href="#tripRecorder">black box</a> and the value store (<a href="#paramStore"><code>paramStore</code></a>) tap this</td></tr>
             <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>
             <tr><td><code>connectionLogLineAppended(QString line)</code></td><td>One live line for the OBD settings Connection Log card</td></tr>
           </tbody>
@@ -900,6 +902,27 @@
           <tbody>
             <tr><td><code>info(QString id)</code></td><td><code>QVariantMap</code></td><td>One entry as in <code>parameters</code> (hash lookup); empty map for an unknown id</td></tr>
             <tr><td><code>contains(QString id)</code></td><td><code>bool</code></td><td>Whether the id is in the catalog</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ParameterStore -->
+        <h2 id="paramStore">ParameterStore <span class="cmt">&mdash; <code>paramStore</code></span></h2>
+        <p><span class="file-path">src/managers/parameterstore.h</span> &mdash; QML context property <code>paramStore</code>, a <code>QQmlPropertyMap</code></p>
+        <p>The latest value of every <a href="#parameterCatalog">catalog</a> id, one notifying key per id: bind <code>paramStore.RPM</code> or <code>paramStore[id]</code> and the binding re-evaluates only when that id changes; an id with no reading yet is <code>undefined</code>. <span class="file-path">src/main.cpp</span> feeds it from <code>obdManager.parameterSampled</code> and the eight <code>berryIMU</code> signals; QML writes are rejected. Writes are coalesced: values land together every 33 ms (<code>kFlushMs</code>). A catalog alias (<code>IGNITION_TIMING</code>) is written whenever its target arrives. <code>OBDParameterModel</code> mirrors it into <code>paramValues</code>. Tests: <span class="file-path">tests/cpp/tst_parameterstore.cpp</span>.</p>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>get(QString id)</code></td><td><code>QVariant</code></td><td>Current value, or invalid / <code>undefined</code> if none yet</td></tr>
+            <tr><td><code>snapshot()</code></td><td><code>QVariantMap</code></td><td>Every id that has a value &rarr; its value</td></tr>
+            <tr><td><code>ingest(QString id, float value)</code></td><td><code>void</code></td><td>Record a reading (lands at the next fold). Wired in <code>main.cpp</code>; tests and simulators call it too</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>changed(QStringList ids)</code></td><td>After each fold: the ids whose values were written. Per-key bindings do not need it; it is for consumers that want the batch (<code>OBDParameterModel</code>)</td></tr>
           </tbody>
         </table>
 

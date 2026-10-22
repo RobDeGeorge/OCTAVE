@@ -44,6 +44,7 @@ extern "C" {
 #include "managers/volumecontroller.h"
 #include "managers/shiftlightmanager.h"
 #include "managers/parametercatalog.h"
+#include "managers/parameterstore.h"
 
 // Phase 2 managers
 #include "managers/mediamanager.h"
@@ -277,6 +278,25 @@ int main(int argc, char *argv[])
     BerryIMUManager berryIMU;
     berryIMU.connect_settings_manager(&settingsManager);
     ctx->setContextProperty("berryIMU", &berryIMU);
+
+    // Value store: the latest value of every PID and IMU reading, one
+    // notifying key per id (OBDParameterModel and the gauges bind to it)
+    ParameterStore paramStore;
+    QObject::connect(&obdManager, &OBDManager::parameterSampled, &paramStore, &ParameterStore::ingest);
+    {
+        auto feed = [&paramStore](const char *id) {
+            return [&paramStore, key = QString::fromLatin1(id)](float v) { paramStore.ingest(key, v); };
+        };
+        QObject::connect(&berryIMU, &BerryIMUManager::pitchChanged, &paramStore, feed("PITCH"));
+        QObject::connect(&berryIMU, &BerryIMUManager::rollChanged, &paramStore, feed("ROLL"));
+        QObject::connect(&berryIMU, &BerryIMUManager::headingChanged, &paramStore, feed("HEADING"));
+        QObject::connect(&berryIMU, &BerryIMUManager::altitudeChanged, &paramStore, feed("ALTITUDE"));
+        QObject::connect(&berryIMU, &BerryIMUManager::accelMagnitudeChanged, &paramStore, feed("ACCEL_MAG"));
+        QObject::connect(&berryIMU, &BerryIMUManager::lateralGChanged, &paramStore, feed("LATERAL_G"));
+        QObject::connect(&berryIMU, &BerryIMUManager::longitudinalGChanged, &paramStore, feed("LONGITUDINAL_G"));
+        QObject::connect(&berryIMU, &BerryIMUManager::baroTempChanged, &paramStore, feed("BARO_TEMP"));
+    }
+    ctx->setContextProperty("paramStore", &paramStore);
 
     GestureManager gestureSensor;
     gestureSensor.connect_settings_manager(&settingsManager);

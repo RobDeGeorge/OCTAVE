@@ -116,7 +116,7 @@ Desktop                                   Android
         <table>
           <thead><tr><th>QML file</th><th>What it uses</th></tr></thead>
           <tbody>
-            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Connects to the 84 base parameter signals and <code>obdParameterChanged(id, value)</code> for 37 extended values, then mirrors them into <code>paramValues</code>. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Mirrors the C++ <code>paramStore</code> (fed from <code>parameterSampled</code> in <span class="file-path">main.cpp</span>) into <code>paramValues</code> and serves the <code>ParameterCatalog</code> metadata. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
             <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the dashboards chooser/renderer, the RPM/shift-light settings popup. While no adapter is connected no dashboard renders at all (<code>obdConnected</code> gates the renderer, the cards grid, swipe and the page dots): the page shows "No vehicle connected" and a "Connect Bluetooth OBD2" button (<code>obdConnectButton</code>) that opens <code>OBDAdapterSheet</code>, whichever dashboard is active.</td></tr>
             <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td>Everything on <code>obdAdapterFinder</code>; in fallback mode <code>availableAdapters</code>, <code>scan()</code> and <code>connect_to_adapter()</code>; <code>connected</code> closes the sheet 1.5 s after the adapter comes up.</td></tr>
             <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code>, a 40-line rolling log fed by <code>connectionLogLineAppended</code>, and the sub-page buttons.</td></tr>
@@ -926,22 +926,26 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
         <!-- Parameter model -->
         <h2 id="parameter-model">OBDParameterModel and IMU Parameters</h2>
         <p>
-          <span class="file-path">frontend/OBDParameterModel.qml</span> centralizes parameter values for gauges, cards and dashboards. A <code>Connections { target: obdManager }</code> block with one
-          handler per base signal (84), plus <code>onObdParameterChanged(paramId, value)</code> for the extended values, writes into the model with <code>updateParamValue(paramId, value)</code>; a second,
-          guarded <code>Connections</code> on <code>berryIMU</code> (<code>typeof berryIMU !== "undefined"</code>) does the same
-          for <code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>,
-          <code>LATERAL_G</code>, <code>LONGITUDINAL_G</code> and <code>BARO_TEMP</code> from the IMU's
-          <code>pitchChanged</code> .. <code>baroTempChanged</code> signals (see
-          <a href="hardware-managers.html">Hardware Managers</a>). The IMU values are ordinary parameters from that point
-          on: any gauge can bind them, the PID picker lists them, demo mode sweeps them.
+          Values flow through the C++ <a href="signals-slots-reference.html#paramStore"><code>paramStore</code></a>
+          (<span class="file-path">src/managers/parameterstore.{h,cpp}</span>, a <code>QQmlPropertyMap</code> with one notifying
+          key per id). <span class="file-path">src/main.cpp</span> feeds it from <code>parameterSampled(id, value)</code>, which
+          <code>OBDManager</code> emits for every decoded value, single- and multi-value, on the desktop worker path and on Android
+          alike, and from the IMU's <code>pitchChanged</code> .. <code>baroTempChanged</code> signals for <code>PITCH</code>,
+          <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>,
+          <code>LONGITUDINAL_G</code> and <code>BARO_TEMP</code> (see <a href="hardware-managers.html">Hardware Managers</a>). The IMU
+          values are ordinary parameters from that point on: any gauge can bind them, the PID picker lists them, demo mode sweeps
+          them. An alias (<code>IGNITION_TIMING</code>) is written whenever its target (<code>TIMING_ADVANCE</code>) arrives.
+          <span class="file-path">frontend/OBDParameterModel.qml</span> mirrors the store into its whole-map
+          <code>paramValues</code> with one <code>Connections</code> on <code>paramStore.changed(ids)</code>; it has no per-signal
+          handlers.
         </p>
         <p>
-          <strong>Coalesced writes</strong> (<code>486a809</code>): <code>updateParamValue()</code> only stores into
-          <code>_pendingValues</code> and arms a one-shot 33 ms <code>Timer</code>; the timer folds the pending map into a
-          fresh <code>paramValues</code> object with <code>Object.assign</code>. Replacing <code>paramValues</code> is what
-          re-evaluates every gauge binding, and the IMU alone fires about 420 orientation/gauge signals per second (7 signals at 60 Hz), plus barometer updates -- copying the
-          whole dictionary on each one pegged the QML thread at 100 % on an idle Orange Pi (V4 string allocation + GC churn,
-          found with py-spy). Bindings now re-evaluate at most ~30 times a second and only while data arrives.
+          <strong>Coalesced writes</strong> (<code>486a809</code>, moved into the store): <code>ingest()</code> only records the
+          value and arms a one-shot 33 ms timer; the fold writes the pending values and emits <code>changed(ids)</code> once.
+          The IMU alone fires about 420 orientation/gauge signals per second (7 signals at 60 Hz), plus barometer updates --
+          copying a whole dictionary on each one pegged the QML thread at 100 % on an idle Orange Pi (V4 string allocation + GC
+          churn, found with py-spy). Values now land at most ~30 times a second and only while data arrives, and a binding on
+          <code>paramStore[id]</code> re-evaluates only for its own id.
           <code>hasParameter(id)</code>, <code>getParamInfo(id)</code>, <code>parameterInfo</code> (with short titles for the
           home cards) and <code>allParameters</code> (the C++ <code>ParameterCatalog</code>: id, title, short title, unit, min, max, <code>kind</code>, decimals) are documented on the
           <a href="gauges-dashboards.html#parameter-model">Gauges &amp; Dashboards</a> page.

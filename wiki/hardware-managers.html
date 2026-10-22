@@ -732,8 +732,8 @@ tz = yw*qz - yz*qw</code></pre>
               <tr>
                 <td><span class="file-path">frontend/OBDParameterModel.qml</span></td>
                 <td>
-                  A <code>Connections { target: berryIMU }</code> (guarded with <code>typeof</code>, <code>ignoreUnknownSignals</code>)
-                  writes the eight IMU values into the shared parameter store via <code>updateParamValue()</code>, so every
+                  <span class="file-path">src/main.cpp</span> connects the eight IMU signals to the C++ value store
+                  (<code>paramStore.ingest(id, value)</code>), which this singleton mirrors, so every
                   gauge, dashboard, PID picker and home card treats them like OBD PIDs:
                   <table>
                     <thead><tr><th>ID</th><th>Title</th><th>Unit</th><th>Range</th><th>Kind</th></tr></thead>

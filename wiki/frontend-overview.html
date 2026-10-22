@@ -369,7 +369,8 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <ul>
           <li><code>isAndroid</code> &mdash; BottomBar hides the Android Auto and Phone Mirror buttons when <code>isAndroid</code> is true; <code>SettingsMenu.buildHubModel()</code> drops <code>desktopOnly</code> pages (Accessories) on Android.</li>
           <li><code>screenAutoScale</code> &mdash; Main.qml only applies it if defined.</li>
-          <li><code>berryIMU</code> &mdash; Main.qml's gating, <code>OBDParameterModel</code>'s IMU <code>Connections</code>, the Accessories settings page.</li>
+          <li><code>berryIMU</code> &mdash; Main.qml's gating, the Accessories settings page (its values reach QML through <code>paramStore</code>).</li>
+          <li><code>paramStore</code> &mdash; the live value of every PID and IMU reading, one notifying key per id: <code>OBDParameterModel</code> mirrors it.</li>
           <li><code>dashboardManager</code> &mdash; OBDMenu builds its registry with the built-in "grid" sentinel alone when the manager is absent; <span class="file-path">dashboards/editor/DashboardEditor.qml</span> guards its save/load and draft-rescue paths the same way.</li>
           <li><code>esp32VolumeManager</code>, <code>gestureSensor</code>, <code>diagnosticsManager</code>, <code>phoneMirrorManager</code>, <code>mediaManager</code>, <code>settingsManager</code> &mdash; settings pages, hub widgets, the media views, the two dashboard media widgets and Main.qml's album-art handlers.</li>
           <li><code>typeof obj.method === "function"</code> &mdash; feature probes on items and managers: <code>currentItem.navigateToHub</code>, <code>mainWindow.openNowPlayingStudio</code>, <code>roomLoader.item.previewTrackTransition</code>, and in the OBD settings page <code>obdManager.connect_to_adapter</code> / <code>set_target_address</code> / <code>platform_hint</code>.</li>

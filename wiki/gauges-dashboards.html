@@ -108,9 +108,10 @@ tests/cpp/tst_vehiclegate.cpp           headless QML gate test with a fake obdMa
 
         <h2 id="parameter-model">Data Flow: OBDParameterModel</h2>
         <pre class="diagram">
-obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues[id] -->  gauge bindings
-                          (dedicated + generic handlers)         _pendingValues                             _normalized
-                                                33 ms flush timer                         _animNorm (Behavior)
+obdManager.parameterSampled ─┐
+berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms fold) ─ changed(ids) ─> OBDParameterModel ─ paramValues[id] ─> gauge bindings
+  (main.cpp)                       one notifying key per id                                                            _normalized
+                                   paramStore[id] ─────────────────────────────────────────────────────────────────> _animNorm (Behavior)
         </pre>
         <p>
           <span class="file-path">frontend/OBDParameterModel.qml</span> (registered as a singleton in
@@ -124,14 +125,13 @@ obdManager / berryIMU  -- *Changed(float) -->  OBDParameterModel  -- paramValues
             <tr><td><code>originalParameters</code>, <code>isOriginalParameter(id)</code></td><td>The historical group of 18 ids, also used as the settings list fallback before a supported-PID list is available.</td></tr>
             <tr><td><code>parameterInfo</code>, <code>getParamInfo(id)</code>, <code>decimalsFor(id)</code></td><td>Compact metadata (catalog <code>shortTitle</code>: <code>SPD</code>, <code>CLT</code>, <code>AFR</code>...) keyed by id for the home cards; <code>decimalsFor</code> is the catalog <code>decimals</code> (1 for an unknown id); <code>getParamInfo</code> returns a permissive fallback for unknown ids.</td></tr>
             <tr><td><code>hasParameter(id)</code></td><td>Strict membership test, added for renderer/editor validation precisely because <code>getParamInfo</code> never fails.</td></tr>
-            <tr><td><code>paramValues</code>, <code>getParamValue(id)</code></td><td>Live values. A plain object that is <em>replaced</em> (never mutated) so bindings re-evaluate; missing ids read as 0.</td></tr>
-            <tr><td><code>updateParamValue(id, v)</code></td><td>Writes into <code>_pendingValues</code> and arms the one-shot 33 ms <code>_flushTimer</code>; the flush does <code>Object.assign({}, paramValues, _pendingValues)</code> once. This coalescing landed in <code>486a809</code> after the IMU's ~440 signals/s pegged the QML thread at 100 % on an idle Orange Pi.</td></tr>
-            <tr><td><code>simulationActive</code></td><td>Demo mode: a 100 ms timer sweeps every parameter along a sine between min and max (period 4-16 s and phase vary per index so the screen does not pulse in lockstep; big ranges are rounded to integers). While on, backend writes are ignored; switching off clears both maps.</td></tr>
+            <tr><td><code>paramValues</code>, <code>getParamValue(id)</code></td><td>Live values as a whole map, kept while consumers move to <code>paramStore</code>. A plain object that is <em>replaced</em> (never mutated) once per store fold (<code>paramStore.changed(ids)</code>) so bindings re-evaluate; missing ids read as 0. The values themselves live in the C++ <a href="signals-slots-reference.html#paramStore"><code>paramStore</code></a>, which coalesces writes to one fold per 33 ms (introduced in QML in <code>486a809</code> after the IMU's ~440 signals/s pegged the QML thread at 100 % on an idle Orange Pi; now in C++). New bindings use <code>paramStore[id]</code>: it re-evaluates only for its own id.</td></tr>
+            <tr><td><code>simulationActive</code></td><td>Demo mode: a 100 ms timer sweeps every parameter along a sine between min and max (period 4-16 s and phase vary per index so the screen does not pulse in lockstep; big ranges are rounded to integers). While on, store folds are ignored; switching off rebuilds <code>paramValues</code> and the holders from <code>paramStore.snapshot()</code> (the real readings, no fake ones).</td></tr>
             <tr><td><code>sensorParameters</code>, <code>isSensorParameter(id)</code></td><td>The eight BerryIMU ids (catalog <code>source: "imu"</code>). They are not OBD PIDs, so the vehicle gate never applies to them.</td></tr>
             <tr><td><code>vehicleKnown</code>, <code>vehicleSupportedParameters</code></td><td>Mirrors of <code>obdManager.vehicleScanComplete</code> / <code>vehicleSupportedParameters</code>: this session's supported-PID scan, cleared on disconnect, never loaded from the saved list. Guarded with <code>typeof obdManager</code>.</td></tr>
             <tr><td><code>isSupported(id)</code></td><td>True for sensor ids, and for OBD ids the scanned vehicle reported. False otherwise, including when no vehicle is known (callers wanting "anything goes offline", like the PID picker, check <code>vehicleKnown</code> first).</td></tr>
             <tr><td><code>vehicleParameters</code></td><td>The supported OBD entries of <code>allParameters</code>, in <code>allParameters</code> order, without aliases (no second Timing Advance card); empty until a vehicle has been scanned. Feeds Parameter Cards.</td></tr>
-            <tr><td><code>_obdConnections</code>, <code>_imuConnections</code></td><td>Two <code>Connections</code> blocks, dedicated handlers plus the generic <code>onObdParameterChanged(paramId, value)</code> handler. The IMU one is guarded with <code>typeof berryIMU !== "undefined"</code> and <code>ignoreUnknownSignals</code> so stripped builds still load.</td></tr>
+            <tr><td><code>_storeConnections</code></td><td>One <code>Connections</code> on <code>paramStore.changed(ids)</code>, the only feed (the 84 per-signal handlers and the <code>berryIMU</code> block are gone; the store is fed in <span class="file-path">main.cpp</span>).</td></tr>
           </tbody>
         </table>
         <p>The eight sensor parameters (fed by <code>berryIMU</code>, not <code>obdManager</code>):</p>
@@ -749,7 +749,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <ul>
           <li><strong>New dashboard</strong>: build it in the editor, or write a schema-1 JSON by hand and drop it into <span class="file-path">frontend/dashboards/presets/</span> (ships as a read-only built-in, picked up at the next start) or the user dashboards directory (picked up live).</li>
           <li><strong>New primitive</strong>: create <span class="file-path">frontend/gauges/MyGauge.qml</span>, paste the shared binding preamble verbatim, animate <code>_animNorm</code> (not <code>value</code>), use <code>Shape</code>/<code>PathAngleArc</code> for curves and rotated <code>Rectangle</code>s for marks, declare <code>octaveSupportedKinds</code>, scale typography with the cell, and register it in <code>WidgetCatalog</code> with a url, display name, glyph, default span, matching <code>supportedKinds</code> and curated <code>editableProps</code> with honest defaults. Without the catalog entry it will neither render nor be placeable. Then document it in §3 of the authoring guide and on this page.</li>
-          <li><strong>New backend parameter</strong>: add the decoder to <span class="file-path">elm327protocol.cpp</span> (and the signal to <code>OBDManager</code>), the row with a <code>kind</code> to <span class="file-path">parametercatalog.cpp</span> (<code>tst_parametercatalog</code> fails without it), and the handler in <code>OBDParameterModel._obdConnections</code>; gauges pick it up with no further work.</li>
+          <li><strong>New backend parameter</strong>: add the decoder to <span class="file-path">elm327protocol.cpp</span> (and the signal to <code>OBDManager</code>), and the row with a <code>kind</code> to <span class="file-path">parametercatalog.cpp</span> (<code>tst_parametercatalog</code> fails without it); its values reach <code>paramStore</code> through <code>parameterSampled</code>, so gauges pick it up with no further work.</li>
         </ul>
 
         <h2 id="design-decisions">Design Decisions</h2>
