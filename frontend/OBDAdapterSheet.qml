@@ -30,15 +30,8 @@ Popup {
     readonly property var obdDevices: allDevices.filter(function(d) { return d.likelyObd })
     readonly property var shownDevices: showAll ? allDevices : obdDevices
 
-    readonly property var savedAdapters: {
-        if (typeof settingsManager === "undefined" || !settingsManager) return []
-        try {
-            var arr = JSON.parse(settingsManager.obdSavedAdapters || "[]")
-            return Array.isArray(arr) ? arr : []
-        } catch (e) {
-            return []
-        }
-    }
+    readonly property var savedAdapters: (typeof settingsManager !== "undefined" && settingsManager)
+                                         ? settingsManager.obdSavedAdapters : []
 
     parent: Overlay.overlay
     x: Math.round((parent.width - width) / 2)

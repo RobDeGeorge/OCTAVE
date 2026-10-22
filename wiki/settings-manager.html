@@ -189,9 +189,10 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
           (<code>uiScale</code>, <code>startUpVolume</code>, <code>fuelTankCapacity</code>), <code>double</code>
           (<code>sideCardOpacity</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckLevel</code>,
           <code>esp32VolumeStepSize</code>) and <code>QVariantList</code> for <code>homeOBDParameters</code>, <code>directoryHistory</code>,
-          <code>customThemes</code> (a list of theme <em>names</em>) and <code>pinnedSettings</code>. Three properties are
+          <code>customThemes</code> (a list of theme <em>names</em>), <code>pinnedSettings</code> and <code>obdSavedAdapters</code>
+          (the remembered adapters as <code>{name, mac}</code> maps, though the file stores a JSON string). Two properties are
           JSON <em>strings</em> rather than maps or lists so QML parses them with <code>JSON.parse</code>:
-          <code>settingsMenuVisibility</code>, <code>albumArtColors</code> and <code>obdSavedAdapters</code>. Object-valued settings
+          <code>settingsMenuVisibility</code> and <code>albumArtColors</code>. Object-valued settings
           (<code>obdParameters</code>, <code>gestureMapping</code>, <code>expandedCards</code>,
           <code>customThemes</code> contents) have no property at all; QML reads them through dedicated getters or
           <code>get_setting_with_default()</code>.
@@ -460,7 +461,7 @@ reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span clas
             <tr><td><code>get_obd_parameter_enabled(parameter, defaultVal = true)</code></td><td>Invokable. Returns the state from memory; an unknown PID is cached with <code>default</code> as a side effect (so the next flush persists it).</td></tr>
             <tr><td><code>save_supported_obd_parameters(list)</code> / <code>get_supported_obd_parameters()</code></td><td>Persist and read the last vehicle-scan result; <code>OBDManager</code> writes it as a historical scan result; live polling uses the new connection’s scan rather than trusting this persisted list. Emits <code>supportedOBDParametersChanged</code>.</td></tr>
             <tr><td><code>save_home_obd_parameters(list)</code> / <code>get_home_obd_parameters()</code></td><td>The PIDs shown on the home screen cards. Emits <code>homeOBDParametersChanged</code>.</td></tr>
-            <tr><td><code>save_obd_saved_adapters(json)</code>, <code>add_obd_saved_adapter(name, mac)</code>, <code>remove_obd_saved_adapter(mac)</code></td><td>Maintain <code>obdSavedAdapters</code>, a JSON-array <em>string</em> of <code>{"name", "mac"}</code> records. <code>add</code> upper-cases and trims the MAC, removes any duplicate, prepends the entry (most recent first) and caps the list at 8. <code>OBDManager::connect_to_adapter()</code> calls <code>add</code> whenever the identifier it is asked to connect to is a MAC address ("persist the choice so reconnects + restarts use it"); the OBD settings page calls <code>remove</code>.</td></tr>
+            <tr><td><code>add_obd_saved_adapter(name, mac)</code>, <code>remove_obd_saved_adapter(mac)</code></td><td>Maintain <code>obdSavedAdapters</code>: a list of <code>{name, mac}</code> maps for QML, stored as a compact JSON-array <em>string</em> (the private <code>save_obd_saved_adapters(json)</code> writes it). <code>add</code> upper-cases and trims the MAC, removes any duplicate, prepends the entry (most recent first) and caps the list at 8. <code>OBDManager::connect_to_adapter()</code> calls <code>add</code> whenever the identifier it is asked to connect to is a MAC address ("persist the choice so reconnects + restarts use it"); the OBD settings page calls <code>remove</code>.</td></tr>
           </tbody>
         </table>
 
@@ -758,10 +759,10 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
         <h3>Snake_case slots, camelCase properties, string-typed JSON properties</h3>
         <p>
           Properties use the JSON key name so QML bindings read like the file, and slots are snake_case
-          <code>save_*</code> verbs, which keeps the two easy to tell apart at a QML call site. Structured state (<code>settingsMenuVisibility</code>,
-          <code>albumArtColors</code>, <code>obdSavedAdapters</code>) crosses to QML as JSON strings. On disk,
-          <code>settingsMenuVisibility</code> is an object, while the palette and adapter list remain string values;
-          QML parses their property values with <code>JSON.parse</code>.
+          <code>save_*</code> verbs, which keeps the two easy to tell apart at a QML call site. Some structured state (<code>settingsMenuVisibility</code>,
+          <code>albumArtColors</code>) still crosses to QML as JSON strings, which QML parses with <code>JSON.parse</code>;
+          <code>obdSavedAdapters</code> crosses as a list of maps (open-backend #9 is removing the rest). On disk,
+          <code>settingsMenuVisibility</code> is an object, while the palette and adapter list remain string values.
         </p>
 
         <!-- How to Add a New Setting -->
@@ -833,7 +834,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <tr><td><code>currentVolumeChanged</code></td><td>int</td><td>Unified 0–100 volume changed by any source; not persisted</td></tr>
             <tr><td><code>obdParametersChanged</code></td><td>none</td><td>After the 800&nbsp;ms OBD debounce flush, or on reset</td></tr>
             <tr><td><code>homeOBDParametersChanged</code>, <code>supportedOBDParametersChanged</code></td><td>none</td><td>Home-card list / scan result saved</td></tr>
-            <tr><td><code>obdSavedAdaptersChanged</code></td><td>QString (JSON)</td><td>Adapter list changed</td></tr>
+            <tr><td><code>obdSavedAdaptersChanged</code></td><td>&mdash;</td><td>Adapter list changed</td></tr>
             <tr><td><code>directoryHistoryChanged</code>, <code>customThemesChanged</code>, <code>gestureMappingChanged</code>, <code>pinnedSettingsChanged</code>, <code>settingsMenuVisibilityChanged</code></td><td>none</td><td>Their object/list changed; QML re-queries the getter</td></tr>
             <tr><td><code>genericSettingChanged</code></td><td>QString (key)</td><td><code>save_setting()</code> called</td></tr>
             <tr><td><code>albumArtColorsChanged</code></td><td>QString (JSON)</td><td>New palette pushed by MediaManager; also drives the ESP32 LEDs in theme mode</td></tr>
@@ -851,7 +852,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
           </thead>
           <tbody>
             <tr><td>Numeric validation</td><td>any JSON number is accepted for an int or float default; the member's <code>toInt()</code> / <code>toDouble()</code> decides the precision</td></tr>
-            <tr><td><code>save_obd_saved_adapters</code></td><td>stores the string as given; only an empty string becomes <code>"[]"</code></td></tr>
+            <tr><td><code>save_obd_saved_adapters</code> (private)</td><td>stores the string as given; only an empty string becomes <code>"[]"</code></td></tr>
             <tr><td><code>add_obd_saved_adapter</code></td><td>keeps an <code>rfcomm://</code> scheme lower-case while upper-casing the MAC; a missing name defaults to the MAC</td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td>Writes the full default object, reloads every cached member (<code>populateMembers()</code>) and emits every property signal. No caller exists today</td></tr>
             <tr><td><code>set_last_settings_section()</code></td><td>Whitelists the six current section IDs (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the four legacy per-feature IDs an older file may carry; saves and emits only when the section changes</td></tr>

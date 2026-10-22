@@ -74,9 +74,8 @@ Item {
         { cardId: "obd_adapters", title: "Adapters", component: adaptersContent,
           summary: function() {
               if (!settingsManager) return {}
-              var saved = []
-              try { saved = JSON.parse(settingsManager.obdSavedAdapters || "[]") } catch (e) {}
-              if (!Array.isArray(saved) || saved.length === 0) return {}
+              var saved = settingsManager.obdSavedAdapters
+              if (saved.length === 0) return {}
               return { state: saved.length === 1 ? (saved[0].name || "1 saved") : saved.length + " saved" }
           } },
         { cardId: "obd_parameters", title: "Parameters", component: parametersContent,
@@ -889,16 +888,7 @@ Item {
 
                 Repeater {
                     id: savedAdaptersRepeater
-                    model: {
-                        if (!settingsManager) return []
-                        try {
-                            var raw = settingsManager.obdSavedAdapters || "[]"
-                            var arr = JSON.parse(raw)
-                            return Array.isArray(arr) ? arr : []
-                        } catch (e) {
-                            return []
-                        }
-                    }
+                    model: settingsManager ? settingsManager.obdSavedAdapters : []
 
                     delegate: Rectangle {
                         height: dp(32)

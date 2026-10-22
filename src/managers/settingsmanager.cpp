@@ -958,7 +958,10 @@ int     SettingsManager::textScrollSpeed() const         { return m_textScrollSp
 
 // --- OBD ---
 QString SettingsManager::obdBluetoothPort() const        { return m_obdBluetoothPort; }
-QString SettingsManager::obdSavedAdapters() const        { return m_obdSavedAdapters; }
+QVariantList SettingsManager::obdSavedAdapters() const
+{
+    return QJsonDocument::fromJson(m_obdSavedAdapters.toUtf8()).array().toVariantList();
+}
 bool    SettingsManager::obdFastMode() const             { return m_obdFastMode; }
 bool    SettingsManager::obdCardStyleCircular() const    { return m_obdCardStyleCircular; }
 int     SettingsManager::obdAutoReconnectAttempts() const { return m_obdAutoReconnectAttempts; }
@@ -1411,7 +1414,7 @@ void SettingsManager::save_obd_saved_adapters(const QString &json)
 {
     m_obdSavedAdapters = json.isEmpty() ? QStringLiteral("[]") : json;
     updateSetting(QStringLiteral("obdSavedAdapters"), m_obdSavedAdapters);
-    emit obdSavedAdaptersChanged(m_obdSavedAdapters);
+    emit obdSavedAdaptersChanged();
 }
 
 void SettingsManager::add_obd_saved_adapter(const QString &name, const QString &mac)
@@ -2306,7 +2309,7 @@ void SettingsManager::reset_to_defaults()
     emit colorTransitionMsChanged(m_colorTransitionMs);
     emit songLengthTransitionChanged(m_songLengthTransition);
     emit obdBluetoothPortChanged(m_obdBluetoothPort);
-    emit obdSavedAdaptersChanged(m_obdSavedAdapters);
+    emit obdSavedAdaptersChanged();
     emit obdFastModeChanged(m_obdFastMode);
     emit obdCardStyleCircularChanged(m_obdCardStyleCircular);
     emit obdAutoReconnectAttemptsChanged(m_obdAutoReconnectAttempts);

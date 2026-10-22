@@ -77,7 +77,9 @@ class SettingsManager : public QObject
 
     // --- OBD ---
     Q_PROPERTY(QString obdBluetoothPort READ obdBluetoothPort NOTIFY obdBluetoothPortChanged)
-    Q_PROPERTY(QString obdSavedAdapters READ obdSavedAdapters NOTIFY obdSavedAdaptersChanged)
+    // Recently used OBD adapters, newest first, at most 8: {name, mac} maps
+    // (stored as a JSON string under the same key)
+    Q_PROPERTY(QVariantList obdSavedAdapters READ obdSavedAdapters NOTIFY obdSavedAdaptersChanged)
     Q_PROPERTY(bool obdFastMode READ obdFastMode NOTIFY obdFastModeChanged)
     Q_PROPERTY(bool obdCardStyleCircular READ obdCardStyleCircular NOTIFY obdCardStyleCircularChanged)
     Q_PROPERTY(int obdAutoReconnectAttempts READ obdAutoReconnectAttempts NOTIFY obdAutoReconnectAttemptsChanged)
@@ -206,7 +208,7 @@ public:
 
     // OBD
     QString obdBluetoothPort() const;
-    QString obdSavedAdapters() const;
+    QVariantList obdSavedAdapters() const;
     bool obdFastMode() const;
     bool obdCardStyleCircular() const;
     int obdAutoReconnectAttempts() const;
@@ -321,7 +323,7 @@ signals:
 
     // OBD
     void obdBluetoothPortChanged(const QString &value);
-    void obdSavedAdaptersChanged(const QString &value);
+    void obdSavedAdaptersChanged();
     void obdFastModeChanged(bool value);
     void obdCardStyleCircularChanged(bool value);
     void obdAutoReconnectAttemptsChanged(int value);
@@ -446,7 +448,6 @@ public slots:
 
     // OBD
     void save_obd_bluetooth_port(const QString &port);
-    void save_obd_saved_adapters(const QString &json);
     void add_obd_saved_adapter(const QString &name, const QString &mac);
     void remove_obd_saved_adapter(const QString &mac);
     void save_obd_fast_mode(bool enabled);
@@ -591,6 +592,8 @@ private:
     QJsonObject loadSettings();
     void saveSettings(const QJsonObject &settings);
     void updateSetting(const QString &key, const QVariant &value);
+    // The adapters list as stored (a compact JSON array string)
+    void save_obd_saved_adapters(const QString &json);
     QJsonObject validateSettings(const QJsonObject &settings);
     void setFilePermissions(const QString &filepath);
     QJsonObject buildDefaultSettings() const;

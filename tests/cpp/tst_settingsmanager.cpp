@@ -97,6 +97,27 @@ private slots:
 #endif
     }
 
+    void savedObdAdaptersAreAListStoredAsBefore()
+    {
+        // Pages read a list; the file keeps the compact JSON string it always had
+        SettingsManager sm;
+        QSignalSpy changed(&sm, &SettingsManager::obdSavedAdaptersChanged);
+        QCOMPARE(sm.obdSavedAdapters(), QVariantList{});
+        sm.add_obd_saved_adapter(QStringLiteral("NEXAS"), QStringLiteral("aa:bb:cc:dd:ee:ff"));
+        sm.add_obd_saved_adapter(QString(), QStringLiteral("rfcomm://11:22:33:44:55:66/2"));
+        QCOMPARE(changed.count(), 2);
+        const QVariantList list = sm.property("obdSavedAdapters").toList();
+        QCOMPARE(list.size(), 2);
+        QCOMPARE(list.at(0).toMap().value("mac").toString(), QStringLiteral("rfcomm://11:22:33:44:55:66/2"));
+        QCOMPARE(list.at(0).toMap().value("name").toString(), QStringLiteral("rfcomm://11:22:33:44:55:66/2"));
+        QCOMPARE(list.at(1).toMap(), (QVariantMap{{"name", "NEXAS"}, {"mac", "AA:BB:CC:DD:EE:FF"}}));
+        QCOMPARE(sm.m_settings.value("obdSavedAdapters").toString(),
+                 QStringLiteral(R"([{"mac":"RFCOMM://11:22:33:44:55:66/2","name":"RFCOMM://11:22:33:44:55:66/2"},)"
+                                R"({"mac":"AA:BB:CC:DD:EE:FF","name":"NEXAS"}])").replace("RFCOMM", "rfcomm"));
+        sm.remove_obd_saved_adapter(QStringLiteral("aa:bb:cc:dd:ee:ff"));
+        QCOMPARE(sm.obdSavedAdapters().size(), 1);
+    }
+
     void everySettingSurvivesARestart()
     {
         QJsonObject saved;

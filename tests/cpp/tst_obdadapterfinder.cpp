@@ -91,8 +91,9 @@ private slots:
         f.handOff(2);
         QCOMPARE(f.busyAddress(), kMac);
         QCOMPARE(f.status(), QStringLiteral("Connecting to the vehicle…"));
-        QVERIFY2(settings.obdSavedAdapters().contains("NEXAS23082749"), qPrintable(settings.obdSavedAdapters()));
-        QVERIFY2(settings.obdSavedAdapters().contains("rfcomm://" + kMac + "/2"), qPrintable(settings.obdSavedAdapters()));
+        const QVariantMap saved = settings.obdSavedAdapters().value(0).toMap();
+        QCOMPARE(saved.value("name").toString(), QStringLiteral("NEXAS23082749"));
+        QCOMPARE(saved.value("mac").toString(), "rfcomm://" + kMac + "/2");
         QCOMPARE(settings.obdBluetoothPort(), "rfcomm://" + kMac + "/2");
 
         // The real connection (to the simulator) decides the outcome

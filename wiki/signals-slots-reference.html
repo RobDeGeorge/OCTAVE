@@ -147,7 +147,7 @@
             <tr><td><code>buttonTiltDuration</code></td><td><code>int</code></td><td>read-only</td><td><code>buttonTiltDurationChanged</code></td><td>Button tilt animation duration in ms &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>textScrollSpeed</code></td><td><code>int</code></td><td>read-only</td><td><code>textScrollSpeedChanged</code></td><td>Marquee scroll speed for long titles &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdBluetoothPort</code></td><td><code>QString</code></td><td>read-only</td><td><code>obdBluetoothPortChanged</code></td><td>OBD adapter identifier: serial port / COM port / <code>/dev</code> path, or BLE MAC on Android &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
-            <tr><td><code>obdSavedAdapters</code></td><td><code>QString</code></td><td>read-only</td><td><code>obdSavedAdaptersChanged</code></td><td>JSON array of remembered <code>{name, mac}</code> adapters, most recent first &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>obdSavedAdapters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>obdSavedAdaptersChanged</code></td><td>Remembered <code>{name, mac}</code> adapters (stored as a JSON string), most recent first &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdFastMode</code></td><td><code>bool</code></td><td>read-only</td><td><code>obdFastModeChanged</code></td><td>Adapter fast-mode option, applied at the next connection; on-screen demand independently selects the PIDs &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdCardStyleCircular</code></td><td><code>bool</code></td><td>read-only</td><td><code>obdCardStyleCircularChanged</code></td><td>Circular gauges instead of square cards on the OBD parameter grid (default false)</td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td><code>int</code></td><td>read-only</td><td><code>obdAutoReconnectAttemptsChanged</code></td><td>Max automatic reconnect attempts before giving up &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -237,7 +237,6 @@
             <tr><td><code>save_button_tilt_duration(int duration)</code></td><td><code>void</code></td><td>Save <code>buttonTiltDuration</code>, then emit <code>buttonTiltDurationChanged</code></td></tr>
             <tr><td><code>save_text_scroll_speed(int speed)</code></td><td><code>void</code></td><td>Save <code>textScrollSpeed</code>, then emit <code>textScrollSpeedChanged</code></td></tr>
             <tr><td><code>save_obd_bluetooth_port(QString port)</code></td><td><code>void</code></td><td>Save <code>obdBluetoothPort</code>, then emit <code>obdBluetoothPortChanged</code></td></tr>
-            <tr><td><code>save_obd_saved_adapters(QString json)</code></td><td><code>void</code></td><td>Replace the remembered-adapters JSON array wholesale</td></tr>
             <tr><td><code>add_obd_saved_adapter(QString name, QString mac)</code></td><td><code>void</code></td><td>Upsert a <code>{name, mac}</code> entry (MAC upper-cased) at the front of <code>obdSavedAdapters</code></td></tr>
             <tr><td><code>remove_obd_saved_adapter(QString mac)</code></td><td><code>void</code></td><td>Drop the entry with this MAC from <code>obdSavedAdapters</code></td></tr>
             <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td><code>void</code></td><td>Save <code>obdFastMode</code>, then emit <code>obdFastModeChanged</code></td></tr>
@@ -381,7 +380,7 @@
             <tr><td><code>buttonTiltDurationChanged(int value)</code></td><td>Emitted after <code>buttonTiltDuration</code> is saved</td></tr>
             <tr><td><code>textScrollSpeedChanged(int value)</code></td><td>Emitted after <code>textScrollSpeed</code> is saved</td></tr>
             <tr><td><code>obdBluetoothPortChanged(QString value)</code></td><td>Emitted after <code>obdBluetoothPort</code> is saved</td></tr>
-            <tr><td><code>obdSavedAdaptersChanged(QString value)</code></td><td>Emitted after <code>obdSavedAdapters</code> is saved</td></tr>
+            <tr><td><code>obdSavedAdaptersChanged()</code></td><td>Emitted after <code>obdSavedAdapters</code> is saved</td></tr>
             <tr><td><code>obdFastModeChanged(bool value)</code></td><td>Emitted after <code>obdFastMode</code> is saved</td></tr>
             <tr><td><code>obdAutoReconnectAttemptsChanged(int value)</code></td><td>Emitted after <code>obdAutoReconnectAttempts</code> is saved</td></tr>
             <tr><td><code>fuelTankCapacityChanged(float value)</code></td><td>Emitted after <code>fuelTankCapacity</code> is saved</td></tr>
