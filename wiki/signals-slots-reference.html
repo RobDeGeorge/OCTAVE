@@ -31,6 +31,7 @@
             <li><a href="#audioAnalyzer">AudioAnalyzer</a></li>
             <li><a href="#obdManager">OBDManager</a></li>
             <li><a href="#obdAdapterFinder">OBDAdapterFinder</a></li>
+            <li><a href="#parameterCatalog">ParameterCatalog</a></li>
             <li><a href="#shiftLightManager">ShiftLightManager</a></li>
             <li><a href="#tripRecorder">TripRecorder</a></li>
             <li><a href="#esp32VolumeManager">ESP32VolumeManager</a></li>
@@ -65,6 +66,7 @@
             <tr><td><a href="#audioAnalyzer"><code>audioAnalyzer</code></a></td><td><code>AudioAnalyzer</code> &mdash; <span class="file-path">src/managers/audioanalyzer.h</span></td><td></td></tr>
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td></td></tr>
             <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
+            <tr><td><a href="#parameterCatalog"><code>parameterCatalog</code></a></td><td><code>ParameterCatalog</code> &mdash; <span class="file-path">src/managers/parametercatalog.h</span></td><td>Title / unit / range / kind of every OBD PID and IMU reading</td></tr>
             <tr><td><a href="#shiftLightManager"><code>shiftLightManager</code></a></td><td><code>ShiftLightManager</code> &mdash; <span class="file-path">src/managers/shiftlightmanager.h</span></td><td>RPM shift light: active flag and flash phase</td></tr>
             <tr><td><a href="#tripRecorder"><code>tripRecorder</code></a></td><td><code>TripRecorder</code> &mdash; <span class="file-path">src/managers/triprecorder.h</span></td><td>Black box: every drive into SQLite + CSV / JSON files</td></tr>
             <tr><td><a href="#esp32VolumeManager"><code>esp32VolumeManager</code></a></td><td><code>ESP32VolumeManager</code> &mdash; <span class="file-path">src/managers/esp32volumemanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
@@ -878,6 +880,26 @@
             <tr><td><code>parameterSampled(QString paramId, float value)</code></td><td>Every decoded reading, base or multi-value, by parameter id; the <a href="#tripRecorder">black box</a> taps this</td></tr>
             <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>
             <tr><td><code>connectionLogLineAppended(QString line)</code></td><td>One live line for the OBD settings Connection Log card</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ParameterCatalog -->
+        <h2 id="parameterCatalog">ParameterCatalog <span class="cmt">&mdash; <code>parameterCatalog</code></span></h2>
+        <p><span class="file-path">src/managers/parametercatalog.h</span> &mdash; QML context property <code>parameterCatalog</code></p>
+        <p>The one table of display metadata for the 129 values a gauge can show: 120 OBD ids (the python-obd command names <code>OBDManager</code> emits on <code>parameterSampled</code>, which settings and dashboard files store), one alias (<code>IGNITION_TIMING</code> carries <code>TIMING_ADVANCE</code>) and the 8 BerryIMU readings. Decoders stay in <code>ELM327Protocol</code>; <span class="file-path">tests/cpp/tst_parametercatalog.cpp</span> keeps the catalog's OBD ids equal to the decoders' and, while <span class="file-path">frontend/OBDParameterModel.qml</span> still has its own table, equal to it field by field. C++ reads it through the static <code>ParameterCatalog::all()</code> / <code>find(id)</code> / <code>imuIds()</code> / <code>obdIds()</code>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>parameters</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td>Every parameter, in display order, as <code>{id, title, shortTitle, unit, min, max, kind, decimals, source, aliasOf}</code>. <code>kind</code> is <code>percentage</code> | <code>temperature</code> | <code>voltage</code> | <code>pressure</code> | <code>bidirectional</code> | <code>numeric</code> (what <code>WidgetCatalog</code> matches widgets on); <code>decimals</code> is 0 or 1 for text readouts; <code>source</code> is <code>"obd"</code> or <code>"imu"</code>; <code>shortTitle</code> may be empty</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>info(QString id)</code></td><td><code>QVariantMap</code></td><td>One entry as in <code>parameters</code> (hash lookup); empty map for an unknown id</td></tr>
+            <tr><td><code>contains(QString id)</code></td><td><code>bool</code></td><td>Whether the id is in the catalog</td></tr>
           </tbody>
         </table>
 

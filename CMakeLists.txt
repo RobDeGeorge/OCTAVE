@@ -3,6 +3,11 @@ project(OCTAVE VERSION 0.9.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Sources are UTF-8 (parametercatalog.cpp has unit strings like "°C"): MSVC
+# otherwise reads BOM-less files in the system code page
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
 set(CMAKE_AUTOMOC ON)
 
 # ---- Qt 6 ----
@@ -194,6 +199,8 @@ qt_add_executable(octave
     src/managers/networkmanager.cpp
     src/managers/volumecontroller.h
     src/managers/volumecontroller.cpp
+    src/managers/parametercatalog.h
+    src/managers/parametercatalog.cpp
     src/managers/shiftlightmanager.h
     src/managers/shiftlightmanager.cpp
     src/managers/mediamanager.h

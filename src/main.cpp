@@ -43,6 +43,7 @@ extern "C" {
 #include "managers/networkmanager.h"
 #include "managers/volumecontroller.h"
 #include "managers/shiftlightmanager.h"
+#include "managers/parametercatalog.h"
 
 // Phase 2 managers
 #include "managers/mediamanager.h"
@@ -241,6 +242,11 @@ int main(int argc, char *argv[])
     // ==================================================================
     // Phase 4: Vehicle & Hardware
     // ==================================================================
+
+    // Parameter catalog: title / unit / range / kind of every OBD PID and IMU
+    // reading, for every frontend (OBDParameterModel reads it)
+    ParameterCatalog parameterCatalog;
+    ctx->setContextProperty("parameterCatalog", &parameterCatalog);
 
     // OBD Manager — vehicle diagnostics via ELM327
     OBDManager obdManager(&settingsManager);

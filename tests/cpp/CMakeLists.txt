@@ -36,6 +36,9 @@ octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_shiftlightmanager SOURCES managers/shiftlightmanager.h managers/shiftlightmanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
+octave_add_test(tst_parametercatalog
+    SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/elm327protocol.cpp
+    LIBS Qt6::Gui Qt6::Qml)
 octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_triprecorder
     SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
