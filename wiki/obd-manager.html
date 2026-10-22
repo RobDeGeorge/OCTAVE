@@ -714,7 +714,8 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           are the <strong>Black Box</strong> card in the OBD settings. Settings: <code>blackBoxEnabled</code>,
           <code>blackBoxSweepAll</code>, <code>blackBoxMaxMB</code>. QML API:
           <a href="signals-slots-reference.html#tripRecorder">Signals &amp; Slots &rarr; TripRecorder</a>. Tests:
-          <code>tst_triprecorder</code>.
+          <code>tst_triprecorder</code>. To look at the page without driving, <code>tools/trips/make_mock_trip.py</code>
+          writes a realistic mock drive into the database (see <a href="development.html#repo-map">Development</a>).
         </p>
 
         <h2 id="vehicle-scanning">Vehicle Scanning</h2>

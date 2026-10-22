@@ -411,8 +411,17 @@ int TripStore::recoverOpenTrips()
             deleteTrip(id);
             continue;
         }
-        qCInfo(lcTripStore) << "Recovering trip" << id << "left open (power cut?)";
-        endTrip(id, endMs, false);
+        // A trip_end event means the drive ended normally and only the
+        // finalisation was lost (or the trip was imported by a tool that
+        // leaves summarising to us): close it clean
+        bool ended = false;
+        Query ev(m_db);
+        if (ev.prepare("SELECT kind FROM events WHERE trip_id = ? ORDER BY ts_ms DESC LIMIT 1")) {
+            ev.bind(1, id);
+            ended = ev.step() && ev.text(0) == QLatin1String("trip_end");
+        }
+        qCInfo(lcTripStore) << "Recovering trip" << id << (ended ? "(ended, not finalised)" : "left open (power cut?)");
+        endTrip(id, endMs, ended);
     }
     return open.size();
 }
@@ -475,6 +484,7 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
                 p[QStringLiteral("last")] = lastQ.dbl(0);
             lastQ.reset();
         }
+        byName.insert(name, p);   // fuelStart / fuelEnd below read first / last from here
         params.append(p);
     }
     s[QStringLiteral("sampleCount")] = sampleCount;

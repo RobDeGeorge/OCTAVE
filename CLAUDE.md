@@ -12,7 +12,7 @@ OCTAVE is a **C++ / Qt 6** app (`src/`) with a QML frontend (`frontend/`). Every
 
 Until 2026-10-18 there was also a Python / PySide6 backend (`backend/`, `main.py`). It was frozen at the `python-final` branch (`b5463c9`, with its own wiki) and deleted from `main`. Don't reintroduce a Python backend, Python-on-Android (buildozer / p4a) or a PyInstaller pipeline.
 
-Python that remains is tooling around the C++ app, listed in `requirements.txt` and installed into `./venv`: the desktop download helpers (`yt-dlp`, `scripts/ytmusic_search.py` with `ytmusicapi`), `scripts/fetch_platform_tools.py`, `wiki/build_search_index.py`, the Android pylib bundle script, the Blender scripts in `tools/vehicle/`, and the gitignored `dev/` clients that drive the app over the command server.
+Python that remains is tooling around the C++ app, listed in `requirements.txt` and installed into `./venv`: the desktop download helpers (`yt-dlp`, `scripts/ytmusic_search.py` with `ytmusicapi`), `scripts/fetch_platform_tools.py`, `wiki/build_search_index.py`, the Android pylib bundle script, the Blender scripts in `tools/vehicle/`, `tools/trips/make_mock_trip.py` (a mock drive for the black box / Trip History page), and the gitignored `dev/` clients that drive the app over the command server.
 
 ## Commands
 

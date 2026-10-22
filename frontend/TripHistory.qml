@@ -317,24 +317,15 @@ Item {
                     }
 
                     // Storage footer
-                    RowLayout {
+                    Text {
                         Layout.fillWidth: true
-                        spacing: dp(8)
-                        Text {
-                            text: available ? trips.length + (trips.length === 1 ? " drive · " : " drives · ") + fmtBytes(tripRecorder.storageBytes)
-                                            + " of " + (settingsManager ? settingsManager.blackBoxMaxMB : 500) + " MB"
-                                            : ""
-                            color: labelColor
-                            font.pixelSize: App.Spacing.overallText * 0.7
-                            font.family: globalFont
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        TripActionButton {
-                            text: "Folder"
-                            visible: available && tripRecorder.canOpenFolder
-                            onClicked: tripRecorder.openHistoryFolder()
-                        }
+                        text: available ? trips.length + (trips.length === 1 ? " drive · " : " drives · ") + fmtBytes(tripRecorder.storageBytes)
+                                        + " of " + (settingsManager ? settingsManager.blackBoxMaxMB : 500) + " MB"
+                                        : ""
+                        color: labelColor
+                        font.pixelSize: App.Spacing.overallText * 0.7
+                        font.family: globalFont
+                        elide: Text.ElideRight
                     }
                 }
             }

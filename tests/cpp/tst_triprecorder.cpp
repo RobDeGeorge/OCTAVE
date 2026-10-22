@@ -101,14 +101,19 @@ private slots:
             batch.append({id, id + i * 1000, QStringLiteral("RPM"), 2500.0f});
             batch.append({id, id + i * 1000, QStringLiteral("COOLANT_TEMP"), 80.0f + i});
         }
+        batch.append({id, id + 500, QStringLiteral("FUEL_LEVEL"), 50.0f});
+        batch.append({id, id + 59500, QStringLiteral("FUEL_LEVEL"), 47.5f});
         store.append(batch);
         store.appendEvent(id, id + 30000, QStringLiteral("mil"), QStringLiteral("on"));
-        QCOMPARE(store.sampleCount(id), 183);
+        QCOMPARE(store.sampleCount(id), 185);
 
         QSignalSpy finalized(&store, &TripStore::tripFinalized);
         const QVariantMap s = store.endTrip(id, id + 60000, true);
         QCOMPARE(finalized.count(), 1);
-        QCOMPARE(s.value("sampleCount").toLongLong(), 183);
+        QCOMPARE(s.value("sampleCount").toLongLong(), 185);
+        QCOMPARE(s.value("fuelStart").toDouble(), 50.0);
+        QCOMPARE(s.value("fuelEnd").toDouble(), 47.5);
+        QCOMPARE(s.value("fuelUsedPct").toDouble(), 2.5);
         QCOMPARE(s.value("durationS").toDouble(), 60.0);
         QVERIFY(qAbs(s.value("distanceMiles").toDouble() - 1.0) < 0.001);
         QCOMPARE(s.value("maxSpeed").toDouble(), 60.0);
@@ -116,7 +121,7 @@ private slots:
         QCOMPARE(s.value("maxCoolant").toDouble(), 140.0);
         QCOMPARE(s.value("make").toString(), QStringLiteral("Jeep"));
         QCOMPARE(s.value("eventCount").toInt(), 1);
-        QCOMPARE(s.value("params").toList().size(), 3);
+        QCOMPARE(s.value("params").toList().size(), 4);
         QVariantMap coolant;
         for (const QVariant &p : s.value("params").toList())
             if (p.toMap().value("id") == QStringLiteral("COOLANT_TEMP")) coolant = p.toMap();
@@ -131,14 +136,14 @@ private slots:
         QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
         const QStringList lines = QString::fromUtf8(f.readAll()).split('\n', Qt::SkipEmptyParts);
         QCOMPARE(lines.first(), QStringLiteral("timestamp_ms,time,elapsed_s,parameter,value"));
-        QCOMPARE(lines.size(), 1 + 183);
+        QCOMPARE(lines.size(), 1 + 185);
         QVERIFY(lines.at(1).startsWith(QString::number(id) + ","));
         const QString json = csv.chopped(4) + ".json";
         QFile j(json);
         QVERIFY(j.open(QIODevice::ReadOnly));
         const QJsonObject doc = QJsonDocument::fromJson(j.readAll()).object();
         QCOMPARE(doc.value("format").toString(), QStringLiteral("octave-trip"));
-        QCOMPARE(doc.value("sampleCount").toInt(), 183);
+        QCOMPARE(doc.value("sampleCount").toInt(), 185);
         QCOMPARE(doc.value("events").toArray().size(), 1);
 
         // List, detail and a downsampled series
@@ -147,7 +152,7 @@ private slots:
         QCOMPARE(trips.first().toMap().value("open").toBool(), false);
         QVERIFY(!trips.first().toMap().contains("params"));   // list items stay light
         const QVariantMap detail = store.tripDetail(id);
-        QCOMPARE(detail.value("params").toList().size(), 3);
+        QCOMPARE(detail.value("params").toList().size(), 4);
         const QVariantList series = store.series(id, QStringLiteral("COOLANT_TEMP"), 10);
         QVERIFY(series.size() >= 5 && series.size() <= 11);
         QCOMPARE(series.first().toMap().value("t").toDouble(), 0.0);
@@ -178,14 +183,22 @@ private slots:
                           {id, id + 9000, QStringLiteral("RPM"), 950.0f}});
             // An empty shell (power cut right after the start) must vanish
             store.beginTrip(id + 20000, id + 20000, {});
+            // A trip whose end was logged but never summarised (tools/trips/make_mock_trip.py
+            // relies on this) recovers clean
+            store.beginTrip(id + 40000, id + 40000, {});
+            store.append({{id + 40000, id + 41000, QStringLiteral("RPM"), 900.0f}});
+            store.appendEvent(id + 40000, id + 41000, QStringLiteral("trip_end"), QStringLiteral("mock"));
             // no endTrip: "power cut"
         }
         TripStore store;
         QVERIFY(store.open(dir));
-        QCOMPARE(store.recoverOpenTrips(), 2);
+        QCOMPARE(store.recoverOpenTrips(), 3);
         const QVariantList trips = store.listTrips();
-        QCOMPARE(trips.size(), 1);
-        const QVariantMap t = trips.first().toMap();
+        QCOMPARE(trips.size(), 2);
+        const QVariantMap ended = trips.first().toMap();   // newest first
+        QCOMPARE(ended.value("id").toLongLong(), id + 40000);
+        QCOMPARE(ended.value("clean").toBool(), true);
+        const QVariantMap t = trips.last().toMap();
         QCOMPARE(t.value("id").toLongLong(), id);
         QCOMPARE(t.value("clean").toBool(), false);
         QCOMPARE(t.value("durationS").toDouble(), 9.0);   // last sample time

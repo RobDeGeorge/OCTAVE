@@ -60,7 +60,8 @@ public:
     // tripsChanged(). `clean` is false for a trip recovered after a power cut.
     QVariantMap endTrip(qint64 id, qint64 endMs, bool clean);
     // Trips left open by a crash / power cut get their last sample time as
-    // the end and are finalised (clean = false). Returns how many.
+    // the end and are finalised (clean = false, or true when a trip_end event
+    // was logged: the drive ended, only the summary was lost). Returns how many.
     int recoverOpenTrips();
 
     // --- reading ---
