@@ -16,18 +16,14 @@ Flickable {
     property var mainWindow: null
     property string currentSection: ""
 
-    // ── Volume Knob serial ports model ─────────────────────────
-    property var portsModel: []
+    // ── Volume Knob serial ports ({port, label, description, isEsp32S3},
+    // ESP32-S3 first; updated by every scan, including the refresh button) ──
+    readonly property var portsModel: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager)
+                                      ? esp32VolumeManager.availablePorts : []
 
     function refreshPorts() {
-        if (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager) {
-            try {
-                var jsonStr = esp32VolumeManager.get_ports_with_descriptions()
-                portsModel = JSON.parse(jsonStr)
-            } catch (e) {
-                portsModel = []
-            }
-        }
+        if (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager)
+            esp32VolumeManager.refresh_ports()
     }
 
     Component.onCompleted: refreshPorts()

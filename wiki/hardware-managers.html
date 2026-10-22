@@ -197,14 +197,15 @@
             VID matches (or whose description contains <code>jtag</code>, <code>esp32-s3</code> or <code>esp32s3</code>) at the
             front of the list and remembers it as <code>m_esp32S3Port</code>. The OBD serial port
             (<code>settingsManager.obdBluetoothPort</code>) is always excluded so the two features cannot fight over one device.
-            Results are de-duplicated and sorted; <code>availablePortsChanged</code> fires only when the list actually changes.
+            Results are de-duplicated; <code>availablePorts</code> holds one <code>{port, label, description, isEsp32S3}</code>
+            map per port, ESP32-S3 first then by port (label "&lt;port&gt; - ESP32-S3 (Recommended)" or "&lt;port&gt; - &lt;description&gt;"),
+            and <code>availablePortsChanged</code> fires only when the list actually changes. The Accessories page binds it
+            directly (it used to parse a JSON string from <code>get_ports_with_descriptions()</code>, now removed).
           </p>
           <p>
             Enumeration is <code>QSerialPortInfo::availablePorts()</code> on every desktop platform, with the VID test
-            <code>vendorIdentifier() == 0x303A</code>. Non-ESP32 ports are accepted if their description contains
-            <code>cp210</code>, <code>ch340</code>, <code>ch910</code>, <code>ftdi</code>, <code>usb serial</code>,
-            <code>silicon labs</code> or <code>prolific</code>, <em>or</em> simply have a non-empty <code>systemLocation()</code>
-            &mdash; in practice every enumerated port is listed. No glob patterns are used.
+            <code>vendorIdentifier() == 0x303A</code>. Every enumerated port with a <code>systemLocation()</code> is listed
+            (an earlier USB-serial description filter accepted any such port anyway). No glob patterns are used.
           </p>
 
           <h4>Startup sequence</h4>
@@ -374,7 +375,7 @@ m_reconnectAttempts++;
               <tr><td><code>connected</code></td><td><code>bool</code></td><td><code>connectionStatusChanged</code></td></tr>
               <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td><code>connectionStatusChanged</code></td></tr>
               <tr><td><code>connectionDetail</code></td><td><code>QString</code></td><td><code>connectionDetailChanged</code></td></tr>
-              <tr><td><code>availablePorts</code></td><td><code>QVariantList</code></td><td><code>availablePortsChanged</code></td></tr>
+              <tr><td><code>availablePorts</code></td><td><code>QVariantList</code> of <code>{port, label, description, isEsp32S3}</code></td><td><code>availablePortsChanged</code></td></tr>
             </tbody>
           </table>
           <h4>Slots</h4>
@@ -383,8 +384,7 @@ m_reconnectAttempts++;
             <tbody>
               <tr><td><code>connect_device()</code></td><td>&mdash;</td><td>Open the configured port (see sequence above)</td></tr>
               <tr><td><code>disconnect_device()</code></td><td>&mdash;</td><td>Stop reconnect + keepalive timers, close the port, emit "Disconnected"</td></tr>
-              <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>Scan now and return the port list</td></tr>
-              <tr><td><code>get_ports_with_descriptions()</code></td><td><code>QString</code> (JSON)</td><td><code>[{port, label, description, isEsp32S3}]</code>, ESP32-S3 first; label "&lt;port&gt; - ESP32-S3 (Recommended)"; OBD port omitted. Parsed by <span class="file-path">frontend/settings/AccessoriesSettingsPage.qml</span></td></tr>
+              <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>Scan now and return <code>availablePorts</code></td></tr>
               <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Read by <span class="file-path">AccessoriesWidget.qml</span> and the settings page status dot</td></tr>
               <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>Same as <code>connectionStatus</code></td></tr>
               <tr><td><code>get_connection_detail()</code></td><td><code>QString</code></td><td>Same as <code>connectionDetail</code></td></tr>
@@ -1088,8 +1088,7 @@ tz = yw*qz - yz*qw</code></pre>
             names; <code>78ab72c</code> added the signals "QML <code>Connections</code> handlers reference" to those stubs so
             the shared frontend loads unchanged on Android. The stubs now carry the exact desktop signatures: the ESP32 stub
             declares the four properties (<code>connected</code>, <code>connectionStatus</code>, <code>connectionDetail</code>,
-            <code>availablePorts</code>), every desktop slot (<code>get_ports_with_descriptions()</code> returns the JSON string
-            <code>"[]"</code> so the Accessories page can parse it) and the desktop signal set (the former stub-only
+            <code>availablePorts</code>), every desktop slot (<code>availablePorts</code> is empty) and the desktop signal set (the former stub-only
             <code>connectionStateChanged</code> is gone); the gesture stub declares <code>gestureDetected</code>,
             <code>actionTriggered</code>, <code>connectionStatusChanged(QString)</code>, <code>setCooldown(int)</code>,
             <code>isEnabled()</code> and <code>getConnectionStatus()</code>. The IMU is the one manager with a real mobile

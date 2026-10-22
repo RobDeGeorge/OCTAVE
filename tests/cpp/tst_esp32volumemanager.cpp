@@ -26,6 +26,34 @@ private slots:
         qputenv("XDG_CONFIG_HOME", (m_home.path() + "/config").toUtf8());
     }
 
+    void availablePortsDescribeEachPortWithoutTheObdOne()
+    {
+        // The settings page binds this list (it used to parse a JSON string
+        // from get_ports_with_descriptions)
+        SettingsManager settings;
+        settings.save_obd_bluetooth_port(QString());
+        ESP32VolumeManager mgr(&settings);
+        QSignalSpy changed(&mgr, &ESP32VolumeManager::availablePortsChanged);
+        const QVariantList all = mgr.get_available_ports();
+        if (all.isEmpty())
+            QSKIP("no serial ports on this machine");
+        for (const QVariant &v : all) {
+            const QVariantMap row = v.toMap();
+            const QStringList keys = row.keys();
+            QCOMPARE(QSet<QString>(keys.cbegin(), keys.cend()),
+                     (QSet<QString>{"port", "label", "description", "isEsp32S3"}));
+            QVERIFY(row.value("label").toString().startsWith(row.value("port").toString()));
+        }
+        QCOMPARE(mgr.property("availablePorts").toList(), all);
+
+        // The OBD adapter's port is never offered for the knob
+        const QString obd = all.first().toMap().value("port").toString();
+        settings.save_obd_bluetooth_port(obd);
+        for (const QVariant &v : mgr.get_available_ports())
+            QVERIFY(v.toMap().value("port").toString() != obd);
+        QVERIFY(changed.count() >= 1);
+    }
+
     void noPortSavedAutoSelectsOnlyAnEsp32S3()
     {
         SettingsManager settings;

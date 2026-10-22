@@ -168,42 +168,46 @@ QStringList ESP32VolumeManager::scanForDevices()
             obdPort = v.toString();
     }
 
+    // One row per port for the settings page: {port, label, description,
+    // isEsp32S3}, ESP32-S3 first, then by port
+    QList<QVariantMap> rows;
     for (const QSerialPortInfo &info : portInfos) {
-        const QString desc = info.description().toLower();
-        const QString portName = info.portName();
         const QString systemLocation = info.systemLocation();
 
         // Skip OBD port
-        if (!obdPort.isEmpty() && systemLocation == obdPort)
+        if (systemLocation.isEmpty() || (!obdPort.isEmpty() && systemLocation == obdPort))
             continue;
+        if (ports.contains(systemLocation))
+            continue;
+        ports.append(systemLocation);
 
-        if (looksLikeEsp32S3(info)) {
-            ports.prepend(systemLocation);
+        const bool isEsp32S3 = looksLikeEsp32S3(info);
+        if (isEsp32S3) {
             m_esp32S3Port = systemLocation;
             qCInfo(lcEsp32) << "detected ESP32-S3 on" << systemLocation;
-        } else {
-            // Accept common USB-serial chips
-            bool isUsbSerial = desc.contains(QStringLiteral("cp210"))
-                || desc.contains(QStringLiteral("ch340"))
-                || desc.contains(QStringLiteral("ch910"))
-                || desc.contains(QStringLiteral("ftdi"))
-                || desc.contains(QStringLiteral("usb serial"))
-                || desc.contains(QStringLiteral("silicon labs"))
-                || desc.contains(QStringLiteral("prolific"));
-
-            if (isUsbSerial || !systemLocation.isEmpty()) {
-                ports.append(systemLocation);
-            }
         }
+        QString desc = info.description();
+        if (desc.isEmpty())
+            desc = QStringLiteral("Unknown Device");
+        rows.append({{QStringLiteral("port"), systemLocation},
+                     {QStringLiteral("label"), isEsp32S3
+                          ? QStringLiteral("%1 - ESP32-S3 (Recommended)").arg(systemLocation)
+                          : QStringLiteral("%1 - %2").arg(systemLocation, desc)},
+                     {QStringLiteral("description"), desc},
+                     {QStringLiteral("isEsp32S3"), isEsp32S3}});
     }
-
-    ports.removeDuplicates();
     ports.sort();
+    std::sort(rows.begin(), rows.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        const bool aEsp = a.value(QStringLiteral("isEsp32S3")).toBool();
+        const bool bEsp = b.value(QStringLiteral("isEsp32S3")).toBool();
+        if (aEsp != bEsp)
+            return aEsp;
+        return a.value(QStringLiteral("port")).toString() < b.value(QStringLiteral("port")).toString();
+    });
 
-    // Convert to QVariantList for comparison / emission
     QVariantList portsList;
-    for (const QString &p : ports)
-        portsList.append(p);
+    for (const QVariantMap &row : rows)
+        portsList.append(row);
 
     if (portsList != m_availablePorts) {
         m_availablePorts = portsList;
@@ -661,63 +665,6 @@ QVariantList ESP32VolumeManager::get_available_ports()
 {
     scanForDevices();
     return m_availablePorts;
-}
-
-QString ESP32VolumeManager::get_ports_with_descriptions()
-{
-    QJsonArray portsArray;
-    QString obdPort;
-    if (m_settingsManager)
-        obdPort = m_settingsManager->property("obdBluetoothPort").toString();
-
-    const auto portInfos = QSerialPortInfo::availablePorts();
-    for (const QSerialPortInfo &info : portInfos) {
-        QString device = info.systemLocation();
-
-        // Skip OBD port
-        if (device == obdPort)
-            continue;
-
-        QString desc = info.description();
-        if (desc.isEmpty())
-            desc = QStringLiteral("Unknown Device");
-
-        const bool isEsp32S3 = looksLikeEsp32S3(info);
-
-        // Build display label
-        QString label;
-        if (isEsp32S3) {
-            label = QStringLiteral("%1 - ESP32-S3 (Recommended)").arg(device);
-        } else {
-            label = QStringLiteral("%1 - %2").arg(device, desc);
-        }
-
-        QJsonObject obj;
-        obj[QStringLiteral("port")] = device;
-        obj[QStringLiteral("label")] = label;
-        obj[QStringLiteral("description")] = desc;
-        obj[QStringLiteral("isEsp32S3")] = isEsp32S3;
-        portsArray.append(obj);
-    }
-
-    // Sort: ESP32-S3 first, then by port name
-    // QJsonArray doesn't support in-place sort, so we sort via a QList
-    QList<QJsonObject> sorted;
-    for (const QJsonValue &v : portsArray)
-        sorted.append(v.toObject());
-    std::sort(sorted.begin(), sorted.end(), [](const QJsonObject &a, const QJsonObject &b) {
-        bool aEsp = a[QStringLiteral("isEsp32S3")].toBool();
-        bool bEsp = b[QStringLiteral("isEsp32S3")].toBool();
-        if (aEsp != bEsp)
-            return aEsp; // ESP32-S3 first
-        return a[QStringLiteral("port")].toString() < b[QStringLiteral("port")].toString();
-    });
-
-    QJsonArray sortedArray;
-    for (const QJsonObject &obj : sorted)
-        sortedArray.append(obj);
-
-    return QString::fromUtf8(QJsonDocument(sortedArray).toJson(QJsonDocument::Compact));
 }
 
 bool ESP32VolumeManager::is_connected()

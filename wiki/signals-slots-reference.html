@@ -1111,7 +1111,7 @@
         <h2 id="esp32VolumeManager">ESP32VolumeManager <span class="cmt">&mdash; <code>esp32VolumeManager</code></span></h2>
         <p><span class="file-path">src/managers/esp32volumemanager.h</span> &mdash; QML context property <code>esp32VolumeManager</code></p>
         <p>Wireless rotary encoder over USB serial (115200 baud). Encoder ticks and button presses arrive as signals; <code>main.cpp</code> routes them through VolumeController, and pushes volume (<code>send_volume_update</code>), mute (<code>send_mute_state</code>) and the LED ring colour (<code>send_theme_color</code>: album-art accent in <code>"theme"</code> mode, <code>esp32LedStaticColor</code> in <code>"static"</code> mode, cyan fallback) back to the knob &mdash; including a full push 500 ms after the knob connects. <code>ResourceError</code>, <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code>, <code>WriteError</code> and a rejected keepalive write are treated as a lost link and trigger auto-reconnect.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile builds compile a no-op stub with the same signatures as desktop: all four properties, every slot below (<code>get_ports_with_descriptions()</code> returns the JSON string <code>"[]"</code>, <code>get_connection_status()</code> <code>"Disconnected"</code>, <code>get_connection_detail()</code> <code>"Not available on mobile"</code>, <code>is_connected()</code> <code>false</code>) and the five signals. QML still guards with <code>typeof esp32VolumeManager</code>.</div>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile builds compile a no-op stub with the same signatures as desktop: all four properties, every slot below (<code>get_available_ports()</code> returns an empty list, <code>get_connection_status()</code> <code>"Disconnected"</code>, <code>get_connection_detail()</code> <code>"Not available on mobile"</code>, <code>is_connected()</code> <code>false</code>) and the five signals. QML still guards with <code>typeof esp32VolumeManager</code>.</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1119,7 +1119,7 @@
             <tr><td><code>connected</code></td><td><code>bool</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td>Serial link to the knob is open</td></tr>
             <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td><code>"Connected"</code> / <code>"Disconnected"</code> / <code>"Connecting"</code> / <code>"Error"</code></td></tr>
             <tr><td><code>connectionDetail</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionDetailChanged</code></td><td>Human-readable detail (port, last error)</td></tr>
-            <tr><td><code>availablePorts</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>availablePortsChanged</code></td><td>Serial ports found by the last scan</td></tr>
+            <tr><td><code>availablePorts</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>availablePortsChanged</code></td><td>Serial ports found by the last scan, one <code>{port, label, description, isEsp32S3}</code> map each, ESP32-S3 first then by port, the OBD port left out; the Accessories page's picker binds it</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1128,8 +1128,7 @@
           <tbody>
             <tr><td><code>connect_device()</code></td><td><code>void</code></td><td>Open the configured (or auto-detected VID 303A) port at 115200 baud</td></tr>
             <tr><td><code>disconnect_device()</code></td><td><code>void</code></td><td>Close the serial port</td></tr>
-            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>Scan and return port names</td></tr>
-            <tr><td><code>get_ports_with_descriptions()</code></td><td><code>QString</code></td><td>JSON array of <code>{port, description, label, jtag}</code> for the settings picker (ESP32-S3 auto-detected via VID 303A; the port used by OBD is labelled)</td></tr>
+            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>Scan and return <code>availablePorts</code></td></tr>
             <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Link verified: an ESP32-S3 port is open, or another port has sent a knob command (only then does the manager write)</td></tr>
             <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>Status text</td></tr>
             <tr><td><code>get_connection_detail()</code></td><td><code>QString</code></td><td>Detail text</td></tr>

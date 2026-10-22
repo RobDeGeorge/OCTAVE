@@ -25,6 +25,9 @@ class ESP32VolumeManager : public QObject
     Q_PROPERTY(bool connected READ getConnected NOTIFY connectionStatusChanged)
     Q_PROPERTY(QString connectionStatus READ getConnectionStatusProp NOTIFY connectionStatusChanged)
     Q_PROPERTY(QString connectionDetail READ getConnectionDetailProp NOTIFY connectionDetailChanged)
+    // Serial ports the knob could be on (the OBD port left out), one
+    // {port, label, description, isEsp32S3} map each, ESP32-S3 first then by
+    // port; updated by every scan (startup, reconnect scans, refresh_ports)
     Q_PROPERTY(QVariantList availablePorts READ getAvailablePortsProp NOTIFY availablePortsChanged)
 
 public:
@@ -64,8 +67,7 @@ signals:
 public slots:
     void connect_device();
     void disconnect_device();
-    QVariantList get_available_ports();
-    QString get_ports_with_descriptions();
+    QVariantList get_available_ports();   // rescans, then availablePorts
     bool is_connected();
     QString get_connection_status();
     QString get_connection_detail();
@@ -153,7 +155,7 @@ private:
 #else // Q_OS_MOBILE — mobile stub
 // Every slot/signal/property below must keep the exact desktop signature:
 // QML binds the same names on both builds (SettingsHubLayout,
-// AccessoriesSettingsPage parse get_ports_with_descriptions() as JSON text).
+// AccessoriesSettingsPage's port list).
 
 #include <QObject>
 #include <QString>
@@ -191,7 +193,6 @@ public slots:
     void connect_device() {}
     void disconnect_device() {}
     QVariantList get_available_ports() { return {}; }
-    QString get_ports_with_descriptions() { return QStringLiteral("[]"); }
     bool is_connected() { return false; }
     QString get_connection_status() { return QStringLiteral("Disconnected"); }
     QString get_connection_detail() { return QStringLiteral("Not available on mobile"); }
