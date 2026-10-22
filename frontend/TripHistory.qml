@@ -158,7 +158,6 @@ Item {
         RowLayout {
             anchors.fill: parent
             anchors.margins: dp(16)
-            anchors.bottomMargin: dp(16) + (App.Spacing.bottomBarHeight || 0)
             spacing: dp(16)
 
             // ── Left: drive list ─────────────────────────────────────
