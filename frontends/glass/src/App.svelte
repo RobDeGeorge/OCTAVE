@@ -13,10 +13,11 @@
   import Trips from './pages/Trips.svelte'
   import Settings from './pages/Settings.svelte'
   import More from './pages/More.svelte'
+  import Mirror from './pages/Mirror.svelte'
 
   const status = octave.status
   const retryIn = octave.retryIn
-  const pages: Record<string, any> = { home: Home, media: Media, obd: Obd, dashboards: Dashboards, trips: Trips, settings: Settings, more: More }
+  const pages: Record<string, any> = { home: Home, media: Media, obd: Obd, dashboards: Dashboards, trips: Trips, settings: Settings, more: More, mirror: Mirror }
   const Page = $derived(pages[$route.page] ?? Home)
   $effect(() => { applyAccent($tint ? (($activeTheme.accent as string) ?? null) : null) })
 </script>

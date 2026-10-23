@@ -12,6 +12,8 @@
 import { readable, writable, get, type Readable, type Writable } from 'svelte/store'
 import { parseRecord, type MediaRecord, type StreamEvents, type StreamInfo } from './stream'
 
+/** The protocol versions this page understands: 1, and 2 (pairing; loopback stays open). */
+export const PROTOCOL_VERSIONS = [1, 2]
 export const PROTOCOL_VERSION = 1
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
@@ -122,7 +124,7 @@ export class Octave {
       try {
         const hello = (await this.request('hello')) as unknown as Hello
         this.hello.set(hello)
-        if (hello.protocolVersion !== PROTOCOL_VERSION) {
+        if (!PROTOCOL_VERSIONS.includes(hello.protocolVersion)) {
           this.status.set('mismatch')
         } else {
           this.status.set('online')

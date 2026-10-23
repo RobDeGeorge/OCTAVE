@@ -2,6 +2,7 @@
   // More: downloads, the phone (mirror and Android Auto), diagnostics.
   import { octave, type Json } from '../lib/octave'
   import { act, toast } from '../lib/stores'
+  import { go } from '../lib/router'
   import Icon from '../ui/Icon.svelte'
   import Modal from '../ui/Modal.svelte'
   import Toggle from '../ui/Toggle.svelte'
@@ -145,12 +146,13 @@
               <button class="btn primary" disabled={!$mirrorOn} onclick={() => act(octave.call('phoneMirrorManager', 'startScrcpy'))}>Start</button>
             {/if}
             <button class="btn icon" aria-label="Refresh" onclick={() => act(octave.call('phoneMirrorManager', 'refreshDeviceState'))}><Icon name="refresh" /></button>
+            <button class="btn" onclick={() => go('mirror')}>Screen</button>
           </div></div>
         {#if $ph.mirrorNotice}<div class="row"><span class="small">{$ph.mirrorNotice}</span><button class="btn" onclick={() => act(octave.call('phoneMirrorManager', 'dismissNotice'))}>Dismiss</button></div>{/if}
         {#if $ph.lastErrorKind}<p class="small bad">Last error: {$ph.lastErrorKind}</p>{/if}
         {#if $ph.isRunning}
-          <div class="screen"><MirrorView showStats /></div>
-          <p class="small muted">Touch the picture to use the phone. {$ph.frameWidth}×{$ph.frameHeight}{$ph.currentBitRate ? `, ${$ph.currentBitRate} Mb/s` : ''}{$ph.audioActive ? ', audio' : ''}{$ph.phoneAsleep ? ', phone asleep' : ''}{$ph.phoneInUse ? ', phone in use' : ''}</p>
+          <div class="screen"><MirrorView /></div>
+          <p class="small muted">Touch the picture to use the phone. <button class="link" onclick={() => go('mirror')}>Full screen</button>. {$ph.frameWidth}×{$ph.frameHeight}{$ph.currentBitRate ? `, ${$ph.currentBitRate} Mb/s` : ''}{$ph.audioActive ? ', audio' : ''}{$ph.phoneAsleep ? ', phone asleep' : ''}{$ph.phoneInUse ? ', phone in use' : ''}</p>
           <div class="acts wrap">
             <button class="btn" onclick={() => act(octave.call('phoneMirrorManager', 'pressHome'))}>Home</button>
             <button class="btn" onclick={() => act(octave.call('phoneMirrorManager', 'pressBack'))}>Back</button>
@@ -244,6 +246,7 @@
   .log { margin: 0; max-height: 420px; overflow: auto; background: var(--control); border-radius: var(--radius-s); padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
   .qr { font-family: ui-monospace, monospace; line-height: 1; font-size: 10px; background: #fff; color: #000; padding: 12px; border-radius: 12px; display: inline-block; }
   .bad { color: var(--bad); }
+  .link { color: var(--accent); font-weight: 600; text-decoration: underline; }
   .screen { height: 420px; }
   @media (max-width: 760px) { .screen { height: 60vh; } .target { flex-direction: column; align-items: stretch; } .target .sel { max-width: none; } }
 </style>
