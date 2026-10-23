@@ -380,6 +380,7 @@ private:
             flush(sock);
             return;
         }
+        connection.setBrowser(request.headers.contains("origin") || request.headers.contains("sec-fetch-site"));
         // A name in Host could be a rebinding site's: addresses only, on
         // every request (the page, /art, /export), not just with an Origin
         if (const QString why = Ws::hostRefusal(request); !why.isEmpty()) {
@@ -700,6 +701,18 @@ bool Connection::peerLoopback() const
 {
     QMutexLocker l(&m_lock);
     return m_peerLoopback;
+}
+
+void Connection::setBrowser(bool browser)
+{
+    QMutexLocker l(&m_lock);
+    m_browser = browser;
+}
+
+bool Connection::browser() const
+{
+    QMutexLocker l(&m_lock);
+    return m_browser;
 }
 
 QString Connection::peerAddress() const

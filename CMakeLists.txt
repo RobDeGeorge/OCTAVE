@@ -226,6 +226,8 @@ qt_add_executable(octave
     src/service/servicebridge.cpp
     src/service/serviceoptions.h
     src/service/serviceoptions.cpp
+    src/service/adminchannel.h
+    src/service/adminchannel.cpp
     src/service/apidump.h
     src/service/apidump.cpp
     src/service/websocket.h
