@@ -79,6 +79,8 @@ Who may use the service (`src/service/servicepairing.h`). A connection is **trus
 4. For images and downloads, a trusted connection asks `{"op":"mediaTicket"}` → `{ticket, expiresIn: 600}` and uses `/art?ticket=...`; never put the token in a URL.
 5. `{"op":"unpair"}` forgets the caller's own device.
 
+Developing a networked frontend without the head unit's screen: run a developer build with `--dev --service-bind 0.0.0.0` (or `--headless --dev --service-bind 0.0.0.0`), connect your frontend through the machine's LAN address (untrusted), and get a code over loopback with the dev-only action `{"action":"sim_pairing_code"}` → `{code, secondsLeft}`.
+
 Limits: the code is single use and void after 5 wrong tries; one `pair` attempt a second across all clients; an address with 10 wrong codes is refused until the app restarts; refusals are logged with the address (never the code). Only a SHA-256 of each token is stored, in the settings file key `serviceTokens`, which no setter, `apply_settings` or reset can write. Revoking a device in Settings closes its connections at once (their subscriptions and streams end) and voids its tickets. Making codes, listing or revoking devices and switching the service on are on the head unit only (`servicePairing`, not a service object).
 
 `serviceLoopbackOpen` trusts every process on the device, including a local reverse proxy: behind a proxy, set it to false in `settingsConfigure.json`.
