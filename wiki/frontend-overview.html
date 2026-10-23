@@ -24,7 +24,7 @@
             <li><a href="#main-qml">Main.qml Structure</a></li>
             <li><a href="#window-management">Window Management</a></li>
             <li><a href="#page-routing">Page Routing Mechanism</a></li>
-            <li><a href="#imu-gating">IMU Rate Gating from the StackView</a></li>
+            <li><a href="#imu-gating">IMU Rate Gating by Page Demand</a></li>
             <li><a href="#import-path">Import Path and Singletons</a></li>
             <li><a href="#controls-style">Qt Quick Controls "Basic" Style</a></li>
             <li><a href="#context-properties">Accessing Backend Managers</a></li>
@@ -268,19 +268,20 @@
         <p>When the bottom bar is vertical (side mode) the StackView fills from the bar's right edge to the window's right edge; when horizontal, from the top of the window to the bar's top. The BottomBar itself re-anchors in its <code>onIsVerticalChanged</code> handler in Main.qml (width <code>parent.width * 0.1</code> when vertical; height <code>parent.height * Spacing.bottomBarHeightPercent</code> when horizontal).</p>
 
         <!-- IMU gating -->
-        <h2 id="imu-gating">IMU Rate Gating from the StackView</h2>
+        <h2 id="imu-gating">IMU Rate Gating by Page Demand</h2>
 
         <p>The BerryIMU worker samples the I&sup2;C sensors at a ~200&nbsp;Hz target on its own thread and <em>emits</em> seven signals per tick into QML at 60&nbsp;Hz (<code>EMIT_INTERVAL = 0.016</code> in <span class="file-path">src/managers/berryimumanager.cpp</span>). Pushing ~440 queued signals per second into pages that do not display them pegged the QML thread (the comment in <span class="file-path">OBDParameterModel.qml</span> records 100&nbsp;% CPU while idle on the Orange Pi), so Main.qml decides from the current page whether the full-rate stream is needed and calls <code>berryIMU.setActive(bool)</code>. Sampling and Madgwick fusion continue at full rate; only the emission into QML drops to <code>IDLE_EMIT_INTERVAL = 0.2</code> (5&nbsp;Hz) so the settings status stays fresh (commit <code>94d61be</code>). The rule, in a <code>Connections</code> block on <code>stackView</code>:</p>
 
-        <pre><code><span class="kw">function</span> <span class="fn">updateSensorConsumers</span>() {
-    <span class="kw">if</span> (<span class="kw">typeof</span> berryIMU === <span class="str">"undefined"</span> || !berryIMU || !stackView.currentItem)
-        <span class="kw">return</span>
-    <span class="kw">var</span> n = stackView.currentItem.objectName
-    berryIMU.<span class="fn">setActive</span>(n === <span class="str">"carMenu"</span> || n === <span class="str">"sensorMenu"</span> || n === <span class="str">"sensorHome"</span>
-                       || n === <span class="str">"obdMenu"</span> || (n === <span class="str">"mainMenu"</span> &amp;&amp; <span class="fn">_homeShowsImuParam</span>()))
+        <pre><code><span class="cmt">// frontend/ImuDemand.qml, dropped into each page that shows IMU readings</span>
+App.ImuDemand { consumer: <span class="str">"sensorMenu"</span>; wanted: sensorMenu.visible }
+<span class="cmt">// MainMenu: only while a home card shows an IMU reading</span>
+App.ImuDemand {
+    consumer: <span class="str">"mainMenu"</span>
+    wanted: mainMenu.visible &amp;&amp; settingsManager.homeOBDParameters.some(<span class="kw">function</span>(id) {
+        <span class="kw">return</span> App.OBDParameterModel.sensorParameters.indexOf(id) !== -<span class="num">1</span> })
 }</code></pre>
 
-        <p><code>_homeShowsImuParam()</code> checks <code>settingsManager.get_home_obd_parameters()</code> for any of <code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>, <code>LONGITUDINAL_G</code>, <code>BARO_TEMP</code> &mdash; the IMU-fed entries of <code>OBDParameterModel</code>. The handler runs on <code>onCurrentItemChanged</code> and once at completion. The same handler closes the Now Playing Studio if the user navigates while it is open. This is why page <code>objectName</code>s matter: the gating is keyed on them (commits <code>94d61be</code>, <code>2fef514</code>).</p>
+        <p>Each page that shows IMU readings drops in an <code>ImuDemand</code> (<span class="file-path">frontend/ImuDemand.qml</span>), which calls <code>berryIMU.setDemand(consumer, wanted)</code>; the manager runs at full rate while any consumer wants it. The consumers are CarMenu, SensorMenu, SensorHome, OBDMenu and MainMenu while a home card shows one of the IMU ids (<code>OBDParameterModel.sensorParameters</code>: <code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>, <code>LONGITUDINAL_G</code>, <code>BARO_TEMP</code>). Until open-backend #10 <code>Main.qml</code> decided from a list of page names on every StackView change.</p>
 
         <p>On Android, <code>BerryIMUManager</code> reads the phone's own sensors through QtSensors, and <code>setActive(false)</code> <em>stops</em> them (accelerometer, compass, pressure) rather than lowering the rate: Android treats a data rate as a hint and kept delivering about 25 readings a second. <code>setActive(true)</code> restarts them if the IMU is enabled; <code>connected</code> stays true while they are paused. Not yet measured on a phone (<span class="file-path">TODO/sensor-driven-ui-cost.md</span>).</p>
 

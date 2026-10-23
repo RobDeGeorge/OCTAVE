@@ -976,6 +976,15 @@ void BerryIMUManager::setActive(bool active)
     qCDebug(lcImu) << (active ? "sensor page shown: full emit rate" : "no sensor page: idle emit rate");
 }
 
+void BerryIMUManager::setDemand(const QString &consumer, bool wanted)
+{
+    if (wanted)
+        m_demand.insert(consumer);
+    else
+        m_demand.remove(consumer);
+    setActive(!m_demand.isEmpty());
+}
+
 void BerryIMUManager::calibrateTare()
 {
     if (m_worker)
@@ -1250,6 +1259,15 @@ void BerryIMUManager::setActive(bool active)
         m_pressure->stop();
     }
     qCInfo(lcImuMobile) << "phone sensors" << (m_active && m_enabled ? "running" : "paused");
+}
+
+void BerryIMUManager::setDemand(const QString &consumer, bool wanted)
+{
+    if (wanted)
+        m_demand.insert(consumer);
+    else
+        m_demand.remove(consumer);
+    setActive(!m_demand.isEmpty());
 }
 
 void BerryIMUManager::calibrateTare()

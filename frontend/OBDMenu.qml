@@ -15,6 +15,10 @@ Item {
 
     id: obdPage
     objectName: "obdMenu"
+
+    // Full IMU rate while the OBD views are on screen (dashboards can carry
+    // compass and G-force gauges)
+    App.ImuDemand { consumer: "obdMenu"; wanted: obdPage.visible }
     required property StackView stackView
     required property ApplicationWindow mainWindow
 

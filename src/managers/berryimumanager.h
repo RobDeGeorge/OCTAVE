@@ -6,6 +6,7 @@
 #ifndef Q_OS_MOBILE
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QTimer>
 #include <QMutex>
@@ -188,8 +189,14 @@ public slots:
     bool isEnabled();
     void setEmitRate(int hz);
     int emitRate() const;   // Hz actually requested of the sensor
-    // Called by Main.qml on page changes: true while a sensor page is showing
+    // Full emit rate while a sensor value is on screen, idle rate otherwise;
+    // driven by setDemand
     void setActive(bool active);
+    // A page or widget showing IMU values says so while it is on screen
+    // (consumer = a stable name, e.g. its objectName); the sensor runs at
+    // full rate while any consumer wants it. Pages register themselves, as
+    // they do with obdManager.setParameterDemand.
+    void setDemand(const QString &consumer, bool wanted);
     void calibrateTare();
     void resetTare();
     void cleanup();
@@ -201,6 +208,7 @@ private:
     // Dev tooling (src/dev/devimufeed.cpp) stops the I2C worker and drives
     // these signals with simulated motion when asked to (sim_imu).
     friend class DevImuAccess;
+    friend class TstSensorSettings;
 
     bool getConnected() const;
     void scheduleRetry();
@@ -209,7 +217,8 @@ private:
     SettingsManager *m_settingsManager;
     QThread *m_workerThread;
     BerryIMUWorker *m_worker;
-    bool m_active = true;
+    bool m_active = false;   // idle until a consumer asks (setDemand)
+    QSet<QString> m_demand;   // consumers that want the full rate (setDemand)
     // Requested emit interval (s); applied to every worker we create so a
     // setEmitRate() call before start or across a retry is not lost.
     double m_emitInterval;
@@ -224,6 +233,7 @@ private:
 #else // Q_OS_MOBILE — QtSensors-backed implementation (Android)
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QElapsedTimer>
 
@@ -268,8 +278,14 @@ public slots:
     bool isEnabled();
     void setEmitRate(int hz);
     int emitRate() const;   // Hz actually requested of the sensor
-    // Called by Main.qml on page changes: true while a sensor page is showing
+    // Full emit rate while a sensor value is on screen, idle rate otherwise;
+    // driven by setDemand
     void setActive(bool active);
+    // A page or widget showing IMU values says so while it is on screen
+    // (consumer = a stable name, e.g. its objectName); the sensor runs at
+    // full rate while any consumer wants it. Pages register themselves, as
+    // they do with obdManager.setParameterDemand.
+    void setDemand(const QString &consumer, bool wanted);
     void calibrateTare();
     void resetTare();
     void cleanup();
@@ -288,7 +304,8 @@ private:
     QPressureSensor *m_pressure;
 
     int    m_emitRate;
-    bool   m_active = true;
+    bool   m_active = false;   // idle until a consumer asks (setDemand)
+    QSet<QString> m_demand;   // consumers that want the full rate (setDemand)
     // Software throttle while inactive: Android treats setDataRate() as a
     // hint and kept delivering ~25 readings/s at the 5 Hz idle rate.
     bool idleThrottled(QElapsedTimer &last) const;

@@ -1173,7 +1173,8 @@
             <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>Enabled flag</td></tr>
             <tr><td><code>setEmitRate(int hz)</code></td><td><code>void</code></td><td>Signal rate in Hz (clamped 10&ndash;120); the value is kept and applied to every worker the manager creates, so a call before start or across a retry is not lost. Driven by <code>settingsManager.sensorEmitRate</code> from startup</td></tr>
             <tr><td><code>emitRate()</code></td><td><code>int</code></td><td>The rate in Hz currently requested (C++ only)</td></tr>
-            <tr><td><code>setActive(bool active)</code></td><td><code>void</code></td><td>Main.qml sets <code>true</code> while a sensor page is showing; <code>false</code> drops the worker to a 5 Hz idle rate</td></tr>
+            <tr><td><code>setActive(bool active)</code></td><td><code>void</code></td><td>Driven by <code>setDemand</code>: <code>true</code> while any consumer wants the IMU; <code>false</code> drops the worker to a 5 Hz idle rate</td></tr>
+            <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td><code>void</code></td><td>A page showing IMU readings registers while on screen (<span class="file-path">frontend/ImuDemand.qml</span>, consumer = its objectName); full rate while any consumer wants it</td></tr>
             <tr><td><code>calibrateTare()</code></td><td><code>void</code></td><td>Take the current orientation as the zero reference (CarMenu ZERO). Raises a request that the read thread services on its next pass; ignored with a log line when the loop is not running</td></tr>
             <tr><td><code>resetTare()</code></td><td><code>void</code></td><td>Clear the tare (CarMenu RESET); serviced on the read thread while running, applied immediately otherwise</td></tr>
             <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Stop the worker thread and close the I2C bus</td></tr>

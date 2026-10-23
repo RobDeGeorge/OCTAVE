@@ -10,6 +10,9 @@ Item {
 
     id: sensorHome
     objectName: "sensorHome"
+
+    // Full IMU rate while this page is on screen
+    App.ImuDemand { consumer: "sensorHome"; wanted: sensorHome.visible }
     required property StackView stackView
     required property ApplicationWindow mainWindow
 

@@ -13,6 +13,14 @@ Item {
 
     id: mainMenu
     objectName: "mainMenu"
+
+    // Full IMU rate while the home screen shows an IMU reading on a card
+    App.ImuDemand {
+        consumer: "mainMenu"
+        wanted: mainMenu.visible && !!settingsManager && settingsManager.homeOBDParameters.some(function(id) {
+            return App.OBDParameterModel.sensorParameters.indexOf(id) !== -1
+        })
+    }
     property StackView stackView
     property ApplicationWindow mainWindow
     property real windowWidth

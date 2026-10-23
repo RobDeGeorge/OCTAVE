@@ -11,6 +11,9 @@ Item {
 
     id: sensorMenu
     objectName: "sensorMenu"
+
+    // Full IMU rate while this page is on screen
+    App.ImuDemand { consumer: "sensorMenu"; wanted: sensorMenu.visible }
     required property StackView stackView
     required property ApplicationWindow mainWindow
     width: parent.width

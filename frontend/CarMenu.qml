@@ -11,6 +11,9 @@ Item {
 
     id: carMenu
     objectName: "carMenu"
+
+    // Full IMU rate while this page is on screen
+    App.ImuDemand { consumer: "carMenu"; wanted: carMenu.visible }
     width: parent.width
     height: parent.height
 

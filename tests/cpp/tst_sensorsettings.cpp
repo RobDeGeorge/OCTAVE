@@ -86,6 +86,23 @@ private slots:
 
     // ── gesture sensor ──────────────────────────────────────────────────
 
+    void imuRunsFullRateWhileAnyConsumerWantsIt()
+    {
+        // Pages register themselves (ImuDemand) instead of Main.qml keeping
+        // a list of page names
+        BerryIMUManager imu;
+        QVERIFY(!imu.m_active);   // idle until a page asks
+        imu.setDemand("mainMenu", false);
+        QVERIFY(!imu.m_active);
+        imu.setDemand("sensorMenu", true);
+        imu.setDemand("obdMenu", true);
+        QVERIFY(imu.m_active);
+        imu.setDemand("sensorMenu", false);
+        QVERIFY(imu.m_active);   // the OBD page still shows a compass
+        imu.setDemand("obdMenu", false);
+        QVERIFY(!imu.m_active);
+    }
+
     void gestureReadsSavedStateAtConnect()
     {
         SettingsManager settings;

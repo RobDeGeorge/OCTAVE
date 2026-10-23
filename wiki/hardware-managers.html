@@ -613,22 +613,24 @@ m_reconnectAttempts++;
             on the worker, also applied when the worker is (re)created.
           </p>
           <p>
-            <span class="file-path">frontend/Main.qml</span> drives it from the <code>StackView</code>: a
-            <code>Connections { target: stackView }</code> calls <code>updateSensorConsumers()</code> on
-            <code>onCurrentItemChanged</code> and on completion, and inspects <code>stackView.currentItem.objectName</code>:
+            The pages that show IMU readings say so themselves: each drops in an <span class="file-path">frontend/ImuDemand.qml</span>
+            (<code>consumer</code>, <code>wanted</code>), which calls <code>berryIMU.setDemand(consumer, wanted)</code>; the manager
+            runs at full rate while any consumer wants it and idles until a page wants it (the IMU's twin of <code>obdManager.setParameterDemand</code>):
           </p>
-          <pre><code><span class="kw">readonly property var</span> _imuParamIds: App.OBDParameterModel.sensorParameters   <span class="cmt">// the catalog's source: "imu" ids</span>
-<span class="kw">function</span> <span class="fn">updateSensorConsumers</span>() {
-    <span class="kw">var</span> n = stackView.currentItem.objectName
-    berryIMU.setActive(n === <span class="str">"carMenu"</span> || n === <span class="str">"sensorMenu"</span> || n === <span class="str">"sensorHome"</span>
-                       || n === <span class="str">"obdMenu"</span> || (n === <span class="str">"mainMenu"</span> &amp;&amp; _homeShowsImuParam()))
+          <pre><code><span class="cmt">// frontend/ImuDemand.qml, dropped into each page that shows IMU readings</span>
+App.ImuDemand { consumer: <span class="str">"sensorMenu"</span>; wanted: sensorMenu.visible }
+<span class="cmt">// MainMenu: only while a home card shows an IMU reading</span>
+App.ImuDemand {
+    consumer: <span class="str">"mainMenu"</span>
+    wanted: mainMenu.visible &amp;&amp; settingsManager.homeOBDParameters.some(<span class="kw">function</span>(id) {
+        <span class="kw">return</span> App.OBDParameterModel.sensorParameters.indexOf(id) !== -<span class="num">1</span> })
 }</code></pre>
           <p>
-            Commit <code>2fef514</code> extended the full-rate set from the three sensor pages to <strong>OBDMenu</strong>
-            (dashboards can contain compass / G-force gauges that read the IMU through <code>OBDParameterModel</code>) and to
-            the <strong>main menu whenever one of the home OBD cards</strong>
-            (<code>settingsManager.get_home_obd_parameters()</code>) is one of the eight IMU parameter IDs;
-            <code>MainMenu.qml</code> received <code>objectName: "mainMenu"</code> for that check. Pages need no code of their own.
+            The consumers are CarMenu, SensorMenu, SensorHome, OBDMenu (dashboards can contain compass / G-force gauges that read
+            the IMU through <code>OBDParameterModel</code>) and the main menu while one of its home OBD cards is an IMU id. Until
+            open-backend #10 <span class="file-path">frontend/Main.qml</span> decided from a list of page <code>objectName</code>s on
+            every <code>StackView</code> change; a new IMU page now needs its own <code>ImuDemand</code> and no edit elsewhere.
+            A page being pre-built is visible for two frames, so the rate can flick to full for that moment.
           </p>
           <p>
             <code>setEmitRate(hz)</code> clamps to 10&ndash;120 Hz and sets the active interval to <code>1 / hz</code>.
@@ -810,7 +812,8 @@ tz = yw*qz - yz*qw</code></pre>
               <tr><td><code>setEnabled(bool)</code></td><td>Runtime switch, called on <code>imuEnabledChanged</code>; does not save. Starts (retry counter reset) or stops the worker and emits "Disabled"</td></tr>
               <tr><td><code>isEnabled()</code></td><td>Current enabled flag</td></tr>
               <tr><td><code>setEmitRate(int hz)</code></td><td>Clamp 10&ndash;120, interval = 1/hz; stored on the manager and applied to every worker</td></tr>
-              <tr><td><code>setActive(bool)</code></td><td>Called by <code>Main.qml</code> on every page change; <code>false</code> drops emission to 5 Hz</td></tr>
+              <tr><td><code>setActive(bool)</code></td><td>Driven by <code>setDemand</code>; <code>false</code> drops emission to 5 Hz</td></tr>
+              <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td>A page showing IMU readings registers while on screen (<span class="file-path">frontend/ImuDemand.qml</span>); full rate while any consumer wants it</td></tr>
               <tr><td><code>calibrateTare()</code></td><td>ZERO &mdash; request the read loop to capture the current tilt and accel bias (does nothing while no worker exists)</td></tr>
               <tr><td><code>resetTare()</code></td><td>RESET &mdash; identity tare, zero biases</td></tr>
               <tr><td><code>getConnectionStatus()</code></td><td>"Connected" or "Disconnected" (Android: "Connected" / "Unavailable")</td></tr>
