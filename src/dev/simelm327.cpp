@@ -279,6 +279,7 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
             && QRandomGenerator::global()->generateDouble() < link.failureRate)
             return "NO DATA";
         m_probed = true;
+        m_state->notePoll();
         return reply(0x41, pid, data);
     }
 

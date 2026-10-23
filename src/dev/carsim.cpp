@@ -230,8 +230,26 @@ void CarSim::setLinkUp(bool up)
     qCInfo(lcCarSim) << (up ? "adapter plugged in" : "adapter unplugged");
 }
 
+void CarState::notePoll()
+{
+    QMutexLocker l(&m_lock);
+    if (m_sinceLastPoll.isValid())
+        m_maxPollGapMs = qMax(m_maxPollGapMs, m_sinceLastPoll.elapsed());
+    m_sinceLastPoll.start();
+    ++m_polls;
+}
+
+CarState::PollStats CarState::takePollStats() const
+{
+    QMutexLocker l(&m_lock);
+    const PollStats st{m_polls, m_maxPollGapMs};
+    m_maxPollGapMs = 0;
+    return st;
+}
+
 QVariantMap CarSim::status() const
 {
+    const CarState::PollStats polls = m_state->takePollStats();
     const CarValues v = m_state->values();
     const LinkSettings l = m_state->link();
     return {
@@ -243,6 +261,8 @@ QVariantMap CarSim::status() const
         {QStringLiteral("_brake"), v.brake},
         {QStringLiteral("realistic"), l.realistic},
         {QStringLiteral("link_down"), m_state->linkDown()},
+        {QStringLiteral("polls"), polls.count},
+        {QStringLiteral("poll_max_gap_ms"), polls.maxGapMs},
     };
 }
 
