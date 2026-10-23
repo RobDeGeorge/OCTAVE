@@ -212,6 +212,8 @@ qt_add_executable(octave
     src/service/serviceoptions.cpp
     src/service/apidump.h
     src/service/apidump.cpp
+    src/service/websocket.h
+    src/service/websocket.cpp
     src/service/metadescribe.h
     src/service/metadescribe.cpp
     src/util/units.cpp
@@ -441,6 +443,13 @@ qt_add_resources(octave "shaders"
     PREFIX "/shaders"
     BASE "${CMAKE_SOURCE_DIR}/frontend/shaders"
     FILES "${CMAKE_SOURCE_DIR}/frontend/shaders/dissolve_squares.frag.qsb"
+)
+
+# ---- The service's reference browser client (sdk/web), served at GET / ----
+qt_add_resources(octave "web_client"
+    PREFIX "/web-client"
+    BASE "${CMAKE_SOURCE_DIR}/sdk/web"
+    FILES "${CMAKE_SOURCE_DIR}/sdk/web/index.html"
 )
 
 # ---- Bundled phone server (OCTAVE's fork of the scrcpy server, Apache-2.0) ----

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCTAVE Web Client</title>
+<!--
+  The reference browser client for OCTAVE's service API (TODO/open-backend.md,
+  contract step 5): no Qt, no build step, no libraries. The app serves this
+  page at http://<host>:9876/ when the service is on (octave --service or
+  --headless), and the page talks to the same port over a WebSocket, one JSON
+  message per frame: the protocol in wiki/utilities.html#service-protocol,
+  the objects in docs/api/.
+-->
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #1b1d22; --muted: #5d6470; --line: #dde0e6;
+    --accent: #0a7c86; --track: #e3e6eb; --warn: #b4441f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111317; --panel: #1a1d23; --ink: #e8eaee; --muted: #9aa1ad; --line: #2b2f37;
+            --accent: #3cc4cf; --track: #2b2f37; --warn: #f08a5d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .02em; }
+  #status { margin-left: auto; font-size: 13px; color: var(--muted); }
+  #status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                    background: var(--warn); margin-right: 6px; vertical-align: 1px; }
+  #status.up::before { background: var(--accent); }
+  main { display: grid; gap: 16px; padding: 16px; max-width: 1100px; margin: 0 auto;
+         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+  section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; }
+  .gauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .gauge { text-align: center; }
+  .gauge svg { width: 100%; max-width: 120px; }
+  .gauge .value { font-size: 22px; font-variant-numeric: tabular-nums; margin-top: -26px; }
+  .gauge .label { font-size: 12px; color: var(--muted); }
+  .track { fill: none; stroke: var(--track); stroke-width: 10; stroke-linecap: round; }
+  .fill { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .15s linear; }
+  .title { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .sub { color: var(--muted); overflow-wrap: anywhere; }
+  .bar { height: 6px; background: var(--track); border-radius: 3px; margin: 12px 0 4px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); }
+  .times { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  button, select, input { font: inherit; color: inherit; }
+  button { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+  .pct { width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; }
+  select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; max-width: 100%; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 10px 0 0;
+        max-height: 320px; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .wide { grid-column: 1 / -1; }
+  .note { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>OCTAVE</h1>
+  <span class="note" id="app"></span>
+  <span id="status">connecting…</span>
+</header>
+<main>
+  <section>
+    <h2>Engine</h2>
+    <div class="gauges" id="gauges"></div>
+    <p class="note">Live from <code>paramStore</code>, in each value's native unit.</p>
+  </section>
+
+  <section>
+    <h2>Now playing</h2>
+    <div class="title" id="np-title">Nothing playing</div>
+    <div class="sub" id="np-artist"></div>
+    <div class="bar"><div id="np-bar"></div></div>
+    <div class="times"><span id="np-pos">0:00</span><span id="np-source"></span><span id="np-dur">0:00</span></div>
+    <div class="row">
+      <button id="np-prev" aria-label="Previous">⏮</button>
+      <button id="np-play" aria-label="Play or pause">▶</button>
+      <button id="np-next" aria-label="Next">⏭</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Volume</h2>
+    <div class="row">
+      <input type="range" id="vol" min="0" max="100" aria-label="Volume">
+      <span class="pct" id="vol-pct">–</span>
+      <button id="mute">Mute</button>
+    </div>
+  </section>
+
+  <section class="wide">
+    <h2>API explorer</h2>
+    <div class="row">
+      <select id="ex-object" aria-label="Object"></select>
+      <select id="ex-prop" aria-label="Property"></select>
+      <button id="ex-get">get</button>
+      <button id="ex-describe">describe</button>
+    </div>
+    <pre id="ex-out">Pick an object.</pre>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+// ── the client: one WebSocket, requests matched to replies by id ───────────
+class Octave {
+  constructor(url) {
+    this.url = url;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.handlers = [];
+  }
+  connect() {
+    return new Promise((resolve, reject) => {
+      this.ws = new WebSocket(this.url);
+      this.ws.onopen = () => resolve();
+      this.ws.onerror = () => reject(new Error("cannot reach " + this.url));
+      this.ws.onclose = () => {
+        for (const p of this.pending.values()) p.reject(new Error("connection closed"));
+        this.pending.clear();
+        if (this.onclose) this.onclose();
+      };
+      this.ws.onmessage = (m) => {
+        const msg = JSON.parse(m.data);
+        if ("event" in msg) {
+          for (const h of this.handlers) h(msg);
+        } else if (this.pending.has(msg.id)) {
+          const p = this.pending.get(msg.id);
+          this.pending.delete(msg.id);
+          msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+        }
+      };
+    });
+  }
+  request(op, args = {}) {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.ws.send(JSON.stringify({ op, id, ...args }));
+    });
+  }
+  onEvent(h) { this.handlers.push(h); }
+  get(object, property) { return this.request("get", { object, property }); }
+  call(object, method, args = []) { return this.request("call", { object, method, args }); }
+  subscribe(object, opts) { return this.request("subscribe", { object, ...opts }); }
+}
+
+// ── page ───────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const PROTOCOL = 1;
+const GAUGES = ["RPM", "SPEED", "COOLANT_TEMP"];
+const ARC = 2 * Math.PI * 46 * 0.75;   // a 270° arc of radius 46
+
+function mmss(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+function buildGauge(info) {
+  const div = document.createElement("div");
+  div.className = "gauge";
+  div.innerHTML =
+    `<svg viewBox="0 0 120 110" aria-hidden="true">
+       <circle class="track" cx="60" cy="60" r="46" stroke-dasharray="${ARC} 999" transform="rotate(135 60 60)"/>
+       <circle class="fill" cx="60" cy="60" r="46" stroke-dasharray="${ARC} 999" stroke-dashoffset="${ARC}" transform="rotate(135 60 60)"/>
+     </svg>
+     <div class="value">–</div>
+     <div class="label"></div>`;
+  div.querySelector(".label").textContent = `${info.title}${info.unit ? " (" + info.unit + ")" : ""}`;
+  $("gauges").appendChild(div);
+  return (v) => {
+    const frac = Math.min(1, Math.max(0, (v - info.min) / ((info.max - info.min) || 1)));
+    div.querySelector(".fill").setAttribute("stroke-dashoffset", ARC * (1 - frac));
+    div.querySelector(".value").textContent = v === null ? "–" : Number(v).toFixed(info.decimals || 0);
+  };
+}
+
+async function main() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const octave = new Octave(`${proto}//${location.host || "127.0.0.1:9876"}/`);
+  octave.onclose = () => { $("status").textContent = "disconnected"; $("status").className = ""; };
+  await octave.connect();
+
+  const hello = await octave.request("hello");
+  $("status").textContent = "connected";
+  $("status").className = "up";
+  $("app").textContent = `v${hello.app.version}${hello.app.headless ? ", headless" : ""}`;
+  if (hello.protocolVersion !== PROTOCOL)
+    $("app").textContent += ` (protocol ${hello.protocolVersion}, this page speaks ${PROTOCOL})`;
+
+  // Gauges: catalog metadata once, then the paramStore stream
+  const gauges = {};
+  for (const id of GAUGES) gauges[id] = buildGauge(await octave.call("parameterCatalog", "info", [id]));
+  const np = {};
+  octave.onEvent((e) => {
+    if (e.event === "params") {
+      for (const [id, v] of Object.entries(e.values)) if (gauges[id]) gauges[id](v);
+    } else if (e.event === "property" && e.object === "nowPlaying") {
+      np[e.name] = e.value;
+      renderNowPlaying(np);
+    } else if (e.event === "property" && e.object === "volumeController") {
+      if (e.name === "percent") { $("vol").value = e.value; $("vol-pct").textContent = e.value + "%"; }
+      if (e.name === "muted") $("mute").textContent = e.value ? "Unmute" : "Mute";
+    }
+  });
+  await octave.subscribe("paramStore", { properties: GAUGES, throttleMs: 100 });
+  await octave.subscribe("nowPlaying", {
+    properties: ["hasTrack", "title", "artist", "album", "playing", "positionMs", "durationMs", "source", "canSeek"],
+    throttleMs: 250 });
+  await octave.subscribe("volumeController", { properties: ["percent", "muted"] });
+
+  $("np-play").onclick = () => octave.call("nowPlaying", "togglePlay");
+  $("np-next").onclick = () => octave.call("nowPlaying", "next");
+  $("np-prev").onclick = () => octave.call("nowPlaying", "previous");
+  $("vol").oninput = (e) => octave.call("volumeController", "applyVolume", [Number(e.target.value)]);
+  $("mute").onclick = () => octave.call("volumeController", "toggleMute");
+
+  // Explorer: every object hello names, described on demand
+  for (const name of hello.objects) $("ex-object").add(new Option(name, name));
+  const show = (v) => { $("ex-out").textContent = JSON.stringify(v, null, 2); };
+  const fail = (err) => { $("ex-out").textContent = String(err.message || err); };
+  async function pickObject() {
+    const d = await octave.request("describe", { object: $("ex-object").value });
+    $("ex-prop").innerHTML = "";
+    for (const p of d.properties) $("ex-prop").add(new Option(`${p.name} : ${p.type}`, p.name));
+    $("ex-get").disabled = d.properties.length === 0;
+    show(d);
+  }
+  $("ex-object").onchange = () => pickObject().catch(fail);
+  $("ex-describe").onclick = () => pickObject().catch(fail);
+  $("ex-get").onclick = () => octave.get($("ex-object").value, $("ex-prop").value).then(show, fail);
+  await pickObject();
+}
+
+function renderNowPlaying(np) {
+  $("np-title").textContent = np.hasTrack ? (np.title || "Unknown title") : "Nothing playing";
+  $("np-artist").textContent = np.hasTrack ? [np.artist, np.album].filter(Boolean).join(" — ") : "";
+  $("np-play").textContent = np.playing ? "⏸" : "▶";
+  $("np-pos").textContent = mmss(np.positionMs || 0);
+  $("np-dur").textContent = mmss(np.durationMs || 0);
+  $("np-source").textContent = np.source === "phone" ? "phone" : "";
+  $("np-bar").style.width = np.durationMs ? Math.min(100, 100 * (np.positionMs || 0) / np.durationMs) + "%" : "0";
+}
+
+main().catch((err) => {
+  $("status").textContent = err.message;
+  $("status").className = "";
+});
+</script>
+</body>
+</html>

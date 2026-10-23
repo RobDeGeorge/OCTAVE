@@ -1,7 +1,9 @@
 #include "commandserver.h"
+#include "websocket.h"
 
 #include <QColor>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QJSValue>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -87,31 +89,134 @@ private:
         qCInfo(lcCommand) << "command client connected:" << sock.peerAddress().toString() << sock.peerPort();
         auto connection = std::make_shared<Connection>();
         t_connection = connection;
+
+        // The first byte says which protocol: a JSON line starts with '{',
+        // HTTP (a WebSocket upgrade or the reference page) with "GET"
         QByteArray buf;
-        while (!m_stopping && sock.state() == QAbstractSocket::ConnectedState) {
-            // Short waits: queued events go out within ~20 ms. Data that
-            // waitForBytesWritten() already pulled in counts too (else a
-            // pipelined request would sit there until the next one came)
-            if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20)) {
+        while (buf.isEmpty() && !m_stopping && sock.state() == QAbstractSocket::ConnectedState) {
+            if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20))
                 buf += sock.readAll();
-                int nl;
-                while ((nl = buf.indexOf('\n')) >= 0) {
-                    const QByteArray line = buf.left(nl).trimmed();
-                    buf.remove(0, nl + 1);
-                    if (line.isEmpty())
-                        continue;
-                    sock.write(m_owner->handleLine(line));
-                }
-            } else if (sock.state() != QAbstractSocket::ConnectedState) {
-                break;
-            }
-            for (const QByteArray &event : connection->takeAll())
-                sock.write(event);
-            if (sock.bytesToWrite() > 0)
-                sock.waitForBytesWritten(10000);
         }
+        if (buf.startsWith('G'))
+            serveHttp(sock, buf, *connection);
+        else
+            serveLines(sock, buf, *connection);
+
         connection->close();   // its subscriptions go (on the GUI thread)
         t_connection.reset();
+    }
+
+    // Wait for more bytes (short waits, so queued events go out within
+    // ~20 ms); false once the client is gone or the server stops
+    bool pump(QTcpSocket &sock, QByteArray &buf)
+    {
+        if (m_stopping || sock.state() != QAbstractSocket::ConnectedState)
+            return false;
+        // Data that waitForBytesWritten() already pulled in counts too (else
+        // a pipelined request would sit there until the next one came)
+        if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20))
+            buf += sock.readAll();
+        return sock.state() == QAbstractSocket::ConnectedState || sock.bytesAvailable() > 0;
+    }
+
+    static void flush(QTcpSocket &sock)
+    {
+        if (sock.bytesToWrite() > 0)
+            sock.waitForBytesWritten(10000);
+    }
+
+    void serveLines(QTcpSocket &sock, QByteArray buf, Connection &connection)
+    {
+        do {
+            int nl;
+            while ((nl = buf.indexOf('\n')) >= 0) {
+                const QByteArray line = buf.left(nl).trimmed();
+                buf.remove(0, nl + 1);
+                if (line.isEmpty())
+                    continue;
+                sock.write(m_owner->handleLine(line));
+            }
+            for (const QByteArray &event : connection.takeAll())
+                sock.write(event);
+            flush(sock);
+        } while (pump(sock, buf));
+    }
+
+    void serveHttp(QTcpSocket &sock, QByteArray buf, Connection &connection)
+    {
+        namespace Ws = OctaveService::WebSocket;
+        constexpr int kMaxHead = 16 * 1024;
+        int headLength = 0;
+        Ws::HttpRequest request = Ws::parseRequest(buf, &headLength);
+        QElapsedTimer waited;
+        waited.start();
+        while (!request.valid && buf.size() < kMaxHead && waited.elapsed() < 5000 && pump(sock, buf))
+            request = Ws::parseRequest(buf, &headLength);
+        if (!request.valid) {
+            sock.write(Ws::httpResponse(400, "Bad Request", "text/plain", "bad request\n"));
+            flush(sock);
+            return;
+        }
+        if (const QString why = Ws::refusal(request); !why.isEmpty()) {
+            qCWarning(lcCommand).noquote() << "refused" << sock.peerAddress().toString() << ":" << why;
+            sock.write(Ws::httpResponse(403, "Forbidden", "text/plain", why.toUtf8() + '\n'));
+            flush(sock);
+            return;
+        }
+        if (!Ws::isUpgrade(request)) {
+            // The reference client (sdk/web), so a browser reaches the
+            // service same-origin; nothing else is served
+            const QByteArray page = m_owner->page();
+            const bool root = request.path == "/" || request.path == "/index.html";
+            if (request.method == "GET" && root && !page.isEmpty())
+                sock.write(Ws::httpResponse(200, "OK", "text/html; charset=utf-8", page));
+            else
+                sock.write(Ws::httpResponse(404, "Not Found", "text/plain", "not found\n"));
+            flush(sock);
+            return;
+        }
+
+        sock.write(Ws::acceptResponse(request));
+        qCInfo(lcCommand) << "command client is a WebSocket";
+        Ws::Decoder decoder;
+        decoder.feed(buf.mid(headLength));
+        auto sendText = [&sock](QByteArray json) {
+            if (json.endsWith('\n'))
+                json.chop(1);
+            sock.write(Ws::encodeFrame(Ws::Text, json));
+        };
+        QByteArray incoming;
+        do {
+            decoder.feed(incoming);
+            incoming.clear();
+            Ws::Decoder::Message message;
+            while (decoder.next(message)) {
+                switch (message.opcode) {
+                case Ws::Text:
+                case Ws::Binary:
+                    sendText(m_owner->handleLine(message.payload.trimmed()));
+                    break;
+                case Ws::Ping:
+                    sock.write(Ws::encodeFrame(Ws::Pong, message.payload));
+                    break;
+                case Ws::Close:
+                    sock.write(Ws::encodeFrame(Ws::Close, message.payload.left(2)));
+                    flush(sock);
+                    return;
+                default:
+                    break;
+                }
+            }
+            if (!decoder.error().isEmpty()) {
+                qCWarning(lcCommand).noquote() << "WebSocket client dropped:" << decoder.error();
+                sock.write(Ws::encodeFrame(Ws::Close, QByteArray::fromHex("03ea")));   // 1002 protocol error
+                flush(sock);
+                return;
+            }
+            for (const QByteArray &event : connection.takeAll())
+                sendText(event);
+            flush(sock);
+        } while (pump(sock, incoming));
     }
 
     CommandServer *m_owner;

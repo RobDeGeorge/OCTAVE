@@ -18,6 +18,11 @@
 //
 // A request carrying both keys is an op (`action` is ignored).
 //
+// The same port takes WebSocket clients (a browser): one JSON request or
+// reply / event per text frame (src/service/websocket.h, which also holds
+// the Origin rule), and serves the reference client page (setPage) at
+// GET / so a browser can reach it same-origin.
+//
 // Listens on 127.0.0.1 (default port 9876) unless setBindAddress() says
 // otherwise (src/service/serviceoptions.h). Each client connection gets
 // its own thread, so a slow GUI call never
@@ -105,6 +110,10 @@ public:
     // Before start(); 127.0.0.1 by default. The protocol has no
     // authentication: anything else lets the network drive the app.
     void setBindAddress(const QHostAddress &address) { m_bind = address; }
+    // The HTML served at GET / (the reference client, sdk/web); none = 404.
+    // Before start().
+    void setPage(const QByteArray &html) { m_page = html; }
+    QByteArray page() const { return m_page; }
     bool start();
     void stop();
     quint16 port() const { return m_port; }   // the bound port once started (0 asks for any)
@@ -127,6 +136,7 @@ private:
 
     quint16 m_port;
     QHostAddress m_bind = QHostAddress(QHostAddress::LocalHost);
+    QByteArray m_page;
     mutable QReadWriteLock m_lock;
     QHash<QString, Handler> m_handlers;
     QStringList m_order;   // registration order, for list_actions

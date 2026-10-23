@@ -103,6 +103,10 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
     if (options.enabled) {
         service.server = std::make_unique<OctaveService::CommandServer>(options.port);
         service.server->setBindAddress(options.bind);
+        // The reference browser client (sdk/web), same-origin with the socket
+        QFile page(QStringLiteral(":/web-client/index.html"));
+        if (page.open(QIODevice::ReadOnly))
+            service.server->setPage(page.readAll());
         service.bridge = std::make_unique<OctaveService::ServiceBridge>(
             &core.registry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, headless});
         service.bridge->install(*service.server);
