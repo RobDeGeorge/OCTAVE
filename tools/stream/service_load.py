@@ -1,8 +1,9 @@
 """Service load harness: many clients at once against one OCTAVE.
 
-Starts one developer build (`--headless --dev --service PORT`, or with --ui
-`--dev --profile --command-port PORT`: the QML UI offscreen) on the service port, on a throwaway config, HOME and
-XDG dirs under WORKDIR, then runs each scenario in turn for SECONDS:
+Starts one OCTAVE with the simulated car (`--headless --sim --service PORT`,
+or with --ui the QML UI offscreen; any build, release too), with its config
+(`--config`), HOME and XDG dirs under WORKDIR, then runs each scenario in
+turn for SECONDS:
 
   idle       no load clients: the reference row
   fanout20   20 clients, each with its own setParameterDemand on every PID
@@ -14,7 +15,7 @@ XDG dirs under WORKDIR, then runs each scenario in turn for SECONDS:
   churn      two clients connecting, subscribing, reading one event and
              disconnecting in a loop
   wsmix      8 WebSocket clients on paramStore (throttleMs 40) + nowPlaying,
-             2 WebSocket and 1 TCP client on the phone video (sim_video)
+             2 WebSocket and 1 TCP client on the phone video (sim.setVideo)
   all        every scenario above at once
   media      the 2026-10-22 baseline: paramStore (40 ms), nowPlaying,
              audio levels, the video over WebSocket and over TCP
@@ -25,7 +26,7 @@ A probe runs through every scenario so the rows compare:
     event latency as the excess over the fastest delivery seen
   - a `get` every 100 ms: the GUI thread's round trip (where the QML UI
     waits too)
-  - sim_status once a second: Mode 01 replies the simulated adapter sent
+  - sim.status() once a second: Mode 01 replies the simulated adapter sent
     (the OBD poll rate) and the longest gap between two
   - the backend's CPU % (of one core) and RSS from /proc
 
@@ -48,17 +49,27 @@ import sys
 import threading
 import time
 
-SCENARIOS = ["idle", "fanout20", "nonreader", "callflood", "churn", "wsmix", "all", "media"]
+SCENARIOS = ["idle", "fanout20", "nonreader", "callflood", "churn", "wsmix", "all", "media", "quick"]
 
 ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 ap.add_argument("bin")
-ap.add_argument("port", type=int)
+ap.add_argument("port", type=int, help="0: any free one")
 ap.add_argument("workdir")
-ap.add_argument("media")
+ap.add_argument("media", nargs="?", help="tracks to play during the load (default: none)")
 ap.add_argument("--ui", action="store_true", help="the QML UI offscreen instead of --headless")
 ap.add_argument("--seconds", type=int, default=30)
-ap.add_argument("--scenario", nargs="+", choices=SCENARIOS, default=SCENARIOS[:-1])
+ap.add_argument("--scenario", nargs="+", choices=SCENARIOS, default=SCENARIOS[:-2])
+ap.add_argument("--check", action="store_true",
+                help="the ctest (service_load_check): idle and quick for a few seconds each, "
+                     "exit 1 unless the limits hold")
 opt = ap.parse_args()
+WARMUP_S, SETTLE_S = 2, 3
+if opt.check:
+    opt.scenario, opt.seconds, WARMUP_S, SETTLE_S = ["idle", "quick"], 4, 1, 0.5
+if opt.port == 0:
+    with socket.socket() as probe_port:
+        probe_port.bind(("127.0.0.1", 0))
+        opt.port = probe_port.getsockname()[1]
 
 PORT = opt.port
 WORK = os.path.abspath(opt.workdir)
@@ -72,15 +83,19 @@ MODE = "ui" if opt.ui else "headless"
 shutil.rmtree(WORK, ignore_errors=True)
 for d in ("cfg/OCTAVE", "home/.local/share", "home/.cache"):
     os.makedirs(f"{WORK}/{d}")
+if not opt.media:   # nothing to play: an empty folder, never the user's ~/Music
+    opt.media = f"{WORK}/music"
+    os.makedirs(opt.media)
 json.dump({"mediaFolder": os.path.abspath(opt.media), "esp32VolumeEnabled": False},
           open(f"{WORK}/cfg/OCTAVE/settingsConfigure.json", "w"))
 env = dict(os.environ, HOME=f"{WORK}/home", XDG_CONFIG_HOME=f"{WORK}/cfg",
            XDG_DATA_HOME=f"{WORK}/home/.local/share", XDG_CACHE_HOME=f"{WORK}/home/.cache",
            QT_QPA_PLATFORM="offscreen")
-# With the UI the sim_* actions are on the --profile command server (the
-# service shares it), so that mode also runs the perf monitor
-args = ([opt.bin, "--dev", "--profile", "--command-port", str(PORT)] if opt.ui
-        else [opt.bin, "--headless", "--dev", "--service", str(PORT)])
+# The simulated car is the `sim` service object (--sim, every build); with
+# --config it uses our folder instead of seeding a throwaway one
+args = [opt.bin, "--sim", "--config", f"{WORK}/cfg/OCTAVE", "--service", str(PORT)]
+if not opt.ui:
+    args.insert(1, "--headless")
 app = subprocess.Popen(args, env=env, stdout=open(f"{WORK}/app.log", "w"), stderr=subprocess.STDOUT)
 
 
@@ -416,11 +431,11 @@ def now_playing_client(stop, st):
 def scenario_clients(name, ids):
     """[(group, fn)] for one scenario; `group` names the stats row."""
     out = []
-    if name in ("fanout20", "all"):
+    if name in ("fanout20", "all", "quick"):
         out += [("fanout", param_client(f"load-{i}", ids)) for i in range(20)]
     if name in ("nonreader", "all"):
         out.append(("nonreader", nonreader))
-    if name in ("callflood", "all"):
+    if name in ("callflood", "all", "quick"):
         out.append(("callflood", callflood))
     if name in ("churn", "all"):
         out += [("churn", churn)] * 2
@@ -472,9 +487,9 @@ def probe_rtt(stop, st):
 
 
 def sim_status(c):
-    r = c.rpc({"action": "sim_status"})
-    if not r.get("ok"):   # with the UI, the dev actions arrive after the QML engine
-        raise LookupError(r.get("error"))
+    r = c.rpc({"op": "call", "object": "sim", "method": "status"})
+    if not r.get("ok") or not r["result"]:   # not up yet (or not a simulated run)
+        raise LookupError(r.get("error", "sim.status() is empty"))
     return r["result"]
 
 
@@ -492,7 +507,7 @@ def run_scenario(name, ids, seconds, sim):
         threads.append(threading.Thread(target=fn, args=(stop, st), daemon=True))
     for t in threads:
         t.start()
-    time.sleep(2)   # subscriptions in place
+    time.sleep(WARMUP_S)   # subscriptions in place
     probe.update(values=0, excess=[], rtt=[])
     for g in groups.values():
         for st in g:
@@ -540,7 +555,7 @@ def run_scenario(name, ids, seconds, sim):
             rates = sorted(st.get("events", 0) / elapsed for st in sts)
             agg["eventsPerSMin"], agg["eventsPerSMax"] = round(rates[0], 1), round(rates[-1], 1)
         row["clients"][group] = agg
-    time.sleep(3)   # let the closed connections go before the next row
+    time.sleep(SETTLE_S)   # let the closed connections go before the next row
     return row
 
 
@@ -571,7 +586,7 @@ try:
     log = open(f"{WORK}/app.log").read()
     if "Using adb" in log:
         raise SystemExit("the app found an adb: stopping before it talks to a device")
-    for _ in range(60):   # the dev actions are in and the simulated car connects
+    for _ in range(60):   # the simulated car connects
         try:
             if sim_status(ctl)["polls"] > 0:
                 break
@@ -580,10 +595,10 @@ try:
         time.sleep(0.5)
     else:
         raise SystemExit("the simulated car never answered a poll")
-    ctl.rpc({"action": "sim_throttle", "args": {"value": 40}})
+    ctl.rpc({"op": "call", "object": "sim", "method": "setThrottle", "args": [40]})
     if any(s in opt.scenario for s in ("wsmix", "all", "media")):
-        ctl.rpc({"action": "sim_video", "args": {"on": True}})
-    files = sorted(f for f in os.listdir(opt.media) if not f.startswith("."))
+        ctl.rpc({"op": "call", "object": "sim", "method": "setVideo", "args": [True]})
+    files = sorted(f for f in os.listdir(opt.media) if not f.startswith(".")) if opt.media else []
     if files:
         ctl.rpc({"op": "call", "object": "mediaManager", "method": "play_file", "args": [files[0]]})
     rows = []
@@ -604,3 +619,24 @@ for r in rows:
     print(f"| {r['scenario']} | {r['cpu']} | {r['rssEnd']} | {r['pollsPerS']} | {r['pollGapMaxMs']} | {r['probeValuesPerS']} "
           f"| {r['probeP99Ms']} | {r['rttP50Ms']} / {r['rttP99Ms']} / {r['rttMaxMs']} | {describe(r) or '-'} |")
 print(f"\n(harness CPU per row: {', '.join(str(r['harnessCpu']) for r in rows)} % of one core)")
+
+if opt.check:
+    # Loose bounds, so a slow CI machine passes and a broken limit does not
+    idle, quick = rows
+    fan, flood = quick["clients"]["fanout"], quick["clients"]["callflood"]
+    floodRate = flood.get("replies", 0) / quick["seconds"]
+    pollChange = abs(quick["pollsPerS"] - idle["pollsPerS"]) / max(idle["pollsPerS"], 0.1)
+    checks = [
+        ("the simulated car is polled", idle["pollsPerS"] > 1),
+        ("no subscriber dropped events or lost its connection",
+         not (fan.get("dropped") or fan.get("closed") or fan.get("errors"))),
+        ("every subscriber kept getting events (at least 5 a second)", fan["eventsPerSMin"] >= 5),
+        ("the flooder was limited (rateLimited, or closed for ignoring it)",
+         bool(flood.get("closed") or flood.get("codes", {}).get("rateLimited"))),
+        (f"the flooder got at most 300 answers a second ({floodRate:.0f})", floodRate <= 300),
+        (f"the poll rate stayed within 20 % of idle ({pollChange * 100:.0f} %)", pollChange <= 0.2),
+    ]
+    print()
+    for what, ok in checks:
+        print(("ok    " if ok else "FAIL  ") + what)
+    sys.exit(0 if all(ok for _, ok in checks) else 1)

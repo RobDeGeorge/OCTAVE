@@ -86,6 +86,12 @@ public:
     // `scope`, and what it holds (the device's own screen holds full)
     bool connectionAllows(const Connection &c, const QString &scope) const;
     QStringList connectionScopes(const Connection &c) const;
+    // An installed web frontend is the page this port serves
+    // (frontendmanager.h): a browser on this device (a loopback connection
+    // marked Connection::browser) then holds `scopes`, the frontend's
+    // manifest, instead of the full trust loopback gives programs; a token
+    // it presents counts as usual. Before the server starts
+    void setLoopbackBrowserScopes(const QStringList &scopes) { m_browserScopes = scopes; }
 
     // `object`.`method`(consumer, value) claims `consumer` for the calling
     // connection unless `value` is the release value (an empty list for a
@@ -130,6 +136,7 @@ private:
     ServiceRegistry *m_registry;
     AppInfo m_app;
     ServicePairing *m_pairing = nullptr;
+    QStringList m_browserScopes;   // setLoopbackBrowserScopes
 };
 
 } // namespace OctaveService

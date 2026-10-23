@@ -262,6 +262,13 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(sdk_python PROPERTIES
         ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
         TIMEOUT 180)
+    # Many clients (tools/stream/service_load.py --check): 20 subscribers and a
+    # call flood against `octave --headless --sim`; fails if a subscriber
+    # loses events, the flood is not limited or the OBD poll rate moves 20 %
+    add_test(NAME service_load_check
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/stream/service_load.py"
+                $<TARGET_FILE:octave> 0 "${CMAKE_CURRENT_BINARY_DIR}/service_load_check" --check)
+    set_tests_properties(service_load_check PROPERTIES TIMEOUT 60)
     # tools/api/check_compat.py (CI's API compatibility gate) sorts changes right
     add_test(NAME api_compat
         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tools/api/tests")

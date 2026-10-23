@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLocalSocket>
 #include <QStandardPaths>
 #include <QElapsedTimer>
 #include <QProcess>
@@ -396,7 +397,7 @@ time.sleep(4)   # the simulated car records a trip meanwhile
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
-        app.start(kApp, {"--headless", "--config", config, "--service", QString::number(port), "--smoke"});
+        app.start(kApp, {"--headless", "--config", config, "--service", QString::number(port)});
         QVERIFY(app.waitForStarted(10000));
         QByteArray page;
         QElapsedTimer t;
@@ -412,10 +413,98 @@ time.sleep(4)   # the simulated car records a trip meanwhile
                 QTest::qWait(200);
             }
         }
+        // Its page in a browser on this device holds the manifest's scopes
+        // (read only here), not loopback's full trust; a program still has full
+        const QByteArray browserHello = wsRequest(port, R"({"op": "hello", "id": 1})");
+        QVERIFY2(browserHello.contains(R"("scopes":["read"])"), browserHello.constData());
+        const QByteArray browserSet = wsRequest(port, R"({"op": "call", "object": "volumeController", "method": "applyVolume", "args": [20], "id": 2})");
+        QVERIFY2(browserSet.contains(R"("code":"forbidden")"), browserSet.constData());
+        const QByteArray browserGet = wsRequest(port, R"({"op": "get", "object": "volumeController", "property": "percent", "id": 3})");
+        QVERIFY2(browserGet.contains(R"("ok":true)"), browserGet.constData());
+        const QByteArray programSet = request(app, port, R"({"op": "call", "object": "volumeController", "method": "applyVolume", "args": [20]})");
+        QVERIFY2(programSet.contains(R"("ok":true)"), programSet.constData());
+        app.terminate();
         QVERIFY2(finished(app), "did not exit within 60 s");
         const QString out = QString::fromUtf8(app.readAll());
         QVERIFY2(page.contains("installed-web-frontend"), qPrintable(page.left(500) + out.right(2000)));
         QVERIFY2(out.contains("Frontend org.test.web 1 (web) is the active screen"), qPrintable(out.right(3000)));
+    }
+
+    // `octave --pair-code`: a code from the running instance of the same
+    // config, from a second process; nothing running is exit 1, and another
+    // config's instance is never the one asked
+    void pairCodeFromTheRunningInstance()
+    {
+#ifdef Q_OS_ANDROID
+        QSKIP("desktop only");
+#else
+        QTemporaryDir tmp;
+        const QString a = tmp.filePath("a"), b = tmp.filePath("b");
+        auto runPairCode = [&](const QString &config, QString *out) {
+            QProcess p;
+            p.setProcessEnvironment(env(tmp));
+            p.start(kApp, {"--pair-code", "--config", config});
+            if (!p.waitForFinished(30000))
+                return -2;
+            *out = QString::fromUtf8(p.readAllStandardOutput() + p.readAllStandardError());
+            return p.exitCode();
+        };
+        QString out;
+        QCOMPARE(runPairCode(a, &out), 1);   // nothing running
+        QVERIFY2(out.contains("no running OCTAVE"), qPrintable(out));
+
+        QProcess appA, appB;
+        for (QProcess *app : {&appA, &appB}) {
+            app->setProcessEnvironment(env(tmp));
+            app->setProcessChannelMode(QProcess::MergedChannels);
+        }
+        const quint16 portA = freePort();
+        appA.start(kApp, {"--headless", "--sim", "--config", a, "--service", QString::number(portA)});
+        QVERIFY(appA.waitForStarted(10000));
+        QVERIFY(!request(appA, portA, R"({"op": "hello"})").isEmpty());   // up
+        const quint16 portB = freePort();
+        appB.start(kApp, {"--headless", "--config", b, "--service", QString::number(portB)});
+        QVERIFY(appB.waitForStarted(10000));
+        QVERIFY(!request(appB, portB, R"({"op": "hello"})").isEmpty());
+
+        QCOMPARE(runPairCode(b, &out), 0);
+        QVERIFY2(QRegularExpression(R"(^\{"code": "\d{6}", "secondsLeft": \d+\}\s*$)").match(out).hasMatch(), qPrintable(out));
+        auto logOf = [](const QString &config) {
+            QFile f(config + "/logs/octave-cpp.log");
+            return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+        };
+        QTRY_VERIFY(logOf(b).contains("pairing code shown for octave --pair-code"));
+        QVERIFY(!logOf(a).contains("pairing code shown"));   // A was not asked
+        // The code is B's: it pairs a device there
+        const QString code = QRegularExpression(R"re("code": "(\d{6})")re").match(out).captured(1);
+        const QByteArray paired = request(appB, portB, QStringLiteral(R"({"op": "pair", "code": "%1", "name": "test"})").arg(code).toUtf8());
+        QVERIFY2(paired.contains(R"("token")"), paired.constData());
+
+        // The channel: the user's own socket, and one op only
+        const QRegularExpressionMatch where = QRegularExpression("admin channel \\(octave --pair-code\\) on (\\S+)").match(logOf(a));
+        QVERIFY2(where.hasMatch(), qPrintable(logOf(a).right(2000)));
+#ifdef Q_OS_UNIX
+        const QFileInfo sock(where.captured(1));
+        QVERIFY(sock.exists());
+        QCOMPARE(sock.permissions() & (QFile::ReadGroup | QFile::WriteGroup | QFile::ReadOther | QFile::WriteOther),
+                 QFile::Permissions());
+#endif
+        QLocalSocket s;
+        s.connectToServer(where.captured(1));
+        QVERIFY(s.waitForConnected(3000));
+        s.write("{\"op\":\"shutdown\"}\n");
+        QVERIFY(s.waitForReadyRead(3000));
+        QVERIFY(s.readAll().contains("only pairCode"));
+
+        for (QProcess *app : {&appA, &appB}) {
+            app->terminate();
+            QVERIFY(finished(*app));
+        }
+#ifdef Q_OS_UNIX
+        QVERIFY(!QFileInfo::exists(where.captured(1)));   // removed at exit
+#endif
+        QCOMPARE(runPairCode(a, &out), 1);
+#endif
     }
 
     void helpAndVersionExitBeforeAnything()
@@ -439,7 +528,7 @@ time.sleep(4)   # the simulated car records a trip meanwhile
             if (args.contains("--version"))
                 QCOMPARE(out.count('\n'), 1);
             else
-                for (const char *flag : {"--service", "--service-bind", "--headless", "--sim", "--config", "--web-root", "--dump-api", "--command-port"})
+                for (const char *flag : {"--service", "--service-bind", "--headless", "--sim", "--config", "--pair-code", "--web-root", "--dump-api", "--command-port"})
                     QVERIFY2(out.contains(flag), flag);
             QVERIFY2(QDir(tmp.path()).isEmpty(), qPrintable(QDir(tmp.path()).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden).join(", ")));
         }
@@ -498,6 +587,59 @@ private:
             } else {
                 QTest::qWait(200);
             }
+        }
+        return {};
+    }
+
+    // One request over a WebSocket as a browser on this device opens it
+    // (with the page's Origin); the first text frame back
+    static QByteArray wsRequest(quint16 port, const QByteArray &json)
+    {
+        QTcpSocket s;
+        s.connectToHost(QHostAddress::LocalHost, port);
+        if (!s.waitForConnected(3000))
+            return {};
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(port);
+        s.write("GET / HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n"
+                "Origin: http://" + host + "\r\n\r\n");
+        QByteArray buf;
+        while (!buf.contains("\r\n\r\n") && s.waitForReadyRead(3000))
+            buf += s.readAll();
+        if (!buf.startsWith("HTTP/1.1 101"))
+            return buf;
+        buf = buf.mid(buf.indexOf("\r\n\r\n") + 4);
+        QByteArray frame("\x81", 1);
+        frame += char(0x80 | 126);
+        frame += char((json.size() >> 8) & 0xFF);
+        frame += char(json.size() & 0xFF);
+        const char mask[4] = {1, 2, 3, 4};
+        frame += QByteArray(mask, 4);
+        for (int i = 0; i < json.size(); ++i)
+            frame += char(json[i] ^ mask[i % 4]);
+        s.write(frame);
+        // Text frames until the reply with our id (events may come first)
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 5000) {
+            while (buf.size() >= 2) {
+                int len = quint8(buf[1]) & 0x7F, off = 2;
+                if (len == 126) {
+                    if (buf.size() < 4)
+                        break;
+                    len = (quint8(buf[2]) << 8) | quint8(buf[3]);
+                    off = 4;
+                }
+                if (buf.size() < off + len)
+                    break;
+                const QByteArray payload = buf.mid(off, len);
+                buf = buf.mid(off + len);
+                if (payload.contains("\"id\":"))
+                    return payload;
+            }
+            if (!s.waitForReadyRead(1000))
+                continue;
+            buf += s.readAll();
         }
         return {};
     }

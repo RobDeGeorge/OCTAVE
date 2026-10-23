@@ -8,8 +8,10 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QtEndian>
 #include <QTest>
 
 #include <memory>
@@ -374,7 +376,181 @@ private slots:
         server.stop();
     }
 
+    // Step 7's limits hold for WebSocket clients too (the line protocol's
+    // tests are in tst_servicebridge)
+    void rateLimitedOverFrames()
+    {
+        CommandServer server(0);
+        server.registerOp(QStringLiteral("echo"), [](const QVariantMap &) { return QVariant(1); });
+        CommandServer::Limits limits;
+        limits.opsPerSecond = 20;
+        limits.opsBurst = 10;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+        QTcpSocket s;
+        QByteArray in;
+        QVERIFY(wsConnect(s, server.port(), in));
+        QByteArray burst;
+        for (int i = 1; i <= 50; ++i)
+            burst += clientFrame(Ws::Text, R"({"op": "echo", "id": )" + QByteArray::number(i) + "}");
+        s.write(burst);
+        QList<QByteArray> texts;
+        QElapsedTimer t;
+        t.start();
+        while (texts.size() < 50 && t.elapsed() < 5000) {
+            if (s.bytesAvailable() > 0 || s.waitForReadyRead(20))
+                in += s.readAll();
+            texts += takeTextFrames(in);
+        }
+        QCOMPARE(texts.size(), 50);
+        int ok = 0;
+        for (const QByteArray &text : std::as_const(texts)) {
+            const QJsonObject r = QJsonDocument::fromJson(text).object();
+            if (r.value("ok").toBool()) {
+                ++ok;
+                continue;
+            }
+            QCOMPARE(r.value("code").toString(), QStringLiteral("rateLimited"));
+            QVERIFY(r.value("retryAfterMs").toInt() > 0);
+            QVERIFY(r.value("id").toInt() > 0);
+        }
+        QVERIFY2(ok >= 10 && ok < 30, qPrintable(QString::number(ok)));
+        server.stop();
+    }
+
+    void aWebSocketConnectLoopIsRefused()
+    {
+        // Upgrades count against the same per-address bucket as everything
+        CommandServer server(0);
+        CommandServer::Limits limits;
+        limits.loopbackConnectsPerSecond = 3;
+        limits.loopbackConnectsBurst = 3;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+        int upgraded = 0, refused = 0;
+        for (int i = 0; i < 15; ++i) {
+            QTcpSocket s;
+            QByteArray in;
+            wsConnect(s, server.port(), in) ? ++upgraded : ++refused;
+        }
+        QVERIFY2(upgraded >= 3 && upgraded < 8, qPrintable(QStringLiteral("%1 upgraded").arg(upgraded)));
+        QVERIFY(refused > 0);
+        QTest::qWait(700);   // the bucket refills
+        QTcpSocket late;
+        QByteArray in;
+        QVERIFY(wsConnect(late, server.port(), in));
+        server.stop();
+    }
+
+    void aWebSocketReaderThatStaysBehindIsClosed()
+    {
+        // At maxUnsentBytes for maxBehindMs the connection goes; another
+        // WebSocket client keeps getting its replies meanwhile
+        CommandServer server(0);
+        std::shared_ptr<Connection> held;
+        QMutex heldLock;
+        server.registerOp(QStringLiteral("hold"), [&](const QVariantMap &) {
+            QMutexLocker l(&heldLock);
+            held = CommandServer::currentConnection();
+            return QVariant(true);
+        });
+        server.registerOp(QStringLiteral("echo"), [](const QVariantMap &) { return QVariant(1); });
+        CommandServer::Limits limits;
+        limits.maxUnsentBytes = 64 * 1024;
+        limits.maxBehindMs = 500;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+        QTcpSocket slow, other;
+        QByteArray slowIn, otherIn;
+        QVERIFY(wsConnect(slow, server.port(), slowIn));
+        QVERIFY(wsConnect(other, server.port(), otherIn));
+        slow.write(clientFrame(Ws::Text, R"({"op": "hold", "id": 1})"));
+        QVERIFY(slow.waitForBytesWritten(3000));
+        QTRY_VERIFY_WITH_TIMEOUT((QMutexLocker(&heldLock), held != nullptr), 3000);
+        slow.setReadBufferSize(1);   // and from now on reads nothing
+        std::shared_ptr<Connection> c;
+        {
+            QMutexLocker l(&heldLock);
+            c = held;
+        }
+        auto otherEchoes = [&other, &otherIn] {
+            other.write(clientFrame(Ws::Text, R"({"op": "echo", "id": 2})"));
+            QList<QByteArray> texts;
+            QElapsedTimer w;
+            w.start();
+            while (texts.isEmpty() && w.elapsed() < 3000) {
+                if (other.bytesAvailable() > 0 || other.waitForReadyRead(20))
+                    otherIn += other.readAll();
+                texts += takeTextFrames(otherIn);
+            }
+            return texts.size() == 1 && QJsonDocument::fromJson(texts.first()).object().value("ok").toBool();
+        };
+        const QByteArray event = "{\"event\":\"signal\",\"pad\":\"" + QByteArray(32 * 1024, 'x') + "\"}\n";
+        QElapsedTimer t;
+        t.start();
+        int i = 0;
+        while (!c->isClosed() && t.elapsed() < 15000) {
+            c->push(event);
+            QTest::qWait(2);
+            if (++i % 100 == 0)   // the other client, meanwhile
+                QVERIFY(otherEchoes());
+        }
+        QVERIFY2(c->isClosed(), "the WebSocket reader that never reads was never closed");
+        QVERIFY(i >= 100);   // the other client was asked at least once while it was behind
+        QVERIFY(otherEchoes());
+        server.stop();
+    }
+
 private:
+    // A WebSocket upgrade on `s`; false if the server refused or closed it.
+    // Leftover bytes after the 101 head stay in `in`
+    static bool wsConnect(QTcpSocket &s, quint16 port, QByteArray &in)
+    {
+        s.connectToHost(QHostAddress::LocalHost, port);
+        if (!s.waitForConnected(3000))
+            return false;
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(port);
+        s.write("GET / HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+        QElapsedTimer t;
+        t.start();
+        while (!in.contains("\r\n\r\n") && s.state() == QAbstractSocket::ConnectedState && t.elapsed() < 3000)
+            if (s.bytesAvailable() > 0 || s.waitForReadyRead(20))
+                in += s.readAll();
+        in += s.readAll();
+        if (!in.startsWith("HTTP/1.1 101") || !in.contains("\r\n\r\n"))
+            return false;
+        in = in.mid(in.indexOf("\r\n\r\n") + 4);
+        return true;
+    }
+
+    // The complete text frames at the front of `in` (server frames: unmasked)
+    static QList<QByteArray> takeTextFrames(QByteArray &in)
+    {
+        QList<QByteArray> out;
+        while (in.size() >= 2) {
+            qint64 n = quint8(in.at(1)) & 0x7F;
+            int off = 2;
+            if (n == 126) {
+                if (in.size() < 4)
+                    break;
+                n = (quint8(in.at(2)) << 8) | quint8(in.at(3));
+                off = 4;
+            } else if (n == 127) {
+                if (in.size() < 10)
+                    break;
+                n = qFromBigEndian<quint64>(in.constData() + 2);
+                off = 10;
+            }
+            if (in.size() < off + n)
+                break;
+            if ((quint8(in.at(0)) & 0x0F) == Ws::Text)
+                out.append(in.mid(off, int(n)));
+            in.remove(0, off + int(n));
+        }
+        return out;
+    }
+
     static QByteArray readUntil(QTcpSocket &s, const QByteArray &marker)
     {
         QByteArray in;

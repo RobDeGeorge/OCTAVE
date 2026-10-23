@@ -8,6 +8,7 @@
 #include "serviceregistry.h"
 #include "streamhub.h"
 #include "servicepairing.h"
+#include "servicescopes.h"
 #include "memberscope.h"
 #include "staticfiles.h"
 
@@ -430,17 +431,38 @@ void ServiceBridge::install(CommandServer &server)
     });
 }
 
+// Loopback trust: full for a program on this device; for a browser page
+// while an installed web frontend is served, only that frontend's scopes
+namespace {
+bool limitedBrowser(const Connection &c, const QStringList &browserScopes)
+{
+    return !browserScopes.isEmpty() && c.browser() && c.tokenId().isEmpty();
+}
+} // namespace
+
 bool ServiceBridge::connectionAllows(const Connection &c, const QString &scope) const
 {
-    if (!m_pairing || (c.peerLoopback() && m_pairing->loopbackOpen()))
+    if (!m_pairing)
         return true;
+    if (c.peerLoopback() && m_pairing->loopbackOpen()) {
+        if (limitedBrowser(c, m_browserScopes))
+            return OctaveService::scopeAllows(m_browserScopes, scope);
+        if (m_browserScopes.isEmpty() || !c.browser())
+            return true;
+    }
     return m_pairing->allows(c.tokenId(), scope);
 }
 
 QStringList ServiceBridge::connectionScopes(const Connection &c) const
 {
-    if (!m_pairing || (c.peerLoopback() && m_pairing->loopbackOpen()))
+    if (!m_pairing)
         return {QStringLiteral("full")};
+    if (c.peerLoopback() && m_pairing->loopbackOpen()) {
+        if (limitedBrowser(c, m_browserScopes))
+            return m_browserScopes;
+        if (m_browserScopes.isEmpty() || !c.browser())
+            return {QStringLiteral("full")};
+    }
     return m_pairing->scopesOf(c.tokenId());
 }
 
