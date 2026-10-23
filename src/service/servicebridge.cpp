@@ -7,6 +7,8 @@
 #include "protocol.h"
 #include "serviceregistry.h"
 #include "streamhub.h"
+#include "servicepairing.h"
+#include "staticfiles.h"
 
 #include <QAbstractItemModel>
 #include <QElapsedTimer>
@@ -197,7 +199,17 @@ QObject *ServiceBridge::object(const QString &name) const
 
 void ServiceBridge::install(CommandServer &server)
 {
-    server.registerOp(QStringLiteral("hello"), [this](const QVariantMap &) {
+    // hello {token?}: a paired device's token makes this connection
+    // trusted; the reply says whether it is
+    server.registerOp(QStringLiteral("hello"), [this](const QVariantMap &args) {
+        const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+        const QString token = args.value(QStringLiteral("token")).toString();
+        if (c && m_pairing && !token.isEmpty()) {
+            const QString id = m_pairing->checkToken(token);
+            if (id.isEmpty())
+                throw CommandError(QStringLiteral("unknown token: pair again"));
+            c->setTokenId(id);
+        }
         return QVariant(QVariantMap{
             {QStringLiteral("protocolVersion"), kProtocolVersion},
             {QStringLiteral("app"), QVariantMap{{QStringLiteral("version"), m_app.version},
@@ -205,8 +217,55 @@ void ServiceBridge::install(CommandServer &server)
                                                                                            : QStringLiteral("release")},
                                                 {QStringLiteral("headless"), m_app.headless}}},
             {QStringLiteral("objects"), m_registry->names()},
+            {QStringLiteral("auth"), (!c || trusted(*c)) ? QStringLiteral("trusted") : QStringLiteral("untrusted")},
+            {QStringLiteral("loopbackOpen"), m_pairing ? m_pairing->loopbackOpen() : true},
         });
     });
+
+    if (m_pairing) {
+        // pair {code, name} -> {token}: the 6-digit code the head unit shows
+        server.registerOp(QStringLiteral("pair"), [this](const QVariantMap &args) -> QVariant {
+            const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+            QString error;
+            const QString token = m_pairing->pair(args.value(QStringLiteral("code")).toString(),
+                                                  args.value(QStringLiteral("name")).toString(),
+                                                  c ? c->peerAddress() : QString(), &error);
+            if (token.isEmpty())
+                throw CommandError(error);
+            if (c)
+                c->setTokenId(m_pairing->checkToken(token));
+            return QVariantMap{{QStringLiteral("token"), token}};
+        });
+        // unpair: forget this connection's own device
+        server.registerOp(QStringLiteral("unpair"), [this](const QVariantMap &) -> QVariant {
+            const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+            if (!c || c->tokenId().isEmpty())
+                throw CommandError(QStringLiteral("this connection is not a paired device"));
+            m_pairing->unpair(c->tokenId());
+            return true;
+        });
+        // mediaTicket -> {ticket, expiresIn}: for /art?ticket= and
+        // /export?ticket=, so no token goes in a URL
+        server.registerOp(QStringLiteral("mediaTicket"), [this](const QVariantMap &) -> QVariant {
+            const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+            if (!c)
+                throw CommandError(QStringLiteral("mediaTicket needs a connection"));
+            return QVariantMap{{QStringLiteral("ticket"), m_pairing->mintTicket(c->tokenId())},
+                               {QStringLiteral("expiresIn"), int(ServicePairing::kTicketLifetimeMs / 1000)}};
+        });
+        server.setTrust([this](const Connection &c) { return trusted(c); },
+                        [this](const Connection &c, const QHash<QByteArray, QByteArray> &headers, const QByteArray &target) {
+                            if (trusted(c))
+                                return true;
+                            const QByteArray auth = headers.value("authorization");
+                            if (auth.startsWith("Bearer ")
+                                && !m_pairing->checkToken(QString::fromLatin1(auth.mid(7).trimmed())).isEmpty())
+                                return true;
+                            const QString ticket = StaticFiles::queryValue(target, QStringLiteral("ticket"));
+                            return !ticket.isEmpty() && m_pairing->checkTicket(ticket, c.peerLoopback());
+                        },
+                        {QStringLiteral("hello"), QStringLiteral("pair")});
+    }
 
     server.registerOp(QStringLiteral("get"), [this](const QVariantMap &args) {
         QPointer<QObject> o = object(args.value(QStringLiteral("object")).toString());
@@ -332,6 +391,16 @@ void ServiceBridge::install(CommandServer &server)
         return QVariant(QVariantMap{{QStringLiteral("protocolVersion"), kProtocolVersion},
                                     {QStringLiteral("objects"), all}});
     });
+}
+
+bool ServiceBridge::trusted(const Connection &c) const
+{
+    if (!m_pairing)
+        return true;
+    if (c.peerLoopback() && m_pairing->loopbackOpen())
+        return true;
+    const QString id = c.tokenId();
+    return !id.isEmpty() && m_pairing->tokenIdValid(id);
 }
 
 void ServiceBridge::releaseOnClose(const QString &object, const QString &method, const QVariant &release)

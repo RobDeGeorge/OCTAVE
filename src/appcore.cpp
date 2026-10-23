@@ -25,6 +25,7 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     , nowPlaying(&mediaManager, &phoneMirrorManager, &settingsManager)
     , fontCatalog(frontendDir.absoluteFilePath(QStringLiteral("assets/fonts")))
     , themeCatalog(frontendDir.absoluteFilePath(QStringLiteral("themes.json")), &settingsManager)
+    , servicePairing(&settingsManager)
 {
     // Settings Manager — central settings store, everything depends on this
     expose("settingsManager", &settingsManager);

@@ -55,6 +55,8 @@
 
 class QObject;
 
+class ServicePairing;
+
 namespace OctaveService {
 
 class CommandServer;
@@ -74,6 +76,10 @@ public:
 
     // Register the ops on `server` (before or after it starts)
     void install(CommandServer &server);
+    // Protocol v2 trust (servicepairing.h): with it, every op but hello and
+    // pair needs a trusted connection. Before install(). None = all trusted.
+    void setPairing(ServicePairing *pairing) { m_pairing = pairing; }
+    bool trusted(const Connection &c) const;
 
     // `object`.`method`(consumer, value) claims `consumer` for the calling
     // connection unless `value` is the release value (an empty list for a
@@ -112,6 +118,7 @@ private:
 
     ServiceRegistry *m_registry;
     AppInfo m_app;
+    ServicePairing *m_pairing = nullptr;
 };
 
 } // namespace OctaveService

@@ -60,6 +60,19 @@ class HeadlessClientTest(unittest.TestCase):
 
     def test_hello_on_connect(self):
         self.assertEqual(self.octave.server["protocolVersion"], PROTOCOL_VERSION)
+        # On this device, with loopback open (the default), no pairing
+        self.assertEqual(self.octave.server["auth"], "trusted")
+        self.assertTrue(self.octave.trusted)
+
+    def test_media_ticket(self):
+        ticket = self.octave.media_ticket()
+        self.assertEqual(len(ticket["ticket"]), 32)
+        self.assertEqual(ticket["expiresIn"], 600)
+
+    def test_pair_needs_the_code_on_screen(self):
+        with self.assertRaises(OctaveError) as e:
+            self.octave.pair("000000", "test")
+        self.assertIn("no pairing code", str(e.exception))
 
     def test_errors_raise(self):
         with self.assertRaises(OctaveError):

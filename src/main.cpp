@@ -217,6 +217,11 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
             });
         }
 #endif
+        // Protocol v2: pairing (servicepairing.h); a revoked device's
+        // connections close
+        service.bridge->setPairing(&core.servicePairing);
+        QObject::connect(&core.servicePairing, &ServicePairing::revoked, service.server.get(),
+                         [server = service.server.get()](const QString &id) { server->closeConnectionsOf(id); });
         // A client that goes without saying so leaves no demand behind
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setParameterDemand"), QStringList());
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setBackgroundDemand"), QStringList());
@@ -549,6 +554,9 @@ int main(int argc, char *argv[])
     // Assimp importer) must open themselves — extracted from the APK on Android.
     AssetStore assetStore(frontendDir.absoluteFilePath(QStringLiteral("assets")));
     ctx->setContextProperty("assetStore", &assetStore);
+    // Settings > Service: pairing codes, paired devices, the service switch
+    // (QML only: never a service object)
+    ctx->setContextProperty("servicePairing", &core.servicePairing);
 
     // Optional QML modules, checked without loading them: CarMenu's 3D view
     // needs QtQuick3D (SensorHome greys its card without it); the music
