@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <QQmlApplicationEngine>
@@ -284,10 +285,79 @@ int runHeadless(QGuiApplication &app, bool smokeTest)
 }
 #endif
 
+// Every flag the app reads, for --help (and the unknown-flag warning).
+// Keep in step with the parsing below, serviceoptions.cpp and devruntime.
+struct Flag {
+    const char *name;
+    const char *arg;    // "" = none
+    const char *help;
+};
+constexpr Flag kFlags[] = {
+    {"--help", "", "print this and exit (also -h)"},
+    {"--version", "", "print the version and exit"},
+    {"--service", "[PORT]", "serve the service protocol on 127.0.0.1:PORT (9876); also --service=PORT"},
+    {"--service-bind", "ADDRESS", "listen on ADDRESS instead of 127.0.0.1 (no authentication: read the docs first)"},
+    {"--command-port", "PORT", "the service port, older spelling"},
+    {"--web-root", "DIR", "serve DIR (a built web frontend with index.html) at GET / instead of the reference client"},
+    {"--headless", "", "every manager and the service, no QML engine and no window"},
+    {"--dump-api", "DIR", "write the published API (docs/api) to DIR and exit"},
+    {"--smoke", "", "start, run 5 s, exit 0 (CI)"},
+    {"--debug", "", "debug logging (octave-cpp-debug.log)"},
+#ifdef OCTAVE_DEV_TOOLS
+    {"--dev", "", "simulated car (OBD and IMU) and the dev overlay; with --headless, no UI"},
+    {"--profile", "", "perf monitor, and the service with the UI / perf / sim actions"},
+#endif
+};
+
+// --help / --version, or "" to start: decided before any manager, config
+// read or log file exists
+QString earlyExitText(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--version") == 0)
+            return QStringLiteral("OCTAVE %1\n").arg(QStringLiteral(OCTAVE_VERSION));
+        if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
+            QString text = QStringLiteral("OCTAVE %1\nUsage: octave [options]\n\n").arg(QStringLiteral(OCTAVE_VERSION));
+            for (const Flag &f : kFlags) {
+                const QString left = QStringLiteral("  %1 %2").arg(QLatin1String(f.name), QLatin1String(f.arg)).trimmed();
+                text += QStringLiteral("  %1  %2\n").arg(left.leftJustified(24), QLatin1String(f.help));
+            }
+            return text + QStringLiteral("\nDocumentation: wiki/development.html, wiki/writing-a-frontend.html\n");
+        }
+    }
+    return {};
+}
+
+// A "--flag" this build doesn't know (a typo, or a flag from another
+// build): said on stderr before anything starts
+void warnUnknownFlags(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i) {
+        const QString a = QString::fromLocal8Bit(argv[i]);
+        if (!a.startsWith(QLatin1String("--")) || a.startsWith(QLatin1String("--qmljsdebugger")))
+            continue;
+        const QString name = a.section(QLatin1Char('='), 0, 0);
+        bool known = false;
+        for (const Flag &f : kFlags)
+            known = known || name == QLatin1String(f.name);
+#ifndef OCTAVE_DEV_TOOLS
+        known = known || name == QLatin1String("--dev") || name == QLatin1String("--profile");   // warned about later
+#endif
+        if (!known)
+            std::fprintf(stderr, "octave: unknown option %s (see octave --help)\n", qPrintable(name));
+    }
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
 {
+    if (const QString text = earlyExitText(argc, argv); !text.isEmpty()) {
+        std::fputs(text.toLocal8Bit().constData(), stdout);
+        return 0;
+    }
+    warnUnknownFlags(argc, argv);
+
     // Persistent logging + crash handlers first, so anything the managers
     // say during construction (and any crash) reaches the log files.
     bool debugLogging = false;
