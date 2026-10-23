@@ -1,4 +1,5 @@
 #include "commandserver.h"
+#include "staticfiles.h"
 #include "websocket.h"
 
 #include <QColor>
@@ -161,6 +162,16 @@ private:
         if (const QString why = Ws::refusal(request); !why.isEmpty()) {
             qCWarning(lcCommand).noquote() << "refused" << sock.peerAddress().toString() << ":" << why;
             sock.write(Ws::httpResponse(403, "Forbidden", "text/plain", why.toUtf8() + '\n'));
+            flush(sock);
+            return;
+        }
+        if (!Ws::isUpgrade(request) && !m_owner->webRoot().isEmpty()) {
+            // A frontend's own files (--web-root), same-origin with the socket
+            const StaticFiles::Reply r = request.method == "GET"
+                ? StaticFiles::serve(m_owner->webRoot(), request.path)
+                : StaticFiles::Reply{405, "Method Not Allowed", "text/plain", "GET only\n"};
+            sock.write(Ws::httpResponse(r.status, r.reason, r.contentType, r.body,
+                                        Ws::webRootCsp(request.headers.value("host"))));
             flush(sock);
             return;
         }

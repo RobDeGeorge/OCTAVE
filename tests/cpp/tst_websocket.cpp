@@ -3,10 +3,13 @@
 // limits, the Origin rule that keeps websites off it, and a real browser-
 // shaped client against a running CommandServer, plus the page at GET /.
 
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTcpSocket>
+#include <QTemporaryDir>
 #include <QTest>
 
 #include <memory>
@@ -194,6 +197,51 @@ private slots:
         // The JSON-lines protocol is unchanged on the same port
         reply = once(server.port(), "{\"action\": \"ping\"}\n");
         QCOMPARE(reply.trimmed(), QByteArray(R"({"ok":true,"result":"pong"})"));
+        server.stop();
+    }
+
+    void servesAWebRootSameOrigin()
+    {
+        QTemporaryDir tmp;
+        QDir(tmp.path()).mkpath("assets");
+        auto write = [&tmp](const char *rel, const QByteArray &data) {
+            QFile f(QDir(tmp.path()).filePath(QString::fromLatin1(rel)));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(data);
+        };
+        write("index.html", "<html>frontend</html>");
+        write("assets/app.js", "go()");
+        CommandServer server(0);
+        server.setPage("<html>client</html>");
+        server.setWebRoot(tmp.path());   // wins over the page
+        QVERIFY(server.start());
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+
+        QByteArray reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.endsWith("<html>frontend</html>"), reply.constData());
+        QVERIFY(reply.contains("X-Content-Type-Options: nosniff"));
+        QVERIFY(reply.contains("Cache-Control: no-store"));
+        // Its own scripts, no inline script, sockets to this service only
+        QVERIFY2(reply.contains("script-src 'self' 'wasm-unsafe-eval';"), reply.constData());
+        QVERIFY2(reply.contains("connect-src 'self' ws://" + host + " wss://" + host + ";"), reply.constData());
+        QVERIFY(!reply.contains("ws: wss:"));
+        // A module script fetch carries the page's Origin: same origin passes
+        reply = once(server.port(), "GET /assets/app.js HTTP/1.1\r\nHost: " + host + "\r\nOrigin: http://" + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.contains("Content-Type: text/javascript"), reply.constData());
+        reply = once(server.port(), "GET /assets/app.js HTTP/1.1\r\nHost: " + host + "\r\nOrigin: https://example.com\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        reply = once(server.port(), "GET /../../etc/passwd HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        // Only GET is HTTP on this port: anything else is a JSON line, never a file
+        reply = once(server.port(), "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 0\r\n\r\n");
+        QVERIFY2(!reply.contains("frontend"), reply.constData());
+        // A Host header that is a name, or tries to add a directive, is not echoed
+        reply = once(server.port(), "GET / HTTP/1.1\r\nHost: evil.example; script-src *\r\n\r\n");
+        QVERIFY2(reply.contains("connect-src 'self';") && !reply.contains("evil"), reply.constData());
+        // The socket still upgrades on the same port
+        reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nOrigin: http://" + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 101"), reply.constData());
         server.stop();
     }
 

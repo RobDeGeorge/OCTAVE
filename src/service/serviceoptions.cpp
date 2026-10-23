@@ -1,5 +1,8 @@
 #include "serviceoptions.h"
 
+#include <QDir>
+#include <QFileInfo>
+
 namespace OctaveService {
 
 namespace {
@@ -15,9 +18,11 @@ bool parsePort(const QString &text, quint16 &port)
 }
 } // namespace
 
-ServiceOptions parseServiceOptions(const QStringList &arguments, bool settingEnabled, bool devToolsBuild)
+ServiceOptions parseServiceOptions(const QStringList &arguments, bool settingEnabled, bool devToolsBuild,
+                                   const QString &settingWebRoot)
 {
     ServiceOptions o;
+    QString webRoot = settingWebRoot;
     bool asked = settingEnabled;
     auto badPort = [&o](const QString &text) {
         o.error = QStringLiteral("not a port: %1").arg(text);
@@ -50,6 +55,12 @@ ServiceOptions parseServiceOptions(const QStringList &arguments, bool settingEna
                 : (i + 1 < arguments.size() ? arguments.at(++i) : QString());
             if (!o.bind.setAddress(text))
                 o.error = QStringLiteral("not an address: %1").arg(text);
+        } else if (a == QLatin1String("--web-root") || a.startsWith(QLatin1String("--web-root="))) {
+            webRoot = a.contains(QLatin1Char('='))
+                ? a.section(QLatin1Char('='), 1)
+                : (i + 1 < arguments.size() ? arguments.at(++i) : QString());
+            if (webRoot.isEmpty())
+                o.error = QStringLiteral("--web-root needs a directory");
         } else if (a == QLatin1String("--headless")) {
             asked = true;
         } else if (a == QLatin1String("--profile") && devToolsBuild) {
@@ -57,8 +68,20 @@ ServiceOptions parseServiceOptions(const QStringList &arguments, bool settingEna
         }
     }
 
+    if (!webRoot.isEmpty())
+        o.webRoot = QDir::cleanPath(QDir::current().absoluteFilePath(webRoot));
     o.enabled = asked && o.error.isEmpty();
     return o;
+}
+
+QString webRootProblem(const QString &dir)
+{
+    const QFileInfo info(dir);
+    if (!info.isDir())
+        return QStringLiteral("%1 is not a directory").arg(dir);
+    if (!QFileInfo(QDir(dir).filePath(QStringLiteral("index.html"))).isFile())
+        return QStringLiteral("%1 has no index.html").arg(dir);
+    return {};
 }
 
 } // namespace OctaveService
