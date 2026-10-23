@@ -1,357 +1,75 @@
-// The service-protocol client for the browser: one WebSocket to OCTAVE
-// carrying JSON messages (wiki/utilities.html#service-protocol, docs/api/).
-//
-// - connect / reconnect with backoff; every subscription is re-issued on
-//   reconnect, so a page only declares what it wants once
-// - request / reply by id (hello, describe, get, set, call, rows, ...)
-// - subscriptions as Svelte stores: prop(), params(), model(), signal()
-// - a describe cache
-//
-// Written against protocol version 1 (docs/api/README.md).
+// Glass's connection to OCTAVE: the octave-client package (sdk/typescript)
+// with its subscriptions wrapped as Svelte stores. Pages import `octave`.
+import { readable, writable, type Readable, type Writable } from 'svelte/store'
+import { OctaveClient, defaultUrl as sdkDefaultUrl, type Json, type Status, type Hello, type Description, type ServiceEvent, type StreamHandlers, type StreamInfo } from 'octave-client'
 
-import { readable, writable, get, type Readable, type Writable } from 'svelte/store'
-import { parseRecord, type MediaRecord, type StreamEvents, type StreamInfo } from './stream'
-
-/** The protocol versions this page understands: 1, and 2 (pairing; loopback stays open). */
-export const PROTOCOL_VERSIONS = [1, 2]
-export const PROTOCOL_VERSION = 1
-
-export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
-export type Status = 'connecting' | 'online' | 'offline' | 'mismatch'
-
-export interface Hello {
-  protocolVersion: number
-  app: { version: string; build: string; headless: boolean }
-  objects: string[]
-}
-
-export interface PropertyMeta {
-  name: string
-  type: string
-  readable: boolean
-  writable: boolean
-  constant?: boolean
-  notify?: string
-  enum?: string[]
-}
-export interface ParamMeta { name: string; type: string }
-export interface MethodMeta { name: string; kind: string; params: ParamMeta[]; returns?: string }
-export interface SignalMeta { name: string; params: ParamMeta[] }
-export interface Description {
-  object: string
-  class: string
-  properties: PropertyMeta[]
-  methods: MethodMeta[]
-  signals: SignalMeta[]
-  enums?: Record<string, string[]>
-}
-
-export type ModelChange =
-  | { change: 'reset' | 'insert' | 'update'; first: number; last: number; rows: Record<string, Json>[] }
-  | { change: 'remove'; first: number; last: number }
-
-type Event =
-  | { event: 'property'; sub: number; object: string; name: string; value: Json; t?: number }
-  | { event: 'params'; sub: number; object: string; values: Record<string, number | null> }
-  | { event: 'signal'; sub: number; object: string; name: string; args: Json[] }
-  | ({ event: 'model'; sub: number; object: string; name: string } & ModelChange)
-  | { event: 'dropped'; count: number }
-  | { event: 'streamConfig'; stream: number; codec?: string; width?: number; height?: number }
-  | { event: 'streamDropped'; stream: number; count: number }
-
-interface Pending { resolve: (v: Json) => void; reject: (e: Error) => void; sub?: Sub }
-
-/** What one `subscribe` to the service looks like, kept so it can be replayed. */
-interface Sub {
-  object: string
-  properties?: string[]
-  signals?: string[]
-  throttleMs?: number
-  /** Called for every event that arrives on this subscription. */
-  onEvent: (e: Event) => void
-  /** The id the service gave us this time round, or 0 while offline. */
-  id: number
-}
-
-export class OctaveError extends Error {}
+export { OctaveError, PROTOCOL_VERSION } from 'octave-client'
+export type { Json, Status, Hello, Description, ServiceEvent, StreamHandlers, StreamInfo, MediaRecord, ModelChange } from 'octave-client'
 
 /** Where the service is for this page: dev-proxied under /ws, or the page's own host. */
 export function defaultUrl(): string {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = location.host || '127.0.0.1:9876'
-  return import.meta.env.DEV ? `${proto}//${host}/ws` : `${proto}//${host}/`
+  return import.meta.env.DEV ? `${proto}//${host}/ws` : sdkDefaultUrl()
 }
 
 export class Octave {
+  readonly client: OctaveClient
   readonly status: Writable<Status> = writable('connecting')
   readonly hello: Writable<Hello | null> = writable(null)
-  /** Seconds until the next reconnect attempt, for the offline banner. */
-  readonly retryIn: Writable<number> = writable(0)
 
-  private ws: WebSocket | null = null
-  private nextId = 1
-  private pending = new Map<number, Pending>()
-  private subs = new Set<Sub>()
-  /** Open media streams by the id the service gave them. */
-  private streams = new Map<number, StreamEvents & { object: string; name: string }>()
-  private describeCache = new Map<string, Promise<Description>>()
-  private backoff = 500
-  private retryTimer: ReturnType<typeof setTimeout> | null = null
-  private closed = false
-
-  constructor(readonly url: string = defaultUrl()) {}
-
-  // ── lifecycle ───────────────────────────────────────────────────────────
-
-  connect(): void {
-    this.closed = false
-    this.open()
-  }
-
-  close(): void {
-    this.closed = true
-    if (this.retryTimer) clearTimeout(this.retryTimer)
-    this.ws?.close()
-  }
-
-  private open(): void {
-    this.status.set('connecting')
-    const ws = new WebSocket(this.url)
-    ws.binaryType = 'arraybuffer'
-    this.ws = ws
-    ws.onopen = async () => {
-      this.backoff = 500
-      try {
-        const hello = (await this.request('hello')) as unknown as Hello
-        this.hello.set(hello)
-        if (!PROTOCOL_VERSIONS.includes(hello.protocolVersion)) {
-          this.status.set('mismatch')
-        } else {
-          this.status.set('online')
-        }
-        // Replay every live subscription on the new connection
-        for (const sub of this.subs) this.send(sub)
-      } catch (e) {
-        console.warn('octave: hello failed', e)
-        ws.close()
-      }
-    }
-    ws.onmessage = (m) => {
-      if (m.data instanceof ArrayBuffer) { const r = parseRecord(m.data); if (r) this.streams.get(r.stream)?.onRecord(r); return }
-      this.dispatch(JSON.parse(m.data))
-    }
-    ws.onerror = () => { /* onclose follows */ }
-    ws.onclose = () => {
-      if (this.ws !== ws) return
-      this.ws = null
-      for (const p of this.pending.values()) p.reject(new OctaveError('connection closed'))
-      this.pending.clear()
-      for (const sub of this.subs) sub.id = 0
-      this.streams.clear()   // a stream ends with its connection; the page opens it again
-      this.describeCache.clear()
-      this.status.set('offline')
-      if (!this.closed) this.scheduleRetry()
-    }
-  }
-
-  private scheduleRetry(): void {
-    const delay = this.backoff
-    this.backoff = Math.min(this.backoff * 1.7, 8000)
-    const started = Date.now()
-    this.retryIn.set(Math.ceil(delay / 1000))
-    const tick = setInterval(() => {
-      this.retryIn.set(Math.max(0, Math.ceil((delay - (Date.now() - started)) / 1000)))
-    }, 250)
-    this.retryTimer = setTimeout(() => {
-      clearInterval(tick)
-      this.retryIn.set(0)
-      this.open()
-    }, delay)
-  }
-
-  private dispatch(msg: Record<string, Json>): void {
-    if ('event' in msg) {
-      const e = msg as unknown as Event
-      if (e.event === 'dropped') {
-        console.warn(`octave: ${e.count} events dropped`)
-        return
-      }
-      if (e.event === 'streamConfig') { this.streams.get(e.stream)?.onConfig?.(e as StreamInfo); return }
-      if (e.event === 'streamDropped') { this.streams.get(e.stream)?.onDropped?.(e.count); return }
-      for (const sub of this.subs) if (sub.id === e.sub) sub.onEvent(e)
-      return
-    }
-    const p = this.pending.get(msg.id as number)
-    if (!p) return
-    this.pending.delete(msg.id as number)
-    // A subscribe reply names its id: record it here, synchronously, since the
-    // subscription's first events are already in the next frames and a
-    // promise .then would run after they had been dispatched.
-    if (msg.ok && p.sub) p.sub.id = (msg.result as { sub: number }).sub
-    if (msg.ok) p.resolve(msg.result as Json)
-    else p.reject(new OctaveError(String(msg.error ?? 'unknown error')))
-  }
-
-  // ── requests ────────────────────────────────────────────────────────────
-
-  /** Resolves once the connection is open (hello answered), or rejects after `ms`. */
-  whenOnline(ms = 10000): Promise<void> {
-    if (get(this.status) === 'online') return Promise.resolve()
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { unsub(); reject(new OctaveError('not connected')) }, ms)
-      const unsub = this.status.subscribe((s) => { if (s === 'online') { clearTimeout(t); queueMicrotask(unsub); resolve() } })
+  constructor(url: string = defaultUrl()) {
+    this.client = new OctaveClient({ url, checkVersion: false })
+    this.client.on('status', (s) => this.status.set(s))
+    this.client.on('hello', (h) => {
+      this.hello.set(h)
+      // loopback is open under protocol 2 as under 1; anything else is a page / app mismatch
+      if (![1, 2].includes(h.protocolVersion)) this.status.set('mismatch')
     })
   }
 
-  /** Any op. A request made while (re)connecting waits for the connection
-   *  rather than failing, so a page can ask for what it needs on load. */
-  async request(op: string, args: Record<string, unknown> = {}): Promise<Json> {
-    if (op !== 'hello' && get(this.status) !== 'online') await this.whenOnline()
-    return this.send0(op, args)
-  }
+  connect(): void { this.client.connect() }
+  close(): void { this.client.close() }
+  whenOnline(ms?: number): Promise<void> { return this.client.whenOnline(ms) }
+  request(op: string, args?: Record<string, unknown>): Promise<Json> { return this.client.request(op, args) }
+  get<T = Json>(object: string, property?: string): Promise<T> { return this.client.get<T>(object, property) }
+  set<T = Json>(object: string, property: string, value: unknown): Promise<T> { return this.client.set<T>(object, property, value) }
+  call<T = Json>(object: string, method: string, ...args: unknown[]): Promise<T> { return this.client.call<T>(object, method, ...args) }
+  rows<T = Record<string, Json>>(object: string, property: string, from = 0, count?: number): Promise<T[]> { return this.client.rows<T>(object, property, from, count) }
+  describe(object: string): Promise<Description> { return this.client.describe(object) }
+  stream(object: string, name: string, handlers: StreamHandlers): Promise<{ info: StreamInfo; close: () => void }> { return this.client.stream(object, name, handlers) }
 
-  private send0(op: string, args: Record<string, unknown>, sub?: Sub): Promise<Json> {
-    const ws = this.ws
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return Promise.reject(new OctaveError('not connected'))
-    }
-    const id = this.nextId++
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, sub })
-      ws.send(JSON.stringify({ op, id, ...args }))
-    })
-  }
-
-  get<T = Json>(object: string, property?: string): Promise<T> {
-    return this.request('get', property ? { object, property } : { object }) as Promise<T>
-  }
-
-  set<T = Json>(object: string, property: string, value: unknown): Promise<T> {
-    return this.request('set', { object, property, value }) as Promise<T>
-  }
-
-  call<T = Json>(object: string, method: string, ...args: unknown[]): Promise<T> {
-    return this.request('call', { object, method, args }) as Promise<T>
-  }
-
-  rows<T = Record<string, Json>>(object: string, property: string, from = 0, count?: number): Promise<T[]> {
-    return this.request('rows', { object, property, from, ...(count !== undefined ? { count } : {}) }) as Promise<T[]>
-  }
-
-  describe(object: string): Promise<Description> {
-    let p = this.describeCache.get(object)
-    if (!p) {
-      p = this.request('describe', { object }) as unknown as Promise<Description>
-      p.catch(() => this.describeCache.delete(object))
-      this.describeCache.set(object, p)
-    }
-    return p
-  }
-
-  // ── subscriptions ───────────────────────────────────────────────────────
-
-  private send(sub: Sub): void {
-    const args: Record<string, unknown> = { object: sub.object }
-    if (sub.properties) args.properties = sub.properties
-    if (sub.signals) args.signals = sub.signals
-    if (sub.throttleMs) args.throttleMs = sub.throttleMs
-    this.send0('subscribe', args, sub)
-      .catch((e) => console.warn(`octave: subscribe ${sub.object} failed:`, e.message))
-  }
-
-  private addSub(sub: Sub): () => void {
-    this.subs.add(sub)
-    if (get(this.status) === 'online') this.send(sub)
-    return () => {
-      this.subs.delete(sub)
-      if (sub.id) this.request('unsubscribe', { sub: sub.id }).catch(() => {})
-    }
-  }
-
-  /** One property as a store. The service sends the current value at once. */
+  /** One property as a store; the service sends the current value at once. */
   prop<T = Json>(object: string, name: string, initial: T, throttleMs?: number): Readable<T> {
-    return readable(initial, (set) =>
-      this.addSub({
-        object, properties: [name], throttleMs, id: 0,
-        onEvent: (e) => { if (e.event === 'property' && e.name === name) set(e.value as T) },
-      }))
+    return readable(initial, (set) => this.client.property<T>(object, name, set, throttleMs))
   }
 
-  /** Several properties of one object, as one store of {name: value}. */
+  /** Several properties of one object as one store of {name: value}. */
   props<T extends Record<string, Json>>(object: string, names: (keyof T & string)[], initial: T, throttleMs?: number): Readable<T> {
-    return readable(initial, (set, update) =>
-      this.addSub({
-        object, properties: names, throttleMs, id: 0,
-        onEvent: (e) => {
-          if (e.event === 'property') update((v) => ({ ...v, [e.name]: e.value }))
-        },
-      }))
+    return readable(initial, (_set, update) =>
+      this.client.subscribe(object, { properties: names, throttleMs }, (e) => { if (e.event === 'property') update((v) => ({ ...v, [e.name]: e.value })) }))
   }
 
   /** A signal: the handler gets its arguments. Returns the unsubscribe. */
   signal(object: string, name: string, handler: (...args: Json[]) => void): () => void {
-    return this.addSub({
-      object, signals: [name], id: 0,
-      onEvent: (e) => { if (e.event === 'signal' && e.name === name) handler(...e.args) },
-    })
+    return this.client.signal(object, name, handler)
   }
 
   /** Live paramStore values (native units) for a set of ids, as {id: value}. */
   params(ids: string[], throttleMs = 50): Readable<Record<string, number>> {
-    return readable<Record<string, number>>({}, (set, update) => {
+    return readable<Record<string, number>>({}, (_set, update) => {
       if (ids.length === 0) return
-      return this.addSub({
-        object: 'paramStore', properties: ids, throttleMs, id: 0,
-        onEvent: (e) => {
-          if (e.event !== 'params') return
-          update((v) => {
-            const n = { ...v }
-            for (const [k, x] of Object.entries(e.values)) {
-              if (x === null) delete n[k]; else n[k] = x
-            }
-            return n
-          })
-        },
-      })
+      return this.client.params(ids, (values) => update((v) => {
+        const n = { ...v }
+        for (const [k, x] of Object.entries(values)) { if (x === null) delete n[k]; else n[k] = x }
+        return n
+      }), throttleMs)
     })
   }
 
   /** A list-model property as a store of rows, kept current from model events. */
   model<T = Record<string, Json>>(object: string, name: string): Readable<T[]> {
-    return readable<T[]>([], (set, update) =>
-      this.addSub({
-        object, properties: [name], id: 0,
-        onEvent: (e) => {
-          if (e.event !== 'model' || e.name !== name) return
-          update((rows) => {
-            const r = rows.slice()
-            switch (e.change) {
-              case 'reset': return (e.rows as T[]) ?? []
-              case 'insert': r.splice(e.first, 0, ...(e.rows as T[])); return r
-              case 'remove': r.splice(e.first, e.last - e.first + 1); return r
-              case 'update': (e.rows as T[]).forEach((row, i) => { r[e.first + i] = row }); return r
-            }
-          })
-        },
-      }))
-  }
-
-  // ── media streams ───────────────────────────────────────────────────────
-
-  /** Open a media stream (phoneMirrorManager "video", androidAutoManager
-   *  "frames"). Records arrive on `events.onRecord`; the returned function
-   *  closes it. A stream ends with its connection: open it again after a
-   *  reconnect. */
-  async stream(object: string, name: string, events: StreamEvents): Promise<{ info: StreamInfo; close: () => void }> {
-    const info = (await this.request('stream', { object, name })) as unknown as StreamInfo
-    this.streams.set(info.stream, { ...events, object, name })
-    events.onConfig?.(info)
-    return {
-      info,
-      close: () => {
-        if (this.streams.delete(info.stream)) this.request('unstream', { stream: info.stream }).catch(() => {})
-      },
-    }
+    return readable<T[]>([], (set) => this.client.model<T>(object, name, set))
   }
 }
 
