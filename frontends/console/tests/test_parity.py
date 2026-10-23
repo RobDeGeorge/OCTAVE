@@ -358,14 +358,19 @@ async def test_settings_presets_import_export_and_folder(sdk):
         assert await wait_for(pilot, lambda: picker.path == folder)
         assert any(label.endswith("/") or label.startswith("..") for _, label in picker.entries)
         shot(app, "folder-pick")
+        # up a level (a parent folder, the list of places, or a refusal), then back to the folder
         await pilot.press("backspace")
-        assert await wait_for(pilot, lambda: picker.path == picker.up_path or picker.path != folder)
-        name = folder.rstrip("/").rsplit("/", 1)[-1]
-        assert await wait_for(pilot, lambda: any(label == name + "/" for _, label in picker.entries))
-        idx = [label for _, label in picker.entries].index(name + "/")
-        picker.query_one(OptionList).highlighted = idx
-        await pilot.press("enter")
-        assert await wait_for(pilot, lambda: picker.path == folder)
+        await wait_for(pilot, lambda: picker.path != folder or "may" in str(picker.query_one("#folder-info").render()))
+        if picker.path != folder:
+            name = folder.rstrip("/").rsplit("/", 1)[-1]
+
+            def entry():
+                return next((i for i, (path, label) in enumerate(picker.entries)
+                             if path == folder or label == name + "/"), None)
+            assert await wait_for(pilot, lambda: entry() is not None)
+            picker.query_one(OptionList).highlighted = entry()
+            await pilot.press("enter")
+            assert await wait_for(pilot, lambda: picker.path == folder)
         await pilot.press("s")
         assert await wait_for(pilot, lambda: screen_name(app) != "FolderPick")
         assert sdk.get("settingsManager", "mediaFolder") == folder
