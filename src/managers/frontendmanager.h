@@ -72,7 +72,8 @@ public:
     Q_INVOKABLE QString installFromFolder(const QString &path);
     Q_INVOKABLE QString installFromZip(const QString &path);
     Q_INVOKABLE bool remove(const QString &id);
-    // "" = the built-in QML UI. From the next start
+    // "" = the built-in QML UI. From the next start; choosing a frontend
+    // also deletes USE_QML
     Q_INVOKABLE bool setActive(const QString &id);
     // Delete USE_QML, so the active exec frontend starts again next time
     Q_INVOKABLE void clearForcedQml();

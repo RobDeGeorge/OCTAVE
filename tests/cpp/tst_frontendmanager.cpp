@@ -383,6 +383,10 @@ private slots:
         fm.clearForcedQml();
         QVERIFY(!fm.forcedQml());
         QCOMPARE(FrontendManager::bootChoice(root, false).kind, FrontendManager::Boot::Exec);
+        // Choosing it again clears USE_QML too
+        FrontendManager::forceQml(root, "again");
+        QVERIFY(fm.setActive("org.test.exec"));
+        QVERIFY(!fm.forcedQml());
 
         // A program missing after install: the QML UI, with the reason
         QFile::remove(QDir(root).filePath("org.test.exec/bin/run"));

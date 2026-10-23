@@ -243,6 +243,11 @@ octave_add_test(tst_servicepairing
     SOURCES service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Network)
 set_tests_properties(tst_servicepairing PROPERTIES TIMEOUT 120)
+# The exec frontend supervisor with fake frontends (shell scripts)
+octave_add_test(tst_frontendsupervisor
+    SOURCES managers/frontendsupervisor.h managers/frontendsupervisor.cpp managers/frontendmanifest.h managers/frontendmanifest.cpp
+            service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui Qt6::Network)
 # Media streams: the H.264 helpers and the hub's join / drop / config rules
 octave_add_test(tst_streamhub
     SOURCES service/streamhub.h service/streamhub.cpp service/commandserver.h service/commandserver.cpp

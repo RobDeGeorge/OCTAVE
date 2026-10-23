@@ -23,7 +23,7 @@ Added (some landed while 1 was current, but none was released under 1):
 - `describe` with no object also answers `ops`, the op names the server has.
 - `docs/api/protocol.json`: the envelope (ops, errors, events, stream records, HTTP routes, pairing) as JSON Schema, checked against the server by `sdk_python`.
 - Object `sim` (experimental, not covered by the version): the simulated car of `--sim`, in every build. Flags `--sim` and `--config DIR`.
-- Object `frontendManager`: installed frontends (`octave-frontend.json`), install from a folder or zip, remove, the active screen.
+- Object `frontendManager`: installed frontends (`octave-frontend.json`), install from a folder or zip, remove, the active screen. An active exec frontend runs with a session token of its manifest's scopes, and loopback trust is off for that run; flag `--qml`.
 
 ## Protocol 1
 

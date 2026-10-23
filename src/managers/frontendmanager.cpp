@@ -463,6 +463,7 @@ bool FrontendManager::setActive(const QString &id)
             return refuse(QStringLiteral("can't use %1: %2").arg(id, problem));
         if (!writeSmall(QDir(m_root).filePath(kActiveFile), id))
             return refuse(QStringLiteral("could not save the choice"));
+        QFile::remove(QDir(m_root).filePath(kUseQmlFile));   // a fresh choice: try it again
     }
     qCInfo(lcFrontends).noquote() << "active screen from the next start:" << (id.isEmpty() ? QStringLiteral("the QML UI") : id);
     m_lastError.clear();
