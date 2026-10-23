@@ -113,14 +113,15 @@ QByteArray webRootCsp(const QByteArray &host)
 }
 
 QByteArray httpResponse(int status, const QByteArray &reason, const QByteArray &contentType, const QByteArray &body,
-                        const QByteArray &csp)
+                        const QByteArray &csp, const QByteArray &extraHeaders)
 {
     return QByteArrayLiteral("HTTP/1.1 ") + QByteArray::number(status) + ' ' + reason
            + QByteArrayLiteral("\r\nContent-Type: ") + contentType
            + QByteArrayLiteral("\r\nContent-Length: ") + QByteArray::number(body.size())
            + QByteArrayLiteral("\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff"
                                "\r\nContent-Security-Policy: ") + csp
-           + QByteArrayLiteral("\r\nConnection: close\r\n\r\n")
+           + QByteArrayLiteral("\r\n") + extraHeaders
+           + QByteArrayLiteral("Connection: close\r\n\r\n")
            + body;
 }
 

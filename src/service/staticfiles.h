@@ -31,6 +31,7 @@ struct Reply {
     QByteArray reason = "Not Found";
     QByteArray contentType = "text/plain";
     QByteArray body = "not found\n";
+    QByteArray headers;   // extra header lines, each ending "\r\n"
 };
 
 // The Content-Type for a file name, by extension (lower case)
@@ -56,6 +57,17 @@ QString queryValue(const QByteArray &target, const QString &key);
 // `localPath` if its canonical form lies inside `dir` (canonical too),
 // else "": a file a manager names must still be in that manager's folder
 QString insideDir(const QString &localPath, const QString &dir);
+
+// GET /export/...: the file at `localPath` (a path the app's own export
+// recorded, never one from the request) as an attachment: typed by its
+// extension, Content-Disposition with its sanitised name, 404 if missing,
+// 413 over `maxBytes`
+Reply serveDownload(const QString &localPath, qint64 maxBytes = kMaxFile);
+
+// GET /export/logs: the files directly in `dir` (an export folder the
+// app recorded) as a JSON list of names, or with `name` that one file
+// (only a name the listing holds: no separators, no "..", no dotfiles)
+Reply serveFromFolder(const QString &dir, const QString &name, qint64 maxBytes = kMaxFile);
 
 // GET /art: the image file at `localPath` (the app's own current cover,
 // never a path a client chose), typed by its bytes. 404 for no path, a

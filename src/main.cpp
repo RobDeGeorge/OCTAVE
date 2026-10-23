@@ -150,6 +150,30 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
             }, 15000).toString();
             return OctaveService::StaticFiles::serveImage(file);
         });
+        // GET /export/<kind>: what the app itself last exported (to the
+        // head unit's Downloads), as an attachment; never a requested path
+        QPointer<TripRecorder> trips = &core.tripRecorder;
+        QPointer<DiagnosticsManager> diagnostics = &core.diagnosticsManager;
+        QPointer<DashboardManager> dashboards = &core.dashboardManager;
+        auto lastExport = [](QPointer<QObject> o) {
+            return OctaveService::CommandServer::onGui([o]() {
+                return QVariant(o ? o->property("lastExportPath").toString() : QString());
+            }, 5000).toString();
+        };
+        service.server->addRoute("/export/trip", [trips, lastExport](const QByteArray &target) {
+            QString csv = lastExport(trips.data());
+            if (OctaveService::StaticFiles::queryValue(target, QStringLiteral("format")) == QLatin1String("json")
+                && csv.endsWith(QLatin1String(".csv")))
+                csv = csv.left(csv.size() - 4) + QStringLiteral(".json");   // its sibling, written with it
+            return OctaveService::StaticFiles::serveDownload(csv);
+        });
+        service.server->addRoute("/export/dashboard", [dashboards, lastExport](const QByteArray &) {
+            return OctaveService::StaticFiles::serveDownload(lastExport(dashboards.data()));
+        });
+        service.server->addRoute("/export/logs", [diagnostics, lastExport](const QByteArray &target) {
+            return OctaveService::StaticFiles::serveFromFolder(
+                lastExport(diagnostics.data()), OctaveService::StaticFiles::queryValue(target, QStringLiteral("file")));
+        });
         // A client that goes without saying so leaves no demand behind
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setParameterDemand"), QStringList());
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setBackgroundDemand"), QStringList());

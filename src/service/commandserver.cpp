@@ -187,7 +187,7 @@ private:
                     r = StaticFiles::Reply{503, "Service Unavailable", "text/plain", QByteArray(e.what()) + '\n'};
                 }
                 sock.write(Ws::httpResponse(r.status, r.reason, r.contentType, r.body,
-                                            Ws::webRootCsp(request.headers.value("host"))));
+                                            Ws::webRootCsp(request.headers.value("host")), r.headers));
                 flush(sock);
                 return;
             }

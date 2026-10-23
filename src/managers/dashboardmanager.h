@@ -41,6 +41,9 @@ class DashboardManager : public QObject
     // Why the last loadDashboard / saveDashboard failed ("" after one that
     // worked): their return values stay as they were
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // Where exportDashboard last wrote ("" until it has); a service client
+    // downloads it from GET /export/dashboard
+    Q_PROPERTY(QString lastExportPath READ lastExportPath NOTIFY lastExportPathChanged)
     // Built-in presets the user deleted (hidden) — the chooser shows
     // "Restore defaults" while this is non-zero.
     Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
@@ -100,6 +103,7 @@ public:
 
     QString lastShareError() const { return m_lastShareError; }
     QString lastError() const { return m_lastError; }
+    QString lastExportPath() const { return m_lastExportPath; }
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
     int supportedSchema() const { return kSupportedSchema; }
 
@@ -158,11 +162,13 @@ signals:
     void dashboardsChanged();
     void lastShareErrorChanged();
     void lastErrorChanged();
+    void lastExportPathChanged();
 
 private:
     QString m_lastShareError;
     void setShareError(const QString &message);
     QString m_lastError;
+    QString m_lastExportPath;
     void setError(const QString &message);
 
     // The one set of spec rules, applied on import, save and load: known
