@@ -60,6 +60,21 @@ await client.stream('phoneMirrorManager', 'video', { onRecord: (r) => decoder.fe
 
 It reconnects with backoff and re-issues its subscriptions; `request(op, args)` covers any op. `cd sdk/typescript && npm install && npm test` regenerates nothing but checks that the committed `src/protocol.ts` and `src/types.ts` match `docs/api` (so they go stale loudly, like `tst_apidocs`), type-checks the facade, and runs the client against a fake service; `npm run generate` rewrites both after `octave --dump-api docs/api` or an edit to `protocol.json`. Its README has the details and `examples/now_playing.mjs`.
 
+## Go: `go/`
+
+`go/` is a Go module (`github.com/RobDeGeorge/OCTAVE/sdk/go`, standard library only) generated from `docs/api/`: `protocol_gen.go` from `protocol.json`, `objects_gen.go` from the object files, so every service object is a Go type with a method per API method and `Get` / `Set` per property, and a deprecated member carries Go's `Deprecated:` paragraph. The hand-written `client.go` is the line protocol over TCP:
+
+```go
+c, _ := octave.Dial("127.0.0.1:9876")
+vol := octave.NewVolumeController(c)
+vol.ApplyVolume(40)
+percent, _ := vol.GetPercent()
+sub, _ := c.Subscribe(octave.SubscribeArgs{Object: "paramStore", Properties: []string{"RPM"}})
+for ev := range c.Events { /* ev.Kind, ev.Decode(&octave.ParamsEvent{}) */ }
+```
+
+`go test ./...` in `sdk/go` checks the generated files against `docs/api` and runs the client against the binary in `OCTAVE_BIN` (ctest runs it as `sdk_go` when Go is installed). `go generate ./...` regenerates. Its README has the details and `examples/now_playing`.
+
 ## Versioning
 
-The Python and web clients know protocol versions 1 and 2, as does the TypeScript one (under 2, loopback stays open). The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.
+The Python, web, TypeScript and Go clients know protocol versions 1 and 2 (under 2, loopback stays open). The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.

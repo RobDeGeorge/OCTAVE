@@ -32,7 +32,7 @@ What stops an outside developer today, in order of how much it hurts:
 ### 3. One machine-readable protocol spec, SDKs generated from it
 **Effort:** L. **Device:** desktop.
 - **Done (2026-10-23):** `docs/api/protocol.json` (ops, errors, events, stream record, HTTP routes, pairing), checked against a headless app by `sdk/python/tests/test_protocol_spec.py` (ctest `sdk_python`); `describe` answers `ops`.
-- **Done (2026-10-23):** TypeScript generated from `protocol.json` (`sdk/typescript/src/protocol.ts`: ops, replies, events, errors, record constants, routes; `request` typed per op) and from the object files with `@deprecated` / `@experimental` JSDoc; only the connection logic is hand-written. **Left:** Python (its `Client` is small enough that generation buys little; decide after Go), and one compiled language to prove the spec isn't TypeScript-shaped.
+- **Done (2026-10-23):** TypeScript generated from `protocol.json` (`sdk/typescript/src/protocol.ts`: ops, replies, events, errors, record constants, routes; `request` typed per op) and from the object files with `@deprecated` / `@experimental` JSDoc; only the connection logic is hand-written. Go too (`sdk/go`, standard library only: `protocol_gen.go` + `objects_gen.go` from `internal/gen`, hand-written `client.go`, ctest `sdk_go`), which proves the spec isn't TypeScript-shaped. **Left:** Python stays hand-written (its `Client` is 200 lines and `test_protocol_spec.py` already holds it to the spec); generate it only if it drifts.
 - A conformance kit for SDK authors: a recorded session plus a fake server they can run their client against.
 
 ### 4. Installable frontends
