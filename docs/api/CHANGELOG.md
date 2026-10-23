@@ -19,6 +19,7 @@ Added (some landed while 1 was current, but none was released under 1):
 - `audioAnalyzer.setDemand`, `clock.time`, `dashboardManager.lastError` / `lastErrorChanged`, `dashboardManager.lastExportPath` / `lastExportPathChanged`, `dashboardManager.widgetCatalog`, `mediaManager.browse_music_folders`, `nowPlaying.artRevision`, `settingsManager.applyNowPlayingPreset`, `settingsManager.apply_settings`, `settingsManager.nowPlayingPresets`.
 - `settingsManager.save_media_folder` returns whether it saved (it returned nothing).
 - Every member's `stability` (`experimental` when it is not covered by the version) and `deprecated` in `describe` and `docs/api/`.
+- Object `sim` (experimental, not covered by the version): the simulated car of `--sim`, in every build. Flags `--sim` and `--config DIR`.
 
 ## Protocol 1
 

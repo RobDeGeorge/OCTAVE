@@ -71,35 +71,31 @@ octave_add_test(tst_obdmanager
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort)
 
-# Integration: the real OBD stack against the simulated adapter (src/dev/)
-if(OCTAVE_DEV_TOOLS)
-    octave_add_test(tst_obdsim
-        SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
-                managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
-                managers/settingsmanager.h managers/settingsmanager.cpp
-                dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
-        LIBS Qt6::Gui Qt6::SerialPort)
-endif()
+# Integration: the real OBD stack against the simulated adapter (src/sim/)
+octave_add_test(tst_obdsim
+    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+            sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp
+    LIBS Qt6::Gui Qt6::SerialPort)
 
-# The adapter finder's hand-off connects to the simulated adapter (src/dev/)
-if(OCTAVE_DEV_TOOLS)
-    set(_finder_sources managers/obdadapterfinder.h managers/obdadapterfinder.cpp)
-    set(_finder_libs Qt6::Gui Qt6::SerialPort Qt6::Bluetooth)
-    set(_finder_defines)
-    if(TARGET Qt6::DBus)   # Linux: the BlueZ pairing agent, as in the app
-        list(APPEND _finder_sources platform/bluezpairer.h platform/bluezpairer.cpp)
-        list(APPEND _finder_libs Qt6::DBus)
-        list(APPEND _finder_defines OCTAVE_BLUEZ)
-    endif()
-    octave_add_test(tst_obdadapterfinder
-        SOURCES ${_finder_sources}
-                managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
-                managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
-                managers/settingsmanager.h managers/settingsmanager.cpp
-                dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
-        LIBS ${_finder_libs}
-        DEFINES ${_finder_defines})
+# The adapter finder's hand-off connects to the simulated adapter (src/sim/)
+set(_finder_sources managers/obdadapterfinder.h managers/obdadapterfinder.cpp)
+set(_finder_libs Qt6::Gui Qt6::SerialPort Qt6::Bluetooth)
+set(_finder_defines)
+if(TARGET Qt6::DBus)   # Linux: the BlueZ pairing agent, as in the app
+    list(APPEND _finder_sources platform/bluezpairer.h platform/bluezpairer.cpp)
+    list(APPEND _finder_libs Qt6::DBus)
+    list(APPEND _finder_defines OCTAVE_BLUEZ)
 endif()
+octave_add_test(tst_obdadapterfinder
+    SOURCES ${_finder_sources}
+            managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+            sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp
+    LIBS ${_finder_libs}
+    DEFINES ${_finder_defines})
 
 # MediaManager reads tags with TagLib, as the app does
 if(TARGET TagLib::tag)

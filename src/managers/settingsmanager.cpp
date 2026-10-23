@@ -332,8 +332,25 @@ QJsonObject SettingsManager::buildDefaultSettings() const
 // ---------------------------------------------------------------------------
 // getAppDataDir  — OS-specific config directory (static)
 // ---------------------------------------------------------------------------
+namespace {
+QString &appDataDirOverride()
+{
+    static QString dir;
+    return dir;
+}
+} // namespace
+
+void SettingsManager::setAppDataDirOverride(const QString &dir)
+{
+    appDataDirOverride() = dir;
+}
+
 QString SettingsManager::getAppDataDir()
 {
+    if (!appDataDirOverride().isEmpty()) {
+        QDir().mkpath(appDataDirOverride());
+        return appDataDirOverride();
+    }
     const QString appName = QStringLiteral("OCTAVE");
     QString dataDir;
 

@@ -43,7 +43,7 @@ Every keyframe record carries the current SPS and PPS first, so a decoder can st
 
 **Touch.** `phoneMirrorManager.injectTouch(pointerId, action, relX, relY)`: `action` 0 down, 1 up, 2 move; `relX` / `relY` from 0 to 1 across the picture as decoded (the current `streamConfig` width and height), origin top left. Use one `pointerId` per finger.
 
-**Developing without a phone.** In a developer build, `octave --headless --dev --service` and the dev-only action `{"action":"sim_video","args":{"on":true}}` loop `tests/data/stream-test.h264` (640x360 for 2 s, then 1280x720, 30 fps; made by `tools/stream/make_test_h264.sh`) into the phone stream, so the config change is exercised. Never send dev actions from a shipped frontend.
+**Developing without a phone.** `octave --headless --sim` (any build) and `sim.setVideo(true)` loop a test clip (`tests/data/stream-test.h264`, compiled in: 640x360 for 2 s, then 1280x720, 30 fps; made by `tools/stream/make_test_h264.sh`) into the phone stream, so the config change is exercised. See [Simulator](#simulator).
 
 **Security.** A read under the same rules as every op (loopback by default, the browser Origin rule). The phone screen is sensitive: when pairing lands, `stream` will need an authorised client like every other op.
 
@@ -75,7 +75,7 @@ Every member is **stable** unless marked: covered by the version, so it changes 
 
 `tools/api/check_compat.py` compares this directory with the base of a change (CI's `lint` job: the PR's base branch, or the commit before a push) and fails when a stable member, a parameter id or a parameter's unit is removed or changed without `kProtocolVersion` going up, or when the new version's section in [CHANGELOG.md](CHANGELOG.md) does not name each break as `object.member`. `python tools/api/check_compat.py --draft` lists every change, breaking and additive, for the changelog. What it does not see: the meaning of a value, the ops and their arguments (`src/service/servicebridge.cpp`), the stream record format and the HTTP routes; those still need a reviewer and a changelog line.
 
-Not covered by the version: the dev-only `action` vocabulary (`navigate`, `click`, `screenshot`, `sim_*`, ...), which exists only with `--profile` in a developer build and may change at any time.
+Not covered by the version: the `sim` object (experimental, see [Simulator](#simulator)), and the dev-only `action` vocabulary (`navigate`, `click`, `screenshot`, `sim_*`, ...), which exists only with `--dev` / `--profile` in a developer build and may change at any time.
 
 ## Pairing
 
@@ -87,11 +87,36 @@ Who may use the service (`src/service/servicepairing.h`). A connection is **trus
 4. For images and downloads, a trusted connection asks `{"op":"mediaTicket"}` → `{ticket, expiresIn: 600}` and uses `/art?ticket=...`; never put the token in a URL.
 5. `{"op":"unpair"}` forgets the caller's own device.
 
-Developing a networked frontend without the head unit's screen: run a developer build with `--dev --service-bind 0.0.0.0` (or `--headless --dev --service-bind 0.0.0.0`), connect your frontend through the machine's LAN address (untrusted), and get a code over loopback with the dev-only action `{"action":"sim_pairing_code"}` → `{code, secondsLeft}`.
+Developing a networked frontend without the head unit's screen: run `octave --headless --sim --service-bind 0.0.0.0` (any build), connect your frontend through the machine's LAN address (untrusted), and get a code over loopback with `{"op":"call","object":"sim","method":"pairingCode","args":[]}` → `{code, secondsLeft}`.
 
 Limits: the code is single use and void after 20 wrong tries in all; one `pair` attempt a second across all clients; an address (an IPv6 /64) with 10 wrong codes is refused until the app restarts; an untrusted `hello` gets only `protocolVersion`, `auth` and `loopbackOpen` (no app version, build or object list); at most 256 media tickets exist at once (the oldest goes); refusals are logged with the address (never the code). Only a SHA-256 of each token is stored, in the settings file key `serviceTokens`, which no setter, `apply_settings` or reset can write. Revoking a device in Settings closes its connections at once (their subscriptions and streams end) and voids its tickets. Making codes, listing or revoking devices and switching the service on are on the head unit only (`servicePairing`, not a service object).
 
 `serviceLoopbackOpen` trusts every process on the device, including a local reverse proxy: behind a proxy, set it to false in `settingsConfigure.json`.
+
+## Simulator
+
+A car to build against without a car, in every build (release and app store included): `octave --headless --sim` serves every object with the real `obdManager` connected to a simulated ELM327 (`sim://elm327`: every PID supported, VIN, trouble codes, freeze frame), the `berryIMU` readings moving with it, and three short test tracks in the music folder. `--sim` without `--headless` gives the same car in the QML UI. `--dev` (developer builds) implies `--sim` on your usual config.
+
+**Config.** `--sim` runs on a throwaway config folder (logged at start, deleted at exit) seeded with the test tracks and the ESP32 knob and gesture sensor off, so trying it never reads or writes a real install. `--config DIR` keeps settings, trips, dashboards and logs in `DIR` instead (any run); with `--sim` nothing is seeded there.
+
+**The `sim` object** (`src/sim/simulator.h`, [sim.json](sim.json)) drives the car. It is listed in every build; `active` is false unless the run is simulated, and then every control returns `false` and does nothing. Controls return `true`:
+
+| Method | What |
+|---|---|
+| `setThrottle(percent)`, `setBrake(percent)` | pedals, 0-100 (the physics moves the speed, RPM and gear) |
+| `rev(intensity)` | a blip of the throttle, 0-100 |
+| `setEngineOn(on)`, `toggleEngine()` | |
+| `setGear(n)`, `upshift()`, `downshift()` | 1-6 |
+| `setSpeed(mph)`, `setRpm(rpm)` | jump to a value |
+| `scenario(name)` | `cold`, `hot`, `low_fuel`, anything else for normal |
+| `setRealistic(on)` | Bluetooth-like latency and 2 % NO DATA (on at start) |
+| `setDropouts(on)`, `dropoutNow()`, `setFailureRate(rate)`, `setLinkUp(up)` | link faults; `setLinkUp(false)` unplugs the adapter |
+| `setImu(on)` | the IMU motion (on at start with `--sim` and `--headless`) |
+| `setVideo(on)` | the test clip into `phoneMirrorManager.video` |
+| `pairingCode()` | shows a pairing code as Settings would: `{code, secondsLeft}` |
+| `status()` | the car's values and link settings, `imu`, `video` |
+
+Experimental: not covered by the protocol version, so names and arguments may change in any release. Never call it from a frontend meant for a real car; check `sim.active` if you show simulator controls. The dev tooling's `sim_*` actions are aliases for these methods.
 
 ## Values
 

@@ -45,6 +45,7 @@ extern "C" {
 #include "service/apidump.h"
 #include "service/serviceoptions.h"
 #include "service/streamhub.h"
+#include "sim/simconfig.h"
 #ifndef Q_OS_MOBILE
 #include "phone_mirror/scrcpyclient.h"
 #endif
@@ -85,6 +86,27 @@ QDir findFrontendDir()
     }
     return frontendDir;
 #endif
+}
+
+// --sim, or --dev in a build with the dev tooling (it implies --sim)
+bool simRequested(const QStringList &arguments)
+{
+#ifdef OCTAVE_DEV_TOOLS
+    if (arguments.contains(QStringLiteral("--dev")))
+        return true;
+#endif
+    return arguments.contains(QStringLiteral("--sim"));
+}
+
+// The simulator (src/sim/simulator.h) when asked for. The IMU motion starts
+// on with --sim and --headless; a GUI --dev run leaves it to sim.setImu, as
+// it always has, so a Pi's real IMU is not masked
+void startSim(AppCore &core, const QStringList &arguments, bool headless)
+{
+    if (!simRequested(arguments))
+        return;
+    core.sim.start(&core.obdManager, &core.berryIMU, &core.servicePairing,
+                   headless || arguments.contains(QStringLiteral("--sim")));
 }
 
 // The command server + the service protocol (src/service/), when asked
@@ -287,7 +309,8 @@ int runHeadless(QGuiApplication &app, bool smokeTest)
 {
 #ifndef OCTAVE_DEV_TOOLS
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
-        qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON; ignored with --headless");
+        qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON; ignored with --headless "
+                 "(--sim runs the simulated car in any build)");
 #endif
 
     // A stalled event loop still gets logged (octave.ui_watchdog)
@@ -301,13 +324,15 @@ int runHeadless(QGuiApplication &app, bool smokeTest)
     // destructor never touches the provider
     std::unique_ptr<QQuickImageProvider> dhuFrames(core.androidAutoManager.frameProvider());
 
+    // --headless --sim: the simulated car, driven through the `sim` object
+    startSim(core, app.arguments(), true);
     Service service = makeService(app.arguments(), core, true);
 #ifdef OCTAVE_DEV_TOOLS
-    // --headless --dev: the simulated car and its sim_* actions, no UI
+    // --headless --dev: also the sim_* actions, no UI
     const QDir frontendDir = findFrontendDir();
     OctaveDev::Runtime devRuntime(app.arguments(), {nullptr, &core.settingsManager, &core.mediaManager, &core.volumeController,
-                                                    &core.nowPlaying, &core.obdManager, &core.berryIMU,
-                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.servicePairing});
+                                                    &core.nowPlaying, &core.obdManager,
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.sim});
     devRuntime.startHeadless(service.server.get());
 #endif
     if (!service.server || !service.server->start()) {
@@ -347,11 +372,13 @@ constexpr Flag kFlags[] = {
     {"--command-port", "PORT", "the service port, older spelling"},
     {"--web-root", "DIR", "serve DIR (a built web frontend with index.html) at GET / instead of the reference client"},
     {"--headless", "", "every manager and the service, no QML engine and no window"},
+    {"--sim", "", "a simulated car, IMU motion and test tracks (the `sim` object drives them), on a throwaway config unless --config"},
+    {"--config", "DIR", "keep settings, trips, dashboards and logs in DIR instead of the OS config folder"},
     {"--dump-api", "DIR", "write the published API (docs/api) to DIR and exit"},
     {"--smoke", "", "start, run 5 s, exit 0 (CI)"},
     {"--debug", "", "debug logging (octave-cpp-debug.log)"},
 #ifdef OCTAVE_DEV_TOOLS
-    {"--dev", "", "simulated car (OBD and IMU) and the dev overlay; with --headless, no UI"},
+    {"--dev", "", "--sim on your usual config, plus the dev overlay; with --headless, the sim_* actions"},
     {"--profile", "", "perf monitor, and the service with the UI / perf / sim actions"},
 #endif
 };
@@ -416,6 +443,9 @@ int main(int argc, char *argv[])
     bool headless = false;
     // --dump-api DIR: write the published API and exit (dumpApi)
     QString dumpApiDir;
+    // --config DIR: the config folder; --sim without it gets a throwaway one
+    QString configDir;
+    bool sim = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0)
             debugLogging = true;
@@ -425,21 +455,37 @@ int main(int argc, char *argv[])
             headless = true;
         else if (std::strcmp(argv[i], "--dump-api") == 0 && i + 1 < argc)
             dumpApiDir = QString::fromLocal8Bit(argv[++i]);
+        else if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc)
+            configDir = QString::fromLocal8Bit(argv[++i]);
+        else if (std::strcmp(argv[i], "--sim") == 0)
+            sim = true;
     }
 
     // --dump-api builds every manager: keep its settings, trip database and
     // logs out of the real config (set before the logger picks its folder)
+    // --sim without --config does the same, seeded with test tracks, so
+    // trying the simulator never touches a real install (simconfig.h)
     std::unique_ptr<QTemporaryDir> throwawayConfig;
-    if (!dumpApiDir.isEmpty()) {
-        dumpApiDir = QDir(dumpApiDir).absolutePath();
+    if (!dumpApiDir.isEmpty() || (sim && configDir.isEmpty())) {
         throwawayConfig = std::make_unique<QTemporaryDir>();
         const QByteArray home = throwawayConfig->path().toLocal8Bit();
         for (const char *var : {"HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "APPDATA", "LOCALAPPDATA"})
             qputenv(var, home);
+        configDir = throwawayConfig->filePath(QStringLiteral("OCTAVE"));
+    }
+    if (!dumpApiDir.isEmpty()) {
+        dumpApiDir = QDir(dumpApiDir).absolutePath();
         if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
             qputenv("QT_QPA_PLATFORM", "offscreen");
+    } else if (throwawayConfig
+               && !OctaveSim::seedThrowawayConfig(configDir, throwawayConfig->filePath(QStringLiteral("Music")))) {
+        std::fprintf(stderr, "octave: could not prepare the --sim config in %s\n", qPrintable(configDir));
     }
+    if (!configDir.isEmpty())
+        SettingsManager::setAppDataDirOverride(QDir(configDir).absolutePath());
     OctaveLog::install(debugLogging);
+    if (throwawayConfig && dumpApiDir.isEmpty())
+        qInfo("--sim: throwaway config in %s, deleted at exit (--config DIR keeps one)", qPrintable(configDir));
 
     if (!dumpApiDir.isEmpty()) {
         QGuiApplication app(argc, argv);
@@ -599,18 +645,20 @@ int main(int argc, char *argv[])
 
     // ---- Developer tooling (inactive unless --dev / --profile) ----
 #ifdef OCTAVE_DEV_TOOLS
-    OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &core.mediaManager, &core.volumeController, &core.nowPlaying, &core.obdManager, &core.berryIMU,
-                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.servicePairing});
+    startSim(core, app.arguments(), false);   // --sim / --dev: the simulated car
+    OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &core.mediaManager, &core.volumeController, &core.nowPlaying, &core.obdManager,
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.sim});
     devRuntime.beforeLoad();
 #else
+    startSim(core, app.arguments(), false);   // --sim: the simulated car
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
         qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON (the default for Debug); ignoring "
-                 "(--service still starts the service)");
+                 "(--sim runs the simulated car and --service the service in any build)");
 #endif
 
 #ifdef OCTAVE_WASM
     // ---- Browser demo: the simulated car on the real OBDManager ----
-    WebDemo webDemo(&core.obdManager, &core.berryIMU);
+    WebDemo webDemo(&core.sim, &core.obdManager, &core.berryIMU);
 #endif
 
     // ---- Service (makeService: off unless asked for) ----

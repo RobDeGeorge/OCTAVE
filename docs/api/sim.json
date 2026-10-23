@@ -1,0 +1,220 @@
+{
+    "class": "Simulator",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "setThrottle",
+            "params": [
+                {
+                    "name": "percent",
+                    "type": "double"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setBrake",
+            "params": [
+                {
+                    "name": "percent",
+                    "type": "double"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "rev",
+            "params": [
+                {
+                    "name": "intensity",
+                    "type": "double"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setEngineOn",
+            "params": [
+                {
+                    "name": "on",
+                    "type": "bool"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "toggleEngine",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setGear",
+            "params": [
+                {
+                    "name": "gear",
+                    "type": "int"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "upshift",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "downshift",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setSpeed",
+            "params": [
+                {
+                    "name": "mph",
+                    "type": "double"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setRpm",
+            "params": [
+                {
+                    "name": "rpm",
+                    "type": "double"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setRealistic",
+            "params": [
+                {
+                    "name": "on",
+                    "type": "bool"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "scenario",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setDropouts",
+            "params": [
+                {
+                    "name": "on",
+                    "type": "bool"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "dropoutNow",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setFailureRate",
+            "params": [
+                {
+                    "name": "rate",
+                    "type": "double"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setLinkUp",
+            "params": [
+                {
+                    "name": "up",
+                    "type": "bool"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setImu",
+            "params": [
+                {
+                    "name": "on",
+                    "type": "bool"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setVideo",
+            "params": [
+                {
+                    "name": "on",
+                    "type": "bool"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "pairingCode",
+            "params": [
+            ],
+            "returns": "QVariantMap"
+        },
+        {
+            "kind": "invokable",
+            "name": "status",
+            "params": [
+            ],
+            "returns": "QVariantMap"
+        }
+    ],
+    "object": "sim",
+    "properties": [
+        {
+            "constant": false,
+            "name": "active",
+            "notify": "activeChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "activeChanged",
+            "params": [
+            ]
+        }
+    ],
+    "stability": "experimental"
+}

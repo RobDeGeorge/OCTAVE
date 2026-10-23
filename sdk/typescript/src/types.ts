@@ -1425,6 +1425,39 @@ export interface ShiftLightManager {
   }
 }
 
+/** sim (Simulator) */
+export interface Simulator {
+  properties: {
+    /** bool, notify activeChanged */
+    active: boolean
+  }
+  methods: {
+    setThrottle: { args: [percent: number]; returns: boolean }
+    setBrake: { args: [percent: number]; returns: boolean }
+    rev: { args: [intensity: number]; returns: boolean }
+    setEngineOn: { args: [on: boolean]; returns: boolean }
+    toggleEngine: { args: []; returns: boolean }
+    setGear: { args: [gear: number]; returns: boolean }
+    upshift: { args: []; returns: boolean }
+    downshift: { args: []; returns: boolean }
+    setSpeed: { args: [mph: number]; returns: boolean }
+    setRpm: { args: [rpm: number]; returns: boolean }
+    setRealistic: { args: [on: boolean]; returns: boolean }
+    scenario: { args: [name: string]; returns: boolean }
+    setDropouts: { args: [on: boolean]; returns: boolean }
+    dropoutNow: { args: []; returns: boolean }
+    setFailureRate: { args: [rate: number]; returns: boolean }
+    setLinkUp: { args: [up: boolean]; returns: boolean }
+    setImu: { args: [on: boolean]; returns: boolean }
+    setVideo: { args: [on: boolean]; returns: boolean }
+    pairingCode: { args: []; returns: Record<string, unknown> }
+    status: { args: []; returns: Record<string, unknown> }
+  }
+  signals: {
+    activeChanged: []
+  }
+}
+
 /** themeCatalog (ThemeCatalog) */
 export interface ThemeCatalog {
   properties: {
@@ -1581,6 +1614,7 @@ export interface Objects {
   phoneMirrorManager: PhoneMirrorManager
   settingsManager: SettingsManager
   shiftLightManager: ShiftLightManager
+  sim: Simulator
   themeCatalog: ThemeCatalog
   tripRecorder: TripRecorder
   units: Units

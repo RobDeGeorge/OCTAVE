@@ -28,7 +28,7 @@
 
         <h2 id="overview">Overview</h2>
         <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>) is described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 24 objects:</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 25 objects:</p>
         <ul>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
             <li><a href="#audioAnalyzer">audioAnalyzer</a></li>
@@ -50,6 +50,7 @@
             <li><a href="#phoneMirrorManager">phoneMirrorManager</a></li>
             <li><a href="#settingsManager">settingsManager</a></li>
             <li><a href="#shiftLightManager">shiftLightManager</a></li>
+            <li><a href="#sim">sim</a></li>
             <li><a href="#themeCatalog">themeCatalog</a></li>
             <li><a href="#tripRecorder">tripRecorder</a></li>
             <li><a href="#units">units</a></li>
@@ -997,6 +998,42 @@
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>settingsChanged()</code>, <code>flagsChanged()</code>, <code>rpmChanged()</code>, <code>activeFlagChanged()</code>, <code>litChanged()</code>, <code>suppressedChanged()</code>.</p>
+
+        <h3 id="sim"><code>sim</code> <span class="cmt">&mdash; Simulator</span></h3>
+        <p><strong>Experimental:</strong> this object may change or go in any release.</p>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#sim">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/sim.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>active</code></td><td>bool</td><td>read</td><td><code>activeChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <tbody>
+            <tr><td><code>setThrottle(double percent)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setBrake(double percent)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>rev(double intensity)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setEngineOn(bool on)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>toggleEngine()</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setGear(int gear)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>upshift()</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>downshift()</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setSpeed(double mph)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setRpm(double rpm)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setRealistic(bool on)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>scenario(QString name)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setDropouts(bool on)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>dropoutNow()</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setFailureRate(double rate)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setLinkUp(bool up)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setImu(bool on)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>setVideo(bool on)</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>pairingCode()</code></td><td><code>QVariantMap</code></td><td>invokable</td></tr>
+            <tr><td><code>status()</code></td><td><code>QVariantMap</code></td><td>invokable</td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>activeChanged()</code>.</p>
 
         <h3 id="themeCatalog"><code>themeCatalog</code> <span class="cmt">&mdash; ThemeCatalog</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#themeCatalog">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/themeCatalog.json</span>.</p>

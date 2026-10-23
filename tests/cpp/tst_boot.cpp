@@ -6,9 +6,12 @@
 // service protocol in any build without the dev-only actions; `--headless`
 // must bring the managers and the service up with no QML at all, and with
 // the dev tooling `--headless --dev` must connect the real OBDManager to the
-// simulated car and take the sim_* actions.
+// simulated car and take the sim_* actions. `--headless --sim` must do the
+// same through the `sim` object in every build, release included, on a
+// throwaway config that leaves the caller's alone.
 
 #include <QDir>
+#include <QFile>
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QRegularExpression>
@@ -95,10 +98,12 @@ private slots:
 
         const QByteArray hello = request(app, port, R"({"op": "hello"})");
         const QByteArray get = request(app, port, R"({"op": "get", "object": "volumeController", "property": "percent"})");
+        const QByteArray sim = request(app, port, R"({"op": "call", "object": "sim", "method": "setThrottle", "args": [50]})");
         QVERIFY2(finished(app), "did not exit within 60 s");
         const QString out = QString::fromUtf8(app.readAll());
         QVERIFY2(hello.contains(R"("headless":true)"), qPrintable(hello + out.right(3000)));
         QVERIFY2(get.startsWith(R"({"ok":true)"), get.constData());
+        QVERIFY2(sim.contains(R"("result":false)"), sim.constData());   // no simulated car unless --sim
         QVERIFY2(out.contains("Smoke test: headless core up"), qPrintable(out.right(3000)));
         QVERIFY2(!out.contains("Main.qml"), qPrintable(out.right(3000)));   // no engine, no UI
         QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
@@ -150,6 +155,75 @@ private slots:
 #endif
     }
 
+    void headlessSimRunsInEveryBuild()
+    {
+        QTemporaryDir tmp;
+        const quint16 port = freePort();
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--headless", "--sim", "--service", QString::number(port)});
+        QVERIFY(app.waitForStarted(10000));
+
+        const QByteArray active = request(app, port, R"({"op": "get", "object": "sim", "property": "active"})");
+        QVERIFY2(active.contains(R"("result":true)"), active.constData());
+        QByteArray connected;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 30000 && app.state() == QProcess::Running) {
+            connected = request(app, port, R"({"op": "get", "object": "obdManager", "property": "connected"})");
+            if (connected.contains(R"("result":true)"))
+                break;
+            QTest::qWait(500);
+        }
+        QVERIFY2(connected.contains(R"("result":true)"), connected.constData());
+        const QByteArray throttle = request(app, port, R"({"op": "call", "object": "sim", "method": "setThrottle", "args": [60]})");
+        QVERIFY2(throttle.contains(R"("result":true)"), throttle.constData());
+        const QByteArray code = request(app, port, R"({"op": "call", "object": "sim", "method": "pairingCode", "args": []})");
+        QVERIFY2(QRegularExpression(R"("code":"\d{6}")").match(QString::fromUtf8(code)).hasMatch(), code.constData());
+        // The IMU moves from the start
+        const QByteArray status = request(app, port, R"({"op": "call", "object": "sim", "method": "status", "args": []})");
+        QVERIFY2(status.contains(R"("imu":{)") && status.contains(R"("on":true)"), status.constData());
+        // Test tracks to play, with their tags
+        const QByteArray play = request(app, port, R"({"op": "call", "object": "mediaManager", "method": "play_file", "args": ["01 - Idle.wav"]})");
+        QVERIFY2(play.startsWith(R"({"ok":true)"), play.constData());
+        QByteArray title;
+        t.restart();
+        while (t.elapsed() < 10000 && !title.contains(R"("result":"Idle")")) {
+            title = request(app, port, R"({"op": "get", "object": "nowPlaying", "property": "title"})");
+            QTest::qWait(200);
+        }
+        QVERIFY2(title.contains(R"("result":"Idle")"), title.constData());
+        // The dev tooling's sim_* actions only come with --dev
+        const QByteArray action = request(app, port, R"({"action": "sim_status"})");
+        QVERIFY2(action.contains(R"("ok":false)"), action.constData());
+
+        app.terminate();
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
+        // Its own throwaway config, not the one the environment points at
+        QVERIFY2(!QDir(tmp.filePath("OCTAVE")).exists(), qPrintable(out.right(3000)));
+        QVERIFY2(out.contains("--sim: throwaway config in"), qPrintable(out.right(3000)));
+    }
+
+    void configDirKeepsEverythingThere()
+    {
+        QTemporaryDir tmp;
+        const QString config = tmp.filePath("chosen");
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--headless", "--sim", "--config", config, "--service", QString::number(freePort()), "--smoke"});
+        QVERIFY(app.waitForStarted(10000));
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitCode() == 0, qPrintable(out.right(3000)));
+        QVERIFY2(QFile::exists(config + "/logs/octave-cpp.log"), qPrintable(out.right(3000)));
+        QVERIFY2(!QDir(tmp.filePath("OCTAVE")).exists(), qPrintable(out.right(3000)));
+        QVERIFY2(!out.contains("throwaway"), qPrintable(out.right(3000)));
+    }
+
     void helpAndVersionExitBeforeAnything()
     {
         // No manager, no config read, no log file: --help on someone's
@@ -171,7 +245,7 @@ private slots:
             if (args.contains("--version"))
                 QCOMPARE(out.count('\n'), 1);
             else
-                for (const char *flag : {"--service", "--service-bind", "--headless", "--web-root", "--dump-api", "--command-port"})
+                for (const char *flag : {"--service", "--service-bind", "--headless", "--sim", "--config", "--web-root", "--dump-api", "--command-port"})
                     QVERIFY2(out.contains(flag), flag);
             QVERIFY2(QDir(tmp.path()).isEmpty(), qPrintable(QDir(tmp.path()).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden).join(", ")));
         }

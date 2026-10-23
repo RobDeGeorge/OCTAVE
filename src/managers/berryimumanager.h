@@ -205,9 +205,9 @@ private slots:
     void startSensor();
 
 private:
-    // Dev tooling (src/dev/devimufeed.cpp) stops the I2C worker and drives
-    // these signals with simulated motion when asked to (sim_imu).
-    friend class DevImuAccess;
+    // The simulator (src/sim/imufeed.cpp) stops the I2C worker and drives
+    // these signals with simulated motion when asked to (sim.setImu).
+    friend class SimImuAccess;
     friend class TstSensorSettings;
 
     bool getConnected() const;

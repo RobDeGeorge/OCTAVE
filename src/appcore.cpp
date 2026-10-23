@@ -151,6 +151,9 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     dashboardManager.setUserDir(SettingsManager::getAppDataDir() + QStringLiteral("/dashboards"));
     expose("dashboardManager", &dashboardManager);
 
+    // The simulator: `active` false and every control a no-op unless started
+    expose("sim", &sim);
+
     wireInputs();
     wireKnobLed();
 }
