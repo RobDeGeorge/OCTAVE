@@ -266,6 +266,11 @@ class OctaveConsole(App):
     def on_octave_event(self, message: OctaveEvent):
         ev = message.event
         obj, kind, name = ev.get("object"), ev.get("event"), ev.get("name")
+        if kind in ("record", "streamConfig", "streamDropped"):   # binary stream traffic: to whoever watches
+            for pane in self.panes:
+                if pane.is_mounted and hasattr(pane, "stream_event"):
+                    pane.stream_event(ev)
+            return
         if kind == "property":
             self.state.setdefault(obj, {})[name] = ev.get("value")
         elif kind == "model":

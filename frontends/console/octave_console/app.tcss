@@ -250,3 +250,12 @@ Confirm, EditValue {
 #lib-cover-label {
     height: 1;
 }
+
+#stream-stats {
+    height: auto;
+}
+
+#stream-preview {
+    height: auto;
+    max-height: 14;
+}

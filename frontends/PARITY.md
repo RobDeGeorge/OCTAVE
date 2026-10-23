@@ -108,9 +108,9 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Phone keys: home, back, app switch | `phoneMirrorManager.pressHome`, `pressBack`, `pressAppSwitch` | Yes | Yes | Yes | No | No | |
 | Wireless and QR pairing | `phoneMirrorManager.wirelessAddress`, `setWirelessAddress`, `forgetWireless`, `startQrPairing`, `qrPairingRows`, `cancelQrPairing` | Yes | Yes | Yes | No | No | |
 | Mirror settings (size, DPI, bit rates, audio gain and ducking, screen off) | `settingsManager.save_scrcpy_*`, `phoneMirrorManager.setDisplaySize` | Yes | Yes | Partial | No | No | console: settings table |
-| The mirrored picture and touch | `phoneMirrorManager.videoSink`, `injectTouch` | Yes | No | No | No | No | API missing: video (lane A 12); `injectTouch` is callable but useless without the picture |
+| The mirrored picture and touch | `stream` phoneMirrorManager video (H.264 records), `phoneMirrorManager.injectTouch` | Yes | Yes | Partial | No | No | streams landed (lane A 12); glass: WebCodecs player with touch; console: a stats line, no decoder |
 | Android Auto: launch, close, install state | `androidAutoManager.launchDhuSeamless`, `closeDhu`, `isDhuEmbedded`, `isDhuInstalled`, `getDhuInstallInstructions` | Yes | Yes | Yes | No | No | |
-| Android Auto picture | `dhuframe` image provider | Yes | No | No | No | No | API missing: video (lane A 12) |
+| Android Auto picture | `stream` androidAutoManager frames (JPEG records) | Yes | Yes | Partial | No | No | frames landed (lane A 12); glass: JPEG view; console: a 48 x 28 half-block preview |
 
 ## Settings, device, network, diagnostics
 
@@ -132,7 +132,6 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 
 All of these are backend items, none frontend work:
 
-- The phone mirror picture and Android Auto frames: lane A 12 (contract step 6).
 - Downloading files the app exports (trip CSV, log bundle, dashboard file): `GET /export/trip|dashboard|logs` landed (lane A 9c); no frontend offers it yet. The contents are reachable anyway (`requestSeries`, `recentLogLines`, `loadDashboard`).
 
 Head-unit-local by design (no gap): the clipboard actions, opening a folder in the head unit's file manager, window size and position.
