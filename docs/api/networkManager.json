@@ -1,0 +1,222 @@
+{
+    "class": "NetworkManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "refreshNetwork",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "checkForUpdates",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "applySelfUpdate",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "restartApp",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "shutdown_device",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "cleanup",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "networkManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "networkName",
+            "notify": "networkNameChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "isConnected",
+            "notify": "isConnectedChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "updateStatus",
+            "notify": "updateStatusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "updateMessage",
+            "notify": "updateMessageChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "remoteCommit",
+            "notify": "remoteCommitChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "remoteCommitMsg",
+            "notify": "remoteCommitMsgChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "workingTreeDirty",
+            "notify": "workingTreeDirtyChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "selfUpdateStatus",
+            "notify": "selfUpdateStatusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "selfUpdateMessage",
+            "notify": "selfUpdateMessageChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "canSelfUpdate",
+            "notify": "canSelfUpdateChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "networkNameChanged",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "isConnectedChanged",
+            "params": [
+                {
+                    "name": "connected",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "updateStatusChanged",
+            "params": [
+                {
+                    "name": "status",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "updateMessageChanged",
+            "params": [
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "remoteCommitChanged",
+            "params": [
+                {
+                    "name": "commit",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "remoteCommitMsgChanged",
+            "params": [
+                {
+                    "name": "msg",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "workingTreeDirtyChanged",
+            "params": [
+                {
+                    "name": "dirty",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "selfUpdateStatusChanged",
+            "params": [
+                {
+                    "name": "status",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "selfUpdateMessageChanged",
+            "params": [
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "canSelfUpdateChanged",
+            "params": [
+                {
+                    "name": "canUpdate",
+                    "type": "bool"
+                }
+            ]
+        }
+    ]
+}

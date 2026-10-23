@@ -49,6 +49,11 @@
         </nav>
 
         <div class="info-box info">
+          <div class="info-box-title">Generated reference</div>
+          This page is hand-kept and says what members mean. The exact list of every property, method and signal with its types is generated from the C++ and cannot go stale: <a href="api-reference.html">Service API Reference</a> (<span class="file-path">docs/api/</span>, checked by <code>tst_apidocs</code>). When the two disagree, the generated one is right.
+        </div>
+
+        <div class="info-box info">
           <div class="info-box-title">How managers reach QML</div>
           Every manager is a <code>QObject</code> member of <code>AppCore</code> (<span class="file-path">src/appcore.{h,cpp}</span>), set as a context property by <span class="file-path">src/main.cpp</span>, and QML reaches it by that name: <code>mediaManager.next_track()</code>, <code>settingsManager.themeSetting</code>, <code>obdManager.onRpmChanged</code>. Other context values are <code>screenAutoScale</code> (float, short screen edge / 720 clamped to 0.4&ndash;3.0), <code>isAndroid</code> (bool, <code>true</code> only in the Android build), <code>wikiViewerAvailable</code> (bool: an embedded web viewer is available), and <code>wikiHomeUrl</code> (<code>QUrl</code>: the wiki entry point). The <code>qmlRegisterType</code>'d <code>OCTAVE.AndroidAuto.EmbeddedDhuItem</code> and the QML singletons (<code>OBDParameterModel</code>, <code>WidgetCatalog</code>, &hellip;) are documented in <a href="components.html">Components</a>, not here.
         </div>

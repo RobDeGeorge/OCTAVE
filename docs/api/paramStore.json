@@ -1,0 +1,52 @@
+{
+    "class": "ParameterStore",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "ingest",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                },
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "invokable",
+            "name": "get",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariant"
+        },
+        {
+            "kind": "invokable",
+            "name": "snapshot",
+            "params": [
+            ],
+            "returns": "QVariantMap"
+        }
+    ],
+    "object": "paramStore",
+    "properties": [
+    ],
+    "signals": [
+        {
+            "name": "changed",
+            "params": [
+                {
+                    "name": "ids",
+                    "type": "QStringList"
+                }
+            ]
+        }
+    ]
+}

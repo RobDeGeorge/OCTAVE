@@ -1,0 +1,1573 @@
+{
+    "class": "OBDManager",
+    "enums": {
+        "ConnectionState": [
+            "Disconnected",
+            "Connecting",
+            "Connected",
+            "NoVehicle",
+            "Failed"
+        ]
+    },
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "connect_obd",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "reconnect",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "force_connect",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "close",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "reset_connection",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_connection_status",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "getConnectionStatus",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "refresh_ports",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_available_ports",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "scan",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "availableAdapters",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "connect_to_adapter",
+            "params": [
+                {
+                    "name": "identifier",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "platform_hint",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "scan_vehicle",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "is_scanning",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_all_parameter_names",
+            "params": [
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_supported_commands",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "enable_scanned_parameters",
+            "params": [
+                {
+                    "name": "paramNames",
+                    "type": "QVariantList"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "enable_all_supported",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "enter_diagnostic_mode",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "exit_diagnostic_mode",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "is_diagnostic_mode",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "read_dtc",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "read_current_dtc",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "read_status",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "clear_dtc",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "read_freeze_frame",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "read_vin",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_dtc_codes",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_dtc_count",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "get_mil_status",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_freeze_frame",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "coolantTemp",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "voltage",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "engineLoad",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "throttlePosition",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "intakeTemp",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "timingAdvance",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "massAirFlow",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "speedMPH",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "rpm",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "airFuelRatio",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "fuelLevel",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "intakeManifoldPressure",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "shortTermFuelTrim",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "longTermFuelTrim",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "oxygenSensorVoltage",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "fuelPressure",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "engineOilTemp",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "ignitionTiming",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "refresh_values",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "open_bluetooth_settings",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_target_address",
+            "params": [
+                {
+                    "name": "address",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "connect_direct",
+            "params": [
+                {
+                    "name": "mac",
+                    "type": "QString"
+                },
+                {
+                    "name": "channel",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "connect_direct",
+            "params": [
+                {
+                    "name": "mac",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_auto_reconnect",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_connection_timeout",
+            "params": [
+                {
+                    "name": "timeoutSeconds",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "check_device_presence",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "isConnected",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "clearConnectionLog",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "invokable",
+            "name": "is_connected",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "setParameterDemand",
+            "params": [
+                {
+                    "name": "consumer",
+                    "type": "QString"
+                },
+                {
+                    "name": "paramIds",
+                    "type": "QStringList"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "invokable",
+            "name": "setBackgroundDemand",
+            "params": [
+                {
+                    "name": "consumer",
+                    "type": "QString"
+                },
+                {
+                    "name": "paramIds",
+                    "type": "QStringList"
+                }
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "obdManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "connected",
+            "notify": "connectionStatusChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "connectionStatus",
+            "notify": "connectionStatusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "enum": [
+                "Disconnected",
+                "Connecting",
+                "Connected",
+                "NoVehicle",
+                "Failed"
+            ],
+            "name": "connectionState",
+            "notify": "connectionStatusChanged",
+            "readable": true,
+            "type": "OBDManager::ConnectionState",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "connectionDetail",
+            "notify": "connectionStatusDetailChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "connectionProgress",
+            "notify": "connectionProgressChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "connectionLog",
+            "notify": "connectionLogChanged",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "availableAdapters",
+            "notify": "availableAdaptersChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "vin",
+            "notify": "vinChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "vehicleMake",
+            "notify": "vinChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "vehicleModelYear",
+            "notify": "vinChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "vehicleSupportedParameters",
+            "notify": "vehicleSupportedParametersChanged",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "vehicleScanComplete",
+            "notify": "vehicleSupportedParametersChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "coolantTempChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "voltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "engineLoadChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "throttlePositionChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "intakeAirTempChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "timingAdvanceChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "massAirFlowChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "speedMPHChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "rpmChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "airFuelRatioChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelLevelChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "intakeManifoldPressureChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "shortTermFuelTrimChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "longTermFuelTrimChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "oxygenSensorVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelPressureChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "engineOilTempChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "ignitionTimingChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "runTimeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "distanceWithMILChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelRailPressureChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelRailPressureDirectChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "barometricPressureChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "ambientAirTempChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "relativeThrottlePosChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "absoluteThrottlePosBChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "acceleratorPosChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "catalystTempB1S1Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "catalystTempB1S2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "evapVaporPressureChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "shortFuelTrim2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "longFuelTrim2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2SensorB1S2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2SensorB2S1Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2SensorB2S2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "distanceSinceCodesCleared",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "warmupsSinceCodesCleared",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "absoluteLoadChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "commandedEGRChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "egrErrorChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "ethanoPercentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2SensorB1S3Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2SensorB1S4Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2SensorB2S3Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2SensorB2S4Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S1WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S2WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S3WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S4WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S5WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S6WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S7WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S8WRVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S1WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S2WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S3WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S4WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S5WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S6WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S7WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "o2S8WRCurrentChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "catalystTempB2S1Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "catalystTempB2S2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "throttlePosCChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "acceleratorPosEChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "acceleratorPosFChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "throttleActuatorChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "evaporativePurgeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelRailPressureAbsChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelInjectTimingChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelRateChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "runTimeMILChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "timeSinceDTCClearedChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "maxMAFChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "fuelTypeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "evapVaporPressureAbsChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "evapVaporPressureAltChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "shortO2TrimB1Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "longO2TrimB1Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "shortO2TrimB2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "longO2TrimB2Changed",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "relativeAccelPosChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "hybridBatteryRemainingChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "elmVoltageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "connectionStatusChanged",
+            "params": [
+                {
+                    "name": "status",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionLostUnexpectedly",
+            "params": [
+                {
+                    "name": "reason",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionStatusDetailChanged",
+            "params": [
+                {
+                    "name": "detail",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionProgressChanged",
+            "params": [
+                {
+                    "name": "progress",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "devicePresenceChanged",
+            "params": [
+                {
+                    "name": "present",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "availablePortsChanged",
+            "params": [
+                {
+                    "name": "ports",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "availableAdaptersChanged",
+            "params": [
+                {
+                    "name": "adapters",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "supportedCommandsChanged",
+            "params": [
+                {
+                    "name": "commands",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "scanProgressChanged",
+            "params": [
+                {
+                    "name": "progress",
+                    "type": "int"
+                },
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "scanCompleteChanged",
+            "params": [
+                {
+                    "name": "supportedParams",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "scanOutputChanged",
+            "params": [
+                {
+                    "name": "output",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "vehicleSupportedParametersChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "dtcCodesChanged",
+            "params": [
+                {
+                    "name": "codes",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "dtcCountChanged",
+            "params": [
+                {
+                    "name": "count",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "milStatusChanged",
+            "params": [
+                {
+                    "name": "status",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "dtcClearResult",
+            "params": [
+                {
+                    "name": "success",
+                    "type": "bool"
+                },
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "freezeFrameChanged",
+            "params": [
+                {
+                    "name": "data",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "obdParameterChanged",
+            "params": [
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "parameterSampled",
+            "params": [
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "vinChanged",
+            "params": [
+                {
+                    "name": "vin",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionLogLineAppended",
+            "params": [
+                {
+                    "name": "line",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionLogChanged",
+            "params": [
+            ]
+        }
+    ]
+}

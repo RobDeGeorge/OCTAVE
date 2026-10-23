@@ -1,0 +1,142 @@
+{
+    "class": "GestureManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "getConnectionStatus",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "setGestureAction",
+            "params": [
+                {
+                    "name": "gesture",
+                    "type": "QString"
+                },
+                {
+                    "name": "action",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "getGestureAction",
+            "params": [
+                {
+                    "name": "gesture",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "resetMappingToDefaults",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setEnabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setCooldown",
+            "params": [
+                {
+                    "name": "ms",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "isEnabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "cooldownMs",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "cleanup",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "gestureSensor",
+    "properties": [
+        {
+            "constant": false,
+            "name": "connectionStatus",
+            "notify": "connectionStatusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "gestures",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "actions",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "gestureDetected",
+            "params": [
+                {
+                    "name": "gesture",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "actionTriggered",
+            "params": [
+                {
+                    "name": "action",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionStatusChanged",
+            "params": [
+                {
+                    "name": "status",
+                    "type": "QString"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,197 @@
+{
+    "class": "NowPlaying",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "togglePlay",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "next",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "previous",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "seek",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "toggleShuffle",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "extractArtColors",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "nowPlaying",
+    "properties": [
+        {
+            "constant": false,
+            "name": "source",
+            "notify": "sourceChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "playing",
+            "notify": "playingChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "hasTrack",
+            "notify": "trackInfoChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "title",
+            "notify": "trackInfoChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "artist",
+            "notify": "trackInfoChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "album",
+            "notify": "trackInfoChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "artUrl",
+            "notify": "artUrlChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "durationMs",
+            "notify": "durationChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "positionMs",
+            "notify": "positionChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "canSeek",
+            "notify": "capabilitiesChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "canShuffle",
+            "notify": "capabilitiesChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "shuffled",
+            "notify": "shuffledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "sourceChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "playingChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "trackInfoChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "artUrlChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "durationChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "positionChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "capabilitiesChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "shuffledChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "trackChanged",
+            "params": [
+            ]
+        }
+    ]
+}

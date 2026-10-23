@@ -1,0 +1,126 @@
+{
+    "class": "AndroidAutoManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "getDhuInstallInstructions",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "launchDhuSeamless",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "sendDhuClick",
+            "params": [
+                {
+                    "name": "x",
+                    "type": "int"
+                },
+                {
+                    "name": "y",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "closeDhu",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "cleanup",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "androidAutoManager",
+    "properties": [
+        {
+            "constant": true,
+            "name": "isDhuInstalled",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "dhuPath",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "isDhuEmbedded",
+            "notify": "dhuEmbeddedChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "dhuWindowHandle",
+            "notify": "dhuWindowReady",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "dhuCapture",
+            "readable": true,
+            "type": "QObject*",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "connectionProgress",
+            "params": [
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "error",
+            "params": [
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "dhuWindowReady",
+            "params": [
+                {
+                    "name": "windowHandle",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "dhuEmbeddedChanged",
+            "params": [
+                {
+                    "name": "embedded",
+                    "type": "bool"
+                }
+            ]
+        }
+    ]
+}

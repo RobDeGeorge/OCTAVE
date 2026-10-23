@@ -1,0 +1,3187 @@
+{
+    "class": "SettingsManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "save_device_name",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_font_setting",
+            "params": [
+                {
+                    "name": "font",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_theme_setting",
+            "params": [
+                {
+                    "name": "theme",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_ui_scale",
+            "params": [
+                {
+                    "name": "scale",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_color_transition_ms",
+            "params": [
+                {
+                    "name": "ms",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_song_length_transition",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_show_clock",
+            "params": [
+                {
+                    "name": "show",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_clock_format",
+            "params": [
+                {
+                    "name": "is24hour",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_clock_show_seconds",
+            "params": [
+                {
+                    "name": "show",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_clock_size",
+            "params": [
+                {
+                    "name": "size",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_clock_size_auto",
+            "params": [
+                {
+                    "name": "autoSize",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_background_grid",
+            "params": [
+                {
+                    "name": "grid",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_screen_width",
+            "params": [
+                {
+                    "name": "width",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_screen_height",
+            "params": [
+                {
+                    "name": "height",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_background_blur_radius",
+            "params": [
+                {
+                    "name": "radius",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_bottom_bar_orientation",
+            "params": [
+                {
+                    "name": "orientation",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_show_bottom_bar_media_controls",
+            "params": [
+                {
+                    "name": "show",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_settings_layout_style",
+            "params": [
+                {
+                    "name": "style",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_album_art_colors",
+            "params": [
+                {
+                    "name": "colorsJson",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_start_volume",
+            "params": [
+                {
+                    "name": "volume",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setCurrentVolume",
+            "params": [
+                {
+                    "name": "volume",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_media_folder",
+            "params": [
+                {
+                    "name": "folderPath",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_media_folder_url",
+            "params": [
+                {
+                    "name": "url",
+                    "type": "QUrl"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "save_auto_play_on_startup",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_persist_shuffle_state",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_last_shuffle_state",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_last_played_song",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_last_played_position",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_last_played_playlist",
+            "params": [
+                {
+                    "name": "playlistName",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_playback_state",
+            "params": [
+                {
+                    "name": "song",
+                    "type": "QString"
+                },
+                {
+                    "name": "positionMs",
+                    "type": "int"
+                },
+                {
+                    "name": "playlist",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_music_button_default_page",
+            "params": [
+                {
+                    "name": "page",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_return_to_library_after_selection",
+            "params": [
+                {
+                    "name": "returnToLibrary",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_show_waveform_visualizer",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_show_3d_button_tilt",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_show_3d_album_preview",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_rounded_album_art",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_album_art_corner_radius",
+            "params": [
+                {
+                    "name": "radius",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_show_album_art_shadow",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_vinyl_record_mode",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_album_art_transition",
+            "params": [
+                {
+                    "name": "transition",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_background_overlay_opacity",
+            "params": [
+                {
+                    "name": "opacity",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_side_card_opacity",
+            "params": [
+                {
+                    "name": "opacity",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_side_card_angle",
+            "params": [
+                {
+                    "name": "angle",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_button_tilt_duration",
+            "params": [
+                {
+                    "name": "duration",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_text_scroll_speed",
+            "params": [
+                {
+                    "name": "speed",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_obd_bluetooth_port",
+            "params": [
+                {
+                    "name": "port",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "add_obd_saved_adapter",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                },
+                {
+                    "name": "mac",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "remove_obd_saved_adapter",
+            "params": [
+                {
+                    "name": "mac",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_obd_fast_mode",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_obd_card_style_circular",
+            "params": [
+                {
+                    "name": "circular",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_gauge_temp_unit",
+            "params": [
+                {
+                    "name": "unit",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_gauge_speed_unit",
+            "params": [
+                {
+                    "name": "unit",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_obd_auto_reconnect_attempts",
+            "params": [
+                {
+                    "name": "attempts",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_fuel_tank_capacity",
+            "params": [
+                {
+                    "name": "capacity",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_black_box_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_black_box_sweep_all",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_black_box_max_mb",
+            "params": [
+                {
+                    "name": "megabytes",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_obd_parameter_enabled",
+            "params": [
+                {
+                    "name": "parameter",
+                    "type": "QString"
+                },
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_supported_obd_parameters",
+            "params": [
+                {
+                    "name": "parameters",
+                    "type": "QVariantList"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_home_obd_parameters",
+            "params": [
+                {
+                    "name": "parameters",
+                    "type": "QVariantList"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "add_home_obd_parameter",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                },
+                {
+                    "name": "index",
+                    "type": "int"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "add_home_obd_parameter",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "remove_home_obd_parameter",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "move_home_obd_parameter",
+            "params": [
+                {
+                    "name": "from",
+                    "type": "int"
+                },
+                {
+                    "name": "to",
+                    "type": "int"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "save_to_directory_history",
+            "params": [
+                {
+                    "name": "folderPath",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "remove_from_directory_history",
+            "params": [
+                {
+                    "name": "folderPath",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_custom_theme",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                },
+                {
+                    "name": "theme",
+                    "type": "QVariantMap"
+                },
+                {
+                    "name": "albumArtSource",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_custom_theme",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                },
+                {
+                    "name": "theme",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "delete_custom_theme",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_window_state",
+            "params": [
+                {
+                    "name": "state",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_last_settings_section",
+            "params": [
+                {
+                    "name": "section",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_settings_section_visibility",
+            "params": [
+                {
+                    "name": "section",
+                    "type": "QString"
+                },
+                {
+                    "name": "visible",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_android_auto_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_phone_mirror_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_display_size",
+            "params": [
+                {
+                    "name": "size",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_audio_gain",
+            "params": [
+                {
+                    "name": "gain",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_audio_duck_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_audio_duck_level",
+            "params": [
+                {
+                    "name": "level",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_audio_gain_db",
+            "params": [
+                {
+                    "name": "db",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_audio_duck_level_db",
+            "params": [
+                {
+                    "name": "db",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_phone_screen_off",
+            "params": [
+                {
+                    "name": "off",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_display_dpi",
+            "params": [
+                {
+                    "name": "dpi",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_bit_rate_usb",
+            "params": [
+                {
+                    "name": "mbps",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_bit_rate_wifi",
+            "params": [
+                {
+                    "name": "mbps",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_auto_wifi",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_bit_rate_auto",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_scrcpy_wireless_address",
+            "params": [
+                {
+                    "name": "address",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_esp32_volume_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_esp32_volume_port",
+            "params": [
+                {
+                    "name": "port",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_esp32_volume_step_size",
+            "params": [
+                {
+                    "name": "stepSize",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_esp32_auto_reconnect",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_esp32_led_sleep_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_esp32_led_color_mode",
+            "params": [
+                {
+                    "name": "mode",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_esp32_led_static_color",
+            "params": [
+                {
+                    "name": "color",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_imu_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_sensor_emit_rate",
+            "params": [
+                {
+                    "name": "hz",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_sensor_decimal_places",
+            "params": [
+                {
+                    "name": "places",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_sensor_temp_unit",
+            "params": [
+                {
+                    "name": "unit",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_sensor_altitude_unit",
+            "params": [
+                {
+                    "name": "unit",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_sensor_card_visible",
+            "params": [
+                {
+                    "name": "card",
+                    "type": "QString"
+                },
+                {
+                    "name": "visible",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_gesture_sensor_enabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_gesture_action",
+            "params": [
+                {
+                    "name": "gesture",
+                    "type": "QString"
+                },
+                {
+                    "name": "action",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_gesture_mapping",
+            "params": [
+                {
+                    "name": "mapping",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "reset_gesture_mapping",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_gesture_volume_step",
+            "params": [
+                {
+                    "name": "step",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_gesture_cooldown",
+            "params": [
+                {
+                    "name": "ms",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "toggle_pin_setting",
+            "params": [
+                {
+                    "name": "settingId",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "reset_to_defaults",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "save_setting",
+            "params": [
+                {
+                    "name": "key",
+                    "type": "QString"
+                },
+                {
+                    "name": "value",
+                    "type": "QVariant"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_setting",
+            "params": [
+                {
+                    "name": "key",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariant"
+        },
+        {
+            "kind": "slot",
+            "name": "get_setting_with_default",
+            "params": [
+                {
+                    "name": "key",
+                    "type": "QString"
+                },
+                {
+                    "name": "defaultValue",
+                    "type": "QVariant"
+                }
+            ],
+            "returns": "QVariant"
+        },
+        {
+            "kind": "slot",
+            "name": "get_obd_parameter_enabled",
+            "params": [
+                {
+                    "name": "parameter",
+                    "type": "QString"
+                },
+                {
+                    "name": "defaultVal",
+                    "type": "bool"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_obd_parameter_enabled",
+            "params": [
+                {
+                    "name": "parameter",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_supported_obd_parameters",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_directory_history",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_home_obd_parameters",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_auto_play_on_startup",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_persist_shuffle_state",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_last_shuffle_state",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_last_played_song",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_last_played_position",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "get_last_played_playlist",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_last_settings_section",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_window_state",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_music_button_default_page",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_return_to_library_after_selection",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "flushPendingSave",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_android_auto_enabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_phone_mirror_enabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_display_size",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_audio_gain",
+            "params": [
+            ],
+            "returns": "double"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_audio_duck_enabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_audio_duck_level",
+            "params": [
+            ],
+            "returns": "double"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_phone_screen_off",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_display_dpi",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_bit_rate_usb",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_bit_rate_wifi",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_auto_wifi",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_bit_rate_auto",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_scrcpy_wireless_address",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_esp32_volume_enabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_esp32_volume_port",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_esp32_volume_step_size",
+            "params": [
+            ],
+            "returns": "double"
+        },
+        {
+            "kind": "slot",
+            "name": "get_esp32_auto_reconnect",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_esp32_led_sleep_enabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_esp32_led_color_mode",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_esp32_led_static_color",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_show_waveform_visualizer",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_imu_enabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_gesture_sensor_enabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_gesture_mapping",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_gesture_mapping_dict",
+            "params": [
+            ],
+            "returns": "QVariantMap"
+        },
+        {
+            "kind": "slot",
+            "name": "is_setting_pinned",
+            "params": [
+                {
+                    "name": "settingId",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_settings_registry",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_pinned_settings_metadata",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_settings_menu_visibility",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "is_settings_section_visible",
+            "params": [
+                {
+                    "name": "section",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_git_commit_hash",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_git_commit_date",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_git_commit_message",
+            "params": [
+            ],
+            "returns": "QString"
+        }
+    ],
+    "object": "settingsManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "deviceName",
+            "notify": "deviceNameChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "fontSetting",
+            "notify": "fontSettingChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "themeSetting",
+            "notify": "themeSettingChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "uiScale",
+            "notify": "uiScaleChanged",
+            "readable": true,
+            "type": "float",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "colorTransitionMs",
+            "notify": "colorTransitionMsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "songLengthTransition",
+            "notify": "songLengthTransitionChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "showClock",
+            "notify": "showClockChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "clockFormat24Hour",
+            "notify": "clockFormatChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "clockShowSeconds",
+            "notify": "clockShowSecondsChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "clockSize",
+            "notify": "clockSizeChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "clockSizeAuto",
+            "notify": "clockSizeAutoChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "backgroundGrid",
+            "notify": "backgroundGridChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "screenWidth",
+            "notify": "screenWidthChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "screenHeight",
+            "notify": "screenHeightChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "backgroundBlurRadius",
+            "notify": "backgroundBlurRadiusChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "bottomBarOrientation",
+            "notify": "bottomBarOrientationChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "showBottomBarMediaControls",
+            "notify": "showBottomBarMediaControlsChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "settingsLayoutStyle",
+            "notify": "settingsLayoutStyleChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "albumArtColors",
+            "notify": "albumArtColorsChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "settingsMenuVisibility",
+            "notify": "settingsMenuVisibilityChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "startUpVolume",
+            "notify": "startUpVolumeChanged",
+            "readable": true,
+            "type": "float",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "currentVolume",
+            "notify": "currentVolumeChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaFolder",
+            "notify": "mediaFolderChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "autoPlayOnStartup",
+            "notify": "autoPlayOnStartupChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "persistShuffleState",
+            "notify": "persistShuffleStateChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastShuffleState",
+            "notify": "lastShuffleStateChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastPlayedSong",
+            "notify": "lastPlayedSongChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastPlayedPosition",
+            "notify": "lastPlayedPositionChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastPlayedPlaylist",
+            "notify": "lastPlayedPlaylistChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "musicButtonDefaultPage",
+            "notify": "musicButtonDefaultPageChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "returnToLibraryAfterSelection",
+            "notify": "returnToLibraryAfterSelectionChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "showWaveformVisualizer",
+            "notify": "showWaveformVisualizerChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "show3DButtonTilt",
+            "notify": "show3DButtonTiltChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "show3DAlbumPreview",
+            "notify": "show3DAlbumPreviewChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "roundedAlbumArt",
+            "notify": "roundedAlbumArtChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "albumArtCornerRadius",
+            "notify": "albumArtCornerRadiusChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "showAlbumArtShadow",
+            "notify": "showAlbumArtShadowChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "vinylRecordMode",
+            "notify": "vinylRecordModeChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "albumArtTransition",
+            "notify": "albumArtTransitionChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "backgroundOverlayOpacity",
+            "notify": "backgroundOverlayOpacityChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sideCardOpacity",
+            "notify": "sideCardOpacityChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sideCardAngle",
+            "notify": "sideCardAngleChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "buttonTiltDuration",
+            "notify": "buttonTiltDurationChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "textScrollSpeed",
+            "notify": "textScrollSpeedChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "obdBluetoothPort",
+            "notify": "obdBluetoothPortChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "obdSavedAdapters",
+            "notify": "obdSavedAdaptersChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "obdFastMode",
+            "notify": "obdFastModeChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "obdCardStyleCircular",
+            "notify": "obdCardStyleCircularChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "gaugeTempUnit",
+            "notify": "gaugeTempUnitChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "gaugeSpeedUnit",
+            "notify": "gaugeSpeedUnitChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "obdAutoReconnectAttempts",
+            "notify": "obdAutoReconnectAttemptsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "fuelTankCapacity",
+            "notify": "fuelTankCapacityChanged",
+            "readable": true,
+            "type": "float",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "blackBoxEnabled",
+            "notify": "blackBoxEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "blackBoxSweepAll",
+            "notify": "blackBoxSweepAllChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "blackBoxMaxMB",
+            "notify": "blackBoxMaxMBChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "homeOBDParameters",
+            "notify": "homeOBDParametersChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "maxHomeObdParameters",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "customThemes",
+            "notify": "customThemesChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "customThemeData",
+            "notify": "customThemesChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "directoryHistory",
+            "notify": "directoryHistoryChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "windowState",
+            "notify": "windowStateChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastSettingsSection",
+            "notify": "lastSettingsSectionChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "androidAutoEnabled",
+            "notify": "androidAutoEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "phoneMirrorEnabled",
+            "notify": "phoneMirrorEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyDisplaySize",
+            "notify": "scrcpyDisplaySizeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyAudioGain",
+            "notify": "scrcpyAudioGainChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyAudioGainDb",
+            "notify": "scrcpyAudioGainChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyAudioDuckLevelDb",
+            "notify": "scrcpyAudioDuckLevelChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyAudioDuckEnabled",
+            "notify": "scrcpyAudioDuckEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyAudioDuckLevel",
+            "notify": "scrcpyAudioDuckLevelChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyPhoneScreenOff",
+            "notify": "scrcpyPhoneScreenOffChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyDisplayDpi",
+            "notify": "scrcpyDisplayDpiChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyBitRateUsb",
+            "notify": "scrcpyBitRateUsbChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyBitRateWifi",
+            "notify": "scrcpyBitRateWifiChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyAutoWifi",
+            "notify": "scrcpyAutoWifiChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyBitRateAuto",
+            "notify": "scrcpyBitRateAutoChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scrcpyWirelessAddress",
+            "notify": "scrcpyWirelessAddressChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "esp32VolumeEnabled",
+            "notify": "esp32VolumeEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "esp32VolumePort",
+            "notify": "esp32VolumePortChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "esp32VolumeStepSize",
+            "notify": "esp32VolumeStepSizeChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "esp32AutoReconnect",
+            "notify": "esp32AutoReconnectChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "esp32LedSleepEnabled",
+            "notify": "esp32LedSleepEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "esp32LedColorMode",
+            "notify": "esp32LedColorModeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "esp32LedStaticColor",
+            "notify": "esp32LedStaticColorChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "imuEnabled",
+            "notify": "imuEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sensorEmitRate",
+            "notify": "sensorEmitRateChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sensorDecimalPlaces",
+            "notify": "sensorDecimalPlacesChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sensorTempUnit",
+            "notify": "sensorTempUnitChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sensorAltitudeUnit",
+            "notify": "sensorAltitudeUnitChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sensorCards",
+            "notify": "sensorCardsChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "gestureSensorEnabled",
+            "notify": "gestureSensorEnabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "gestureVolumeStep",
+            "notify": "gestureVolumeStepChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "gestureCooldown",
+            "notify": "gestureCooldownChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "pinnedSettings",
+            "notify": "pinnedSettingsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "deviceNameChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "fontSettingChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "themeSettingChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "uiScaleChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "colorTransitionMsChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "songLengthTransitionChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "showClockChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "clockFormatChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "clockShowSecondsChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "clockSizeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "clockSizeAutoChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "backgroundGridChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "screenWidthChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "screenHeightChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "backgroundBlurRadiusChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "bottomBarOrientationChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "showBottomBarMediaControlsChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "settingsLayoutStyleChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "albumArtColorsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "settingsMenuVisibilityChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "startUpVolumeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "currentVolumeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "mediaFolderChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "autoPlayOnStartupChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "persistShuffleStateChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "lastShuffleStateChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "lastPlayedSongChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "lastPlayedPositionChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "lastPlayedPlaylistChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "musicButtonDefaultPageChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "returnToLibraryAfterSelectionChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "showWaveformVisualizerChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "show3DButtonTiltChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "show3DAlbumPreviewChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "roundedAlbumArtChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "albumArtCornerRadiusChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "showAlbumArtShadowChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "vinylRecordModeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "albumArtTransitionChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "backgroundOverlayOpacityChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "sideCardOpacityChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "double"
+                }
+            ]
+        },
+        {
+            "name": "sideCardAngleChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "buttonTiltDurationChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "textScrollSpeedChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "obdBluetoothPortChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "obdSavedAdaptersChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "obdFastModeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "obdCardStyleCircularChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "gaugeTempUnitChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "gaugeSpeedUnitChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "obdAutoReconnectAttemptsChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "fuelTankCapacityChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "blackBoxEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "blackBoxSweepAllChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "blackBoxMaxMBChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "obdParametersChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "homeOBDParametersChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "supportedOBDParametersChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "directoryHistoryChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "customThemesChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "windowStateChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "lastSettingsSectionChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "androidAutoEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "phoneMirrorEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyDisplaySizeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyAudioGainChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "double"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyAudioDuckEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyAudioDuckLevelChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "double"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyPhoneScreenOffChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyDisplayDpiChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyBitRateUsbChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyBitRateWifiChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyAutoWifiChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyBitRateAutoChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyWirelessAddressChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "esp32VolumeEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "esp32VolumePortChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "esp32VolumeStepSizeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "double"
+                }
+            ]
+        },
+        {
+            "name": "esp32AutoReconnectChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "esp32LedSleepEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "esp32LedColorModeChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "esp32LedStaticColorChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "imuEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "sensorEmitRateChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "sensorDecimalPlacesChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "sensorTempUnitChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "sensorAltitudeUnitChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "sensorCardsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "gestureSensorEnabledChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "gestureMappingChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "gestureVolumeStepChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "gestureCooldownChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "pinnedSettingsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "genericSettingChanged",
+            "params": [
+                {
+                    "name": "key",
+                    "type": "QString"
+                }
+            ]
+        }
+    ]
+}

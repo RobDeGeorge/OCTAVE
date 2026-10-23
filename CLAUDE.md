@@ -12,7 +12,7 @@ OCTAVE is a **C++ / Qt 6** app (`src/`) with a QML frontend (`frontend/`). Every
 
 Until 2026-10-18 there was also a Python / PySide6 backend (`backend/`, `main.py`). It was frozen at the `python-final` branch (`b5463c9`, with its own wiki) and deleted from `main`. Don't reintroduce a Python backend, Python-on-Android (buildozer / p4a) or a PyInstaller pipeline.
 
-Python that remains is tooling around the C++ app, listed in `requirements.txt` and installed into `./venv`: the desktop download helpers (`yt-dlp`, `scripts/ytmusic_search.py` with `ytmusicapi`), `scripts/fetch_platform_tools.py`, `wiki/build_search_index.py`, `scripts/gen_gauge_param_docs.py` (regenerates the parameter table in `docs/GAUGE_AUTHORING.md` §6 from the C++ catalog), the Android pylib bundle script, the Blender scripts in `tools/vehicle/`, `tools/trips/make_mock_trip.py` (a mock drive for the black box / Trip History page), and the gitignored `dev/` clients that drive the app over the command server.
+Python that remains is tooling around the C++ app, listed in `requirements.txt` and installed into `./venv`: the desktop download helpers (`yt-dlp`, `scripts/ytmusic_search.py` with `ytmusicapi`), `scripts/fetch_platform_tools.py`, `wiki/build_search_index.py`, `wiki/build_api_reference.py` (builds `wiki/api-reference.html` from `docs/api/`), `scripts/gen_gauge_param_docs.py` (regenerates the parameter table in `docs/GAUGE_AUTHORING.md` §6 from the C++ catalog), the Android pylib bundle script, the Blender scripts in `tools/vehicle/`, `tools/trips/make_mock_trip.py` (a mock drive for the black box / Trip History page), and the gitignored `dev/` clients that drive the app over the command server.
 
 ## Commands
 
@@ -83,7 +83,7 @@ When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMa
 
 1. Implement in C++ (`src/`); QML in `frontend/`.
 2. Build and test: `cmake --build build -j && ctest --test-dir build`. Add or extend a QtTest in `tests/cpp/` for logic changes (`octave_add_test()` in its CMakeLists; give anything that touches settings a temp `XDG_CONFIG_HOME`). Drive the result with `./build/octave --dev --profile` and the dev tooling (screenshots, stories, dashboard drivers, MCP tools) when it touches the UI.
-3. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes.
+3. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes. When a manager's public surface changes (a `Q_PROPERTY`, `Q_INVOKABLE`, slot or signal, or a PID), regenerate the published API in the same commit: `./build/octave --dump-api docs/api && venv/bin/python wiki/build_api_reference.py` (`tst_apidocs` fails otherwise). A breaking change also bumps `kProtocolVersion` (`src/service/protocol.h`, `docs/api/README.md`).
 
 ### Frontend (`frontend/`)
 

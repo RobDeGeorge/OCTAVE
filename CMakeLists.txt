@@ -210,6 +210,8 @@ qt_add_executable(octave
     src/service/servicebridge.cpp
     src/service/serviceoptions.h
     src/service/serviceoptions.cpp
+    src/service/apidump.h
+    src/service/apidump.cpp
     src/service/metadescribe.h
     src/service/metadescribe.cpp
     src/util/units.cpp

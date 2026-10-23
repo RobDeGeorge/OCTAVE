@@ -1,0 +1,146 @@
+{
+    "class": "ESP32VolumeManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "connect_device",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "disconnect_device",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_available_ports",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "is_connected",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_connection_status",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_connection_detail",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "refresh_ports",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "reset_reconnect_attempts",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "cleanup",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "esp32VolumeManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "connected",
+            "notify": "connectionStatusChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "connectionStatus",
+            "notify": "connectionStatusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "connectionDetail",
+            "notify": "connectionDetailChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "availablePorts",
+            "notify": "availablePortsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "connectionStatusChanged",
+            "params": [
+                {
+                    "name": "status",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionDetailChanged",
+            "params": [
+                {
+                    "name": "detail",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "availablePortsChanged",
+            "params": [
+                {
+                    "name": "ports",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "volumeChangeRequested",
+            "params": [
+                {
+                    "name": "delta",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "muteToggleRequested",
+            "params": [
+            ]
+        }
+    ]
+}

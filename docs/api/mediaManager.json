@@ -1,0 +1,738 @@
+{
+    "class": "MediaManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "connect_settings_manager",
+            "params": [
+                {
+                    "name": "",
+                    "type": "QObject*"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "_save_playback_state",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "_clear_temp_files",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "flush_metadata_store",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "play_file",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "next_track",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "previous_track",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "pause",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "toggle_play",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setMuted",
+            "params": [
+                {
+                    "name": "muted",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "toggle_shuffle",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setVolume",
+            "params": [
+                {
+                    "name": "volume",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setDucking",
+            "params": [
+                {
+                    "name": "factor",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_position",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "extract_colors_from_album_art",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "extract_colors_from_image",
+            "params": [
+                {
+                    "name": "imagePath",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "scan_library",
+            "params": [
+                {
+                    "name": "resetDisplayNames",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "scan_library",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_library_root",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "strip_filenames",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "select_playlist",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "create_playlist",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "delete_playlist",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "move_song_to_playlist",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                },
+                {
+                    "name": "targetPlaylist",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "delete_song",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "play_downloaded_song",
+            "params": [
+                {
+                    "name": "artist",
+                    "type": "QString"
+                },
+                {
+                    "name": "name",
+                    "type": "QString"
+                },
+                {
+                    "name": "playlist",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "play_file_at_path",
+            "params": [
+                {
+                    "name": "filePath",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "invalidate_stats_cache",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_media_files",
+            "params": [
+                {
+                    "name": "emitSignal",
+                    "type": "bool"
+                }
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_media_files",
+            "params": [
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_formatted_duration",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_band",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_album",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_album_art",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_current_file",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_next_track_name",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_previous_track_name",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_next_track_album_art",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_previous_track_album_art",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_neighbor_album_arts",
+            "params": [
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "is_playing",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "is_paused",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_duration",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "get_position",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "is_muted",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "getVolume",
+            "params": [
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "is_shuffled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "get_playlist_names",
+            "params": [
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_current_playlist_name",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_current_song_list",
+            "params": [
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_movable_playlist_names",
+            "params": [
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_song_playlist_name",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_song_file_path",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_full_file_path",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_display_name",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_default_media_dir",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_media_folder_name",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_total_duration",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "get_album_count",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "get_artist_count",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "sort_media_files",
+            "params": [
+                {
+                    "name": "sortColumn",
+                    "type": "QString"
+                },
+                {
+                    "name": "ascending",
+                    "type": "bool"
+                }
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
+            "name": "sort_media_files",
+            "params": [
+                {
+                    "name": "sortColumn",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QStringList"
+        }
+    ],
+    "object": "mediaManager",
+    "properties": [
+    ],
+    "signals": [
+        {
+            "name": "playbackStateChanged",
+            "params": [
+                {
+                    "name": "state",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "playStateChanged",
+            "params": [
+                {
+                    "name": "playing",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "currentMediaChanged",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "mediaListChanged",
+            "params": [
+                {
+                    "name": "files",
+                    "type": "QStringList"
+                }
+            ]
+        },
+        {
+            "name": "durationChanged",
+            "params": [
+                {
+                    "name": "durationMs",
+                    "type": "qlonglong"
+                }
+            ]
+        },
+        {
+            "name": "positionChanged",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "qlonglong"
+                }
+            ]
+        },
+        {
+            "name": "metadataChanged",
+            "params": [
+                {
+                    "name": "title",
+                    "type": "QString"
+                },
+                {
+                    "name": "artist",
+                    "type": "QString"
+                },
+                {
+                    "name": "album",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "durationFormatChanged",
+            "params": [
+                {
+                    "name": "formatted",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "volumeChanged",
+            "params": [
+                {
+                    "name": "volume",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "shuffleStateChanged",
+            "params": [
+                {
+                    "name": "shuffled",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "totalDurationChanged",
+            "params": [
+                {
+                    "name": "formatted",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "albumCountChanged",
+            "params": [
+                {
+                    "name": "count",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "artistCountChanged",
+            "params": [
+                {
+                    "name": "count",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "playlistsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "currentPlaylistChanged",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "scanProgress",
+            "params": [
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "albumColorsExtracted",
+            "params": [
+                {
+                    "name": "jsonColors",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "songDeleted",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ]
+        }
+    ]
+}

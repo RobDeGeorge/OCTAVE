@@ -1,0 +1,119 @@
+{
+    "class": "DiagnosticsManager",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "recentLogLines",
+            "params": [
+                {
+                    "name": "maxLines",
+                    "type": "int"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "invokable",
+            "name": "recentLogLines",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "invokable",
+            "name": "copyLogsToClipboard",
+            "params": [
+                {
+                    "name": "maxLines",
+                    "type": "int"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "copyLogsToClipboard",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "exportLogs",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "invokable",
+            "name": "openLogFolder",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "licenseText",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        }
+    ],
+    "object": "diagnosticsManager",
+    "properties": [
+        {
+            "constant": true,
+            "name": "logDir",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "appVersion",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "backendName",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "deviceInfo",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastExportPath",
+            "notify": "lastExportPathChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "canOpenFolder",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "lastExportPathChanged",
+            "params": [
+            ]
+        }
+    ]
+}

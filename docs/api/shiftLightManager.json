@@ -1,0 +1,190 @@
+{
+    "class": "ShiftLightManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "setRpm",
+            "params": [
+                {
+                    "name": "rpm",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setFlags",
+            "params": [
+                {
+                    "name": "flags",
+                    "type": "QVariantList"
+                }
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "shiftLightManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "enabled",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "showOnHomeCard",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "maxRpm",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "fullScreenFlashOpacity",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lampSize",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "glowSize",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "glowIntensity",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "colorTransitionSpeed",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "pulseEnabled",
+            "notify": "settingsChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "flags",
+            "notify": "flagsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "rpm",
+            "notify": "rpmChanged",
+            "readable": true,
+            "type": "double",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "active",
+            "notify": "activeFlagChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "activeIndex",
+            "notify": "activeFlagChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "activeFlag",
+            "notify": "activeFlagChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lit",
+            "notify": "litChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "suppressed",
+            "notify": "suppressedChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": true
+        }
+    ],
+    "signals": [
+        {
+            "name": "settingsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "flagsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "rpmChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "activeFlagChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "litChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "suppressedChanged",
+            "params": [
+            ]
+        }
+    ]
+}

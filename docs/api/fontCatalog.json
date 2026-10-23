@@ -1,0 +1,24 @@
+{
+    "class": "FontCatalog",
+    "methods": [
+    ],
+    "object": "fontCatalog",
+    "properties": [
+        {
+            "constant": true,
+            "name": "fonts",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "symbolFamily",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
+    ],
+    "signals": [
+    ]
+}

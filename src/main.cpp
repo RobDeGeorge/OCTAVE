@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QFile>
 #include <QWindow>
+#include <QTemporaryDir>
 #include <QTimer>
 #include <QtQml/qqml.h>
 #ifdef OCTAVE_HAVE_WEBENGINE
@@ -34,6 +35,7 @@ extern "C" {
 #include "util/units.h"
 #include "service/commandserver.h"
 #include "service/servicebridge.h"
+#include "service/apidump.h"
 #include "service/serviceoptions.h"
 
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MOBILE)
@@ -132,6 +134,28 @@ void quitOnSignals(QCoreApplication &app)
 #endif
 }
 
+// --dump-api DIR: the published API (docs/api/, src/service/apidump.h)
+// from the managers' meta-objects, then exit. The managers are really
+// built, so main() has pointed the config at a throwaway directory first.
+// The event loop never runs, so the managers' deferred starts (the OBD
+// connection, the ESP32 and IMU probes) never fire; only TripRecorder's
+// thread and database come up, in that directory, and shutdown() closes them.
+int dumpApi(QGuiApplication &app, const QString &dir)
+{
+    Units units;
+    AppCore core(findFrontendDir(), &units);
+    QString error;
+    const bool ok = OctaveService::writeApiDocs(core.registry, QDir(dir), &error);
+    core.shutdown();
+    if (!ok) {
+        qCritical("--dump-api: %s", qPrintable(error));
+        return 1;
+    }
+    qInfo("API written to %s", qPrintable(QDir(dir).absolutePath()));
+    Q_UNUSED(app);
+    return 0;
+}
+
 #ifndef Q_OS_MOBILE
 // --headless: every manager and the service, no QML engine and no window
 // (TODO/open-backend.md, contract step 2). Another frontend, a script or
@@ -189,6 +213,8 @@ int main(int argc, char *argv[])
     bool smokeTest = false;
     // --headless: the managers and the service, no UI (runHeadless)
     bool headless = false;
+    // --dump-api DIR: write the published API and exit (dumpApi)
+    QString dumpApiDir;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0)
             debugLogging = true;
@@ -196,8 +222,30 @@ int main(int argc, char *argv[])
             smokeTest = true;
         else if (std::strcmp(argv[i], "--headless") == 0)
             headless = true;
+        else if (std::strcmp(argv[i], "--dump-api") == 0 && i + 1 < argc)
+            dumpApiDir = QString::fromLocal8Bit(argv[++i]);
+    }
+
+    // --dump-api builds every manager: keep its settings, trip database and
+    // logs out of the real config (set before the logger picks its folder)
+    std::unique_ptr<QTemporaryDir> throwawayConfig;
+    if (!dumpApiDir.isEmpty()) {
+        dumpApiDir = QDir(dumpApiDir).absolutePath();
+        throwawayConfig = std::make_unique<QTemporaryDir>();
+        const QByteArray home = throwawayConfig->path().toLocal8Bit();
+        for (const char *var : {"HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "APPDATA", "LOCALAPPDATA"})
+            qputenv(var, home);
+        if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+            qputenv("QT_QPA_PLATFORM", "offscreen");
     }
     OctaveLog::install(debugLogging);
+
+    if (!dumpApiDir.isEmpty()) {
+        QGuiApplication app(argc, argv);
+        app.setOrganizationName("OCTAVE");
+        app.setApplicationName("OCTAVE");
+        return dumpApi(app, dumpApiDir);
+    }
 
 #ifndef Q_OS_MOBILE
     if (headless) {

@@ -1,0 +1,121 @@
+{
+    "class": "VolumeController",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "applyVolume",
+            "params": [
+                {
+                    "name": "percent",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setMuted",
+            "params": [
+                {
+                    "name": "muted",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "toggleMute",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "toLinear",
+            "params": [
+                {
+                    "name": "percent",
+                    "type": "float"
+                }
+            ],
+            "returns": "float"
+        },
+        {
+            "kind": "slot",
+            "name": "toPercent",
+            "params": [
+                {
+                    "name": "linear",
+                    "type": "float"
+                }
+            ],
+            "returns": "int"
+        }
+    ],
+    "object": "volumeController",
+    "properties": [
+        {
+            "constant": false,
+            "name": "percent",
+            "notify": "percentChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "muted",
+            "notify": "mutedChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": true
+        },
+        {
+            "constant": false,
+            "name": "effectivelyMuted",
+            "notify": "effectivelyMutedChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "volumeApplied",
+            "params": [
+                {
+                    "name": "percent",
+                    "type": "int"
+                },
+                {
+                    "name": "linear",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "percentChanged",
+            "params": [
+                {
+                    "name": "percent",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "mutedChanged",
+            "params": [
+                {
+                    "name": "muted",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "effectivelyMutedChanged",
+            "params": [
+            ]
+        }
+    ]
+}

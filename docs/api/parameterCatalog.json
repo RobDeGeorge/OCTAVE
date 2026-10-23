@@ -1,0 +1,67 @@
+{
+    "class": "ParameterCatalog",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "toDisplay",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                },
+                {
+                    "name": "value",
+                    "type": "QVariant"
+                }
+            ],
+            "returns": "QVariant"
+        },
+        {
+            "kind": "invokable",
+            "name": "contains",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "info",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariantMap"
+        }
+    ],
+    "object": "parameterCatalog",
+    "properties": [
+        {
+            "constant": true,
+            "name": "parameters",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "displayParameters",
+            "notify": "displayParametersChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "displayParametersChanged",
+            "params": [
+            ]
+        }
+    ]
+}

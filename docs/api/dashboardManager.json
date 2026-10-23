@@ -1,0 +1,271 @@
+{
+    "class": "DashboardManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "saveDashboard",
+            "params": [
+                {
+                    "name": "spec",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "deleteDashboard",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "restoreBuiltInDashboards",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "duplicateDashboard",
+            "params": [
+                {
+                    "name": "sourceId",
+                    "type": "QString"
+                },
+                {
+                    "name": "newLabel",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "exportDashboard",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "copyDashboardToClipboard",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "importDashboard",
+            "params": [
+                {
+                    "name": "fileOrUrl",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "importDashboardFromClipboard",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "importDashboardFromText",
+            "params": [
+                {
+                    "name": "json",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "refresh",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "invokable",
+            "name": "loadDashboard",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariant"
+        },
+        {
+            "kind": "invokable",
+            "name": "isBuiltIn",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "uniqueIdForLabel",
+            "params": [
+                {
+                    "name": "label",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "invokable",
+            "name": "normalizedSpec",
+            "params": [
+                {
+                    "name": "spec",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": "QVariantMap"
+        },
+        {
+            "kind": "invokable",
+            "name": "canPlace",
+            "params": [
+                {
+                    "name": "cells",
+                    "type": "QVariantList"
+                },
+                {
+                    "name": "gridColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "gridRows",
+                    "type": "int"
+                },
+                {
+                    "name": "col",
+                    "type": "int"
+                },
+                {
+                    "name": "row",
+                    "type": "int"
+                },
+                {
+                    "name": "colSpan",
+                    "type": "int"
+                },
+                {
+                    "name": "rowSpan",
+                    "type": "int"
+                },
+                {
+                    "name": "exceptIndex",
+                    "type": "int"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "invokable",
+            "name": "fitAt",
+            "params": [
+                {
+                    "name": "cells",
+                    "type": "QVariantList"
+                },
+                {
+                    "name": "gridColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "gridRows",
+                    "type": "int"
+                },
+                {
+                    "name": "col",
+                    "type": "int"
+                },
+                {
+                    "name": "row",
+                    "type": "int"
+                },
+                {
+                    "name": "colSpan",
+                    "type": "int"
+                },
+                {
+                    "name": "rowSpan",
+                    "type": "int"
+                }
+            ],
+            "returns": "QVariantMap"
+        }
+    ],
+    "object": "dashboardManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "dashboards",
+            "notify": "dashboardsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastShareError",
+            "notify": "lastShareErrorChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "hiddenBuiltInCount",
+            "notify": "dashboardsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "supportedSchema",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "dashboardsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastShareErrorChanged",
+            "params": [
+            ]
+        }
+    ]
+}

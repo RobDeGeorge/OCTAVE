@@ -1,0 +1,935 @@
+{
+    "class": "PhoneMirrorManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "setVolume",
+            "params": [
+                {
+                    "name": "volume",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setMuted",
+            "params": [
+                {
+                    "name": "muted",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setAudioGain",
+            "params": [
+                {
+                    "name": "gain",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setAudioDuckEnabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setAudioDuckLevel",
+            "params": [
+                {
+                    "name": "level",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setDisplaySize",
+            "params": [
+                {
+                    "name": "size",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setViewSize",
+            "params": [
+                {
+                    "name": "width",
+                    "type": "int"
+                },
+                {
+                    "name": "height",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setDisplayDpi",
+            "params": [
+                {
+                    "name": "dpi",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setBitRateUsb",
+            "params": [
+                {
+                    "name": "mbps",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setBitRateWifi",
+            "params": [
+                {
+                    "name": "mbps",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setBitRateAuto",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setAutoWifi",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setPhoneScreenOff",
+            "params": [
+                {
+                    "name": "off",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "wakePhone",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "resumeMirroring",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "environmentOk",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "getInstallInstructions",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "getDeviceState",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "refreshDeviceState",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setViewActive",
+            "params": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "describeDeviceState",
+            "params": [
+                {
+                    "name": "state",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "hasConnectedDevice",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "selectDevice",
+            "params": [
+                {
+                    "name": "serial",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "dismissNotice",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "injectTouch",
+            "params": [
+                {
+                    "name": "pointerId",
+                    "type": "int"
+                },
+                {
+                    "name": "action",
+                    "type": "int"
+                },
+                {
+                    "name": "relX",
+                    "type": "float"
+                },
+                {
+                    "name": "relY",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "injectKey",
+            "params": [
+                {
+                    "name": "keycode",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "pressHome",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "pressBack",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "pressAppSwitch",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "startScrcpy",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "stopScrcpy",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "cleanup",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setWirelessAddress",
+            "params": [
+                {
+                    "name": "address",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "forgetWireless",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "startQrPairing",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "cancelQrPairing",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "mediaPosition",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "mediaPlayPause",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "mediaPlay",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "mediaPause",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "mediaNext",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "mediaPrevious",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "mediaSeek",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "mediaSkipToQueueItem",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "releaseMedia",
+            "params": [
+                {
+                    "name": "pausePhone",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "phoneMirrorManager",
+    "properties": [
+        {
+            "constant": true,
+            "name": "adbPath",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "nativeAvailable",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "serverVersion",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "isRunning",
+            "notify": "isRunningChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "displaySize",
+            "notify": "displaySizeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "activeDisplaySize",
+            "notify": "frameSizeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "videoSink",
+            "notify": "videoSinkChanged",
+            "readable": true,
+            "type": "QObject*",
+            "writable": true
+        },
+        {
+            "constant": false,
+            "name": "frameWidth",
+            "notify": "frameSizeChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "frameHeight",
+            "notify": "frameSizeChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "audioActive",
+            "notify": "audioActiveChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "audioPlaying",
+            "notify": "audioPlayingChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "phoneAsleep",
+            "notify": "phoneAsleepChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "phoneInUse",
+            "notify": "phoneInUseChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "wirelessAddress",
+            "notify": "wirelessAddressChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "connectionType",
+            "notify": "connectionTypeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "wirelessBusy",
+            "notify": "wirelessBusyChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "qrPairingRows",
+            "notify": "qrPairingChanged",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "qrPairingActive",
+            "notify": "qrPairingChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "currentBitRate",
+            "notify": "currentBitRateChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaAvailable",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaPlaying",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaTitle",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaArtist",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaAlbum",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaApp",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaDuration",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaCanSeek",
+            "notify": "mediaChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaArtUrl",
+            "notify": "mediaArtChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaActive",
+            "notify": "mediaActiveChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaQueue",
+            "notify": "mediaQueueChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaQueueActiveId",
+            "notify": "mediaQueueChanged",
+            "readable": true,
+            "type": "qlonglong",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mediaQueueTitle",
+            "notify": "mediaQueueChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "deviceState",
+            "notify": "deviceStateChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastErrorKind",
+            "notify": "lastErrorKindChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "sessionState",
+            "notify": "sessionStateChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "deviceHint",
+            "notify": "deviceStateChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "devices",
+            "notify": "deviceStateChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mirrorNotice",
+            "notify": "mirrorNoticeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "scrcpyStarted",
+            "params": [
+                {
+                    "name": "handle",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "scrcpyStopped",
+            "params": [
+            ]
+        },
+        {
+            "name": "scrcpyError",
+            "params": [
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "lastErrorKindChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "sessionStateChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "isRunningChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "displaySizeChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "frameSizeChanged",
+            "params": [
+                {
+                    "name": "width",
+                    "type": "int"
+                },
+                {
+                    "name": "height",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "frameReady",
+            "params": [
+            ]
+        },
+        {
+            "name": "videoSinkChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "audioActiveChanged",
+            "params": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "audioPlayingChanged",
+            "params": [
+                {
+                    "name": "playing",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "audioPlayed",
+            "params": [
+                {
+                    "name": "pcm",
+                    "type": "QByteArray"
+                },
+                {
+                    "name": "bufferedMs",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "phoneAsleepChanged",
+            "params": [
+                {
+                    "name": "asleep",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "phoneInUseChanged",
+            "params": [
+                {
+                    "name": "inUse",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "duckingChanged",
+            "params": [
+                {
+                    "name": "factor",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "wirelessAddressChanged",
+            "params": [
+                {
+                    "name": "address",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "connectionTypeChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "wirelessBusyChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "wirelessResult",
+            "params": [
+                {
+                    "name": "ok",
+                    "type": "bool"
+                },
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "qrPairingChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "currentBitRateChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "mediaChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "mediaTrackChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "mediaArtChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "mediaQueueChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "mediaActiveChanged",
+            "params": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "deviceStateChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "mirrorNoticeChanged",
+            "params": [
+            ]
+        }
+    ]
+}

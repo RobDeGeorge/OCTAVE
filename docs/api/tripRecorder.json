@@ -1,0 +1,476 @@
+{
+    "class": "TripRecorder",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "recordSample",
+            "params": [
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "value",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setConnected",
+            "params": [
+                {
+                    "name": "connected",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setVehicleParameters",
+            "params": [
+                {
+                    "name": "ids",
+                    "type": "QStringList"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setVehicleIdentity",
+            "params": [
+                {
+                    "name": "vin",
+                    "type": "QString"
+                },
+                {
+                    "name": "make",
+                    "type": "QString"
+                },
+                {
+                    "name": "modelYear",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "noteEvent",
+            "params": [
+                {
+                    "name": "kind",
+                    "type": "QString"
+                },
+                {
+                    "name": "detail",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setEnabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "endTripNow",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "refresh",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "requestDetail",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "requestSeries",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "maxPoints",
+                    "type": "int"
+                },
+                {
+                    "name": "fromS",
+                    "type": "double"
+                },
+                {
+                    "name": "toS",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "requestSeries",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "maxPoints",
+                    "type": "int"
+                },
+                {
+                    "name": "fromS",
+                    "type": "double"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "requestSeries",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "maxPoints",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "requestSeries",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "deleteTrip",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "clearHistory",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "exportTrip",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "openHistoryFolder",
+            "params": [
+            ],
+            "returns": "bool"
+        }
+    ],
+    "object": "tripRecorder",
+    "properties": [
+        {
+            "constant": false,
+            "name": "enabled",
+            "notify": "enabledChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "storeReady",
+            "notify": "storeReadyChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "recording",
+            "notify": "recordingChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "currentTripId",
+            "notify": "recordingChanged",
+            "readable": true,
+            "type": "qlonglong",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "currentTripStartMs",
+            "notify": "recordingChanged",
+            "readable": true,
+            "type": "qlonglong",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "currentSampleCount",
+            "notify": "currentSampleCountChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "currentTripElapsedS",
+            "notify": "currentTripElapsedSChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "trips",
+            "notify": "tripsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "historyDir",
+            "notify": "historyDirChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "tripsDir",
+            "notify": "historyDirChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "storageBytes",
+            "notify": "storageBytesChanged",
+            "readable": true,
+            "type": "qlonglong",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "canOpenFolder",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastExportPath",
+            "notify": "lastExportPathChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastError",
+            "notify": "lastErrorChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "enabledChanged",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "storeReadyChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "recordingChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "currentSampleCountChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "currentTripElapsedSChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "liveTripChanged",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                }
+            ]
+        },
+        {
+            "name": "tripsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "historyDirChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "storageBytesChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastExportPathChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastErrorChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "tripStarted",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                }
+            ]
+        },
+        {
+            "name": "tripEnded",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "summary",
+                    "type": "QVariantMap"
+                }
+            ]
+        },
+        {
+            "name": "detailReady",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "detail",
+                    "type": "QVariantMap"
+                }
+            ]
+        },
+        {
+            "name": "seriesReady",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "points",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "exportFinished",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "qlonglong"
+                },
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ]
+        }
+    ]
+}

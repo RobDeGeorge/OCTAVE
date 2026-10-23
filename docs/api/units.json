@@ -1,0 +1,98 @@
+{
+    "class": "Units",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "formatDuration",
+            "params": [
+                {
+                    "name": "ms",
+                    "type": "double"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "invokable",
+            "name": "formatSeconds",
+            "params": [
+                {
+                    "name": "s",
+                    "type": "double"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "invokable",
+            "name": "cardinal",
+            "params": [
+                {
+                    "name": "headingDeg",
+                    "type": "double"
+                }
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "invokable",
+            "name": "cToF",
+            "params": [
+                {
+                    "name": "c",
+                    "type": "double"
+                }
+            ],
+            "returns": "double"
+        },
+        {
+            "kind": "invokable",
+            "name": "mToFt",
+            "params": [
+                {
+                    "name": "m",
+                    "type": "double"
+                }
+            ],
+            "returns": "double"
+        },
+        {
+            "kind": "invokable",
+            "name": "mphToKph",
+            "params": [
+                {
+                    "name": "mph",
+                    "type": "double"
+                }
+            ],
+            "returns": "double"
+        },
+        {
+            "kind": "invokable",
+            "name": "linearToDb",
+            "params": [
+                {
+                    "name": "x",
+                    "type": "double"
+                }
+            ],
+            "returns": "double"
+        },
+        {
+            "kind": "invokable",
+            "name": "dbToLinear",
+            "params": [
+                {
+                    "name": "db",
+                    "type": "double"
+                }
+            ],
+            "returns": "double"
+        }
+    ],
+    "object": "units",
+    "properties": [
+    ],
+    "signals": [
+    ]
+}

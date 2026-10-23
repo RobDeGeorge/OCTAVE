@@ -1,0 +1,26 @@
+{
+    "class": "Clock",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "update_time",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "clock",
+    "properties": [
+    ],
+    "signals": [
+        {
+            "name": "timeChanged",
+            "params": [
+                {
+                    "name": "timeStr",
+                    "type": "QString"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,29 @@
+{
+    "generatedBy": "octave --dump-api (src/service/apidump.cpp); do not edit",
+    "objects": {
+        "androidAutoManager": "AndroidAutoManager",
+        "audioAnalyzer": "AudioAnalyzer",
+        "berryIMU": "BerryIMUManager",
+        "clock": "Clock",
+        "dashboardManager": "DashboardManager",
+        "diagnosticsManager": "DiagnosticsManager",
+        "downloadManager": "DownloadManager",
+        "esp32VolumeManager": "ESP32VolumeManager",
+        "fontCatalog": "FontCatalog",
+        "gestureSensor": "GestureManager",
+        "mediaManager": "MediaManager",
+        "networkManager": "NetworkManager",
+        "nowPlaying": "NowPlaying",
+        "obdAdapterFinder": "OBDAdapterFinder",
+        "obdManager": "OBDManager",
+        "paramStore": "ParameterStore",
+        "parameterCatalog": "ParameterCatalog",
+        "phoneMirrorManager": "PhoneMirrorManager",
+        "settingsManager": "SettingsManager",
+        "shiftLightManager": "ShiftLightManager",
+        "tripRecorder": "TripRecorder",
+        "units": "Units",
+        "volumeController": "VolumeController"
+    },
+    "protocolVersion": 1
+}

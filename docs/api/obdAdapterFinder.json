@@ -1,0 +1,129 @@
+{
+    "class": "OBDAdapterFinder",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "startScan",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "stopScan",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "connectAdapter",
+            "params": [
+                {
+                    "name": "address",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "cancel",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "powerOn",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "obdAdapterFinder",
+    "properties": [
+        {
+            "constant": true,
+            "name": "supported",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "bluetoothOn",
+            "notify": "bluetoothOnChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "scanning",
+            "notify": "scanningChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "devices",
+            "notify": "devicesChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "busyAddress",
+            "notify": "busyChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "status",
+            "notify": "statusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "statusIsError",
+            "notify": "statusChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "bluetoothOnChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "scanningChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "devicesChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "busyChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "statusChanged",
+            "params": [
+            ]
+        }
+    ]
+}

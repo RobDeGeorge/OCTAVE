@@ -358,6 +358,7 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
             <tr><td><code>--command-port N</code></td><td>Another port for the command server.</td></tr>
             <tr><td><code>--service [PORT]</code></td><td>The <a href="utilities.html#service-protocol">service protocol</a> on <code>127.0.0.1:9876</code> (or PORT) for another frontend or a script, in any build. Off by default; the <code>serviceEnabled</code> setting turns it on at every start.</td></tr>
             <tr><td><code>--headless</code></td><td>Every manager and the service, no QML engine and no window (the offscreen platform unless <code>QT_QPA_PLATFORM</code> says otherwise). Implies <code>--service</code>: another frontend, a script or the SDK drives it. Desktop and the Pi only; <code>--dev</code> / <code>--profile</code> are ignored with it, and phone-mirror / Android Auto video has nowhere to go.</td></tr>
+            <tr><td><code>--dump-api DIR</code></td><td>Write the published API (<a href="api-reference.html">Service API Reference</a>) as JSON into DIR and exit. Builds the managers in a throwaway config directory, so your settings and trip history are untouched.</td></tr>
             <tr><td><code>--service-bind ADDRESS</code></td><td>Listen on ADDRESS instead of loopback (<code>0.0.0.0</code>: every interface). There is no authentication: only on a network you trust.</td></tr>
           </tbody>
         </table>

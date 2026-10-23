@@ -1,0 +1,227 @@
+{
+    "class": "BerryIMUManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "getConnectionStatus",
+            "params": [
+            ],
+            "returns": "QString"
+        },
+        {
+            "kind": "slot",
+            "name": "setEnabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "isEnabled",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "setEmitRate",
+            "params": [
+                {
+                    "name": "hz",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "emitRate",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "setActive",
+            "params": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setDemand",
+            "params": [
+                {
+                    "name": "consumer",
+                    "type": "QString"
+                },
+                {
+                    "name": "wanted",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "calibrateTare",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "resetTare",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "cleanup",
+            "params": [
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "berryIMU",
+    "properties": [
+        {
+            "constant": false,
+            "name": "connected",
+            "notify": "connectionStatusChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "hasTemperature",
+            "notify": "hasTemperatureChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "orientationChanged",
+            "params": [
+                {
+                    "name": "w",
+                    "type": "float"
+                },
+                {
+                    "name": "x",
+                    "type": "float"
+                },
+                {
+                    "name": "y",
+                    "type": "float"
+                },
+                {
+                    "name": "z",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "pitchChanged",
+            "params": [
+                {
+                    "name": "pitch",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "rollChanged",
+            "params": [
+                {
+                    "name": "roll",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "headingChanged",
+            "params": [
+                {
+                    "name": "heading",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "altitudeChanged",
+            "params": [
+                {
+                    "name": "altitude",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "accelMagnitudeChanged",
+            "params": [
+                {
+                    "name": "mag",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "lateralGChanged",
+            "params": [
+                {
+                    "name": "g",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "longitudinalGChanged",
+            "params": [
+                {
+                    "name": "g",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "baroTempChanged",
+            "params": [
+                {
+                    "name": "temp",
+                    "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "connectionStatusChanged",
+            "params": [
+                {
+                    "name": "status",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "hasTemperatureChanged",
+            "params": [
+                {
+                    "name": "has",
+                    "type": "bool"
+                }
+            ]
+        }
+    ]
+}

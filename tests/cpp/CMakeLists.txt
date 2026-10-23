@@ -212,3 +212,11 @@ octave_add_test(tst_servicebridge
             util/variantlistmodel.h util/variantlistmodel.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 octave_add_test(tst_serviceoptions SOURCES service/serviceoptions.h service/serviceoptions.cpp LIBS Qt6::Network)
+
+# docs/api/ matches what the built app publishes (--dump-api)
+set(_apidocs_defines OCTAVE_APP_BINARY="$<TARGET_FILE:octave>")
+if(OCTAVE_ENABLE_DOWNLOADS)
+    list(APPEND _apidocs_defines OCTAVE_ENABLE_DOWNLOADS)
+endif()
+octave_add_test(tst_apidocs DEFINES ${_apidocs_defines})
+add_dependencies(tst_apidocs octave)

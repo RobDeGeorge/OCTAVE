@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/RobDeGeorge/OCTAVE/blob/main/docs/api/dashboard-spec.schema.json",
+  "title": "OCTAVE dashboard spec, schema 1",
+  "description": "A dashboard file: built-ins in frontend/dashboards/presets/, user dashboards in <config>/dashboards/*.json, and what dashboardManager exports and imports. Hand-written from DashboardManager::normalizeSpec (src/managers/dashboardmanager.cpp), which is the authority: OCTAVE reads a spec by those rules and does not reject what this schema would. Out-of-range numbers are clamped, cells off the grid move back in, an overlapping cell shrinks toward 1x1 or is dropped, unknown cell types render as a placeholder, and non-scalar props are dropped. Writers should still produce specs that validate here.",
+  "type": "object",
+  "required": ["schema", "label", "cells"],
+  "properties": {
+    "schema": {
+      "description": "Spec version. Missing reads as 1; a newer one is refused with 'needs a newer version of OCTAVE' (DashboardManager.supportedSchema).",
+      "const": 1
+    },
+    "id": {
+      "description": "File name without .json. Kept on save and load; an import always gets a new one, so a shared file need not carry it. 'grid' (the Parameter Cards page) is reserved.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "label": {
+      "description": "Name shown in the chooser; whitespace is simplified, cut at 80 characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "gridColumns": {
+      "description": "Grid width in cells; anything below 1 (or absent) is 12.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 48,
+      "default": 12
+    },
+    "gridRows": {
+      "description": "Grid height in cells; anything below 1 (or absent) is 6.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 48,
+      "default": 6
+    },
+    "margins": {
+      "description": "Outer margin in pixels (absent: the renderer's default).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 200
+    },
+    "spacing": {
+      "description": "Gap between cells in pixels (absent: the renderer's default).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 200
+    },
+    "cells": {
+      "description": "The widgets, at most 256. In file order an earlier cell wins an overlap.",
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/cell" }
+    }
+  },
+  "$defs": {
+    "cell": {
+      "type": "object",
+      "required": ["type", "col", "row"],
+      "properties": {
+        "type": {
+          "description": "A WidgetCatalog type (frontend/dashboards/WidgetCatalog.qml; docs/GAUGE_AUTHORING.md lists each one's props). An unknown type is kept and renders as a placeholder.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "examples": ["CircularGauge", "ArcGauge", "BarGauge", "LinearGauge", "DigitalReadout", "SparklineGauge",
+                       "WarningLight", "GForceGauge", "CompassGauge", "NowPlayingWidget", "MediaControlsWidget"]
+        },
+        "paramId": {
+          "description": "The value the widget shows: an id from parameters.json (e.g. RPM, SPEED). Empty for widgets that bind themselves (GForceGauge, CompassGauge, the media widgets).",
+          "type": "string",
+          "maxLength": 64
+        },
+        "col": { "type": "integer", "minimum": 0, "maximum": 47 },
+        "row": { "type": "integer", "minimum": 0, "maximum": 47 },
+        "colSpan": { "type": "integer", "minimum": 1, "maximum": 48, "default": 1 },
+        "rowSpan": { "type": "integer", "minimum": 1, "maximum": 48, "default": 1 },
+        "props": {
+          "description": "Per-widget overrides (the catalog's editableProps). Scalars only; strings are cut at 200 characters.",
+          "type": "object",
+          "propertyNames": { "maxLength": 64 },
+          "additionalProperties": { "type": ["boolean", "number", "string"] }
+        }
+      }
+    }
+  }
+}

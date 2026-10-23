@@ -1,0 +1,182 @@
+{
+    "class": "AudioAnalyzer",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "setViewActive",
+            "params": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setPlaying",
+            "params": [
+                {
+                    "name": "playing",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setLocalFile",
+            "params": [
+                {
+                    "name": "filePath",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "setPosition",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "qlonglong"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "analyze_file",
+            "params": [
+                {
+                    "name": "filePath",
+                    "type": "QString"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "update_position",
+            "params": [
+                {
+                    "name": "positionSeconds",
+                    "type": "float"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_active",
+            "params": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "get_current_levels",
+            "params": [
+            ],
+            "returns": "QVariantList"
+        },
+        {
+            "kind": "slot",
+            "name": "get_num_bars",
+            "params": [
+            ],
+            "returns": "int"
+        },
+        {
+            "kind": "slot",
+            "name": "is_analyzed",
+            "params": [
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
+            "name": "clear",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "set_live",
+            "params": [
+                {
+                    "name": "live",
+                    "type": "bool"
+                }
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "update_live",
+            "params": [
+            ],
+            "returns": ""
+        },
+        {
+            "kind": "slot",
+            "name": "feed_live_pcm",
+            "params": [
+                {
+                    "name": "pcm",
+                    "type": "QByteArray"
+                },
+                {
+                    "name": "bufferedMs",
+                    "type": "int"
+                }
+            ],
+            "returns": ""
+        }
+    ],
+    "object": "audioAnalyzer",
+    "properties": [
+        {
+            "constant": false,
+            "name": "levels",
+            "notify": "fftDataChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "numBars",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "fftDataChanged",
+            "params": [
+                {
+                    "name": "levels",
+                    "type": "QVariantList"
+                }
+            ]
+        },
+        {
+            "name": "analysisComplete",
+            "params": [
+            ]
+        },
+        {
+            "name": "analysisStarted",
+            "params": [
+            ]
+        }
+    ]
+}
