@@ -205,3 +205,8 @@ octave_add_test(tst_qmlmodules SOURCES util/qmlmodules.h util/qmlmodules.cpp LIB
 octave_add_test(tst_units SOURCES util/units.h util/units.cpp)
 octave_add_test(tst_fontcatalog SOURCES util/fontcatalog.h util/fontcatalog.cpp LIBS Qt6::Gui)
 octave_add_test(tst_pathurl)
+octave_add_test(tst_servicebridge
+    SOURCES service/commandserver.h service/commandserver.cpp service/protocol.h
+            service/serviceregistry.h service/serviceregistry.cpp service/servicebridge.h service/servicebridge.cpp
+            service/metadescribe.h service/metadescribe.cpp
+    LIBS Qt6::Gui Qt6::Qml Qt6::Network)

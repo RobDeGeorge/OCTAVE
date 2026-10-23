@@ -29,6 +29,7 @@
             <li><a href="#version">Version &amp; update check</a></li>
             <li><a href="#perf-monitor">Performance monitor &amp; perf tooling</a></li>
             <li><a href="#command-server">Command server</a></li>
+            <li><a href="#service-protocol">Service protocol</a></li>
             <li><a href="#platform"><code>src/util/</code> and <code>src/platform/</code></a></li>
             <li><a href="#backend-dirs"><code>media/</code> and <code>temp/</code></a></li>
             <li><a href="#design-decisions">Design decisions</a></li>
@@ -441,6 +442,24 @@ volumeController.applyVolume(settingsManager.currentVolume());   <span class="cm
         </ul>
 
         <!-- Platform -->
+        <!-- Service protocol -->
+        <h2 id="service-protocol">Service protocol</h2>
+        <p>The way any frontend, in any language, reads and drives OCTAVE (<span class="file-path">TODO/open-backend.md</span>, contract steps 1 and 4). It shares the command server's socket and line format, keyed on <code>op</code> instead of <code>action</code>: the arguments sit at the top level, and an optional <code>id</code> is echoed in the reply so a client can pipeline requests. The dev tooling's <code>action</code> form keeps working unchanged next to it.</p>
+        <pre><code>{<span class="str">"op"</span>: <span class="str">"hello"</span>, <span class="str">"id"</span>: <span class="num">1</span>}
+{<span class="str">"ok"</span>: <span class="kw">true</span>, <span class="str">"id"</span>: <span class="num">1</span>, <span class="str">"result"</span>: {<span class="str">"protocolVersion"</span>: <span class="num">1</span>, <span class="str">"app"</span>: {<span class="str">"version"</span>: <span class="str">"0.9.5"</span>, <span class="str">"build"</span>: <span class="str">"debug"</span>, <span class="str">"headless"</span>: <span class="kw">false</span>}, <span class="str">"objects"</span>: [<span class="str">"settingsManager"</span>, &hellip;]}}</code></pre>
+        <ul>
+          <li><strong>Objects.</strong> <span class="file-path">src/service/serviceregistry.{h,cpp}</span> holds the managers by the names QML knows them by. <code>main.cpp</code>'s <code>expose(name, object)</code> sets the QML context property and adds the registry entry in one call, so the QML UI and the protocol always see the same set (23 objects today; plain values such as <code>isAndroid</code> and <code>assetStore</code> are not exposed).</li>
+          <li><strong>Version.</strong> <code>kProtocolVersion</code> in <span class="file-path">src/service/protocol.h</span> (1). It is bumped on any breaking change: a removed or renamed op, object, property, method or signal, or a changed type or meaning. Additions don't bump it, and clients ignore fields they don't know.</li>
+          <li><strong>Ops.</strong> <span class="file-path">src/service/servicebridge.{h,cpp}</span> registers them on the server (<code>CommandServer::registerOp</code>). An unknown op is <code>{"ok": false, "error": "Unknown op: &hellip;"}</code>; an unknown object <code>"Unknown object: &hellip;"</code>.
+            <ul>
+              <li><code>hello</code> &rarr; <code>{protocolVersion, app: {version, build, headless}, objects: [names]}</code>.</li>
+              <li><code>describe {object?}</code> &rarr; one object's <code>{class, properties, methods, signals, enums?}</code>, or every object's as <code>{protocolVersion, objects: {name: &hellip;}}</code> (about 110&nbsp;KB for all 23). A property is <code>{name, type, readable, writable, constant, notify?, enum?}</code> (<code>enum</code> lists the keys of a <code>Q_ENUM</code>), a method <code>{name, kind: "invokable" | "slot", params: [{name, type}], returns}</code>, a signal <code>{name, params}</code>. Only what the app's own classes declare: members of Qt base classes (<code>QObject</code>, <code>QAbstractItemModel</code>, <code>QQmlPropertyMap</code>&hellip;) are left out, overloads are listed apart. <span class="file-path">src/service/metadescribe.{h,cpp}</span>, which step 3's schema generator reuses.</li>
+            </ul>
+            Enum values travel as their key names (<code>"Connected"</code>); on the way in a <code>Q_ENUM</code> parameter takes the key or its number (<code>convertTo()</code> in <span class="file-path">commandserver.cpp</span>), anything else is refused.</li>
+          <li><strong>When it runs.</strong> For now with <code>--profile</code> in <code>OCTAVE_DEV_TOOLS</code> builds, like the command server; the dev runtime installs the bridge on its server.</li>
+        </ul>
+        <p>Tests: <span class="file-path">tests/cpp/tst_servicebridge.cpp</span> (a real socket against a server on an ephemeral port).</p>
+
         <h2 id="platform"><code>src/util/</code> and <code>src/platform/</code></h2>
         <p>Both directories are listed explicitly in <code>qt_add_executable(octave …)</code> in <span class="file-path">CMakeLists.txt</span>.</p>
 

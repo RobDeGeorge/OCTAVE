@@ -3,6 +3,7 @@
 #include "carsim.h"
 #include "collagebridge.h"
 #include "../service/commandserver.h"
+#include "../service/servicebridge.h"
 #include "coreactions.h"
 #include "devimufeed.h"
 #include "devtoolsmanager.h"
@@ -46,6 +47,7 @@ Runtime::Runtime(const QStringList &arguments, const AppObjects &app, QObject *p
 Runtime::~Runtime()
 {
     shutdown();
+    delete m_bridge;   // after the server stopped: its ops reference it
 }
 
 void Runtime::beforeLoad()
@@ -126,6 +128,18 @@ void Runtime::afterLoad()
         m_perf->start();
         m_ui = new UiDriver(m_app.engine, this);
         m_server = new CommandServer(m_port, this);
+        if (m_app.registry) {
+            // The service ops on the same socket (src/service/servicebridge)
+            m_bridge = new OctaveService::ServiceBridge(
+                m_app.registry, {QStringLiteral(OCTAVE_VERSION),
+#ifdef QT_DEBUG
+                                 true,
+#else
+                                 false,
+#endif
+                                 false});
+            m_bridge->install(*m_server);
+        }
         registerCoreActions(*m_server, {m_ui, m_perf, m_app.settings, m_app.media, m_app.volume, m_app.nowPlaying, m_app.obd});
         m_collage = new CollageBridge(m_app.engine, m_app.projectRoot, this);
         m_collage->registerActions(*m_server);

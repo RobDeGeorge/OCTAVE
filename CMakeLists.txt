@@ -201,6 +201,13 @@ qt_add_executable(octave
     src/util/pathurl.h
     src/service/commandserver.h
     src/service/commandserver.cpp
+    src/service/protocol.h
+    src/service/serviceregistry.h
+    src/service/serviceregistry.cpp
+    src/service/servicebridge.h
+    src/service/servicebridge.cpp
+    src/service/metadescribe.h
+    src/service/metadescribe.cpp
     src/util/units.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp

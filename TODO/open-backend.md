@@ -25,7 +25,7 @@ A side benefit worth confirming with someone who does licensing: a frontend in a
 ## What already exists
 
 - Every manager is a `QObject` with `Q_PROPERTY` / `Q_INVOKABLE` / signals, registered in `src/main.cpp`. Qt's meta-object system can enumerate all of it, so the API surface can be published and served generically rather than hand-written per manager.
-- The dev command server (`src/dev/commandserver.{h,cpp}`, JSON lines on `127.0.0.1:9876`, `--profile` only) already has `invokeByName()` (call any slot by name with converted args), `jsonSafe()` (QVariant → JSON), and `get_prop` / `set_prop` / `list_*` actions in `src/dev/coreactions.cpp`. Its header says it is meant to grow into the service API.
+- The command server (`src/service/commandserver.{h,cpp}`, moved from `src/dev/` in contract step 1, JSON lines on `127.0.0.1:9876`, `--profile` only) already has `invokeByName()` (call any slot by name with converted args), `jsonSafe()` (QVariant → JSON), and `get_prop` / `set_prop` / `list_*` actions in `src/dev/coreactions.cpp`. Its header says it is meant to grow into the service API.
 - `wiki/signals-slots-reference.html` documents the manager contract by hand.
 - The gitignored `dev/` tree holds Python clients (MCP servers, screenshot stories, perf loops) that drive the app over that socket. That is the seed of the SDK, and it is not in the repo.
 

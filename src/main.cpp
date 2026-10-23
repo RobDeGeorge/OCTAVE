@@ -38,6 +38,7 @@ extern "C" {
 #include "util/logger.h"
 #include "util/qmlmodules.h"
 #include "util/units.h"
+#include "service/serviceregistry.h"
 #include "util/fontcatalog.h"
 #include "util/uiwatchdog.h"
 #include "managers/clock.h"
@@ -159,13 +160,22 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("isAndroid", false);
 #endif
 
+    // Every manager a frontend can use goes through expose(): a QML context
+    // property and an entry in the service registry, so the QML UI and the
+    // service protocol (src/service/) always see the same objects
+    OctaveService::ServiceRegistry serviceRegistry;
+    auto expose = [&](const char *name, QObject *object) {
+        ctx->setContextProperty(QString::fromLatin1(name), object);
+        serviceRegistry.add(QString::fromLatin1(name), object);
+    };
+
     // ==================================================================
     // Phase 1: Real manager objects
     // ==================================================================
 
     // Settings Manager — central settings store, everything depends on this
     SettingsManager settingsManager;
-    ctx->setContextProperty("settingsManager", &settingsManager);
+    expose("settingsManager", &settingsManager);
 
     // A hung event loop gets logged (octave.ui_watchdog) instead of vanishing
     UiWatchdog uiWatchdog;
@@ -173,20 +183,20 @@ int main(int argc, char *argv[])
 
     // Diagnostics — read / export the logs from the head unit (Settings > About)
     DiagnosticsManager diagnosticsManager;
-    ctx->setContextProperty("diagnosticsManager", &diagnosticsManager);
+    expose("diagnosticsManager", &diagnosticsManager);
 
     // Clock — time display, depends on settings for format
     Clock clock(&settingsManager);
-    ctx->setContextProperty("clock", &clock);
+    expose("clock", &clock);
 
     // Network Manager — WiFi status, update checking
     NetworkManager networkManager;
-    ctx->setContextProperty("networkManager", &networkManager);
+    expose("networkManager", &networkManager);
 
     // Volume Controller — quadratic curve + dispatch to all audio outputs
     // (wired to the managers further down, once they exist).
     VolumeController volumeController(&settingsManager);
-    ctx->setContextProperty("volumeController", &volumeController);
+    expose("volumeController", &volumeController);
 
     // Apply saved startup volume (media wiring below, after MediaManager creation)
 
@@ -197,7 +207,7 @@ int main(int argc, char *argv[])
     // Media Manager — local music playback, library scanning, playlists
     MediaManager mediaManager;
     mediaManager.setSettingsManager(&settingsManager);
-    ctx->setContextProperty("mediaManager", &mediaManager);
+    expose("mediaManager", &mediaManager);
 
 #ifdef Q_OS_ANDROID
 #ifdef OCTAVE_ENABLE_DOWNLOADS
@@ -237,7 +247,7 @@ int main(int argc, char *argv[])
 
     // Audio Analyzer — waveform visualization via FFT
     AudioAnalyzer audioAnalyzer;
-    ctx->setContextProperty("audioAnalyzer", &audioAnalyzer);
+    expose("audioAnalyzer", &audioAnalyzer);
 
     // Volume wiring moved below after all managers are created
 
@@ -252,7 +262,7 @@ int main(int argc, char *argv[])
     // Parameter catalog: title / unit / range / kind of every OBD PID and IMU
     // reading, for every frontend (OBDParameterModel reads it)
     ParameterCatalog parameterCatalog;
-    ctx->setContextProperty("parameterCatalog", &parameterCatalog);
+    expose("parameterCatalog", &parameterCatalog);
     // Gauges show the units the settings ask for (the Sensors page keeps
     // its own temperature unit)
     auto applyGaugeUnits = [&] {
@@ -266,33 +276,33 @@ int main(int argc, char *argv[])
 
     // OBD Manager — vehicle diagnostics via ELM327
     OBDManager obdManager(&settingsManager);
-    ctx->setContextProperty("obdManager", &obdManager);
+    expose("obdManager", &obdManager);
 
     // Shift light — which RPM flag is active and its flash phase, fed by OBD
     ShiftLightManager shiftLightManager(&settingsManager);
     QObject::connect(&obdManager, &OBDManager::rpmChanged,
                      &shiftLightManager, &ShiftLightManager::setRpm);
-    ctx->setContextProperty("shiftLightManager", &shiftLightManager);
+    expose("shiftLightManager", &shiftLightManager);
 
     // Bluetooth OBD adapter discovery + pairing (the "Connect" sheet)
     OBDAdapterFinder obdAdapterFinder(&obdManager, &settingsManager);
-    ctx->setContextProperty("obdAdapterFinder", &obdAdapterFinder);
+    expose("obdAdapterFinder", &obdAdapterFinder);
 
     // Trip Recorder — the black box: every OBD reading of every drive into
     // <config>/history/blackbox.sqlite, one CSV + JSON per trip
     TripRecorder tripRecorder(&settingsManager);
     tripRecorder.attach(&obdManager);
     tripRecorder.start();
-    ctx->setContextProperty("tripRecorder", &tripRecorder);
+    expose("tripRecorder", &tripRecorder);
 
     // Hardware managers (USB-serial / I2C on desktop, stubbed on mobile via header).
     ESP32VolumeManager esp32VolumeManager;
     esp32VolumeManager.connect_settings_manager(&settingsManager);
-    ctx->setContextProperty("esp32VolumeManager", &esp32VolumeManager);
+    expose("esp32VolumeManager", &esp32VolumeManager);
 
     BerryIMUManager berryIMU;
     berryIMU.connect_settings_manager(&settingsManager);
-    ctx->setContextProperty("berryIMU", &berryIMU);
+    expose("berryIMU", &berryIMU);
 
     // Value store: the latest value of every PID and IMU reading, one
     // notifying key per id (OBDParameterModel and the gauges bind to it)
@@ -311,11 +321,11 @@ int main(int argc, char *argv[])
         QObject::connect(&berryIMU, &BerryIMUManager::longitudinalGChanged, &paramStore, feed("LONGITUDINAL_G"));
         QObject::connect(&berryIMU, &BerryIMUManager::baroTempChanged, &paramStore, feed("BARO_TEMP"));
     }
-    ctx->setContextProperty("paramStore", &paramStore);
+    expose("paramStore", &paramStore);
 
     GestureManager gestureSensor;
     gestureSensor.connect_settings_manager(&settingsManager);
-    ctx->setContextProperty("gestureSensor", &gestureSensor);
+    expose("gestureSensor", &gestureSensor);
 
     // ==================================================================
     // Phase 5: Desktop Integration (phone mirror, Android Auto)
@@ -323,12 +333,12 @@ int main(int argc, char *argv[])
     // ==================================================================
 
     AndroidAutoManager androidAutoManager;
-    ctx->setContextProperty("androidAutoManager", &androidAutoManager);
+    expose("androidAutoManager", &androidAutoManager);
     engine.addImageProvider(QStringLiteral("dhuframe"),
                             androidAutoManager.frameProvider());
 
     PhoneMirrorManager phoneMirrorManager;
-    ctx->setContextProperty("phoneMirrorManager", &phoneMirrorManager);
+    expose("phoneMirrorManager", &phoneMirrorManager);
 
 #ifndef Q_OS_MOBILE
     // Phone audio drives the visualizer's live mode
@@ -382,7 +392,7 @@ int main(int argc, char *argv[])
     // Outside the desktop block: on mobile the phone stub never takes them, so
     // the source is always local
     NowPlaying nowPlaying(&mediaManager, &phoneMirrorManager, &settingsManager);
-    ctx->setContextProperty("nowPlaying", &nowPlaying);
+    expose("nowPlaying", &nowPlaying);
 
     // The visualizer follows what is playing: phone audio live, a local
     // track pre-analysed and read at its position
@@ -408,7 +418,7 @@ int main(int argc, char *argv[])
     // Download Manager — music search & download via yt-dlp
     DownloadManager downloadManager;
     downloadManager.connect_settings_manager(&settingsManager);
-    ctx->setContextProperty("downloadManager", &downloadManager);
+    expose("downloadManager", &downloadManager);
 
     // Auto-rescan library when a download completes
     QObject::connect(&downloadManager, &DownloadManager::downloadComplete,
@@ -470,11 +480,11 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("assetStore", &assetStore);
 
     // Time formatting, compass points and unit conversions (src/util/units)
-    ctx->setContextProperty("units", &units);
+    expose("units", &units);
 
     // The bundled UI and icon fonts, registered before any QML loads
     FontCatalog fontCatalog(frontendDir.absoluteFilePath(QStringLiteral("assets/fonts")));
-    ctx->setContextProperty("fontCatalog", &fontCatalog);
+    expose("fontCatalog", &fontCatalog);
 
     // Optional QML modules, checked without loading them: CarMenu's 3D view
     // needs QtQuick3D (SensorHome greys its card without it); the music
@@ -524,12 +534,12 @@ int main(int argc, char *argv[])
     dashboardManager.setPresetsDir(frontendDir.absoluteFilePath("dashboards/presets"));
     dashboardManager.setUserDir(SettingsManager::getAppDataDir()
                                 + QStringLiteral("/dashboards"));
-    ctx->setContextProperty("dashboardManager", &dashboardManager);
+    expose("dashboardManager", &dashboardManager);
 
     // ---- Developer tooling (inactive unless --dev / --profile) ----
 #ifdef OCTAVE_DEV_TOOLS
     OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &mediaManager, &volumeController, &nowPlaying, &obdManager, &berryIMU,
-                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &serviceRegistry});
     devRuntime.beforeLoad();
 #else
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))

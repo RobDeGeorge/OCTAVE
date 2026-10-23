@@ -9,13 +9,23 @@
 //     -> {"action": "navigate", "args": {"page": "obd"}}\n
 //     <- {"ok": true, "result": {"navigated_to": "obd"}}\n
 //
+// The service protocol (ServiceBridge; wiki utilities.html#service-protocol) uses
+// `op` instead, with its arguments at the top level and an optional `id`
+// echoed in the reply so a client can pipeline:
+//
+//     -> {"op": "hello", "id": 1}\n
+//     <- {"ok": true, "id": 1, "result": {"protocolVersion": 1, ...}}\n
+//
+// A request carrying both keys is an op (`action` is ignored).
+//
 // Listens on 127.0.0.1 only (default port 9876). Each client connection gets
 // its own thread, so a slow GUI call never
 // blocks get_metrics on another connection. Handlers run on that connection
 // thread and use onGui() / postGui() for anything that touches Qt objects.
 //
-// Moved from src/dev/ to become the transport of the service API
-// (TODO/open-backend.md, contract step 1).
+// The transport of the service API (TODO/open-backend.md, contract
+// step 1): built in every configuration; the dev runtime (src/dev/)
+// registers its UI / perf / simulator actions on it.
 
 #include <QHash>
 #include <QObject>
@@ -53,10 +63,13 @@ public:
     // `handler` runs on a connection thread.
     void registerAction(const QString &action, Handler handler);
     QStringList actions() const;
+    // A service op: `handler` gets the whole request object (minus op / id)
+    void registerOp(const QString &op, Handler handler);
+    QStringList ops() const;
 
     bool start();
     void stop();
-    quint16 port() const { return m_port; }
+    quint16 port() const { return m_port; }   // the bound port once started (0 asks for any)
 
     // Run `fn` on the GUI thread and wait for its result (or its error).
     // Throws CommandError after `timeoutMs` if the GUI thread is stuck.
@@ -69,11 +82,14 @@ public:
 
 private:
     QVariant dispatch(const QString &action, const QVariantMap &args);
+    QVariant dispatchOp(const QString &op, const QVariantMap &args);
 
     quint16 m_port;
     mutable QReadWriteLock m_lock;
     QHash<QString, Handler> m_handlers;
     QStringList m_order;   // registration order, for list_actions
+    QHash<QString, Handler> m_ops;
+    QStringList m_opOrder;
     QThread *m_thread = nullptr;
     CommandTcpServer *m_server = nullptr;
 };
@@ -81,6 +97,11 @@ private:
 // QVariant -> something QJsonValue::fromVariant() can serialise: QJSValue
 // unwrapped, QObject / geometry / colour types turned into strings.
 QVariant jsonSafe(const QVariant &value);
+
+// Convert a JSON-decoded value to `type` in place: QVariant::convert, plus
+// Q_ENUM types by key name or number. False if it can't. QFlags (combined
+// values) are not handled; no manager has one.
+bool convertTo(QVariant &value, QMetaType type);
 
 // Invoke a slot / Q_INVOKABLE by name, converting `args` to its parameter
 // types. Throws CommandError when there is no such method or a conversion
@@ -93,6 +114,7 @@ QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args
 namespace OctaveDev {
 using OctaveService::CommandError;
 using OctaveService::CommandServer;
+using OctaveService::convertTo;
 using OctaveService::invokeByName;
 using OctaveService::jsonSafe;
 } // namespace OctaveDev

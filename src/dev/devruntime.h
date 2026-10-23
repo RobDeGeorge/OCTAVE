@@ -29,7 +29,7 @@ namespace OctaveDev {
 class CarSim;
 class CollageBridge;
 }
-namespace OctaveService { class CommandServer; }
+namespace OctaveService { class CommandServer; class ServiceBridge; class ServiceRegistry; }
 namespace OctaveDev {
 using OctaveService::CommandServer;
 class DevImuFeed;
@@ -47,6 +47,7 @@ struct AppObjects {
     OBDManager *obd = nullptr;
     BerryIMUManager *imu = nullptr;
     QDir projectRoot;   // checkout root: frontend/, src/dev/qml/, dev/perf/logs/
+    OctaveService::ServiceRegistry *registry = nullptr;   // served by the service ops
 };
 
 class Runtime : public QObject
@@ -83,6 +84,7 @@ private:
     UiDriver *m_ui = nullptr;
     CollageBridge *m_collage = nullptr;
     CommandServer *m_server = nullptr;
+    OctaveService::ServiceBridge *m_bridge = nullptr;
     QPointer<QQuickItem> m_overlay;
 };
 

@@ -137,6 +137,20 @@ QStringList CommandServer::actions() const
     return m_order;
 }
 
+void CommandServer::registerOp(const QString &op, Handler handler)
+{
+    QWriteLocker l(&m_lock);
+    if (!m_ops.contains(op))
+        m_opOrder.append(op);
+    m_ops.insert(op, std::move(handler));
+}
+
+QStringList CommandServer::ops() const
+{
+    QReadLocker l(&m_lock);
+    return m_opOrder;
+}
+
 bool CommandServer::start()
 {
     if (m_thread)
@@ -157,6 +171,7 @@ bool CommandServer::start()
         stop();
         return false;
     }
+    m_port = m_server->serverPort();
     qCInfo(lcCommand) << "command server listening on 127.0.0.1:" << m_port;
     std::fprintf(stdout, "\033[1;36m[CMD]\033[0m   Command server on port %u\n", m_port);
     std::fflush(stdout);
@@ -193,15 +208,25 @@ QByteArray CommandServer::handleLine(const QByteArray &line)
                                              .arg(err.error != QJsonParseError::NoError ? err.errorString()
                                                                                         : QStringLiteral("not an object"));
     } else {
-        const QJsonObject cmd = doc.object();
-        const QString action = cmd.value(QStringLiteral("action")).toString();
-        const QVariantMap args = cmd.value(QStringLiteral("args")).toObject().toVariantMap();
+        QJsonObject cmd = doc.object();
+        // Service ops: {"op", "id"?, ...args}; else the dev `action` form
+        const bool isOp = cmd.contains(QStringLiteral("op"));
+        const QString name = cmd.value(isOp ? QStringLiteral("op") : QStringLiteral("action")).toString();
+        if (cmd.contains(QStringLiteral("id")))
+            reply[QStringLiteral("id")] = cmd.value(QStringLiteral("id"));
         try {
-            const QVariant result = jsonSafe(dispatch(action, args));
+            QVariant result;
+            if (isOp) {
+                cmd.remove(QStringLiteral("op"));
+                cmd.remove(QStringLiteral("id"));
+                result = jsonSafe(dispatchOp(name, cmd.toVariantMap()));
+            } else {
+                result = jsonSafe(dispatch(name, cmd.value(QStringLiteral("args")).toObject().toVariantMap()));
+            }
             reply[QStringLiteral("ok")] = true;
             reply[QStringLiteral("result")] = QJsonValue::fromVariant(result);
         } catch (const std::exception &e) {
-            qCWarning(lcCommand).noquote() << "command error [" + action + "]:" << e.what();
+            qCWarning(lcCommand).noquote() << "command error [" + name + "]:" << e.what();
             reply[QStringLiteral("ok")] = false;
             reply[QStringLiteral("error")] = QString::fromUtf8(e.what());
         }
@@ -218,6 +243,18 @@ QVariant CommandServer::dispatch(const QString &action, const QVariantMap &args)
     }
     if (!handler)
         throw CommandError(QStringLiteral("Unknown action: %1").arg(action));
+    return handler(args);
+}
+
+QVariant CommandServer::dispatchOp(const QString &op, const QVariantMap &args)
+{
+    Handler handler;
+    {
+        QReadLocker l(&m_lock);
+        handler = m_ops.value(op);
+    }
+    if (!handler)
+        throw CommandError(QStringLiteral("Unknown op: %1").arg(op));
     return handler(args);
 }
 
@@ -332,6 +369,40 @@ QVariant jsonSafe(const QVariant &value)
     return QString::fromLatin1(type.name());
 }
 
+bool convertTo(QVariant &value, QMetaType type)
+{
+    if (value.metaType() == type)
+        return true;
+    if (type.flags() & QMetaType::IsEnumeration) {
+        // A Q_ENUM: its enclosing class knows the keys ("Connecting" or 1)
+        const QMetaObject *mo = type.metaObject();
+        QByteArray name = type.name();
+        name = name.mid(name.lastIndexOf(':') + 1);
+        const int ei = mo ? mo->indexOfEnumerator(name.constData()) : -1;
+        int number = 0;
+        if (value.typeId() == QMetaType::QString) {
+            if (ei < 0)
+                return false;
+            bool ok = false;
+            number = mo->enumerator(ei).keyToValue(value.toString().toUtf8().constData(), &ok);
+            if (!ok)
+                return false;
+        } else {
+            bool ok = false;
+            number = value.toInt(&ok);
+            if (!ok || (ei >= 0 && !mo->enumerator(ei).valueToKey(number)))
+                return false;
+        }
+        QVariant out(type);
+        if (type.sizeOf() != int(sizeof(int)))
+            return false;
+        *static_cast<int *>(out.data()) = number;
+        value = out;
+        return true;
+    }
+    return value.convert(type);
+}
+
 QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args)
 {
     if (!obj)
@@ -352,7 +423,7 @@ QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args
                 converted.append(a);
                 continue;
             }
-            ok = a.convert(pt);
+            ok = convertTo(a, pt);
             converted.append(a);
         }
         if (!ok)
