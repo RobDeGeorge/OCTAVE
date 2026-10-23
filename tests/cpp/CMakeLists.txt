@@ -269,3 +269,30 @@ if(GO_EXECUTABLE)
         ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen;GOFLAGS=-mod=mod;GOMAXPROCS=4"
         TIMEOUT 300)
 endif()
+
+# The starter templates (templates/): each runs against `octave --headless
+# --sim` on a free port and must show readings and a playing track, so they
+# cannot rot. Each only where its language is installed.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME template_python
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/templates/hello-car-python/test" -p "check.py")
+    set_tests_properties(template_python PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 180)
+endif()
+find_program(NODE_EXECUTABLE node)
+if(NODE_EXECUTABLE)
+    add_test(NAME template_js
+        COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/templates/hello-car-js/test/check.mjs")
+    set_tests_properties(template_js PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 180)
+endif()
+if(GO_EXECUTABLE)
+    add_test(NAME template_go
+        COMMAND ${GO_EXECUTABLE} test ./...
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/templates/hello-car-go")
+    set_tests_properties(template_go PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen;GOFLAGS=-mod=mod;GOMAXPROCS=4"
+        TIMEOUT 300)
+endif()
