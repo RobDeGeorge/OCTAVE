@@ -6,6 +6,8 @@ __pycache__/
 # Build artifacts
 dist/
 build/
+# Any other local build tree (build-release/, build-debug/, ...)
+build-*/
 build-desktop-*/
 build-wasm/
 build-appimage/
