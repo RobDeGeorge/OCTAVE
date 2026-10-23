@@ -423,7 +423,7 @@ private slots:
             QByteArray in;
             while (!in.contains('\n') && t.elapsed() < 5000) {
                 QCoreApplication::processEvents();
-                if (sock.waitForReadyRead(10))
+                if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(10))
                     in += sock.readAll();
             }
             return in;
@@ -474,7 +474,8 @@ private slots:
         t.start();
         while (!in.contains('\n') && t.elapsed() < 3000) {
             QCoreApplication::processEvents();
-            if (raw.waitForReadyRead(10))
+            // What processEvents() already pulled into the socket counts too
+            if (raw.bytesAvailable() > 0 || raw.waitForReadyRead(10))
                 in += raw.readAll();
         }
         const QJsonObject reply = QJsonDocument::fromJson(in.left(in.indexOf('\n'))).object();
@@ -491,11 +492,12 @@ private slots:
         t.restart();
         while (in.count(char(0xFF)) < 2 && t.elapsed() < 3000) {
             QCoreApplication::processEvents();
-            if (raw.waitForReadyRead(10))
+            // What processEvents() already pulled into the socket counts too
+            if (raw.bytesAvailable() > 0 || raw.waitForReadyRead(10))
                 in += raw.readAll();
         }
         const int nl = in.indexOf('\n');
-        QVERIFY2(nl > 0, in.toHex().constData());
+        QVERIFY(nl > 0);
         const QJsonObject config = QJsonDocument::fromJson(in.left(nl)).object();
         QCOMPARE(config.value("event").toString(), QStringLiteral("streamConfig"));
         QCOMPARE(config.value("stream").toInt(), id);
