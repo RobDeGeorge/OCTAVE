@@ -45,4 +45,20 @@ fi
 
 flock -u 9
 exec 9>&-
+
+# OCTAVE_FRESH=1 (the "OCTAVE (Fresh)" menu entry): a first launch every
+# time. HOME and the XDG dirs point at a new empty folder, so there are no
+# settings, no music library, no trip history and no logs from before; the
+# folder is deleted when the app exits. The build above still uses the real
+# home (its caches).
+if [[ "${OCTAVE_FRESH:-0}" == 1 ]]; then
+    fresh="$(mktemp -d -t octave-fresh.XXXXXX)"
+    trap 'rm -rf -- "$fresh"' EXIT
+    trap - ERR
+    printf 'Fresh launch in %s\n' "$fresh"
+    HOME="$fresh" XDG_CONFIG_HOME="$fresh/.config" XDG_DATA_HOME="$fresh/.local/share" \
+        XDG_CACHE_HOME="$fresh/.cache" XDG_STATE_HOME="$fresh/.local/state" \
+        "$OCTAVE_BUILD/octave" "$@" || true
+    exit 0
+fi
 exec "$OCTAVE_BUILD/octave" "$@"
