@@ -1,0 +1,9 @@
+{
+  "id": "org.octave.hello-car-js",
+  "name": "Hello, car (JavaScript)",
+  "version": "1.0.0",
+  "description": "Two live readings, the track with play / pause, and the cover, in a browser",
+  "protocol": [2, 2],
+  "scopes": ["media"],
+  "web": {"root": "."}
+}
