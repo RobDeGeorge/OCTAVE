@@ -96,7 +96,9 @@ private:
     // GUI thread only: live subscriptions by connection, then id. Shared so
     // a connection's cleanup, which can run after the bridge is gone, can
     // tell (it holds a weak reference)
-    using Subscriptions = QHash<const void *, QHash<int, QPointer<QObject>>>;
+    // Keyed by Connection::serial(), never the address: close cleanups run
+    // later on the GUI thread, by when a new connection may have it
+    using Subscriptions = QHash<quint64, QHash<int, QPointer<QObject>>>;
     std::shared_ptr<Subscriptions> m_subscriptions = std::make_shared<Subscriptions>();
 
     // GUI thread only: who holds each claimed consumer
@@ -105,11 +107,11 @@ private:
         QByteArray method;
         QString consumer;
         QVariant release;
-        const void *connection = nullptr;
+        quint64 connection = 0;   // Connection::serial()
     };
     struct Claims {
         QHash<QString, Claim> byKey;              // "object.method\nconsumer"
-        QHash<const void *, bool> hooked;         // connections with a close hook
+        QHash<quint64, bool> hooked;         // connections with a close hook
     };
     void noteClaim(const QString &objectName, QObject *o, const QByteArray &method, const QVariantList &args,
                    const std::shared_ptr<Connection> &connection);

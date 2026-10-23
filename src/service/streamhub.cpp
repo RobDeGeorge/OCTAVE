@@ -372,12 +372,12 @@ int StreamHub::subscribe(const QString &name, const std::shared_ptr<Connection> 
     const auto it = m_streams.constFind(name);
     if (it == m_streams.constEnd() || !connection)
         return 0;
-    int &next = m_nextId[connection.get()];
+    int &next = m_nextId[connection->serial()];
     if (next >= 255)
         return 0;
     const int id = ++next;
     Stream &s = *it.value();
-    s.subscribers.append(Subscriber{connection, connection.get(), id, true, 0});
+    s.subscribers.append(Subscriber{connection, connection->serial(), id, true, 0});
     s.count.store(int(s.subscribers.size()));
     maybeRequestKey(s);
     return id;
@@ -387,19 +387,19 @@ void StreamHub::unsubscribe(const std::shared_ptr<Connection> &connection, int s
 {
     QMutexLocker l(&m_lock);
     for (auto &s : m_streams) {
-        s->subscribers.removeIf([&](const Subscriber &sub) { return sub.key == connection.get() && sub.id == streamId; });
+        s->subscribers.removeIf([&](const Subscriber &sub) { return sub.key == connection->serial() && sub.id == streamId; });
         s->count.store(int(s->subscribers.size()));
     }
 }
 
-void StreamHub::unsubscribeAll(const Connection *connection)
+void StreamHub::unsubscribeAll(quint64 connectionSerial)
 {
     QMutexLocker l(&m_lock);
     for (auto &s : m_streams) {
-        s->subscribers.removeIf([&](const Subscriber &sub) { return sub.key == connection; });
+        s->subscribers.removeIf([&](const Subscriber &sub) { return sub.key == connectionSerial; });
         s->count.store(int(s->subscribers.size()));
     }
-    m_nextId.remove(connection);
+    m_nextId.remove(connectionSerial);
 }
 
 QVariantMap StreamHub::info(const QString &name) const

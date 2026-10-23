@@ -421,6 +421,10 @@ private:
 // ---------------------------------------------------------------------------
 
 Connection::Connection()
+    : m_serial([] {
+          static std::atomic<quint64> next{0};
+          return ++next;
+      }())
 {
 #if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
     if (::pipe(m_wake) == 0) {

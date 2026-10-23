@@ -79,7 +79,7 @@ public:
     // not a stream. Its first record waits for a keyframe.
     int subscribe(const QString &name, const std::shared_ptr<Connection> &connection);
     void unsubscribe(const std::shared_ptr<Connection> &connection, int streamId);
-    void unsubscribeAll(const Connection *connection);
+    void unsubscribeAll(quint64 connectionSerial);   // Connection::serial()
     // {codec, width, height, format} as known now ({format: "jpeg"} for JPEG)
     QVariantMap info(const QString &name) const;
     QStringList names() const;
@@ -89,7 +89,7 @@ public:
 private:
     struct Subscriber {
         std::weak_ptr<Connection> connection;
-        const Connection *key = nullptr;
+        quint64 key = 0;   // Connection::serial()
         int id = 0;
         bool waitingForKey = true;
         int dropped = 0;
@@ -109,7 +109,7 @@ private:
 
     mutable QMutex m_lock;
     QHash<QString, std::shared_ptr<Stream>> m_streams;
-    QHash<const Connection *, int> m_nextId;
+    QHash<quint64, int> m_nextId;   // by Connection::serial()
     QElapsedTimer m_lastKeyRequest;
 };
 

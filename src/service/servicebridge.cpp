@@ -378,7 +378,7 @@ void ServiceBridge::install(CommandServer &server)
             throw CommandError(hub.names().contains(name) ? QStringLiteral("too many streams on this connection")
                                                           : QStringLiteral("%1 has no stream %2")
                                                                 .arg(objectName, args.value(QStringLiteral("name")).toString()));
-        const Connection *key = connection.get();
+        const quint64 key = connection->serial();
         connection->onClose([key] { StreamHub::instance().unsubscribeAll(key); });
         QVariantMap reply = hub.info(name);
         reply.insert(QStringLiteral("stream"), id);
@@ -436,7 +436,7 @@ void ServiceBridge::noteClaim(const QString &objectName, QObject *o, const QByte
         releasing = value == release;
 
     const QString key = objectName + QLatin1Char('.') + QString::fromUtf8(method) + QLatin1Char('\n') + consumer;
-    const void *conn = connection.get();
+    const quint64 conn = connection->serial();
     if (releasing) {
         m_claims->byKey.remove(key);
         return;
@@ -588,7 +588,7 @@ QVariant ServiceBridge::subscribe(const QVariantMap &args)
 
         // Ends with the object, an unsubscribe or the connection
         QObject::connect(o, &QObject::destroyed, sub, [sub] { sub->deleteLater(); });
-        const void *key = connection.get();
+        const quint64 key = connection->serial();
         (*m_subscriptions)[key].insert(id, sub);
         QPointer<QObject> guard = sub;
         std::weak_ptr<Subscriptions> subs = m_subscriptions;
@@ -608,7 +608,7 @@ QVariant ServiceBridge::unsubscribe(const QVariantMap &args)
     std::shared_ptr<Connection> connection = CommandServer::currentConnection();
     if (!connection)
         throw CommandError(QStringLiteral("unsubscribe needs a connection"));
-    const void *key = connection.get();
+    const quint64 key = connection->serial();
     return CommandServer::onGui([this, key, id]() -> QVariant {
         // Null too once its object went (it ended with it)
         QPointer<QObject> sub = m_subscriptions->value(key).value(id);

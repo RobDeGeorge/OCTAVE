@@ -111,7 +111,7 @@ private slots:
         QCOMPARE(nalType(nals.at(0)), 7);   // SPS, PPS, then the IDR: a decoder can start here
         QCOMPARE(got.first().pts, 60 * 33333);
         QCOMPARE(got.at(1).flags, 0);
-        hub.unsubscribeAll(c.get());
+        hub.unsubscribeAll(c->serial());
         QVERIFY(!hub.wanted("test.video"));
     }
 
@@ -134,7 +134,7 @@ private slots:
         QCOMPARE(config.value("width").toInt(), 1280);
         QCOMPARE(config.value("height").toInt(), 720);
         QCOMPARE(config.value("codec").toString(), QStringLiteral("avc1.42c01f"));
-        hub.unsubscribeAll(c.get());
+        hub.unsubscribeAll(c->serial());
     }
 
     void fallingBehindDropsToTheNextKeyframe()
@@ -156,7 +156,7 @@ private slots:
         QVERIFY(!got.isEmpty());
         QVERIFY(got.first().flags & StreamHub::Key);   // what is left starts at a keyframe
         QVERIFY(got.first().flags & StreamHub::Discontinuity);
-        hub.unsubscribeAll(c.get());
+        hub.unsubscribeAll(c->serial());
     }
 
     void keyRequestsAreRateLimitedAcrossSubscribers()
@@ -172,7 +172,7 @@ private slots:
         }
         QCOMPARE(keyRequests, 1);
         for (const auto &c : many)
-            hub.unsubscribeAll(c.get());
+            hub.unsubscribeAll(c->serial());
     }
 
     void closedConnectionsAreForgotten()

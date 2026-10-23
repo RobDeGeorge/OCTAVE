@@ -89,6 +89,9 @@ public:
     void close();
     bool isClosed() const;
     int nextId() { return ++m_lastId; }
+    // Unique for the life of the process, unlike the address: cleanups run
+    // later on the GUI thread, when a new connection may sit at the same one
+    quint64 serial() const { return m_serial; }
 
     // Readable when something was queued (Unix: a pipe the connection
     // thread polls with its socket, so an event goes out at once instead
@@ -119,6 +122,7 @@ private:
     bool m_peerLoopback = false;
     QString m_peerAddress, m_tokenId;
     std::atomic<int> m_lastId{0};
+    const quint64 m_serial;
     std::vector<std::function<void()>> m_cleanups;
 };
 
