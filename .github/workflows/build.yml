@@ -218,7 +218,7 @@ jobs:
         working-directory: frontends/sunlight
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
+          sudo apt-get install -y pkg-config libffi-dev libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
             libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libxfixes-dev
           go vet -tags novulkan ./...
           go test -tags novulkan ./...
