@@ -105,7 +105,11 @@ func (s *Session) Run(stop <-chan struct{}) {
 			}
 			s.mu.Lock()
 			s.needPair = false
+			token := s.Token
 			s.mu.Unlock()
+			if err == nil { // an untrusted hello leaves out the app: ask again, now trusted
+				hello, err = c.HelloToken(token)
+			}
 		}
 		version := hello.Version
 		if err == nil {

@@ -210,6 +210,7 @@ func (a *App) dial(p *Painter, r image.Rectangle, c dash.Cell, start, sweep floa
 		readout = image.Rect(cx-w/2, cy+int(radius*0.15), cx+w/2, cy+int(radius*0.8))
 		rows := split(readout, 3, 0, true)
 		big := image.Rect(readout.Min.X, rows[0].Min.Y, readout.Max.X, rows[1].Max.Y)
+		p.Fill(readout.Inset(readout.Dx()/8), pal.Paper) // the needle passes under the number, not through it
 		col := pal.Ink
 		if hot {
 			col = pal.Accent

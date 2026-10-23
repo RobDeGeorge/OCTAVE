@@ -190,6 +190,8 @@ class Link:
                     while not self._paired.wait(0.5):
                         if self._stop.is_set() or client._closed:
                             raise OctaveError("closed while pairing")
+                    # an untrusted hello leaves out the app and its objects: ask again, now trusted
+                    client.server = client.hello(self.token)
                 describe = client.describe()
                 self.client = client
                 self.app.post_message(Linked(client.server, describe))
