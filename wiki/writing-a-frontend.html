@@ -62,6 +62,7 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
           <li><code>hello</code>: the protocol version (check it), the app version, whether it is headless, and the object names.</li>
           <li><code>describe {object}</code>: that object's properties (type, writable, notify signal, enum keys), methods (parameter types, return type) and signals. <code>describe</code> with no object returns all of them (about 110&nbsp;KB). It is the same data as <span class="file-path">docs/api/&lt;object&gt;.json</span>, so you can code against the files and check them at run time.</li>
           <li><span class="file-path">docs/api/parameters.json</span> (or <code>get parameterCatalog parameters</code>): every OBD PID and IMU reading with its title, native unit, range and decimals.</li>
+          <li><span class="file-path">docs/api/protocol.json</span>: the protocol itself as JSON Schema, for a client in a language without an SDK: each op's arguments and reply, the reply envelope and error codes, every event's fields, the binary record, the HTTP routes, the pairing steps. It is checked against the server by a test, so it is current. <code>describe</code> with no object lists the ops the server has as <code>ops</code>, so a client can tell at run time what it may send.</li>
         </ul>
 
         <h2 id="read">4. Read and Subscribe</h2>

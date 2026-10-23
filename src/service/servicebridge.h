@@ -6,7 +6,9 @@
 //
 //   hello -> {protocolVersion, app: {version, build, headless}, objects}
 //   describe {object?} -> one object's properties / methods / signals
-//       (metadescribe.h), or every object's as {protocolVersion, objects}
+//       (metadescribe.h), or every object's as {protocolVersion, objects,
+//       ops: [every op name this server answers]}. The envelope itself
+//       (ops, errors, events, records, routes) is docs/api/protocol.json
 //   get {object, property?} -> a property's value; on a key-value object
 //       (QQmlPropertyMap: paramStore) a key's, or every key's without one
 //   set {object, property, value} -> writes a writable property (converted

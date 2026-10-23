@@ -1,6 +1,6 @@
 # OCTAVE SDK
 
-Clients for OCTAVE's service API: read and drive the app (media, volume, live OBD and IMU values, settings, dashboards) from another program, with no Qt. The objects and their types are in [`docs/api/`](../docs/api/README.md); the protocol is in [`wiki/utilities.html#service-protocol`](../wiki/utilities.html#service-protocol).
+Clients for OCTAVE's service API: read and drive the app (media, volume, live OBD and IMU values, settings, dashboards) from another program, with no Qt. The objects and their types are in [`docs/api/`](../docs/api/README.md); the protocol envelope (ops, replies, errors, events, stream records, HTTP routes, pairing) is [`docs/api/protocol.json`](../docs/api/protocol.json), JSON Schema checked against the server, and in prose in [`wiki/utilities.html#service-protocol`](../wiki/utilities.html#service-protocol). Writing a client in another language: start from `protocol.json` and the `<object>.json` files; `sdk/python/tests/test_protocol_spec.py` shows how to check a client's idea of the protocol against a running app.
 
 Turn the service on first. It is off by default, and listens on 127.0.0.1:9876:
 
@@ -39,7 +39,7 @@ Examples: `python/examples/live_gauges.py` (readings with titles and units) and 
 
 Over the network: `token = Client(host).pair("123456", "My script")` once, then `Client(host, token=token)`. Video: `octave.stream("phoneMirrorManager", "video")`, after which `events()` also yields `{"event": "record", "stream", "flags", "pts", "key", "config", "data": bytes}` (H.264 Annex-B access units, every keyframe with its SPS / PPS; `docs/api/README.md`, "Streams"); `unstream(id)` stops it.
 
-Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app (the stream test uses the dev-only `sim_video` and skips without the dev tools). ctest runs it as `sdk_python`.
+Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app (the stream test uses the dev-only `sim_video` and skips without the dev tools) and `test_protocol_spec.py`, which checks `docs/api/protocol.json` against that app: the same ops both ways, and replies, errors and events validating against the spec's schemas. ctest runs it as `sdk_python`.
 
 ## TypeScript: `typescript/`
 

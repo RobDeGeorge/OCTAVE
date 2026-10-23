@@ -33,7 +33,7 @@ What stops an outside developer today, in order of how much it hurts:
 
 ### 3. One machine-readable protocol spec, SDKs generated from it
 **Effort:** L. **Device:** desktop.
-- `docs/api/protocol.json`: every op with its arguments and reply, the error codes, the event shapes, the stream record format, the pairing flow. Written once, checked against the server by a test that runs each op (extend `tst_conformance` or the `sdk_python` ctest).
+- **Done (2026-10-23):** `docs/api/protocol.json` (ops, errors, events, stream record, HTTP routes, pairing), checked against a headless app by `sdk/python/tests/test_protocol_spec.py` (ctest `sdk_python`); `describe` answers `ops`.
 - A generator that turns `protocol.json` + the object files into a client: TypeScript first (replace the hand-written parts of `sdk/typescript`), then Python, then one compiled language (Go, Rust or Kotlin) to prove it isn't TypeScript-shaped.
 - A conformance kit for SDK authors: a recorded session plus a fake server they can run their client against.
 
