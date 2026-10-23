@@ -26,7 +26,6 @@ Where it is documented: `docs/api/` (the published API, its `README.md`: version
 
 ## Left: small follow-ups (desktop)
 
-- **Event latency.** Events wait for the connection thread's 20 ms read poll (`pump()` in `src/service/commandserver.cpp`): p50 10 ms, max 21 ms in the baseline. Wake the thread when something is queued (an eventfd / self-pipe the poll also watches). Do it before the Pi numbers. **Effort:** S.
 - **A test for write backpressure (M5).** The limit is in; its test also passes with the limit off, because the blocking flush already throttles a fully stalled reader. The real case is a slow reader: read at a fixed slow rate while publishing faster, and check what is in flight stays bounded. **Effort:** S.
 - **Leftovers noted during the rule moves:** Trip History shows the recorded units, not the gauge units (convert its series through `toDisplay` if wanted); the Sensors page keeps its own `sensorTempUnit` (default °F), so the IMU temperature can read °F there and °C on a dashboard; the persisted `supportedOBDParameters` holds the raw scan without aliases while `vehicleSupportedParameters` has them; `OBDManager::obdParameterChanged` and the 84 typed per-PID signals have no listener left; the gesture worker's flag table is a second spelling of the gesture names; a file QAudioDecoder rejects waits out the 30 s watchdog instead of failing at the error. Each **Effort:** S.
 - **`tst_conformance` gap:** a QML alias (`property var sm: settingsManager`) escapes it; none exist today.
@@ -46,14 +45,15 @@ Nothing here can be done on the desktop. Each was noted when its change landed.
 
 ## Service load baseline (desktop, 2026-10-23)
 
-To compare on the Orange Pi. One `octave --headless --dev` (Debug build at 2ccf54b on night/backend, AMD Ryzen 7 9700X, Arch Linux), the simulated car, a local track playing; the script is `tools/stream/service_load.py`.
+To compare on the Orange Pi. One `octave --headless --dev` (Debug build of night/backend with the wake pipe, AMD Ryzen 7 9700X, Arch Linux), the simulated car, a local track playing; the script is `tools/stream/service_load.py`.
 
 | | Backend CPU (of one core) | Backend RSS |
 |---|---|---|
-| 60 s, no clients | 0.7 % | 400 MB |
-| 120 s, 5 clients (below) | 1.2 % | 415 MB |
+| 60 s, no clients | 0.5 % | 400 MB |
+| 120 s, 5 clients (below) | 1.1 % | 414-418 MB |
 
-Clients: `paramStore` every one of the 129 ids with `setParameterDemand` on all, `throttleMs` 40 (15.9 events/s); `nowPlaying` six properties (20.1/s); `audioAnalyzer.levels` with `setDemand` (3.5/s, only on change); `sim_video` over WebSocket and over TCP (30.3 records/s each, no drops). Event latency, as the excess over the fastest delivery seen (the server's `t` is its own monotonic clock): p50 10 ms, p95 19 ms, p99 20 ms, max 21 ms, the same for every subscription: the read poll above. Not covered: the test video is 300 kbit/s where a phone sends 8-16 Mbit/s; the RSS is a Debug build's.
+Clients: `paramStore` every one of the 129 ids with `setParameterDemand` on all, `throttleMs` 40 (15.9 events/s); `nowPlaying` six properties (20.1/s); `audioAnalyzer.levels` with `setDemand` (3.5/s, only on change); `sim_video` over WebSocket and over TCP (30.3 records/s each, no drops). Event latency, as the excess over the fastest delivery seen (the server's `t` is its own monotonic clock, in whole ms): p50 0.5 ms, p95 1.0 ms, max 1.1 ms on every subscription. Measured the same way before the wake pipe (the 20 ms read poll alone): 0.7 % / 1.2-1.4 % CPU, p50 10 ms, max 21 ms.
+Not covered: the test video is 300 kbit/s where a phone sends 8-16 Mbit/s; the RSS is a Debug build's; Windows keeps the 20 ms poll (no wake pipe there).
 
 ## Left: running the core as its own process
 
@@ -82,8 +82,8 @@ Constraints:
 
 ## Recommended order of operations
 
-1. The event-latency wake-up and the M5 test (S, desktop).
-2. The hardware checks above, as the devices are at hand (the Pi load run after item 1).
+1. The M5 slow-reader test (S, desktop).
+2. The hardware checks above, as the devices are at hand.
 3. After v1.0 has road time: CMake plan step 1 with a CI dispatch for every platform, then steps 2 and 3, then the Pi unit and a road test.
 4. Step 4 (`--connect`) only if the measurements say the split is worth it.
 

@@ -16,6 +16,7 @@
 #include <QThread>
 #include <QtEndian>
 
+#include <algorithm>
 #include <memory>
 
 #include "service/commandserver.h"
@@ -695,6 +696,34 @@ private slots:
             }
         }
         QCOMPARE(replyAt.size(), 2);
+    }
+
+    void eventsGoOutAtOnce()
+    {
+#if !defined(Q_OS_UNIX) || defined(Q_OS_WASM)
+        QSKIP("the wake pipe is Unix only; elsewhere events go out within the 20 ms poll");
+#else
+        // An event used to wait for the connection thread's 20 ms read
+        // poll; the connection's wake pipe sends it at once
+        m_registry->add("fixture", &m_fixture);
+        QVERIFY(result(R"({"op": "subscribe", "object": "fixture", "properties": ["level"]})").toMap().contains("sub"));
+        QTRY_COMPARE_WITH_TIMEOUT(collect().size(), 1, 2000);   // the current value
+        QList<qint64> waits;
+        for (int i = 0; i < 20; ++i) {
+            m_events.clear();
+            QElapsedTimer t;
+            t.start();
+            m_fixture.setLevel(100 + i);
+            while (collect().isEmpty() && t.elapsed() < 1000) {
+                QCoreApplication::processEvents();
+                if (m_socket->waitForReadyRead(1))
+                    pump(0);
+            }
+            waits.append(t.nsecsElapsed() / 1000);
+        }
+        std::sort(waits.begin(), waits.end());
+        QVERIFY2(waits.at(waits.size() / 2) < 5000, qPrintable(QStringLiteral("median %1 us").arg(waits.at(waits.size() / 2))));
+#endif
     }
 
     void throttleKeepsTheLatest()
