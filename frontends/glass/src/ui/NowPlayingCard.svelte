@@ -16,7 +16,7 @@
 
 <div class="glass panel card" class:compact>
   <div class="top">
-    <Art title={$np.title} artist={$np.artist} url={$np.artUrl} size={compact ? 120 : 220} />
+    <Art title={$np.title} artist={$np.artist} url={$np.artUrl} size={compact ? 110 : 200} />
     <div class="text">
       <div class="src faint small">{$np.source === 'phone' ? 'From the phone' : $np.hasTrack ? 'Playing from the library' : 'Library'}</div>
       <div class="title">{$np.hasTrack ? $np.title || 'Untitled' : 'Nothing playing'}</div>
@@ -58,5 +58,11 @@
   .transport { display: flex; justify-content: center; align-items: center; gap: 14px; }
   .vol { display: flex; align-items: center; gap: 12px; color: var(--ink-2); }
   .compact .vol { display: none; }
-  @media (max-width: 760px) { .top { gap: 14px; } .title { font-size: 22px; } .artist { font-size: 15px; } }
+  @media (max-width: 760px) {
+    .top { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .compact .top { flex-direction: row; align-items: center; }
+    .title { font-size: 24px; } .artist { font-size: 15px; }
+    .transport { gap: 8px; }
+    .transport .big { min-width: 60px; min-height: 60px; }
+  }
 </style>
