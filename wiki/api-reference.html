@@ -757,6 +757,7 @@
             <tr><td><code>maxHomeObdParameters</code></td><td>int</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>customThemes</code></td><td>QVariantList</td><td>read</td><td><code>customThemesChanged</code></td></tr>
             <tr><td><code>customThemeData</code></td><td>QVariantMap</td><td>read</td><td><code>customThemesChanged</code></td></tr>
+            <tr><td><code>nowPlayingPresets</code></td><td>QVariantList</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>directoryHistory</code></td><td>QVariantList</td><td>read</td><td><code>directoryHistoryChanged</code></td></tr>
             <tr><td><code>windowState</code></td><td>QString</td><td>read</td><td><code>windowStateChanged</code></td></tr>
             <tr><td><code>lastSettingsSection</code></td><td>QString</td><td>read</td><td><code>lastSettingsSectionChanged</code></td></tr>
@@ -906,6 +907,8 @@
             <tr><td><code>toggle_pin_setting(QString settingId)</code></td><td>&ndash;</td><td>slot</td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td>&ndash;</td><td>slot</td></tr>
             <tr><td><code>save_setting(QString key, QVariant value)</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>apply_settings(QVariantMap values)</code></td><td><code>QVariantMap</code></td><td>slot</td></tr>
+            <tr><td><code>applyNowPlayingPreset(QString label)</code></td><td><code>bool</code></td><td>slot</td></tr>
             <tr><td><code>get_setting(QString key)</code></td><td><code>QVariant</code></td><td>slot</td></tr>
             <tr><td><code>get_setting_with_default(QString key, QVariant defaultValue)</code></td><td><code>QVariant</code></td><td>slot</td></tr>
             <tr><td><code>get_obd_parameter_enabled(QString parameter, bool defaultVal)</code></td><td><code>bool</code></td><td>slot</td></tr>

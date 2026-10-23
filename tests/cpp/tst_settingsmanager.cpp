@@ -51,6 +51,75 @@ private slots:
         QVERIFY(!sm.get_setting("serviceEnabled").toBool());
         sm.save_setting("someOtherKey", 5);
         QCOMPARE(sm.get_setting("someOtherKey").toInt(), 5);
+
+        // A reset keeps what the file says for them
+        QFile f(SettingsManager::getAppDataDir() + "/settingsConfigure.json");
+        sm.flushPendingSave();
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QJsonObject file = QJsonDocument::fromJson(f.readAll()).object();
+        f.close();
+        file.insert("serviceEnabled", true);
+        file.insert("serviceWebRoot", "/srv/ui");
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write(QJsonDocument(file).toJson());
+        f.close();
+        SettingsManager fresh;
+        fresh.reset_to_defaults();
+        QVERIFY(fresh.get_setting("serviceEnabled").toBool());
+        QCOMPARE(fresh.get_setting("serviceWebRoot").toString(), QStringLiteral("/srv/ui"));
+        QCOMPARE(fresh.get_setting("someOtherKey"), QVariant());   // the rest is reset
+    }
+
+    void applySettingsGoesThroughTheSaveSlots()
+    {
+        SettingsManager sm;
+        QSignalSpy grid(&sm, &SettingsManager::backgroundGridChanged);
+        const QVariantMap result = sm.apply_settings({
+            {"roundedAlbumArt", false},          // registry slot
+            {"backgroundGrid", "Normal"},        // derived: save_background_grid
+            {"show3DButtonTilt", true},          // derived through the digits
+            {"backgroundBlurRadius", 42.6},      // int slot: rounded
+            {"sideCardOpacity", 0.35},
+            {"vinylRecordMode", "yes"},          // not a bool
+            {"backgroundOverlayOpacity", "50"},  // not a number
+            {"noSuchSetting", 1},                // no setter
+            {"serviceEnabled", true},            // file-only
+            {"serviceWebRoot", "/"}});
+        QCOMPARE(result.value("applied").toStringList(),
+                 (QStringList{"backgroundBlurRadius", "backgroundGrid", "roundedAlbumArt", "show3DButtonTilt", "sideCardOpacity"}));
+        const QVariantMap refused = result.value("refused").toMap();
+        QCOMPARE(refused.keys(), (QStringList{"backgroundOverlayOpacity", "noSuchSetting", "serviceEnabled", "serviceWebRoot", "vinylRecordMode"}));
+        QVERIFY(refused.value("serviceEnabled").toString().contains("settingsConfigure.json"));
+        QVERIFY(!sm.roundedAlbumArt());
+        QCOMPARE(sm.backgroundGrid(), QStringLiteral("Normal"));
+        QCOMPARE(grid.size(), 1);   // the slot's own notify
+        QCOMPARE(sm.backgroundBlurRadius(), 43);
+        QCOMPARE(sm.sideCardOpacity(), 0.35);
+        QVERIFY(!sm.get_setting("serviceEnabled").toBool());
+        QVERIFY(!sm.vinylRecordMode());
+    }
+
+    void nowPlayingPresetsLiveInCpp()
+    {
+        SettingsManager sm;
+        const QVariantList presets = sm.property("nowPlayingPresets").toList();
+        QStringList labels;
+        for (const QVariant &p : presets)
+            labels << p.toMap().value("label").toString();
+        QCOMPARE(labels, (QStringList{"Minimal", "Vinyl", "Showcase 3D", "Cinema"}));
+        // Every preset key has a setter: nothing a preset holds is refused
+        for (const QVariant &p : presets) {
+            SettingsManager probe;
+            const QVariantMap r = probe.apply_settings(p.toMap().value("settings").toMap());
+            QVERIFY2(r.value("refused").toMap().isEmpty(), qPrintable(p.toMap().value("label").toString()));
+        }
+        QVERIFY(sm.applyNowPlayingPreset("Vinyl"));
+        QVERIFY(sm.vinylRecordMode());
+        QCOMPARE(sm.albumArtTransition(), QStringLiteral("Vinyl Lift"));
+        QVERIFY(sm.applyNowPlayingPreset("Showcase 3D"));
+        QCOMPARE(sm.sideCardOpacity(), 0.4);
+        QCOMPARE(sm.backgroundGrid(), QStringLiteral("4x4"));
+        QVERIFY(!sm.applyNowPlayingPreset("Nope"));
     }
 
     void corruptSettingsRestoredFromBackup()

@@ -343,52 +343,13 @@ Flickable {
             readonly property real pipFitHeight: pipFitWidth / windowAspect
 
             // Bundled looks — apply with one tap, then dial in.
-            readonly property var presetDefs: [
-                { label: "Minimal", settings: {
-                    roundedAlbumArt: true, showAlbumArtShadow: false, vinylRecordMode: false,
-                    showWaveformVisualizer: false, show3DButtonTilt: false, show3DAlbumPreview: false,
-                    backgroundBlurRadius: 60, backgroundOverlayOpacity: 80,
-                    albumArtCornerRadius: 16, albumArtTransition: "Crossfade", backgroundGrid: "Normal"
-                }},
-                { label: "Vinyl", settings: {
-                    roundedAlbumArt: false, showAlbumArtShadow: true, vinylRecordMode: true,
-                    showWaveformVisualizer: true, show3DButtonTilt: false, show3DAlbumPreview: false,
-                    backgroundBlurRadius: 30, backgroundOverlayOpacity: 60,
-                    albumArtTransition: "Vinyl Lift", backgroundGrid: "Normal"
-                }},
-                { label: "Showcase 3D", settings: {
-                    roundedAlbumArt: true, showAlbumArtShadow: true, vinylRecordMode: false,
-                    showWaveformVisualizer: false, show3DButtonTilt: true, show3DAlbumPreview: true,
-                    backgroundBlurRadius: 50, backgroundOverlayOpacity: 70,
-                    albumArtCornerRadius: 16, albumArtTransition: "Coverflow",
-                    backgroundGrid: "4x4",
-                    sideCardOpacity: 0.4, sideCardAngle: 30, buttonTiltDuration: 200
-                }},
-                { label: "Cinema", settings: {
-                    roundedAlbumArt: true, showAlbumArtShadow: true, vinylRecordMode: false,
-                    showWaveformVisualizer: true, show3DButtonTilt: false, show3DAlbumPreview: false,
-                    backgroundBlurRadius: 80, backgroundOverlayOpacity: 90,
-                    albumArtCornerRadius: 24, albumArtTransition: "Dissolve", backgroundGrid: "4x4"
-                }}
-            ]
+            // The Now Playing look presets live in C++ (settingsManager.nowPlayingPresets,
+            // applied through settingsManager.apply_settings), so every frontend has them
+            readonly property var presetDefs: settingsManager ? settingsManager.nowPlayingPresets : []
 
             function applyPreset(preset) {
-                if (!settingsManager || !preset || !preset.settings) return
-                var s = preset.settings
-                if ("roundedAlbumArt" in s)         settingsManager.save_rounded_album_art(s.roundedAlbumArt)
-                if ("showAlbumArtShadow" in s)      settingsManager.save_show_album_art_shadow(s.showAlbumArtShadow)
-                if ("vinylRecordMode" in s)         settingsManager.save_vinyl_record_mode(s.vinylRecordMode)
-                if ("showWaveformVisualizer" in s)  settingsManager.save_show_waveform_visualizer(s.showWaveformVisualizer)
-                if ("show3DButtonTilt" in s)        settingsManager.save_show_3d_button_tilt(s.show3DButtonTilt)
-                if ("show3DAlbumPreview" in s)      settingsManager.save_show_3d_album_preview(s.show3DAlbumPreview)
-                if ("backgroundBlurRadius" in s)    settingsManager.save_background_blur_radius(s.backgroundBlurRadius)
-                if ("backgroundOverlayOpacity" in s) settingsManager.save_background_overlay_opacity(s.backgroundOverlayOpacity)
-                if ("albumArtCornerRadius" in s)    settingsManager.save_album_art_corner_radius(s.albumArtCornerRadius)
-                if ("albumArtTransition" in s)      settingsManager.save_album_art_transition(s.albumArtTransition)
-                if ("backgroundGrid" in s)          settingsManager.save_background_grid(s.backgroundGrid)
-                if ("sideCardOpacity" in s)         settingsManager.save_side_card_opacity(s.sideCardOpacity)
-                if ("sideCardAngle" in s)           settingsManager.save_side_card_angle(s.sideCardAngle)
-                if ("buttonTiltDuration" in s)      settingsManager.save_button_tilt_duration(s.buttonTiltDuration)
+                if (settingsManager && preset)
+                    settingsManager.applyNowPlayingPreset(preset.label)
             }
 
             // ── PiP locked top-right ──
