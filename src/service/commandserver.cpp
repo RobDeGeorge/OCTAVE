@@ -249,9 +249,9 @@ bool CommandServer::start()
     m_thread->start();
     bool ok = false;
     QMetaObject::invokeMethod(m_server, [this, &ok] {
-        ok = m_server->listen(QHostAddress::LocalHost, m_port);
+        ok = m_server->listen(m_bind, m_port);
         if (!ok)
-            qCWarning(lcCommand) << "command server could not listen on 127.0.0.1:" << m_port << ":"
+            qCWarning(lcCommand).noquote() << "command server could not listen on" << m_bind.toString() + ':' + QString::number(m_port) << ":"
                                  << m_server->errorString();
     }, Qt::BlockingQueuedConnection);
     if (!ok) {
@@ -259,7 +259,10 @@ bool CommandServer::start()
         return false;
     }
     m_port = m_server->serverPort();
-    qCInfo(lcCommand) << "command server listening on 127.0.0.1:" << m_port;
+    qCInfo(lcCommand).noquote() << "command server listening on" << m_bind.toString() + ':' + QString::number(m_port);
+    if (!m_bind.isLoopback())
+        qCWarning(lcCommand).noquote() << "command server reachable beyond this machine (" + m_bind.toString()
+                                              + "): it has no authentication";
     std::fprintf(stdout, "\033[1;36m[CMD]\033[0m   Command server on port %u\n", m_port);
     std::fflush(stdout);
     return true;

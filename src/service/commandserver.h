@@ -18,7 +18,8 @@
 //
 // A request carrying both keys is an op (`action` is ignored).
 //
-// Listens on 127.0.0.1 only (default port 9876). Each client connection gets
+// Listens on 127.0.0.1 (default port 9876) unless setBindAddress() says
+// otherwise (src/service/serviceoptions.h). Each client connection gets
 // its own thread, so a slow GUI call never
 // blocks get_metrics on another connection. Handlers run on that connection
 // thread and use onGui() / postGui() for anything that touches Qt objects.
@@ -28,6 +29,7 @@
 // registers its UI / perf / simulator actions on it.
 
 #include <QHash>
+#include <QHostAddress>
 #include <QObject>
 #include <QReadWriteLock>
 #include <QStringList>
@@ -100,6 +102,9 @@ public:
     void registerOp(const QString &op, Handler handler);
     QStringList ops() const;
 
+    // Before start(); 127.0.0.1 by default. The protocol has no
+    // authentication: anything else lets the network drive the app.
+    void setBindAddress(const QHostAddress &address) { m_bind = address; }
     bool start();
     void stop();
     quint16 port() const { return m_port; }   // the bound port once started (0 asks for any)
@@ -121,6 +126,7 @@ private:
     QVariant dispatchOp(const QString &op, const QVariantMap &args);
 
     quint16 m_port;
+    QHostAddress m_bind = QHostAddress(QHostAddress::LocalHost);
     mutable QReadWriteLock m_lock;
     QHash<QString, Handler> m_handlers;
     QStringList m_order;   // registration order, for list_actions

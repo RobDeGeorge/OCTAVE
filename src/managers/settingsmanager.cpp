@@ -165,6 +165,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("blackBoxEnabled")]       = true;
     d[QStringLiteral("blackBoxSweepAll")]      = true;
     d[QStringLiteral("blackBoxMaxMB")]         = 500;
+    d[QStringLiteral("serviceEnabled")]        = false;   // the service at every start (src/service/serviceoptions.h)
 
     // OBD parameters
     QJsonObject obdParams;

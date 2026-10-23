@@ -38,6 +38,9 @@ extern "C" {
 #include "util/logger.h"
 #include "util/qmlmodules.h"
 #include "util/units.h"
+#include "service/commandserver.h"
+#include "service/servicebridge.h"
+#include "service/serviceoptions.h"
 #include "service/serviceregistry.h"
 #include "util/fontcatalog.h"
 #include "util/uiwatchdog.h"
@@ -79,7 +82,7 @@ extern "C" {
 #include "managers/dashboardmanager.h"
 
 #ifdef OCTAVE_DEV_TOOLS
-// --dev / --profile: simulator, command server, perf monitor (src/dev/)
+// --dev / --profile: simulator, UI / perf actions, perf monitor (src/dev/)
 #include "dev/devruntime.h"
 #endif
 
@@ -539,12 +542,41 @@ int main(int argc, char *argv[])
     // ---- Developer tooling (inactive unless --dev / --profile) ----
 #ifdef OCTAVE_DEV_TOOLS
     OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &mediaManager, &volumeController, &nowPlaying, &obdManager, &berryIMU,
-                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &serviceRegistry});
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
     devRuntime.beforeLoad();
 #else
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
-        qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON (the default for Debug); ignoring");
+        qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON (the default for Debug); ignoring "
+                 "(--service still starts the service)");
 #endif
+
+    // ---- Service: the command server + the service protocol (src/service/) ----
+    // Off unless asked for (--service, the serviceEnabled setting, or
+    // --profile with the dev tools); loopback only unless --service-bind.
+#ifdef OCTAVE_DEV_TOOLS
+    constexpr bool devToolsBuild = true;
+#else
+    constexpr bool devToolsBuild = false;
+#endif
+    const OctaveService::ServiceOptions serviceOptions = OctaveService::parseServiceOptions(
+        app.arguments(), settingsManager.get_setting(QStringLiteral("serviceEnabled")).toBool(), devToolsBuild);
+    if (!serviceOptions.error.isEmpty())
+        qWarning("Service not started: %s", qPrintable(serviceOptions.error));
+    // The bridge outlives the server: the server's ops call into it
+    std::unique_ptr<OctaveService::ServiceBridge> serviceBridge;
+    std::unique_ptr<OctaveService::CommandServer> commandServer;
+    if (serviceOptions.enabled) {
+        commandServer = std::make_unique<OctaveService::CommandServer>(serviceOptions.port);
+        commandServer->setBindAddress(serviceOptions.bind);
+#ifdef QT_DEBUG
+        constexpr bool debugBuild = true;
+#else
+        constexpr bool debugBuild = false;
+#endif
+        serviceBridge = std::make_unique<OctaveService::ServiceBridge>(
+            &serviceRegistry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, false});
+        serviceBridge->install(*commandServer);
+    }
 
     // ---- Load Main.qml ----
 #ifdef Q_OS_ANDROID
@@ -563,8 +595,10 @@ int main(int argc, char *argv[])
         return -1;
     }
 #ifdef OCTAVE_DEV_TOOLS
-    devRuntime.afterLoad();
+    devRuntime.afterLoad(commandServer.get());   // its UI / perf / sim actions, with --profile
 #endif
+    if (commandServer)
+        commandServer->start();
     if (smokeTest) {
         qInfo("Smoke test: Main.qml loaded, exiting in 5 s");
         // CI greps this line: release builds must ship the phone-mirror decoder + adb
@@ -701,8 +735,10 @@ int main(int argc, char *argv[])
     // Cleanup on quit (stubs make all calls no-op on mobile)
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
 #ifdef OCTAVE_DEV_TOOLS
-        devRuntime.shutdown();   // command clients and the perf log go first
+        devRuntime.shutdown();   // the perf log and a UI recording go first
 #endif
+        if (commandServer)
+            commandServer->stop();   // no client reaches a manager while it cleans up
         uiWatchdog.stop();
         androidAutoManager.cleanup();
         phoneMirrorManager.cleanup();

@@ -7,7 +7,10 @@
 //
 //   octave --dev               simulated car (OBD over a fake ELM327, keyboard
 //                              driving), dev overlay + tools panel
-//   octave --profile           perf monitor + command server on 127.0.0.1:9876
+//   octave --profile           perf monitor + the UI / perf actions on the
+//                              command server, which --profile starts in
+//                              these builds (127.0.0.1:9876; main.cpp owns
+//                              it, src/service/serviceoptions.h)
 //   octave --dev --profile     both, plus the sim_* actions (what the
 //                              screenshot stories and MCP tools launch)
 //   --command-port N           listen somewhere other than 9876
@@ -29,7 +32,7 @@ namespace OctaveDev {
 class CarSim;
 class CollageBridge;
 }
-namespace OctaveService { class CommandServer; class ServiceBridge; class ServiceRegistry; }
+namespace OctaveService { class CommandServer; }
 namespace OctaveDev {
 using OctaveService::CommandServer;
 class DevImuFeed;
@@ -47,7 +50,6 @@ struct AppObjects {
     OBDManager *obd = nullptr;
     BerryIMUManager *imu = nullptr;
     QDir projectRoot;   // checkout root: frontend/, src/dev/qml/, dev/perf/logs/
-    OctaveService::ServiceRegistry *registry = nullptr;   // served by the service ops
 };
 
 class Runtime : public QObject
@@ -63,8 +65,9 @@ public:
 
     // Before engine.load(): context properties, the simulated adapter
     void beforeLoad();
-    // After Main.qml loaded: the overlay, the perf monitor, the command server
-    void afterLoad();
+    // After Main.qml loaded: the overlay, the perf monitor, and (with
+    // --profile) its actions on `server`, before main.cpp starts it
+    void afterLoad(CommandServer *server);
     // From aboutToQuit, before the managers clean up
     void shutdown();
 
@@ -74,7 +77,6 @@ private:
     AppObjects m_app;
     bool m_dev = false;
     bool m_profile = false;
-    quint16 m_port = 9876;
 
     CarSim *m_sim = nullptr;
     DevKeyboardController *m_keyboard = nullptr;
@@ -83,8 +85,7 @@ private:
     PerfMonitor *m_perf = nullptr;
     UiDriver *m_ui = nullptr;
     CollageBridge *m_collage = nullptr;
-    CommandServer *m_server = nullptr;
-    OctaveService::ServiceBridge *m_bridge = nullptr;
+    CommandServer *m_server = nullptr;   // main.cpp's
     QPointer<QQuickItem> m_overlay;
 };
 

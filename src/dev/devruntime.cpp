@@ -3,7 +3,6 @@
 #include "carsim.h"
 #include "collagebridge.h"
 #include "../service/commandserver.h"
-#include "../service/servicebridge.h"
 #include "coreactions.h"
 #include "devimufeed.h"
 #include "devtoolsmanager.h"
@@ -37,17 +36,12 @@ Runtime::Runtime(const QStringList &arguments, const AppObjects &app, QObject *p
             m_dev = true;
         else if (a == QLatin1String("--profile"))
             m_profile = true;
-        else if (a == QLatin1String("--command-port") && i + 1 < arguments.size())
-            m_port = static_cast<quint16>(arguments.at(++i).toUInt());
-        else if (a.startsWith(QLatin1String("--command-port=")))
-            m_port = static_cast<quint16>(a.section(QLatin1Char('='), 1).toUInt());
     }
 }
 
 Runtime::~Runtime()
 {
     shutdown();
-    delete m_bridge;   // after the server stopped: its ops reference it
 }
 
 void Runtime::beforeLoad()
@@ -97,7 +91,7 @@ void Runtime::beforeLoad()
     }
 }
 
-void Runtime::afterLoad()
+void Runtime::afterLoad(CommandServer *server)
 {
     const auto roots = m_app.engine->rootObjects();
     auto *window = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(roots.first());
@@ -124,35 +118,23 @@ void Runtime::afterLoad()
         m_tools->setWindow(window);
     }
 
-    if (m_profile) {
+    if (m_profile)
         m_perf->start();
+    // --profile turns the server on in these builds (serviceoptions.h); the
+    // UI / perf / sim actions ride on it only then, never on a plain --service
+    if (m_profile && server) {
+        m_server = server;
         m_ui = new UiDriver(m_app.engine, this);
-        m_server = new CommandServer(m_port, this);
-        if (m_app.registry) {
-            // The service ops on the same socket (src/service/servicebridge)
-            m_bridge = new OctaveService::ServiceBridge(
-                m_app.registry, {QStringLiteral(OCTAVE_VERSION),
-#ifdef QT_DEBUG
-                                 true,
-#else
-                                 false,
-#endif
-                                 false});
-            m_bridge->install(*m_server);
-        }
         registerCoreActions(*m_server, {m_ui, m_perf, m_app.settings, m_app.media, m_app.volume, m_app.nowPlaying, m_app.obd});
         m_collage = new CollageBridge(m_app.engine, m_app.projectRoot, this);
         m_collage->registerActions(*m_server);
         if (m_dev)
             registerSimActions();
-        m_server->start();
     }
 }
 
 void Runtime::shutdown()
 {
-    if (m_server)
-        m_server->stop();
     if (m_perf)
         m_perf->stop();
     if (m_ui)

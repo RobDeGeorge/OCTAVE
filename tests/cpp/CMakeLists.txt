@@ -211,3 +211,4 @@ octave_add_test(tst_servicebridge
             service/metadescribe.h service/metadescribe.cpp
             util/variantlistmodel.h util/variantlistmodel.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
+octave_add_test(tst_serviceoptions SOURCES service/serviceoptions.h service/serviceoptions.cpp LIBS Qt6::Network)

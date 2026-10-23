@@ -355,7 +355,9 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
             <tr><td><code>--smoke</code></td><td>Load <code>Main.qml</code>, run 5&nbsp;s (startup work, page pre-building), then exit 0. A build that cannot start exits non-zero or never starts; CI and the <code>tst_boot</code> test use it.</td></tr>
             <tr><td><code>--dev</code></td><td>Simulated car and dev overlay (<a href="#dev-mode">Developer Mode</a>). Needs an <code>OCTAVE_DEV_TOOLS</code> build.</td></tr>
             <tr><td><code>--profile</code></td><td>Perf monitor and command server on <code>127.0.0.1:9876</code>. Needs an <code>OCTAVE_DEV_TOOLS</code> build.</td></tr>
-            <tr><td><code>--command-port N</code></td><td>Another port for the command server (with <code>--profile</code>).</td></tr>
+            <tr><td><code>--command-port N</code></td><td>Another port for the command server.</td></tr>
+            <tr><td><code>--service [PORT]</code></td><td>The <a href="utilities.html#service-protocol">service protocol</a> on <code>127.0.0.1:9876</code> (or PORT) for another frontend or a script, in any build. Off by default; the <code>serviceEnabled</code> setting turns it on at every start.</td></tr>
+            <tr><td><code>--service-bind ADDRESS</code></td><td>Listen on ADDRESS instead of loopback (<code>0.0.0.0</code>: every interface). There is no authentication: only on a network you trust.</td></tr>
           </tbody>
         </table>
         <pre><code>./build/octave --debug
