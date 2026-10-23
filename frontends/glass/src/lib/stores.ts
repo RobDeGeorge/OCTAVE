@@ -115,3 +115,15 @@ export function hms(totalS: number): string {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
   return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s % 60).padStart(2, '0')}`
 }
+
+/** The palette the app has in force (album art > custom > built-in). */
+export const activeTheme = octave.prop<Record<string, Json>>('themeCatalog', 'activeTheme', {})
+
+/** The waveform: 96 bar levels 0..8 from audioAnalyzer, while someone asks for them. */
+export function levels(): Readable<number[]> {
+  return readable<number[]>([], (set) => {
+    octave.call('audioAnalyzer', 'setDemand', 'glass', true).catch(() => {})
+    const unsub = octave.prop<number[]>('audioAnalyzer', 'levels', [], 50).subscribe(set)
+    return () => { unsub(); octave.call('audioAnalyzer', 'setDemand', 'glass', false).catch(() => {}) }
+  })
+}

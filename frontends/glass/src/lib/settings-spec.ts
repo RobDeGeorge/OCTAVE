@@ -10,7 +10,7 @@ export interface Item {
   /** For 'number' and 'slider': the save slot takes this type. */
   float?: boolean
 }
-export interface Section { title: string; items: Item[]; special?: 'shiftlight' | 'homeParams' | 'gestures' | 'esp32' | 'imu' | 'network' | 'power' | 'about' | 'mediaFolder' }
+export interface Section { title: string; items: Item[]; special?: 'themes' | 'shiftlight' | 'homeParams' | 'gestures' | 'esp32' | 'imu' | 'network' | 'power' | 'about' | 'mediaFolder' }
 export interface Group { id: string; title: string; icon: string; sections: Section[] }
 
 const opts = (...pairs: [string | number | boolean, string][]) => pairs.map(([value, label]) => ({ value, label }))
@@ -26,8 +26,7 @@ export const groups: Group[] = [
       { prop: 'settingsLayoutStyle', slot: 'save_settings_layout_style', label: 'Settings layout', kind: 'chips', options: opts(['Sidebar', 'Sidebar'], ['Tiles', 'Tiles']) },
       { prop: 'backgroundGrid', slot: 'save_background_grid', label: 'Background layout', kind: 'chips', options: opts(['Normal', 'Normal'], ['2x2', '2x2'], ['4x4', '4x4']) },
     ] },
-    { title: 'Appearance', items: [
-      { prop: 'themeSetting', slot: 'save_theme_setting', label: 'Theme', kind: 'chips', options: 'themes' },
+    { title: 'Appearance', special: 'themes', items: [
       { prop: 'fontSetting', slot: 'save_font_setting', label: 'Font', kind: 'chips', options: 'fonts' },
       { prop: 'colorTransitionMs', slot: 'save_color_transition_ms', label: 'Theme transition', kind: 'slider', min: 0, max: 2000, step: 50, unit: 'ms' },
       { prop: 'songLengthTransition', slot: 'save_song_length_transition', label: 'Fade over the song', kind: 'toggle', hint: 'Album colours cross-fade for the length of the track' },

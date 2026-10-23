@@ -30,11 +30,11 @@ The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backo
 ## Pages
 
 - **Home**: the clock (OCTAVE's own text, in the user's format), now playing with transport and seek, the home gauges from `settingsManager.homeOBDParameters`, the vehicle and black-box state.
-- **Media**: now playing in full (transport, seek, shuffle, volume, mute), the library sorted by title / artist / album, playlists (select, create, delete), move a song to a playlist, delete a song.
+- **Media**: now playing in full (transport, seek, shuffle, volume, mute, the waveform from `audioAnalyzer.levels` while the page is open), the library sorted by title / artist / album, playlists (select, create, delete), move a song to a playlist, delete a song.
 - **Vehicle**: every PID the car reports, live, with a filter (Live); connect / reconnect / disconnect / reset, rescan, read VIN, the connection log, serial ports, saved adapters, a typed address, Bluetooth scan / pair / connect (Connection); trouble codes with read, lamp status, clear behind a confirmation, and the freeze frame (Trouble codes).
 - **Dashboards**: the chooser (new, edit, copy, share, delete, import from pasted JSON, restore built-ins), a full-screen view of any `schema: 1` spec drawn with this frontend's own gauges, and the editor: tap a widget then the grid to place it, drag the handle to move, the corner grip to resize, a PID picker filtered by the widget's kinds, the catalog's editable props, ranges in the user's units, colour swatches.
 - **Trips**: the black box. Every drive with its summary, any recorded reading plotted with its band and a crosshair, the trip's events, export, delete, end the live trip, clear the history, the recorder switch.
-- **Settings**: every setting, grouped like the bundled UI (Display, Media, Vehicle, Accessories, Device), with editors for the shift light bands, the home gauges, the gesture mapping, the knob's port, the IMU zero and cards, network / updates / power, and About. Whatever `describe settingsManager` lists with a `save_*` slot that has no row of its own appears under Everything else.
+- **Settings**: every setting, grouped like the bundled UI (Display, Media, Vehicle, Accessories, Device), with a theme picker that previews each palette from `themeCatalog` (and an option to tint this page's accent from the active theme), editors for the shift light bands, the home gauges, the gesture mapping, the knob's port, the IMU zero and cards, network / updates / power, and About. Whatever `describe settingsManager` lists with a `save_*` slot that has no row of its own appears under Everything else.
 - **More**: yt-dlp search and the download queue, phone mirror and Android Auto session controls and state (no video: media streams are not on the service yet), diagnostics with the recent log, export and copy.
 
 ## What it uses from the API
@@ -46,6 +46,8 @@ The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backo
 | `obdManager` | `setParameterDemand("glass-<page>", ids)`, connection, VIN, log, adapters, DTCs, freeze frame |
 | `obdAdapterFinder` | Bluetooth scan, pair, connect |
 | `nowPlaying`, `volumeController` | playback, position, seek, shuffle, volume, mute; `GET /art` with `artRevision` for the cover |
+| `themeCatalog` | the palettes behind the theme picker, `activeTheme` for the accent tint |
+| `audioAnalyzer` | `setDemand("glass", true)` while the Media page shows the waveform, `levels` |
 | `mediaManager` | the library, sorting, playlists, delete |
 | `settingsManager` | every property and `save_*` slot, `save_setting` for the shift light keys, the home gauges, gestures |
 | `shiftLightManager` | the bands (`setFlags`), the live lamp |
@@ -59,6 +61,6 @@ The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backo
 
 ## Known gaps
 
-- No phone-mirror video and no waveform: media streams are not on the service yet (`TODO/open-backend.md`, step 6).
+- No phone-mirror video: media streams are not on the service yet (`TODO/open-backend.md`, step 6).
 - Download search was exercised only as far as the backend's own error path (the test machine had no yt-dlp).
 - The volume slider sends `applyVolume` while dragging; on a slow link the knob can lag the finger.
