@@ -311,3 +311,82 @@ async def test_trip_chart_download_target_and_theme(sdk):
             await pick(pilot, app, other)
             assert await sdk_wait(lambda: sdk.get("settingsManager", "themeSetting") == other)
             sdk.call("settingsManager", "save_theme_setting", theme)
+
+
+# ── svc/4 additions: presets, settings import / export, the folder picker, IMU ─
+
+
+@live
+async def test_settings_presets_import_export_and_folder(sdk):
+    if "apply_settings" not in {m["name"] for m in sdk.describe("settingsManager")["methods"]}:
+        pytest.skip("this OCTAVE predates apply_settings / presets / the folder browser")
+    app = OctaveConsole(HOST, PORT, start_tab="settings")
+    async with app.run_test(size=SIZE) as pilot:
+        await linked(pilot, app)
+        pane = app.query_one("#pane-settings")
+        assert await wait_for(pilot, lambda: "nowPlayingPresets" in app.state.get("settingsManager", {}))
+        keys = set().union(*(p["settings"] for p in sdk.get("settingsManager", "nowPlayingPresets")))
+        saved = {k: sdk.get("settingsManager", k) for k in keys | {"clockSize"}}
+        try:
+            # a Now Playing preset
+            preset = sdk.get("settingsManager", "nowPlayingPresets")[1]
+            pane.table.focus()
+            await pilot.press("p")
+            await pick(pilot, app, preset["label"])
+            assert await sdk_wait(lambda: all(sdk.get("settingsManager", k) == v for k, v in preset["settings"].items()))
+            # export shows every setting as JSON
+            await pilot.press("o")
+            assert await wait_for(pilot, lambda: screen_name(app) == "EditText")
+            exported = json.loads(app.screen.query_one(TextArea).text)
+            assert exported["clockSize"] == sdk.get("settingsManager", "clockSize") and "serviceEnabled" not in exported
+            await pilot.press("escape")
+            # import applies what is pasted, and shows what was refused
+            await pilot.press("i")
+            await edit_text(pilot, app, json.dumps({"clockSize": saved["clockSize"] + 1, "noSuchKey": 1}))
+            assert await sdk_wait(lambda: sdk.get("settingsManager", "clockSize") == saved["clockSize"] + 1)
+            assert await wait_for(pilot, lambda: screen_name(app) == "EditText")
+            assert "noSuchKey" in app.screen.query_one(TextArea).text
+            shot(app, "settings-refused")
+            await pilot.press("escape")
+        finally:
+            sdk.call("settingsManager", "apply_settings", saved)
+        # the folder picker: open, go up, come back, use the same folder
+        folder = sdk.get("settingsManager", "mediaFolder")
+        await pilot.press("f")
+        assert await wait_for(pilot, lambda: screen_name(app) == "FolderPick")
+        picker = app.screen
+        assert await wait_for(pilot, lambda: picker.path == folder)
+        assert any(label.endswith("/") or label.startswith("..") for _, label in picker.entries)
+        shot(app, "folder-pick")
+        await pilot.press("backspace")
+        assert await wait_for(pilot, lambda: picker.path == picker.up_path or picker.path != folder)
+        name = folder.rstrip("/").rsplit("/", 1)[-1]
+        assert await wait_for(pilot, lambda: any(label == name + "/" for _, label in picker.entries))
+        idx = [label for _, label in picker.entries].index(name + "/")
+        picker.query_one(OptionList).highlighted = idx
+        await pilot.press("enter")
+        assert await wait_for(pilot, lambda: picker.path == folder)
+        await pilot.press("s")
+        assert await wait_for(pilot, lambda: screen_name(app) != "FolderPick")
+        assert sdk.get("settingsManager", "mediaFolder") == folder
+
+
+@live
+async def test_imu_readings_and_tare(sdk):
+    from test_console import sim
+    try:
+        sim("sim_imu", on=True)   # under --dev with the QML UI the simulated IMU is off until asked
+    except OSError:
+        pytest.skip("no dev actions on this service")
+    app = OctaveConsole(HOST, PORT, start_tab="car")
+    async with app.run_test(size=SIZE) as pilot:
+        await linked(pilot, app)
+        pane = app.query_one("#pane-car")
+        if not await wait_for(pilot, lambda: "LATERAL_G" in pane.imu, timeout=6):
+            pytest.skip("no IMU readings from this service")
+        assert "Lateral" in str(app.query_one("#imu-state").render()) or "LATERAL" in str(app.query_one("#imu-state").render())
+        await pilot.click("#imu-tare")
+        assert await wait_for(pilot, lambda: app.note == "IMU tared")
+        await pilot.click("#imu-reset")
+        assert await wait_for(pilot, lambda: app.note == "IMU tare reset")
+        shot(app, "car-imu")

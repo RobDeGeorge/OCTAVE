@@ -7,6 +7,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Provider
+from textual.css.query import NoMatches
 from textual.widgets import Footer, Static, TabbedContent, TabPane
 
 from .link import Link, Linked, OctaveError, OctaveEvent, Unlinked
@@ -248,7 +249,10 @@ class OctaveConsole(App):
             if not pane.is_mounted:   # still composing at startup; it renders from state when it is
                 continue
             if obj in pane.OBJECTS or any(obj == sub[0] for sub in pane.SUBSCRIBE):
-                pane.octave(ev)
+                try:
+                    pane.octave(ev)
+                except NoMatches:   # the pane is being torn down (quitting)
+                    pass
         if obj in ("nowPlaying", "volumeController", "obdManager", "tripRecorder", "clock"):
             self.refresh_bars()
 
