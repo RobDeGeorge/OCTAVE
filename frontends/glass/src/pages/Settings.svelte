@@ -11,6 +11,7 @@
   import Esp32 from '../ui/Esp32.svelte'
   import Imu from '../ui/Imu.svelte'
   import DeviceBits from '../ui/DeviceBits.svelte'
+  import ThemePicker from '../ui/ThemePicker.svelte'
   import Icon from '../ui/Icon.svelte'
 
   let { arg = '' }: { arg?: string } = $props()
@@ -70,7 +71,8 @@
               <div class="sub"><HomeParams /></div>
             {:else}
               {#each s.items as item}<SettingRow {item} value={$values[item.prop]} options={optionsFor(item)} />{/each}
-              {#if s.special === 'shiftlight'}<ShiftLightEditor />
+              {#if s.special === 'themes'}<div class="sub"><ThemePicker /></div>
+              {:else if s.special === 'shiftlight'}<ShiftLightEditor />
               {:else if s.special === 'gestures'}<GestureMap />
               {:else if s.special === 'esp32'}<Esp32 />
               {:else if s.special === 'imu'}<Imu />

@@ -17,6 +17,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QMetaMethod>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -2182,13 +2183,145 @@ void SettingsManager::toggle_pin_setting(const QString &settingId)
 }
 
 // --- Generic setting access ---
+const QStringList &SettingsManager::fileOnlyKeys()
+{
+    static const QStringList keys = {QStringLiteral("serviceEnabled"), QStringLiteral("serviceWebRoot")};
+    return keys;
+}
+
+QVariantList SettingsManager::nowPlayingPresets()
+{
+    auto preset = [](const char *label, const QVariantMap &settings) {
+        return QVariantMap{{QStringLiteral("label"), QString::fromUtf8(label)}, {QStringLiteral("settings"), settings}};
+    };
+    return {
+        preset("Minimal", {{"roundedAlbumArt", true}, {"showAlbumArtShadow", false}, {"vinylRecordMode", false},
+                           {"showWaveformVisualizer", false}, {"show3DButtonTilt", false}, {"show3DAlbumPreview", false},
+                           {"backgroundBlurRadius", 60}, {"backgroundOverlayOpacity", 80},
+                           {"albumArtCornerRadius", 16}, {"albumArtTransition", "Crossfade"}, {"backgroundGrid", "Normal"}}),
+        preset("Vinyl", {{"roundedAlbumArt", false}, {"showAlbumArtShadow", true}, {"vinylRecordMode", true},
+                         {"showWaveformVisualizer", true}, {"show3DButtonTilt", false}, {"show3DAlbumPreview", false},
+                         {"backgroundBlurRadius", 30}, {"backgroundOverlayOpacity", 60},
+                         {"albumArtTransition", "Vinyl Lift"}, {"backgroundGrid", "Normal"}}),
+        preset("Showcase 3D", {{"roundedAlbumArt", true}, {"showAlbumArtShadow", true}, {"vinylRecordMode", false},
+                               {"showWaveformVisualizer", false}, {"show3DButtonTilt", true}, {"show3DAlbumPreview", true},
+                               {"backgroundBlurRadius", 50}, {"backgroundOverlayOpacity", 70},
+                               {"albumArtCornerRadius", 16}, {"albumArtTransition", "Coverflow"},
+                               {"backgroundGrid", "4x4"},
+                               {"sideCardOpacity", 0.4}, {"sideCardAngle", 30}, {"buttonTiltDuration", 200}}),
+        preset("Cinema", {{"roundedAlbumArt", true}, {"showAlbumArtShadow", true}, {"vinylRecordMode", false},
+                          {"showWaveformVisualizer", true}, {"show3DButtonTilt", false}, {"show3DAlbumPreview", false},
+                          {"backgroundBlurRadius", 80}, {"backgroundOverlayOpacity", 90},
+                          {"albumArtCornerRadius", 24}, {"albumArtTransition", "Dissolve"}, {"backgroundGrid", "4x4"}}),
+    };
+}
+
+bool SettingsManager::applyNowPlayingPreset(const QString &label)
+{
+    for (const QVariant &p : nowPlayingPresets()) {
+        const QVariantMap preset = p.toMap();
+        if (preset.value(QStringLiteral("label")).toString() == label) {
+            apply_settings(preset.value(QStringLiteral("settings")).toMap());
+            return true;
+        }
+    }
+    return false;
+}
+
+namespace {
+// showWaveformVisualizer -> show_waveform_visualizer, show3DButtonTilt ->
+// show_3d_button_tilt
+QString snakeCase(const QString &camel)
+{
+    QString s = camel;
+    static const QRegularExpression lowerThenUpper(QStringLiteral("([a-z])([A-Z0-9])"));
+    static const QRegularExpression upperThenWord(QStringLiteral("([A-Z0-9])([A-Z][a-z])"));
+    s.replace(lowerThenUpper, QStringLiteral("\\1_\\2"));
+    s.replace(upperThenWord, QStringLiteral("\\1_\\2"));
+    return s.toLower();
+}
+
+// `v` as a value of `type`, only when it already is one ("true" is not a bool)
+bool strictArg(QVariant &v, QMetaType type)
+{
+    const int id = v.typeId();
+    const bool number = id == QMetaType::Int || id == QMetaType::LongLong || id == QMetaType::Double
+                        || id == QMetaType::UInt || id == QMetaType::ULongLong;
+    switch (type.id()) {
+    case QMetaType::Bool:
+        return id == QMetaType::Bool;
+    case QMetaType::Int:
+        if (!number) return false;
+        v = QVariant(int(qRound(v.toDouble())));
+        return true;
+    case QMetaType::Double:
+    case QMetaType::Float:
+        if (!number) return false;
+        return v.convert(type);
+    case QMetaType::QString:
+        return id == QMetaType::QString;
+    case QMetaType::QStringList:
+    case QMetaType::QVariantList:
+        return (id == QMetaType::QVariantList || id == QMetaType::QStringList) && v.convert(type);
+    case QMetaType::QVariantMap:
+        return id == QMetaType::QVariantMap;
+    default:
+        return false;
+    }
+}
+} // namespace
+
+QVariantMap SettingsManager::apply_settings(const QVariantMap &values)
+{
+    QHash<QString, QString> registrySlots;
+    const QJsonObject reg = buildSettingsRegistry();
+    for (auto it = reg.constBegin(); it != reg.constEnd(); ++it) {
+        const QJsonObject e = it.value().toObject();
+        registrySlots.insert(e.value(QStringLiteral("key")).toString(), e.value(QStringLiteral("saveSlot")).toString());
+    }
+
+    QStringList applied;
+    QVariantMap refused;
+    const QMetaObject *mo = metaObject();
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+        const QString &key = it.key();
+        if (fileOnlyKeys().contains(key)) {
+            refused.insert(key, QStringLiteral("set in settingsConfigure.json only"));
+            continue;
+        }
+        const QString slotName = registrySlots.value(key, QStringLiteral("save_") + snakeCase(key));
+        QMetaMethod slot;
+        for (int i = mo->methodOffset(); i < mo->methodCount(); ++i) {
+            const QMetaMethod m = mo->method(i);
+            if (m.methodType() != QMetaMethod::Signal && m.access() == QMetaMethod::Public && m.parameterCount() == 1
+                && m.name() == slotName.toLatin1()) {
+                slot = m;
+                break;
+            }
+        }
+        if (!slot.isValid() || !slotName.startsWith(QLatin1String("save_"))) {
+            refused.insert(key, QStringLiteral("no setter for this key"));
+            continue;
+        }
+        QVariant arg = it.value();
+        if (!strictArg(arg, slot.parameterMetaType(0))) {
+            refused.insert(key, QStringLiteral("takes a %1").arg(QString::fromLatin1(slot.parameterMetaType(0).name())));
+            continue;
+        }
+        slot.invoke(this, Qt::DirectConnection, QGenericArgument(slot.parameterMetaType(0).name(), arg.constData()));
+        applied.append(key);
+    }
+    if (!refused.isEmpty())
+        qCWarning(lcSettings) << "apply_settings refused" << refused;
+    return {{QStringLiteral("applied"), applied}, {QStringLiteral("refused"), refused}};
+}
+
 void SettingsManager::save_setting(const QString &key, const QVariant &value)
 {
     // What turns the service on and what it serves are set in the file,
     // never by a client of the service itself (one could otherwise point
     // the web root at any directory for the next start)
-    static const QStringList fileOnly = {QStringLiteral("serviceEnabled"), QStringLiteral("serviceWebRoot")};
-    if (fileOnly.contains(key)) {
+    if (fileOnlyKeys().contains(key)) {
         qCWarning(lcSettings) << "save_setting: refused" << key << "(edit settingsConfigure.json)";
         return;
     }
@@ -2385,8 +2518,15 @@ QString SettingsManager::keyToAttr(const QString &key) const
 void SettingsManager::reset_to_defaults()
 {
     // Persist the defaults, reload every cached member exactly as the
-    // constructor does, then notify QML of each property.
-    saveSettings(m_defaultSettings);
+    // constructor does, then notify QML of each property. The file-only
+    // keys keep what the file says: a reset from a client must not change
+    // what the service does at the next start.
+    QJsonObject defaults = m_defaultSettings;
+    const QJsonObject current = loadSettings();
+    for (const QString &key : fileOnlyKeys())
+        if (current.contains(key))
+            defaults.insert(key, current.value(key));
+    saveSettings(defaults);
     populateMembers();
 
     emit deviceNameChanged(m_deviceName);

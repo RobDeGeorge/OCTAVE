@@ -518,6 +518,24 @@
         },
         {
             "kind": "slot",
+            "name": "browse_music_folders",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariantMap"
+        },
+        {
+            "kind": "slot",
+            "name": "musicBrowseRoots",
+            "params": [
+            ],
+            "returns": "QStringList"
+        },
+        {
+            "kind": "slot",
             "name": "get_total_duration",
             "params": [
             ],

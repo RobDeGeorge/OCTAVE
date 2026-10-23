@@ -38,6 +38,9 @@ class DashboardManager : public QObject
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
     Q_PROPERTY(QString lastShareError READ lastShareError NOTIFY lastShareErrorChanged)
+    // Why the last loadDashboard / saveDashboard failed ("" after one that
+    // worked): their return values stay as they were
+    Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     // Built-in presets the user deleted (hidden) — the chooser shows
     // "Restore defaults" while this is non-zero.
     Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
@@ -96,6 +99,7 @@ public:
                                   int colSpan, int rowSpan) const;
 
     QString lastShareError() const { return m_lastShareError; }
+    QString lastError() const { return m_lastError; }
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
     int supportedSchema() const { return kSupportedSchema; }
 
@@ -109,9 +113,11 @@ public:
 
 public slots:
     // Writes a user dashboard JSON file, normalised first (normalizeSpec).
-    // `spec` must include at least `id` and `label`. Returns the saved id on
-    // success, empty string on failure (no id or label, id collision with a
-    // built-in or kParameterCardsId, newer schema, I/O error, etc.).
+    // `spec` must include a `label`; with no `id` it gets
+    // uniqueIdForLabel(label), a new dashboard (an existing id overwrites
+    // that user dashboard). Returns the saved id on success, empty string
+    // on failure (no label, id collision with a built-in or
+    // kParameterCardsId, newer schema, I/O error, etc.).
     QString saveDashboard(const QVariantMap &spec);
 
     // Deletes a user dashboard file, or hides a built-in preset (persisted
@@ -151,10 +157,13 @@ public slots:
 signals:
     void dashboardsChanged();
     void lastShareErrorChanged();
+    void lastErrorChanged();
 
 private:
     QString m_lastShareError;
     void setShareError(const QString &message);
+    QString m_lastError;
+    void setError(const QString &message);
 
     // The one set of spec rules, applied on import, save and load: known
     // schema-1 keys only (JSON numbers, strings and bools are not numbers),

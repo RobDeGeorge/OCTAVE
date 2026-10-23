@@ -2,7 +2,7 @@
   // What is playing, with transport, seek, shuffle and volume. The Home page
   // uses the compact form, the Media page the full one.
   import { octave } from '../lib/octave'
-  import { nowPlaying, position, volume, mmss, act, artSrc } from '../lib/stores'
+  import { nowPlaying, position, volume, mmss, act, artSrc, levels } from '../lib/stores'
   import Icon from './Icon.svelte'
   import Slider from './Slider.svelte'
   import Art from './Art.svelte'
@@ -12,6 +12,7 @@
   let seeking = $state(false)
   let seekTo = $state(0)
   const pos = $derived(seeking ? seekTo : $position)
+  const wave = $derived(compact ? null : levels())
 </script>
 
 <div class="glass panel card" class:compact>
@@ -23,6 +24,12 @@
       <div class="artist muted">{[$np.artist, $np.album].filter(Boolean).join(' – ') || ($np.hasTrack ? '' : 'Pick a song in Media')}</div>
     </div>
   </div>
+
+  {#if wave && $np.hasTrack}
+    <div class="wave" aria-hidden="true">
+      {#each $wave as v, i (i)}<span style="height:{Math.max(6, (v / 8) * 100)}%"></span>{/each}
+    </div>
+  {/if}
 
   <div class="seek">
     <Slider value={pos} min={0} max={Math.max(1, $np.durationMs)} step={500} label="Position" disabled={!$np.canSeek}
@@ -54,6 +61,8 @@
   .title { font-size: 30px; font-weight: 700; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .compact .title { font-size: 24px; }
   .artist { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wave { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
+  .wave span { flex: 1; min-width: 0; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .7; transition: height .08s linear; }
   .times { display: flex; justify-content: space-between; margin-top: -8px; padding: 0 4px; }
   .transport { display: flex; justify-content: center; align-items: center; gap: 14px; }
   .vol { display: flex; align-items: center; gap: 12px; color: var(--ink-2); }
