@@ -8,9 +8,9 @@
 
   /** Android MotionEvent actions, as injectTouch expects them. */
   const DOWN = 0, UP = 1, MOVE = 2
-  let { source, ontouch, showStats = false, onstats }:
+  let { source, ontouch, showStats = false, onstats, skipToKeyframe = $bindable(null) }:
     { source: { subscribe: (cb: (u: FedUnit) => void) => () => void }; ontouch?: (pointerId: number, action: number, relX: number, relY: number) => void;
-      showStats?: boolean; onstats?: (s: Stats) => void } = $props()
+      showStats?: boolean; onstats?: (s: Stats) => void; skipToKeyframe?: (() => void) | null } = $props()
   let canvas = $state<HTMLCanvasElement | null>(null)
   let player: H264Player | null = null
   let stats = $state<Stats | null>(null)
@@ -21,6 +21,7 @@
     if (!H264Player.supported()) { unsupported = true; return }
     player = new H264Player(canvas!)
     player.onstats = (s) => { stats = s; onstats?.(s) }
+    skipToKeyframe = () => player?.skipToKeyframe()
     const unsub = source.subscribe((u) => player!.feed(u))
     return () => { unsub(); player!.close() }
   })

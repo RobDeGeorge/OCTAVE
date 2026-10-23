@@ -10,6 +10,7 @@
 // Written against protocol version 1 (docs/api/README.md).
 
 import { readable, writable, get, type Readable, type Writable } from 'svelte/store'
+import { parseRecord, type MediaRecord, type StreamEvents, type StreamInfo } from './stream'
 
 export const PROTOCOL_VERSION = 1
 
@@ -53,6 +54,8 @@ type Event =
   | { event: 'signal'; sub: number; object: string; name: string; args: Json[] }
   | ({ event: 'model'; sub: number; object: string; name: string } & ModelChange)
   | { event: 'dropped'; count: number }
+  | { event: 'streamConfig'; stream: number; codec?: string; width?: number; height?: number }
+  | { event: 'streamDropped'; stream: number; count: number }
 
 interface Pending { resolve: (v: Json) => void; reject: (e: Error) => void; sub?: Sub }
 
@@ -87,6 +90,8 @@ export class Octave {
   private nextId = 1
   private pending = new Map<number, Pending>()
   private subs = new Set<Sub>()
+  /** Open media streams by the id the service gave them. */
+  private streams = new Map<number, StreamEvents & { object: string; name: string }>()
   private describeCache = new Map<string, Promise<Description>>()
   private backoff = 500
   private retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -110,6 +115,7 @@ export class Octave {
   private open(): void {
     this.status.set('connecting')
     const ws = new WebSocket(this.url)
+    ws.binaryType = 'arraybuffer'
     this.ws = ws
     ws.onopen = async () => {
       this.backoff = 500
@@ -128,7 +134,10 @@ export class Octave {
         ws.close()
       }
     }
-    ws.onmessage = (m) => this.dispatch(JSON.parse(m.data))
+    ws.onmessage = (m) => {
+      if (m.data instanceof ArrayBuffer) { const r = parseRecord(m.data); if (r) this.streams.get(r.stream)?.onRecord(r); return }
+      this.dispatch(JSON.parse(m.data))
+    }
     ws.onerror = () => { /* onclose follows */ }
     ws.onclose = () => {
       if (this.ws !== ws) return
@@ -136,6 +145,7 @@ export class Octave {
       for (const p of this.pending.values()) p.reject(new OctaveError('connection closed'))
       this.pending.clear()
       for (const sub of this.subs) sub.id = 0
+      this.streams.clear()   // a stream ends with its connection; the page opens it again
       this.describeCache.clear()
       this.status.set('offline')
       if (!this.closed) this.scheduleRetry()
@@ -164,6 +174,8 @@ export class Octave {
         console.warn(`octave: ${e.count} events dropped`)
         return
       }
+      if (e.event === 'streamConfig') { this.streams.get(e.stream)?.onConfig?.(e as StreamInfo); return }
+      if (e.event === 'streamDropped') { this.streams.get(e.stream)?.onDropped?.(e.count); return }
       for (const sub of this.subs) if (sub.id === e.sub) sub.onEvent(e)
       return
     }
@@ -320,6 +332,24 @@ export class Octave {
           })
         },
       }))
+  }
+
+  // ── media streams ───────────────────────────────────────────────────────
+
+  /** Open a media stream (phoneMirrorManager "video", androidAutoManager
+   *  "frames"). Records arrive on `events.onRecord`; the returned function
+   *  closes it. A stream ends with its connection: open it again after a
+   *  reconnect. */
+  async stream(object: string, name: string, events: StreamEvents): Promise<{ info: StreamInfo; close: () => void }> {
+    const info = (await this.request('stream', { object, name })) as unknown as StreamInfo
+    this.streams.set(info.stream, { ...events, object, name })
+    events.onConfig?.(info)
+    return {
+      info,
+      close: () => {
+        if (this.streams.delete(info.stream)) this.request('unstream', { stream: info.stream }).catch(() => {})
+      },
+    }
   }
 }
 

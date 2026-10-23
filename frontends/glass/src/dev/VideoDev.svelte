@@ -2,6 +2,7 @@
   import VideoPlayer from '../ui/VideoPlayer.svelte'
   import { groupAccessUnits, type AccessUnit } from '../lib/h264'
   import type { FedUnit, Stats } from '../lib/videodecoder'
+  import { buildRecord, parseRecord, F_KEY } from '../lib/stream'
 
   let units: AccessUnit[] = []   // not reactive on purpose: a plain array read by the ticker
   let count = $state(0)
@@ -29,7 +30,9 @@
   }
   function emit() {
     const u = units[i % units.length]
-    for (const cb of subs) cb({ data: u.data, keyframe: u.keyframe, pts: sent * Math.round(1e6 / fps) })
+    // through the service's record format and back, so the parser is on the path
+    const r = parseRecord(buildRecord(1, u.keyframe ? F_KEY : 0, sent * Math.round(1e6 / fps), u.data))
+    if (r) for (const cb of subs) cb({ data: r.payload, keyframe: r.keyframe, pts: r.pts })
     i++; sent++
   }
   function tick() {

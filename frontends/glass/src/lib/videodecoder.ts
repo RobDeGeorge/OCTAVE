@@ -103,6 +103,9 @@ export class H264Player {
     return [fx, fy]
   }
 
+  /** After a gap (the service dropped records): wait for the next keyframe. */
+  skipToKeyframe(): void { this.waitingKey = true }
+
   /** Forget the stream: the next keyframe (with its SPS) starts afresh. */
   reset(): void {
     this.decoder?.close()
