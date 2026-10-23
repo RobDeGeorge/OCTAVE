@@ -1298,6 +1298,14 @@ void OBDManager::close()
     m_deviceScannerTimer.stop();
     m_dataWatchdogTimer.stop();
     cleanupConnection();
+    // cleanupConnection() is silent (a reconnect says "Connecting" right
+    // after it); here nothing follows, so say it, or connected,
+    // connectionState and connectionStatus stay "Connected" for subscribers
+    if (m_connectionStatus != QLatin1String("Disconnected")) {
+        emit connectionStatusChanged(QStringLiteral("Disconnected"));
+        emit connectionStatusDetailChanged(QStringLiteral("Closed"));
+        emit connectionProgressChanged(0);
+    }
 }
 
 void OBDManager::reset_connection()
