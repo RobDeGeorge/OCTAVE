@@ -397,8 +397,8 @@ impl Draw<'_> {
             x += w + 6.0;
         }
 
-        // The clock: the app's own string when it has sent one (it follows
-        // the 12/24 h setting), local time until then
+        // The clock: the app's own string (clock.time, in the user's 12/24 h
+        // format); local time only against a backend too old to send it
         let text = self.s.clock.clone().filter(|c| !c.is_empty()).unwrap_or_else(|| chrono::Local::now().format("%H:%M").to_string());
         let digits: String = text.chars().filter(|c| c.is_ascii_digit()).take(4).collect();
         let r = self.cv.r(1104.0, 14.0, 132.0, 42.0);

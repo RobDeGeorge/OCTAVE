@@ -275,6 +275,7 @@ impl State {
             ("tripRecorder", "recording") => self.recording = b(),
             ("tripRecorder", "currentTripElapsedS") => self.trip_elapsed_s = i(),
             ("parameterCatalog", "displayParameters") => self.load_catalog(v),
+            ("clock", "time") => self.clock = Some(s()),
             ("tripRecorder", "trips") => self.trips = trip_list(v),
             _ => {}
         }
@@ -504,6 +505,9 @@ fn subscriptions() -> Vec<(&'static str, Vec<&'static str>, u64)> {
         ),
         ("shiftLightManager", vec!["lit", "active"], 0),
         ("tripRecorder", vec!["recording", "currentTripElapsedS", "trips"], 0),
+        // `time` is a property on newer backends; an older one refuses this
+        // one subscription, and the timeChanged signal below still arrives
+        ("clock", vec!["time"], 0),
         // Every reading, merged into one event per 40 ms
         ("paramStore", vec![], 40),
     ]
