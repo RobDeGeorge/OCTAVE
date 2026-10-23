@@ -34,11 +34,24 @@ def signature(method):
 def access(prop):
     if prop["constant"]:
         return "constant"
-    return "read / write" if prop["writable"] else "read"
+    return f"read / write ({esc(prop['scope'])})" if prop["writable"] and prop.get("scope") else (
+        "read / write" if prop["writable"] else "read")
+
+
+def marks(member):
+    """Experimental / deprecated notes after a member (docs/api/README.md, Stability)."""
+    out = ""
+    if member.get("stability") == "experimental":
+        out += ' <span class="cmt">(experimental)</span>'
+    if member.get("deprecated"):
+        out += f' <span class="cmt">(deprecated: {esc(member["deprecated"])})</span>'
+    return out
 
 
 def object_section(name, obj):
     out = [f'        <h3 id="{esc(name)}"><code>{esc(name)}</code> <span class="cmt">&mdash; {esc(obj["class"])}</span></h3>']
+    if obj.get("stability") == "experimental":
+        out.append("        <p><strong>Experimental:</strong> this object may change or go in any release.</p>")
     out.append(f'        <p>Hand-written notes: <a href="signals-slots-reference.html#{esc(name)}">Signals &amp; Slots API</a>. '
                f'Raw: <span class="file-path">docs/api/{esc(name)}.json</span>.</p>')
     props = obj["properties"]
@@ -48,17 +61,17 @@ def object_section(name, obj):
             kind = esc(p["type"])
             if p.get("enum"):
                 kind += " (" + " | ".join(esc(k) for k in p["enum"]) + ")"
-            out.append(f"            <tr><td>{code(p['name'])}</td><td>{kind}</td><td>{access(p)}</td><td>{code(p.get('notify', ''))}</td></tr>")
+            out.append(f"            <tr><td>{code(p['name'])}{marks(p)}</td><td>{kind}</td><td>{access(p)}</td><td>{code(p.get('notify', ''))}</td></tr>")
         out.append("          </tbody>\n        </table>")
     methods = obj["methods"]
     if methods:
-        out.append("        <table>\n          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>\n          <tbody>")
+        out.append("        <table>\n          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>\n          <tbody>")
         for m in methods:
-            out.append(f"            <tr><td>{code(signature(m))}</td><td>{code(m['returns'])}</td><td>{esc(m['kind'])}</td></tr>")
+            out.append(f"            <tr><td>{code(signature(m))}{marks(m)}</td><td>{code(m['returns'])}</td><td>{esc(m['kind'])}</td><td>{code(m.get('scope', ''))}</td></tr>")
         out.append("          </tbody>\n        </table>")
     sigs = obj["signals"]
     if sigs:
-        out.append("        <p><strong>Signals</strong> (<code>subscribe</code>): " + ", ".join(code(signature(s)) for s in sigs) + ".</p>")
+        out.append("        <p><strong>Signals</strong> (<code>subscribe</code>): " + ", ".join(code(signature(s)) + marks(s) for s in sigs) + ".</p>")
     for enum, keys in sorted(obj.get("enums", {}).items()):
         out.append(f"        <p><strong>Enum</strong> <code>{esc(enum)}</code>: " + ", ".join(code(k) for k in keys) + " (by name or number).</p>")
     return "\n".join(out)
@@ -110,7 +123,7 @@ def main():
         </nav>
 
         <h2 id="overview">Overview</h2>
-        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>) is described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
+        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
         <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. {len(names)} objects:</p>
         <ul>
 {toc}

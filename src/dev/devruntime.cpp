@@ -1,13 +1,13 @@
 #include "devruntime.h"
 
-#include "carsim.h"
 #include "collagebridge.h"
 #include "../service/commandserver.h"
+#include "../sim/carsim.h"
+#include "../sim/simulator.h"
 #include "coreactions.h"
-#include "devimufeed.h"
+#include "devkeyboard.h"
 #include "devtoolsmanager.h"
 #include "perfmonitor.h"
-#include "simelm327.h"
 #include "uidriver.h"
 
 #include "../managers/obdmanager.h"
@@ -61,24 +61,11 @@ void Runtime::beforeLoad()
                      "============================================================\n");
         std::fflush(stdout);
 
-        // The real OBDManager talks to a simulated ELM327: the protocol
-        // parsing, demand-driven polling, vehicle scan and VIN decode all run
-        // as they would in the car. The saved port setting is left alone.
-        m_sim = new CarSim(this);
-        const std::shared_ptr<CarState> state = m_sim->state();
-        OBDConnectionWorker::setCustomTransport(
-            [](const QString &port) { return port == QLatin1String(kSimPort); },
-            [state](const QString &, QObject *parent) -> QIODevice * { return new SimElm327Device(state, parent); });
-        if (m_app.obd)
-            m_app.obd->setPortOverride(QString::fromLatin1(kSimPort));
-
-        m_keyboard = new DevKeyboardController(m_sim, this);
+        m_keyboard = new DevKeyboardController(m_app.sim ? m_app.sim->car() : nullptr, this);
         m_tools = new DevToolsManager(m_app.projectRoot, this);
         ctx->setContextProperty(QStringLiteral("devKeyboardController"), m_keyboard);
         ctx->setContextProperty(QStringLiteral("devToolsManager"), m_tools);
         ctx->setContextProperty(QStringLiteral("devMode"), true);
-        if (m_app.imu)
-            m_imuFeed = new DevImuFeed(m_app.imu, m_sim, this);
     }
 
     if (m_profile) {
@@ -133,6 +120,16 @@ void Runtime::afterLoad(CommandServer *server)
     }
 }
 
+void Runtime::startHeadless(CommandServer *server)
+{
+    if (m_profile)
+        qCWarning(lcDev) << "--profile needs the QML UI; ignored with --headless (--dev still runs the simulated car)";
+    if (m_dev && server) {
+        m_server = server;
+        registerSimActions();
+    }
+}
+
 void Runtime::shutdown()
 {
     if (m_perf)
@@ -143,12 +140,13 @@ void Runtime::shutdown()
 
 void Runtime::registerSimActions()
 {
-    QPointer<CarSim> sim = m_sim;
-    QPointer<DevImuFeed> imu = m_imuFeed;
+    QPointer<Simulator> sim = m_app.sim;
 
     // Fire-and-forget on the GUI thread
-    auto queued = [this, sim](const QString &name, std::function<void(CarSim *, const QVariantMap &)> apply) {
+    auto queued = [this, sim](const QString &name, std::function<void(Simulator *, const QVariantMap &)> apply) {
         m_server->registerAction(name, [sim, name, apply](const QVariantMap &args) -> QVariant {
+            if (!sim || !sim->active())
+                throw CommandError(QStringLiteral("no simulated car in this run"));
             CommandServer::postGui([sim, args, apply] { if (sim) apply(sim, args); });
             return QVariantMap{{QStringLiteral("queued"), name}};
         });
@@ -161,64 +159,51 @@ void Runtime::registerSimActions()
         }
         return def;
     };
+    auto on = [](const QVariantMap &a, const char *key = "on") { return a.value(QLatin1String(key), true).toBool(); };
+    using S = Simulator;
 
-    queued("sim_throttle", [value](CarSim *s, const QVariantMap &a) { s->setThrottle(value(a)); });
-    queued("sim_brake", [value](CarSim *s, const QVariantMap &a) { s->setBrake(value(a)); });
-    queued("sim_rev", [value](CarSim *s, const QVariantMap &a) {
-        const double v = value(a);
-        s->revEngine(v ? v : 50);
-    });
-    queued("sim_engine", [](CarSim *s, const QVariantMap &a) {
+    queued("sim_throttle", [value](S *s, const QVariantMap &a) { s->setThrottle(value(a)); });
+    queued("sim_brake", [value](S *s, const QVariantMap &a) { s->setBrake(value(a)); });
+    queued("sim_rev", [value](S *s, const QVariantMap &a) { s->rev(value(a)); });
+    queued("sim_engine", [](S *s, const QVariantMap &a) {
         if (!a.contains(QStringLiteral("on")))
             s->toggleEngine();
         else
             s->setEngineOn(a.value(QStringLiteral("on")).toBool());
     });
-    queued("sim_gear", [value](CarSim *s, const QVariantMap &a) { s->setGear(int(value(a))); });
-    queued("sim_upshift", [](CarSim *s, const QVariantMap &) { s->upshift(); });
-    queued("sim_downshift", [](CarSim *s, const QVariantMap &) { s->downshift(); });
-    queued("sim_speed", [value](CarSim *s, const QVariantMap &a) { s->setSpeed(value(a)); });
-    queued("sim_rpm", [value](CarSim *s, const QVariantMap &a) { s->setRpm(value(a)); });
-    queued("sim_realistic", [](CarSim *s, const QVariantMap &a) {
-        s->setRealisticMode(a.value(QStringLiteral("enabled"), a.value(QStringLiteral("on"), true)).toBool());
+    queued("sim_gear", [value](S *s, const QVariantMap &a) { s->setGear(int(value(a))); });
+    queued("sim_upshift", [](S *s, const QVariantMap &) { s->upshift(); });
+    queued("sim_downshift", [](S *s, const QVariantMap &) { s->downshift(); });
+    queued("sim_speed", [value](S *s, const QVariantMap &a) { s->setSpeed(value(a)); });
+    queued("sim_rpm", [value](S *s, const QVariantMap &a) { s->setRpm(value(a)); });
+    queued("sim_realistic", [](S *s, const QVariantMap &a) {
+        s->setRealistic(a.value(QStringLiteral("enabled"), a.value(QStringLiteral("on"), true)).toBool());
     });
-    queued("sim_scenario", [](CarSim *s, const QVariantMap &a) {
-        const QString name = a.value(QStringLiteral("name"), QStringLiteral("normal")).toString();
-        if (name == QLatin1String("cold"))
-            s->simulateColdStart();
-        else if (name == QLatin1String("hot"))
-            s->simulateOverheating();
-        else if (name == QLatin1String("low_fuel"))
-            s->simulateLowFuel();
-        else
-            s->resetToNormal();
+    queued("sim_scenario", [](S *s, const QVariantMap &a) {
+        s->scenario(a.value(QStringLiteral("name"), QStringLiteral("normal")).toString());
     });
     // Link-fault knobs
-    queued("sim_dropouts", [](CarSim *s, const QVariantMap &a) {
-        s->setSimulateDropouts(a.value(QStringLiteral("on"), true).toBool());
-    });
-    queued("sim_dropout_now", [](CarSim *s, const QVariantMap &) { s->triggerDropoutNow(); });
-    queued("sim_failure_rate", [value](CarSim *s, const QVariantMap &a) { s->setFailureRate(value(a, 0.02)); });
-    queued("sim_link", [](CarSim *s, const QVariantMap &a) { s->setLinkUp(a.value(QStringLiteral("up"), true).toBool()); });
-
-    m_server->registerAction("sim_imu", [imu](const QVariantMap &a) -> QVariant {
-        if (!imu)
-            throw CommandError(QStringLiteral("no berryIMU manager to drive"));
-        const bool on = a.value(QStringLiteral("on"), true).toBool();
-        CommandServer::postGui([imu, on] { if (imu) imu->setEnabled(on); });
-        return QVariantMap{{QStringLiteral("queued"), QStringLiteral("sim_imu")}};
-    });
-    m_server->registerAction("sim_status", [sim, imu](const QVariantMap &) {
-        return CommandServer::onGui([sim, imu] {
-            QVariantMap st = sim ? sim->status() : QVariantMap();
-            if (imu)
-                st.insert(QStringLiteral("imu"), imu->status());
-            return QVariant(st);
+    queued("sim_dropouts", [on](S *s, const QVariantMap &a) { s->setDropouts(on(a)); });
+    queued("sim_dropout_now", [](S *s, const QVariantMap &) { s->dropoutNow(); });
+    queued("sim_failure_rate", [value](S *s, const QVariantMap &a) { s->setFailureRate(value(a, 0.02)); });
+    queued("sim_link", [on](S *s, const QVariantMap &a) { s->setLinkUp(on(a, "up")); });
+    queued("sim_imu", [on](S *s, const QVariantMap &a) { s->setImu(on(a)); });
+    queued("sim_video", [on](S *s, const QVariantMap &a) { s->setVideo(on(a)); });
+    m_server->registerAction("sim_pairing_code", [sim](const QVariantMap &) {
+        return CommandServer::onGui([sim]() -> QVariant {
+            const QVariantMap code = sim ? sim->pairingCode() : QVariantMap();
+            if (code.isEmpty())
+                throw CommandError(QStringLiteral("no pairing in this run"));
+            return code;
         });
     });
-    std::fprintf(stdout, "[DEV] Simulator actions on the command server: sim_throttle, sim_brake, sim_rev, sim_engine, "
-                         "sim_gear, sim_upshift, sim_downshift, sim_speed, sim_rpm, sim_scenario, sim_realistic, "
-                         "sim_dropouts, sim_dropout_now, sim_failure_rate, sim_link, sim_status, sim_imu\n");
+    m_server->registerAction("sim_status", [sim](const QVariantMap &) {
+        return CommandServer::onGui([sim] { return QVariant(sim ? sim->status() : QVariantMap()); });
+    });
+    std::fprintf(stdout, "[DEV] Simulator actions on the command server (aliases for the sim object): sim_throttle, "
+                         "sim_brake, sim_rev, sim_engine, sim_gear, sim_upshift, sim_downshift, sim_speed, sim_rpm, "
+                         "sim_scenario, sim_realistic, sim_dropouts, sim_dropout_now, sim_failure_rate, sim_link, "
+                         "sim_status, sim_imu, sim_video, sim_pairing_code\n");
     std::fflush(stdout);
 }
 

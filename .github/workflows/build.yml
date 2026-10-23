@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the API compatibility check reads docs/api/ at the base
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,6 +40,20 @@ jobs:
           python scripts/gen_gauge_param_docs.py
           git diff --exit-code docs/GAUGE_AUTHORING.md || {
             echo "::error::Run python scripts/gen_gauge_param_docs.py and commit docs/GAUGE_AUTHORING.md"; exit 1; }
+
+      # docs/api/ (the published service API) breaks only with a protocol
+      # bump and a docs/api/CHANGELOG.md entry: against the PR's base, or
+      # the commit before a push
+      - name: Service API compatibility
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"
+          else base="HEAD~1"; fi
+          python tools/api/check_compat.py --base "$base" --draft
 
   # ---------------------------------------------------------------------------
   # C++ compile check — runs on EVERY push/PR so a C++ break can't land on
@@ -69,6 +85,21 @@ jobs:
           modules: 'qtmultimedia qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline qtwebview'
           cache: true
 
+      # The ctests that run an SDK or a starter template against a headless
+      # app are registered only where their language is found (tests/cpp/
+      # CMakeLists.txt): Node 22 for template_js (its client needs the
+      # WebSocket global), Go for sdk_go and template_go. Python 3 is on the
+      # runner already (sdk_python, template_python, api_compat).
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DOCTAVE_REQUIRE_FFMPEG=ON
 
@@ -78,7 +109,7 @@ jobs:
       - name: C++ tests (ctest)
         # tests/cpp: QtTest suite, built because this is a Debug configure
         # (OCTAVE_BUILD_TESTS); includes the OBD stack against the simulated
-        # ELM327 from src/dev/ (OCTAVE_DEV_TOOLS)
+        # ELM327, the SDKs and the starter templates against octave --headless
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build --output-on-failure
@@ -169,6 +200,39 @@ jobs:
           name: octave-phone-server
           path: build-phone-server/octave-phone-server
           retention-days: 30
+
+  # The SDKs (sdk/): the TypeScript and Go ones are generated from docs/api
+  # (protocol.json and the object files) and must be current; the
+  # TypeScript client passes its tests against a fake service. Their tests
+  # against a real headless app run in cpp-compile-check's ctest (sdk_python,
+  # sdk_go).
+  sdk:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: sdk/typescript (generated files current against docs/api, typecheck, tests)
+        working-directory: sdk/typescript
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: sdk/go (generated files current against docs/api, vet; the headless test skips here)
+        working-directory: sdk/go
+        run: |
+          go vet ./...
+          go test ./...
 
   # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)
@@ -295,6 +359,30 @@ jobs:
           }
           Write-Host "Smoke test passed: the packaged app starts, loads Main.qml and has phone mirroring on a clean PATH"
 
+      - name: Smoke-test the simulator in the packaged app
+        shell: pwsh
+        run: |
+          # The same files, now as a release user trying a frontend would run
+          # them: --headless --sim --smoke (no window, a throwaway config,
+          # exits 0 after 5 s). packaging/smoke-sim.sh does this on Linux and
+          # macOS; the log lines required are the ones only a working
+          # simulated car and service produce.
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $log = Join-Path $env:RUNNER_TEMP "sim-smoke.log"
+          $p = Start-Process -FilePath "dist\OCTAVE\OCTAVE.exe" -ArgumentList "--headless --sim --smoke --service 0" -PassThru -NoNewWindow -RedirectStandardError $log
+          $ok = $p.WaitForExit(90000)
+          if (-not $ok) { $p.Kill(); Write-Host "::error::OCTAVE.exe --headless --sim --smoke did not exit within 90 s"; Get-Content $log -Tail 60; exit 1 }
+          if ($p.ExitCode -ne 0) { Write-Host "::error::OCTAVE.exe --headless --sim --smoke exited with $($p.ExitCode)"; Get-Content $log -Tail 60; exit 1 }
+          foreach ($want in @("Simulated car on sim://elm327", "ELM327 initialised, vehicle answered", "objects served on port", "Smoke test: headless core up")) {
+            if (-not (Select-String -Path $log -SimpleMatch -Pattern $want -Quiet)) {
+              Write-Host "::error::the packaged app did not log `"$want`": the simulator or the service is missing"
+              Get-Content $log -Tail 60
+              exit 1
+            }
+          }
+          Write-Host "Smoke test passed: the packaged app runs the simulated car and the service with no window"
+
       - name: Build Windows installer (Inno Setup)
         shell: pwsh
         run: |
@@ -374,6 +462,11 @@ jobs:
           mv dist/OCTAVE.dmg "dist/OCTAVE-${VERSION}-macos.dmg"
           ls -la dist/
 
+      - name: Smoke-test the simulator in the packaged app
+        # The bundle as shipped, with no window: --headless --sim --smoke must
+        # run the simulated car and the service (packaging/smoke-sim.sh)
+        run: bash packaging/smoke-sim.sh dist/OCTAVE.app/Contents/MacOS/octave
+
       - name: Upload macOS .app
         uses: actions/upload-artifact@v4
         with:
@@ -438,6 +531,12 @@ jobs:
           # the static decoder, so no shared FFmpeg or codec library belongs here.
           bad="$(ls AppDir/usr/lib | grep -E '^lib(avcodec|avformat|avutil|swscale|swresample|postproc|x264|x265|xvidcore)\.' || true)"
           if [ -n "$bad" ]; then echo "::error::AppImage bundles $bad"; exit 1; fi
+
+      - name: Smoke-test the simulator in the AppImage
+        # The AppImage as shipped (extracted, so FUSE is not needed), with no
+        # window: --headless --sim --smoke must run the simulated car and the
+        # service (packaging/smoke-sim.sh)
+        run: bash packaging/smoke-sim.sh dist/OCTAVE-*-linux-x86_64.AppImage
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
@@ -508,6 +607,11 @@ jobs:
           # Google publishes no aarch64 platform-tools; the build falls back to
           # the distro adb on PATH (see BUILD.md). Skip the fetch.
           bash packaging/linux/build-appimage.sh
+
+      - name: Smoke-test the simulator in the AppImage
+        # ubuntu-22.04-arm is a native aarch64 runner, so the aarch64 AppImage
+        # runs here as it will on the head unit; no emulation involved
+        run: bash packaging/smoke-sim.sh dist/OCTAVE-*-linux-aarch64.AppImage
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4

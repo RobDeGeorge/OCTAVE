@@ -10,28 +10,32 @@
                     "type": "QObject*"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
             "name": "_save_playback_state",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
             "name": "_clear_temp_files",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
             "name": "flush_metadata_store",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -42,35 +46,40 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "next_track",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "previous_track",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "pause",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "toggle_play",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -81,14 +90,16 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
             "name": "toggle_shuffle",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -99,7 +110,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -110,7 +122,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -121,7 +134,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -132,7 +146,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -143,7 +158,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -154,14 +170,16 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "scan_library",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -172,14 +190,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "strip_filenames",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -190,7 +210,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -201,7 +222,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -212,7 +234,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -227,7 +250,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -238,7 +262,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -257,7 +282,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -268,14 +294,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "invalidate_stats_cache",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -286,14 +314,16 @@
                     "type": "bool"
                 }
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_media_files",
             "params": [
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -304,7 +334,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -315,7 +346,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -326,7 +358,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -337,126 +370,144 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_current_file",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_next_track_name",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_previous_track_name",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_next_track_album_art",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_previous_track_album_art",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_neighbor_album_arts",
             "params": [
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "is_playing",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "is_paused",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_duration",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_position",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "is_muted",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "getVolume",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "is_shuffled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_playlist_names",
             "params": [
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_current_playlist_name",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_current_song_list",
             "params": [
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_movable_playlist_names",
             "params": [
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -467,7 +518,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -478,7 +530,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -489,7 +542,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -500,42 +554,60 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_default_media_dir",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_media_folder_name",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "browse_music_folders",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_total_duration",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_album_count",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_artist_count",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -550,7 +622,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -561,7 +634,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "media"
         }
     ],
     "object": "mediaManager",

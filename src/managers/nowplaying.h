@@ -33,6 +33,9 @@ class SettingsManager;
 class NowPlaying : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.full", "extractArtColors")
     Q_PROPERTY(QString source READ source NOTIFY sourceChanged)          // "local" | "phone"
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(bool hasTrack READ hasTrack NOTIFY trackInfoChanged)
@@ -40,6 +43,8 @@ class NowPlaying : public QObject
     Q_PROPERTY(QString artist READ artist NOTIFY trackInfoChanged)
     Q_PROPERTY(QString album READ album NOTIFY trackInfoChanged)
     Q_PROPERTY(QString artUrl READ artUrl NOTIFY artUrlChanged)          // "" when none
+    // +1 on every art change: a service client's cache key for GET /art
+    Q_PROPERTY(int artRevision READ artRevision NOTIFY artUrlChanged)
     Q_PROPERTY(int durationMs READ durationMs NOTIFY durationChanged)    // 0 = unknown
     Q_PROPERTY(int positionMs READ positionMs NOTIFY positionChanged)
     Q_PROPERTY(bool canSeek READ canSeek NOTIFY capabilitiesChanged)
@@ -61,6 +66,7 @@ public:
     QString artist() const { return m_artist; }
     QString album() const { return m_album; }
     QString artUrl() const { return m_artUrl; }
+    int artRevision() const { return m_artRevision; }
     int durationMs() const { return m_durationMs; }
     int positionMs() const { return m_positionMs; }
     bool canSeek() const { return m_canSeek; }
@@ -116,6 +122,7 @@ private:
     bool m_playing = false;
     bool m_hasTrack = false;
     QString m_title, m_artist, m_album, m_artUrl;
+    int m_artRevision = 0;
     int m_durationMs = 0;
     int m_positionMs = 0;
     bool m_canSeek = false;

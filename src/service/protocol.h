@@ -12,7 +12,10 @@
 #define OCTAVE_SERVICE_PROTOCOL_H
 
 namespace OctaveService {
-constexpr int kProtocolVersion = 1;
+// 2 (2026-10-23): pairing. Over the network every op but hello and pair
+// needs a paired device's token; loopback stays open by default, where a
+// v1 client sees no difference except protocolVersion 2.
+constexpr int kProtocolVersion = 2;
 }
 
 #endif // OCTAVE_SERVICE_PROTOCOL_H

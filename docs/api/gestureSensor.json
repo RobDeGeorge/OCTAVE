@@ -6,7 +6,8 @@
             "name": "getConnectionStatus",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -21,7 +22,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -32,14 +34,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "resetMappingToDefaults",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -50,7 +54,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -61,28 +66,32 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "isEnabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "cooldownMs",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "cleanup",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         }
     ],
     "object": "gestureSensor",

@@ -353,13 +353,19 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
           <tbody>
             <tr><td><code>--debug</code></td><td>DEBUG-level output and the extra rotating debug log <code>octave-cpp-debug.log</code> in the config directory's <code>logs/</code> folder; without it, debug messages are filtered at the source.</td></tr>
             <tr><td><code>--smoke</code></td><td>Load <code>Main.qml</code>, run 5&nbsp;s (startup work, page pre-building), then exit 0. A build that cannot start exits non-zero or never starts; CI and the <code>tst_boot</code> test use it.</td></tr>
-            <tr><td><code>--dev</code></td><td>Simulated car and dev overlay (<a href="#dev-mode">Developer Mode</a>). Needs an <code>OCTAVE_DEV_TOOLS</code> build.</td></tr>
+            <tr><td><code>--sim</code></td><td>A simulated car behind the real OBD stack, IMU motion and three test tracks, driven by the <code>sim</code> service object, on a throwaway config deleted at exit (unless <code>--config</code>). Any build; with <code>--headless</code>, what a frontend author starts from (<a href="writing-a-frontend.html#start">Writing a Frontend</a>).</td></tr>
+            <tr><td><code>--qml</code></td><td>The built-in QML UI for this run, even when an installed exec frontend is the screen (<a href="writing-a-frontend.html#install">Installing Your Frontend</a>).</td></tr>
+            <tr><td><code>--pair-code</code></td><td>Print a pairing code from the running OCTAVE (same user; same <code>--config</code> if it has one) and exit, 1 if none runs. For pairing devices while no Settings page is on screen (an exec frontend, <code>--headless</code>). The channel is a local socket only that user can open (<span class="file-path">src/service/adminchannel.h</span>), never on the network.</td></tr>
+            <tr><td><code>--config DIR</code></td><td>Keep settings, trips, dashboards and logs in DIR instead of the OS config folder.</td></tr>
+            <tr><td><code>--dev</code></td><td><code>--sim</code> on your usual config, plus the dev overlay (<a href="#dev-mode">Developer Mode</a>). Needs an <code>OCTAVE_DEV_TOOLS</code> build.</td></tr>
             <tr><td><code>--profile</code></td><td>Perf monitor and command server on <code>127.0.0.1:9876</code>. Needs an <code>OCTAVE_DEV_TOOLS</code> build.</td></tr>
             <tr><td><code>--command-port N</code></td><td>Another port for the command server.</td></tr>
             <tr><td><code>--service [PORT]</code></td><td>The <a href="utilities.html#service-protocol">service protocol</a> on <code>127.0.0.1:9876</code> (or PORT) for another frontend or a script, in any build; open <code>http://127.0.0.1:9876/</code> in a browser for the reference web client (<span class="file-path">sdk/</span>). Off by default; the <code>serviceEnabled</code> setting turns it on at every start.</td></tr>
-            <tr><td><code>--headless</code></td><td>Every manager and the service, no QML engine and no window (the offscreen platform unless <code>QT_QPA_PLATFORM</code> says otherwise). Implies <code>--service</code>: another frontend, a script or the SDK drives it. Desktop and the Pi only; <code>--dev</code> / <code>--profile</code> are ignored with it, and phone-mirror / Android Auto video has nowhere to go.</td></tr>
+            <tr><td><code>--headless</code></td><td>Every manager and the service, no QML engine and no window (the offscreen platform unless <code>QT_QPA_PLATFORM</code> says otherwise). Implies <code>--service</code>: another frontend, a script or the SDK drives it. Desktop and the Pi only; <code>--profile</code> is ignored with it (<code>--sim</code> and <code>--dev</code> are not), and phone-mirror / Android Auto video is not decoded, only streamed to clients.</td></tr>
             <tr><td><code>--dump-api DIR</code></td><td>Write the published API (<a href="api-reference.html">Service API Reference</a>) as JSON into DIR and exit. Builds the managers in a throwaway config directory, so your settings and trip history are untouched.</td></tr>
-            <tr><td><code>--service-bind ADDRESS</code></td><td>Listen on ADDRESS instead of loopback (<code>0.0.0.0</code>: every interface). There is no authentication: only on a network you trust.</td></tr>
+            <tr><td><code>--service-bind ADDRESS</code></td><td>Listen on ADDRESS instead of loopback (<code>0.0.0.0</code>: every interface). A client from the network gets nothing but <code>hello</code> and <code>pair</code> until it pairs with a code from Settings &gt; Device &gt; Service; still, only on a network you trust.</td></tr>
+            <tr><td><code>--web-root DIR</code></td><td>Serve DIR (a built web frontend with <code>index.html</code>) at <code>GET /</code> instead of the reference client, same-origin with the service.</td></tr>
+            <tr><td><code>--version</code>, <code>--help</code></td><td>Print the version, or every flag, and exit.</td></tr>
           </tbody>
         </table>
         <pre><code>./build/octave --debug
@@ -381,7 +387,8 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
         <p>
           Developer mode provides a simulated car and keyboard controls for testing without hardware or a vehicle.
           It is a flag on an <code>OCTAVE_DEV_TOOLS</code> build: the real <code>OBDManager</code> talks to a simulated
-          ELM327 adapter, so the shipped OBD code runs against the simulation. The in-app half (<code>src/dev/</code>)
+          ELM327 adapter, so the shipped OBD code runs against the simulation. The simulated car on its own is
+          <code>--sim</code> (<span class="file-path">src/sim/</span>), which every build has, release downloads included. The in-app half (<code>src/dev/</code>)
           is committed. The client tools that drive it over the command server (screenshot / story recorder, MCP
           servers, perf scripts, all Python scripts in <code>dev/</code>) are <strong>gitignored</strong>: they exist on the
           maintainers' machines but are not part of a fresh clone.
@@ -439,13 +446,14 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
 │   ├── phone_mirror/scrcpyclient.*    <span class="cmt"># built-in scrcpy-protocol client</span>
 │   ├── items/embeddeddhuitem.*        <span class="cmt"># QQuickItem for Android Auto frames</span>
 │   ├── platform/                      <span class="cmt"># Android JNI bridges (media, process), Linux BlueZ pairing</span>
+│   ├── sim/                           <span class="cmt"># --sim simulator (every build): simulated car, ELM327, IMU motion, the sim object</span>
 │   └── dev/                           <span class="cmt"># --dev / --profile tooling (OCTAVE_DEV_TOOLS builds only), qml/ dev overlay</span>
 ├── <span class="prop">frontend/</span>            <span class="cmt"># QML UI</span>
 │   ├── Main.qml  MainMenu.qml  MediaRoom.qml  MediaPlayer.qml  OBDMenu.qml  CarMenu.qml ...
 │   ├── JeepVehicle.qml  JeepHinge.qml  JeepLamp.qml  JeepLink.qml  JeepSteering.js
 │   ├── gauges/          <span class="cmt"># gauge primitives</span>
 │   ├── dashboards/      <span class="cmt"># DashboardRenderer, WidgetCatalog, presets/*.json, editor/, widgets/</span>
-│   ├── settings/        <span class="cmt"># settings pages and components (DeviceSettingsPage has Diagnostics)</span>
+│   ├── settings/        <span class="cmt"># settings pages and components (DeviceSettingsPage has Service, Frontends and Diagnostics)</span>
 │   ├── shaders/         <span class="cmt"># .qsb shaders (compiled into the binary as resources)</span>
 │   └── assets/          <span class="cmt"># icons, fonts, jeep_tj_2003.glb + jeep_tj/ part GLBs, readme media</span>
 ├── <span class="prop">tests/</span>

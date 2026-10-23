@@ -6,11 +6,20 @@
             "name": "update_time",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         }
     ],
     "object": "clock",
     "properties": [
+        {
+            "constant": false,
+            "name": "time",
+            "notify": "timeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
     ],
     "signals": [
         {

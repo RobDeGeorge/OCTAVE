@@ -6,6 +6,11 @@
 #include "metadescribe.h"
 #include "protocol.h"
 #include "serviceregistry.h"
+#include "streamhub.h"
+#include "servicepairing.h"
+#include "servicescopes.h"
+#include "memberscope.h"
+#include "staticfiles.h"
 
 #include <QAbstractItemModel>
 #include <QElapsedTimer>
@@ -171,8 +176,9 @@ QVariant modelSummary(QAbstractItemModel *model)
 
 QMetaProperty findProperty(QObject *o, const QString &name)
 {
+    // Only the object's own properties (memberscope.h): not objectName
     const int i = o->metaObject()->indexOfProperty(name.toUtf8().constData());
-    if (i < 0)
+    if (i < MemberScope::propertyStart(o->metaObject()))
         throw CommandError(QStringLiteral("%1 has no property %2")
                                .arg(QString::fromLatin1(o->metaObject()->className()), name));
     return o->metaObject()->property(i);
@@ -196,16 +202,95 @@ QObject *ServiceBridge::object(const QString &name) const
 
 void ServiceBridge::install(CommandServer &server)
 {
-    server.registerOp(QStringLiteral("hello"), [this](const QVariantMap &) {
-        return QVariant(QVariantMap{
+    // hello {token?}: a paired device's token makes this connection
+    // trusted; the reply says whether it is
+    server.registerOp(QStringLiteral("hello"), [this](const QVariantMap &args) {
+        const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+        const QString token = args.value(QStringLiteral("token")).toString();
+        // An unknown or revoked token is not an error: the reply says so,
+        // and the client shows its pairing screen
+        bool tokenRejected = false;
+        if (c && m_pairing && !token.isEmpty()) {
+            const QString id = m_pairing->checkToken(token);
+            tokenRejected = id.isEmpty();
+            c->setTokenId(id);   // a rejected token also drops an earlier one
+        }
+        const bool isTrusted = !c || trusted(*c);
+        QVariantMap reply{
             {QStringLiteral("protocolVersion"), kProtocolVersion},
             {QStringLiteral("app"), QVariantMap{{QStringLiteral("version"), m_app.version},
                                                 {QStringLiteral("build"), m_app.debugBuild ? QStringLiteral("debug")
                                                                                            : QStringLiteral("release")},
                                                 {QStringLiteral("headless"), m_app.headless}}},
             {QStringLiteral("objects"), m_registry->names()},
-        });
+            {QStringLiteral("auth"), isTrusted ? QStringLiteral("trusted") : QStringLiteral("untrusted")},
+            {QStringLiteral("loopbackOpen"), m_pairing ? m_pairing->loopbackOpen() : true},
+        };
+        // An untrusted client learns only enough to pair: no version, no build, no objects
+        if (!isTrusted) {
+            reply.remove(QStringLiteral("app"));
+            reply.remove(QStringLiteral("objects"));
+        }
+        if (tokenRejected)
+            reply.insert(QStringLiteral("tokenRejected"), true);
+        if (isTrusted)
+            reply.insert(QStringLiteral("scopes"), c ? connectionScopes(*c) : QStringList{QStringLiteral("full")});
+        return QVariant(reply);
     });
+
+    if (m_pairing) {
+        // pair {code, name} -> {token}: the 6-digit code the head unit shows
+        server.registerOp(QStringLiteral("pair"), [this](const QVariantMap &args) -> QVariant {
+            const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+            QString error;
+            const QString token = m_pairing->pair(args.value(QStringLiteral("code")).toString(),
+                                                  args.value(QStringLiteral("name")).toString(),
+                                                  c ? c->peerAddress() : QString(), &error,
+                                                  args.value(QStringLiteral("scopes")).toStringList());
+            if (token.isEmpty())
+                throw CommandError(error);
+            const QString id = m_pairing->checkToken(token);
+            if (c)
+                c->setTokenId(id);
+            return QVariantMap{{QStringLiteral("token"), token}, {QStringLiteral("scopes"), m_pairing->scopesOf(id)}};
+        });
+        // unpair: forget this connection's own device
+        server.registerOp(QStringLiteral("unpair"), [this](const QVariantMap &) -> QVariant {
+            const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+            if (!c || c->tokenId().isEmpty())
+                throw CommandError(QStringLiteral("this connection is not a paired device"));
+            m_pairing->unpair(c->tokenId());
+            return true;
+        });
+        // mediaTicket -> {ticket, expiresIn}: for /art?ticket= and
+        // /export?ticket=, so no token goes in a URL
+        server.registerOp(QStringLiteral("mediaTicket"), [this](const QVariantMap &) -> QVariant {
+            const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+            if (!c)
+                throw CommandError(QStringLiteral("mediaTicket needs a connection"));
+            return QVariantMap{{QStringLiteral("ticket"), m_pairing->mintTicket(c->tokenId())},
+                               {QStringLiteral("expiresIn"), int(ServicePairing::kTicketLifetimeMs / 1000)}};
+        });
+        server.setTrust([this](const Connection &c) { return trusted(c); },
+                        [this](const Connection &c, const QHash<QByteArray, QByteArray> &headers, const QByteArray &target) {
+                            // Downloads of what is saved need files; covers only read
+                            const QString scope = target.startsWith("/export") ? QStringLiteral("files")
+                                                                               : QStringLiteral("read");
+                            if (trusted(c) && connectionAllows(c, scope))
+                                return true;
+                            const QByteArray auth = headers.value("authorization");
+                            if (auth.startsWith("Bearer ")) {
+                                const QString id = m_pairing->checkToken(QString::fromLatin1(auth.mid(7).trimmed()));
+                                if (!id.isEmpty() && m_pairing->allows(id, scope))
+                                    return true;
+                            }
+                            const QString ticket = StaticFiles::queryValue(target, QStringLiteral("ticket"));
+                            return !ticket.isEmpty() && m_pairing->ticketAllows(ticket, c.peerLoopback(), scope);
+                        },
+                        {QStringLiteral("hello"), QStringLiteral("pair")});
+        // The dev actions (sim_*, navigate, screenshot, ...) reach anything
+        server.setActionTrust([this](const Connection &c) { return connectionAllows(c, QStringLiteral("full")); });
+    }
 
     server.registerOp(QStringLiteral("get"), [this](const QVariantMap &args) {
         QPointer<QObject> o = object(args.value(QStringLiteral("object")).toString());
@@ -254,6 +339,7 @@ void ServiceBridge::install(CommandServer &server)
         QPointer<QObject> o = object(args.value(QStringLiteral("object")).toString());
         const QString property = args.value(QStringLiteral("property")).toString();
         const QVariant value = args.value(QStringLiteral("value"));
+        requireScope(o, args.value(QStringLiteral("object")).toString(), property);
         return CommandServer::onGui([o, property, value]() -> QVariant {
             if (!o)
                 throw CommandError(QStringLiteral("object is gone"));
@@ -272,29 +358,188 @@ void ServiceBridge::install(CommandServer &server)
     });
 
     server.registerOp(QStringLiteral("call"), [this](const QVariantMap &args) {
-        QPointer<QObject> o = object(args.value(QStringLiteral("object")).toString());
+        const QString name = args.value(QStringLiteral("object")).toString();
+        QPointer<QObject> o = object(name);
         const QByteArray method = args.value(QStringLiteral("method")).toString().toUtf8();
         const QVariantList callArgs = args.value(QStringLiteral("args")).toList();
-        return CommandServer::onGui([o, method, callArgs]() -> QVariant {
+        requireScope(o, name, QString::fromUtf8(method));
+        const bool claims = callArgs.size() == 2 && m_releases.contains(name + QLatin1Char('.') + QString::fromUtf8(method));
+        std::shared_ptr<Connection> connection = claims ? CommandServer::currentConnection() : nullptr;
+        return CommandServer::onGui([this, o, name, method, callArgs, connection]() -> QVariant {
             if (!o)
                 throw CommandError(QStringLiteral("object is gone"));
-            return invokeByName(o, method.constData(), callArgs);
+            QVariant result = invokeByName(o, method.constData(), callArgs, true);
+            if (connection)
+                noteClaim(name, o, method, callArgs, connection);
+            return result;
         }, timeoutOf(args));
     });
 
     server.registerOp(QStringLiteral("subscribe"), [this](const QVariantMap &args) { return subscribe(args); });
+
+    // Media streams (streamhub.h): binary records on this connection.
+    // When pairing lands this needs an authorised client like every op.
+    server.registerOp(QStringLiteral("stream"), [this](const QVariantMap &args) -> QVariant {
+        const QString objectName = args.value(QStringLiteral("object")).toString();
+        // An unknown object is an error, as for any op. A stream whose owner
+        // is in the phone scope (the phone mirror, Android Auto: a phone's
+        // screen either way) needs that permission; any other stream only read
+        const QObject *streamOwner = object(objectName);
+        if (streamOwner && memberScope(streamOwner->metaObject(), QString()) == QLatin1String("phone"))
+            requireScope(streamOwner, objectName, QString());
+        const QString name = objectName + QLatin1Char('.') + args.value(QStringLiteral("name")).toString();
+        std::shared_ptr<Connection> connection = CommandServer::currentConnection();
+        if (!connection)
+            throw CommandError(QStringLiteral("stream needs a connection"));
+        StreamHub &hub = StreamHub::instance();
+        const int id = hub.subscribe(name, connection);
+        if (id == 0)
+            throw CommandError(hub.names().contains(name) ? QStringLiteral("too many streams on this connection")
+                                                          : QStringLiteral("%1 has no stream %2")
+                                                                .arg(objectName, args.value(QStringLiteral("name")).toString()));
+        const quint64 key = connection->serial();
+        connection->onClose([key] { StreamHub::instance().unsubscribeAll(key); });
+        QVariantMap reply = hub.info(name);
+        reply.insert(QStringLiteral("stream"), id);
+        return reply;
+    });
+    server.registerOp(QStringLiteral("unstream"), [](const QVariantMap &args) -> QVariant {
+        std::shared_ptr<Connection> connection = CommandServer::currentConnection();
+        if (!connection)
+            throw CommandError(QStringLiteral("unstream needs a connection"));
+        StreamHub::instance().unsubscribe(connection, args.value(QStringLiteral("stream")).toInt());
+        return true;
+    });
     server.registerOp(QStringLiteral("unsubscribe"), [this](const QVariantMap &args) { return unsubscribe(args); });
 
     // Meta-objects are static data: no GUI-thread hop needed
-    server.registerOp(QStringLiteral("describe"), [this](const QVariantMap &args) {
+    // Without an object: every object, plus the ops this server answers
+    // (`ops`, additive), so a client or the spec test (docs/api/protocol.json)
+    // can compare what it knows with what is there
+    server.registerOp(QStringLiteral("describe"), [this, &server](const QVariantMap &args) {
         const QString name = args.value(QStringLiteral("object")).toString();
         if (!name.isEmpty())
             return QVariant(describeObject(object(name)));
         QVariantMap all;
         for (const QString &n : m_registry->names())
             all.insert(n, describeObject(m_registry->object(n)));
+        QStringList ops = server.ops();
+        ops.sort();
         return QVariant(QVariantMap{{QStringLiteral("protocolVersion"), kProtocolVersion},
-                                    {QStringLiteral("objects"), all}});
+                                    {QStringLiteral("objects"), all},
+                                    {QStringLiteral("ops"), ops}});
+    });
+}
+
+// Loopback trust: full for a program on this device; for a browser page
+// while an installed web frontend is served, only that frontend's scopes
+namespace {
+bool limitedBrowser(const Connection &c, const QStringList &browserScopes)
+{
+    return !browserScopes.isEmpty() && c.browser() && c.tokenId().isEmpty();
+}
+} // namespace
+
+bool ServiceBridge::connectionAllows(const Connection &c, const QString &scope) const
+{
+    if (!m_pairing)
+        return true;
+    if (c.peerLoopback() && m_pairing->loopbackOpen()) {
+        if (limitedBrowser(c, m_browserScopes))
+            return OctaveService::scopeAllows(m_browserScopes, scope);
+        if (m_browserScopes.isEmpty() || !c.browser())
+            return true;
+    }
+    return m_pairing->allows(c.tokenId(), scope);
+}
+
+QStringList ServiceBridge::connectionScopes(const Connection &c) const
+{
+    if (!m_pairing)
+        return {QStringLiteral("full")};
+    if (c.peerLoopback() && m_pairing->loopbackOpen()) {
+        if (limitedBrowser(c, m_browserScopes))
+            return m_browserScopes;
+        if (m_browserScopes.isEmpty() || !c.browser())
+            return {QStringLiteral("full")};
+    }
+    return m_pairing->scopesOf(c.tokenId());
+}
+
+void ServiceBridge::requireScope(const QObject *o, const QString &objectName, const QString &member) const
+{
+    const std::shared_ptr<Connection> c = CommandServer::currentConnection();
+    if (!m_pairing || !o || !c)
+        return;
+    const QString scope = memberScope(o->metaObject(), member);
+    if (connectionAllows(*c, scope))
+        return;
+    const QString what = member.isEmpty() ? objectName : objectName + QLatin1Char('.') + member;
+    throw CommandError(QStringLiteral("%1 needs the %2 permission; this device has %3")
+                           .arg(what, scope, connectionScopes(*c).join(QStringLiteral(", "))),
+                       QStringLiteral("forbidden"));
+}
+
+bool ServiceBridge::trusted(const Connection &c) const
+{
+    if (!m_pairing)
+        return true;
+    if (c.peerLoopback() && m_pairing->loopbackOpen())
+        return true;
+    const QString id = c.tokenId();
+    return !id.isEmpty() && m_pairing->tokenIdValid(id);
+}
+
+void ServiceBridge::releaseOnClose(const QString &object, const QString &method, const QVariant &release)
+{
+    m_releases.insert(object + QLatin1Char('.') + method, release);
+}
+
+void ServiceBridge::noteClaim(const QString &objectName, QObject *o, const QByteArray &method, const QVariantList &args,
+                              const std::shared_ptr<Connection> &connection)
+{
+    const QVariant release = m_releases.value(objectName + QLatin1Char('.') + QString::fromUtf8(method));
+    const QString consumer = args.at(0).toString();
+    const QVariant value = args.at(1);
+    bool releasing = false;
+    if (release.typeId() == QMetaType::Bool)
+        releasing = !value.toBool();
+    else if (release.canConvert<QVariantList>() && release.typeId() != QMetaType::QString)
+        releasing = value.toList().isEmpty();
+    else
+        releasing = value == release;
+
+    const QString key = objectName + QLatin1Char('.') + QString::fromUtf8(method) + QLatin1Char('\n') + consumer;
+    const quint64 conn = connection->serial();
+    if (releasing) {
+        m_claims->byKey.remove(key);
+        return;
+    }
+    m_claims->byKey.insert(key, Claim{o, method, consumer, release, conn});   // the latest caller holds it
+    if (m_claims->hooked.contains(conn))
+        return;
+    m_claims->hooked.insert(conn, true);
+    std::weak_ptr<Claims> weak = m_claims;
+    connection->onClose([weak, conn] {
+        auto claims = weak.lock();
+        if (!claims)
+            return;
+        claims->hooked.remove(conn);
+        for (auto it = claims->byKey.begin(); it != claims->byKey.end();) {
+            if (it->connection != conn) {
+                ++it;
+                continue;
+            }
+            const Claim c = *it;
+            it = claims->byKey.erase(it);
+            if (!c.object)
+                continue;
+            try {
+                invokeByName(c.object, c.method.constData(), {c.consumer, c.release});
+            } catch (const CommandError &e) {
+                qWarning("service: releasing %s for a closed client failed: %s", qPrintable(c.consumer), e.what());
+            }
+        }
     });
 }
 
@@ -347,8 +592,9 @@ QVariant ServiceBridge::subscribe(const QVariantMap &args)
         } else {
             for (const QString &sig : signalNames) {
                 QMetaMethod signal;
-                for (int i = 0; i < mo->methodCount(); ++i)
-                    if (mo->method(i).methodType() == QMetaMethod::Signal && mo->method(i).name() == sig.toUtf8())
+                for (int i = MemberScope::methodStart(mo); i < mo->methodCount(); ++i)
+                    if (mo->method(i).methodType() == QMetaMethod::Signal && mo->method(i).access() == QMetaMethod::Public
+                        && mo->method(i).name() == sig.toUtf8())
                         signal = mo->method(i);
                 if (!signal.isValid())
                     fail(QStringLiteral("%1 has no signal %2").arg(name, sig));
@@ -366,7 +612,7 @@ QVariant ServiceBridge::subscribe(const QVariantMap &args)
             }
             for (const QString &prop : propertyNames) {
                 const int pi = mo->indexOfProperty(prop.toUtf8().constData());
-                if (pi < 0)
+                if (pi < MemberScope::propertyStart(mo))
                     fail(QStringLiteral("%1 has no property %2").arg(name, prop));
                 const QMetaProperty p = mo->property(pi);
                 if (QAbstractItemModel *model = modelIn(p.read(o))) {
@@ -416,7 +662,7 @@ QVariant ServiceBridge::subscribe(const QVariantMap &args)
 
         // Ends with the object, an unsubscribe or the connection
         QObject::connect(o, &QObject::destroyed, sub, [sub] { sub->deleteLater(); });
-        const void *key = connection.get();
+        const quint64 key = connection->serial();
         (*m_subscriptions)[key].insert(id, sub);
         QPointer<QObject> guard = sub;
         std::weak_ptr<Subscriptions> subs = m_subscriptions;
@@ -436,7 +682,7 @@ QVariant ServiceBridge::unsubscribe(const QVariantMap &args)
     std::shared_ptr<Connection> connection = CommandServer::currentConnection();
     if (!connection)
         throw CommandError(QStringLiteral("unsubscribe needs a connection"));
-    const void *key = connection.get();
+    const quint64 key = connection->serial();
     return CommandServer::onGui([this, key, id]() -> QVariant {
         // Null too once its object went (it ended with it)
         QPointer<QObject> sub = m_subscriptions->value(key).value(id);

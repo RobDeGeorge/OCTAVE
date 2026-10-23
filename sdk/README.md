@@ -1,6 +1,6 @@
 # OCTAVE SDK
 
-Clients for OCTAVE's service API: read and drive the app (media, volume, live OBD and IMU values, settings, dashboards) from another program, with no Qt. The objects and their types are in [`docs/api/`](../docs/api/README.md); the protocol is in [`wiki/utilities.html#service-protocol`](../wiki/utilities.html#service-protocol).
+Clients for OCTAVE's service API: read and drive the app (media, volume, live OBD and IMU values, settings, dashboards) from another program, with no Qt. The objects and their types are in [`docs/api/`](../docs/api/README.md); the protocol envelope (ops, replies, errors, events, stream records, HTTP routes, pairing) is [`docs/api/protocol.json`](../docs/api/protocol.json), JSON Schema checked against the server, and in prose in [`wiki/utilities.html#service-protocol`](../wiki/utilities.html#service-protocol). Writing a client in another language: start from `protocol.json` and the `<object>.json` files, develop against `tools/api/fake_server.py` (a stdlib fake of the service that validates everything it sends against the spec; no OCTAVE build needed), then check it against a running app the way `sdk/python/tests/test_protocol_spec.py` does.
 
 Turn the service on first. It is off by default, and listens on 127.0.0.1:9876:
 
@@ -9,13 +9,13 @@ Turn the service on first. It is off by default, and listens on 127.0.0.1:9876:
 ./build/octave --headless         # no UI: the managers and the service only
 ```
 
-(Or set `"serviceEnabled": true` in `settingsConfigure.json`. To reach it from another machine add `--service-bind 0.0.0.0`; there is no authentication, so only on a network you trust.)
+(Or turn on Settings > Device > Service. To reach it from another machine add `--service-bind 0.0.0.0`: clients there must pair first, with the code that card shows; programs on the head unit itself need nothing. Traffic is not encrypted, so only on a network you control.)
 
 ## Browser: `web/`
 
 `web/index.html` is a reference client in plain JavaScript (no build, no libraries): live gauges, now playing with transport controls, volume, and an API explorer. The gauges show native units (`parameters.json`), not the user's display units. The app serves it at **http://127.0.0.1:9876/** and the page talks back over a WebSocket on the same port. One JSON request, reply or event per text frame, the same messages as the line protocol.
 
-A browser page from anywhere else can't connect. The app refuses a WebSocket whose `Origin` isn't its own page, and refuses a host given by name rather than by address (`src/service/websocket.h`). Scripts send no `Origin` and are not affected. So open the page by address (`http://192.168.x.y:9876/`), not by a name such as `octave.local`: names are refused on purpose, since a website could point one at the car. With `--service-bind` beyond loopback the page goes to the whole network as well, as a control panel with no login.
+A browser page from anywhere else can't connect. The app refuses a WebSocket whose `Origin` isn't its own page, and refuses a host given by name rather than by address (`src/service/websocket.h`). Scripts send no `Origin` and are not affected. So open the page by address (`http://192.168.x.y:9876/`), not by a name such as `octave.local`: names are refused on purpose, since a website could point one at the car. With `--service-bind` beyond loopback the page shows a pairing form until you enter the code from Settings > Device > Service; it keeps the token in the browser and loads covers with short-lived media tickets.
 
 ## Python: `python/`
 
@@ -37,12 +37,44 @@ with launch_headless() as app, Client(port=app.port) as octave:   # or Client() 
 
 Examples: `python/examples/live_gauges.py` (readings with titles and units) and `python/examples/now_playing.py` (follow the track; `next`, `play`, `volume 40`, `mute`).
 
-Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app. ctest runs it as `sdk_python`.
+Over the network: `token = Client(host).pair("123456", "My script")` once, then `Client(host, token=token)`. Video: `octave.stream("phoneMirrorManager", "video")`, after which `events()` also yields `{"event": "record", "stream", "flags", "pts", "key", "config", "data": bytes}` (H.264 Annex-B access units, every keyframe with its SPS / PPS; `docs/api/README.md`, "Streams"); `unstream(id)` stops it.
 
-## Another whole frontend: `frontends/retro-cluster/`
+Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app (the stream test uses the dev-only `sim_video` and skips without the dev tools) and `test_protocol_spec.py`, which checks `docs/api/protocol.json` against that app: the same ops both ways, and replies, errors and events validating against the spec's schemas. ctest runs it as `sdk_python`.
 
-An experimental UI in Rust + egui, styled as an 80s fluorescent instrument cluster, built only on this API (see its README). Not built by CI.
+## TypeScript: `typescript/`
+
+`typescript/` is an npm package (`octave-client`: ESM, no dependencies, browsers and Node 22+) with the same client as a library on top of code generated from `docs/api/`: the envelope (ops, replies, events, errors) from `protocol.json` and every object's members from the object files, with `@deprecated` / `@experimental` JSDoc where the API says so. `obj(client, "volumeController").call("applyVolume", 40)` type-checks and `call("applyVolume", "loud")` does not, as does `request("get", { object, property })` against a missing `object`:
+
+```ts
+import { OctaveClient, obj } from 'octave-client'
+
+const client = new OctaveClient({ url: 'ws://127.0.0.1:9876/' })   // in a browser the page's own host is the default
+client.connect()
+await client.whenOnline()
+const vol = obj(client, 'volumeController')
+await vol.call('applyVolume', 40)
+vol.property('percent', (v) => console.log(v))                       // now and on every change
+client.params(['RPM', 'SPEED'], (values) => console.log(values))    // live readings
+await client.stream('phoneMirrorManager', 'video', { onRecord: (r) => decoder.feed(r) })   // media records
+```
+
+It reconnects with backoff and re-issues its subscriptions; `request(op, args)` covers any op. `cd sdk/typescript && npm install && npm test` regenerates nothing but checks that the committed `src/protocol.ts` and `src/types.ts` match `docs/api` (so they go stale loudly, like `tst_apidocs`), type-checks the facade, and runs the client against a fake service; `npm run generate` rewrites both after `octave --dump-api docs/api` or an edit to `protocol.json`. Its README has the details and `examples/now_playing.mjs`.
+
+## Go: `go/`
+
+`go/` is a Go module (`github.com/RobDeGeorge/OCTAVE/sdk/go`, standard library only) generated from `docs/api/`: `protocol_gen.go` from `protocol.json`, `objects_gen.go` from the object files, so every service object is a Go type with a method per API method and `Get` / `Set` per property, and a deprecated member carries Go's `Deprecated:` paragraph. The hand-written `client.go` is the line protocol over TCP:
+
+```go
+c, _ := octave.Dial("127.0.0.1:9876")
+vol := octave.NewVolumeController(c)
+vol.ApplyVolume(40)
+percent, _ := vol.GetPercent()
+sub, _ := c.Subscribe(octave.SubscribeArgs{Object: "paramStore", Properties: []string{"RPM"}})
+for ev := range c.Events { /* ev.Kind, ev.Decode(&octave.ParamsEvent{}) */ }
+```
+
+`go test ./...` in `sdk/go` checks the generated files against `docs/api` and runs the client against the binary in `OCTAVE_BIN` (ctest runs it as `sdk_go` when Go is installed). `go generate ./...` regenerates. Its README has the details and `examples/now_playing`.
 
 ## Versioning
 
-Both clients speak protocol version 1. The Python `Client` asks `hello` on connect and raises `OctaveError` on another version (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.
+The Python, web, TypeScript and Go clients know protocol versions 1 and 2 (under 2, loopback stays open). The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.

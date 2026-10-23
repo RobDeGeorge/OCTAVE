@@ -13,7 +13,7 @@ namespace {
 const QString kApp = QStringLiteral(OCTAVE_APP_BINARY);
 const QString kDocs = QStringLiteral(OCTAVE_SOURCE_DIR "/docs/api");
 // Hand-written files living next to the generated ones
-const QStringList kHandWritten = {QStringLiteral("dashboard-spec.schema.json")};
+const QStringList kHandWritten = {QStringLiteral("dashboard-spec.schema.json"), QStringLiteral("protocol.json")};
 } // namespace
 
 class TstApiDocs : public QObject

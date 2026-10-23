@@ -170,8 +170,14 @@ private slots:
         phone.onMediaArt(redJpeg());
         QVERIFY(!np.artUrl().isEmpty());
         QTRY_COMPARE(colors.count(), 1);   // once, from the art change
+        // GET /art's cache key moves with every new cover
+        const int revision = np.artRevision();
+        QVERIFY(revision > 0);
+        phone.onMediaArt(redJpeg());
+        QCOMPARE(np.artRevision(), revision + 1);
+        QTRY_COMPARE(colors.count(), 2);
         QTest::qWait(100);
-        QCOMPARE(colors.count(), 1);
+        QCOMPARE(colors.count(), 2);   // once per art change
     }
 
     void noExtractionForOtherThemes()

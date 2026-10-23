@@ -11,6 +11,7 @@
 #include <QUrl>
 
 #include <memory>
+#include "managers/themecatalog.h"
 
 namespace {
 const QString kFrontend = QStringLiteral(OCTAVE_SOURCE_DIR "/frontend");
@@ -27,6 +28,8 @@ private slots:
         m_engine->addImportPath(kFrontend);
         m_engine->rootContext()->setContextProperty("width", 1280);   // read by Spacing.qml
         m_engine->rootContext()->setContextProperty("height", 720);
+        m_themes = std::make_unique<ThemeCatalog>(kFrontend + "/themes.json");   // Style.qml's palettes
+        m_engine->rootContext()->setContextProperty("themeCatalog", m_themes.get());
         QQmlComponent comp(m_engine.get(), QUrl::fromLocalFile(kFrontend + "/ErrorToast.qml"));
         m_toast.reset(qobject_cast<QQuickItem *>(comp.create()));
         QVERIFY2(m_toast, qPrintable(comp.errorString()));
@@ -97,6 +100,7 @@ private:
     QString current() const { return m_toast->property("currentMessage").toString(); }
     int queued() const { return m_toast->property("queuedCount").toInt(); }
 
+    std::unique_ptr<ThemeCatalog> m_themes;   // outlives the engine
     std::unique_ptr<QQmlEngine> m_engine;
     std::unique_ptr<QQuickItem> m_toast;
 };

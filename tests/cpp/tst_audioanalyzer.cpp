@@ -95,6 +95,28 @@ private slots:
         QCOMPARE(levels.count(), 0);
     }
 
+    void barsRunWhileAnyConsumerWantsThem()
+    {
+        // The QML view and a service client each say so under their own
+        // name; one leaving does not stop the other's bars
+        AudioAnalyzer a;
+        a.set_live(true);
+        a.setPlaying(true);
+        a.setDemand("remote", true);
+        QTRY_VERIFY_WITH_TIMEOUT((a.feed_live_pcm(tone(), 0), anyNonZero(a.get_current_levels())), 2000);
+        a.setViewActive(true);
+        a.setViewActive(false);   // the QML page left
+        QTRY_VERIFY_WITH_TIMEOUT((a.feed_live_pcm(tone(), 0), anyNonZero(a.get_current_levels())), 2000);
+        a.setDemand("other", false);   // never asked: no effect
+        QTRY_VERIFY_WITH_TIMEOUT((a.feed_live_pcm(tone(), 0), anyNonZero(a.get_current_levels())), 2000);
+        a.setDemand("remote", false);   // the last one: flat, and nothing more
+        QVERIFY(!anyNonZero(a.get_current_levels()));
+        QSignalSpy levels(&a, &AudioAnalyzer::fftDataChanged);
+        a.feed_live_pcm(tone(), 0);
+        QTest::qWait(5 * AudioAnalyzer::kLiveFrameMs);
+        QCOMPARE(levels.count(), 0);
+    }
+
     void hidingTheViewFlattensTheBars()
     {
         AudioAnalyzer a;

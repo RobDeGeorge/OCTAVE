@@ -15,77 +15,88 @@
             "name": "connect_obd",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "reconnect",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "force_connect",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "close",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "reset_connection",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "get_connection_status",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "getConnectionStatus",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "refresh_ports",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "get_available_ports",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "scan",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "availableAdapters",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -96,42 +107,48 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "platform_hint",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "scan_vehicle",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "is_scanning",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_all_parameter_names",
             "params": [
             ],
-            "returns": "QStringList"
+            "returns": "QStringList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_supported_commands",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -142,245 +159,280 @@
                     "type": "QVariantList"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "enable_all_supported",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "enter_diagnostic_mode",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "exit_diagnostic_mode",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "is_diagnostic_mode",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "read_dtc",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "read_current_dtc",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "read_status",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "clear_dtc",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "read_freeze_frame",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "read_vin",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "get_dtc_codes",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_dtc_count",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_mil_status",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_freeze_frame",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "coolantTemp",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "voltage",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "engineLoad",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "throttlePosition",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "intakeTemp",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "timingAdvance",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "massAirFlow",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "speedMPH",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "rpm",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "airFuelRatio",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "fuelLevel",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "intakeManifoldPressure",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "shortTermFuelTrim",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "longTermFuelTrim",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "oxygenSensorVoltage",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "fuelPressure",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "engineOilTemp",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "ignitionTiming",
             "params": [
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "refresh_values",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "open_bluetooth_settings",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "system"
         },
         {
             "kind": "slot",
@@ -391,7 +443,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -406,7 +459,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -417,7 +471,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -428,7 +483,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -439,35 +495,40 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "check_device_presence",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "vehicle"
         },
         {
             "kind": "invokable",
             "name": "isConnected",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "invokable",
             "name": "clearConnectionLog",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "invokable",
             "name": "is_connected",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -482,7 +543,8 @@
                     "type": "QStringList"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -497,7 +559,8 @@
                     "type": "QStringList"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         }
     ],
     "object": "obdManager",

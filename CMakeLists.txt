@@ -98,9 +98,13 @@ if(EMSCRIPTEN)
     target_compile_options(octave_sqlite PRIVATE -pthread)
 endif()
 
-# Qt6::CorePrivate is an imported target provided by Qt6::Core — not a
-# separately-findable component. Linking it grants access to private headers
-# (QtAndroidPrivate::requestPermission on Android).
+# Qt6::CorePrivate grants access to private headers (QZipReader for
+# frontend installs, QtAndroidPrivate::requestPermission on Android). Up to
+# Qt 6.8 it comes with Qt6::Core; from 6.9 it is its own package.
+set(QT_NO_PRIVATE_MODULE_WARNING ON)   # the use is deliberate and small
+if(NOT TARGET Qt6::CorePrivate)
+    find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
+endif()
 
 # TagLib only available on desktop (no pkg-config on Android host; mobile uses Qt metadata fallback).
 # Windows: vcpkg ships taglib's CMake config — find_package is the supported path there.
@@ -174,7 +178,7 @@ endif()
 option(OCTAVE_ENABLE_DOWNLOADS "Enable music download feature (disable for app store builds)" ON)
 
 # ---- Developer tooling (src/dev/) ----
-# `octave --dev` (simulated car over a fake ELM327, dev overlay) and
+# `octave --dev` (the --sim simulator of src/sim/ plus the dev overlay) and
 # `octave --profile` (perf monitor + JSON command server on 127.0.0.1:9876,
 # which the dev/ MCP servers and screenshot scripts drive). Both are inactive
 # without their flag. Default ON only for desktop Debug builds; anything else
@@ -211,6 +215,8 @@ qt_add_executable(octave
     src/util/fontcatalog.h
     src/util/fontcatalog.cpp
     src/util/pathurl.h
+    src/util/folderbrowser.h
+    src/util/folderbrowser.cpp
     src/service/commandserver.h
     src/service/commandserver.cpp
     src/service/protocol.h
@@ -220,10 +226,18 @@ qt_add_executable(octave
     src/service/servicebridge.cpp
     src/service/serviceoptions.h
     src/service/serviceoptions.cpp
+    src/service/adminchannel.h
+    src/service/adminchannel.cpp
     src/service/apidump.h
     src/service/apidump.cpp
     src/service/websocket.h
     src/service/websocket.cpp
+    src/service/staticfiles.h
+    src/service/staticfiles.cpp
+    src/service/streamhub.h
+    src/service/streamhub.cpp
+    src/service/servicepairing.h
+    src/service/servicepairing.cpp
     src/service/metadescribe.h
     src/service/metadescribe.cpp
     src/util/units.cpp
@@ -257,6 +271,8 @@ qt_add_executable(octave
     src/managers/elm327protocol.cpp
     src/managers/obdmanager.h
     src/managers/obdmanager.cpp
+    src/managers/dtcdescriptions.h
+    src/managers/dtcdescriptions.cpp
     src/managers/rfcommsocket.h
     src/managers/rfcommsocket.cpp
     src/managers/obdadapterfinder.h
@@ -274,10 +290,30 @@ qt_add_executable(octave
     src/managers/androidautomanager.cpp
     src/managers/dashboardmanager.h
     src/managers/dashboardmanager.cpp
+    src/managers/themecatalog.h
+    src/managers/themecatalog.cpp
     src/managers/tripstore.h
     src/managers/tripstore.cpp
     src/managers/triprecorder.h
     src/managers/triprecorder.cpp
+    src/managers/frontendmanifest.h
+    src/managers/frontendmanifest.cpp
+    src/managers/frontendmanager.h
+    src/managers/frontendmanager.cpp
+    src/managers/frontendsupervisor.h
+    src/managers/frontendsupervisor.cpp
+    # The simulator (--sim, the `sim` object, the browser demo): in every
+    # build, inert unless started
+    src/sim/simulator.h
+    src/sim/simulator.cpp
+    src/sim/simconfig.h
+    src/sim/simconfig.cpp
+    src/sim/carsim.h
+    src/sim/carsim.cpp
+    src/sim/simelm327.h
+    src/sim/simelm327.cpp
+    src/sim/imufeed.h
+    src/sim/imufeed.cpp
     src/phone_mirror/scrcpyclient.h
     src/phone_mirror/adaptivebitrate.h
     src/phone_mirror/scrcpyclient.cpp
@@ -342,6 +378,8 @@ target_link_libraries(octave PRIVATE
     Qt6::Multimedia
     Qt6::Network
     Qt6::Concurrent
+    # QZipReader (private, in QtCore since 6.2): installing a frontend from a .zip
+    Qt6::CorePrivate
     octave_sqlite
 )
 if(EMSCRIPTEN)
@@ -353,15 +391,9 @@ if(EMSCRIPTEN)
         src/platform/wasm/QSerialPortInfo
         src/platform/wasm/obdadapterfinder_wasm.cpp
         src/platform/wasm/networkmanager_wasm.cpp
-        # the demo car: the dev tooling's simulator, driven by an autopilot
+        # the demo car: the --sim simulator (src/sim/), driven by an autopilot
         src/platform/wasm/webdemo.h
         src/platform/wasm/webdemo.cpp
-        src/dev/carsim.h
-        src/dev/carsim.cpp
-        src/dev/simelm327.h
-        src/dev/simelm327.cpp
-        src/dev/devimufeed.h
-        src/dev/devimufeed.cpp
     )
     set_source_files_properties(src/managers/obdadapterfinder.cpp src/managers/networkmanager.cpp
                                 PROPERTIES HEADER_FILE_ONLY ON)
@@ -442,12 +474,8 @@ if(OCTAVE_DEV_TOOLS)
         src/dev/uidriver.cpp
         src/dev/perfmonitor.h
         src/dev/perfmonitor.cpp
-        src/dev/carsim.h
-        src/dev/carsim.cpp
-        src/dev/simelm327.h
-        src/dev/simelm327.cpp
-        src/dev/devimufeed.h
-        src/dev/devimufeed.cpp
+        src/dev/devkeyboard.h
+        src/dev/devkeyboard.cpp
         src/dev/devtoolsmanager.h
         src/dev/devtoolsmanager.cpp
         src/dev/collagebridge.h
@@ -487,6 +515,16 @@ qt_add_resources(octave "web_client"
     BASE "${CMAKE_SOURCE_DIR}/sdk/web"
     FILES "${CMAKE_SOURCE_DIR}/sdk/web/index.html"
 )
+
+# ---- The simulator's test video (sim.setVideo), 140 KB ----
+# Not in the browser build: no service there to stream it to
+if(NOT EMSCRIPTEN)
+    qt_add_resources(octave "sim_video"
+        PREFIX "/sim"
+        BASE "${CMAKE_SOURCE_DIR}/tests/data"
+        FILES "${CMAKE_SOURCE_DIR}/tests/data/stream-test.h264"
+    )
+endif()
 
 # ---- Bundled phone server (OCTAVE's fork of the scrcpy server, Apache-2.0) ----
 # Source in phone_server/; prebuilt jar in tools/phone-server/ (rebuilt and

@@ -24,6 +24,8 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     , tripRecorder(&settingsManager)
     , nowPlaying(&mediaManager, &phoneMirrorManager, &settingsManager)
     , fontCatalog(frontendDir.absoluteFilePath(QStringLiteral("assets/fonts")))
+    , themeCatalog(frontendDir.absoluteFilePath(QStringLiteral("themes.json")), &settingsManager)
+    , servicePairing(&settingsManager)
 {
     // Settings Manager — central settings store, everything depends on this
     expose("settingsManager", &settingsManager);
@@ -139,12 +141,22 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
         expose("units", units);
     // The bundled UI and icon fonts, registered before any QML loads
     expose("fontCatalog", &fontCatalog);
+    // The colour themes as data, and the palette in force (Style.qml reads it)
+    expose("themeCatalog", &themeCatalog);
 
     // Dashboards (data-driven dashboards + user-authored presets), see
     // TODO/dashboards-roadmap.md
     dashboardManager.setPresetsDir(frontendDir.absoluteFilePath(QStringLiteral("dashboards/presets")));
+    dashboardManager.setWidgetCatalogFile(frontendDir.absoluteFilePath(QStringLiteral("dashboards/widget-catalog.json")));
     dashboardManager.setUserDir(SettingsManager::getAppDataDir() + QStringLiteral("/dashboards"));
     expose("dashboardManager", &dashboardManager);
+
+    // The simulator: `active` false and every control a no-op unless started
+    expose("sim", &sim);
+
+    // Other screens: installed web / exec frontends, chosen from the next start
+    frontendManager.setRoot(SettingsManager::getAppDataDir() + QStringLiteral("/frontends"));
+    expose("frontendManager", &frontendManager);
 
     wireInputs();
     wireKnobLed();

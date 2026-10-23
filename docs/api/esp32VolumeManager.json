@@ -6,63 +6,72 @@
             "name": "connect_device",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "disconnect_device",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "get_available_ports",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "is_connected",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_connection_status",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_connection_detail",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "refresh_ports",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "reset_reconnect_attempts",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "cleanup",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         }
     ],
     "object": "esp32VolumeManager",

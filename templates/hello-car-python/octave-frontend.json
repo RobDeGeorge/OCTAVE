@@ -1,0 +1,13 @@
+{
+  "id": "org.octave.hello-car-python",
+  "name": "Hello, car (Python)",
+  "version": "1.0.0",
+  "description": "Two live readings and the track with play / pause, in a terminal",
+  "protocol": [2, 2],
+  "scopes": ["media"],
+  "exec": {
+    "linux":   ["python3", "{dir}/hello_car.py"],
+    "macos":   ["python3", "{dir}/hello_car.py"],
+    "windows": ["python", "{dir}/hello_car.py"]
+  }
+}

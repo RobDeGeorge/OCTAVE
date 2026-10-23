@@ -152,6 +152,10 @@ private:
 class BerryIMUManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "vehicle")
+    Q_CLASSINFO("octave.scope.read", "emitRate getConnectionStatus isEnabled setDemand")
+    Q_CLASSINFO("octave.scope.full", "cleanup")
 
     Q_PROPERTY(bool connected READ getConnected NOTIFY connectionStatusChanged)
     Q_PROPERTY(bool hasTemperature READ hasTemperature NOTIFY hasTemperatureChanged)
@@ -205,9 +209,9 @@ private slots:
     void startSensor();
 
 private:
-    // Dev tooling (src/dev/devimufeed.cpp) stops the I2C worker and drives
-    // these signals with simulated motion when asked to (sim_imu).
-    friend class DevImuAccess;
+    // The simulator (src/sim/imufeed.cpp) stops the I2C worker and drives
+    // these signals with simulated motion when asked to (sim.setImu).
+    friend class SimImuAccess;
     friend class TstSensorSettings;
 
     bool getConnected() const;

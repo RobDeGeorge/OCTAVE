@@ -3,15 +3,21 @@
 // limits, the Origin rule that keeps websites off it, and a real browser-
 // shaped client against a running CommandServer, plus the page at GET /.
 
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QTcpSocket>
+#include <QTemporaryDir>
+#include <QtEndian>
 #include <QTest>
 
 #include <memory>
 
 #include "service/commandserver.h"
+#include "service/staticfiles.h"
 #include "service/websocket.h"
 
 using namespace OctaveService;
@@ -197,7 +203,354 @@ private slots:
         server.stop();
     }
 
+    void servesAWebRootSameOrigin()
+    {
+        QTemporaryDir tmp;
+        QDir(tmp.path()).mkpath("assets");
+        auto write = [&tmp](const char *rel, const QByteArray &data) {
+            QFile f(QDir(tmp.path()).filePath(QString::fromLatin1(rel)));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(data);
+        };
+        write("index.html", "<html>frontend</html>");
+        write("assets/app.js", "go()");
+        CommandServer server(0);
+        server.setPage("<html>client</html>");
+        server.setWebRoot(tmp.path());   // wins over the page
+        QVERIFY(server.start());
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+
+        QByteArray reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.endsWith("<html>frontend</html>"), reply.constData());
+        QVERIFY(reply.contains("X-Content-Type-Options: nosniff"));
+        QVERIFY(reply.contains("Cache-Control: no-store"));
+        // Its own scripts, no inline script, sockets to this service only
+        QVERIFY2(reply.contains("script-src 'self' 'wasm-unsafe-eval';"), reply.constData());
+        QVERIFY2(reply.contains("connect-src 'self' ws://" + host + " wss://" + host + ";"), reply.constData());
+        QVERIFY(!reply.contains("ws: wss:"));
+        // A module script fetch carries the page's Origin: same origin passes
+        reply = once(server.port(), "GET /assets/app.js HTTP/1.1\r\nHost: " + host + "\r\nOrigin: http://" + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.contains("Content-Type: text/javascript"), reply.constData());
+        reply = once(server.port(), "GET /assets/app.js HTTP/1.1\r\nHost: " + host + "\r\nOrigin: https://example.com\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        reply = once(server.port(), "GET /../../etc/passwd HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        // Only GET is HTTP on this port: anything else is a JSON line, never a file
+        reply = once(server.port(), "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 0\r\n\r\n");
+        QVERIFY2(!reply.contains("frontend"), reply.constData());
+        // A Host header that is a name (or tries to add a directive) is
+        // refused before anything is served
+        reply = once(server.port(), "GET / HTTP/1.1\r\nHost: evil.example; script-src *\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        // The socket still upgrades on the same port
+        reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nOrigin: http://" + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 101"), reply.constData());
+        server.stop();
+    }
+
+    void routesAndCrossSiteLoads()
+    {
+        CommandServer server(0);
+        server.setPage("<html>client</html>");
+        int calls = 0;
+        QByteArray seen;
+        server.addRoute("/art", [&calls, &seen](const QByteArray &target) {
+            ++calls;
+            seen = target;
+            return StaticFiles::Reply{200, "OK", "image/png", "\x89PNG"};
+        });
+        server.addRoute("/export/x", [](const QByteArray &) {
+            StaticFiles::Reply r{200, "OK", "text/csv", "a,b\n"};
+            r.headers = "Content-Disposition: attachment; filename=\"x.csv\"\r\n";
+            return r;
+        });
+        QVERIFY(server.start());
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+        QByteArray reply = once(server.port(), "GET /art?rev=7 HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.contains("Content-Type: image/png") && reply.endsWith("\x89PNG"),
+                 reply.constData());
+        QVERIFY(reply.contains("X-Content-Type-Options: nosniff"));
+        QCOMPARE(calls, 1);
+        QCOMPARE(seen, QByteArray("/art?rev=7"));   // the handler reads its own query
+        reply = once(server.port(), "GET /export/x HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.contains("\r\nContent-Disposition: attachment; filename=\"x.csv\"\r\nConnection: close\r\n\r\na,b\n"),
+                 reply.constData());
+        // Exact paths only
+        QVERIFY(once(server.port(), "GET /art/x HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 404"));
+        // An <img> on another site sends no Origin; its Sec-Fetch-Site gives it away
+        reply = once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: cross-site\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: same-site\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        QCOMPARE(calls, 1);
+        // The page's own loads and the address bar pass
+        QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: same-origin\r\n\r\n").startsWith("HTTP/1.1 200"));
+        QVERIFY(once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: none\r\n\r\n").startsWith("HTTP/1.1 200"));
+        server.stop();
+    }
+
+    void everyRequestNeedsAnAddressInHost()
+    {
+        // M6: DNS rebinding sends no Origin on a plain GET; the Host says it
+        CommandServer server(0);
+        server.setPage("<html>client</html>");
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        QVERIFY(server.start());
+        const QByteArray port = QByteArray::number(server.port());
+        for (const QByteArray &host : {QByteArray("rebind.example.com:") + port, QByteArray("octave.local"), QByteArray()}) {
+            const QByteArray head = host.isEmpty() ? QByteArray() : "Host: " + host + "\r\n";
+            for (const char *path : {"/", "/art"}) {
+                const QByteArray r = once(server.port(), "GET " + QByteArray(path) + " HTTP/1.1\r\n" + head + "\r\n");
+                QVERIFY2(r.startsWith("HTTP/1.1 403"), r.constData());
+            }
+        }
+        for (const QByteArray &host : {"127.0.0.1:" + port, "localhost:" + port, "[::1]:" + port, QByteArray("192.168.1.20")})
+            QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 200"));
+        server.stop();
+    }
+
+    void oneClientCannotExhaustTheServer()
+    {
+        CommandServer server(0);
+        CommandServer::Limits limits;
+        limits.maxConnections = 4;
+        limits.firstByteMs = 300;
+        limits.maxLineBytes = 4096;
+        server.setLimits(limits);
+        // Everyone untrusted, for the idle rule
+        server.setTrust([](const Connection &) { return false; }, {}, {QStringLiteral("hello")});
+        limits.untrustedIdleMs = 400;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+
+        // M3: a line that never ends is cut off at the cap
+        {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(s.waitForConnected(3000));
+            s.write("{\"op\": \"" + QByteArray(8192, 'a'));
+            QByteArray in;
+            QElapsedTimer t;
+            t.start();
+            while (s.state() == QAbstractSocket::ConnectedState && t.elapsed() < 3000)
+                if (s.waitForReadyRead(50))
+                    in += s.readAll();
+            QVERIFY2(in.contains("request too long"), in.constData());
+            QVERIFY(s.state() != QAbstractSocket::ConnectedState || !s.waitForReadyRead(500));
+        }
+        // M4: a connection that says nothing is closed
+        {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(s.waitForConnected(3000));
+            QTRY_VERIFY_WITH_TIMEOUT((s.waitForReadyRead(50), s.state() == QAbstractSocket::UnconnectedState), 3000);
+        }
+        // M4: an untrusted client that goes quiet is closed
+        {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(s.waitForConnected(3000));
+            s.write("{\"op\": \"hello\"}\n");
+            QTRY_VERIFY_WITH_TIMEOUT((s.waitForReadyRead(50), s.state() == QAbstractSocket::UnconnectedState), 3000);
+        }
+        // M4: past maxConnections, refused at the door
+        {
+            QList<QTcpSocket *> held;
+            for (int i = 0; i < 4; ++i) {
+                auto *s = new QTcpSocket;
+                s->connectToHost(QHostAddress::LocalHost, server.port());
+                QVERIFY(s->waitForConnected(3000));
+                s->write("{\"op\": \"hello\"}\n");   // keep each busy past the first-byte rule
+                held.append(s);
+            }
+            QTest::qWait(100);
+            QTcpSocket extra;
+            extra.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(extra.waitForConnected(3000));
+            extra.write("{\"op\": \"hello\"}\n");
+            QTRY_VERIFY_WITH_TIMEOUT((extra.waitForReadyRead(50), extra.state() == QAbstractSocket::UnconnectedState), 2000);
+            QVERIFY(!extra.readAll().contains("\"ok\""));
+            qDeleteAll(held);
+        }
+        server.stop();
+    }
+
+    // Step 7's limits hold for WebSocket clients too (the line protocol's
+    // tests are in tst_servicebridge)
+    void rateLimitedOverFrames()
+    {
+        CommandServer server(0);
+        server.registerOp(QStringLiteral("echo"), [](const QVariantMap &) { return QVariant(1); });
+        CommandServer::Limits limits;
+        limits.opsPerSecond = 20;
+        limits.opsBurst = 10;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+        QTcpSocket s;
+        QByteArray in;
+        QVERIFY(wsConnect(s, server.port(), in));
+        QByteArray burst;
+        for (int i = 1; i <= 50; ++i)
+            burst += clientFrame(Ws::Text, R"({"op": "echo", "id": )" + QByteArray::number(i) + "}");
+        s.write(burst);
+        QList<QByteArray> texts;
+        QElapsedTimer t;
+        t.start();
+        while (texts.size() < 50 && t.elapsed() < 5000) {
+            if (s.bytesAvailable() > 0 || s.waitForReadyRead(20))
+                in += s.readAll();
+            texts += takeTextFrames(in);
+        }
+        QCOMPARE(texts.size(), 50);
+        int ok = 0;
+        for (const QByteArray &text : std::as_const(texts)) {
+            const QJsonObject r = QJsonDocument::fromJson(text).object();
+            if (r.value("ok").toBool()) {
+                ++ok;
+                continue;
+            }
+            QCOMPARE(r.value("code").toString(), QStringLiteral("rateLimited"));
+            QVERIFY(r.value("retryAfterMs").toInt() > 0);
+            QVERIFY(r.value("id").toInt() > 0);
+        }
+        QVERIFY2(ok >= 10 && ok < 30, qPrintable(QString::number(ok)));
+        server.stop();
+    }
+
+    void aWebSocketConnectLoopIsRefused()
+    {
+        // Upgrades count against the same per-address bucket as everything
+        CommandServer server(0);
+        CommandServer::Limits limits;
+        limits.loopbackConnectsPerSecond = 3;
+        limits.loopbackConnectsBurst = 3;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+        int upgraded = 0, refused = 0;
+        for (int i = 0; i < 15; ++i) {
+            QTcpSocket s;
+            QByteArray in;
+            wsConnect(s, server.port(), in) ? ++upgraded : ++refused;
+        }
+        QVERIFY2(upgraded >= 3 && upgraded < 8, qPrintable(QStringLiteral("%1 upgraded").arg(upgraded)));
+        QVERIFY(refused > 0);
+        QTest::qWait(700);   // the bucket refills
+        QTcpSocket late;
+        QByteArray in;
+        QVERIFY(wsConnect(late, server.port(), in));
+        server.stop();
+    }
+
+    void aWebSocketReaderThatStaysBehindIsClosed()
+    {
+        // At maxUnsentBytes for maxBehindMs the connection goes; another
+        // WebSocket client keeps getting its replies meanwhile
+        CommandServer server(0);
+        std::shared_ptr<Connection> held;
+        QMutex heldLock;
+        server.registerOp(QStringLiteral("hold"), [&](const QVariantMap &) {
+            QMutexLocker l(&heldLock);
+            held = CommandServer::currentConnection();
+            return QVariant(true);
+        });
+        server.registerOp(QStringLiteral("echo"), [](const QVariantMap &) { return QVariant(1); });
+        CommandServer::Limits limits;
+        limits.maxUnsentBytes = 64 * 1024;
+        limits.maxBehindMs = 500;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+        QTcpSocket slow, other;
+        QByteArray slowIn, otherIn;
+        QVERIFY(wsConnect(slow, server.port(), slowIn));
+        QVERIFY(wsConnect(other, server.port(), otherIn));
+        slow.write(clientFrame(Ws::Text, R"({"op": "hold", "id": 1})"));
+        QVERIFY(slow.waitForBytesWritten(3000));
+        QTRY_VERIFY_WITH_TIMEOUT((QMutexLocker(&heldLock), held != nullptr), 3000);
+        slow.setReadBufferSize(1);   // and from now on reads nothing
+        std::shared_ptr<Connection> c;
+        {
+            QMutexLocker l(&heldLock);
+            c = held;
+        }
+        auto otherEchoes = [&other, &otherIn] {
+            other.write(clientFrame(Ws::Text, R"({"op": "echo", "id": 2})"));
+            QList<QByteArray> texts;
+            QElapsedTimer w;
+            w.start();
+            while (texts.isEmpty() && w.elapsed() < 3000) {
+                if (other.bytesAvailable() > 0 || other.waitForReadyRead(20))
+                    otherIn += other.readAll();
+                texts += takeTextFrames(otherIn);
+            }
+            return texts.size() == 1 && QJsonDocument::fromJson(texts.first()).object().value("ok").toBool();
+        };
+        const QByteArray event = "{\"event\":\"signal\",\"pad\":\"" + QByteArray(32 * 1024, 'x') + "\"}\n";
+        QElapsedTimer t;
+        t.start();
+        int i = 0;
+        while (!c->isClosed() && t.elapsed() < 15000) {
+            c->push(event);
+            QTest::qWait(2);
+            if (++i % 100 == 0)   // the other client, meanwhile
+                QVERIFY(otherEchoes());
+        }
+        QVERIFY2(c->isClosed(), "the WebSocket reader that never reads was never closed");
+        QVERIFY(i >= 100);   // the other client was asked at least once while it was behind
+        QVERIFY(otherEchoes());
+        server.stop();
+    }
+
 private:
+    // A WebSocket upgrade on `s`; false if the server refused or closed it.
+    // Leftover bytes after the 101 head stay in `in`
+    static bool wsConnect(QTcpSocket &s, quint16 port, QByteArray &in)
+    {
+        s.connectToHost(QHostAddress::LocalHost, port);
+        if (!s.waitForConnected(3000))
+            return false;
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(port);
+        s.write("GET / HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+        QElapsedTimer t;
+        t.start();
+        while (!in.contains("\r\n\r\n") && s.state() == QAbstractSocket::ConnectedState && t.elapsed() < 3000)
+            if (s.bytesAvailable() > 0 || s.waitForReadyRead(20))
+                in += s.readAll();
+        in += s.readAll();
+        if (!in.startsWith("HTTP/1.1 101") || !in.contains("\r\n\r\n"))
+            return false;
+        in = in.mid(in.indexOf("\r\n\r\n") + 4);
+        return true;
+    }
+
+    // The complete text frames at the front of `in` (server frames: unmasked)
+    static QList<QByteArray> takeTextFrames(QByteArray &in)
+    {
+        QList<QByteArray> out;
+        while (in.size() >= 2) {
+            qint64 n = quint8(in.at(1)) & 0x7F;
+            int off = 2;
+            if (n == 126) {
+                if (in.size() < 4)
+                    break;
+                n = (quint8(in.at(2)) << 8) | quint8(in.at(3));
+                off = 4;
+            } else if (n == 127) {
+                if (in.size() < 10)
+                    break;
+                n = qFromBigEndian<quint64>(in.constData() + 2);
+                off = 10;
+            }
+            if (in.size() < off + n)
+                break;
+            if ((quint8(in.at(0)) & 0x0F) == Ws::Text)
+                out.append(in.mid(off, int(n)));
+            in.remove(0, off + int(n));
+        }
+        return out;
+    }
+
     static QByteArray readUntil(QTcpSocket &s, const QByteArray &marker)
     {
         QByteArray in;

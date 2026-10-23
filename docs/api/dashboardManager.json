@@ -10,7 +10,8 @@
                     "type": "QVariantMap"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -21,14 +22,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "restoreBuiltInDashboards",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -43,7 +46,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -54,7 +58,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -65,7 +70,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -76,14 +82,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "importDashboardFromClipboard",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -94,14 +102,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "refresh",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -112,7 +122,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QVariant"
+            "returns": "QVariant",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -123,7 +134,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -134,7 +146,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -145,7 +158,8 @@
                     "type": "QVariantMap"
                 }
             ],
-            "returns": "QVariantMap"
+            "returns": "QVariantMap",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -184,7 +198,8 @@
                     "type": "int"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -219,7 +234,8 @@
                     "type": "int"
                 }
             ],
-            "returns": "QVariantMap"
+            "returns": "QVariantMap",
+            "scope": "read"
         }
     ],
     "object": "dashboardManager",
@@ -242,6 +258,22 @@
         },
         {
             "constant": false,
+            "name": "lastError",
+            "notify": "lastErrorChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastExportPath",
+            "notify": "lastExportPathChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "hiddenBuiltInCount",
             "notify": "dashboardsChanged",
             "readable": true,
@@ -254,6 +286,13 @@
             "readable": true,
             "type": "int",
             "writable": false
+        },
+        {
+            "constant": true,
+            "name": "widgetCatalog",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
         }
     ],
     "signals": [
@@ -264,6 +303,16 @@
         },
         {
             "name": "lastShareErrorChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastErrorChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastExportPathChanged",
             "params": [
             ]
         }

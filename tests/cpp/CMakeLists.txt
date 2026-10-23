@@ -32,6 +32,7 @@ function(octave_add_test name)
 endfunction()
 
 octave_add_test(tst_elm327protocol SOURCES managers/elm327protocol.cpp managers/parametercatalog.h managers/parametercatalog.cpp)
+octave_add_test(tst_dtcdescriptions SOURCES managers/dtcdescriptions.h managers/dtcdescriptions.cpp)
 octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
@@ -46,7 +47,7 @@ octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h manager
                 util/dashboardgrid.h util/dashboardgrid.cpp LIBS Qt6::Gui)
 octave_add_test(tst_triprecorder
     SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
-            managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort octave_sqlite)
@@ -65,40 +66,36 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 octave_add_test(tst_downloadutil SOURCES managers/downloadutil.cpp)
 octave_add_test(tst_obdmanager
-    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort)
 
-# Integration: the real OBD stack against the simulated adapter (src/dev/)
-if(OCTAVE_DEV_TOOLS)
-    octave_add_test(tst_obdsim
-        SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
-                managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
-                managers/settingsmanager.h managers/settingsmanager.cpp
-                dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
-        LIBS Qt6::Gui Qt6::SerialPort)
-endif()
+# Integration: the real OBD stack against the simulated adapter (src/sim/)
+octave_add_test(tst_obdsim
+    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+            sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp
+    LIBS Qt6::Gui Qt6::SerialPort)
 
-# The adapter finder's hand-off connects to the simulated adapter (src/dev/)
-if(OCTAVE_DEV_TOOLS)
-    set(_finder_sources managers/obdadapterfinder.h managers/obdadapterfinder.cpp)
-    set(_finder_libs Qt6::Gui Qt6::SerialPort Qt6::Bluetooth)
-    set(_finder_defines)
-    if(TARGET Qt6::DBus)   # Linux: the BlueZ pairing agent, as in the app
-        list(APPEND _finder_sources platform/bluezpairer.h platform/bluezpairer.cpp)
-        list(APPEND _finder_libs Qt6::DBus)
-        list(APPEND _finder_defines OCTAVE_BLUEZ)
-    endif()
-    octave_add_test(tst_obdadapterfinder
-        SOURCES ${_finder_sources}
-                managers/obdmanager.h managers/obdmanager.cpp managers/parametercatalog.h managers/parametercatalog.cpp
-                managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
-                managers/settingsmanager.h managers/settingsmanager.cpp
-                dev/carsim.h dev/carsim.cpp dev/simelm327.h dev/simelm327.cpp
-        LIBS ${_finder_libs}
-        DEFINES ${_finder_defines})
+# The adapter finder's hand-off connects to the simulated adapter (src/sim/)
+set(_finder_sources managers/obdadapterfinder.h managers/obdadapterfinder.cpp)
+set(_finder_libs Qt6::Gui Qt6::SerialPort Qt6::Bluetooth)
+set(_finder_defines)
+if(TARGET Qt6::DBus)   # Linux: the BlueZ pairing agent, as in the app
+    list(APPEND _finder_sources platform/bluezpairer.h platform/bluezpairer.cpp)
+    list(APPEND _finder_libs Qt6::DBus)
+    list(APPEND _finder_defines OCTAVE_BLUEZ)
 endif()
+octave_add_test(tst_obdadapterfinder
+    SOURCES ${_finder_sources}
+            managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+            sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp
+    LIBS ${_finder_libs}
+    DEFINES ${_finder_defines})
 
 # MediaManager reads tags with TagLib, as the app does
 if(TARGET TagLib::tag)
@@ -114,21 +111,24 @@ octave_add_test(tst_downloadmanager
     LIBS Qt6::Gui Qt6::Network Qt6::Concurrent ${_taglib}
     DEFINES OCTAVE_ENABLE_DOWNLOADS)
 octave_add_test(tst_mediamanager
-    SOURCES managers/mediamanager.h managers/mediamanager.cpp util/units.h util/units.cpp
+    SOURCES managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
 octave_add_test(tst_musicdeviceassets)
-octave_add_test(tst_vehiclegate SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_vehiclegate SOURCES managers/themecatalog.h managers/themecatalog.cpp managers/dashboardmanager.h managers/dashboardmanager.cpp util/dashboardgrid.h util/dashboardgrid.cpp managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 
-octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
-octave_add_test(tst_errortoast LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_phonemirrorview SOURCES managers/themecatalog.h managers/themecatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
+octave_add_test(tst_errortoast SOURCES managers/themecatalog.h managers/themecatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+# The theme table as data and the palette in force
+octave_add_test(tst_themecatalog SOURCES managers/themecatalog.h managers/themecatalog.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 
 # QML fixtures (tests/fixtures/), each run in its own qmlfixturehost process
 add_executable(qmlfixturehost qmlfixturehost.cpp
     "${OCTAVE_SRC}/managers/settingsmanager.h" "${OCTAVE_SRC}/managers/settingsmanager.cpp"
     "${OCTAVE_SRC}/util/assetstore.h" "${OCTAVE_SRC}/util/assetstore.cpp"
-    "${OCTAVE_SRC}/util/units.h" "${OCTAVE_SRC}/util/units.cpp")
+    "${OCTAVE_SRC}/util/units.h" "${OCTAVE_SRC}/util/units.cpp"
+    "${OCTAVE_SRC}/managers/themecatalog.h" "${OCTAVE_SRC}/managers/themecatalog.cpp")
 target_include_directories(qmlfixturehost PRIVATE "${OCTAVE_SRC}" "${CMAKE_BINARY_DIR}/generated")
 target_compile_definitions(qmlfixturehost PRIVATE OCTAVE_SOURCE_DIR="${CMAKE_SOURCE_DIR}" OCTAVE_VERSION="${PROJECT_VERSION}")
 target_link_libraries(qmlfixturehost PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
@@ -162,7 +162,7 @@ if(WIN32 AND OCTAVE_HAVE_FFMPEG)
     target_include_directories(tst_scrcpyclient PRIVATE ${FFMPEG_INCLUDE_DIRS})
 endif()
 octave_add_test(tst_phonemirror
-    SOURCES managers/phonemirrormanager.h managers/phonemirrormanager.cpp
+    SOURCES managers/phonemirrormanager.h managers/phonemirrormanager.cpp service/staticfiles.h service/staticfiles.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
@@ -174,7 +174,7 @@ endif()
 # NowPlaying over the real MediaManager and PhoneMirrorManager
 octave_add_test(tst_nowplaying
     SOURCES managers/nowplaying.h managers/nowplaying.cpp
-            managers/mediamanager.h managers/mediamanager.cpp util/units.h util/units.cpp
+            managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
@@ -203,13 +203,22 @@ octave_add_test(tst_audioanalyzer SOURCES managers/audioanalyzer.h managers/audi
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent)
 octave_add_test(tst_qmlmodules SOURCES util/qmlmodules.h util/qmlmodules.cpp LIBS Qt6::Qml)
 octave_add_test(tst_units SOURCES util/units.h util/units.cpp)
+octave_add_test(tst_clock SOURCES managers/clock.h managers/clock.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_fontcatalog SOURCES util/fontcatalog.h util/fontcatalog.cpp LIBS Qt6::Gui)
 octave_add_test(tst_pathurl)
+# Installable frontends: the manifest, folder / zip installs, the boot choice
+octave_add_test(tst_frontendmanager
+    SOURCES managers/frontendmanifest.h managers/frontendmanifest.cpp managers/frontendmanager.h managers/frontendmanager.cpp
+    LIBS Qt6::CorePrivate)
+# Folder browsing for remote UIs: confined to its roots
+octave_add_test(tst_folderbrowser SOURCES util/folderbrowser.h util/folderbrowser.cpp)
 octave_add_test(tst_servicebridge
     SOURCES service/commandserver.h service/commandserver.cpp service/protocol.h
             service/serviceregistry.h service/serviceregistry.cpp service/servicebridge.h service/servicebridge.cpp
             service/metadescribe.h service/metadescribe.cpp
-            service/websocket.h service/websocket.cpp
+            service/websocket.h service/websocket.cpp service/staticfiles.h service/staticfiles.cpp
+            service/streamhub.h service/streamhub.cpp service/servicepairing.h service/servicepairing.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
             util/variantlistmodel.h util/variantlistmodel.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 octave_add_test(tst_serviceoptions SOURCES service/serviceoptions.h service/serviceoptions.cpp LIBS Qt6::Network)
@@ -225,6 +234,24 @@ add_dependencies(tst_apidocs octave)
 octave_add_test(tst_conformance)
 octave_add_test(tst_websocket
     SOURCES service/commandserver.h service/commandserver.cpp service/websocket.h service/websocket.cpp
+            service/staticfiles.h service/staticfiles.cpp
+    LIBS Qt6::Gui Qt6::Qml Qt6::Network)
+# --web-root: what a frontend directory serves, and what it refuses
+octave_add_test(tst_staticfiles SOURCES service/staticfiles.h service/staticfiles.cpp)
+# Protocol v2 pairing: codes, limits, hashed tokens, revoke, media tickets
+octave_add_test(tst_servicepairing
+    SOURCES service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui Qt6::Network)
+set_tests_properties(tst_servicepairing PROPERTIES TIMEOUT 120)
+# The exec frontend supervisor with fake frontends (shell scripts)
+octave_add_test(tst_frontendsupervisor
+    SOURCES managers/frontendsupervisor.h managers/frontendsupervisor.cpp managers/frontendmanifest.h managers/frontendmanifest.cpp
+            service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui Qt6::Network)
+# Media streams: the H.264 helpers and the hub's join / drop / config rules
+octave_add_test(tst_streamhub
+    SOURCES service/streamhub.h service/streamhub.cpp service/commandserver.h service/commandserver.cpp
+            service/websocket.h service/websocket.cpp service/staticfiles.h service/staticfiles.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 
 # The Python SDK (sdk/python) against a real `octave --headless`
@@ -235,4 +262,61 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(sdk_python PROPERTIES
         ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
         TIMEOUT 180)
+    # Many clients (tools/stream/service_load.py --check): 20 subscribers and a
+    # call flood against `octave --headless --sim`; fails if a subscriber
+    # loses events, the flood is not limited or the OBD poll rate moves 20 %
+    add_test(NAME service_load_check
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/stream/service_load.py"
+                $<TARGET_FILE:octave> 0 "${CMAKE_CURRENT_BINARY_DIR}/service_load_check" --check)
+    set_tests_properties(service_load_check PROPERTIES TIMEOUT 60)
+    # tools/api/check_compat.py (CI's API compatibility gate) sorts changes right
+    add_test(NAME api_compat
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tools/api/tests")
+endif()
+
+# The Go SDK (sdk/go): its generated files match docs/api, and the client
+# runs against a real `octave --headless`. Only where Go is installed.
+find_program(GO_EXECUTABLE go)
+if(GO_EXECUTABLE)
+    add_test(NAME sdk_go
+        COMMAND ${GO_EXECUTABLE} test ./...
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/sdk/go")
+    set_tests_properties(sdk_go PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen;GOFLAGS=-mod=mod;GOMAXPROCS=4"
+        TIMEOUT 300)
+endif()
+
+# The starter templates (templates/): each runs against `octave --headless
+# --sim` on a free port and must show readings and a playing track, so they
+# cannot rot. Each only where its language is installed.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME template_python
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/templates/hello-car-python/test" -p "check.py")
+    set_tests_properties(template_python PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 180)
+endif()
+# The templates installed as frontends and run as the screen (frontendmanager.h)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME templates_install
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/templates" -p "check_install.py")
+    set_tests_properties(templates_install PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 300)
+endif()
+find_program(NODE_EXECUTABLE node)
+if(NODE_EXECUTABLE)
+    add_test(NAME template_js
+        COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/templates/hello-car-js/test/check.mjs")
+    set_tests_properties(template_js PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 180)
+endif()
+if(GO_EXECUTABLE)
+    add_test(NAME template_go
+        COMMAND ${GO_EXECUTABLE} test ./...
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/templates/hello-car-go")
+    set_tests_properties(template_go PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen;GOFLAGS=-mod=mod;GOMAXPROCS=4"
+        TIMEOUT 300)
 endif()

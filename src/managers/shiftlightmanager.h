@@ -28,6 +28,9 @@ class SettingsManager;
 class ShiftLightManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "vehicle")
+    Q_CLASSINFO("octave.scope.full", "setRpm")
 
     // Settings (read-only here; the editor saves them through SettingsManager)
     Q_PROPERTY(bool enabled READ enabled NOTIFY settingsChanged)

@@ -11,6 +11,10 @@
 class DiagnosticsManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "files")
+    Q_CLASSINFO("octave.scope.read", "licenseText")
+    Q_CLASSINFO("octave.scope.system", "openLogFolder")
     Q_PROPERTY(QString logDir READ logDir CONSTANT)
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
     Q_PROPERTY(QString backendName READ backendName CONSTANT)

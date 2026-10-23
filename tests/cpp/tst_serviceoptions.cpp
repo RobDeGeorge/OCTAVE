@@ -2,12 +2,16 @@
 // off unless asked for, loopback unless told otherwise, and --profile only
 // turns it on in a build with the dev tools.
 
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QTest>
 
 #include "service/serviceoptions.h"
 
 using OctaveService::ServiceOptions;
 using OctaveService::parseServiceOptions;
+using OctaveService::webRootProblem;
 
 class TstServiceOptions : public QObject
 {
@@ -70,6 +74,39 @@ private slots:
         QCOMPARE(o.port, quint16(7002));
         // ...but not past a bad value
         QVERIFY(!parseServiceOptions({"octave", "--headless", "--service-bind", "x"}, false, false).enabled);
+    }
+
+    void webRoot()
+    {
+        QVERIFY(parseServiceOptions({"octave", "--service"}, false, false).webRoot.isEmpty());
+        ServiceOptions o = parseServiceOptions({"octave", "--service", "--web-root", "/srv/ui/"}, false, false);
+        QVERIFY(o.enabled);
+        QCOMPARE(o.webRoot, QStringLiteral("/srv/ui"));
+        o = parseServiceOptions({"octave", "--service", "--web-root=/srv/a/../b"}, false, false);
+        QCOMPARE(o.webRoot, QStringLiteral("/srv/b"));
+        // Relative to where the app was started
+        o = parseServiceOptions({"octave", "--service", "--web-root", "dist"}, false, false);
+        QCOMPARE(o.webRoot, QDir::current().absoluteFilePath("dist"));
+        // The setting, and the flag over it
+        QCOMPARE(parseServiceOptions({"octave", "--service"}, false, false, "/srv/set").webRoot, QStringLiteral("/srv/set"));
+        QCOMPARE(parseServiceOptions({"octave", "--service", "--web-root", "/srv/flag"}, false, false, "/srv/set").webRoot,
+                 QStringLiteral("/srv/flag"));
+        // It does not turn the service on by itself, and an empty one is an error
+        QVERIFY(!parseServiceOptions({"octave", "--web-root", "/srv/ui"}, false, false).enabled);
+        QVERIFY(!parseServiceOptions({"octave", "--service", "--web-root="}, false, false).enabled);
+        QVERIFY(!parseServiceOptions({"octave", "--service", "--web-root"}, false, false).enabled);
+    }
+
+    void webRootMustHoldAPage()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(webRootProblem(tmp.filePath("missing")).contains("not a directory"));
+        QVERIFY(webRootProblem(tmp.path()).contains("no index.html"));   // "/" or $HOME by mistake
+        QFile page(tmp.filePath("index.html"));
+        QVERIFY(page.open(QIODevice::WriteOnly));
+        page.close();
+        QVERIFY(webRootProblem(tmp.path()).isEmpty());
+        QVERIFY(!webRootProblem("/").isEmpty());
     }
 
     void bindAddress()

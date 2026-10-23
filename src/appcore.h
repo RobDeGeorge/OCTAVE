@@ -35,9 +35,13 @@
 #include "managers/androidautomanager.h"
 #include "managers/phonemirrormanager.h"
 #include "managers/nowplaying.h"
+#include "managers/themecatalog.h"
+#include "service/servicepairing.h"
 #include "managers/downloadmanager.h"
 #include "managers/dashboardmanager.h"
 #include "util/fontcatalog.h"
+#include "sim/simulator.h"
+#include "managers/frontendmanager.h"
 
 class QQmlContext;
 class Units;
@@ -81,7 +85,15 @@ public:
     NowPlaying nowPlaying;
     DownloadManager downloadManager;
     FontCatalog fontCatalog;
+    ThemeCatalog themeCatalog;
+    // Pairing and the service switch (not a service object: QML only)
+    ServicePairing servicePairing;
     DashboardManager dashboardManager;
+    // The simulated car, inert unless main.cpp starts it (--sim, --dev, the
+    // browser demo)
+    Simulator sim;
+    // Installed frontends (<config>/frontends) and which one is the screen
+    FrontendManager frontendManager;
 
 private:
     void expose(const char *name, QObject *object);

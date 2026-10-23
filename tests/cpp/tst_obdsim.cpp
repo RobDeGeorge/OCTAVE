@@ -1,8 +1,8 @@
-// The real OBDManager against the simulated ELM327 (src/dev/simelm327.cpp):
+// The real OBDManager against the simulated ELM327 (src/sim/simelm327.cpp):
 // connect, VIN decode, vehicle scan, demand-driven polling of single and
 // multi-value PIDs, trouble codes, and a lost link that reconnects. The
-// whole shipped OBD stack runs; only the adapter is simulated. Needs
-// OCTAVE_DEV_TOOLS (the simulator lives in src/dev/).
+// whole shipped OBD stack runs; only the adapter is simulated (src/sim/,
+// built in every configuration).
 //
 // The slots share one manager and run in declaration order.
 
@@ -13,12 +13,12 @@
 #include <algorithm>
 #include <memory>
 
-#include "dev/carsim.h"
-#include "dev/simelm327.h"
+#include "sim/carsim.h"
+#include "sim/simelm327.h"
 #include "managers/obdmanager.h"
 #include "managers/settingsmanager.h"
 
-using namespace OctaveDev;
+using namespace OctaveSim;
 
 class TstObdSim : public QObject
 {
@@ -115,16 +115,61 @@ private slots:
         QVERIFY(codes.last().at(0).toList().isEmpty());
     }
 
+    void freezeFrameCarriesItsValues()
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 25000);
+        m_sim->state()->updateValues([](CarValues &c) { c.freezeFrameDtc = QStringLiteral("P0420"); });
+        QSignalSpy frame(m_obd.get(), &OBDManager::freezeFrameChanged);
+        m_obd->read_freeze_frame();
+        QTRY_VERIFY_WITH_TIMEOUT(!frame.isEmpty(), 15000);
+        const QVariantList list = frame.last().at(0).toList();
+        QCOMPARE(list.size(), 1);
+        const QVariantMap item = list.first().toMap();
+        QCOMPARE(item.value("code").toString(), QStringLiteral("P0420"));
+        QCOMPARE(item.value("description").toString(), QStringLiteral("Catalyst system efficiency below threshold (bank 1)"));
+        // The frame's values by paramStore id, native units
+        const QVariantMap values = item.value("values").toMap();
+        QVERIFY2(values.contains("RPM") && values.contains("COOLANT_TEMP") && values.contains("SPEED"),
+                 qPrintable(QStringList(values.keys()).join(", ")));
+        QVERIFY(values.value("RPM").toDouble() > 300);
+        QCOMPARE(m_obd->get_freeze_frame(), list);
+    }
+
     void lostLinkReconnects()
     {
         m_sim->setLinkUp(false);   // adapter unplugged
         QTRY_VERIFY_WITH_TIMEOUT(!m_obd->isConnected(), 10000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Disconnected);
         QVERIFY(!m_obd->vehicleScanComplete());   // the next car may support a different set
 
         // Plugged back in: the passive scan (every 10 s) reconnects
         m_sim->setLinkUp(true);
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 25000);
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->vehicleScanComplete(), 15000);
+    }
+
+    void closeSaysDisconnectedAndResetReconnects()
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 25000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);
+        QSignalSpy status(m_obd.get(), &OBDManager::connectionStatusChanged);
+        m_obd->close();
+        // connected, connectionState and connectionStatus all notify on
+        // connectionStatusChanged: a subscriber must hear the change
+        QVERIFY(!m_obd->isConnected());
+        QCOMPARE(status.size(), 1);
+        QCOMPARE(status.first().at(0).toString(), QStringLiteral("Disconnected"));
+        QCOMPARE(m_obd->getConnectionStatus(), QStringLiteral("Disconnected"));
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Disconnected);
+        // Closed means closed: no reconnect behind the user's back
+        QTest::qWait(3000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Disconnected);
+        m_obd->close();   // again: nothing new to say
+        QCOMPARE(status.size(), 1);
+
+        m_obd->reset_connection();
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 15000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);
     }
 
 private:

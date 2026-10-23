@@ -13,35 +13,65 @@
 The app must be serving: `octave --service`, `octave --headless`, the
 serviceEnabled setting, or `--profile` in a developer build. Protocol:
 wiki/utilities.html#service-protocol; objects, types and the versioning rule:
-docs/api/ (this client speaks protocol version 1).
+docs/api/ (this client speaks protocol versions 1 and 2).
+
+Over the network (an app started with --service-bind) a client pairs once:
+show the code in OCTAVE's Settings > Service, then
+
+    with Client("192.168.1.20") as octave:
+        token = octave.pair("123456", "My script")   # keep it somewhere safe
+    with Client("192.168.1.20", token=token) as octave:
+        ...
+
+On this device no pairing is needed unless serviceLoopbackOpen is false.
 """
 
 import itertools
 import json
 import queue
 import socket
+import struct
 import threading
 
 from .launch import find_binary, launch_headless
 
-__all__ = ["Client", "OctaveError", "PROTOCOL_VERSION", "find_binary", "launch_headless"]
+__all__ = ["Client", "OctaveError", "PROTOCOL_VERSION", "PROTOCOL_VERSIONS", "find_binary", "launch_headless"]
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2          # the newest this client knows
+PROTOCOL_VERSIONS = (1, 2)    # every version it can talk to
+
+
+def _record(raw):
+    """A stream record as an event dict (header: u8 version, u8 stream,
+    u8 flags, u8 reserved, u64 pts in microseconds)."""
+    _version, stream, flags, _reserved, pts = struct.unpack(">BBBBQ", raw[:12])
+    return {"event": "record", "stream": stream, "flags": flags, "pts": pts,
+            "key": bool(flags & 1), "config": bool(flags & 2), "jpeg": bool(flags & 4),
+            "discontinuity": bool(flags & 8), "data": raw[12:]}
 
 
 class OctaveError(RuntimeError):
-    """The app answered {"ok": false, "error": ...}, or the connection went."""
+    """The app answered {"ok": false, "error": ...}, or the connection went.
+    `code` is the reply's machine-readable code when it has one
+    ("unauthorised": pair first; "forbidden": this device lacks the
+    permission), else None."""
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 class Client:
     """One connection. Requests may come from any thread; replies are matched
     by id, so subscription events can arrive in between.
 
-    Connecting asks `hello` and raises OctaveError if the app speaks another
-    protocol version (a version only changes on a breaking change); pass
-    check_version=False to talk to it anyway. The reply is in `self.server`."""
+    Connecting asks `hello` (with `token`, a paired device's, if given) and
+    raises OctaveError if the app speaks a protocol version this client
+    doesn't know (a version only changes on a breaking change); pass
+    check_version=False to talk to it anyway. The reply is in `self.server`;
+    `self.trusted` says whether ops will be accepted (if not, pair())."""
 
-    def __init__(self, host="127.0.0.1", port=9876, timeout=30.0, check_version=True):
+    def __init__(self, host="127.0.0.1", port=9876, timeout=30.0, check_version=True, token=None):
         self.timeout = timeout
         self._sock = socket.create_connection((host, port), timeout=timeout)
         self._sock.settimeout(None)
@@ -52,17 +82,43 @@ class Client:
         self._closed = False
         self._reader = threading.Thread(target=self._read, name="octave-client", daemon=True)
         self._reader.start()
-        self.server = self.hello()
-        if check_version and self.server.get("protocolVersion") != PROTOCOL_VERSION:
+        self.server = self.hello(token)
+        if check_version and self.server.get("protocolVersion") not in PROTOCOL_VERSIONS:
             self.close()
             raise OctaveError(f"the app speaks protocol {self.server.get('protocolVersion')}, "
-                              f"this client {PROTOCOL_VERSION} (docs/api/README.md)")
+                              f"this client knows {', '.join(map(str, PROTOCOL_VERSIONS))} (docs/api/README.md)")
+        # Version 1 has no pairing: everything is accepted
+        self.trusted = self.server.get("auth", "trusted") == "trusted"
+        # What this connection may change (protocol 2 with scopes; before: everything)
+        self.scopes = self.server.get("scopes", ["full"] if self.trusted else [])
 
     # ── protocol ops ──────────────────────────────────────────────────────
 
-    def hello(self):
-        """{protocolVersion, app: {version, build, headless}, objects: [...]}"""
-        return self.request("hello")
+    def hello(self, token=None):
+        """{protocolVersion, app: {version, build, headless}, objects: [...],
+        auth: "trusted" | "untrusted", loopbackOpen}. A paired device's
+        `token` makes this connection trusted."""
+        return self.request("hello", **({"token": token} if token else {}))
+
+    def pair(self, code, name="octave_client", scopes=None):
+        """Pair with the 6-digit code OCTAVE's Settings > Service shows and
+        return the token (store it; pass Client(token=...) next time). This
+        connection is trusted from then on. `scopes` asks for less than full
+        access, e.g. ["media"] (reading is always allowed; the list is in
+        docs/api/README.md, Permissions); what was granted is in
+        `self.scopes`."""
+        args = {"code": str(code), "name": name}
+        if scopes is not None:
+            args["scopes"] = list(scopes)
+        reply = self.request("pair", **args)
+        self.trusted = True
+        self.scopes = reply.get("scopes", ["full"])
+        return reply["token"]
+
+    def media_ticket(self):
+        """{ticket, expiresIn}: for GET /art?ticket=... and /export/...?ticket=...,
+        so no token goes in a URL."""
+        return self.request("mediaTicket")
 
     def describe(self, obj=None):
         """One object's properties / methods / signals, or every object's."""
@@ -101,6 +157,18 @@ class Client:
     def unsubscribe(self, sub):
         return self.request("unsubscribe", sub=sub)
 
+    def stream(self, obj, name):
+        """Media records (docs/api/README.md, "Streams"): e.g.
+        stream("phoneMirrorManager", "video"). Returns the reply ({stream,
+        format, codec?, width?, height?}); then events() yields
+        {"event": "record", "stream", "flags", "pts", "key", "config",
+        "data": bytes} (H.264 Annex-B, or JPEG) and "streamConfig" /
+        "streamDropped" events."""
+        return self.request("stream", object=obj, name=name)
+
+    def unstream(self, stream_id):
+        return self.request("unstream", stream=stream_id)
+
     def events(self, timeout=None):
         """Yield events as they come. With `timeout`, stop after that many
         seconds without one; without, run until the connection closes."""
@@ -135,7 +203,7 @@ class Client:
         if reply is None:
             raise OctaveError("connection closed")
         if not reply.get("ok"):
-            raise OctaveError(reply.get("error", "unknown error"))
+            raise OctaveError(reply.get("error", "unknown error"), reply.get("code"))
         return reply.get("result")
 
     # ── plumbing ──────────────────────────────────────────────────────────
@@ -166,8 +234,22 @@ class Client:
                 if not chunk:
                     break
                 buf += chunk
-                while b"\n" in buf:
-                    line, buf = buf.split(b"\n", 1)
+                while buf:
+                    # A stream record: 0xFF, big-endian u32 length, the record
+                    # (a JSON line never starts with 0xFF)
+                    if buf[0] == 0xFF:
+                        if len(buf) < 5:
+                            break
+                        n = struct.unpack(">I", buf[1:5])[0]
+                        if len(buf) < 5 + n:
+                            break
+                        self._events.put(_record(buf[5:5 + n]))
+                        buf = buf[5 + n:]
+                        continue
+                    nl = buf.find(b"\n")
+                    if nl < 0:
+                        break
+                    line, buf = buf[:nl], buf[nl + 1:]
                     if line.strip():
                         self._dispatch(json.loads(line))
         except (OSError, ValueError):   # gone, or not the protocol: fail what waits

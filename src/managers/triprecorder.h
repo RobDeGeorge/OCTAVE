@@ -45,6 +45,11 @@ class SettingsManager;
 class TripRecorder : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "files")
+    Q_CLASSINFO("octave.scope.read", "refresh requestDetail requestSeries")
+    Q_CLASSINFO("octave.scope.system", "openHistoryFolder")
+    Q_CLASSINFO("octave.scope.full", "noteEvent recordSample setConnected setVehicleIdentity setVehicleParameters")
 
     Q_PROPERTY(bool enabled READ enabled NOTIFY enabledChanged)
     // The database opened; while false nothing is recorded and lastError says why

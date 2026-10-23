@@ -10,7 +10,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -21,14 +22,16 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "toggleMute",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -39,7 +42,8 @@
                     "type": "float"
                 }
             ],
-            "returns": "float"
+            "returns": "float",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -50,7 +54,8 @@
                     "type": "float"
                 }
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         }
     ],
     "object": "volumeController",
@@ -68,6 +73,7 @@
             "name": "muted",
             "notify": "mutedChanged",
             "readable": true,
+            "scope": "media",
             "type": "bool",
             "writable": true
         },

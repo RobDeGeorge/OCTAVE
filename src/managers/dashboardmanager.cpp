@@ -174,19 +174,28 @@ QVariant DashboardManager::loadDashboard(const QString &id)
     QVariantMap entry = findEntry(id);
     if (entry.isEmpty()) {
         qCWarning(lcDashboards) << "loadDashboard: unknown id" << id;
+        setError(QStringLiteral("No dashboard with id %1").arg(id));
         return QVariantMap{};
     }
     const QVariantMap raw = readFullSpec(entry.value(QStringLiteral("path")).toString());
+    if (raw.isEmpty()) {
+        setError(QStringLiteral("Dashboard %1 could not be read").arg(id));
+        return raw;
+    }
     // A newer schema goes through untouched: the renderer shows its "needs a
     // newer OCTAVE" placeholder for it
-    if (raw.isEmpty() || raw.value(QStringLiteral("schema"), 1).toDouble() > kSupportedSchema)
+    if (raw.value(QStringLiteral("schema"), 1).toDouble() > kSupportedSchema) {
+        setError(QStringLiteral("This dashboard needs a newer version of OCTAVE"));
         return raw;
+    }
     QString error;
-    const QVariantMap spec = normalizeSpec(raw, SpecUse::Load, &error);
+    const QVariantMap spec = normalizeSpec(raw, SpecUse::Load, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         qCWarning(lcDashboards) << "loadDashboard:" << id << error;
+        setError(error);
         return QVariantMap{};
     }
+    setError({});
     return spec;
 }
 
@@ -346,17 +355,27 @@ bool DashboardManager::writeSpec(const QString &absolutePath, const QVariantMap 
 // Mutations
 // ---------------------------------------------------------------------------
 
-QString DashboardManager::saveDashboard(const QVariantMap &raw)
+QString DashboardManager::saveDashboard(const QVariantMap &rawIn)
 {
+    // A new dashboard from a client that has no id yet: the one the editor
+    // would give it (uniqueIdForLabel), so a save is one call
+    QVariantMap raw = rawIn;
+    if (raw.value(QStringLiteral("id")).toString().isEmpty()) {
+        const QString label = raw.value(QStringLiteral("label")).toString().simplified();
+        if (!label.isEmpty())
+            raw.insert(QStringLiteral("id"), uniqueIdForLabel(label));
+    }
     QString error;
-    const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error);
+    const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         qCWarning(lcDashboards) << "saveDashboard:" << error;
+        setError(error);
         return {};
     }
     const QString id = spec.value(QStringLiteral("id")).toString();
     if (m_userDir.isEmpty()) {
         qCWarning(lcDashboards) << "User dashboards dir not configured";
+        setError(QStringLiteral("No place to save dashboards"));
         return {};
     }
 
@@ -364,17 +383,23 @@ QString DashboardManager::saveDashboard(const QVariantMap &raw)
     if (m_builtInIds.contains(id)) {
         qCWarning(lcDashboards)
             << "Cannot save: id" << id << "collides with a built-in preset";
+        setError(QStringLiteral("%1 is a built-in dashboard").arg(id));
         return {};
     }
     if (id == QLatin1String(kParameterCardsId)) {
         qCWarning(lcDashboards) << "Cannot save: id" << id << "is the Parameter Cards entry";
+        setError(QStringLiteral("%1 is the Parameter Cards entry").arg(id));
         return {};
     }
 
     const QString path = m_userDir + QDir::separator() + id + QStringLiteral(".json");
-    if (!writeSpec(path, spec)) return {};
+    if (!writeSpec(path, spec)) {
+        setError(QStringLiteral("Could not write %1").arg(path));
+        return {};
+    }
 
     rescanAll();
+    setError({});
     return id;
 }
 
@@ -471,6 +496,13 @@ constexpr int kMaxLabelLength = 80;
 constexpr int kMaxPropString = 200;
 }
 
+void DashboardManager::setError(const QString &message)
+{
+    if (m_lastError == message) return;
+    m_lastError = message;
+    emit lastErrorChanged();
+}
+
 void DashboardManager::setShareError(const QString &message)
 {
     if (m_lastShareError == message) return;
@@ -494,6 +526,8 @@ QString DashboardManager::exportDashboard(const QString &id)
         return {};
     }
     qCInfo(lcDashboards) << "Exported dashboard" << id << "to" << path;
+    m_lastExportPath = path;
+    emit lastExportPathChanged();
     setShareError({});
     return path;
 }
@@ -559,7 +593,7 @@ QString DashboardManager::importDashboardFromText(const QString &json)
 QString DashboardManager::importSpec(const QVariantMap &raw)
 {
     QString error;
-    QVariantMap spec = normalizeSpec(raw, SpecUse::Import, &error);
+    QVariantMap spec = normalizeSpec(raw, SpecUse::Import, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         setShareError(error);
         return {};
@@ -576,8 +610,62 @@ QString DashboardManager::importSpec(const QVariantMap &raw)
     return saved;
 }
 
-QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error)
+void DashboardManager::setWidgetCatalogFile(const QString &absolutePath)
 {
+    QFile f(absolutePath);
+    QJsonParseError parseError{};
+    const QJsonDocument doc = f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll(), &parseError) : QJsonDocument();
+    if (!doc.isObject()) {
+        qCWarning(lcDashboards) << "No widget catalog at" << absolutePath << parseError.errorString();
+        m_widgetCatalog.clear();
+        return;
+    }
+    QVariantMap catalog = doc.object().toVariantMap();
+    catalog.remove(QStringLiteral("_comment"));
+    m_widgetCatalog = catalog;
+}
+
+namespace {
+// A known widget's editable prop held to its catalog kind; false = drop it
+bool editableValue(const QVariantMap &def, QVariant &v)
+{
+    const QString kind = def.value(QStringLiteral("kind")).toString();
+    const bool number = v.typeId() == QMetaType::Int || v.typeId() == QMetaType::LongLong || v.typeId() == QMetaType::Double;
+    if (kind == QLatin1String("bool"))
+        return v.typeId() == QMetaType::Bool;
+    if (kind == QLatin1String("string"))
+        return v.typeId() == QMetaType::QString;
+    if (kind == QLatin1String("enum"))
+        return v.typeId() == QMetaType::QString && def.value(QStringLiteral("options")).toStringList().contains(v.toString());
+    if (kind == QLatin1String("int") || kind == QLatin1String("real")) {
+        if (!number)
+            return false;
+        double d = v.toDouble();
+        if (def.contains(QStringLiteral("min")))
+            d = qMax(d, def.value(QStringLiteral("min")).toDouble());
+        if (def.contains(QStringLiteral("max")))
+            d = qMin(d, def.value(QStringLiteral("max")).toDouble());
+        if (kind == QLatin1String("int"))
+            v = qRound64(d);
+        else if (d != v.toDouble())
+            v = d;
+        return true;
+    }
+    return true;   // a kind this build does not know: leave it
+}
+} // namespace
+
+QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error, const QVariantMap &catalog)
+{
+    // type -> {prop key -> its editableProps entry}
+    QHash<QString, QHash<QString, QVariantMap>> editable;
+    for (const QVariant &w : catalog.value(QStringLiteral("widgets")).toList()) {
+        const QVariantMap widget = w.toMap();
+        auto &props = editable[widget.value(QStringLiteral("type")).toString()];
+        for (const QVariant &p : widget.value(QStringLiteral("editableProps")).toList())
+            props.insert(p.toMap().value(QStringLiteral("key")).toString(), p.toMap());
+    }
+
     auto fail = [error](const QString &msg) { if (error) *error = msg; return QVariantMap{}; };
 
     // JSON numbers only (no bools, no numeric strings).
@@ -685,9 +773,12 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
         // objects or arrays have no meaning to any widget — drop them.
         QVariantMap props;
         const QVariantMap rawProps = c.value(QStringLiteral("props")).toMap();
+        const QHash<QString, QVariantMap> known = editable.value(type);
         for (auto it = rawProps.constBegin(); it != rawProps.constEnd(); ++it) {
             if (it.key().size() > 64) continue;
-            const QVariant &v = it.value();
+            QVariant v = it.value();
+            if (const auto def = known.constFind(it.key()); def != known.constEnd() && !editableValue(*def, v))
+                continue;
             switch (v.typeId()) {
             case QMetaType::Bool:
             case QMetaType::Int:
@@ -714,7 +805,7 @@ QVariantMap DashboardManager::normalizedSpec(const QVariantMap &spec) const
     QVariantMap withId = spec;
     if (withId.value(QStringLiteral("id")).toString().isEmpty())
         withId.insert(QStringLiteral("id"), QStringLiteral("draft"));
-    const QVariantMap out = normalizeSpec(withId, SpecUse::Load, nullptr);
+    const QVariantMap out = normalizeSpec(withId, SpecUse::Load, nullptr, m_widgetCatalog);
     if (out.isEmpty())
         return {};
     QVariantMap result = out;

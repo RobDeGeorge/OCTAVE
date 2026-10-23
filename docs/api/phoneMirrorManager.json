@@ -10,7 +10,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -21,7 +22,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -32,7 +34,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -43,7 +46,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -54,7 +58,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -65,7 +70,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -80,7 +86,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -91,7 +98,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -102,7 +110,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -113,7 +122,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -124,7 +134,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -135,7 +146,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -146,49 +158,56 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "wakePhone",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "resumeMirroring",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "environmentOk",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "getInstallInstructions",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "getDeviceState",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "refreshDeviceState",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -199,7 +218,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -210,14 +230,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "hasConnectedDevice",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -228,14 +250,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "dismissNotice",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -258,7 +282,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -269,49 +294,56 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "pressHome",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "pressBack",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "pressAppSwitch",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "startScrcpy",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "stopScrcpy",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "cleanup",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -322,70 +354,80 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "forgetWireless",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "startQrPairing",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "cancelQrPairing",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "mediaPosition",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "mediaPlayPause",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "mediaPlay",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "mediaPause",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "mediaNext",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "mediaPrevious",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -396,7 +438,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -407,7 +450,8 @@
                     "type": "qlonglong"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -418,7 +462,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         }
     ],
     "object": "phoneMirrorManager",
@@ -473,6 +518,7 @@
             "name": "videoSink",
             "notify": "videoSinkChanged",
             "readable": true,
+            "scope": "full",
             "type": "QObject*",
             "writable": true
         },

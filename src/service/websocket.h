@@ -45,11 +45,30 @@ bool isUpgrade(const HttpRequest &request);
 // Empty if the request may connect, else why not (for the log and a 403)
 QString refusal(const HttpRequest &request);
 
+// Every HTTP request, Origin or not: the Host must be an address (IP or
+// localhost, with a port or not), never a name a DNS-rebinding site
+// could point at the car. Empty if fine, else why not
+QString hostRefusal(const HttpRequest &request);
+
 // The 101 Switching Protocols reply (Sec-WebSocket-Accept from the key)
 QByteArray acceptResponse(const HttpRequest &request);
 
-// A plain HTTP reply (the reference page, 403, 404)
-QByteArray httpResponse(int status, const QByteArray &reason, const QByteArray &contentType, const QByteArray &body);
+// The reference page's policy: its script is inline; it may only talk to
+// this service
+inline constexpr char kInlinePageCsp[] = "default-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:";
+
+// The policy for a --web-root frontend: its own files only (no inline
+// script; inline styles, data: / blob: images and fonts, and WebAssembly
+// allowed, which bundlers emit), sockets only to this service. `host` is
+// the request's Host header, named in connect-src as ws:// and wss:// when
+// it is an IP address or localhost with an optional port; 'self' alone
+// covers it in current browsers.
+QByteArray webRootCsp(const QByteArray &host);
+
+// A plain HTTP reply (the reference page, 403, 404). nosniff and
+// no-store on every reply.
+QByteArray httpResponse(int status, const QByteArray &reason, const QByteArray &contentType, const QByteArray &body,
+                        const QByteArray &csp = kInlinePageCsp, const QByteArray &extraHeaders = {});
 
 enum Opcode : quint8 { Continuation = 0x0, Text = 0x1, Binary = 0x2, Close = 0x8, Ping = 0x9, Pong = 0xA };
 

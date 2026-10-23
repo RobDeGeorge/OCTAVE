@@ -9,16 +9,26 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTcpSocket>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QThread>
+#include <QtEndian>
 
+#include <algorithm>
 #include <memory>
 
 #include "service/commandserver.h"
 #include "util/variantlistmodel.h"
 #include "service/protocol.h"
+#include "service/metadescribe.h"
 #include "service/servicebridge.h"
 #include "service/serviceregistry.h"
+#include "service/streamhub.h"
+#include "service/servicepairing.h"
+#include "service/staticfiles.h"
+#include "managers/settingsmanager.h"
 
 using namespace OctaveService;
 
@@ -67,11 +77,120 @@ signals:
     void pinged(const QString &from, int count);
     void preferredChanged();
 
+private slots:
+    void secret() { secretCalls++; }
+
+public:
+    int secretCalls = 0;
+
 private:
     void hidden() {}
     int m_level = 3;
     Mode m_mode = Mode::Off;
     Mode m_preferred = Mode::Off;
+};
+
+// Members typed QVariant or Qt JSON: the value inside goes on the wire,
+// never the type's name (dashboardManager.loadDashboard() returns QVariant)
+class Shapes : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QVariant spec READ spec NOTIFY specChanged)
+    Q_PROPERTY(QJsonObject json READ json CONSTANT)
+
+public:
+    QVariant spec() const { return QVariantMap{{"schema", 1}, {"cells", QVariantList{"a", 2}}}; }
+    QJsonObject json() const { return QJsonObject{{"k", "v"}}; }
+
+    Q_INVOKABLE QVariant variantMap() const { return spec(); }
+    Q_INVOKABLE QVariant variantList() const { return QVariantList{1, "two", QVariantMap{{"three", 3}}}; }
+    Q_INVOKABLE QVariant variantString() const { return QStringLiteral("text"); }
+    Q_INVOKABLE QVariant variantNone() const { return {}; }
+    Q_INVOKABLE QVariant echo(const QVariant &v) const { return v; }
+    Q_INVOKABLE QJsonValue jsonValue() const { return QJsonValue(QJsonObject{{"n", 1.5}}); }
+    Q_INVOKABLE QJsonObject jsonObject() const { return QJsonObject{{"a", QJsonArray{1, 2}}}; }
+    Q_INVOKABLE QJsonArray jsonArray() const { return QJsonArray{"x", QJsonObject{{"y", true}}}; }
+
+signals:
+    void specChanged();
+    void loaded(const QVariant &spec, const QJsonObject &meta);
+};
+
+// Consumer-keyed demand, as obdManager / berryIMU have it
+class Demand : public QObject
+{
+    Q_OBJECT
+public:
+    QHash<QString, QStringList> ids;
+    QHash<QString, bool> wanted;
+    int releases = 0;
+    Q_INVOKABLE void setDemand(const QString &consumer, const QStringList &list)
+    {
+        if (list.isEmpty()) { ids.remove(consumer); ++releases; } else { ids.insert(consumer, list); }
+    }
+    Q_INVOKABLE void setWanted(const QString &consumer, bool on)
+    {
+        if (!on) { wanted.remove(consumer); ++releases; } else { wanted.insert(consumer, true); }
+    }
+};
+
+// API annotations (metadescribe.h): experimental and deprecated members
+class Annotated : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.experimental", "draft probe")
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.deprecated.oldLevel", "use level; goes in protocol 9")
+    Q_PROPERTY(int level READ level CONSTANT)
+    Q_PROPERTY(int oldLevel READ level CONSTANT)
+    Q_PROPERTY(int draft READ level CONSTANT)
+
+public:
+    int level() const { return 3; }
+    Q_INVOKABLE int probe() const { return 1; }
+    Q_INVOKABLE int probe(int v) const { return v; }
+
+signals:
+    void ready();
+};
+
+// Permissions (servicescopes.h): what each member needs
+class Scoped : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.read", "peek")
+    Q_CLASSINFO("octave.scope.full", "internal")
+    Q_PROPERTY(int level MEMBER m_level NOTIFY levelChanged)
+
+public:
+    int m_level = 1;
+    int plays = 0, internals = 0;
+    Q_INVOKABLE void play() { ++plays; }
+    Q_INVOKABLE int peek() const { return 42; }
+    Q_INVOKABLE void internal() { ++internals; }
+
+signals:
+    void levelChanged();
+};
+
+class WholeDraft : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.experimental", "*")
+    Q_CLASSINFO("octave.scope", "media")
+public:
+    Q_INVOKABLE void go() {}
+};
+
+class Mislabelled : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.experimental", "nosuch")
+    Q_CLASSINFO("octave.deprecated.go", " ")
+    Q_CLASSINFO("octave.scope", "media")
+public:
+    Q_INVOKABLE void go() {}
 };
 
 class TstServiceBridge : public QObject
@@ -173,6 +292,41 @@ private slots:
         QVERIFY(send(R"({"op": "describe", "object": "nope"})").value("error").toString().contains("Unknown object"));
     }
 
+    void annotationsMarkStabilityAndDeprecation()
+    {
+        Annotated annotated;
+        m_registry->add("annotated", &annotated);
+        const QJsonObject d = send(R"({"op": "describe", "object": "annotated"})").value("result").toObject();
+        QVERIFY(!d.contains("stability"));
+        QHash<QString, QJsonObject> props;
+        for (const QJsonValue &p : d.value("properties").toArray())
+            props.insert(p.toObject().value("name").toString(), p.toObject());
+        QVERIFY(!props.value("level").contains("stability"));   // stable unless marked
+        QVERIFY(!props.value("level").contains("deprecated"));
+        QCOMPARE(props.value("draft").value("stability").toString(), QStringLiteral("experimental"));
+        QCOMPARE(props.value("oldLevel").value("deprecated").toString(), QStringLiteral("use level; goes in protocol 9"));
+        int probes = 0;
+        for (const QJsonValue &m : d.value("methods").toArray())
+            if (m.toObject().value("name").toString() == "probe") {
+                ++probes;   // a name covers every overload
+                QCOMPARE(m.toObject().value("stability").toString(), QStringLiteral("experimental"));
+            }
+        QCOMPARE(probes, 2);
+        QVERIFY(!d.value("signals").toArray().at(0).toObject().contains("stability"));
+        QVERIFY(annotationErrors(annotated.metaObject()).isEmpty());
+
+        WholeDraft whole;
+        QCOMPARE(describeObject(&whole).value("stability").toString(), QStringLiteral("experimental"));
+        QVERIFY(annotationErrors(whole.metaObject()).isEmpty());
+
+        // A typo, and a deprecation that says nothing, are caught (--dump-api refuses them)
+        Mislabelled bad;
+        const QStringList errors = annotationErrors(bad.metaObject());
+        QCOMPARE(errors.size(), 2);
+        QVERIFY(errors.join('\n').contains("nosuch"));
+        QVERIFY(errors.join('\n').contains("without saying what to use"));
+    }
+
     void enumsConvertByNameOrNumber()
     {
         const QMetaType t = QMetaType::fromType<Fixture::Mode>();
@@ -220,6 +374,652 @@ private slots:
         QVERIFY(error(R"({"op": "call", "object": "fixture", "method": "greet", "args": []})").contains("no method"));
     }
 
+    void variantAndJsonValuesAreSerialised()
+    {
+        Shapes shapes;
+        m_registry->add("shapes", &shapes);
+        const QVariantMap spec{{"schema", 1}, {"cells", QVariantList{"a", 2}}};
+        // Returns
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "variantMap"})").toMap(), spec);
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "variantList"})").toList(),
+                 (QVariantList{1, "two", QVariantMap{{"three", 3}}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "variantString"})").toString(), QStringLiteral("text"));
+        QJsonObject none = send(R"({"op": "call", "object": "shapes", "method": "variantNone"})");
+        QVERIFY(none.value("ok").toBool());
+        QVERIFY(none.contains("result") && none.value("result").isNull());
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "echo", "args": [{"x": [1]}]})").toMap(),
+                 (QVariantMap{{"x", QVariantList{1}}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "jsonValue"})").toMap(), (QVariantMap{{"n", 1.5}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "jsonObject"})").toMap(),
+                 (QVariantMap{{"a", QVariantList{1, 2}}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "jsonArray"})").toList(),
+                 (QVariantList{"x", QVariantMap{{"y", true}}}));
+        // Properties
+        QCOMPARE(result(R"({"op": "get", "object": "shapes", "property": "spec"})").toMap(), spec);
+        QCOMPARE(result(R"({"op": "get", "object": "shapes", "property": "json"})").toMap(), (QVariantMap{{"k", "v"}}));
+        // Signal arguments
+        QVERIFY(result(R"({"op": "subscribe", "object": "shapes", "signals": ["loaded"]})").toMap().value("sub").toInt() > 0);
+        emit shapes.loaded(spec, QJsonObject{{"id", "d1"}});
+        QTRY_COMPARE_WITH_TIMEOUT(collect().size(), 1, 2000);
+        const QJsonArray args = m_events.first().value("args").toArray();
+        QCOMPARE(args.at(0).toVariant().toMap(), spec);
+        QCOMPARE(args.at(1).toObject().value("id").toString(), QStringLiteral("d1"));
+    }
+
+    void aClosedConnectionReleasesItsDemand()
+    {
+        Demand demand;
+        m_registry->add("demand", &demand);
+        m_bridge->releaseOnClose("demand", "setDemand", QStringList());
+        m_bridge->releaseOnClose("demand", "setWanted", false);
+
+        auto other = std::make_unique<QTcpSocket>();
+        other->connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(other->waitForConnected(3000));
+        auto callOn = [this](QTcpSocket &sock, const QByteArray &line) {
+            sock.write(line + '\n');
+            QElapsedTimer t;
+            t.start();
+            QByteArray in;
+            while (!in.contains('\n') && t.elapsed() < 5000) {
+                QCoreApplication::processEvents();
+                if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(10))
+                    in += sock.readAll();
+            }
+            return in;
+        };
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["dash", ["RPM", "SPEED"]]})").contains("\"ok\":true"));
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["gone", ["MAF"]]})").contains("\"ok\":true"));
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setWanted", "args": ["g", true]})").contains("\"ok\":true"));
+        // Released by the client itself: nothing left to do on close
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["gone", []]})").contains("\"ok\":true"));
+        // A consumer this connection claimed and another one took over
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["shared", ["A"]]})").contains("\"ok\":true"));
+        QVERIFY(result(R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["shared", ["B"]]})").isNull());
+        // And one of m_socket's own
+        QVERIFY(result(R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["mine", ["RPM"]]})").isNull());
+        QCOMPARE(demand.ids.value("dash"), (QStringList{"RPM", "SPEED"}));
+        QVERIFY(demand.wanted.contains("g"));
+        QCOMPARE(demand.releases, 1);
+
+        other->abort();   // killed, no goodbye
+        other.reset();
+        QTRY_VERIFY_WITH_TIMEOUT(!demand.ids.contains("dash"), 3000);
+        QTRY_VERIFY_WITH_TIMEOUT(!demand.wanted.contains("g"), 3000);
+        QCOMPARE(demand.releases, 3);   // dash and g only
+        QCOMPARE(demand.ids.value("shared"), QStringList{"B"});   // the other connection's now
+        QCOMPARE(demand.ids.value("mine"), QStringList{"RPM"});
+        // The surviving connection's claims go when it does
+        m_socket->abort();
+        QTRY_VERIFY_WITH_TIMEOUT(demand.ids.isEmpty(), 3000);
+        QCOMPARE(demand.releases, 5);   // shared and mine
+    }
+
+    void streamsSendBinaryRecords()
+    {
+        // `stream`: the reply, a streamConfig event, then records framed as
+        // 0xFF + u32 length on the line protocol
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QVERIFY(error(R"({"op": "stream", "object": "fixture", "name": "nope"})").contains("has no stream"));
+        QVERIFY(error(R"({"op": "stream", "object": "ghost", "name": "video"})").contains("ghost"));
+
+        QTcpSocket raw;
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 5})" "\n");
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (!in.contains('\n') && t.elapsed() < 3000) {
+            QCoreApplication::processEvents();
+            // What processEvents() already pulled into the socket counts too
+            if (raw.bytesAvailable() > 0 || raw.waitForReadyRead(10))
+                in += raw.readAll();
+        }
+        const QJsonObject reply = QJsonDocument::fromJson(in.left(in.indexOf('\n'))).object();
+        QVERIFY2(reply.value("ok").toBool(), in.constData());
+        const int id = reply.value("result").toObject().value("stream").toInt();
+        QCOMPARE(id, 1);
+        in.remove(0, in.indexOf('\n') + 1);
+
+        // Parameter sets (only their NAL types matter here), a keyframe, a delta
+        const QByteArray sps = QByteArray::fromHex("000000016742c01e"), pps = QByteArray::fromHex("0000000168ce3c80");
+        hub.publishH264("fixture.video", sps + pps, 0, false, true);
+        hub.publishH264("fixture.video", QByteArray::fromHex("0000000165888040"), 1000, true, false);
+        hub.publishH264("fixture.video", QByteArray::fromHex("00000001419a"), 34333, false, false);
+        t.restart();
+        while (in.count(char(0xFF)) < 2 && t.elapsed() < 3000) {
+            QCoreApplication::processEvents();
+            // What processEvents() already pulled into the socket counts too
+            if (raw.bytesAvailable() > 0 || raw.waitForReadyRead(10))
+                in += raw.readAll();
+        }
+        const int nl = in.indexOf('\n');
+        QVERIFY(nl > 0);
+        const QJsonObject config = QJsonDocument::fromJson(in.left(nl)).object();
+        QCOMPARE(config.value("event").toString(), QStringLiteral("streamConfig"));
+        QCOMPARE(config.value("stream").toInt(), id);
+        QByteArray rest = in.mid(nl + 1);
+        QList<QByteArray> recs;
+        while (rest.size() >= 5 && quint8(rest.at(0)) == 0xFF) {
+            const quint32 n = qFromBigEndian<quint32>(rest.constData() + 1);
+            recs.append(rest.mid(5, int(n)));
+            rest.remove(0, 5 + int(n));
+        }
+        QCOMPARE(recs.size(), 2);
+        QCOMPARE(quint8(recs.at(0).at(0)), quint8(1));    // version
+        QCOMPARE(quint8(recs.at(0).at(1)), quint8(id));
+        QCOMPARE(quint8(recs.at(0).at(2)), quint8(StreamHub::Key | StreamHub::Config | StreamHub::Discontinuity));
+        QCOMPARE(qFromBigEndian<quint64>(recs.at(0).constData() + 4), quint64(1000));
+        QVERIFY(recs.at(0).mid(12).startsWith(QByteArray::fromHex("0000000167")));   // SPS first
+        QCOMPARE(quint8(recs.at(1).at(2)), quint8(0));
+        QCOMPARE(recs.at(1).mid(12), QByteArray::fromHex("00000001419a"));
+
+        // Closing the connection ends the stream
+        raw.abort();
+        QTRY_VERIFY_WITH_TIMEOUT((hub.publishH264("fixture.video", QByteArray::fromHex("0000000165"), 0, true, false),
+                                  !hub.wanted("fixture.video")), 3000);
+    }
+
+    void pairingGatesEverythingButHelloAndPair()
+    {
+        // Protocol v2 with loopback closed: this test's client is treated as
+        // one on the network
+        QTemporaryDir cfg;
+        qputenv("HOME", cfg.path().toUtf8());
+        qputenv("XDG_CONFIG_HOME", (cfg.path() + "/config").toUtf8());
+        QDir().mkpath(SettingsManager::getAppDataDir());
+        QFile f(SettingsManager::getAppDataDir() + "/settingsConfigure.json");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"serviceLoopbackOpen": false})");
+        f.close();
+        SettingsManager settings;
+        ServicePairing pairing(&settings);
+        QVERIFY(!pairing.loopbackOpen());
+
+        ServiceRegistry registry;
+        registry.add("fixture", &m_fixture);
+        CommandServer server(0);
+        ServiceBridge bridge(&registry, AppInfo{"9", false, true});
+        bridge.setPairing(&pairing);
+        bridge.install(server);
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        QObject::connect(&pairing, &ServicePairing::revoked, &server,
+                         [&server](const QString &id) { server.closeConnectionsOf(id); });
+        QVERIFY(server.start());
+
+        LineClient a(server.port());
+        QJsonObject hello = a.send(R"({"op": "hello", "id": 1})");
+        QCOMPARE(hello.value("result").toObject().value("protocolVersion").toInt(), 2);
+        QCOMPARE(hello.value("result").toObject().value("auth").toString(), QStringLiteral("untrusted"));
+        // Only what pairing needs: no app version or build, no object list
+        QVERIFY(!hello.value("result").toObject().contains("objects"));
+        QVERIFY(!hello.value("result").toObject().contains("app"));
+        QJsonObject refused = a.send(R"({"op": "get", "object": "fixture", "property": "level", "id": 2})");
+        QCOMPARE(refused.value("ok").toBool(), false);
+        QCOMPARE(refused.value("code").toString(), QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"action": "ping"})").value("code").toString(), QStringLiteral("unauthorised"));
+        // The exemption is for the ops only, never an action of that name
+        QCOMPARE(a.send(R"({"action": "hello"})").value("code").toString(), QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"action": "pair"})").value("code").toString(), QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"op": "stream", "object": "fixture", "name": "video"})").value("code").toString(),
+                 QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"op": "mediaTicket"})").value("code").toString(), QStringLiteral("unauthorised"));
+
+        // Pair with the code the head unit shows
+        pairing.startPairing();
+        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
+        const QJsonObject paired = a.send(QStringLiteral(R"({"op": "pair", "code": "%1", "name": "test", "id": 3})")
+                                              .arg(pairing.pairingCode()).toUtf8());
+        const QString token = paired.value("result").toObject().value("token").toString();
+        QCOMPARE(token.size(), 64);
+        QCOMPARE(a.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), true);
+
+        // A new connection is untrusted until hello {token}
+        LineClient b(server.port());
+        QCOMPARE(b.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), false);
+        QCOMPARE(b.send(QStringLiteral(R"({"op": "hello", "token": "%1"})").arg(token).toUtf8())
+                     .value("result").toObject().value("auth").toString(), QStringLiteral("trusted"));
+        // A wrong token still gets an answer: untrusted, tokenRejected (and
+        // it drops the connection's earlier token)
+        const QJsonObject rejected = b.send(R"({"op": "hello", "token": "nope"})");
+        QCOMPARE(rejected.value("ok").toBool(), true);
+        QCOMPARE(rejected.value("result").toObject().value("auth").toString(), QStringLiteral("untrusted"));
+        QCOMPARE(rejected.value("result").toObject().value("tokenRejected").toBool(), true);
+        QCOMPARE(b.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), false);
+        QVERIFY(!b.send(QStringLiteral(R"({"op": "hello", "token": "%1"})").arg(token).toUtf8())
+                     .value("result").toObject().contains("tokenRejected"));
+        QCOMPARE(b.send(R"({"op": "subscribe", "object": "fixture", "properties": ["level"]})").value("ok").toBool(), true);
+
+        // HTTP: /art needs a ticket or the bearer token; never the token in the URL
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+        QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 401"));
+        QVERIFY(once(server.port(), "GET /art?token=" + token.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 401"));
+        const QByteArray bearer = once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\nAuthorization: Bearer "
+                                                          + token.toLatin1() + "\r\n\r\n");
+        QVERIFY2(bearer.startsWith("HTTP/1.1 200") && bearer.contains("Referrer-Policy: no-referrer"), bearer.constData());
+        const QString ticket = b.send(R"({"op": "mediaTicket"})").value("result").toObject().value("ticket").toString();
+        QVERIFY(once(server.port(), "GET /art?ticket=" + ticket.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 200"));
+
+        // Revoked from Settings: both its connections close, the ticket dies
+        pairing.revoke(pairing.checkToken(token));
+        QTRY_VERIFY_WITH_TIMEOUT(b.socket.state() == QAbstractSocket::UnconnectedState
+                                     || (b.socket.waitForReadyRead(50), b.socket.state() == QAbstractSocket::UnconnectedState),
+                                 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(a.socket.state() == QAbstractSocket::UnconnectedState
+                                     || (a.socket.waitForReadyRead(50), a.socket.state() == QAbstractSocket::UnconnectedState),
+                                 5000);
+        QVERIFY(once(server.port(), "GET /art?ticket=" + ticket.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 401"));
+        server.stop();
+    }
+
+    void scopesLimitWhatAPairedDeviceMayChange()
+    {
+        QTemporaryDir cfg;
+        qputenv("HOME", cfg.path().toUtf8());
+        qputenv("XDG_CONFIG_HOME", (cfg.path() + "/config").toUtf8());
+        QDir().mkpath(SettingsManager::getAppDataDir());
+        QFile f(SettingsManager::getAppDataDir() + "/settingsConfigure.json");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"serviceLoopbackOpen": false})");
+        f.close();
+        SettingsManager settings;
+        ServicePairing pairing(&settings);
+
+        Scoped scoped;
+        ServiceRegistry registry;
+        registry.add("scoped", &scoped);
+        registry.add("fixture", &m_fixture);   // no scope declared: full
+        CommandServer server(0);
+        ServiceBridge bridge(&registry, AppInfo{"9", false, true});
+        bridge.setPairing(&pairing);
+        bridge.install(server);
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        server.addRoute("/export/logs", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "text/plain", "log"}; });
+        QVERIFY(server.start());
+
+        // describe says what each member needs
+        LineClient a(server.port());
+        pairing.startPairing();
+        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
+        // An unknown scope is refused before the code is used
+        const QJsonObject bad = a.send(QStringLiteral(R"({"op": "pair", "code": "%1", "scopes": ["media", "root"]})")
+                                           .arg(pairing.pairingCode()).toUtf8());
+        QCOMPARE(bad.value("ok").toBool(), false);
+        QVERIFY(bad.value("error").toString().contains("root"));
+        QVERIFY(!pairing.pairingCode().isEmpty());
+        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
+        const QJsonObject paired = a.send(QStringLiteral(R"({"op": "pair", "code": "%1", "name": "dash", "scopes": ["media"]})")
+                                              .arg(pairing.pairingCode()).toUtf8());
+        QCOMPARE(paired.value("result").toObject().value("scopes").toVariant().toStringList(), (QStringList{"read", "media"}));
+        const QString token = paired.value("result").toObject().value("token").toString();
+        QCOMPARE(token.size(), 64);
+
+        const QJsonObject d = a.send(R"({"op": "describe", "object": "scoped"})").value("result").toObject();
+        QHash<QString, QString> scopeOf;
+        for (const QJsonValue &m : d.value("methods").toArray())
+            scopeOf.insert(m.toObject().value("name").toString(), m.toObject().value("scope").toString());
+        QCOMPARE(scopeOf.value("play"), QStringLiteral("media"));
+        QCOMPARE(scopeOf.value("peek"), QStringLiteral("read"));
+        QCOMPARE(scopeOf.value("internal"), QStringLiteral("full"));
+        QCOMPARE(d.value("properties").toArray().at(0).toObject().value("scope").toString(), QStringLiteral("media"));
+
+        // Reading is always allowed; changing needs the member's scope
+        QCOMPARE(a.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), true);
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "peek"})").value("result").toInt(), 42);
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "play"})").value("ok").toBool(), true);
+        QCOMPARE(a.send(R"({"op": "set", "object": "scoped", "property": "level", "value": 5})").value("ok").toBool(), true);
+        QCOMPARE(scoped.plays, 1);
+        QCOMPARE(scoped.m_level, 5);
+        const QJsonObject forbidden = a.send(R"({"op": "call", "object": "scoped", "method": "internal"})");
+        QCOMPARE(forbidden.value("code").toString(), QStringLiteral("forbidden"));
+        QVERIFY(forbidden.value("error").toString().contains("scoped.internal needs the full permission"));
+        QCOMPARE(scoped.internals, 0);
+        QCOMPARE(a.send(R"({"op": "set", "object": "fixture", "property": "level", "value": 9})").value("code").toString(),
+                 QStringLiteral("forbidden"));
+        QCOMPARE(a.send(R"({"action": "ping"})").value("code").toString(), QStringLiteral("forbidden"));
+
+        // hello reports them
+        LineClient b(server.port());
+        QCOMPARE(b.send(QStringLiteral(R"({"op": "hello", "token": "%1"})").arg(token).toUtf8())
+                     .value("result").toObject().value("scopes").toVariant().toStringList(), (QStringList{"read", "media"}));
+
+        // HTTP: a cover only needs read, an export needs files
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+        const QByteArray auth = "\r\nAuthorization: Bearer " + token.toLatin1() + "\r\n\r\n";
+        QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + auth).startsWith("HTTP/1.1 200"));
+        QVERIFY(once(server.port(), "GET /export/logs HTTP/1.1\r\nHost: " + host + auth).startsWith("HTTP/1.1 401"));
+        const QString ticket = b.send(R"({"op": "mediaTicket"})").value("result").toObject().value("ticket").toString();
+        QVERIFY(once(server.port(), "GET /export/logs?ticket=" + ticket.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 401"));
+
+        // Narrowed from Settings: at once, on the open connections too
+        const QString id = pairing.checkToken(token);
+        pairing.setDeviceScopes(id, {"read"});
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "play"})").value("code").toString(),
+                 QStringLiteral("forbidden"));
+        QCOMPARE(pairing.devices().value(0).toMap().value("scopes").toStringList(), (QStringList{"read"}));
+        // Widened to full: everything, the dev actions included
+        pairing.setDeviceScopes(id, {"full"});
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "internal"})").value("ok").toBool(), true);
+        QVERIFY(once(server.port(), "GET /export/logs HTTP/1.1\r\nHost: " + host + auth).startsWith("HTTP/1.1 200"));
+
+        // Kept with the device
+        ServicePairing reloaded(&settings);
+        QCOMPARE(reloaded.scopesOf(id), (QStringList{"full"}));
+        server.stop();
+    }
+
+    void aBrowserPostNeverRunsAnOp()
+    {
+        // H1: a cross-site no-cors fetch POST to 127.0.0.1 used to be read
+        // as JSON lines (first byte not 'G'): its body ran as a trusted op
+        m_registry->add("fixture", &m_fixture);
+        m_fixture.setLevel(3);
+        const QByteArray body = R"({"op": "set", "object": "fixture", "property": "level", "value": 77})" "\n";
+        const QByteArray post = "POST / HTTP/1.1\r\nHost: 127.0.0.1:" + QByteArray::number(m_server->port())
+                                + "\r\nOrigin: https://evil.example\r\nContent-Type: text/plain\r\nContent-Length: "
+                                + QByteArray::number(body.size()) + "\r\n\r\n" + body;
+        const QByteArray reply = once(m_server->port(), post);
+        QVERIFY2(reply.startsWith("HTTP/1.1 405"), reply.constData());
+        QCOMPARE(m_fixture.level(), 3);
+        // Other methods too, and with no Origin at all
+        for (const char *method : {"PUT", "DELETE", "OPTIONS", "PATCH"}) {
+            const QByteArray r = once(m_server->port(), QByteArray(method) + " / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n" + body);
+            QVERIFY2(r.startsWith("HTTP/1.1 405"), r.constData());
+        }
+        QCOMPARE(m_fixture.level(), 3);
+        // A lines client that sends anything but a JSON object is closed:
+        // the op after it never runs
+        const QByteArray garbage = once(m_server->port(), "{\"op\": \"hello\"}\nnot json\n" + body);
+        QVERIFY2(garbage.contains("Invalid JSON"), garbage.constData());
+        QCOMPARE(m_fixture.level(), 3);
+        // Leading blank lines before '{' are still the line protocol
+        QVERIFY(once(m_server->port(), "\n  \n" + body).contains(R"("ok":true)"));
+        QCOMPARE(m_fixture.level(), 77);
+    }
+
+    void callReachesOnlyTheServiceMethods()
+    {
+        // H2: `call` used to match any method of the meta-object: QObject's
+        // deleteLater (a crash on a manager), destroyed, signals, private
+        // slots. Only the object's own public slots and Q_INVOKABLEs now.
+        m_registry->add("fixture", &m_fixture);
+        QPointer<Fixture> alive = &m_fixture;
+        for (const char *line : {R"({"op": "call", "object": "fixture", "method": "deleteLater"})",
+                                 R"({"op": "call", "object": "fixture", "method": "destroyed"})",
+                                 R"({"op": "call", "object": "fixture", "method": "levelChanged"})",
+                                 R"({"op": "call", "object": "fixture", "method": "pinged", "args": ["x", 1]})",
+                                 R"({"op": "call", "object": "fixture", "method": "objectNameChanged", "args": ["x"]})",
+                                 R"({"op": "call", "object": "fixture", "method": "hidden"})",
+                                 R"({"op": "call", "object": "fixture", "method": "secret"})"}) {
+            const QJsonObject r = send(line);
+            QVERIFY2(!r.value("ok").toBool() && r.value("error").toString().contains("no method"), line);
+        }
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QVERIFY(alive);
+        QCOMPARE(m_fixture.secretCalls, 0);   // a private slot never runs
+        // QObject's properties and signals are not offered either
+        QVERIFY(error(R"({"op": "get", "object": "fixture", "property": "objectName"})").contains("no property"));
+        QVERIFY(error(R"({"op": "set", "object": "fixture", "property": "objectName", "value": "x"})").contains("no property"));
+        QVERIFY(error(R"({"op": "subscribe", "object": "fixture", "signals": ["destroyed"]})").contains("no signal"));
+        QVERIFY(error(R"({"op": "subscribe", "object": "fixture", "properties": ["objectName"]})").contains("no property"));
+        // What describe lists still works
+        QCOMPARE(result(R"({"op": "call", "object": "fixture", "method": "greet", "args": ["rob"]})").toString(),
+                 QStringLiteral("hi rob"));
+        QVERIFY(result(R"({"op": "call", "object": "fixture", "method": "setMode", "args": ["Fast"]})").isNull());
+        QCOMPARE(m_fixture.mode(), Fixture::Mode::Fast);
+    }
+
+    void aClientThatStopsReadingDropsInsteadOfGrowing()
+    {
+        // M5: events used to move from the bounded queue into the socket's
+        // unbounded write buffer. Past maxUnsentBytes they now stay in the
+        // queue, which drops (a stream back to its next keyframe).
+        CommandServer::Limits limits = m_server->limits();
+        limits.maxUnsentBytes = 64 * 1024;
+        m_server->setLimits(limits);
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QTcpSocket raw;
+        raw.setReadBufferSize(1);   // read nothing more than we must
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 1})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT(hub.wanted("fixture.video"), 3000);
+        hub.publishH264("fixture.video", QByteArray::fromHex("000000016742c01e0000000168ce3c80"), 0, false, true);
+        const QByteArray big(200 * 1024, '\x01');
+        for (int i = 0; i < 300; ++i) {   // 60 MB offered, never read
+            hub.publishH264("fixture.video", QByteArray("\x00\x00\x00\x01\x65", 5) + big, i * 33333, i % 30 == 0, false);
+            QTest::qWait(2);
+        }
+        // Now read it all: the drops were reported, and far less than 60 MB came
+        raw.setReadBufferSize(0);
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 5000) {
+            if (raw.waitForReadyRead(200))
+                in += raw.readAll();
+            else if (in.contains("streamDropped"))
+                break;
+        }
+        QVERIFY2(in.contains("streamDropped"), qPrintable(QString::number(in.size())));
+        QVERIFY2(in.size() < 30 * 1024 * 1024, qPrintable(QString::number(in.size())));
+        raw.abort();
+        QTRY_VERIFY_WITH_TIMEOUT((hub.publishH264("fixture.video", QByteArray::fromHex("0000000165"), 0, true, false),
+                                  !hub.wanted("fixture.video")), 3000);
+    }
+
+    void aSlowReaderKeepsTheBacklogBounded()
+    {
+        // M5, the case the stalled-reader test can't show: a client that
+        // reads, but slower than the stream. Unbounded, everything it
+        // hasn't read yet piles up in the server's socket buffer; bounded,
+        // the queue drops and the backlog stays near maxUnsentBytes
+        CommandServer::Limits limits = m_server->limits();
+        limits.maxUnsentBytes = 256 * 1024;
+        m_server->setLimits(limits);
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QTcpSocket raw;
+        raw.setSocketOption(QAbstractSocket::ReceiveBufferSizeSocketOption, 64 * 1024);
+        raw.setReadBufferSize(64 * 1024);   // Qt's own buffer too: the backlog must be the server's
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 1})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT(hub.wanted("fixture.video"), 3000);
+        hub.publishH264("fixture.video", QByteArray::fromHex("000000016742c01e0000000168ce3c80"), 0, false, true);
+        const QByteArray frame = QByteArray("\x00\x00\x00\x01\x65", 5) + QByteArray(100 * 1024, '\x02');
+        QByteArray in;
+        qint64 offered = 0;
+        QElapsedTimer t;
+        t.start();
+        int i = 0;
+        while (t.elapsed() < 3000) {   // ~10 MB/s offered, ~200 KB/s read
+            hub.publishH264("fixture.video", frame, i * 10000, i % 10 == 0, false);
+            offered += frame.size();
+            ++i;
+            if (raw.waitForReadyRead(10))
+                in += raw.read(2 * 1024);
+        }
+        // What the server still owes the client once the stream stops
+        qint64 backlog = 0;
+        QElapsedTimer drain;
+        drain.start();
+        while (drain.elapsed() < 10000) {
+            if (raw.waitForReadyRead(300))
+                backlog += raw.readAll().size();
+            else
+                break;
+        }
+        QVERIFY2(offered > 20 * 1024 * 1024, qPrintable(QString::number(offered)));
+        QVERIFY2(backlog < 8 * 1024 * 1024, qPrintable(QStringLiteral("backlog %1 bytes of %2 offered").arg(backlog).arg(offered)));
+        QVERIFY(in.contains("streamDropped") || backlog > 0);
+        raw.abort();
+        QTRY_VERIFY_WITH_TIMEOUT((hub.publishH264("fixture.video", QByteArray::fromHex("0000000165"), 0, true, false),
+                                  !hub.wanted("fixture.video")), 3000);
+    }
+
+    void aFloodIsRateLimitedAndNoOneElseIs()
+    {
+        // Step 7: past the burst a connection's ops are refused with a code
+        // and a retry time, before any work; another connection is untouched
+        CommandServer::Limits limits = m_server->limits();
+        limits.opsPerSecond = 20;
+        limits.opsBurst = 10;
+        m_server->setLimits(limits);
+        QTcpSocket flood;
+        flood.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(flood.waitForConnected(3000));
+        QByteArray burst;
+        for (int i = 1; i <= 100; ++i)
+            burst += QByteArray(R"({"op": "hello", "id": )") + QByteArray::number(i) + "}\n";
+        flood.write(burst);
+        QList<QJsonObject> replies;
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (replies.size() < 100 && t.elapsed() < 5000) {
+            QCoreApplication::processEvents();
+            if (flood.waitForReadyRead(10))
+                in += flood.readAll();
+            int nl;
+            while ((nl = in.indexOf('\n')) >= 0) {
+                replies.append(QJsonDocument::fromJson(in.left(nl)).object());
+                in.remove(0, nl + 1);
+            }
+        }
+        QCOMPARE(replies.size(), 100);
+        int ok = 0;
+        for (const QJsonObject &r : std::as_const(replies)) {
+            if (r.value("ok").toBool()) {
+                ++ok;
+                continue;
+            }
+            QCOMPARE(r.value("code").toString(), QStringLiteral("rateLimited"));
+            QVERIFY(r.value("retryAfterMs").toInt() > 0);
+            QVERIFY(r.value("id").toInt() > 0);   // still echoed: the client knows which
+        }
+        QVERIFY2(ok >= 10 && ok < 30, qPrintable(QString::number(ok)));
+        // Someone else's bucket is their own
+        QCOMPARE(send(R"({"op": "hello", "id": 1})").value("ok").toBool(), true);
+        // Dev actions are not counted (the perf loops send hundreds)
+        for (int i = 0; i < 30; ++i)
+            QCOMPARE(send(R"({"action": "ping"})").value("ok").toBool(), true);
+        // And the flood may go on once the bucket refills
+        QTest::qWait(200);
+        flood.write(R"({"op": "hello", "id": 101})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT((in += flood.readAll(), in.contains(R"("id":101,"ok":true)")), 3000);
+    }
+
+    void aClientThatIgnoresRateLimitedIsClosed()
+    {
+        // Refusals cost a parse and a reply each: past maxRefusedPerSecond
+        // in one second the connection goes, and nobody else's does
+        CommandServer::Limits limits = m_server->limits();
+        limits.opsPerSecond = 20;
+        limits.opsBurst = 10;
+        limits.maxRefusedPerSecond = 50;
+        m_server->setLimits(limits);
+        QTcpSocket flood;
+        flood.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(flood.waitForConnected(3000));
+        QByteArray burst;
+        for (int i = 0; i < 300; ++i)
+            burst += R"({"op": "hello"})" "\n";
+        flood.write(burst);
+        QElapsedTimer t;
+        t.start();
+        while (flood.state() == QAbstractSocket::ConnectedState && t.elapsed() < 5000) {
+            QCoreApplication::processEvents();
+            if (flood.waitForReadyRead(10))
+                flood.readAll();
+        }
+        QCOMPARE(flood.state(), QAbstractSocket::UnconnectedState);
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+    }
+
+    void aConnectLoopIsRefusedAtTheDoor()
+    {
+        // Step 7: connections a second per address (loopback is one
+        // address); past the burst they are closed before they cost a thread
+        // The fixture's own connection is accepted (on the server's thread)
+        // before the limits shrink, so it doesn't take one of the 5
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+        CommandServer::Limits limits = m_server->limits();
+        limits.loopbackConnectsPerSecond = 5;
+        limits.loopbackConnectsBurst = 5;
+        m_server->setLimits(limits);
+        int answered = 0, refused = 0;
+        for (int i = 0; i < 30; ++i) {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, m_server->port());
+            QVERIFY(s.waitForConnected(3000));   // the kernel accepts; the server then closes it
+            s.write(R"({"op": "hello", "id": 1})" "\n");
+            QByteArray in;
+            QElapsedTimer t;
+            t.start();
+            while (!in.contains('\n') && s.state() == QAbstractSocket::ConnectedState && t.elapsed() < 3000) {
+                QCoreApplication::processEvents();
+                if (s.waitForReadyRead(10))
+                    in += s.readAll();
+            }
+            in.contains(R"("ok":true)") ? ++answered : ++refused;
+        }
+        QVERIFY2(answered >= 5 && answered < 15, qPrintable(QStringLiteral("%1 answered").arg(answered)));
+        QVERIFY(refused > 0);
+        // The connection made before the loop is untouched, and the bucket refills
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+        QTest::qWait(400);
+        QCOMPARE(once(m_server->port(), R"({"op": "hello", "id": 2})" "\n").contains(R"("ok":true)"), true);
+    }
+
+    void aReaderThatStaysBehindIsClosed()
+    {
+        // Step 7: at maxUnsentBytes for maxBehindMs the connection goes (its
+        // stream with it), while another client still gets its replies
+        CommandServer::Limits limits = m_server->limits();
+        limits.maxUnsentBytes = 64 * 1024;
+        limits.maxBehindMs = 500;
+        m_server->setLimits(limits);
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QTcpSocket raw;
+        raw.setReadBufferSize(1);   // never reads
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 1})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT(hub.wanted("fixture.video"), 3000);
+        hub.publishH264("fixture.video", QByteArray::fromHex("000000016742c01e0000000168ce3c80"), 0, false, true);
+        const QByteArray big = QByteArray("\x00\x00\x00\x01\x65", 5) + QByteArray(200 * 1024, '\x01');
+        QElapsedTimer t;
+        t.start();
+        int i = 0;
+        qint64 gone = -1;
+        while (t.elapsed() < 15000) {
+            hub.publishH264("fixture.video", big, i * 33333, i % 30 == 0, false);
+            ++i;
+            QTest::qWait(5);
+            if (!hub.wanted("fixture.video")) {
+                gone = t.elapsed();
+                break;
+            }
+            if (i % 50 == 0)   // the other client, meanwhile
+                QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+        }
+        QVERIFY2(gone >= 0, "the reader that never reads was never closed");
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+    }
+
     void keyValueObjects()
     {
         // paramStore is a QQmlPropertyMap: keys, not declared properties
@@ -264,6 +1064,63 @@ private slots:
         QCOMPARE(events(200).size(), 0);
         QVERIFY(error(R"({"op": "subscribe", "object": "fixture", "signals": ["nope"]})").contains("no signal"));
         QVERIFY(error(R"({"op": "unsubscribe", "sub": 999})").contains("No subscription"));
+    }
+
+    void subscribeReplyComesBeforeItsEvents()
+    {
+        // A client learns its sub id from the reply: no event of that
+        // subscription may reach it first, even pipelined
+        m_registry->add("fixture", &m_fixture);
+        m_socket->write(R"({"op": "subscribe", "object": "fixture", "properties": ["level", "mode"], "id": 1})" "\n"
+                        R"({"op": "subscribe", "object": "fixture", "properties": ["label"], "id": 2})" "\n");
+        QList<QJsonObject> lines;
+        QElapsedTimer t;
+        t.start();
+        while (lines.size() < 5 && t.elapsed() < 5000) {
+            pump(10);
+            lines += m_lines;
+            m_lines.clear();
+        }
+        QCOMPARE(lines.size(), 5);   // two replies, three current values
+        QHash<int, int> replyAt;     // sub id -> line index of its reply
+        for (int i = 0; i < lines.size(); ++i) {
+            const QJsonObject &l = lines.at(i);
+            if (l.contains("ok")) {
+                replyAt.insert(l.value("result").toObject().value("sub").toInt(), i);
+            } else {
+                const int sub = l.value("sub").toInt();
+                QVERIFY2(replyAt.contains(sub), qPrintable(QStringLiteral("event of sub %1 before its reply").arg(sub)));
+            }
+        }
+        QCOMPARE(replyAt.size(), 2);
+    }
+
+    void eventsGoOutAtOnce()
+    {
+#if !defined(Q_OS_UNIX) || defined(Q_OS_WASM)
+        QSKIP("the wake pipe is Unix only; elsewhere events go out within the 20 ms poll");
+#else
+        // An event used to wait for the connection thread's 20 ms read
+        // poll; the connection's wake pipe sends it at once
+        m_registry->add("fixture", &m_fixture);
+        QVERIFY(result(R"({"op": "subscribe", "object": "fixture", "properties": ["level"]})").toMap().contains("sub"));
+        QTRY_COMPARE_WITH_TIMEOUT(collect().size(), 1, 2000);   // the current value
+        QList<qint64> waits;
+        for (int i = 0; i < 20; ++i) {
+            m_events.clear();
+            QElapsedTimer t;
+            t.start();
+            m_fixture.setLevel(100 + i);
+            while (collect().isEmpty() && t.elapsed() < 1000) {
+                QCoreApplication::processEvents();
+                if (m_socket->waitForReadyRead(1))
+                    pump(0);
+            }
+            waits.append(t.nsecsElapsed() / 1000);
+        }
+        std::sort(waits.begin(), waits.end());
+        QVERIFY2(waits.at(waits.size() / 2) < 5000, qPrintable(QStringLiteral("median %1 us").arg(waits.at(waits.size() / 2))));
+#endif
     }
 
     void throttleKeepsTheLatest()
@@ -384,6 +1241,55 @@ private slots:
     }
 
 private:
+    // A second client of its own server (pumping this thread's events while
+    // it waits, since get / set / call hop to it)
+    struct LineClient {
+        QTcpSocket socket;
+        explicit LineClient(quint16 port)
+        {
+            socket.connectToHost(QHostAddress::LocalHost, port);
+            socket.waitForConnected(3000);
+        }
+        QJsonObject send(const QByteArray &line)
+        {
+            socket.write(line + '\n');
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < 5000) {
+                QCoreApplication::processEvents();
+                if (socket.bytesAvailable() > 0 || socket.waitForReadyRead(10)) {
+                    m_buf += socket.readAll();
+                    int nl;
+                    while ((nl = m_buf.indexOf('\n')) >= 0) {
+                        const QJsonObject o = QJsonDocument::fromJson(m_buf.left(nl)).object();
+                        m_buf.remove(0, nl + 1);
+                        if (o.contains("ok"))
+                            return o;
+                    }
+                }
+            }
+            return {};
+        }
+        QByteArray m_buf;
+    };
+    static QByteArray once(quint16 port, const QByteArray &request)
+    {
+        QTcpSocket s;
+        s.connectToHost(QHostAddress::LocalHost, port);
+        if (!s.waitForConnected(3000))
+            return {};
+        s.write(request);
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 3000 && s.state() == QAbstractSocket::ConnectedState) {
+            QCoreApplication::processEvents();
+            if (s.waitForReadyRead(20))
+                in += s.readAll();
+        }
+        return in + s.readAll();
+    }
+
     QVariant result(const QByteArray &line)
     {
         const QJsonObject r = send(line);

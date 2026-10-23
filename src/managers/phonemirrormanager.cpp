@@ -1,6 +1,7 @@
 #ifndef Q_OS_MOBILE
 
 #include "phonemirrormanager.h"
+#include "../service/staticfiles.h"
 #include "../phone_mirror/scrcpyclient.h"
 #include "../phone_mirror/qrcodegen.hpp"
 #include "settingsmanager.h"
@@ -1552,6 +1553,24 @@ void PhoneMirrorManager::onMediaQueueArt(const QString &key, const QByteArray &j
     m_queueArt.insert(key, url);
     // Art arrives one image at a time right after a queue: publish once per batch
     m_queueArtTimer.start();
+}
+
+void PhoneMirrorManager::requestVideoKeyframe()
+{
+    if (m_client && m_client->isRunning())
+        m_client->requestKeyframe();
+}
+
+QString PhoneMirrorManager::queueArtFile(qint64 id) const
+{
+    for (const QVariant &v : m_mediaQueue) {
+        const QVariantMap item = v.toMap();
+        if (item.value(QStringLiteral("id")).toLongLong() != id)
+            continue;
+        const QUrl url(item.value(QStringLiteral("art")).toString());
+        return url.isLocalFile() ? OctaveService::StaticFiles::insideDir(url.toLocalFile(), queueArtDir()) : QString();
+    }
+    return {};
 }
 
 void PhoneMirrorManager::publishMediaQueue()

@@ -34,15 +34,30 @@
 class DashboardManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "files")
+    Q_CLASSINFO("octave.scope.read", "canPlace fitAt isBuiltIn loadDashboard normalizedSpec refresh uniqueIdForLabel")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
     Q_PROPERTY(QString lastShareError READ lastShareError NOTIFY lastShareErrorChanged)
+    // Why the last loadDashboard / saveDashboard failed ("" after one that
+    // worked): their return values stay as they were
+    Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // Where exportDashboard last wrote ("" until it has); a service client
+    // downloads it from GET /export/dashboard
+    Q_PROPERTY(QString lastExportPath READ lastExportPath NOTIFY lastExportPathChanged)
     // Built-in presets the user deleted (hidden) — the chooser shows
     // "Restore defaults" while this is non-zero.
     Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
     // kSupportedSchema, for DashboardRenderer's "needs a newer OCTAVE" placeholder
     Q_PROPERTY(int supportedSchema READ supportedSchema CONSTANT)
+    // The widget types a dashboard can use (frontend/dashboards/
+    // widget-catalog.json, published as docs/api/widget-catalog.json):
+    // {schema, widgets: [{type, displayName, glyph, defaultColSpan,
+    // defaultRowSpan, supportedKinds, labelProps, rangeProps, colorProps,
+    // editableProps}], colorSwatches}. Empty if the file is missing.
+    Q_PROPERTY(QVariantMap widgetCatalog READ widgetCatalog CONSTANT)
 
 public:
     explicit DashboardManager(QObject *parent = nullptr);
@@ -52,6 +67,10 @@ public:
     // an initial scan.
     void setPresetsDir(const QString &absolutePath);
     void setUserDir(const QString &absolutePath);
+    // Before setUserDir() (the scan normalises with it); main.cpp passes
+    // frontend/dashboards/widget-catalog.json
+    void setWidgetCatalogFile(const QString &absolutePath);
+    QVariantMap widgetCatalog() const { return m_widgetCatalog; }
 
     // Merged list: each entry is { id, label, builtIn, path }. Sorted so
     // built-ins come first (in file-name order), then user dashboards.
@@ -86,6 +105,8 @@ public:
                                   int colSpan, int rowSpan) const;
 
     QString lastShareError() const { return m_lastShareError; }
+    QString lastError() const { return m_lastError; }
+    QString lastExportPath() const { return m_lastExportPath; }
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
     int supportedSchema() const { return kSupportedSchema; }
 
@@ -99,9 +120,11 @@ public:
 
 public slots:
     // Writes a user dashboard JSON file, normalised first (normalizeSpec).
-    // `spec` must include at least `id` and `label`. Returns the saved id on
-    // success, empty string on failure (no id or label, id collision with a
-    // built-in or kParameterCardsId, newer schema, I/O error, etc.).
+    // `spec` must include a `label`; with no `id` it gets
+    // uniqueIdForLabel(label), a new dashboard (an existing id overwrites
+    // that user dashboard). Returns the saved id on success, empty string
+    // on failure (no label, id collision with a built-in or
+    // kParameterCardsId, newer schema, I/O error, etc.).
     QString saveDashboard(const QVariantMap &spec);
 
     // Deletes a user dashboard file, or hides a built-in preset (persisted
@@ -141,17 +164,27 @@ public slots:
 signals:
     void dashboardsChanged();
     void lastShareErrorChanged();
+    void lastErrorChanged();
+    void lastExportPathChanged();
 
 private:
     QString m_lastShareError;
     void setShareError(const QString &message);
+    QString m_lastError;
+    QString m_lastExportPath;
+    void setError(const QString &message);
 
     // The one set of spec rules, applied on import, save and load: known
     // schema-1 keys only (JSON numbers, strings and bools are not numbers),
     // the caps above, a cell off the grid moved back in (shrunk only if wider
     // than the grid), props scalar, and no two cells overlapping (in file
     // order the earlier wins; a later one shrinks toward 1x1, else is
-    // dropped). Unknown widget types and paramIds are kept: the QML
+    // dropped). With a widget catalog, a known type's editableProps are
+    // held to their kind: a bool must be a bool, an int / real a number
+    // (clamped to min / max, an int rounded), an enum one of its options,
+    // a string a string; anything else is dropped (the widget's default).
+    // Other props (title, unit, min, max, colours) are left as they are.
+    // Unknown widget types and paramIds are kept: the QML
     // WidgetCatalog knows the types, the renderer skips or leaves them
     // unbound, and a newer build may know them. Import drops the id (the
     // caller makes a new one) and refuses a bad schema or no cell list; save
@@ -159,10 +192,12 @@ private:
     // schema is refused (loadDashboard passes such a file through untouched).
     // Returns an empty map (and sets *error) when the data isn't usable.
     enum class SpecUse { Import, Save, Load };
-    static QVariantMap normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error);
+    static QVariantMap normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error,
+                                     const QVariantMap &catalog = {});
     QString importSpec(const QVariantMap &raw);
 
     QString m_presetsDir;
+    QVariantMap m_widgetCatalog;
     QString m_userDir;
     QVariantList m_dashboards;
 

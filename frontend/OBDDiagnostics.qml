@@ -95,6 +95,15 @@ Item {
                 for (var i = 0; i < data.length; i++) {
                     var ff = data[i]
                     terminalOutput.appendLine("[DTC] " + ff.code + " - " + ff.description)
+                    // What the car recorded when it stored the code, in the user's units
+                    var vals = ff.values || {}
+                    for (var id in vals) {
+                        var info = App.OBDParameterModel.getParamInfo(id)
+                        var v = App.OBDParameterModel.toDisplay(id, vals[id])
+                        terminalOutput.appendLine("      " + info.title + ": "
+                                                  + (typeof v === "number" ? Number(v).toFixed(info.decimals || 0) : v)
+                                                  + (info.unit ? " " + info.unit : ""))
+                    }
                 }
             } else {
                 terminalOutput.appendLine("[DONE] No freeze frame data stored")

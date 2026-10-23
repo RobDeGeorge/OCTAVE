@@ -44,6 +44,7 @@
             <li><a href="#phoneMirrorManager">PhoneMirrorManager</a></li>
             <li><a href="#downloadManager">DownloadManager</a></li>
             <li><a href="#dashboardManager">DashboardManager</a></li>
+            <li><a href="#frontendManager">FrontendManager</a></li>
             <li><a href="#perfMonitor">PerfMonitor</a> <span class="platform-badge desktop">developer only</span></li>
           </ul>
         </nav>
@@ -86,6 +87,7 @@
             <tr><td><a href="#phoneMirrorManager"><code>phoneMirrorManager</code></a></td><td><code>PhoneMirrorManager</code> &mdash; <span class="file-path">src/managers/phonemirrormanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#downloadManager"><code>downloadManager</code></a></td><td><code>DownloadManager</code> &mdash; <span class="file-path">src/managers/downloadmanager.h</span></td><td>Stub class when <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
             <tr><td><a href="#dashboardManager"><code>dashboardManager</code></a></td><td><code>DashboardManager</code> &mdash; <span class="file-path">src/managers/dashboardmanager.h</span></td><td></td></tr>
+            <tr><td><a href="#frontendManager"><code>frontendManager</code></a></td><td><code>FrontendManager</code> &mdash; <span class="file-path">src/managers/frontendmanager.h</span></td><td></td></tr>
             <tr><td><a href="#perfMonitor"><code>perfMonitor</code></a></td><td><code>PerfMonitor</code> &mdash; <span class="file-path">src/dev/perfmonitor.h</span></td><td>Only with <code>--profile</code>, in <code>OCTAVE_DEV_TOOLS</code> builds; registered by <code>OctaveDev::Runtime</code></td></tr>
           </tbody>
         </table>
@@ -455,7 +457,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>timeChanged(QString timeStr)</code></td><td>New formatted time text. Evaluated every second by a QTimer, emitted only when the text changes (once a minute without seconds). Honours <code>settingsManager.clockFormat24Hour</code> / <code>clockShowSeconds</code>; emits <code>""</code> once when <code>showClock</code> turns off</td></tr>
+            <tr><td><code>timeChanged(QString timeStr)</code></td><td>New formatted time text. Evaluated every second by a QTimer, emitted only when the text changes (once a minute without seconds). Honours <code>settingsManager.clockFormat24Hour</code> / <code>clockShowSeconds</code>; emits <code>""</code> once when <code>showClock</code> turns off. The same text is readable as the <code>time</code> property, which this signal notifies</td></tr>
           </tbody>
         </table>
 
@@ -686,7 +688,8 @@
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>setViewActive(bool active)</code></td><td><code>void</code></td><td>A view showing the bars is on screen; the only call a frontend makes. Nothing runs and no file is decoded while no view is active</td></tr>
+            <tr><td><code>setViewActive(bool active)</code></td><td><code>void</code></td><td>A view showing the bars is on screen: the QML UI's consumer, <code>setDemand("view", active)</code>. Nothing runs and no file is decoded while no consumer wants the bars</td></tr>
+            <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td><code>void</code></td><td>A frontend's bars are on screen under its own consumer name; runs while any consumer wants them; released when its service connection closes</td></tr>
             <tr><td><code>setPlaying(bool)</code>, <code>setLocalFile(QString path)</code>, <code>setPosition(qint64 ms)</code></td><td><code>void</code></td><td>What is playing, fed by <code>main.cpp</code> from <code>nowPlaying.playing</code>, <code>MediaManager::currentMediaChanged</code> and <code>MediaManager::positionChanged</code> (local bars change at that 100 ms rate)</td></tr>
             <tr><td><code>analyze_file(QString filePath)</code></td><td><code>void</code></td><td>Decode a file and pre-compute FFT levels in 100 ms chunks off the GUI thread (QtConcurrent / ThreadPoolExecutor); a file requested mid-analysis is queued</td></tr>
             <tr><td><code>update_position(float positionSeconds)</code></td><td><code>void</code></td><td>Select the chunk for a playback position (seconds) and emit <code>fftDataChanged</code> when active</td></tr>
@@ -768,7 +771,7 @@
             <tr><td><code>read_current_dtc()</code></td><td><code>void</code></td><td>Read pending DTCs (Mode 07)</td></tr>
             <tr><td><code>read_status()</code></td><td><code>void</code></td><td>Read MIL state and DTC count (Mode 01 PID 01) &rarr; <code>milStatusChanged</code>, <code>dtcCountChanged</code></td></tr>
             <tr><td><code>clear_dtc()</code></td><td><code>void</code></td><td>Clear codes (Mode 04) &rarr; <code>dtcClearResult</code></td></tr>
-            <tr><td><code>read_freeze_frame()</code></td><td><code>void</code></td><td>Read freeze-frame DTCs (Mode 02) &rarr; <code>freezeFrameChanged</code></td></tr>
+            <tr><td><code>read_freeze_frame()</code></td><td><code>void</code></td><td>Read freeze frame 0 (Mode 02): the code that stored it and its recorded values &rarr; <code>freezeFrameChanged</code></td></tr>
             <tr><td><code>read_vin()</code></td><td><code>void</code></td><td>Read the VIN again (Mode 09 PID 02) &rarr; <code>vinChanged</code>; runs on Android too (next poll slot)</td></tr>
             <tr><td><code>get_dtc_codes()</code></td><td><code>QVariantList</code></td><td>Last DTC list</td></tr>
             <tr><td><code>get_dtc_count()</code></td><td><code>int</code></td><td>Last DTC count</td></tr>
@@ -904,7 +907,7 @@
             <tr><td><code>dtcCountChanged(int count)</code></td><td>Number of stored DTCs</td></tr>
             <tr><td><code>milStatusChanged(bool status)</code></td><td>Check-engine lamp state</td></tr>
             <tr><td><code>dtcClearResult(bool success, QString message)</code></td><td>Clear-codes result (success, message)</td></tr>
-            <tr><td><code>freezeFrameChanged(QVariantList data)</code></td><td>Freeze-frame DTCs read</td></tr>
+            <tr><td><code>freezeFrameChanged(QVariantList data)</code></td><td>Freeze frame read: <code>[{code, description, values: {paramId: value}}]</code></td></tr>
             <tr><td><code>obdParameterChanged(QString paramId, float value)</code></td><td>One value from a multi-value PID (0x61 and up: torque, boost, odometer, &hellip;); <code>OBDParameterModel</code> routes it by id</td></tr>
             <tr><td><code>parameterSampled(QString paramId, float value)</code></td><td>Every decoded reading, base or multi-value, by parameter id, on desktop and Android; the <a href="#tripRecorder">black box</a> and the value store (<a href="#paramStore"><code>paramStore</code></a>) tap this</td></tr>
             <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>
@@ -968,7 +971,8 @@
             <tr><td><code>source</code></td><td><code>QString</code></td><td>read-only</td><td><code>sourceChanged</code></td><td><code>"local"</code> or <code>"phone"</code></td></tr>
             <tr><td><code>playing</code></td><td><code>bool</code></td><td>read-only</td><td><code>playingChanged</code></td><td>The live source is playing</td></tr>
             <tr><td><code>hasTrack</code>, <code>title</code>, <code>artist</code>, <code>album</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>trackInfoChanged</code></td><td>Local: display name, artist, album of the current file. Phone: the media session's metadata (<code>hasTrack</code> false with no media app)</td></tr>
-            <tr><td><code>artUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>artUrlChanged</code></td><td>Album art URL, <code>""</code> when none</td></tr>
+            <tr><td><code>artUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>artUrlChanged</code></td><td>Album art URL, <code>""</code> when none (a file on the head unit; service clients fetch <code>GET /art</code>)</td></tr>
+            <tr><td><code>artRevision</code></td><td><code>int</code></td><td>read-only</td><td><code>artUrlChanged</code></td><td>Goes up by one on every art change: the cache key for <code>GET /art</code></td></tr>
             <tr><td><code>durationMs</code>, <code>positionMs</code></td><td><code>int</code></td><td>read-only</td><td><code>durationChanged</code>, <code>positionChanged</code></td><td>Local: the player's 10 Hz reports. Phone: each report, extrapolated every 500 ms while playing. <code>0</code> duration = unknown</td></tr>
             <tr><td><code>canSeek</code>, <code>canShuffle</code></td><td><code>bool</code></td><td>read-only</td><td><code>capabilitiesChanged</code></td><td><code>canShuffle</code> is false on the phone (its shuffle belongs to its app)</td></tr>
             <tr><td><code>shuffled</code></td><td><code>bool</code></td><td>read-only</td><td><code>shuffledChanged</code></td><td>Local shuffle state</td></tr>
@@ -1513,6 +1517,7 @@
           <tbody>
             <tr><td><code>dashboards</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Merged headers <code>[{id, label, builtIn, path}, &hellip;]</code>, built-ins first</td></tr>
             <tr><td><code>lastShareError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastShareErrorChanged</code></td><td>Reason the last export/import failed; <code>""</code> after a success</td></tr>
+            <tr><td><code>lastError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorChanged</code></td><td>Why the last <code>loadDashboard</code> / <code>saveDashboard</code> failed (unknown id, unreadable file, newer schema, no name, a built-in id...); <code>""</code> after one that worked. The calls' return values are unchanged</td></tr>
             <tr><td><code>hiddenBuiltInCount</code></td><td><code>int</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Built-in presets the user deleted (hidden); shows the chooser's "Restore defaults" button</td></tr>
             <tr><td><code>supportedSchema</code></td><td><code>int</code></td><td>constant</td><td>&mdash;</td><td>Highest dashboard <code>schema</code> this build reads (<code>kSupportedSchema</code>, 1); DashboardRenderer shows a "needs a newer OCTAVE" message for newer specs</td></tr>
           </tbody>
@@ -1523,7 +1528,7 @@
           <tbody>
             <tr><td><code>loadDashboard(QString id)</code></td><td><code>QVariant</code></td><td>The spec for an id, normalised by the same rules as a save (in the grid, no overlaps, known keys; see <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>); a newer-schema file untouched; empty object if unknown or unparsable</td></tr>
             <tr><td><code>isBuiltIn(QString id)</code></td><td><code>bool</code></td><td>True for a read-only preset</td></tr>
-            <tr><td><code>saveDashboard(QVariantMap spec)</code></td><td><code>QString</code></td><td>Normalise and write a user dashboard JSON (needs a file-safe <code>id</code> + a <code>label</code>); returns the id, <code>""</code> on failure, a newer schema or collision with a built-in</td></tr>
+            <tr><td><code>saveDashboard(QVariantMap spec)</code></td><td><code>QString</code></td><td>Normalise and write a user dashboard JSON (needs a <code>label</code>; a missing <code>id</code> becomes <code>uniqueIdForLabel(label)</code>, a given one must be file-safe); returns the id, <code>""</code> on failure, a newer schema or collision with a built-in</td></tr>
             <tr><td><code>deleteDashboard(QString id)</code></td><td><code>bool</code></td><td>Delete a user dashboard file, or hide a built-in (persisted in <code>.hidden-builtins</code>)</td></tr>
             <tr><td><code>restoreBuiltInDashboards()</code></td><td><code>bool</code></td><td>Un-hide every deleted built-in; false if none were hidden</td></tr>
             <tr><td><code>uniqueIdForLabel(QString label)</code></td><td><code>QString</code></td><td>Free id for a new dashboard named <code>label</code> (slug, then <code>-2</code>, <code>-3</code>, ...); never a built-in id, hidden or not, or the Parameter Cards id <code>"grid"</code>. The editor calls it before <code>saveDashboard</code></td></tr>
@@ -1545,6 +1550,42 @@
           <tbody>
             <tr><td><code>dashboardsChanged()</code></td><td>After any rescan (save, delete, duplicate, import, <code>refresh()</code>, or the user dir changing on disk)</td></tr>
             <tr><td><code>lastShareErrorChanged()</code></td><td>When <code>lastShareError</code> changes</td></tr>
+          </tbody>
+        </table>
+
+        <!-- FrontendManager -->
+        <h2 id="frontendManager">FrontendManager <span class="cmt">&mdash; <code>frontendManager</code></span></h2>
+        <p><span class="file-path">src/managers/frontendmanager.h</span>, <span class="file-path">src/managers/frontendmanifest.h</span> &mdash; QML context property and service object <code>frontendManager</code> (changes need the <code>system</code> permission)</p>
+        <p>Installed frontends in <code>&lt;app data&gt;/frontends/&lt;id&gt;/</code>, each with an <code>octave-frontend.json</code>, and which one is the screen from the next start (see <a href="writing-a-frontend.html#install">Writing a Frontend</a>).</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>frontends</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>frontendsChanged</code></td><td><code>[{id, name, version, description, kind, protocol, scopes, command, active, compatible, problem, path}]</code>; a broken folder is listed with its <code>problem</code></td></tr>
+            <tr><td><code>activeId</code></td><td><code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td>The frontend used from the next start; <code>""</code> for the built-in QML UI</td></tr>
+            <tr><td><code>runningId</code></td><td><code>QString</code></td><td>constant</td><td>&mdash;</td><td>What this run shows, decided at start (<code>""</code> = the QML UI)</td></tr>
+            <tr><td><code>forcedQml</code>, <code>forcedQmlReason</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td><code>USE_QML</code> is present (an exec frontend is not started) and its text</td></tr>
+            <tr><td><code>lastError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorChanged</code></td><td>Why the last install / remove / <code>setActive</code> failed; <code>""</code> after a success</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>installFromFolder(QString path)</code></td><td><code>QString</code></td><td>Copy a frontend folder in after checking it (manifest, protocol, a program for this platform, no links, at most 10000 files and 256 MB); nothing in it runs. The id, or <code>""</code> with <code>lastError</code></td></tr>
+            <tr><td><code>installFromZip(QString path)</code></td><td><code>QString</code></td><td>Same from a <code>.zip</code> of the folder or of its contents; an entry naming a path outside the folder, a link or a size that doesn't match refuses the whole zip</td></tr>
+            <tr><td><code>remove(QString id)</code></td><td><code>bool</code></td><td>Delete an installed frontend (not the one running)</td></tr>
+            <tr><td><code>setActive(QString id)</code></td><td><code>bool</code></td><td>The screen from the next start; <code>""</code> = the QML UI. Refuses one that can't run here</td></tr>
+            <tr><td><code>clearForcedQml()</code></td><td><code>void</code></td><td>Delete <code>USE_QML</code></td></tr>
+            <tr><td><code>manifestOf(QString id)</code></td><td><code>QVariantMap</code></td><td>One row of <code>frontends</code>, <code>{}</code> if none</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code></td><td>As the properties change</td></tr>
+            <tr><td><code>installed(QString id)</code></td><td>An install finished</td></tr>
           </tbody>
         </table>
 

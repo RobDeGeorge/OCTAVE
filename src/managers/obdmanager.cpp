@@ -1,4 +1,5 @@
 #include "obdmanager.h"
+#include "dtcdescriptions.h"
 #include "parametercatalog.h"
 #include "elm327protocol.h"
 #include "rfcommsocket.h"
@@ -1075,7 +1076,7 @@ void OBDManager::onWorkerDtcResult(const QStringList &codes)
     for (const QString &code : codes) {
         QVariantMap item;
         item[QStringLiteral("code")] = code;
-        item[QStringLiteral("description")] = QString();
+        item[QStringLiteral("description")] = DtcDescriptions::describe(code);
         dtcList.append(item);
     }
     m_dtcCodes = dtcList;
@@ -1105,13 +1106,18 @@ void OBDManager::onWorkerMilStatus(bool mil, int dtcCount)
     emit dtcCountChanged(dtcCount);
 }
 
-void OBDManager::onWorkerFreezeFrame(const QStringList &codes)
+void OBDManager::onWorkerFreezeFrame(const QStringList &codes, const QVariantMap &values)
 {
+    // The frame's values by parameter id (paramStore's ids), native units
+    QVariantMap byId;
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+        byId.insert(m_signalToParamId.value(it.key(), it.key()), it.value());
     QVariantList list;
     for (const QString &code : codes) {
         QVariantMap item;
         item[QStringLiteral("code")] = code;
-        item[QStringLiteral("description")] = QString();
+        item[QStringLiteral("description")] = DtcDescriptions::describe(code);
+        item[QStringLiteral("values")] = byId;
         list.append(item);
     }
     m_freezeFrameDtcs = list;
@@ -1298,6 +1304,14 @@ void OBDManager::close()
     m_deviceScannerTimer.stop();
     m_dataWatchdogTimer.stop();
     cleanupConnection();
+    // cleanupConnection() is silent (a reconnect says "Connecting" right
+    // after it); here nothing follows, so say it, or connected,
+    // connectionState and connectionStatus stay "Connected" for subscribers
+    if (m_connectionStatus != QLatin1String("Disconnected")) {
+        emit connectionStatusChanged(QStringLiteral("Disconnected"));
+        emit connectionStatusDetailChanged(QStringLiteral("Closed"));
+        emit connectionProgressChanged(0);
+    }
 }
 
 void OBDManager::reset_connection()
@@ -2525,7 +2539,28 @@ void OBDConnectionWorker::doReadFreezeFrame()
     if (!response.isEmpty()) {
         codes = ELM327Protocol::parseFreezeFrameDtc(m_responseBuffer.lastLines());
     }
-    emit freezeFrame(codes);
+    // Then what the frame recorded: its bitmap (PIDs 01-20, the range
+    // freeze frames use), and each PID OCTAVE can decode
+    QVariantMap values;
+    if (!codes.isEmpty() && !sendCommand(QByteArrayLiteral("020000\r"), 3000).isEmpty()) {
+        if (const auto bitmap = ELM327Protocol::parseFreezeFrameData(m_responseBuffer.lastLines(), 0x00)) {
+            QList<int> pids = ELM327Protocol::parseSupportedPids(*bitmap).values();
+            std::sort(pids.begin(), pids.end());
+            for (int pid : pids) {
+                if (pid <= 0x03 || !ELM327Protocol::pidTable().contains({0x01, pid}))
+                    continue;   // status, the DTC and fuel system status: not values
+                const QByteArray cmd = QStringLiteral("02%100\r").arg(pid, 2, 16, QLatin1Char('0')).toUpper().toLatin1();
+                if (sendCommand(cmd, 3000).isEmpty())
+                    continue;
+                const auto data = ELM327Protocol::parseFreezeFrameData(m_responseBuffer.lastLines(), pid);
+                if (!data)
+                    continue;
+                if (const auto decoded = ELM327Protocol::decodePid(0x01, pid, *data))
+                    values.insert(decoded->signalName, decoded->value);
+            }
+        }
+    }
+    emit freezeFrame(codes, values);
 
     if (wasPolling) startPolling();
 }

@@ -20,6 +20,10 @@ class SettingsManager;
 class ESP32VolumeManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "vehicle")
+    Q_CLASSINFO("octave.scope.read", "get_available_ports get_connection_detail get_connection_status is_connected")
+    Q_CLASSINFO("octave.scope.full", "cleanup")
     friend class TstEsp32VolumeManager;
 
     Q_PROPERTY(bool connected READ getConnected NOTIFY connectionStatusChanged)

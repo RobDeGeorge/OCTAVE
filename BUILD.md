@@ -36,9 +36,10 @@ cmake --build build -j
 Developer tooling (`src/dev/`) is compiled in when `OCTAVE_DEV_TOOLS` is on: the default only
 for `-DCMAKE_BUILD_TYPE=Debug` desktop builds; any other build type, no build type (including
 multi-config generators such as Visual Studio and Xcode), Android and iOS default to off; pass
-`-DOCTAVE_DEV_TOOLS=ON` to force it. It adds `./build/octave --dev` (simulated car, dev overlay)
-and `--profile` (perf monitor + command server on `127.0.0.1:9876` for the MCP / screenshot /
-perf tooling) and links Qt Test. See `wiki/development.html`.
+`-DOCTAVE_DEV_TOOLS=ON` to force it. It adds `./build/octave --dev` (`--sim` on your usual
+config, plus the dev overlay) and `--profile` (perf monitor + command server on `127.0.0.1:9876`
+for the MCP / screenshot / perf tooling) and links Qt Test. The simulated car itself (`--sim`,
+`src/sim/`) is in every build. See `wiki/development.html`.
 
 ---
 
@@ -376,10 +377,10 @@ cmake --build build-wasm
 
 Everything is gated on CMake's `EMSCRIPTEN`, which defines `OCTAVE_WASM` and `Q_OS_MOBILE`:
 
-- Qt SerialPort and Bluetooth, TagLib and FFmpeg are dropped. `src/platform/wasm/` holds stand-ins: a `QSerialPort` / `QSerialPortInfo` whose `open()` always fails, and inert `obdadapterfinder_wasm.cpp` / `networkmanager_wasm.cpp` that replace the real sources (`HEADER_FILE_ONLY` on the originals). `QProcess` users (the settings manager's git/curl, the OBD manager destructor) are behind `#if QT_CONFIG(process)`; the IMU manager and the dev IMU feed take their desktop (no I²C) branch.
+- Qt SerialPort and Bluetooth, TagLib and FFmpeg are dropped. `src/platform/wasm/` holds stand-ins: a `QSerialPort` / `QSerialPortInfo` whose `open()` always fails, and inert `obdadapterfinder_wasm.cpp` / `networkmanager_wasm.cpp` that replace the real sources (`HEADER_FILE_ONLY` on the originals). `QProcess` users (the settings manager's git/curl, the OBD manager destructor) are behind `#if QT_CONFIG(process)`; the IMU manager and the simulator's IMU feed take their desktop (no I²C) branch.
 - `-sDISABLE_EXCEPTION_CATCHING=0`: Assimp's glTF1 probe throws on `.glb`, so exceptions stay on.
 - `frontend/` is staged by `packaging/wasm/stage_frontend.cmake` into `build-wasm/wasm_fs` (a build step with a stamp in `LINK_DEPENDS`, so a QML edit relinks) and preloaded at `/frontend` in the page's in-memory filesystem. That is `octave.data`. The README screenshots, `assets/-src` and the full-size `jeep_tj_2003.glb` are excluded.
-- `src/platform/wasm/webdemo.{h,cpp}` (`WebDemo`, built by `main.cpp` under `#ifdef OCTAVE_WASM`) points the real `OBDManager` at `src/dev`'s `CarSim` + `SimElm327` (port `sim://elm327`, realistic mode off), feeds the IMU through `DevImuFeed`, and runs an autopilot: idle with throttle blips, pull away to a 35–70 mph target, cruise, coast, brake to a stop.
+- `src/platform/wasm/webdemo.{h,cpp}` (`WebDemo`, built by `main.cpp` under `#ifdef OCTAVE_WASM`) starts the simulator of `src/sim/` (the same one `--sim` runs): the real `OBDManager` on its `CarSim` + `SimElm327` (port `sim://elm327`, realistic mode off) and the IMU fed by its `ImuFeed`, then runs an autopilot: idle with throttle blips, pull away to a 35–70 mph target, cruise, coast, brake to a stop.
 
 ### What works, what does not
 

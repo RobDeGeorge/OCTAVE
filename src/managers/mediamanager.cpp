@@ -1,4 +1,6 @@
 #include "mediamanager.h"
+#include "../util/folderbrowser.h"
+#include "../service/staticfiles.h"
 #include "../util/perfscope.h"
 #include "../util/units.h"
 #include "settingsmanager.h"
@@ -18,6 +20,7 @@
 #include <QtConcurrent>
 #include <QFutureWatcher>
 #include <QDateTime>
+#include <QStandardPaths>
 #include <QJsonArray>
 #include <QColor>
 #include <QMediaDevices>
@@ -3206,6 +3209,37 @@ void MediaManager::update_media_directory(const QString &directory)
 QString MediaManager::get_default_media_dir()
 {
     return m_defaultMediaDir;
+}
+
+QStringList MediaManager::musicBrowseRoots() const
+{
+    // Not the whole home folder: its Music folder, the app's own media
+    // folder, removable media and the folder in use
+    QStringList roots{QStandardPaths::writableLocation(QStandardPaths::MusicLocation),
+                      m_defaultMediaDir,
+                      QStringLiteral("/media"), QStringLiteral("/mnt"), QStringLiteral("/run/media"),
+                      QStringLiteral("/storage")};
+    // The folder in use, wherever it is, but never the whole filesystem
+    if (!m_mediaDir.isEmpty() && QFileInfo(m_mediaDir).canonicalFilePath() != QDir::rootPath()
+        && !QDir(m_mediaDir).isRoot())
+        roots.append(m_mediaDir);
+    roots.removeAll(QString());
+    return roots;
+}
+
+QString MediaManager::libraryArtFile(const QString &filename)
+{
+    if (filename.isEmpty() || !m_allMusicFilePaths.contains(filename))
+        return {};
+    const QUrl url(get_album_art(filename));
+    if (!url.isLocalFile())
+        return {};
+    return OctaveService::StaticFiles::insideDir(url.toLocalFile(), m_tempDir);
+}
+
+QVariantMap MediaManager::browse_music_folders(const QString &path)
+{
+    return FolderBrowser::list(path, musicBrowseRoots(), s_audioExtensions);
 }
 
 QString MediaManager::get_media_folder_name()

@@ -6,6 +6,8 @@ __pycache__/
 # Build artifacts
 dist/
 build/
+# Any other local build tree (build-release/, build-debug/, ...)
+build-*/
 build-desktop-*/
 build-wasm/
 build-appimage/
@@ -71,3 +73,7 @@ cmake_install.cmake
 Makefile
 compile_commands.json
 build-rhea/
+
+# Starter templates: a pairing token and a saved cover from running one
+templates/*/.token
+templates/*/cover.*

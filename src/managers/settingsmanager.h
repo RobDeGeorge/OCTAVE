@@ -15,6 +15,27 @@
 class SettingsManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "settings")
+    Q_CLASSINFO("octave.scope.read",
+                "get_android_auto_enabled get_auto_play_on_startup get_directory_history "
+                "get_esp32_auto_reconnect get_esp32_led_color_mode get_esp32_led_sleep_enabled "
+                "get_esp32_led_static_color get_esp32_volume_enabled get_esp32_volume_port "
+                "get_esp32_volume_step_size get_gesture_mapping get_gesture_mapping_dict "
+                "get_gesture_sensor_enabled get_git_commit_date get_git_commit_hash get_git_commit_message "
+                "get_home_obd_parameters get_imu_enabled get_last_played_playlist get_last_played_position "
+                "get_last_played_song get_last_settings_section get_last_shuffle_state "
+                "get_music_button_default_page get_obd_parameter_enabled get_persist_shuffle_state "
+                "get_phone_mirror_enabled get_pinned_settings_metadata "
+                "get_return_to_library_after_selection get_scrcpy_audio_duck_enabled "
+                "get_scrcpy_audio_duck_level get_scrcpy_audio_gain get_scrcpy_auto_wifi "
+                "get_scrcpy_bit_rate_auto get_scrcpy_bit_rate_usb get_scrcpy_bit_rate_wifi "
+                "get_scrcpy_display_dpi get_scrcpy_display_size get_scrcpy_phone_screen_off "
+                "get_scrcpy_wireless_address get_setting get_setting_with_default "
+                "get_settings_menu_visibility get_settings_registry get_show_waveform_visualizer "
+                "get_supported_obd_parameters get_window_state is_setting_pinned "
+                "is_settings_section_visible")
+    Q_CLASSINFO("octave.scope.full", "setCurrentVolume set_album_art_colors")
     friend class TstSettingsManager;
 
     // ======================================================================
@@ -103,6 +124,8 @@ class SettingsManager : public QObject
     Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)   // names
     // Every saved custom theme, name -> theme object (as on disk)
     Q_PROPERTY(QVariantMap customThemeData READ customThemeData NOTIFY customThemesChanged)
+    // The Now Playing look presets, [{label, settings: {key: value}}]
+    Q_PROPERTY(QVariantList nowPlayingPresets READ nowPlayingPresets CONSTANT)
     Q_PROPERTY(QVariantList directoryHistory READ directoryHistory NOTIFY directoryHistoryChanged)
 
     // --- Window ---
@@ -163,8 +186,11 @@ class SettingsManager : public QObject
 public:
     explicit SettingsManager(QObject *parent = nullptr);
 
-    // Returns the OS-specific app data directory path
+    // Returns the OS-specific app data directory path (or the override)
     static QString getAppDataDir();
+    // Use `dir` instead of the OS folder for settings, trips, dashboards and
+    // logs (`--config DIR`, the --sim throwaway). Before anything reads it
+    static void setAppDataDirOverride(const QString &dir);
 
     // ======================================================================
     // Property getters
@@ -245,6 +271,16 @@ public:
     int maxHomeObdParameters() const { return kMaxHomeObdParameters; }
     QVariantList customThemes() const;
     QVariantMap customThemeData() const;
+    static QVariantList nowPlayingPresets();
+    // A file-only key written by its owner in C++ (ServicePairing: the
+    // service switch and the paired devices); never reachable from QML or
+    // the service. Other keys are ignored.
+    void saveFileOnlySetting(const QString &key, const QVariant &value);
+    // ...and read by them (get_setting refuses these keys)
+    QVariant fileOnlySetting(const QString &key);
+    // Keys only an edit of the file may set: save_setting and
+    // apply_settings refuse them (what turns the service on, what it serves)
+    static const QStringList &fileOnlyKeys();
     QVariantList directoryHistory() const;
 
     // Window
@@ -456,7 +492,9 @@ public slots:
     // Media
     void save_start_volume(float volume);
     void setCurrentVolume(int volume);
-    void save_media_folder(const QString &folderPath);
+    // An absolute path (or a file:// URL), never the filesystem root;
+    // false and nothing saved otherwise
+    bool save_media_folder(const QString &folderPath);
     // A folder from a picker (FolderDialog.selectedFolder): a file:// URL, or
     // an Android external-storage content:// tree mapped to its /storage
     // path (src/util/pathurl.h). False, and nothing saved, when it can't be
@@ -579,6 +617,19 @@ public slots:
 
     // Generic setting access
     void save_setting(const QString &key, const QVariant &value);
+
+    // Many settings at once, each through its own save_* slot (the
+    // settings registry's saveSlot, else save_<snake_case of the key>), so
+    // every rule and notify signal of a single save applies. A value must
+    // already be the slot's type (a bool for a bool, a number for a
+    // number, a string for a string; an int slot rounds). Keys with no
+    // save slot and the file-only keys are refused, never written.
+    // Returns {applied: [keys], refused: {key: reason}}.
+    QVariantMap apply_settings(const QVariantMap &values);
+    // The Now Playing look presets (Minimal, Vinyl, Showcase 3D, Cinema),
+    // each {label, settings}; applyNowPlayingPreset(label) applies one
+    // through apply_settings. False for an unknown label.
+    bool applyNowPlayingPreset(const QString &label);
 
     // ======================================================================
     // Q_INVOKABLE getter methods

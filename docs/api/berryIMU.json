@@ -6,7 +6,8 @@
             "name": "getConnectionStatus",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -17,14 +18,16 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "isEnabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -35,14 +38,16 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "emitRate",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -53,7 +58,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -68,28 +74,32 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "calibrateTare",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "resetTare",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "cleanup",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         }
     ],
     "object": "berryIMU",

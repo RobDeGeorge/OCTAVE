@@ -20,8 +20,9 @@
 //
 // The same port takes WebSocket clients (a browser): one JSON request or
 // reply / event per text frame (src/service/websocket.h, which also holds
-// the Origin rule), and serves the reference client page (setPage) at
-// GET / so a browser can reach it same-origin.
+// the Origin rule), and serves the reference client page (setPage), or a
+// directory of a frontend's files (setWebRoot), at GET / so a browser can
+// reach it same-origin.
 //
 // Listens on 127.0.0.1 (default port 9876) unless setBindAddress() says
 // otherwise (src/service/serviceoptions.h). Each client connection gets
@@ -33,6 +34,7 @@
 // step 1): built in every configuration; the dev runtime (src/dev/)
 // registers its UI / perf / simulator actions on it.
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QHostAddress>
 #include <QObject>
@@ -48,6 +50,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "staticfiles.h"
+
 class QThread;
 
 namespace OctaveService {
@@ -58,35 +62,100 @@ class CommandTcpServer;
 // service protocol's subscriptions). Events are queued from any thread and
 // written by the connection's own thread between requests; a client that
 // stops reading loses the oldest events (a {"event": "dropped"} line says
-// how many) instead of growing the queue without bound.
+// how many) instead of growing the queue without bound. Media stream
+// records (streamhub.h) share the queue, so a streamConfig event and the
+// records after it keep their order; they are capped separately, by bytes.
 class Connection
 {
 public:
     static constexpr int kMaxQueuedEvents = 1000;
+    static constexpr qint64 kMaxQueuedRecordBytes = 2 * 1024 * 1024;
+    static constexpr int kMaxQueuedRecords = 90;
 
+    struct Item {
+        QByteArray bytes;
+        bool binary = false;   // a stream record (else a JSON line)
+    };
+
+    Connection();
     ~Connection();
     void push(const QByteArray &jsonLine);   // thread-safe
-    QList<QByteArray> takeAll();             // thread-safe
+    // A stream record; false when it would pass the caps, in which case
+    // every queued record is dropped too (the stream restarts at a
+    // keyframe). Thread-safe
+    bool pushRecord(const QByteArray &record);
+    QList<Item> takeAll();                   // thread-safe
     // Run on the GUI thread when the client goes (subscriptions use it)
     void onClose(std::function<void()> cleanup);
     void close();
     bool isClosed() const;
     int nextId() { return ++m_lastId; }
+    // Unique for the life of the process, unlike the address: cleanups run
+    // later on the GUI thread, when a new connection may sit at the same one
+    quint64 serial() const { return m_serial; }
+
+    // Readable when something was queued (Unix: a pipe the connection
+    // thread polls with its socket, so an event goes out at once instead
+    // of at the next 20 ms poll); -1 where there is none. drainWake()
+    // empties it.
+    int wakeFd() const { return m_wake[0]; }
+    void drainWake();
+
+    // Who is on the other end (set by the connection's own thread; read by
+    // the trust check and by a revoke on the GUI thread)
+    void setPeer(bool loopback, const QString &address);
+    bool peerLoopback() const;
+    QString peerAddress() const;
+    // A browser: its request carried an Origin or Sec-Fetch-Site header
+    // (the served page's WebSocket, an <img> of it), so a page, not a program
+    void setBrowser(bool browser);
+    bool browser() const;
+    // The paired device this connection presented (hello {token}); "" none
+    void setTokenId(const QString &id);
+    QString tokenId() const;
+
+    // Ops a second (a token bucket of `burst`, refilled at `perSecond`;
+    // connection thread only): false when the client is over the rate,
+    // with `retryAfterMs` until the next one would pass. 0 a second = no limit
+    bool takeOp(int perSecond, int burst, int *retryAfterMs);
+    // Ops takeOp() refused in the current second (connection thread only)
+    int refusedThisSecond() const { return m_opRefused; }
 
 private:
     mutable QMutex m_lock;
-    QList<QByteArray> m_queue;
+    QList<Item> m_queue;
+    qint64 m_recordBytes = 0;
+    int m_records = 0;
     int m_dropped = 0;
     bool m_closed = false;
+    int m_wake[2] = {-1, -1};
+    std::atomic<bool> m_wakePending{false};
+    void wake();
+    bool m_peerLoopback = false;
+    bool m_browser = false;
+    QString m_peerAddress, m_tokenId;
     std::atomic<int> m_lastId{0};
+    const quint64 m_serial;
     std::vector<std::function<void()>> m_cleanups;
+    QElapsedTimer m_opClock;
+    qint64 m_opLastNs = 0;
+    double m_opTokens = 0;
+    qint64 m_opWindowNs = 0;   // start of the second m_opRefused counts
+    int m_opRefused = 0;
 };
 
 // Thrown by handlers; becomes {"ok": false, "error": what()}
 class CommandError : public std::runtime_error
 {
 public:
-    explicit CommandError(const QString &message) : std::runtime_error(message.toStdString()) {}
+    // `code` goes in the error reply as "code" for clients to act on
+    // ("forbidden", ...; docs/api/README.md lists them)
+    explicit CommandError(const QString &message, const QString &code = {})
+        : std::runtime_error(message.toStdString()), m_code(code) {}
+    const QString &code() const { return m_code; }
+
+private:
+    QString m_code;
 };
 
 class CommandServer : public QObject
@@ -114,6 +183,17 @@ public:
     // Before start().
     void setPage(const QByteArray &html) { m_page = html; }
     QByteArray page() const { return m_page; }
+    // A directory served at GET / instead of the page (--web-root,
+    // staticfiles.h); empty = the page. Before start().
+    void setWebRoot(const QString &dir) { m_webRoot = dir; }
+    QString webRoot() const { return m_webRoot; }
+    // GET `path` (exactly; the ?query is the handler's to read, from the
+    // request target it is given) answered by `handler` on the
+    // connection's thread, ahead of the web root and the page (GET /art).
+    // Before start().
+    using Route = std::function<StaticFiles::Reply(const QByteArray &target)>;
+    void addRoute(const QByteArray &path, Route handler) { m_routes.insert(path, std::move(handler)); }
+    Route route(const QByteArray &path) const { return m_routes.value(path); }
     bool start();
     void stop();
     quint16 port() const { return m_port; }   // the bound port once started (0 asks for any)
@@ -130,6 +210,51 @@ public:
     // Called from connection threads
     QByteArray handleLine(const QByteArray &line);
 
+    // Trust (servicepairing.h): `trusted(connection)` decides every op and
+    // action but the `open` ones; `httpTrusted(connection, headers,
+    // target)` decides the routes (/art, /export). Unset = everyone (tests,
+    // and before main.cpp wires pairing). Before start().
+    using TrustCheck = std::function<bool(const Connection &)>;
+    using HttpTrustCheck = std::function<bool(const Connection &, const QHash<QByteArray, QByteArray> &, const QByteArray &)>;
+    void setTrust(TrustCheck trusted, HttpTrustCheck httpTrusted, QStringList openOps)
+    {
+        m_trusted = std::move(trusted);
+        m_httpTrusted = std::move(httpTrusted);
+        m_openOps = std::move(openOps);
+    }
+    // Who may send the dev `action` form ({"action": ...}): unset = every
+    // trusted connection
+    void setActionTrust(TrustCheck allowed) { m_actionTrust = std::move(allowed); }
+    // What one client may cost (M3-M5 of the 2026-10-23 review): before
+    // start(); the defaults are the shipped ones, tests shrink them
+    struct Limits {
+        int maxConnections = 64;            // all clients at once
+        int maxPerAddress = 8;              // per address that isn't loopback
+        int firstByteMs = 10000;            // a connection that says nothing is closed
+        int untrustedIdleMs = 60000;        // an untrusted connection idle this long is closed
+        qint64 maxLineBytes = 1 << 20;      // a JSON line longer than this closes the connection
+        qint64 maxUnsentBytes = 4 << 20;    // above this in the socket, events wait in the bounded queue
+        // Many clients (TODO/frontend-platform.md step 7; wiki utilities.html#many-clients)
+        int opsPerSecond = 200;             // ops a connection may send a second, sustained...
+        int opsBurst = 400;                 // ...and at once; past them {"ok":false,"code":"rateLimited"}
+        int maxRefusedPerSecond = 4000;     // a client refused this often in a second ignores retryAfterMs: closed
+        int maxBehindMs = 15000;            // at maxUnsentBytes this long: not reading, closed
+        int connectsPerSecond = 20;         // new connections a second from one network address...
+        int connectsBurst = 100;            // ...and at once (each of a page's files is one)
+        int loopbackConnectsPerSecond = 100;   // the same from this device: a reconnect with
+        int loopbackConnectsBurst = 400;       // back-off never comes near, a runaway loop does
+    };
+    void setLimits(const Limits &limits) { m_limits = limits; }
+    const Limits &limits() const { return m_limits; }
+    bool trusted(const Connection &c) const { return !m_trusted || m_trusted(c); }
+
+    // Close every connection that presented paired device `tokenId` (its
+    // subscriptions and streams end with it): a revoke
+    void closeConnectionsOf(const QString &tokenId);
+    // Connection threads
+    void trackConnection(const std::shared_ptr<Connection> &c);
+    bool httpTrusted(const Connection &c, const QHash<QByteArray, QByteArray> &headers, const QByteArray &target) const;
+
 private:
     QVariant dispatch(const QString &action, const QVariantMap &args);
     QVariant dispatchOp(const QString &op, const QVariantMap &args);
@@ -137,6 +262,15 @@ private:
     quint16 m_port;
     QHostAddress m_bind = QHostAddress(QHostAddress::LocalHost);
     QByteArray m_page;
+    QString m_webRoot;
+    TrustCheck m_trusted;
+    Limits m_limits;
+    HttpTrustCheck m_httpTrusted;
+    QStringList m_openOps;
+    TrustCheck m_actionTrust;
+    QMutex m_connectionsLock;
+    QList<std::weak_ptr<Connection>> m_connections;
+    QHash<QByteArray, Route> m_routes;
     mutable QReadWriteLock m_lock;
     QHash<QString, Handler> m_handlers;
     QStringList m_order;   // registration order, for list_actions
@@ -158,7 +292,10 @@ bool convertTo(QVariant &value, QMetaType type);
 // Invoke a slot / Q_INVOKABLE by name, converting `args` to its parameter
 // types. Throws CommandError when there is no such method or a conversion
 // fails. GUI thread only for GUI objects.
-QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args = {});
+// `serviceOnly`: only what the service offers (memberscope.h: the object's
+// own public slots and Q_INVOKABLEs, never a signal or QObject's members);
+// the `call` op passes true, the dev tooling (QML functions) false
+QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args = {}, bool serviceOnly = false);
 
 } // namespace OctaveService
 

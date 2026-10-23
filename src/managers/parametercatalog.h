@@ -23,6 +23,8 @@
 class ParameterCatalog : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "read")
     // Every parameter as {id, title, shortTitle, unit, min, max, kind,
     // decimals, source, aliasOf}, in display order
     Q_PROPERTY(QVariantList parameters READ parameters CONSTANT)

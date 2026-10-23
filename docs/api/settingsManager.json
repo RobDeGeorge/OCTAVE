@@ -10,7 +10,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -21,7 +22,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -32,7 +34,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -43,7 +46,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -54,7 +58,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -65,7 +70,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -76,7 +82,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -87,7 +94,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -98,7 +106,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -109,7 +118,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -120,7 +130,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -131,7 +142,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -142,7 +154,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -153,7 +166,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -164,7 +178,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -175,7 +190,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -186,7 +202,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -197,7 +214,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -208,7 +226,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -219,7 +238,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -230,7 +250,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -241,7 +262,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "bool",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -252,7 +274,8 @@
                     "type": "QUrl"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -263,7 +286,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -274,7 +298,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -285,7 +310,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -296,7 +322,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -307,7 +334,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -318,7 +346,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -337,7 +366,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -348,7 +378,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -359,7 +390,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -370,7 +402,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -381,7 +414,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -392,7 +426,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -403,7 +438,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -414,7 +450,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -425,7 +462,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -436,7 +474,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -447,7 +486,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -458,7 +498,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -469,7 +510,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -480,7 +522,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -491,7 +534,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -502,7 +546,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -513,7 +558,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -528,7 +574,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -539,7 +586,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -550,7 +598,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -561,7 +610,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -572,7 +622,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -583,7 +634,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -594,7 +646,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -605,7 +658,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -616,7 +670,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -627,7 +682,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -638,7 +694,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -653,7 +710,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -664,7 +722,8 @@
                     "type": "QVariantList"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -675,7 +734,8 @@
                     "type": "QVariantList"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -690,7 +750,8 @@
                     "type": "int"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -701,7 +762,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -712,7 +774,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -727,7 +790,8 @@
                     "type": "int"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -738,7 +802,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -749,7 +814,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -768,7 +834,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -783,7 +850,8 @@
                     "type": "QVariantMap"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -794,7 +862,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -805,7 +874,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -816,7 +886,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -831,7 +902,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -842,7 +914,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -853,7 +926,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -864,7 +938,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -875,7 +950,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -886,7 +962,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -897,7 +974,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -908,7 +986,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -919,7 +998,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -930,7 +1010,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -941,7 +1022,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -952,7 +1034,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -963,7 +1046,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -974,7 +1058,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -985,7 +1070,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -996,7 +1082,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1007,7 +1094,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1018,7 +1106,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1029,7 +1118,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1040,7 +1130,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1051,7 +1142,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1062,7 +1154,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1073,7 +1166,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1084,7 +1178,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1095,7 +1190,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1106,7 +1202,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1117,7 +1214,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1128,7 +1226,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1143,7 +1242,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1154,7 +1254,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1169,7 +1270,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1180,14 +1282,16 @@
                     "type": "QVariantMap"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
             "name": "reset_gesture_mapping",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1198,7 +1302,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1209,7 +1314,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1220,14 +1326,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
             "name": "reset_to_defaults",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1242,7 +1350,32 @@
                     "type": "QVariant"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
+        },
+        {
+            "kind": "slot",
+            "name": "apply_settings",
+            "params": [
+                {
+                    "name": "values",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "settings"
+        },
+        {
+            "kind": "slot",
+            "name": "applyNowPlayingPreset",
+            "params": [
+                {
+                    "name": "label",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "settings"
         },
         {
             "kind": "slot",
@@ -1253,7 +1386,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QVariant"
+            "returns": "QVariant",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -1268,7 +1402,8 @@
                     "type": "QVariant"
                 }
             ],
-            "returns": "QVariant"
+            "returns": "QVariant",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -1283,7 +1418,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -1294,280 +1430,320 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_supported_obd_parameters",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_directory_history",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_home_obd_parameters",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_auto_play_on_startup",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_persist_shuffle_state",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_last_shuffle_state",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_last_played_song",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_last_played_position",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_last_played_playlist",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_last_settings_section",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_window_state",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_music_button_default_page",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_return_to_library_after_selection",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "flushPendingSave",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "settings"
         },
         {
             "kind": "slot",
             "name": "get_android_auto_enabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_phone_mirror_enabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_display_size",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_audio_gain",
             "params": [
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_audio_duck_enabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_audio_duck_level",
             "params": [
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_phone_screen_off",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_display_dpi",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_bit_rate_usb",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_bit_rate_wifi",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_auto_wifi",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_bit_rate_auto",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_scrcpy_wireless_address",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_esp32_volume_enabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_esp32_volume_port",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_esp32_volume_step_size",
             "params": [
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_esp32_auto_reconnect",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_esp32_led_sleep_enabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_esp32_led_color_mode",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_esp32_led_static_color",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_show_waveform_visualizer",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_imu_enabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_gesture_sensor_enabled",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_gesture_mapping",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_gesture_mapping_dict",
             "params": [
             ],
-            "returns": "QVariantMap"
+            "returns": "QVariantMap",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -1578,28 +1754,32 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_settings_registry",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_pinned_settings_metadata",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_settings_menu_visibility",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -1610,28 +1790,32 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_git_commit_hash",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_git_commit_date",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_git_commit_message",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         }
     ],
     "object": "settingsManager",
@@ -2105,6 +2289,13 @@
             "notify": "customThemesChanged",
             "readable": true,
             "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "nowPlayingPresets",
+            "readable": true,
+            "type": "QVariantList",
             "writable": false
         },
         {

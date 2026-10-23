@@ -1,0 +1,634 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robdegeorge.com/OCTAVE/docs/api/protocol.json",
+  "title": "OCTAVE service protocol",
+  "description": "The envelope of OCTAVE's service API: the transports, every op with its arguments and reply, the error form, the event shapes, the binary stream record, the HTTP routes and the pairing flow. The objects an op names (their properties, methods and signals) are in the <object>.json files next to this one; this file is the part of the API that does not come from a C++ meta-object. It is hand-written and checked against a running `octave --headless` by sdk/python/tests/test_protocol_spec.py (ctest sdk_python): every op here exists, every op the server registers is here, and sample replies, errors and events validate against these schemas. Each schema is JSON Schema 2020-12; `$ref`s point into this file. Unknown fields: a client ignores fields, ops and events it does not know (additions never bump the version), so the schemas here do not set additionalProperties false; the test applies them strictly so this file cannot lag behind the server. Generators: sdk/typescript (scripts/generate-protocol.mjs) and sdk/go (generate/main.go) read `ops`, `events`, `errors` and `streams` from here.",
+  "protocolVersion": 2,
+  "versioning": {
+    "rule": "protocolVersion (here, in index.json, in `hello` and `describe`, and kProtocolVersion in src/service/protocol.h) goes up on any breaking change: a removed or renamed op, argument, reply field, event, object or member, or a changed type or meaning. Additions do not bump it. A client accepts the versions it was written against and refuses, or degrades, on an unknown later one.",
+    "history": "docs/api/CHANGELOG.md"
+  },
+  "transports": {
+    "tcp": {
+      "description": "A TCP connection to the service port (127.0.0.1:9876 by default; `--service PORT`, `--service-bind ADDR`). Each request, reply and event is one JSON object on one line ending in \\n (UTF-8). The first byte a client sends must be `{`: anything else is read as HTTP. A line over maxLineBytes closes the connection. Stream records are framed as 0xFF, a big-endian u32 length, then the record (a JSON line never starts with 0xFF).",
+      "firstByte": "{",
+      "recordFraming": "0xFF u32be(length) record"
+    },
+    "websocket": {
+      "description": "An RFC 6455 WebSocket on the same port at path /. One request, reply or event per text frame, the same JSON as a line; a stream record is one binary frame with no extra framing. No extensions are negotiated. Browsers may connect only from the service's own page: the Origin's host:port must equal the Host header, and the Host must be an IP address or localhost (never a name). A request without an Origin header (a script, an SDK) is not restricted. A text frame over 1 MiB, an unmasked or malformed frame closes the connection with 1002.",
+      "path": "/",
+      "originRule": "Origin host:port == Host, and Host is an address or localhost; no Origin = not a browser = allowed; Origin null refused",
+      "maxMessageBytes": 1048576
+    },
+    "limits": {
+      "description": "What one client may cost (src/service/commandserver.h, Limits). Exceeding a limit closes the connection or drops events; none is an op error.",
+      "maxConnections": 64,
+      "maxPerAddress": 8,
+      "firstByteMs": 10000,
+      "untrustedIdleMs": 60000,
+      "maxLineBytes": 1048576,
+      "maxUnsentBytes": 4194304,
+      "maxQueuedEvents": 1000,
+      "maxQueuedRecords": 90,
+      "maxQueuedRecordBytes": 2097152
+    }
+  },
+  "request": {
+    "description": "Every request: `op` names the op, `id` (any JSON value, usually an integer) is echoed in the reply so requests can be pipelined; the op's arguments are the other top-level keys. Requests are answered in order on one connection, but events can arrive between a request and its reply. Methods and property access run on the app's GUI thread; `timeoutMs` (default 30000) bounds that wait where an op takes it.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "op": { "type": "string", "enum": ["hello", "describe", "get", "set", "call", "rows", "subscribe", "unsubscribe", "stream", "unstream", "pair", "unpair", "mediaTicket"] },
+        "id": { "description": "Echoed in the reply. Optional; without it the reply has no id." }
+      },
+      "required": ["op"]
+    }
+  },
+  "reply": {
+    "description": "Every reply has `ok`. A success carries the op's result in `result` (null for an op that returns nothing). A failure carries `error`, a message for a person, and sometimes `code`, a stable string a program can switch on (see errors). The reply to a request with an `id` carries the same `id`.",
+    "schema": {
+      "oneOf": [
+        { "$ref": "#/$defs/okReply" },
+        { "$ref": "#/$defs/errorReply" }
+      ]
+    }
+  },
+  "errors": {
+    "description": "The failure reply form, and the `code`s a client can rely on. Every other failure is a message only (`error`), and the messages below are the families a client will meet; their wording is not part of the contract.",
+    "codes": {
+      "unauthorised": {
+        "description": "The connection is not trusted (protocol 2, pairing): it is not on this device with serviceLoopbackOpen on, and it has presented no valid token. Every op but `hello` and `pair` answers this until the client pairs or sends a valid token with `hello`. HTTP routes answer 401 for the same reason.",
+        "since": 2,
+        "http": 401
+      },
+      "forbidden": {
+        "description": "The connection is trusted but its paired device lacks the permission scope this `set` / `call` / phone stream / dev action needs (docs/api/README.md, Permissions). The message names the member, the scope it needs and the scopes the device has. HTTP routes answer 401 for the same reason (`/export/...` needs `files`).",
+        "since": 2
+      },
+      "rateLimited": {
+        "description": "The connection sent more ops than its limit (docs/api/README.md, Limits per connection: 200 a second, 400 at once by default; dev actions are not counted). The op did not run. `retryAfterMs` says when the next one would pass; a client that keeps sending regardless (more than 4000 refusals in a second) has its connection closed.",
+        "since": 2
+      }
+    },
+    "messages": [
+      { "when": "the line was not a JSON object", "example": "Invalid JSON: ..." },
+      { "when": "no such op", "example": "Unknown op: <op>" },
+      { "when": "no such object", "example": "Unknown object: <name>" },
+      { "when": "no such property, signal, stream or subscription", "example": "<Class> has no property <name>" },
+      { "when": "no such method, or wrong argument count or types", "example": "<Class> has no method <name>(...)" },
+      { "when": "the property is not writable", "example": "<name> is read-only" },
+      { "when": "the value does not convert to the property's type", "example": "<name> takes a <type>" },
+      { "when": "the GUI thread did not answer within timeoutMs", "example": "timed out" },
+      { "when": "a pairing attempt was refused (no code showing, wrong code, too many tries, too fast)", "example": "no pairing code is showing" }
+    ]
+  },
+  "ops": {
+    "hello": {
+      "since": 1,
+      "open": true,
+      "description": "Who you are talking to. The first request on a connection. With a paired device's `token` the connection becomes trusted (protocol 2); an unknown or revoked token is not an error: `auth` is untrusted and `tokenRejected` is true, so the client shows its pairing screen. An untrusted connection learns only `protocolVersion`, `auth` and `loopbackOpen`.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "description": "A paired device's token from `pair` (64 hex characters). Protocol 2." }
+        }
+      },
+      "reply": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": { "type": "integer", "description": "Check it against the versions you know." },
+          "auth": { "type": "string", "enum": ["trusted", "untrusted"], "description": "Whether this connection may use the service. Protocol 2 (absent in 1: everything was trusted)." },
+          "loopbackOpen": { "type": "boolean", "description": "Whether a connection from this device is trusted without pairing (the setting serviceLoopbackOpen). Protocol 2." },
+          "tokenRejected": { "type": "boolean", "const": true, "description": "Present (true) when the `token` sent was unknown or revoked; the connection keeps no token." },
+          "scopes": { "type": "array", "items": { "$ref": "#/$defs/scope" }, "description": "Trusted connections only: what this connection may change (`full` on the device itself)." },
+          "app": {
+            "type": "object",
+            "description": "Trusted connections only.",
+            "properties": {
+              "version": { "type": "string" },
+              "build": { "type": "string", "enum": ["debug", "release"] },
+              "headless": { "type": "boolean", "description": "True when OCTAVE runs with no QML UI (`--headless`): your frontend is the screen." }
+            },
+            "required": ["version", "build", "headless"]
+          },
+          "objects": { "type": "array", "items": { "type": "string" }, "description": "Every service object's name. Trusted connections only." }
+        },
+        "required": ["protocolVersion", "auth", "loopbackOpen"]
+      }
+    },
+    "describe": {
+      "since": 1,
+      "description": "What an object offers: its properties (type, readable / writable / constant, notify signal, enum keys), methods (parameters, return type, slot or invokable) and signals, with `stability` / `deprecated` annotations, exactly as docs/api/<object>.json. Without `object`, every object's description plus the op names this server has (`ops`, additive, since protocol 2).",
+      "args": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string", "description": "One object's name; omit for all of them." }
+        }
+      },
+      "reply": {
+        "oneOf": [
+          { "$ref": "#/$defs/objectDescription" },
+          {
+            "type": "object",
+            "properties": {
+              "protocolVersion": { "type": "integer" },
+              "objects": { "type": "object", "additionalProperties": { "$ref": "#/$defs/objectDescription" } },
+              "ops": { "type": "array", "items": { "type": "string" }, "description": "The op names this server answers. Everything a client can send; compare with this file's `ops`." }
+            },
+            "required": ["protocolVersion", "objects", "ops"]
+          }
+        ]
+      }
+    },
+    "get": {
+      "since": 1,
+      "description": "A property's current value. On a key-value object (paramStore) `property` is a key (a parameter id) and the reply its value, or null before a reading; without `property` every key that has a value, as {id: value}. A property holding a list model answers a summary ({model: true, count, roles}); read the rows with `rows`.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string" },
+          "property": { "type": "string", "description": "Required except on paramStore." },
+          "timeoutMs": { "$ref": "#/$defs/timeoutMs" }
+        },
+        "required": ["object"]
+      },
+      "reply": {
+        "description": "The value as JSON (a Qt type converted: strings, numbers, booleans, lists, maps; an enum as its integer; a QUrl / QColor / QDateTime as a string), or a model summary.",
+        "anyOf": [
+          { "$ref": "#/$defs/modelSummary" },
+          {}
+        ]
+      }
+    },
+    "set": {
+      "since": 1,
+      "description": "Write a writable property. The value is converted to the property's type (an enum by key or number); a value that does not convert is an error, as is a read-only property. Most state changes through a method instead (settings through their save_* slots). Replies with the value read back.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string" },
+          "property": { "type": "string" },
+          "value": { "description": "Any JSON value the property's type accepts." },
+          "timeoutMs": { "$ref": "#/$defs/timeoutMs" }
+        },
+        "required": ["object", "property", "value"]
+      },
+      "reply": { "description": "The property's value after the write." }
+    },
+    "call": {
+      "since": 1,
+      "description": "Call a public slot or invokable. Arguments are converted to the declared parameter types; an overload is chosen by argument count. The reply is the return value (null for void). A method that takes (consumer, value) and is registered for release on close (obdManager.setParameterDemand, obdManager.setBackgroundDemand, berryIMU.setDemand, audioAnalyzer.setDemand) is called again with its release value ([] or false) for every consumer this connection still holds when it closes.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string" },
+          "method": { "type": "string" },
+          "args": { "type": "array", "description": "Positional arguments; default none." },
+          "timeoutMs": { "$ref": "#/$defs/timeoutMs" }
+        },
+        "required": ["object", "method"]
+      },
+      "reply": { "description": "The method's return value as JSON, or null." }
+    },
+    "rows": {
+      "since": 1,
+      "description": "The rows of a list-model property (the download queue, search results), each as {role: value}. Without `count`, every row from `from` on.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string" },
+          "property": { "type": "string" },
+          "from": { "type": "integer", "minimum": 0, "default": 0 },
+          "count": { "type": "integer", "minimum": 0 },
+          "timeoutMs": { "$ref": "#/$defs/timeoutMs" }
+        },
+        "required": ["object", "property"]
+      },
+      "reply": { "type": "array", "items": { "$ref": "#/$defs/row" } }
+    },
+    "subscribe": {
+      "since": 1,
+      "description": "Follow an object: `property` events for each named property (the current value at once, then on every notify; a list-model property sends `model` events instead, starting with a reset of every row), `signal` events for each named signal, and on paramStore `params` events for the ids in `properties` (none = all). The reply, with your `sub` id, always arrives before the first event of that subscription. `throttleMs` > 0 coalesces: at most one event per name per interval, the latest value winning (model events are never coalesced). At least one property or signal is required except on paramStore.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string" },
+          "properties": { "type": "array", "items": { "type": "string" }, "description": "Property names, or parameter ids on paramStore." },
+          "signals": { "type": "array", "items": { "type": "string" } },
+          "throttleMs": { "type": "integer", "minimum": 0, "default": 0 }
+        },
+        "required": ["object"]
+      },
+      "reply": {
+        "type": "object",
+        "properties": { "sub": { "type": "integer", "description": "The subscription id carried by its events; unique per connection." } },
+        "required": ["sub"]
+      }
+    },
+    "unsubscribe": {
+      "since": 1,
+      "description": "End a subscription. Unknown ids are an error. A connection's subscriptions end with it.",
+      "args": {
+        "type": "object",
+        "properties": { "sub": { "type": "integer" } },
+        "required": ["sub"]
+      },
+      "reply": { "type": "boolean", "const": true }
+    },
+    "stream": {
+      "since": 2,
+      "description": "Open a media stream (see streams): binary records follow on this connection. The reply gives the stream id in the records and what is known of the format so far (an H.264 stream with no session yet knows only its id); a `streamConfig` event follows every change. A new subscriber receives nothing until the next keyframe. At most 255 streams per connection; a stream ends with `unstream` or the connection.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string", "description": "The object that owns the stream (phoneMirrorManager, androidAutoManager)." },
+          "name": { "type": "string", "description": "The stream's name on it (video, frames)." }
+        },
+        "required": ["object", "name"]
+      },
+      "reply": { "$ref": "#/$defs/streamInfo" }
+    },
+    "unstream": {
+      "since": 2,
+      "description": "Stop one stream by the id `stream` returned. Not an error for an unknown id.",
+      "args": {
+        "type": "object",
+        "properties": { "stream": { "type": "integer" } },
+        "required": ["stream"]
+      },
+      "reply": { "type": "boolean", "const": true }
+    },
+    "pair": {
+      "since": 2,
+      "open": true,
+      "description": "Become a paired device with the 6-digit code OCTAVE shows (Settings > Service > Pair a device, valid 2 minutes, single use). The reply is the device's token; store it and send it with `hello` on later connections. This connection is trusted at once. A refusal (no code showing, wrong code, too many attempts, attempts faster than one a second, an address with 10 wrong codes) is a message-only error.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "pattern": "^[0-9]{6}$" },
+          "name": { "type": "string", "description": "What the user sees in the device list (\"Kitchen tablet\")." },
+          "scopes": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/scope" },
+            "description": "The permissions this device asks for; absent or empty: full. An unknown one fails `pair` without using the code."
+          }
+        },
+        "required": ["code", "name"]
+      },
+      "reply": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "scopes": { "type": "array", "items": { "$ref": "#/$defs/scope" }, "description": "What was granted: `read` plus what was asked for, or `full`." }
+        },
+        "required": ["token", "scopes"]
+      }
+    },
+    "unpair": {
+      "since": 2,
+      "description": "Forget the caller's own device: its token stops working everywhere. An error when this connection presented no token (a loopback connection trusted by serviceLoopbackOpen has no device to forget).",
+      "args": { "type": "object", "properties": {} },
+      "reply": { "type": "boolean", "const": true }
+    },
+    "mediaTicket": {
+      "since": 2,
+      "description": "A short-lived ticket for the HTTP routes (`/art?ticket=...`, `/export/...?ticket=...`), so no token goes in a URL. Bound to the caller's token (revoked with it); a loopback connection gets one too. At most 256 exist at once (the oldest goes).",
+      "args": { "type": "object", "properties": {} },
+      "reply": {
+        "type": "object",
+        "properties": {
+          "ticket": { "type": "string" },
+          "expiresIn": { "type": "integer", "description": "Seconds the ticket is valid (600)." }
+        },
+        "required": ["ticket", "expiresIn"]
+      }
+    }
+  },
+  "events": {
+    "description": "A message with an `event` key is not a reply. Subscription events carry `sub` and `object`, and `t`, the service's monotonic clock in milliseconds when the event was sent (a throttled one: at the flush).",
+    "property": {
+      "description": "A subscribed property's value: at once on subscribing, then on every notify (coalesced by throttleMs).",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "event": { "const": "property" },
+          "sub": { "type": "integer" },
+          "object": { "type": "string" },
+          "name": { "type": "string" },
+          "value": { "description": "The value as JSON." },
+          "t": { "$ref": "#/$defs/t" }
+        },
+        "required": ["event", "sub", "object", "name", "value", "t"]
+      }
+    },
+    "signal": {
+      "description": "A subscribed signal fired; `args` are its arguments in order.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "event": { "const": "signal" },
+          "sub": { "type": "integer" },
+          "object": { "type": "string" },
+          "name": { "type": "string" },
+          "args": { "type": "array" },
+          "t": { "$ref": "#/$defs/t" }
+        },
+        "required": ["event", "sub", "object", "name", "args", "t"]
+      }
+    },
+    "params": {
+      "description": "paramStore: the ids that changed in one batch (33 ms coalescing in the store; merged further by throttleMs), in native units; at once on subscribing with every id that has a value. A value is a number, or null when the reading is gone.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "event": { "const": "params" },
+          "sub": { "type": "integer" },
+          "object": { "const": "paramStore" },
+          "values": { "type": "object", "additionalProperties": { "type": ["number", "null"] } },
+          "t": { "$ref": "#/$defs/t" }
+        },
+        "required": ["event", "sub", "object", "values", "t"]
+      }
+    },
+    "model": {
+      "description": "A subscribed list-model property changed. Replay in order: `reset` replaces every row (sent first, with all rows), `insert` adds rows at first..last, `remove` deletes first..last, `update` replaces rows first..last. `rows` is present for reset, insert and update. Never coalesced by throttleMs.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "event": { "const": "model" },
+          "sub": { "type": "integer" },
+          "object": { "type": "string" },
+          "name": { "type": "string" },
+          "change": { "type": "string", "enum": ["reset", "insert", "remove", "update"] },
+          "first": { "type": "integer" },
+          "last": { "type": "integer" },
+          "rows": { "type": "array", "items": { "$ref": "#/$defs/row" } },
+          "t": { "$ref": "#/$defs/t" }
+        },
+        "required": ["event", "sub", "object", "name", "change", "first", "last", "t"]
+      }
+    },
+    "dropped": {
+      "description": "The client stopped reading and the oldest `count` JSON events were discarded (the queue holds 1000). Replies are never dropped.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "event": { "const": "dropped" },
+          "count": { "type": "integer" }
+        },
+        "required": ["event", "count"]
+      }
+    },
+    "streamConfig": {
+      "description": "A stream's parameter sets changed (the phone rotated, a new session): the codec and picture size of the records that follow. Reconfigure the decoder.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "event": { "const": "streamConfig" },
+          "stream": { "type": "integer" },
+          "format": { "type": "string", "enum": ["annexb", "jpeg"] },
+          "codec": { "type": "string", "description": "RFC 6381, e.g. avc1.42c01e (from the SPS)." },
+          "width": { "type": "integer" },
+          "height": { "type": "integer" }
+        },
+        "required": ["event", "stream", "format"]
+      }
+    },
+    "streamDropped": {
+      "description": "This stream's queued records overflowed (2 MB or 90 records) and were all discarded; `count` is the number of such drops so far. The stream resumes at the next keyframe, whose record has the discontinuity flag.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "event": { "const": "streamDropped" },
+          "stream": { "type": "integer" },
+          "count": { "type": "integer" }
+        },
+        "required": ["event", "stream", "count"]
+      }
+    }
+  },
+  "streams": {
+    "description": "Media as binary records on the connection that asked with `stream`. Every keyframe record of an H.264 stream carries the current SPS and PPS first, so a decoder can start at any keyframe (WebCodecs: configure({codec}) with no description = Annex-B).",
+    "names": {
+      "phoneMirrorManager.video": { "format": "annexb", "description": "The phone mirror picture: H.264 as the phone sends it, one Annex-B access unit per record." },
+      "androidAutoManager.frames": { "format": "jpeg", "description": "Android Auto: one JPEG per record, at most 15 a second, encoded only while someone watches." }
+    },
+    "record": {
+      "description": "One record: a 12-byte header then the payload. On WebSocket one binary frame; on TCP framed as in transports.tcp.recordFraming.",
+      "byteOrder": "big-endian",
+      "fields": [
+        { "name": "version", "offset": 0, "size": 1, "type": "u8", "value": 1 },
+        { "name": "stream", "offset": 1, "size": 1, "type": "u8", "description": "The id `stream` returned (1-255)." },
+        { "name": "flags", "offset": 2, "size": 1, "type": "u8", "description": "A bit set from `flags`." },
+        { "name": "reserved", "offset": 3, "size": 1, "type": "u8", "value": 0 },
+        { "name": "pts", "offset": 4, "size": 8, "type": "u64", "description": "Presentation time in microseconds (the phone's clock; JPEG: wall clock)." },
+        { "name": "payload", "offset": 12, "description": "An Annex-B access unit, or a whole JPEG." }
+      ],
+      "headerSize": 12
+    },
+    "flags": {
+      "key": { "bit": 1, "description": "A keyframe (every JPEG record)." },
+      "config": { "bit": 2, "description": "SPS / PPS are inline before the IDR." },
+      "jpeg": { "bit": 4, "description": "The payload is a JPEG." },
+      "discontinuity": { "bit": 8, "description": "The first record after joining or after a drop." }
+    },
+    "joining": "A new subscriber gets nothing until the next keyframe; the service asks the source for one at once, at most once a second across all clients.",
+    "fallingBehind": "A client whose queue overflows loses every queued record, gets a streamDropped event, and resumes at the next keyframe."
+  },
+  "http": {
+    "description": "GET only, on the service port. The Host header must be an address (IP or localhost), never a name (403 otherwise); a cross-site load (Sec-Fetch-Site other than same-origin or none) is refused with 403. `/` and the files under it (the reference page, or a `--web-root` frontend) are public. The routes below need trust: a loopback request with serviceLoopbackOpen on, `Authorization: Bearer <token>` from a program, or `?ticket=<ticket>` from `mediaTicket` in a browser; otherwise 401. A route that could not reach the app in time answers 503.",
+    "auth": {
+      "header": "Authorization: Bearer <token>",
+      "query": "ticket",
+      "unauthorised": 401
+    },
+    "routes": {
+      "/art": {
+        "since": 2,
+        "description": "The current cover, typed by its bytes (JPEG, PNG, GIF, WebP or BMP), or a library song's or a phone queue item's. The app resolves the file itself from its own art folders; no path from the request is used. Subscribe to nowPlaying.artRevision and pass it as an extra query key (`rev`) to defeat caches.",
+        "query": {
+          "song": { "type": "string", "description": "A library file name as the playlist APIs name it (URL-encoded): that song's cover." },
+          "queue": { "type": "integer", "description": "A phoneMirrorManager.mediaQueue item id: its cover." },
+          "ticket": { "type": "string" }
+        },
+        "responses": { "200": "image/*", "404": "no cover, or not an image", "401": "not trusted" }
+      },
+      "/export/trip": {
+        "since": 2,
+        "description": "The trip the app last exported (tripRecorder.exportTrip(id), then its exportFinished signal) as an attachment: the CSV, or with format=json the JSON written beside it. Only the last export is served.",
+        "query": {
+          "format": { "type": "string", "enum": ["csv", "json"], "default": "csv" },
+          "ticket": { "type": "string" }
+        },
+        "responses": { "200": "text/csv or application/json, Content-Disposition: attachment", "404": "nothing exported yet", "413": "over the size limit", "401": "not trusted" }
+      },
+      "/export/dashboard": {
+        "since": 2,
+        "description": "The dashboard the app last exported (dashboardManager.exportDashboard(id)) as an attachment.",
+        "query": { "ticket": { "type": "string" } },
+        "responses": { "200": "application/json, Content-Disposition: attachment", "404": "nothing exported yet", "401": "not trusted" }
+      },
+      "/export/logs": {
+        "since": 2,
+        "description": "The log export the app last made (diagnosticsManager.exportLogs()): without `file` a JSON array of the file names in it, with `file` that one file (a name from the listing only).",
+        "query": {
+          "file": { "type": "string", "description": "One name from the listing." },
+          "ticket": { "type": "string" }
+        },
+        "responses": { "200": "application/json (the listing) or the file", "404": "nothing exported, or no such file", "401": "not trusted" }
+      }
+    }
+  },
+  "pairing": {
+    "since": 2,
+    "description": "Who may use the service. A connection is trusted when its peer is on this device and the setting serviceLoopbackOpen is true (the default), or when it has presented a paired device's token. Every op but `hello` and `pair` needs trust, checked as each op runs; so do the HTTP routes.",
+    "flow": [
+      { "step": 1, "who": "user", "does": "opens OCTAVE's Settings > Service > Pair a device: a 6-digit code shows for 2 minutes" },
+      { "step": 2, "who": "client", "does": "sends {\"op\":\"pair\",\"code\":\"123456\",\"name\":\"Kitchen tablet\"} and stores the token from the reply; this connection is trusted at once" },
+      { "step": 3, "who": "client", "does": "on later connections sends {\"op\":\"hello\",\"token\":\"...\"} first; `auth` is trusted. An unknown or revoked token gives `auth` untrusted and `tokenRejected` true: show the pairing screen" },
+      { "step": 4, "who": "client", "does": "for images and downloads asks {\"op\":\"mediaTicket\"} and uses /art?ticket=...; never puts the token in a URL" },
+      { "step": 5, "who": "client", "does": "{\"op\":\"unpair\"} forgets its own device" }
+    ],
+    "limits": {
+      "codeLifetimeSeconds": 120,
+      "attemptIntervalSecondsPerAddress": 1,
+      "maxFailuresPerAddress": 10,
+      "maxAttemptsPerSecondAllAddresses": 10,
+      "loopbackThrottled": false,
+      "ticketLifetimeSeconds": 600,
+      "maxTickets": 256
+    },
+    "untrustedHello": "gets only protocolVersion, auth and loopbackOpen",
+    "revoke": "Revoking a device in Settings closes its connections at once (their subscriptions and streams end) and voids its tickets.",
+    "storage": "Only a SHA-256 of each token is kept (settings key serviceTokens, which no setter reaches)."
+  },
+  "$defs": {
+    "timeoutMs": { "type": "integer", "minimum": 1, "default": 30000, "description": "How long to wait for the app's GUI thread before the op fails." },
+    "t": { "type": "integer", "description": "The service's monotonic clock in milliseconds when the event was sent." },
+    "row": { "type": "object", "description": "One list-model row: {role name: value}." },
+    "okReply": {
+      "type": "object",
+      "properties": {
+        "id": {},
+        "ok": { "const": true },
+        "result": {}
+      },
+      "required": ["ok", "result"]
+    },
+    "errorReply": {
+      "type": "object",
+      "properties": {
+        "id": {},
+        "ok": { "const": false },
+        "error": { "type": "string" },
+        "code": { "type": "string", "enum": ["unauthorised", "forbidden", "rateLimited"] },
+        "retryAfterMs": { "type": "integer", "minimum": 1, "description": "With rateLimited: wait this long before sending again." }
+      },
+      "required": ["ok", "error"]
+    },
+    "modelSummary": {
+      "type": "object",
+      "description": "What `get` returns for a property holding a list model.",
+      "properties": {
+        "model": { "const": true },
+        "count": { "type": "integer" },
+        "roles": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["model", "count", "roles"]
+    },
+    "streamInfo": {
+      "type": "object",
+      "description": "The `stream` reply. `format`, `codec`, `width` and `height` are present once known: a JPEG stream knows its format from the start, an H.264 stream only after its first parameter sets (a `streamConfig` event then carries them all).",
+      "properties": {
+        "stream": { "type": "integer", "minimum": 1, "maximum": 255 },
+        "format": { "type": "string", "enum": ["annexb", "jpeg"] },
+        "codec": { "type": "string", "description": "RFC 6381, from the SPS (H.264 only)." },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" }
+      },
+      "required": ["stream"]
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["read", "media", "vehicle", "phone", "settings", "files", "system", "full"],
+      "description": "A permission a paired device holds (src/service/servicescopes.h)."
+    },
+    "annotated": {
+      "type": "object",
+      "properties": {
+        "stability": { "type": "string", "enum": ["experimental"], "description": "Not covered by the version: may change or go in any release. Absent = stable." },
+        "deprecated": { "type": "string", "description": "Still works; what to use instead and when it goes. Kept at least one protocol version." }
+      }
+    },
+    "paramDescription": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "description": "The Qt type name (QString, int, bool, double, QStringList, QVariantMap, QVariantList, QVariant, an enum...)." }
+      },
+      "required": ["name", "type"]
+    },
+    "propertyDescription": {
+      "allOf": [
+        { "$ref": "#/$defs/annotated" },
+        {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "type": { "type": "string" },
+            "readable": { "type": "boolean" },
+            "writable": { "type": "boolean" },
+            "constant": { "type": "boolean" },
+            "notify": { "type": "string", "description": "The signal that fires on change." },
+            "enum": { "type": "array", "items": { "type": "string" }, "description": "The keys, for an enum property (`set` takes a key or a number)." },
+            "scope": { "$ref": "#/$defs/scope", "description": "Writable properties only: what `set` needs." }
+          },
+          "required": ["name", "type", "readable", "writable", "constant"]
+        }
+      ]
+    },
+    "methodDescription": {
+      "allOf": [
+        { "$ref": "#/$defs/annotated" },
+        {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "kind": { "type": "string", "enum": ["slot", "invokable"] },
+            "params": { "type": "array", "items": { "$ref": "#/$defs/paramDescription" } },
+            "returns": { "type": "string", "description": "The Qt return type; \"\" for void." },
+            "scope": { "$ref": "#/$defs/scope", "description": "What `call` needs." }
+          },
+          "required": ["name", "kind", "params", "returns", "scope"]
+        }
+      ]
+    },
+    "signalDescription": {
+      "allOf": [
+        { "$ref": "#/$defs/annotated" },
+        {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "params": { "type": "array", "items": { "$ref": "#/$defs/paramDescription" } }
+          },
+          "required": ["name", "params"]
+        }
+      ]
+    },
+    "objectDescription": {
+      "type": "object",
+      "description": "One service object, as `describe` answers and as docs/api/<object>.json holds (the file adds `object`, its name).",
+      "properties": {
+        "object": { "type": "string" },
+        "class": { "type": "string" },
+        "stability": { "type": "string", "enum": ["experimental"] },
+        "properties": { "type": "array", "items": { "$ref": "#/$defs/propertyDescription" } },
+        "methods": { "type": "array", "items": { "$ref": "#/$defs/methodDescription" } },
+        "signals": { "type": "array", "items": { "$ref": "#/$defs/signalDescription" } },
+        "enums": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
+      },
+      "required": ["class", "properties", "methods", "signals"]
+    }
+  }
+}

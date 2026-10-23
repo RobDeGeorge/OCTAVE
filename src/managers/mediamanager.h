@@ -40,6 +40,23 @@ struct PlaylistInfo {
 class MediaManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.read",
+                "browse_music_folders getVolume get_album get_album_art get_album_count get_artist_count "
+                "get_band get_current_file get_current_playlist_name get_current_song_list "
+                "get_default_media_dir get_display_name get_duration get_formatted_duration "
+                "get_full_file_path get_media_files get_media_folder_name get_movable_playlist_names "
+                "get_neighbor_album_arts get_next_track_album_art get_next_track_name get_playlist_names "
+                "get_position get_previous_track_album_art get_previous_track_name get_song_file_path "
+                "get_song_playlist_name get_total_duration is_muted is_paused is_playing is_shuffled")
+    Q_CLASSINFO("octave.scope.files",
+                "create_playlist delete_playlist delete_song flush_metadata_store move_song_to_playlist "
+                "set_library_root strip_filenames")
+    Q_CLASSINFO("octave.scope.full",
+                "_clear_temp_files _save_playback_state connect_settings_manager "
+                "extract_colors_from_album_art extract_colors_from_image invalidate_stats_cache setDucking "
+                "setMuted setVolume")
 
 public:
     explicit MediaManager(QObject *parent = nullptr);
@@ -158,10 +175,27 @@ public slots:
     Q_INVOKABLE QString get_display_name(const QString &filename);
     Q_INVOKABLE QString get_default_media_dir();
     Q_INVOKABLE QString get_media_folder_name();
+    // A folder picker for frontends without one (util/folderbrowser.h):
+    // "" lists the browse roots ({roots: [{name, path}]}: ~/Music,
+    // /media, /mnt, /run/media, /storage, the current music folder unless
+    // it is "/"), a path inside them its {path, parent, dirs, audioFiles,
+    // truncated}, anything else {error}. Choose one with
+    // settingsManager.save_media_folder(path).
+    Q_INVOKABLE QVariantMap browse_music_folders(const QString &path);
     Q_INVOKABLE QString get_total_duration();
     Q_INVOKABLE int get_album_count();
     Q_INVOKABLE int get_artist_count();
     Q_INVOKABLE QStringList sort_media_files(const QString &sortColumn, bool ascending = true);
+
+public:
+    // Plain C++, not on the service (no slot, no Q_INVOKABLE)
+    // GET /art?song=<filename>: the cover file of a song in the library
+    // (its own lookup and cache, get_album_art), only if that file is in
+    // the art cache folder; "" otherwise. The service serves the bytes,
+    // never the path.
+    QString libraryArtFile(const QString &filename);
+    // browse_music_folders' roots
+    QStringList musicBrowseRoots() const;
 
 private slots:
     void _update_position();

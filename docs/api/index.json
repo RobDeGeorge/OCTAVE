@@ -10,6 +10,7 @@
         "downloadManager": "DownloadManager",
         "esp32VolumeManager": "ESP32VolumeManager",
         "fontCatalog": "FontCatalog",
+        "frontendManager": "FrontendManager",
         "gestureSensor": "GestureManager",
         "mediaManager": "MediaManager",
         "networkManager": "NetworkManager",
@@ -21,9 +22,11 @@
         "phoneMirrorManager": "PhoneMirrorManager",
         "settingsManager": "SettingsManager",
         "shiftLightManager": "ShiftLightManager",
+        "sim": "Simulator",
+        "themeCatalog": "ThemeCatalog",
         "tripRecorder": "TripRecorder",
         "units": "Units",
         "volumeController": "VolumeController"
     },
-    "protocolVersion": 1
+    "protocolVersion": 2
 }

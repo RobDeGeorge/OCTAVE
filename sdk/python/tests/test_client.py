@@ -60,6 +60,24 @@ class HeadlessClientTest(unittest.TestCase):
 
     def test_hello_on_connect(self):
         self.assertEqual(self.octave.server["protocolVersion"], PROTOCOL_VERSION)
+        # On this device, with loopback open (the default), no pairing
+        self.assertEqual(self.octave.server["auth"], "trusted")
+        self.assertTrue(self.octave.trusted)
+
+    def test_a_rejected_token_still_connects(self):
+        with Client(port=self.app.port, timeout=15, token="0" * 64) as octave:
+            self.assertTrue(octave.server["tokenRejected"])
+            self.assertTrue(octave.trusted)   # on this device anyway, with loopback open
+
+    def test_media_ticket(self):
+        ticket = self.octave.media_ticket()
+        self.assertEqual(len(ticket["ticket"]), 32)
+        self.assertEqual(ticket["expiresIn"], 600)
+
+    def test_pair_needs_the_code_on_screen(self):
+        with self.assertRaises(OctaveError) as e:
+            self.octave.pair("000000", "test")
+        self.assertIn("no pairing code", str(e.exception))
 
     def test_errors_raise(self):
         with self.assertRaises(OctaveError):
@@ -84,3 +102,52 @@ class HeadlessClientTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StreamRecordTest(unittest.TestCase):
+    """Binary stream records on TCP (docs/api/README.md, "Streams") through
+    the dev-only test source, sim_video; skipped without the dev tools."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = launch_headless(extra=("--dev",))
+
+    @classmethod
+    def tearDownClass(cls):
+        code = cls.app.stop()
+        assert code == 0, f"octave exited with {code}"
+
+    def _action(self, name, **args):
+        import json
+        import socket
+        with socket.create_connection(("127.0.0.1", self.app.port), timeout=10) as s:
+            s.sendall((json.dumps({"action": name, "args": args}) + "\n").encode())
+            return json.loads(s.makefile().readline())
+
+    def test_video_records(self):
+        with Client(port=self.app.port, timeout=15) as octave:
+            reply = octave.stream("phoneMirrorManager", "video")
+            started = self._action("sim_video", on=True)
+            if not started.get("ok"):
+                self.skipTest("built without the dev tools (no sim_video)")
+            try:
+                records, configs = [], []
+                for event in octave.events(timeout=5):
+                    if event["event"] == "record":
+                        records.append(event)
+                    elif event["event"] == "streamConfig":
+                        configs.append(event)
+                    if len(records) >= 40:
+                        break
+            finally:
+                self._action("sim_video", on=False)
+            self.assertGreaterEqual(len(records), 40)
+            self.assertEqual(records[0]["stream"], reply["stream"])
+            self.assertTrue(records[0]["key"] and records[0]["config"] and records[0]["discontinuity"])
+            self.assertTrue(records[0]["data"].startswith(b"\x00\x00\x00\x01"))   # Annex-B, SPS first
+            self.assertEqual(records[0]["data"][4] & 0x1F, 7)
+            self.assertFalse(records[1]["key"])
+            self.assertGreater(records[1]["pts"], records[0]["pts"])
+            self.assertTrue(configs and configs[0]["codec"].startswith("avc1."))
+            # Requests still work on the same connection between records
+            self.assertEqual(octave.get("volumeController", "percent"), octave.get("volumeController", "percent"))

@@ -1,0 +1,33 @@
+{
+  "name": "octave-client",
+  "version": "0.1.0",
+  "description": "TypeScript client for OCTAVE's service API, generated from docs/api: browsers and Node 22+, no dependencies",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "generate": "node scripts/generate-protocol.mjs && node scripts/generate-types.mjs",
+    "test": "node scripts/generate-protocol.mjs --check && node scripts/generate-types.mjs --check && npm run build && tsc -p test/tsconfig.json && node --test --test-force-exit test/*.test.mjs",
+    "example": "node examples/now_playing.mjs"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

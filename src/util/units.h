@@ -31,6 +31,8 @@ inline double dbToLinear(double db) { return std::pow(10.0, db / 20.0); }
 class Units : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "read")
 public:
     explicit Units(QObject *parent = nullptr) : QObject(parent) {}
 

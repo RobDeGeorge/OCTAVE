@@ -7,12 +7,20 @@
 
 class SettingsManager;
 
+// The bar's clock text, in the user's format ("" while showClock is off).
+// `time` is readable (a client subscribing gets it at once); timeChanged
+// fires only when the text changes, so once a minute without seconds.
 class Clock : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "read")
+    Q_PROPERTY(QString time READ time NOTIFY timeChanged)
 
 public:
     explicit Clock(SettingsManager *settingsManager, QObject *parent = nullptr);
+
+    QString time() const { return m_lastText; }
 
 signals:
     void timeChanged(const QString &timeStr);

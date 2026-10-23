@@ -14,7 +14,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Service API Reference</div>
           <h1 class="page-title">Service API Reference</h1>
-          <p class="page-subtitle">Every object a frontend can read and drive over the service protocol, generated from the C++ meta-objects (protocol version 1).</p>
+          <p class="page-subtitle">Every object a frontend can read and drive over the service protocol, generated from the C++ meta-objects (protocol version 2).</p>
         </div>
 
         <nav class="toc">
@@ -27,8 +27,8 @@
         </nav>
 
         <h2 id="overview">Overview</h2>
-        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>) is described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 23 objects:</p>
+        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 26 objects:</p>
         <ul>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
             <li><a href="#audioAnalyzer">audioAnalyzer</a></li>
@@ -39,6 +39,7 @@
             <li><a href="#downloadManager">downloadManager</a></li>
             <li><a href="#esp32VolumeManager">esp32VolumeManager</a></li>
             <li><a href="#fontCatalog">fontCatalog</a></li>
+            <li><a href="#frontendManager">frontendManager</a></li>
             <li><a href="#gestureSensor">gestureSensor</a></li>
             <li><a href="#mediaManager">mediaManager</a></li>
             <li><a href="#networkManager">networkManager</a></li>
@@ -50,6 +51,8 @@
             <li><a href="#phoneMirrorManager">phoneMirrorManager</a></li>
             <li><a href="#settingsManager">settingsManager</a></li>
             <li><a href="#shiftLightManager">shiftLightManager</a></li>
+            <li><a href="#sim">sim</a></li>
+            <li><a href="#themeCatalog">themeCatalog</a></li>
             <li><a href="#tripRecorder">tripRecorder</a></li>
             <li><a href="#units">units</a></li>
             <li><a href="#volumeController">volumeController</a></li>
@@ -69,13 +72,13 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>getDhuInstallInstructions()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>launchDhuSeamless()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>sendDhuClick(int x, int y)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>closeDhu()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>getDhuInstallInstructions()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>launchDhuSeamless()</code></td><td><code>bool</code></td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>sendDhuClick(int x, int y)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>closeDhu()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>connectionProgress(QString message)</code>, <code>error(QString message)</code>, <code>dhuWindowReady(int windowHandle)</code>, <code>dhuEmbeddedChanged(bool embedded)</code>.</p>
@@ -90,22 +93,23 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>setViewActive(bool active)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setPlaying(bool playing)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setLocalFile(QString filePath)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setPosition(qlonglong positionMs)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>analyze_file(QString filePath)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>update_position(float positionSeconds)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_active(bool active)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_current_levels()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>get_num_bars()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>is_analyzed()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>clear()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_live(bool live)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>update_live()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>setViewActive(bool active)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>setPlaying(bool playing)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setLocalFile(QString filePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setPosition(qlonglong positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>analyze_file(QString filePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>update_position(float positionSeconds)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>set_active(bool active)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>get_current_levels()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_num_bars()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_analyzed()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>clear()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>set_live(bool live)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>update_live()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>fftDataChanged(QVariantList levels)</code>, <code>analysisComplete()</code>, <code>analysisStarted()</code>.</p>
@@ -120,18 +124,18 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>setEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>setEmitRate(int hz)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>emitRate()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>setActive(bool active)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>calibrateTare()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>resetTare()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>setEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>setEmitRate(int hz)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>emitRate()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>setActive(bool active)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>calibrateTare()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>resetTare()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>orientationChanged(float w, float x, float y, float z)</code>, <code>pitchChanged(float pitch)</code>, <code>rollChanged(float roll)</code>, <code>headingChanged(float heading)</code>, <code>altitudeChanged(float altitude)</code>, <code>accelMagnitudeChanged(float mag)</code>, <code>lateralGChanged(float g)</code>, <code>longitudinalGChanged(float g)</code>, <code>baroTempChanged(float temp)</code>, <code>connectionStatusChanged(QString status)</code>, <code>hasTemperatureChanged(bool has)</code>.</p>
@@ -139,9 +143,15 @@
         <h3 id="clock"><code>clock</code> <span class="cmt">&mdash; Clock</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#clock">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/clock.json</span>.</p>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
-            <tr><td><code>update_time()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>time</code></td><td>QString</td><td>read</td><td><code>timeChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>update_time()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>timeChanged(QString timeStr)</code>.</p>
@@ -153,32 +163,35 @@
           <tbody>
             <tr><td><code>dashboards</code></td><td>QVariantList</td><td>read</td><td><code>dashboardsChanged</code></td></tr>
             <tr><td><code>lastShareError</code></td><td>QString</td><td>read</td><td><code>lastShareErrorChanged</code></td></tr>
+            <tr><td><code>lastError</code></td><td>QString</td><td>read</td><td><code>lastErrorChanged</code></td></tr>
+            <tr><td><code>lastExportPath</code></td><td>QString</td><td>read</td><td><code>lastExportPathChanged</code></td></tr>
             <tr><td><code>hiddenBuiltInCount</code></td><td>int</td><td>read</td><td><code>dashboardsChanged</code></td></tr>
             <tr><td><code>supportedSchema</code></td><td>int</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>widgetCatalog</code></td><td>QVariantMap</td><td>constant</td><td>&ndash;</td></tr>
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>saveDashboard(QVariantMap spec)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>deleteDashboard(QString id)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>restoreBuiltInDashboards()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>duplicateDashboard(QString sourceId, QString newLabel)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>exportDashboard(QString id)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>copyDashboardToClipboard(QString id)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>importDashboard(QString fileOrUrl)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>importDashboardFromClipboard()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>importDashboardFromText(QString json)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>refresh()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>loadDashboard(QString id)</code></td><td><code>QVariant</code></td><td>invokable</td></tr>
-            <tr><td><code>isBuiltIn(QString id)</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>uniqueIdForLabel(QString label)</code></td><td><code>QString</code></td><td>invokable</td></tr>
-            <tr><td><code>normalizedSpec(QVariantMap spec)</code></td><td><code>QVariantMap</code></td><td>invokable</td></tr>
-            <tr><td><code>canPlace(QVariantList cells, int gridColumns, int gridRows, int col, int row, int colSpan, int rowSpan, int exceptIndex)</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>fitAt(QVariantList cells, int gridColumns, int gridRows, int col, int row, int colSpan, int rowSpan)</code></td><td><code>QVariantMap</code></td><td>invokable</td></tr>
+            <tr><td><code>saveDashboard(QVariantMap spec)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>deleteDashboard(QString id)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>restoreBuiltInDashboards()</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>duplicateDashboard(QString sourceId, QString newLabel)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>exportDashboard(QString id)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>copyDashboardToClipboard(QString id)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>importDashboard(QString fileOrUrl)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>importDashboardFromClipboard()</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>importDashboardFromText(QString json)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>refresh()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>loadDashboard(QString id)</code></td><td><code>QVariant</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>isBuiltIn(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>uniqueIdForLabel(QString label)</code></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>normalizedSpec(QVariantMap spec)</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>canPlace(QVariantList cells, int gridColumns, int gridRows, int col, int row, int colSpan, int rowSpan, int exceptIndex)</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>fitAt(QVariantList cells, int gridColumns, int gridRows, int col, int row, int colSpan, int rowSpan)</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>
         </table>
-        <p><strong>Signals</strong> (<code>subscribe</code>): <code>dashboardsChanged()</code>, <code>lastShareErrorChanged()</code>.</p>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>dashboardsChanged()</code>, <code>lastShareErrorChanged()</code>, <code>lastErrorChanged()</code>, <code>lastExportPathChanged()</code>.</p>
 
         <h3 id="diagnosticsManager"><code>diagnosticsManager</code> <span class="cmt">&mdash; DiagnosticsManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#diagnosticsManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/diagnosticsManager.json</span>.</p>
@@ -194,15 +207,15 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>recentLogLines(int maxLines)</code></td><td><code>QString</code></td><td>invokable</td></tr>
-            <tr><td><code>recentLogLines()</code></td><td><code>QString</code></td><td>invokable</td></tr>
-            <tr><td><code>copyLogsToClipboard(int maxLines)</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>copyLogsToClipboard()</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>exportLogs()</code></td><td><code>QString</code></td><td>invokable</td></tr>
-            <tr><td><code>openLogFolder()</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>licenseText(QString name)</code></td><td><code>QString</code></td><td>invokable</td></tr>
+            <tr><td><code>recentLogLines(int maxLines)</code></td><td><code>QString</code></td><td>invokable</td><td><code>files</code></td></tr>
+            <tr><td><code>recentLogLines()</code></td><td><code>QString</code></td><td>invokable</td><td><code>files</code></td></tr>
+            <tr><td><code>copyLogsToClipboard(int maxLines)</code></td><td><code>bool</code></td><td>invokable</td><td><code>files</code></td></tr>
+            <tr><td><code>copyLogsToClipboard()</code></td><td><code>bool</code></td><td>invokable</td><td><code>files</code></td></tr>
+            <tr><td><code>exportLogs()</code></td><td><code>QString</code></td><td>invokable</td><td><code>files</code></td></tr>
+            <tr><td><code>openLogFolder()</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>licenseText(QString name)</code></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>lastExportPathChanged()</code>.</p>
@@ -221,23 +234,23 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>search(QString query)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>next_search_page()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>search_more()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>download(QString songId, QString songName)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cancel_download(QString songId)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>pause_download(QString songId)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>resume_download(QString songId)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>clear_download_queue()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>clear_finished_downloads()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>connect_settings_manager(QObject* sm)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_download_playlist(QString name)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_download_playlist()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>hasStorageAccess()</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>requestStorageAccess()</code></td><td><code>bool</code></td><td>invokable</td></tr>
+            <tr><td><code>search(QString query)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>next_search_page()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>search_more()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>download(QString songId, QString songName)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>cancel_download(QString songId)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>pause_download(QString songId)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>resume_download(QString songId)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>clear_download_queue()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>clear_finished_downloads()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>connect_settings_manager(QObject* sm)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>set_download_playlist(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>get_download_playlist()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>hasStorageAccess()</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>requestStorageAccess()</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>searchInProgress(bool inProgress)</code>, <code>searchError(QString errorMsg)</code>, <code>downloadStarted(QString songId, QString displayName)</code>, <code>downloadProgress(QString songId, float progress)</code>, <code>downloadComplete(QString songId, QString filePath)</code>, <code>downloadError(QString songId, QString displayName, QString errorMsg)</code>, <code>downloadQueueChanged()</code>, <code>statusMessage(QString message)</code>, <code>isSearchingChanged(bool value)</code>, <code>activeDownloadsChanged(int count)</code>.</p>
@@ -254,17 +267,17 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>connect_device()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>disconnect_device()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_connection_detail()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>refresh_ports()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>reset_reconnect_attempts()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>connect_device()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>disconnect_device()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_connection_detail()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refresh_ports()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>reset_reconnect_attempts()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>connectionStatusChanged(QString status)</code>, <code>connectionDetailChanged(QString detail)</code>, <code>availablePortsChanged(QVariantList ports)</code>, <code>volumeChangeRequested(float delta)</code>, <code>muteToggleRequested()</code>.</p>
@@ -279,6 +292,32 @@
           </tbody>
         </table>
 
+        <h3 id="frontendManager"><code>frontendManager</code> <span class="cmt">&mdash; FrontendManager</span></h3>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#frontendManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/frontendManager.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>frontends</code></td><td>QVariantList</td><td>read</td><td><code>frontendsChanged</code></td></tr>
+            <tr><td><code>activeId</code></td><td>QString</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>runningId</code></td><td>QString</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>forcedQml</code></td><td>bool</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>forcedQmlReason</code></td><td>QString</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>lastError</code></td><td>QString</td><td>read</td><td><code>lastErrorChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>installFromFolder(QString path)</code></td><td><code>QString</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>installFromZip(QString path)</code></td><td><code>QString</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>remove(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>setActive(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>clearForcedQml()</code></td><td>&ndash;</td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>manifestOf(QString id)</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code>, <code>installed(QString id)</code>.</p>
+
         <h3 id="gestureSensor"><code>gestureSensor</code> <span class="cmt">&mdash; GestureManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#gestureSensor">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/gestureSensor.json</span>.</p>
         <table>
@@ -290,17 +329,17 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>setGestureAction(QString gesture, QString action)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>getGestureAction(QString gesture)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>resetMappingToDefaults()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setCooldown(int ms)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>cooldownMs()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>setGestureAction(QString gesture, QString action)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>getGestureAction(QString gesture)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>resetMappingToDefaults()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setCooldown(int ms)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>isEnabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>cooldownMs()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>gestureDetected(QString gesture)</code>, <code>actionTriggered(QString action)</code>, <code>connectionStatusChanged(QString status)</code>.</p>
@@ -308,70 +347,71 @@
         <h3 id="mediaManager"><code>mediaManager</code> <span class="cmt">&mdash; MediaManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#mediaManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/mediaManager.json</span>.</p>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>connect_settings_manager(QObject*)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>_save_playback_state()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>_clear_temp_files()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>flush_metadata_store()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>play_file(QString filename)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>next_track()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>previous_track()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>pause()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>toggle_play()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setMuted(bool muted)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>toggle_shuffle()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setVolume(float volume)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setDucking(float factor)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_position(int positionMs)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>extract_colors_from_album_art(QString filename)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>extract_colors_from_image(QString imagePath)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>scan_library(bool resetDisplayNames)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>scan_library()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_library_root(QString path)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>strip_filenames()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>select_playlist(QString name)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>create_playlist(QString name)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>delete_playlist(QString name)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>move_song_to_playlist(QString filename, QString targetPlaylist)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>delete_song(QString filename)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>play_downloaded_song(QString artist, QString name, QString playlist)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>play_file_at_path(QString filePath)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>invalidate_stats_cache()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_media_files(bool emitSignal)</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>get_media_files()</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>get_formatted_duration(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_band(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_album(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_album_art(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_current_file()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_next_track_name()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_previous_track_name()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_next_track_album_art()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_previous_track_album_art()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_neighbor_album_arts()</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>is_playing()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>is_paused()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_duration()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>get_position()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>is_muted()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>getVolume()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>is_shuffled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_playlist_names()</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>get_current_playlist_name()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_current_song_list()</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>get_movable_playlist_names()</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>get_song_playlist_name(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_song_file_path(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_full_file_path(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_display_name(QString filename)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_default_media_dir()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_media_folder_name()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_total_duration()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_album_count()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>get_artist_count()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>sort_media_files(QString sortColumn, bool ascending)</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>sort_media_files(QString sortColumn)</code></td><td><code>QStringList</code></td><td>slot</td></tr>
+            <tr><td><code>connect_settings_manager(QObject*)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>_save_playback_state()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>_clear_temp_files()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>flush_metadata_store()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>play_file(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>next_track()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>previous_track()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>pause()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toggle_play()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>toggle_shuffle()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setVolume(float volume)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setDucking(float factor)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>set_position(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>extract_colors_from_album_art(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>extract_colors_from_image(QString imagePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>scan_library(bool resetDisplayNames)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>scan_library()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>set_library_root(QString path)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>strip_filenames()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>select_playlist(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>create_playlist(QString name)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>delete_playlist(QString name)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>move_song_to_playlist(QString filename, QString targetPlaylist)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>delete_song(QString filename)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>play_downloaded_song(QString artist, QString name, QString playlist)</code></td><td><code>bool</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>play_file_at_path(QString filePath)</code></td><td><code>bool</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>invalidate_stats_cache()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>get_media_files(bool emitSignal)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_media_files()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_formatted_duration(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_band(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_album(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_album_art(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_current_file()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_next_track_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_previous_track_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_next_track_album_art()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_previous_track_album_art()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_neighbor_album_arts()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_playing()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_paused()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_duration()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_position()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_muted()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getVolume()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_shuffled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_playlist_names()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_current_playlist_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_current_song_list()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_movable_playlist_names()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_song_playlist_name(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_song_file_path(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_full_file_path(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_display_name(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_default_media_dir()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_media_folder_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>browse_music_folders(QString path)</code></td><td><code>QVariantMap</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_total_duration()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_album_count()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_artist_count()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>sort_media_files(QString sortColumn, bool ascending)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>sort_media_files(QString sortColumn)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>playbackStateChanged(int state)</code>, <code>playStateChanged(bool playing)</code>, <code>currentMediaChanged(QString filename)</code>, <code>mediaListChanged(QStringList files)</code>, <code>durationChanged(qlonglong durationMs)</code>, <code>positionChanged(qlonglong positionMs)</code>, <code>metadataChanged(QString title, QString artist, QString album)</code>, <code>durationFormatChanged(QString formatted)</code>, <code>volumeChanged(float volume)</code>, <code>shuffleStateChanged(bool shuffled)</code>, <code>totalDurationChanged(QString formatted)</code>, <code>albumCountChanged(int count)</code>, <code>artistCountChanged(int count)</code>, <code>playlistsChanged()</code>, <code>currentPlaylistChanged(QString name)</code>, <code>scanProgress(QString message)</code>, <code>albumColorsExtracted(QString jsonColors)</code>, <code>songDeleted(QString filename)</code>.</p>
@@ -394,14 +434,14 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>refreshNetwork()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>checkForUpdates()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>applySelfUpdate()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>restartApp()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>shutdown_device()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>refreshNetwork()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>checkForUpdates()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>applySelfUpdate()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>restartApp()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>shutdown_device()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>networkNameChanged(QString name)</code>, <code>isConnectedChanged(bool connected)</code>, <code>updateStatusChanged(QString status)</code>, <code>updateMessageChanged(QString message)</code>, <code>remoteCommitChanged(QString commit)</code>, <code>remoteCommitMsgChanged(QString msg)</code>, <code>workingTreeDirtyChanged(bool dirty)</code>, <code>selfUpdateStatusChanged(QString status)</code>, <code>selfUpdateMessageChanged(QString message)</code>, <code>canSelfUpdateChanged(bool canUpdate)</code>.</p>
@@ -418,6 +458,7 @@
             <tr><td><code>artist</code></td><td>QString</td><td>read</td><td><code>trackInfoChanged</code></td></tr>
             <tr><td><code>album</code></td><td>QString</td><td>read</td><td><code>trackInfoChanged</code></td></tr>
             <tr><td><code>artUrl</code></td><td>QString</td><td>read</td><td><code>artUrlChanged</code></td></tr>
+            <tr><td><code>artRevision</code></td><td>int</td><td>read</td><td><code>artUrlChanged</code></td></tr>
             <tr><td><code>durationMs</code></td><td>int</td><td>read</td><td><code>durationChanged</code></td></tr>
             <tr><td><code>positionMs</code></td><td>int</td><td>read</td><td><code>positionChanged</code></td></tr>
             <tr><td><code>canSeek</code></td><td>bool</td><td>read</td><td><code>capabilitiesChanged</code></td></tr>
@@ -426,14 +467,14 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>togglePlay()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>next()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>previous()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>seek(int positionMs)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>toggleShuffle()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>extractArtColors()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>togglePlay()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>next()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>previous()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>seek(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toggleShuffle()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>extractArtColors()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>sourceChanged()</code>, <code>playingChanged()</code>, <code>trackInfoChanged()</code>, <code>artUrlChanged()</code>, <code>durationChanged()</code>, <code>positionChanged()</code>, <code>capabilitiesChanged()</code>, <code>shuffledChanged()</code>, <code>trackChanged()</code>.</p>
@@ -453,13 +494,13 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>startScan()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>stopScan()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>connectAdapter(QString address)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cancel()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>powerOn()</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>startScan()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>stopScan()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connectAdapter(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>cancel()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>powerOn()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>bluetoothOnChanged()</code>, <code>scanningChanged()</code>, <code>devicesChanged()</code>, <code>busyChanged()</code>, <code>statusChanged()</code>.</p>
@@ -484,71 +525,71 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>connect_obd()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>reconnect()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>force_connect()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>close()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>reset_connection()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>refresh_ports()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>scan()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>availableAdapters()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>connect_to_adapter(QString identifier)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>platform_hint()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>scan_vehicle()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>is_scanning()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_all_parameter_names()</code></td><td><code>QStringList</code></td><td>slot</td></tr>
-            <tr><td><code>get_supported_commands()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>enable_scanned_parameters(QVariantList paramNames)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>enable_all_supported()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>enter_diagnostic_mode()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>exit_diagnostic_mode()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>is_diagnostic_mode()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>read_dtc()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>read_current_dtc()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>read_status()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>clear_dtc()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>read_freeze_frame()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>read_vin()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_dtc_codes()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>get_dtc_count()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>get_mil_status()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_freeze_frame()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>coolantTemp()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>voltage()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>engineLoad()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>throttlePosition()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>intakeTemp()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>timingAdvance()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>massAirFlow()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>speedMPH()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>rpm()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>airFuelRatio()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>fuelLevel()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>intakeManifoldPressure()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>shortTermFuelTrim()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>longTermFuelTrim()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>oxygenSensorVoltage()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>fuelPressure()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>engineOilTemp()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>ignitionTiming()</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>refresh_values()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>open_bluetooth_settings()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_target_address(QString address)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>connect_direct(QString mac, int channel)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>connect_direct(QString mac)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_auto_reconnect(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_connection_timeout(int timeoutSeconds)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>check_device_presence()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>isConnected()</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>clearConnectionLog()</code></td><td>&ndash;</td><td>invokable</td></tr>
-            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>setParameterDemand(QString consumer, QStringList paramIds)</code></td><td>&ndash;</td><td>invokable</td></tr>
-            <tr><td><code>setBackgroundDemand(QString consumer, QStringList paramIds)</code></td><td>&ndash;</td><td>invokable</td></tr>
+            <tr><td><code>connect_obd()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>reconnect()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>force_connect()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>close()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>reset_connection()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refresh_ports()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>scan()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>availableAdapters()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>connect_to_adapter(QString identifier)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>platform_hint()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>scan_vehicle()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>is_scanning()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_all_parameter_names()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_supported_commands()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>enable_scanned_parameters(QVariantList paramNames)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>enable_all_supported()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>enter_diagnostic_mode()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>exit_diagnostic_mode()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>is_diagnostic_mode()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>read_dtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_current_dtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_status()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>clear_dtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_freeze_frame()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_vin()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_dtc_codes()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_dtc_count()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_mil_status()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_freeze_frame()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>coolantTemp()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>voltage()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>engineLoad()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>throttlePosition()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>intakeTemp()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>timingAdvance()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>massAirFlow()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>speedMPH()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>rpm()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>airFuelRatio()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>fuelLevel()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>intakeManifoldPressure()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>shortTermFuelTrim()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>longTermFuelTrim()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>oxygenSensorVoltage()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>fuelPressure()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>engineOilTemp()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>ignitionTiming()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refresh_values()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>open_bluetooth_settings()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>set_target_address(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connect_direct(QString mac, int channel)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connect_direct(QString mac)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>set_auto_reconnect(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>set_connection_timeout(int timeoutSeconds)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>check_device_presence()</code></td><td><code>bool</code></td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>isConnected()</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>clearConnectionLog()</code></td><td>&ndash;</td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>setParameterDemand(QString consumer, QStringList paramIds)</code></td><td>&ndash;</td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>setBackgroundDemand(QString consumer, QStringList paramIds)</code></td><td>&ndash;</td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>coolantTempChanged(float value)</code>, <code>voltageChanged(float value)</code>, <code>engineLoadChanged(float value)</code>, <code>throttlePositionChanged(float value)</code>, <code>intakeAirTempChanged(float value)</code>, <code>timingAdvanceChanged(float value)</code>, <code>massAirFlowChanged(float value)</code>, <code>speedMPHChanged(float value)</code>, <code>rpmChanged(float value)</code>, <code>airFuelRatioChanged(float value)</code>, <code>fuelLevelChanged(float value)</code>, <code>intakeManifoldPressureChanged(float value)</code>, <code>shortTermFuelTrimChanged(float value)</code>, <code>longTermFuelTrimChanged(float value)</code>, <code>oxygenSensorVoltageChanged(float value)</code>, <code>fuelPressureChanged(float value)</code>, <code>engineOilTempChanged(float value)</code>, <code>ignitionTimingChanged(float value)</code>, <code>runTimeChanged(float value)</code>, <code>distanceWithMILChanged(float value)</code>, <code>fuelRailPressureChanged(float value)</code>, <code>fuelRailPressureDirectChanged(float value)</code>, <code>barometricPressureChanged(float value)</code>, <code>ambientAirTempChanged(float value)</code>, <code>relativeThrottlePosChanged(float value)</code>, <code>absoluteThrottlePosBChanged(float value)</code>, <code>acceleratorPosChanged(float value)</code>, <code>catalystTempB1S1Changed(float value)</code>, <code>catalystTempB1S2Changed(float value)</code>, <code>evapVaporPressureChanged(float value)</code>, <code>shortFuelTrim2Changed(float value)</code>, <code>longFuelTrim2Changed(float value)</code>, <code>o2SensorB1S2Changed(float value)</code>, <code>o2SensorB2S1Changed(float value)</code>, <code>o2SensorB2S2Changed(float value)</code>, <code>distanceSinceCodesCleared(float value)</code>, <code>warmupsSinceCodesCleared(float value)</code>, <code>absoluteLoadChanged(float value)</code>, <code>commandedEGRChanged(float value)</code>, <code>egrErrorChanged(float value)</code>, <code>ethanoPercentChanged(float value)</code>, <code>o2SensorB1S3Changed(float value)</code>, <code>o2SensorB1S4Changed(float value)</code>, <code>o2SensorB2S3Changed(float value)</code>, <code>o2SensorB2S4Changed(float value)</code>, <code>o2S1WRVoltageChanged(float value)</code>, <code>o2S2WRVoltageChanged(float value)</code>, <code>o2S3WRVoltageChanged(float value)</code>, <code>o2S4WRVoltageChanged(float value)</code>, <code>o2S5WRVoltageChanged(float value)</code>, <code>o2S6WRVoltageChanged(float value)</code>, <code>o2S7WRVoltageChanged(float value)</code>, <code>o2S8WRVoltageChanged(float value)</code>, <code>o2S1WRCurrentChanged(float value)</code>, <code>o2S2WRCurrentChanged(float value)</code>, <code>o2S3WRCurrentChanged(float value)</code>, <code>o2S4WRCurrentChanged(float value)</code>, <code>o2S5WRCurrentChanged(float value)</code>, <code>o2S6WRCurrentChanged(float value)</code>, <code>o2S7WRCurrentChanged(float value)</code>, <code>o2S8WRCurrentChanged(float value)</code>, <code>catalystTempB2S1Changed(float value)</code>, <code>catalystTempB2S2Changed(float value)</code>, <code>throttlePosCChanged(float value)</code>, <code>acceleratorPosEChanged(float value)</code>, <code>acceleratorPosFChanged(float value)</code>, <code>throttleActuatorChanged(float value)</code>, <code>evaporativePurgeChanged(float value)</code>, <code>fuelRailPressureAbsChanged(float value)</code>, <code>fuelInjectTimingChanged(float value)</code>, <code>fuelRateChanged(float value)</code>, <code>runTimeMILChanged(float value)</code>, <code>timeSinceDTCClearedChanged(float value)</code>, <code>maxMAFChanged(float value)</code>, <code>fuelTypeChanged(float value)</code>, <code>evapVaporPressureAbsChanged(float value)</code>, <code>evapVaporPressureAltChanged(float value)</code>, <code>shortO2TrimB1Changed(float value)</code>, <code>longO2TrimB1Changed(float value)</code>, <code>shortO2TrimB2Changed(float value)</code>, <code>longO2TrimB2Changed(float value)</code>, <code>relativeAccelPosChanged(float value)</code>, <code>hybridBatteryRemainingChanged(float value)</code>, <code>elmVoltageChanged(float value)</code>, <code>connectionStatusChanged(QString status)</code>, <code>connectionLostUnexpectedly(QString reason)</code>, <code>connectionStatusDetailChanged(QString detail)</code>, <code>connectionProgressChanged(int progress)</code>, <code>devicePresenceChanged(bool present)</code>, <code>availablePortsChanged(QVariantList ports)</code>, <code>availableAdaptersChanged(QVariantList adapters)</code>, <code>supportedCommandsChanged(QVariantList commands)</code>, <code>scanProgressChanged(int progress, QString message)</code>, <code>scanCompleteChanged(QVariantList supportedParams)</code>, <code>scanOutputChanged(QString output)</code>, <code>vehicleSupportedParametersChanged()</code>, <code>dtcCodesChanged(QVariantList codes)</code>, <code>dtcCountChanged(int count)</code>, <code>milStatusChanged(bool status)</code>, <code>dtcClearResult(bool success, QString message)</code>, <code>freezeFrameChanged(QVariantList data)</code>, <code>obdParameterChanged(QString paramId, float value)</code>, <code>parameterSampled(QString paramId, float value)</code>, <code>vinChanged(QString vin)</code>, <code>connectionLogLineAppended(QString line)</code>, <code>connectionLogChanged()</code>.</p>
@@ -557,11 +598,11 @@
         <h3 id="paramStore"><code>paramStore</code> <span class="cmt">&mdash; ParameterStore</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#paramStore">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/paramStore.json</span>.</p>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>ingest(QString id, float value)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get(QString id)</code></td><td><code>QVariant</code></td><td>invokable</td></tr>
-            <tr><td><code>snapshot()</code></td><td><code>QVariantMap</code></td><td>invokable</td></tr>
+            <tr><td><code>ingest(QString id, float value)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>get(QString id)</code></td><td><code>QVariant</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>snapshot()</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>changed(QStringList ids)</code>.</p>
@@ -576,11 +617,11 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>toDisplay(QString id, QVariant value)</code></td><td><code>QVariant</code></td><td>invokable</td></tr>
-            <tr><td><code>contains(QString id)</code></td><td><code>bool</code></td><td>invokable</td></tr>
-            <tr><td><code>info(QString id)</code></td><td><code>QVariantMap</code></td><td>invokable</td></tr>
+            <tr><td><code>toDisplay(QString id, QVariant value)</code></td><td><code>QVariant</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>contains(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>info(QString id)</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>displayParametersChanged()</code>.</p>
@@ -596,7 +637,7 @@
             <tr><td><code>isRunning</code></td><td>bool</td><td>read</td><td><code>isRunningChanged</code></td></tr>
             <tr><td><code>displaySize</code></td><td>QString</td><td>read</td><td><code>displaySizeChanged</code></td></tr>
             <tr><td><code>activeDisplaySize</code></td><td>QString</td><td>read</td><td><code>frameSizeChanged</code></td></tr>
-            <tr><td><code>videoSink</code></td><td>QObject*</td><td>read / write</td><td><code>videoSinkChanged</code></td></tr>
+            <tr><td><code>videoSink</code></td><td>QObject*</td><td>read / write (full)</td><td><code>videoSinkChanged</code></td></tr>
             <tr><td><code>frameWidth</code></td><td>int</td><td>read</td><td><code>frameSizeChanged</code></td></tr>
             <tr><td><code>frameHeight</code></td><td>int</td><td>read</td><td><code>frameSizeChanged</code></td></tr>
             <tr><td><code>audioActive</code></td><td>bool</td><td>read</td><td><code>audioActiveChanged</code></td></tr>
@@ -631,53 +672,53 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>setVolume(float volume)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setMuted(bool muted)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setAudioGain(float gain)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setAudioDuckEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setAudioDuckLevel(float level)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setDisplaySize(QString size)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setViewSize(int width, int height)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setDisplayDpi(int dpi)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setBitRateUsb(int mbps)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setBitRateWifi(int mbps)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setBitRateAuto(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setAutoWifi(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setPhoneScreenOff(bool off)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>wakePhone()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>resumeMirroring()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>getInstallInstructions()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>getDeviceState()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>refreshDeviceState()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setViewActive(bool active)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>describeDeviceState(QString state)</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>hasConnectedDevice()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>selectDevice(QString serial)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>dismissNotice()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>injectTouch(int pointerId, int action, float relX, float relY)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>injectKey(int keycode)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>pressHome()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>pressBack()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>pressAppSwitch()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>startScrcpy()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>stopScrcpy()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setWirelessAddress(QString address)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>forgetWireless()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>startQrPairing()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>cancelQrPairing()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>mediaPlayPause()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>mediaPlay()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>mediaPause()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>mediaNext()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>mediaPrevious()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>mediaSeek(int positionMs)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>mediaSkipToQueueItem(qlonglong id)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>releaseMedia(bool pausePhone)</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>setVolume(float volume)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setAudioGain(float gain)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setAudioDuckEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setAudioDuckLevel(float level)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setDisplaySize(QString size)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setViewSize(int width, int height)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setDisplayDpi(int dpi)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setBitRateUsb(int mbps)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setBitRateWifi(int mbps)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setBitRateAuto(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setAutoWifi(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setPhoneScreenOff(bool off)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>wakePhone()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>resumeMirroring()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>environmentOk()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getInstallInstructions()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getDeviceState()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refreshDeviceState()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>setViewActive(bool active)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>describeDeviceState(QString state)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>hasConnectedDevice()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>selectDevice(QString serial)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>dismissNotice()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>injectTouch(int pointerId, int action, float relX, float relY)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>injectKey(int keycode)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>pressHome()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>pressBack()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>pressAppSwitch()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>startScrcpy()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>stopScrcpy()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setWirelessAddress(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>forgetWireless()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>startQrPairing()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>cancelQrPairing()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaPosition()</code></td><td><code>int</code></td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaPlayPause()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaPlay()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaPause()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaNext()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaPrevious()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaSeek(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>mediaSkipToQueueItem(qlonglong id)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
+            <tr><td><code>releaseMedia(bool pausePhone)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>scrcpyStarted(int handle)</code>, <code>scrcpyStopped()</code>, <code>scrcpyError(QString message)</code>, <code>lastErrorKindChanged()</code>, <code>sessionStateChanged()</code>, <code>isRunningChanged()</code>, <code>displaySizeChanged()</code>, <code>frameSizeChanged(int width, int height)</code>, <code>frameReady()</code>, <code>videoSinkChanged()</code>, <code>audioActiveChanged(bool active)</code>, <code>audioPlayingChanged(bool playing)</code>, <code>audioPlayed(QByteArray pcm, int bufferedMs)</code>, <code>phoneAsleepChanged(bool asleep)</code>, <code>phoneInUseChanged(bool inUse)</code>, <code>duckingChanged(float factor)</code>, <code>wirelessAddressChanged(QString address)</code>, <code>connectionTypeChanged()</code>, <code>wirelessBusyChanged()</code>, <code>wirelessResult(bool ok, QString message)</code>, <code>qrPairingChanged()</code>, <code>currentBitRateChanged()</code>, <code>mediaChanged()</code>, <code>mediaTrackChanged()</code>, <code>mediaArtChanged()</code>, <code>mediaQueueChanged()</code>, <code>mediaActiveChanged(bool active)</code>, <code>deviceStateChanged()</code>, <code>mirrorNoticeChanged()</code>.</p>
@@ -746,6 +787,7 @@
             <tr><td><code>maxHomeObdParameters</code></td><td>int</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>customThemes</code></td><td>QVariantList</td><td>read</td><td><code>customThemesChanged</code></td></tr>
             <tr><td><code>customThemeData</code></td><td>QVariantMap</td><td>read</td><td><code>customThemesChanged</code></td></tr>
+            <tr><td><code>nowPlayingPresets</code></td><td>QVariantList</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>directoryHistory</code></td><td>QVariantList</td><td>read</td><td><code>directoryHistoryChanged</code></td></tr>
             <tr><td><code>windowState</code></td><td>QString</td><td>read</td><td><code>windowStateChanged</code></td></tr>
             <tr><td><code>lastSettingsSection</code></td><td>QString</td><td>read</td><td><code>lastSettingsSectionChanged</code></td></tr>
@@ -784,168 +826,170 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>save_device_name(QString name)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_font_setting(QString font)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_theme_setting(QString theme)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_ui_scale(float scale)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_color_transition_ms(int ms)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_song_length_transition(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_show_clock(bool show)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_clock_format(bool is24hour)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_clock_show_seconds(bool show)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_clock_size(int size)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_clock_size_auto(bool autoSize)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_background_grid(QString grid)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_screen_width(int width)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_screen_height(int height)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_background_blur_radius(int radius)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_bottom_bar_orientation(QString orientation)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_show_bottom_bar_media_controls(bool show)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_settings_layout_style(QString style)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_album_art_colors(QString colorsJson)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_start_volume(float volume)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setCurrentVolume(int volume)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_media_folder(QString folderPath)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_media_folder_url(QUrl url)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>save_auto_play_on_startup(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_persist_shuffle_state(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_last_shuffle_state(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_last_played_song(QString filename)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_last_played_position(int positionMs)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_last_played_playlist(QString playlistName)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_playback_state(QString song, int positionMs, QString playlist)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_music_button_default_page(QString page)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_return_to_library_after_selection(bool returnToLibrary)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_show_waveform_visualizer(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_show_3d_button_tilt(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_show_3d_album_preview(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_rounded_album_art(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_album_art_corner_radius(int radius)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_show_album_art_shadow(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_vinyl_record_mode(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_album_art_transition(QString transition)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_background_overlay_opacity(int opacity)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_side_card_opacity(double opacity)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_side_card_angle(int angle)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_button_tilt_duration(int duration)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_text_scroll_speed(int speed)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_obd_bluetooth_port(QString port)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>add_obd_saved_adapter(QString name, QString mac)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>remove_obd_saved_adapter(QString mac)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_obd_card_style_circular(bool circular)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_gauge_temp_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_gauge_speed_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_black_box_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_black_box_sweep_all(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_black_box_max_mb(int megabytes)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_supported_obd_parameters(QVariantList parameters)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_home_obd_parameters(QVariantList parameters)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>add_home_obd_parameter(QString id, int index)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>add_home_obd_parameter(QString id)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>remove_home_obd_parameter(QString id)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>move_home_obd_parameter(int from, int to)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>save_to_directory_history(QString folderPath)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>remove_from_directory_history(QString folderPath)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_custom_theme(QString name, QVariantMap theme, QString albumArtSource)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_custom_theme(QString name, QVariantMap theme)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>delete_custom_theme(QString name)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_window_state(QString state)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>set_last_settings_section(QString section)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_settings_section_visibility(QString section, bool visible)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_android_auto_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_phone_mirror_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_display_size(QString size)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_audio_gain(double gain)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_level(double level)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_audio_gain_db(double db)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_level_db(double db)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_display_dpi(int dpi)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_bit_rate_usb(int mbps)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_bit_rate_wifi(int mbps)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_auto_wifi(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_bit_rate_auto(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_scrcpy_wireless_address(QString address)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_esp32_volume_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_esp32_volume_port(QString port)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_esp32_volume_step_size(double stepSize)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_esp32_auto_reconnect(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_esp32_led_sleep_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_esp32_led_color_mode(QString mode)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_esp32_led_static_color(QString color)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_imu_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_sensor_emit_rate(int hz)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_sensor_decimal_places(int places)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_sensor_temp_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_sensor_altitude_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_sensor_card_visible(QString card, bool visible)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_gesture_sensor_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_gesture_action(QString gesture, QString action)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_gesture_mapping(QVariantMap mapping)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>reset_gesture_mapping()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_gesture_volume_step(int step)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_gesture_cooldown(int ms)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>toggle_pin_setting(QString settingId)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>reset_to_defaults()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>save_setting(QString key, QVariant value)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_setting(QString key)</code></td><td><code>QVariant</code></td><td>slot</td></tr>
-            <tr><td><code>get_setting_with_default(QString key, QVariant defaultValue)</code></td><td><code>QVariant</code></td><td>slot</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(QString parameter, bool defaultVal)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(QString parameter)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_supported_obd_parameters()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>get_directory_history()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>get_home_obd_parameters()</code></td><td><code>QVariantList</code></td><td>slot</td></tr>
-            <tr><td><code>get_auto_play_on_startup()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_persist_shuffle_state()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_last_shuffle_state()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_last_played_song()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_last_played_position()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>get_last_played_playlist()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_last_settings_section()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_window_state()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_music_button_default_page()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_return_to_library_after_selection()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>flushPendingSave()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>get_android_auto_enabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_phone_mirror_enabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_display_size()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_audio_gain()</code></td><td><code>double</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_audio_duck_enabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_audio_duck_level()</code></td><td><code>double</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_phone_screen_off()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_display_dpi()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_bit_rate_usb()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_bit_rate_wifi()</code></td><td><code>int</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_auto_wifi()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_bit_rate_auto()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_scrcpy_wireless_address()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_esp32_volume_enabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_esp32_volume_port()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_esp32_volume_step_size()</code></td><td><code>double</code></td><td>slot</td></tr>
-            <tr><td><code>get_esp32_auto_reconnect()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_esp32_led_sleep_enabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_esp32_led_color_mode()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_esp32_led_static_color()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_show_waveform_visualizer()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_imu_enabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_gesture_sensor_enabled()</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_gesture_mapping()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_gesture_mapping_dict()</code></td><td><code>QVariantMap</code></td><td>slot</td></tr>
-            <tr><td><code>is_setting_pinned(QString settingId)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_settings_registry()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_pinned_settings_metadata()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_settings_menu_visibility()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>is_settings_section_visible(QString section)</code></td><td><code>bool</code></td><td>slot</td></tr>
-            <tr><td><code>get_git_commit_hash()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_git_commit_date()</code></td><td><code>QString</code></td><td>slot</td></tr>
-            <tr><td><code>get_git_commit_message()</code></td><td><code>QString</code></td><td>slot</td></tr>
+            <tr><td><code>save_device_name(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_font_setting(QString font)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_theme_setting(QString theme)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_ui_scale(float scale)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_color_transition_ms(int ms)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_song_length_transition(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_clock(bool show)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_format(bool is24hour)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_show_seconds(bool show)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_size(int size)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_size_auto(bool autoSize)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_background_grid(QString grid)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_screen_width(int width)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_screen_height(int height)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_background_blur_radius(int radius)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_bottom_bar_orientation(QString orientation)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_bottom_bar_media_controls(bool show)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_settings_layout_style(QString style)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>set_album_art_colors(QString colorsJson)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>save_start_volume(float volume)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>setCurrentVolume(int volume)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>save_media_folder(QString folderPath)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_media_folder_url(QUrl url)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_auto_play_on_startup(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_persist_shuffle_state(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_shuffle_state(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_played_song(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_played_position(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_played_playlist(QString playlistName)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_playback_state(QString song, int positionMs, QString playlist)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_music_button_default_page(QString page)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_return_to_library_after_selection(bool returnToLibrary)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_waveform_visualizer(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_3d_button_tilt(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_3d_album_preview(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_rounded_album_art(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_album_art_corner_radius(int radius)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_album_art_shadow(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_vinyl_record_mode(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_album_art_transition(QString transition)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_background_overlay_opacity(int opacity)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_side_card_opacity(double opacity)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_side_card_angle(int angle)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_button_tilt_duration(int duration)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_text_scroll_speed(int speed)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_bluetooth_port(QString port)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>add_obd_saved_adapter(QString name, QString mac)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>remove_obd_saved_adapter(QString mac)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_card_style_circular(bool circular)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gauge_temp_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gauge_speed_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_black_box_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_black_box_sweep_all(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_black_box_max_mb(int megabytes)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_supported_obd_parameters(QVariantList parameters)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_home_obd_parameters(QVariantList parameters)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>add_home_obd_parameter(QString id, int index)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>add_home_obd_parameter(QString id)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>remove_home_obd_parameter(QString id)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>move_home_obd_parameter(int from, int to)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_to_directory_history(QString folderPath)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>remove_from_directory_history(QString folderPath)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_custom_theme(QString name, QVariantMap theme, QString albumArtSource)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_custom_theme(QString name, QVariantMap theme)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>delete_custom_theme(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_window_state(QString state)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>set_last_settings_section(QString section)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_settings_section_visibility(QString section, bool visible)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_android_auto_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_phone_mirror_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_display_size(QString size)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_gain(double gain)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_level(double level)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_gain_db(double db)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_level_db(double db)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_display_dpi(int dpi)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_bit_rate_usb(int mbps)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_bit_rate_wifi(int mbps)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_auto_wifi(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_bit_rate_auto(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_wireless_address(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_volume_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_volume_port(QString port)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_volume_step_size(double stepSize)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_auto_reconnect(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_led_sleep_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_led_color_mode(QString mode)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_led_static_color(QString color)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_imu_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_emit_rate(int hz)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_decimal_places(int places)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_temp_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_altitude_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_card_visible(QString card, bool visible)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_sensor_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_action(QString gesture, QString action)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_mapping(QVariantMap mapping)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>reset_gesture_mapping()</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_volume_step(int step)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_cooldown(int ms)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>toggle_pin_setting(QString settingId)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>reset_to_defaults()</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_setting(QString key, QVariant value)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>apply_settings(QVariantMap values)</code></td><td><code>QVariantMap</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>applyNowPlayingPreset(QString label)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>get_setting(QString key)</code></td><td><code>QVariant</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_setting_with_default(QString key, QVariant defaultValue)</code></td><td><code>QVariant</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_obd_parameter_enabled(QString parameter, bool defaultVal)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_obd_parameter_enabled(QString parameter)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_supported_obd_parameters()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_directory_history()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_home_obd_parameters()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_auto_play_on_startup()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_persist_shuffle_state()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_shuffle_state()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_played_song()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_played_position()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_played_playlist()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_settings_section()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_window_state()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_music_button_default_page()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_return_to_library_after_selection()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>flushPendingSave()</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>get_android_auto_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_phone_mirror_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_display_size()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_audio_gain()</code></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_audio_duck_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_audio_duck_level()</code></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_phone_screen_off()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_display_dpi()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_bit_rate_usb()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_bit_rate_wifi()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_auto_wifi()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_bit_rate_auto()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_wireless_address()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_volume_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_volume_port()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_volume_step_size()</code></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_auto_reconnect()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_led_sleep_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_led_color_mode()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_led_static_color()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_show_waveform_visualizer()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_imu_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_gesture_sensor_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_gesture_mapping()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_gesture_mapping_dict()</code></td><td><code>QVariantMap</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_setting_pinned(QString settingId)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_settings_registry()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_pinned_settings_metadata()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_settings_menu_visibility()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_settings_section_visible(QString section)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_git_commit_hash()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_git_commit_date()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_git_commit_message()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>deviceNameChanged(QString value)</code>, <code>fontSettingChanged(QString value)</code>, <code>themeSettingChanged(QString value)</code>, <code>uiScaleChanged(float value)</code>, <code>colorTransitionMsChanged(int value)</code>, <code>songLengthTransitionChanged(bool value)</code>, <code>showClockChanged(bool value)</code>, <code>clockFormatChanged(bool value)</code>, <code>clockShowSecondsChanged(bool value)</code>, <code>clockSizeChanged(int value)</code>, <code>clockSizeAutoChanged(bool value)</code>, <code>backgroundGridChanged(QString value)</code>, <code>screenWidthChanged(int value)</code>, <code>screenHeightChanged(int value)</code>, <code>backgroundBlurRadiusChanged(int value)</code>, <code>bottomBarOrientationChanged(QString value)</code>, <code>showBottomBarMediaControlsChanged(bool value)</code>, <code>settingsLayoutStyleChanged(QString value)</code>, <code>albumArtColorsChanged()</code>, <code>settingsMenuVisibilityChanged()</code>, <code>startUpVolumeChanged(QString value)</code>, <code>currentVolumeChanged(int value)</code>, <code>mediaFolderChanged(QString value)</code>, <code>autoPlayOnStartupChanged(bool value)</code>, <code>persistShuffleStateChanged(bool value)</code>, <code>lastShuffleStateChanged(bool value)</code>, <code>lastPlayedSongChanged(QString value)</code>, <code>lastPlayedPositionChanged(int value)</code>, <code>lastPlayedPlaylistChanged(QString value)</code>, <code>musicButtonDefaultPageChanged(QString value)</code>, <code>returnToLibraryAfterSelectionChanged(bool value)</code>, <code>showWaveformVisualizerChanged(bool value)</code>, <code>show3DButtonTiltChanged(bool value)</code>, <code>show3DAlbumPreviewChanged(bool value)</code>, <code>roundedAlbumArtChanged(bool value)</code>, <code>albumArtCornerRadiusChanged(int value)</code>, <code>showAlbumArtShadowChanged(bool value)</code>, <code>vinylRecordModeChanged(bool value)</code>, <code>albumArtTransitionChanged(QString value)</code>, <code>backgroundOverlayOpacityChanged(int value)</code>, <code>sideCardOpacityChanged(double value)</code>, <code>sideCardAngleChanged(int value)</code>, <code>buttonTiltDurationChanged(int value)</code>, <code>textScrollSpeedChanged(int value)</code>, <code>obdBluetoothPortChanged(QString value)</code>, <code>obdSavedAdaptersChanged()</code>, <code>obdFastModeChanged(bool value)</code>, <code>obdCardStyleCircularChanged(bool value)</code>, <code>gaugeTempUnitChanged()</code>, <code>gaugeSpeedUnitChanged()</code>, <code>obdAutoReconnectAttemptsChanged(int value)</code>, <code>fuelTankCapacityChanged(float value)</code>, <code>blackBoxEnabledChanged(bool value)</code>, <code>blackBoxSweepAllChanged(bool value)</code>, <code>blackBoxMaxMBChanged(int value)</code>, <code>obdParametersChanged()</code>, <code>homeOBDParametersChanged()</code>, <code>supportedOBDParametersChanged()</code>, <code>directoryHistoryChanged()</code>, <code>customThemesChanged()</code>, <code>windowStateChanged(QString value)</code>, <code>lastSettingsSectionChanged(QString value)</code>, <code>androidAutoEnabledChanged(bool value)</code>, <code>phoneMirrorEnabledChanged(bool value)</code>, <code>scrcpyDisplaySizeChanged(QString value)</code>, <code>scrcpyAudioGainChanged(double value)</code>, <code>scrcpyAudioDuckEnabledChanged(bool value)</code>, <code>scrcpyAudioDuckLevelChanged(double value)</code>, <code>scrcpyPhoneScreenOffChanged(bool value)</code>, <code>scrcpyDisplayDpiChanged(int value)</code>, <code>scrcpyBitRateUsbChanged(int value)</code>, <code>scrcpyBitRateWifiChanged(int value)</code>, <code>scrcpyAutoWifiChanged(bool value)</code>, <code>scrcpyBitRateAutoChanged(bool value)</code>, <code>scrcpyWirelessAddressChanged(QString value)</code>, <code>esp32VolumeEnabledChanged(bool value)</code>, <code>esp32VolumePortChanged(QString value)</code>, <code>esp32VolumeStepSizeChanged(double value)</code>, <code>esp32AutoReconnectChanged(bool value)</code>, <code>esp32LedSleepEnabledChanged(bool value)</code>, <code>esp32LedColorModeChanged(QString value)</code>, <code>esp32LedStaticColorChanged(QString value)</code>, <code>imuEnabledChanged(bool value)</code>, <code>sensorEmitRateChanged(int value)</code>, <code>sensorDecimalPlacesChanged(int value)</code>, <code>sensorTempUnitChanged(QString value)</code>, <code>sensorAltitudeUnitChanged(QString value)</code>, <code>sensorCardsChanged()</code>, <code>gestureSensorEnabledChanged(bool value)</code>, <code>gestureMappingChanged()</code>, <code>gestureVolumeStepChanged(int value)</code>, <code>gestureCooldownChanged(int value)</code>, <code>pinnedSettingsChanged()</code>, <code>genericSettingChanged(QString key)</code>.</p>
@@ -970,17 +1014,68 @@
             <tr><td><code>activeIndex</code></td><td>int</td><td>read</td><td><code>activeFlagChanged</code></td></tr>
             <tr><td><code>activeFlag</code></td><td>QVariantMap</td><td>read</td><td><code>activeFlagChanged</code></td></tr>
             <tr><td><code>lit</code></td><td>bool</td><td>read</td><td><code>litChanged</code></td></tr>
-            <tr><td><code>suppressed</code></td><td>bool</td><td>read / write</td><td><code>suppressedChanged</code></td></tr>
+            <tr><td><code>suppressed</code></td><td>bool</td><td>read / write (vehicle)</td><td><code>suppressedChanged</code></td></tr>
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>setRpm(double rpm)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setFlags(QVariantList flags)</code></td><td>&ndash;</td><td>slot</td></tr>
+            <tr><td><code>setRpm(double rpm)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setFlags(QVariantList flags)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>settingsChanged()</code>, <code>flagsChanged()</code>, <code>rpmChanged()</code>, <code>activeFlagChanged()</code>, <code>litChanged()</code>, <code>suppressedChanged()</code>.</p>
+
+        <h3 id="sim"><code>sim</code> <span class="cmt">&mdash; Simulator</span></h3>
+        <p><strong>Experimental:</strong> this object may change or go in any release.</p>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#sim">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/sim.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>active</code></td><td>bool</td><td>read</td><td><code>activeChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>setThrottle(double percent)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setBrake(double percent)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>rev(double intensity)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setEngineOn(bool on)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>toggleEngine()</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setGear(int gear)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>upshift()</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>downshift()</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setSpeed(double mph)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setRpm(double rpm)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setRealistic(bool on)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>scenario(QString name)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setDropouts(bool on)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>dropoutNow()</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setFailureRate(double rate)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setLinkUp(bool up)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setImu(bool on)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setVideo(bool on)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>pairingCode()</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>full</code></td></tr>
+            <tr><td><code>status()</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>activeChanged()</code>.</p>
+
+        <h3 id="themeCatalog"><code>themeCatalog</code> <span class="cmt">&mdash; ThemeCatalog</span></h3>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#themeCatalog">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/themeCatalog.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>themes</code></td><td>QVariantMap</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>themeNames</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>lightThemeNames</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>darkThemeNames</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>activeThemeName</code></td><td>QString</td><td>read</td><td><code>activeThemeChanged</code></td></tr>
+            <tr><td><code>activeTheme</code></td><td>QVariantMap</td><td>read</td><td><code>activeThemeChanged</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>activeThemeChanged()</code>.</p>
 
         <h3 id="tripRecorder"><code>tripRecorder</code> <span class="cmt">&mdash; TripRecorder</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#tripRecorder">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/tripRecorder.json</span>.</p>
@@ -1004,25 +1099,25 @@
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>recordSample(QString paramId, float value)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setConnected(bool connected)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setVehicleParameters(QStringList ids)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setVehicleIdentity(QString vin, QString make, int modelYear)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>noteEvent(QString kind, QString detail)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>endTripNow()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>refresh()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>requestDetail(qlonglong id)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints, double fromS, double toS)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints, double fromS)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>requestSeries(qlonglong id, QString paramId)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>deleteTrip(qlonglong id)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>clearHistory()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>exportTrip(qlonglong id)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>openHistoryFolder()</code></td><td><code>bool</code></td><td>slot</td></tr>
+            <tr><td><code>recordSample(QString paramId, float value)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setConnected(bool connected)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setVehicleParameters(QStringList ids)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setVehicleIdentity(QString vin, QString make, int modelYear)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>noteEvent(QString kind, QString detail)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setEnabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>endTripNow()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>refresh()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestDetail(qlonglong id)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints, double fromS, double toS)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints, double fromS)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestSeries(qlonglong id, QString paramId)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>deleteTrip(qlonglong id)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>clearHistory()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>exportTrip(qlonglong id)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>openHistoryFolder()</code></td><td><code>bool</code></td><td>slot</td><td><code>system</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>enabledChanged(bool enabled)</code>, <code>storeReadyChanged()</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>currentTripElapsedSChanged()</code>, <code>liveTripChanged(qlonglong id)</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code>, <code>tripStarted(qlonglong id)</code>, <code>tripEnded(qlonglong id, QVariantMap summary)</code>, <code>detailReady(qlonglong id, QVariantMap detail)</code>, <code>seriesReady(qlonglong id, QString paramId, QVariantList points)</code>, <code>exportFinished(qlonglong id, QString path)</code>.</p>
@@ -1030,16 +1125,16 @@
         <h3 id="units"><code>units</code> <span class="cmt">&mdash; Units</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#units">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/units.json</span>.</p>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>formatDuration(double ms)</code></td><td><code>QString</code></td><td>invokable</td></tr>
-            <tr><td><code>formatSeconds(double s)</code></td><td><code>QString</code></td><td>invokable</td></tr>
-            <tr><td><code>cardinal(double headingDeg)</code></td><td><code>QString</code></td><td>invokable</td></tr>
-            <tr><td><code>cToF(double c)</code></td><td><code>double</code></td><td>invokable</td></tr>
-            <tr><td><code>mToFt(double m)</code></td><td><code>double</code></td><td>invokable</td></tr>
-            <tr><td><code>mphToKph(double mph)</code></td><td><code>double</code></td><td>invokable</td></tr>
-            <tr><td><code>linearToDb(double x)</code></td><td><code>double</code></td><td>invokable</td></tr>
-            <tr><td><code>dbToLinear(double db)</code></td><td><code>double</code></td><td>invokable</td></tr>
+            <tr><td><code>formatDuration(double ms)</code></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>formatSeconds(double s)</code></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>cardinal(double headingDeg)</code></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>cToF(double c)</code></td><td><code>double</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>mToFt(double m)</code></td><td><code>double</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>mphToKph(double mph)</code></td><td><code>double</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>linearToDb(double x)</code></td><td><code>double</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>dbToLinear(double db)</code></td><td><code>double</code></td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>
         </table>
 
@@ -1049,18 +1144,18 @@
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
             <tr><td><code>percent</code></td><td>int</td><td>read</td><td><code>percentChanged</code></td></tr>
-            <tr><td><code>muted</code></td><td>bool</td><td>read / write</td><td><code>mutedChanged</code></td></tr>
+            <tr><td><code>muted</code></td><td>bool</td><td>read / write (media)</td><td><code>mutedChanged</code></td></tr>
             <tr><td><code>effectivelyMuted</code></td><td>bool</td><td>read</td><td><code>effectivelyMutedChanged</code></td></tr>
           </tbody>
         </table>
         <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>applyVolume(int percent)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>setMuted(bool muted)</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>toggleMute()</code></td><td>&ndash;</td><td>slot</td></tr>
-            <tr><td><code>toLinear(float percent)</code></td><td><code>float</code></td><td>slot</td></tr>
-            <tr><td><code>toPercent(float linear)</code></td><td><code>int</code></td><td>slot</td></tr>
+            <tr><td><code>applyVolume(int percent)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toggleMute()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toLinear(float percent)</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>toPercent(float linear)</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>volumeApplied(int percent, float linear)</code>, <code>percentChanged(int percent)</code>, <code>mutedChanged(bool muted)</code>, <code>effectivelyMutedChanged()</code>.</p>
