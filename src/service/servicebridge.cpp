@@ -272,13 +272,19 @@ void ServiceBridge::install(CommandServer &server)
     });
 
     server.registerOp(QStringLiteral("call"), [this](const QVariantMap &args) {
-        QPointer<QObject> o = object(args.value(QStringLiteral("object")).toString());
+        const QString name = args.value(QStringLiteral("object")).toString();
+        QPointer<QObject> o = object(name);
         const QByteArray method = args.value(QStringLiteral("method")).toString().toUtf8();
         const QVariantList callArgs = args.value(QStringLiteral("args")).toList();
-        return CommandServer::onGui([o, method, callArgs]() -> QVariant {
+        const bool claims = callArgs.size() == 2 && m_releases.contains(name + QLatin1Char('.') + QString::fromUtf8(method));
+        std::shared_ptr<Connection> connection = claims ? CommandServer::currentConnection() : nullptr;
+        return CommandServer::onGui([this, o, name, method, callArgs, connection]() -> QVariant {
             if (!o)
                 throw CommandError(QStringLiteral("object is gone"));
-            return invokeByName(o, method.constData(), callArgs);
+            QVariant result = invokeByName(o, method.constData(), callArgs);
+            if (connection)
+                noteClaim(name, o, method, callArgs, connection);
+            return result;
         }, timeoutOf(args));
     });
 
@@ -295,6 +301,59 @@ void ServiceBridge::install(CommandServer &server)
             all.insert(n, describeObject(m_registry->object(n)));
         return QVariant(QVariantMap{{QStringLiteral("protocolVersion"), kProtocolVersion},
                                     {QStringLiteral("objects"), all}});
+    });
+}
+
+void ServiceBridge::releaseOnClose(const QString &object, const QString &method, const QVariant &release)
+{
+    m_releases.insert(object + QLatin1Char('.') + method, release);
+}
+
+void ServiceBridge::noteClaim(const QString &objectName, QObject *o, const QByteArray &method, const QVariantList &args,
+                              const std::shared_ptr<Connection> &connection)
+{
+    const QVariant release = m_releases.value(objectName + QLatin1Char('.') + QString::fromUtf8(method));
+    const QString consumer = args.at(0).toString();
+    const QVariant value = args.at(1);
+    bool releasing = false;
+    if (release.typeId() == QMetaType::Bool)
+        releasing = !value.toBool();
+    else if (release.canConvert<QVariantList>() && release.typeId() != QMetaType::QString)
+        releasing = value.toList().isEmpty();
+    else
+        releasing = value == release;
+
+    const QString key = objectName + QLatin1Char('.') + QString::fromUtf8(method) + QLatin1Char('\n') + consumer;
+    const void *conn = connection.get();
+    if (releasing) {
+        m_claims->byKey.remove(key);
+        return;
+    }
+    m_claims->byKey.insert(key, Claim{o, method, consumer, release, conn});   // the latest caller holds it
+    if (m_claims->hooked.contains(conn))
+        return;
+    m_claims->hooked.insert(conn, true);
+    std::weak_ptr<Claims> weak = m_claims;
+    connection->onClose([weak, conn] {
+        auto claims = weak.lock();
+        if (!claims)
+            return;
+        claims->hooked.remove(conn);
+        for (auto it = claims->byKey.begin(); it != claims->byKey.end();) {
+            if (it->connection != conn) {
+                ++it;
+                continue;
+            }
+            const Claim c = *it;
+            it = claims->byKey.erase(it);
+            if (!c.object)
+                continue;
+            try {
+                invokeByName(c.object, c.method.constData(), {c.consumer, c.release});
+            } catch (const CommandError &e) {
+                qWarning("service: releasing %s for a closed client failed: %s", qPrintable(c.consumer), e.what());
+            }
+        }
     });
 }
 

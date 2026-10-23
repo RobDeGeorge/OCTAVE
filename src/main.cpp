@@ -124,6 +124,10 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
         }
         service.bridge = std::make_unique<OctaveService::ServiceBridge>(
             &core.registry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, headless});
+        // A client that goes without saying so leaves no demand behind
+        service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setParameterDemand"), QStringList());
+        service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setBackgroundDemand"), QStringList());
+        service.bridge->releaseOnClose(QStringLiteral("berryIMU"), QStringLiteral("setDemand"), false);
         service.bridge->install(*service.server);
     }
     return service;
