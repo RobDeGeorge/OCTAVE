@@ -186,8 +186,11 @@ jobs:
           path: build-phone-server/octave-phone-server
           retention-days: 30
 
-  # The SDKs (sdk/): the TypeScript one's generated types must match
-  # docs/api, and its client passes its tests against a fake service.
+  # The SDKs (sdk/): the TypeScript and Go ones are generated from docs/api
+  # (protocol.json and the object files) and must be current; the
+  # TypeScript client passes its tests against a fake service. Their tests
+  # against a real headless app run in cpp-compile-check's ctest (sdk_python,
+  # sdk_go).
   sdk:
     runs-on: ubuntu-24.04
     steps:
@@ -199,11 +202,22 @@ jobs:
         with:
           node-version: '22'
 
-      - name: sdk/typescript (types current against docs/api, typecheck, tests)
+      - name: sdk/typescript (generated files current against docs/api, typecheck, tests)
         working-directory: sdk/typescript
         run: |
           npm ci --no-audit --no-fund
           npm test
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: sdk/go (generated files current against docs/api, vet; the headless test skips here)
+        working-directory: sdk/go
+        run: |
+          go vet ./...
+          go test ./...
 
   # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)

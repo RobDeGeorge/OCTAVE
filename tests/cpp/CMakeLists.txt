@@ -261,3 +261,15 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME api_compat
         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tools/api/tests")
 endif()
+
+# The Go SDK (sdk/go): its generated files match docs/api, and the client
+# runs against a real `octave --headless`. Only where Go is installed.
+find_program(GO_EXECUTABLE go)
+if(GO_EXECUTABLE)
+    add_test(NAME sdk_go
+        COMMAND ${GO_EXECUTABLE} test ./...
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/sdk/go")
+    set_tests_properties(sdk_go PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen;GOFLAGS=-mod=mod;GOMAXPROCS=4"
+        TIMEOUT 300)
+endif()
