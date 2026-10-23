@@ -109,8 +109,26 @@ QVariantList ServicePairing::devices() const
     for (const Device &d : m_devices)
         out.append(QVariantMap{{QStringLiteral("id"), d.id}, {QStringLiteral("name"), d.name},
                                {QStringLiteral("created"), d.created}, {QStringLiteral("lastUsed"), d.lastUsed},
-                               {QStringLiteral("scopes"), d.scopes}});
+                               {QStringLiteral("scopes"), d.scopes}, {QStringLiteral("session"), d.session}});
     return out;
+}
+
+QString ServicePairing::addSessionDevice(const QString &name, const QStringList &scopes, QString *id)
+{
+    const QStringList granted = normalizedScopes(scopes);
+    const QString token = randomHex(32);
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    Device d{randomHex(8), name.simplified().left(64), hashOf(token), now, now, granted};
+    d.session = true;
+    {
+        QMutexLocker l(&m_lock);
+        m_devices.append(d);
+    }
+    if (id)
+        *id = d.id;
+    qCInfo(lcPairing).noquote() << "session token for" << d.name << "with" << granted.join(QLatin1Char(' '));
+    emit devicesChanged();
+    return token;
 }
 
 void ServicePairing::startPairing()
@@ -366,10 +384,13 @@ void ServicePairing::persist()
     QVariantList list;
     {
         QMutexLocker l(&m_lock);
-        for (const Device &d : m_devices)
+        for (const Device &d : m_devices) {
+            if (d.session)
+                continue;
             list.append(QVariantMap{{QStringLiteral("id"), d.id}, {QStringLiteral("name"), d.name},
                                     {QStringLiteral("hash"), d.hash}, {QStringLiteral("created"), d.created},
                                     {QStringLiteral("lastUsed"), d.lastUsed}, {QStringLiteral("scopes"), d.scopes}});
+        }
     }
     m_settings->saveFileOnlySetting(QStringLiteral("serviceTokens"), list);
 }

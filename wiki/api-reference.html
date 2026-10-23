@@ -28,7 +28,7 @@
 
         <h2 id="overview">Overview</h2>
         <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 25 objects:</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 26 objects:</p>
         <ul>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
             <li><a href="#audioAnalyzer">audioAnalyzer</a></li>
@@ -39,6 +39,7 @@
             <li><a href="#downloadManager">downloadManager</a></li>
             <li><a href="#esp32VolumeManager">esp32VolumeManager</a></li>
             <li><a href="#fontCatalog">fontCatalog</a></li>
+            <li><a href="#frontendManager">frontendManager</a></li>
             <li><a href="#gestureSensor">gestureSensor</a></li>
             <li><a href="#mediaManager">mediaManager</a></li>
             <li><a href="#networkManager">networkManager</a></li>
@@ -290,6 +291,32 @@
             <tr><td><code>symbolFamily</code></td><td>QString</td><td>constant</td><td>&ndash;</td></tr>
           </tbody>
         </table>
+
+        <h3 id="frontendManager"><code>frontendManager</code> <span class="cmt">&mdash; FrontendManager</span></h3>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#frontendManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/frontendManager.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>frontends</code></td><td>QVariantList</td><td>read</td><td><code>frontendsChanged</code></td></tr>
+            <tr><td><code>activeId</code></td><td>QString</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>runningId</code></td><td>QString</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>forcedQml</code></td><td>bool</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>forcedQmlReason</code></td><td>QString</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>lastError</code></td><td>QString</td><td>read</td><td><code>lastErrorChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>installFromFolder(QString path)</code></td><td><code>QString</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>installFromZip(QString path)</code></td><td><code>QString</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>remove(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>setActive(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>clearForcedQml()</code></td><td>&ndash;</td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>manifestOf(QString id)</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code>, <code>installed(QString id)</code>.</p>
 
         <h3 id="gestureSensor"><code>gestureSensor</code> <span class="cmt">&mdash; GestureManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#gestureSensor">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/gestureSensor.json</span>.</p>

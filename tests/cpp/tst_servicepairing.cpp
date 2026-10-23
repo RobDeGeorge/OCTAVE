@@ -175,6 +175,44 @@ private slots:
         QVERIFY(!p.checkTicket(local, false));
     }
 
+    // An exec frontend's token (frontendsupervisor.h): its scopes only,
+    // never in the settings file, and gone when revoked
+    void sessionDevicesAreNotSaved()
+    {
+        SettingsManager settings;
+        ServicePairing p(&settings);
+        p.startPairing();
+        QString error;
+        QVERIFY(!p.pair(p.pairingCode(), "Phone", "10.0.0.9", &error).isEmpty());
+        QString id;
+        const QString token = p.addSessionDevice("Frontend: Dash", {"read", "media"}, &id);
+        QCOMPARE(token.size(), 64);
+        QCOMPARE(p.checkToken(token), id);
+        QCOMPARE(p.scopesOf(id), (QStringList{"read", "media"}));
+        QVERIFY(p.allows(id, "media"));
+        QVERIFY(!p.allows(id, "settings"));
+        QVERIFY(!p.allows(id, "system"));
+        bool listed = false;
+        for (const QVariant &d : p.devices())
+            listed = listed || (d.toMap().value("id") == id && d.toMap().value("session").toBool());
+        QVERIFY(listed);
+        p.setDeviceScopes(id, {"read"});   // saving the paired one's list too
+        QTRY_VERIFY(!settings.fileOnlySetting("serviceTokens").toList().isEmpty());
+        const QVariantList saved = settings.fileOnlySetting("serviceTokens").toList();
+        QCOMPARE(saved.size(), 1);
+        QCOMPARE(saved.first().toMap().value("name").toString(), QStringLiteral("Phone"));
+        p.revoke(id);
+        QVERIFY(p.checkToken(token).isEmpty());
+        // Loopback trust off for one run, not saved
+        QVERIFY(p.loopbackOpen());
+        p.setLoopbackOpenForRun(false);
+        QVERIFY(!p.loopbackOpen());
+        const QVariant saved2 = settings.fileOnlySetting("serviceLoopbackOpen");
+        QVERIFY(!saved2.isValid() || saved2.toBool());   // the file is not changed
+        const QString local = p.mintTicket(QString());
+        QVERIFY(!p.checkTicket(local, true));   // a local ticket needs loopback trust
+    }
+
     void theServiceSwitchWritesTheFileKey()
     {
         SettingsManager settings;

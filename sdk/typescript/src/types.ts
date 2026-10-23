@@ -280,6 +280,38 @@ export interface FontCatalog {
   }
 }
 
+/** frontendManager (FrontendManager) */
+export interface FrontendManager {
+  properties: {
+    /** QVariantList, notify frontendsChanged */
+    frontends: unknown[]
+    /** QString, notify activeChanged */
+    activeId: string
+    /** QString, constant */
+    runningId: string
+    /** bool, notify activeChanged */
+    forcedQml: boolean
+    /** QString, notify activeChanged */
+    forcedQmlReason: string
+    /** QString, notify lastErrorChanged */
+    lastError: string
+  }
+  methods: {
+    installFromFolder: { args: [path: string]; returns: string }
+    installFromZip: { args: [path: string]; returns: string }
+    remove: { args: [id: string]; returns: boolean }
+    setActive: { args: [id: string]; returns: boolean }
+    clearForcedQml: { args: []; returns: void }
+    manifestOf: { args: [id: string]; returns: Record<string, unknown> }
+  }
+  signals: {
+    frontendsChanged: []
+    activeChanged: []
+    lastErrorChanged: []
+    installed: [id: string]
+  }
+}
+
 /** gestureSensor (GestureManager) */
 export interface GestureManager {
   properties: {
@@ -1606,6 +1638,7 @@ export interface Objects {
   downloadManager: DownloadManager
   esp32VolumeManager: ESP32VolumeManager
   fontCatalog: FontCatalog
+  frontendManager: FrontendManager
   gestureSensor: GestureManager
   mediaManager: MediaManager
   networkManager: NetworkManager

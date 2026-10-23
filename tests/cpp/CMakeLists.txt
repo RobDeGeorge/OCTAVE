@@ -206,6 +206,10 @@ octave_add_test(tst_units SOURCES util/units.h util/units.cpp)
 octave_add_test(tst_clock SOURCES managers/clock.h managers/clock.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_fontcatalog SOURCES util/fontcatalog.h util/fontcatalog.cpp LIBS Qt6::Gui)
 octave_add_test(tst_pathurl)
+# Installable frontends: the manifest, folder / zip installs, the boot choice
+octave_add_test(tst_frontendmanager
+    SOURCES managers/frontendmanifest.h managers/frontendmanifest.cpp managers/frontendmanager.h managers/frontendmanager.cpp
+    LIBS Qt6::CorePrivate)
 # Folder browsing for remote UIs: confined to its roots
 octave_add_test(tst_folderbrowser SOURCES util/folderbrowser.h util/folderbrowser.cpp)
 octave_add_test(tst_servicebridge
