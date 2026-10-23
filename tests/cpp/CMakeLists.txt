@@ -296,6 +296,14 @@ if(Python3_Interpreter_FOUND)
         ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
         TIMEOUT 180)
 endif()
+# The templates installed as frontends and run as the screen (frontendmanager.h)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME templates_install
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/templates" -p "check_install.py")
+    set_tests_properties(templates_install PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 300)
+endif()
 find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE)
     add_test(NAME template_js

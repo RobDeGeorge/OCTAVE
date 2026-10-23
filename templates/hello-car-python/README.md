@@ -13,6 +13,12 @@ Enter toggles play / pause, Ctrl-C quits. From another machine, start OCTAVE wit
 
 Make the numbers move with the simulator: `octave_client.Client().call("sim", "setThrottle", 40)`, or a scenario (`docs/api/README.md`, "Simulator").
 
+## Install it as the screen
+
+`octave-frontend.json` beside `hello_car.py` makes the folder an installable frontend: a program (`"exec": {"linux": ["python3", "{dir}/hello_car.py"], ...}`) that asks for the **media** permission. Install it on the head unit (Settings > Device > Frontends > Install from folder, then Use, or `frontendManager.installFromFolder(path)` and `setActive(id)` over the service) and start OCTAVE as usual: it runs without its own UI, starts `hello_car.py` as the screen, and restarts it if it crashes (5 quick crashes bring the built-in screen back; `octave --qml` does that for one start).
+
+Started that way the script gets `OCTAVE_HOST`, `OCTAVE_PORT` and `OCTAVE_TOKEN` in its environment and uses them: the token holds read and media only, and nothing on the head unit gets in without a token while it is the screen (pair other tools with `octave --pair-code`). Quitting it with exit code 0 quits OCTAVE. Change the `id`, `name` and `version` when you make it your own; the rules are in `wiki/writing-a-frontend.html#install`. ctest `templates_install` installs it into a throwaway config, starts OCTAVE with `--sim`, and has `--check` confirm the readings, the track, its permissions and a refused settings change.
+
 ## What it uses
 
 | | |

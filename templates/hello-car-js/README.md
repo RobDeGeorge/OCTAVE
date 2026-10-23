@@ -12,6 +12,18 @@ Open <http://127.0.0.1:9876/>. On the head unit itself nothing else is needed. F
 
 A release build has the simulated car too: `octave --headless --sim` works everywhere, and `sim.setThrottle(40)` or `sim.scenario("highway")` over the service makes the numbers move (`docs/api/README.md`, "Simulator").
 
+## Install it as the screen
+
+`octave-frontend.json` beside `index.html` makes the folder an installable frontend: a web frontend (`"web": {"root": "."}`) that asks for the **media** permission. Install it on the head unit and choose it:
+
+```bash
+# on the head unit: Settings > Device > Frontends > Install from folder, then Use; or over the service:
+python3 -c 'import sys; sys.path.insert(0, "sdk/python"); from octave_client import Client
+c = Client(); i = c.call("frontendManager", "installFromFolder", sys.argv[1]); print(i, c.call("frontendManager", "setActive", i))' templates/hello-car-js
+```
+
+From the next start OCTAVE serves it at `http://<head unit>:9876/` instead of the reference client, with the service on. In a browser on the head unit itself the page holds exactly what its manifest asks for (read and media), not the full trust local programs have; elsewhere it pairs as above. Change the `id`, `name` and `version` when you make it your own. The manifest's rules: `wiki/writing-a-frontend.html#install`. ctest `templates_install` installs it this way into a throwaway config and checks the page and its permissions.
+
 ## What it uses
 
 | | |

@@ -8,6 +8,10 @@ the cover next to this file.
     python hello_car.py 192.168.1.20         # the head unit over the network: pairs once, keeps the token
     python hello_car.py --check 5            # run 5 s unattended and exit 0 if everything arrived (the test)
 
+Installed as OCTAVE's screen (octave-frontend.json beside this file), OCTAVE
+starts it with OCTAVE_HOST, OCTAVE_PORT and OCTAVE_TOKEN in the environment:
+it uses those, and never asks for a pairing code.
+
 octave_client/ beside this file is OCTAVE's stdlib-only Python client
 (sdk/python/octave_client), copied in so this folder is complete on its own.
 """
@@ -28,7 +32,13 @@ TOKEN_FILE = os.path.join(HERE, ".token")
 
 
 def connect(host, port):
-    """A trusted client: on the head unit at once, elsewhere after pairing."""
+    """A trusted client: on the head unit at once, elsewhere after pairing;
+    started by OCTAVE as its screen, with the token it was given."""
+    if os.environ.get("OCTAVE_TOKEN"):
+        octave = Client(host, port, token=os.environ["OCTAVE_TOKEN"])
+        if not octave.trusted:
+            sys.exit("OCTAVE refused the token it started this frontend with")
+        return octave
     token = open(TOKEN_FILE).read().strip() if os.path.exists(TOKEN_FILE) else None
     octave = Client(host, port, token=token)
     if octave.server.get("tokenRejected") and os.path.exists(TOKEN_FILE):
@@ -64,14 +74,15 @@ def fetch_cover(octave, host, port, revision):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("host", nargs="?", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=9876)
+    parser.add_argument("host", nargs="?", default=os.environ.get("OCTAVE_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("OCTAVE_PORT", "9876")))
     parser.add_argument("--check", type=float, metavar="SECONDS", help="unattended: toggle play, run this long, exit 0 if readings and a track arrived")
     args = parser.parse_args()
 
     octave = connect(args.host, args.port)
     app = octave.server["app"]
-    print(f"OCTAVE {app['version']}, protocol {octave.server['protocolVersion']}{', headless' if app['headless'] else ''}")
+    print(f"OCTAVE {app['version']}, protocol {octave.server['protocolVersion']}{', headless' if app['headless'] else ''}, "
+          f"permissions {', '.join(octave.scopes)}", flush=True)
 
     # Readings: titles and units from the catalog, values from paramStore (native units).
     # OCTAVE polls the car only for what someone shows: ask for ours, by our own consumer name.
@@ -120,6 +131,17 @@ def main():
 
     if args.check is not None:
         ok = values.get("RPM", 0) > 0 and "SPEED" in values and track.get("hasTrack") and track.get("playing")
+        if os.environ.get("OCTAVE_TOKEN"):
+            # Started by OCTAVE as its screen: it holds what the manifest asked for, no more
+            again = Client(args.host, args.port, token=os.environ["OCTAVE_TOKEN"])
+            try:
+                again.call("settingsManager", "save_setting", "uiScale", 1.0)
+                refused = False
+            except OctaveError as e:
+                refused = e.code == "forbidden"
+            again.close()
+            print(f"hello-car-python: as the screen with {octave.scopes}; settings refused: {refused}", flush=True)
+            ok = ok and set(octave.scopes) - {"read"} == {"media"} and refused
         print("hello-car-python:", f"all checks passed: {values} {track.get('title')}" if ok else f"FAIL values={values} track={track}")
         sys.exit(0 if ok else 1)
 
