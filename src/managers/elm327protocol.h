@@ -141,6 +141,12 @@ public:
     // Parse the Mode 02 PID 02 reply: the DTC that stored freeze frame 0.
     static QStringList parseFreezeFrameDtc(const QStringList &lines);
 
+    // A Mode 02 reply for `pid` of freeze frame 0 ("42 PP 00 <data>"): its
+    // data bytes, decoded like the Mode 01 PID (decodePid(0x01, pid, ...));
+    // nullopt for NO DATA or another PID. PID 0x00 is the bitmap of the
+    // PIDs the frame holds (parseSupportedPids).
+    static std::optional<QVector<uint8_t>> parseFreezeFrameData(const QStringList &lines, int pid);
+
     // Default PIDs to poll (the 16 most common)
     static QList<PidKey> defaultPids();
 

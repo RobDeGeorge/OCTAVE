@@ -49,6 +49,7 @@ private slots:
     void parseDtcResponse();
     void parseFreezeFrameDtc_data();
     void parseFreezeFrameDtc();
+    void parseFreezeFrameData();
     void evapVaporPressureAltIsOffsetNotScaled();
     void decodeExtendedPid_data();
     void decodeExtendedPid();
@@ -91,6 +92,25 @@ void TstElm327Protocol::parseDtcResponse()
     QFETCH(int, mode);
     QFETCH(QStringList, expected);
     QCOMPARE(ELM327Protocol::parseDtcResponse(lines, mode), expected);
+}
+
+void TstElm327Protocol::parseFreezeFrameData()
+{
+    // 42 0C 00 1A F8: RPM of freeze frame 0, decoded as Mode 01's
+    const auto rpm = ELM327Protocol::parseFreezeFrameData({"42 0C 00 1A F8"}, 0x0C);
+    QVERIFY(rpm.has_value());
+    QCOMPARE(*rpm, (QVector<uint8_t>{0x1A, 0xF8}));
+    QCOMPARE(ELM327Protocol::decodePid(0x01, 0x0C, *rpm)->value, 1726.0);
+    QVERIFY(ELM327Protocol::parseFreezeFrameData({"420C001AF8"}, 0x0C).has_value());   // spaces off
+    // The bitmap of the frame's PIDs
+    const auto bitmap = ELM327Protocol::parseFreezeFrameData({"42 00 00 18 3B 80 00"}, 0x00);
+    QVERIFY(bitmap.has_value());
+    QVERIFY(ELM327Protocol::parseSupportedPids(*bitmap).contains(0x0C));
+    // Another frame, another PID, no data, nothing
+    QVERIFY(!ELM327Protocol::parseFreezeFrameData({"42 0C 01 1A F8"}, 0x0C).has_value());
+    QVERIFY(!ELM327Protocol::parseFreezeFrameData({"42 0D 00 20"}, 0x0C).has_value());
+    QVERIFY(!ELM327Protocol::parseFreezeFrameData({"NO DATA"}, 0x0C).has_value());
+    QVERIFY(!ELM327Protocol::parseFreezeFrameData({"42 0C 00"}, 0x0C).has_value());
 }
 
 void TstElm327Protocol::parseFreezeFrameDtc_data()

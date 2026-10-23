@@ -304,10 +304,20 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
             c.freezeFrameDtc.clear();
         });
         return "44";
-    case 0x02:
+    case 0x02: {
+        // Freeze frame 0: the code that stored it, and its PIDs. The
+        // simulator has no snapshot: a frame's values are the car's now.
+        if (v.freezeFrameDtc.isEmpty())
+            return "NO DATA";
         if (pid == 0x02)
             return reply(0x42, 0x02, QByteArray(1, '\0') + encodeDtc(v.freezeFrameDtc));
-        return "NO DATA";
+        if (pid > 0x20)   // one bitmap range, as most ECUs keep
+            return "NO DATA";
+        const QByteArray data = mode01(pid == 0 ? 0 : pid);
+        if (data.isEmpty())
+            return "NO DATA";
+        return reply(0x42, pid, QByteArray(1, '\0') + data);
+    }
     case 0x09:
         if (pid == 0x02)
             return reply(0x49, 0x02, QByteArray(1, '\x01') + v.vin.toLatin1());
