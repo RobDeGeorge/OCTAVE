@@ -130,6 +130,39 @@ private slots:
         QVERIFY(!r.body.contains("secret"));
     }
 
+    void imagesAreTypedByTheirBytes()
+    {
+        QCOMPARE(StaticFiles::imageTypeOf(QByteArray::fromHex("ffd8ffe000104a464946")), QByteArray("image/jpeg"));
+        QCOMPARE(StaticFiles::imageTypeOf(QByteArray::fromHex("89504e470d0a1a0a0000")), QByteArray("image/png"));
+        QCOMPARE(StaticFiles::imageTypeOf("GIF89a...."), QByteArray("image/gif"));
+        QCOMPARE(StaticFiles::imageTypeOf(QByteArray("RIFF\x10\0\0\0WEBPVP8 ", 16)), QByteArray("image/webp"));
+        QVERIFY(StaticFiles::imageTypeOf("<html>").isEmpty());
+        QVERIFY(StaticFiles::imageTypeOf("").isEmpty());
+    }
+
+    void serveImageOnlyServesImages()
+    {
+        const QString jpg = QDir(m_tmp.path()).filePath("cover.img");   // the art cache's own extension
+        write("cover.img", QByteArray::fromHex("ffd8ffe000104a464946") + QByteArray(100, 'x'));
+        const StaticFiles::Reply r = StaticFiles::serveImage(jpg);
+        QCOMPARE(r.status, 200);
+        QCOMPARE(r.contentType, QByteArray("image/jpeg"));
+        QCOMPARE(r.body.size(), 110);
+        // Not an image (were the art path ever wrong): nothing leaks
+        QCOMPARE(StaticFiles::serveImage(QDir(m_tmp.path()).filePath("outside/secret.txt")).status, 404);
+        QVERIFY(!StaticFiles::serveImage(QDir(m_tmp.path()).filePath("outside/secret.txt")).body.contains("secret"));
+        QCOMPARE(StaticFiles::serveImage(QString()).status, 404);
+        QCOMPARE(StaticFiles::serveImage(m_tmp.filePath("missing.jpg")).status, 404);
+        QCOMPARE(StaticFiles::serveImage(m_tmp.path()).status, 404);   // a directory
+    }
+
+    void pathOfDropsQueryAndFragment()
+    {
+        QCOMPARE(StaticFiles::pathOf("/art?rev=3"), QByteArray("/art"));
+        QCOMPARE(StaticFiles::pathOf("/art#x"), QByteArray("/art"));
+        QCOMPARE(StaticFiles::pathOf("/art"), QByteArray("/art"));
+    }
+
     void rootMustExist()
     {
         QCOMPARE(StaticFiles::serve(m_tmp.filePath("missing"), "/").status, 404);

@@ -40,6 +40,20 @@ QByteArray contentTypeFor(const QString &fileName);
 // under `root`. `root` must be an existing directory.
 Reply serve(const QString &root, const QByteArray &target);
 
+// The path part of a request target (no ?query / #fragment)
+QByteArray pathOf(const QByteArray &target);
+
+// The image type of `bytes` by its signature (JPEG, PNG, GIF, WebP,
+// BMP), or empty when it is none of them
+QByteArray imageTypeOf(const QByteArray &bytes);
+
+constexpr qint64 kMaxImage = 16 * 1024 * 1024;
+
+// GET /art: the image file at `localPath` (the app's own current cover,
+// never a path a client chose), typed by its bytes. 404 for no path, a
+// missing or oversize file, or one that is not an image.
+Reply serveImage(const QString &localPath);
+
 } // namespace OctaveService::StaticFiles
 
 #endif // OCTAVE_SERVICE_STATICFILES_H

@@ -165,6 +165,30 @@ private:
             flush(sock);
             return;
         }
+        // A page on another site may not load anything from here either:
+        // an <img> or <script> sends no Origin, but browsers say where it
+        // came from ("none" is the address bar)
+        const QByteArray fetchSite = request.headers.value("sec-fetch-site");
+        if (!Ws::isUpgrade(request) && !fetchSite.isEmpty() && fetchSite != "same-origin" && fetchSite != "none") {
+            qCWarning(lcCommand).noquote() << "refused" << sock.peerAddress().toString() << ": a" << fetchSite << "load";
+            sock.write(Ws::httpResponse(403, "Forbidden", "text/plain", "not from this service's page\n"));
+            flush(sock);
+            return;
+        }
+        if (!Ws::isUpgrade(request) && request.method == "GET") {
+            if (const CommandServer::Route route = m_owner->route(StaticFiles::pathOf(request.path))) {
+                StaticFiles::Reply r;
+                try {
+                    r = route();
+                } catch (const CommandError &e) {
+                    r = StaticFiles::Reply{503, "Service Unavailable", "text/plain", QByteArray(e.what()) + '\n'};
+                }
+                sock.write(Ws::httpResponse(r.status, r.reason, r.contentType, r.body,
+                                            Ws::webRootCsp(request.headers.value("host"))));
+                flush(sock);
+                return;
+            }
+        }
         if (!Ws::isUpgrade(request) && !m_owner->webRoot().isEmpty()) {
             // A frontend's own files (--web-root), same-origin with the socket
             const StaticFiles::Reply r = request.method == "GET"

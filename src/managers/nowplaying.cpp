@@ -259,6 +259,7 @@ void NowPlaying::setArtUrl(const QString &url)
     if (url == m_artUrl)
         return;
     m_artUrl = url;
+    ++m_artRevision;
     emit artUrlChanged();
 }
 
