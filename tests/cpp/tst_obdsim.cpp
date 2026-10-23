@@ -115,6 +115,26 @@ private slots:
         QVERIFY(codes.last().at(0).toList().isEmpty());
     }
 
+    void freezeFrameCarriesItsValues()
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 25000);
+        m_sim->state()->updateValues([](CarValues &c) { c.freezeFrameDtc = QStringLiteral("P0420"); });
+        QSignalSpy frame(m_obd.get(), &OBDManager::freezeFrameChanged);
+        m_obd->read_freeze_frame();
+        QTRY_VERIFY_WITH_TIMEOUT(!frame.isEmpty(), 15000);
+        const QVariantList list = frame.last().at(0).toList();
+        QCOMPARE(list.size(), 1);
+        const QVariantMap item = list.first().toMap();
+        QCOMPARE(item.value("code").toString(), QStringLiteral("P0420"));
+        QCOMPARE(item.value("description").toString(), QStringLiteral("Catalyst system efficiency below threshold (bank 1)"));
+        // The frame's values by paramStore id, native units
+        const QVariantMap values = item.value("values").toMap();
+        QVERIFY2(values.contains("RPM") && values.contains("COOLANT_TEMP") && values.contains("SPEED"),
+                 qPrintable(QStringList(values.keys()).join(", ")));
+        QVERIFY(values.value("RPM").toDouble() > 300);
+        QCOMPARE(m_obd->get_freeze_frame(), list);
+    }
+
     void lostLinkReconnects()
     {
         m_sim->setLinkUp(false);   // adapter unplugged

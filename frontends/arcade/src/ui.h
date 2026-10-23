@@ -16,6 +16,9 @@ typedef struct {
     int dtc_message_until;   /* ticks until the last DTC note fades */
     Uint32 frame;
     Art art;
+    char code[8];            /* the pairing code being typed */
+    char token_path[512];    /* where a new token is written, or empty */
+    char token_note[64];     /* 'TOKEN SAVED' etc, shown after a pair */
 } Ui;
 
 void ui_draw(Ui *ui, SDL_Renderer *r, Link *l, const State *s);

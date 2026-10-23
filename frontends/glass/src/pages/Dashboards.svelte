@@ -9,6 +9,7 @@
   import Icon from '../ui/Icon.svelte'
   import Toggle from '../ui/Toggle.svelte'
   import Slider from '../ui/Slider.svelte'
+  import { mediaUrl } from '../lib/media'
 
   let { arg = '' }: { arg?: string } = $props()
   interface Entry { id: string; label: string; builtIn: boolean; path: string }
@@ -36,9 +37,10 @@
   let askImport = $state(false), importText = $state('')
   let askDelete = $state<Entry | null>(null)
   let askCopy = $state<Entry | null>(null), copyName = $state('')
+  let shared = $state<Entry | null>(null)   // the last export, ready to download
   async function share(e: Entry) {
     const p = await act(octave.call<string>('dashboardManager', 'exportDashboard', e.id))
-    if (p) toast(`Exported to ${p}`)
+    if (p) { shared = e; toast(`Exported on the head unit: ${p.split('/').pop()}`) }
     else if ($shareError) toast($shareError, 'bad')
   }
   async function importNow() {
@@ -150,6 +152,10 @@
         {#if $hiddenBuiltIns}<button class="btn" onclick={() => act(octave.call('dashboardManager', 'restoreBuiltInDashboards'), 'Built-ins restored')}>Restore {$hiddenBuiltIns} built-in</button>{/if}
       </div>
     </div>
+    {#if shared}
+      <div class="glass panel dlrow"><span>{shared.label} is exported.</span>
+        <a class="btn primary" href={mediaUrl('/export/dashboard')} download="{shared.id}.json"><Icon name="download" />Download the file</a></div>
+    {/if}
     <div class="cards">
       {#each $list as e (e.id)}
         <div class="glass panel card">
@@ -293,6 +299,8 @@
 
 <style>
   .wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dlrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 26px; }
+  a.btn { text-decoration: none; }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--gap); }
   .card { display: flex; flex-direction: column; gap: 12px; }
   .open { display: flex; flex-direction: column; gap: 4px; text-align: left; }

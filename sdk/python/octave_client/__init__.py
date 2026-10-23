@@ -30,6 +30,7 @@ import itertools
 import json
 import queue
 import socket
+import struct
 import threading
 
 from .launch import find_binary, launch_headless
@@ -38,6 +39,15 @@ __all__ = ["Client", "OctaveError", "PROTOCOL_VERSION", "PROTOCOL_VERSIONS", "fi
 
 PROTOCOL_VERSION = 2          # the newest this client knows
 PROTOCOL_VERSIONS = (1, 2)    # every version it can talk to
+
+
+def _record(raw):
+    """A stream record as an event dict (header: u8 version, u8 stream,
+    u8 flags, u8 reserved, u64 pts in microseconds)."""
+    _version, stream, flags, _reserved, pts = struct.unpack(">BBBBQ", raw[:12])
+    return {"event": "record", "stream": stream, "flags": flags, "pts": pts,
+            "key": bool(flags & 1), "config": bool(flags & 2), "jpeg": bool(flags & 4),
+            "discontinuity": bool(flags & 8), "data": raw[12:]}
 
 
 class OctaveError(RuntimeError):
@@ -131,6 +141,18 @@ class Client:
     def unsubscribe(self, sub):
         return self.request("unsubscribe", sub=sub)
 
+    def stream(self, obj, name):
+        """Media records (docs/api/README.md, "Streams"): e.g.
+        stream("phoneMirrorManager", "video"). Returns the reply ({stream,
+        format, codec?, width?, height?}); then events() yields
+        {"event": "record", "stream", "flags", "pts", "key", "config",
+        "data": bytes} (H.264 Annex-B, or JPEG) and "streamConfig" /
+        "streamDropped" events."""
+        return self.request("stream", object=obj, name=name)
+
+    def unstream(self, stream_id):
+        return self.request("unstream", stream=stream_id)
+
     def events(self, timeout=None):
         """Yield events as they come. With `timeout`, stop after that many
         seconds without one; without, run until the connection closes."""
@@ -196,8 +218,22 @@ class Client:
                 if not chunk:
                     break
                 buf += chunk
-                while b"\n" in buf:
-                    line, buf = buf.split(b"\n", 1)
+                while buf:
+                    # A stream record: 0xFF, big-endian u32 length, the record
+                    # (a JSON line never starts with 0xFF)
+                    if buf[0] == 0xFF:
+                        if len(buf) < 5:
+                            break
+                        n = struct.unpack(">I", buf[1:5])[0]
+                        if len(buf) < 5 + n:
+                            break
+                        self._events.put(_record(buf[5:5 + n]))
+                        buf = buf[5 + n:]
+                        continue
+                    nl = buf.find(b"\n")
+                    if nl < 0:
+                        break
+                    line, buf = buf[:nl], buf[nl + 1:]
                     if line.strip():
                         self._dispatch(json.loads(line))
         except (OSError, ValueError):   # gone, or not the protocol: fail what waits

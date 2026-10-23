@@ -16,6 +16,9 @@ typedef struct {
 
 typedef struct {
     bool online;             /* hello answered, subscriptions up */
+    bool untrusted;          /* protocol 2: this client must pair before the service answers */
+    char pair_error[LINK_TEXT];
+    bool paired_now;         /* a pair just succeeded; the token is in link_token() */
     int protocol;
     char app_version[32];
     /* paramStore, native units */
@@ -47,7 +50,12 @@ typedef struct {
 
 typedef struct Link Link;
 
-Link *link_start(const char *host, int port);
+/* `token`: a paired device's token (protocol 2) or NULL. */
+Link *link_start(const char *host, int port, const char *token);
+/* Pair with a code from the head unit's Settings; the result arrives as
+ * `paired_now` (then link_token() has the token) or `pair_error`. */
+void link_pair(Link *l, const char *code, const char *name);
+const char *link_token(const Link *l);
 void link_stop(Link *l);
 /* Copy the state out under the lock. */
 void link_snapshot(Link *l, State *out);

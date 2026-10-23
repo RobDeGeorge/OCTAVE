@@ -512,6 +512,27 @@ QStringList ELM327Protocol::parseFreezeFrameDtc(const QStringList &lines)
     return codes;
 }
 
+std::optional<QVector<uint8_t>> ELM327Protocol::parseFreezeFrameData(const QStringList &lines, int pid)
+{
+    const QString prefix = QStringLiteral("42%1").arg(pid, 2, 16, QLatin1Char('0')).toUpper();
+    for (const QString &msg : splitMessages(lines)) {
+        // 42 PP FF <data>: FF is the frame number, 00 for the one we asked
+        if (!msg.startsWith(prefix) || msg.size() < 8 || msg.mid(4, 2) != QLatin1String("00"))
+            continue;
+        QVector<uint8_t> data;
+        for (int i = 6; i + 1 < msg.size(); i += 2) {
+            bool ok = false;
+            const int b = msg.mid(i, 2).toInt(&ok, 16);
+            if (!ok)
+                return std::nullopt;
+            data.append(uint8_t(b));
+        }
+        if (!data.isEmpty())
+            return data;
+    }
+    return std::nullopt;
+}
+
 // ---------------------------------------------------------------------------
 // Multi-value PIDs (SAE J1979 Mode 01 above 0x5E). Byte layouts and scaling
 // cross-checked against the OBD-II PIDs table on Wikipedia and OBDb's

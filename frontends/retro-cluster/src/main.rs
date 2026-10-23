@@ -62,19 +62,24 @@ struct PageState {
 
 struct Args {
     address: String,
+    token: Option<String>,
     fullscreen: bool,
     theme: usize,
     page: Page,
 }
 
 fn parse_args() -> Args {
-    let mut a = Args { address: String::new(), fullscreen: false, theme: 0, page: Page::Drive };
+    let mut a = Args { address: String::new(), token: std::env::var("OCTAVE_TOKEN").ok().filter(|t| !t.is_empty()),
+                       fullscreen: false, theme: 0, page: Page::Drive };
+    let mut pair_code: Option<String> = None;
     let (mut host, mut port) = ("127.0.0.1".to_string(), 9876u16);
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--host" => host = it.next().unwrap_or(host),
             "--port" => port = it.next().and_then(|p| p.parse().ok()).unwrap_or(port),
+            "--token" => a.token = it.next(),
+            "--pair" => pair_code = it.next(),
             "--fullscreen" => a.fullscreen = true,
             "--page" => {
                 a.page = match it.next().as_deref() {
@@ -87,7 +92,9 @@ fn parse_args() -> Args {
             }
             "--theme" => a.theme = it.next().and_then(|t| t.parse().ok()).unwrap_or(0) % PALETTES.len(),
             "-h" | "--help" => {
-                println!("retro-cluster [--host 127.0.0.1] [--port 9876] [--fullscreen] [--theme 0|1|2] [--page drive|diag|dtc|trips|audio]");
+                println!("retro-cluster [--host 127.0.0.1] [--port 9876] [--token T] [--fullscreen] [--theme 0|1|2] [--page drive|diag|dtc|trips|audio]");
+                println!("              [--pair CODE]   pair with the code in OCTAVE's Settings > Device > Service, print the token");
+                println!("Over the network the cluster needs a token (--token, or OCTAVE_TOKEN); on the head unit itself it doesn't.");
                 println!("keys: Space play/pause  Left/Right prev/next  +/- volume  M mute");
                 println!("      Tab page  T theme  F11 fullscreen  Ctrl+Q quit");
                 std::process::exit(0);
@@ -96,6 +103,19 @@ fn parse_args() -> Args {
         }
     }
     a.address = format!("{host}:{port}");
+    if let Some(code) = pair_code {
+        match link::pair(&a.address, &code) {
+            Ok(token) => {
+                println!("{token}");
+                eprintln!("retro-cluster: paired; run with --token <that> (or OCTAVE_TOKEN=<that>)");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("retro-cluster: pairing failed: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
     a
 }
 
@@ -138,7 +158,7 @@ struct Cluster {
 impl Cluster {
     fn new(cc: &eframe::CreationContext<'_>, args: Args) -> Self {
         let ctx = cc.egui_ctx.clone();
-        let link = Link::start(args.address, move || ctx.request_repaint());
+        let link = Link::start(args.address, args.token.clone(), move || ctx.request_repaint());
         Cluster {
             link,
             page: args.page,
@@ -597,8 +617,10 @@ impl Draw<'_> {
         }
         let footer: String = footer.chars().take(118).collect();
         self.label(52.0, 548.0, 1.4, &footer, self.dim());
-        if s.protocol.is_some_and(|p| p != link::PROTOCOL_VERSION) {
-            self.label(52.0, 530.0, 1.4, "WARNING: THIS CLUSTER SPEAKS PROTOCOL 1", pal.hot);
+        if let Some(p) = s.protocol.filter(|p| !link::PROTOCOL_VERSIONS.contains(p)) {
+            self.label(52.0, 530.0, 1.4, &format!("WARNING: UNKNOWN PROTOCOL {p}; THIS CLUSTER KNOWS 1 AND 2"), pal.hot);
+        } else if !s.trusted {
+            self.label(52.0, 530.0, 1.4, "NOT PAIRED: RUN RETRO-CLUSTER --PAIR CODE (SETTINGS > DEVICE > SERVICE)", pal.hot);
         }
         let _ = actions;
     }
@@ -847,7 +869,10 @@ impl Draw<'_> {
         let frame = self.cv.r(30.0, 594.0, 1220.0, 186.0);
         vfd::window(self.painter, frame, &pal);
 
-        let line = if np.has_track {
+        let line = if self.online && !s.trusted {
+            // Over the network, protocol 2: nothing is answered until paired
+            "NOT PAIRED  -  RUN RETRO-CLUSTER --PAIR CODE  (OCTAVE: SETTINGS > DEVICE > SERVICE)".into()
+        } else if np.has_track {
             let mut parts = vec![np.title.clone()];
             if !np.artist.is_empty() {
                 parts.push(np.artist.clone());

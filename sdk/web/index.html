@@ -67,6 +67,17 @@
   <span id="status">connecting…</span>
 </header>
 <main>
+  <section class="wide" id="pairing" hidden>
+    <h2>Pair this browser</h2>
+    <p class="note">On the head unit open Settings &gt; Device &gt; Service and press <b>Show a code</b>, then enter it here.
+      The token is kept in this browser; revoke it there any time.</p>
+    <div class="row">
+      <input id="pair-code" inputmode="numeric" maxlength="7" placeholder="123 456" aria-label="Pairing code">
+      <button id="pair-go">Pair</button>
+      <span class="note" id="pair-msg"></span>
+    </div>
+  </section>
+
   <section>
     <h2>Engine</h2>
     <div class="gauges" id="gauges"></div>
@@ -75,6 +86,7 @@
 
   <section>
     <h2>Now playing</h2>
+    <img id="np-art" alt="" hidden style="width:96px;height:96px;object-fit:cover;border-radius:6px;float:right">
     <div class="title" id="np-title">Nothing playing</div>
     <div class="sub" id="np-artist"></div>
     <div class="bar"><div id="np-bar"></div></div>
@@ -155,7 +167,12 @@ class Octave {
 
 // ── page ───────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const PROTOCOL = 1;
+const PROTOCOLS = [1, 2];   // the versions this page knows
+const TOKEN_KEY = "octave.token";
+const store = {   // a token per page origin; private windows may refuse storage
+  get() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
+  set(v) { try { v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY); } catch {} },
+};
 const GAUGES = ["RPM", "SPEED", "COOLANT_TEMP"];
 const ARC = 2 * Math.PI * 46 * 0.75;   // a 270° arc of radius 46
 
@@ -189,12 +206,32 @@ async function main() {
   octave.onclose = () => { $("status").textContent = "disconnected"; $("status").className = ""; };
   await octave.connect();
 
-  const hello = await octave.request("hello");
+  // Protocol 2: a browser on the network pairs once (docs/api/README.md, "Pairing")
+  let hello = await octave.request("hello");
+  if (hello.auth === "untrusted" && store.get()) {
+    hello = await octave.request("hello", { token: store.get() });
+    if (hello.tokenRejected) store.set(null);   // revoked or unknown: pair again
+  }
+  if (hello.auth === "untrusted") {
+    $("status").textContent = "not paired";
+    $("pairing").hidden = false;
+    await new Promise((resolve) => {
+      $("pair-go").onclick = async () => {
+        $("pair-msg").textContent = "";
+        try {
+          const r = await octave.request("pair", { code: $("pair-code").value.replace(/\D/g, ""), name: "Browser" });
+          store.set(r.token);
+          $("pairing").hidden = true;
+          resolve();
+        } catch (err) { $("pair-msg").textContent = err.message; }
+      };
+    });
+  }
   $("status").textContent = "connected";
   $("status").className = "up";
   $("app").textContent = `v${hello.app.version}${hello.app.headless ? ", headless" : ""}`;
-  if (hello.protocolVersion !== PROTOCOL)
-    $("app").textContent += ` (protocol ${hello.protocolVersion}, this page speaks ${PROTOCOL})`;
+  if (!PROTOCOLS.includes(hello.protocolVersion))
+    $("app").textContent += ` (protocol ${hello.protocolVersion}, this page knows ${PROTOCOLS.join(" and ")})`;
 
   // Gauges: catalog metadata once, then the paramStore stream
   const gauges = {};
@@ -206,6 +243,7 @@ async function main() {
     } else if (e.event === "property" && e.object === "nowPlaying") {
       np[e.name] = e.value;
       renderNowPlaying(np);
+      if (e.name === "artRevision" || e.name === "hasTrack") showArt(octave, np).catch(() => {});
     } else if (e.event === "property" && e.object === "volumeController") {
       if (e.name === "percent") { $("vol").value = e.value; $("vol-pct").textContent = e.value + "%"; }
       if (e.name === "muted") $("mute").textContent = e.value ? "Unmute" : "Mute";
@@ -213,7 +251,8 @@ async function main() {
   });
   await octave.subscribe("paramStore", { properties: GAUGES, throttleMs: 100 });
   await octave.subscribe("nowPlaying", {
-    properties: ["hasTrack", "title", "artist", "album", "playing", "positionMs", "durationMs", "source", "canSeek"],
+    properties: ["hasTrack", "title", "artist", "album", "playing", "positionMs", "durationMs", "source", "canSeek",
+                 "artRevision"],
     throttleMs: 250 });
   await octave.subscribe("volumeController", { properties: ["percent", "muted"] });
 
@@ -238,6 +277,21 @@ async function main() {
   $("ex-describe").onclick = () => pickObject().catch(fail);
   $("ex-get").onclick = () => octave.get($("ex-object").value, $("ex-prop").value).then(show, fail);
   await pickObject();
+}
+
+// The cover over HTTP (GET /art): a short-lived media ticket in the URL,
+// never the token; artRevision busts the cache
+let ticket = null;
+async function showArt(octave, np) {
+  const img = $("np-art");
+  if (!np.hasTrack) { img.hidden = true; return; }
+  if (!ticket || ticket.until < Date.now()) {
+    const t = await octave.request("mediaTicket");
+    ticket = { value: t.ticket, until: Date.now() + (t.expiresIn - 30) * 1000 };
+  }
+  img.onerror = () => { img.hidden = true; };
+  img.onload = () => { img.hidden = false; };
+  img.src = `/art?rev=${np.artRevision}&ticket=${ticket.value}`;
 }
 
 function renderNowPlaying(np) {

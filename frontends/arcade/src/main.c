@@ -1,7 +1,10 @@
 /* OCTAVE Arcade: a C + SDL2 frontend over the service API, drawn like an
  * 8-bit arcade dashboard on a 320x200 canvas scaled up whole. */
 #include <SDL.h>
+#include <fcntl.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,12 +13,16 @@
 
 static void usage(void)
 {
-    puts("octave-arcade [--host H] [--port P] [--fullscreen] [--page drive|media|dtc] [--scale N]");
+    puts("octave-arcade [--host H] [--port P] [--fullscreen] [--page drive|media|dtc] [--scale N]\n"
+         "              [--token T | OCTAVE_TOKEN=T] [--token-file PATH]   (pairing, protocol 2, over the network)");
 }
 
 int main(int argc, char **argv)
 {
     const char *host = "127.0.0.1";
+    const char *token = getenv("OCTAVE_TOKEN");
+    const char *token_file = NULL;
+    char token_buf[80] = {0};
     int port = 9876, fullscreen = 0, scale = 4;
     Page page = PAGE_DRIVE;
     for (int i = 1; i < argc; i++) {
@@ -23,6 +30,8 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--scale") == 0 && i + 1 < argc) scale = atoi(argv[++i]);
         else if (strcmp(argv[i], "--fullscreen") == 0) fullscreen = 1;
+        else if (strcmp(argv[i], "--token") == 0 && i + 1 < argc) token = argv[++i];
+        else if (strcmp(argv[i], "--token-file") == 0 && i + 1 < argc) token_file = argv[++i];
         else if (strcmp(argv[i], "--page") == 0 && i + 1 < argc) {
             const char *p = argv[++i];
             page = strcmp(p, "media") == 0 ? PAGE_MEDIA : strcmp(p, "dtc") == 0 ? PAGE_DTC : PAGE_DRIVE;
@@ -32,6 +41,16 @@ int main(int argc, char **argv)
         }
     }
     if (scale < 1) scale = 1;
+    if (!token && token_file) {
+        FILE *f = fopen(token_file, "r");
+        if (f) {
+            if (fgets(token_buf, sizeof token_buf, f)) {
+                token_buf[strcspn(token_buf, "\r\n")] = 0;
+                if (token_buf[0]) token = token_buf;
+            }
+            fclose(f);
+        }
+    }
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         fprintf(stderr, "SDL: %s\n", SDL_GetError());
@@ -55,14 +74,34 @@ int main(int argc, char **argv)
     SDL_RenderSetIntegerScale(r, SDL_TRUE);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
 
-    Link *link = link_start(host, port);
+    Link *link = link_start(host, port, token);
     Ui ui = {0};
     ui.page = page;
+    if (token_file) snprintf(ui.token_path, sizeof ui.token_path, "%s", token_file);
     State s;
     int running = 1;
     while (running) {
         SDL_Event e;
         link_snapshot(link, &s);
+        if (s.paired_now) {
+            /* a new token: keep it for the next run */
+            if (token_file) {
+                /* the token is a credential: owner-only, whether the file is new or not */
+                int fd = open(token_file, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+                FILE *f = fd >= 0 ? fdopen(fd, "w") : NULL;
+                if (f) {
+                    fchmod(fd, 0600);
+                    fputs(link_token(link), f); fputc('\n', f); fclose(f);
+                    snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, TOKEN SAVED");
+                } else {
+                    if (fd >= 0) close(fd);
+                    snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, CANNOT SAVE TOKEN");
+                }
+            } else {
+                printf("paired; token: %s\n", link_token(link));
+                snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, TOKEN ON STDOUT");
+            }
+        }
         while (SDL_PollEvent(&e)) {
             switch (e.type) {
             case SDL_QUIT: running = 0; break;

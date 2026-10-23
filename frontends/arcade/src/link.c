@@ -26,7 +26,8 @@ struct Link {
     State st;
     int next_id;
     int sub_params, sub_np, sub_vol, sub_obd, sub_sig, sub_shift, sub_clock;
-    int id_hello, id_params, id_np, id_vol, id_obd, id_sig, id_shift, id_clock, id_dtcs;
+    int id_hello, id_params, id_np, id_vol, id_obd, id_sig, id_shift, id_clock, id_dtcs, id_pair;
+    char token[80];
 };
 
 static int connect_to(const char *host, int port)
@@ -194,6 +195,9 @@ static void apply_signal(State *s, const char *object, const char *name, const c
     }
 }
 
+static void on_connected(Link *l);
+static void subscribe_all(Link *l);
+
 static void handle_line(Link *l, char *line)
 {
     cJSON *msg = cJSON_Parse(line);
@@ -221,7 +225,24 @@ static void handle_line(Link *l, char *line)
             l->st.protocol = (int)cJSON_GetNumberValue(cJSON_GetObjectItemCaseSensitive(result, "protocolVersion"));
             const cJSON *app = cJSON_GetObjectItemCaseSensitive(result, "app");
             copy_str(l->st.app_version, sizeof l->st.app_version, cJSON_GetObjectItemCaseSensitive(app, "version"));
-            l->st.online = l->st.protocol == PROTOCOL_VERSION;
+            l->st.online = l->st.protocol == 1 || l->st.protocol == 2;
+            const cJSON *auth = cJSON_GetObjectItemCaseSensitive(result, "auth");
+            l->st.untrusted = cJSON_IsString(auth) && strcmp(auth->valuestring, "trusted") != 0;
+            if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(result, "tokenRejected")))
+                l->token[0] = 0;   /* revoked or unknown: pair again */
+            if (!l->st.untrusted)
+                subscribe_all(l);
+        } else if (id == l->id_pair) {
+            if (cJSON_IsTrue(ok)) {
+                copy_str(l->token, sizeof l->token, cJSON_GetObjectItemCaseSensitive(result, "token"));
+                l->st.untrusted = false;
+                l->st.paired_now = true;
+                l->st.pair_error[0] = 0;
+                subscribe_all(l);   /* trusted now: the subscriptions */
+            } else {
+                const cJSON *err = cJSON_GetObjectItemCaseSensitive(msg, "error");
+                snprintf(l->st.pair_error, sizeof l->st.pair_error, "%s", cJSON_IsString(err) ? err->valuestring : "PAIRING FAILED");
+            }
         } else if (id == l->id_dtcs && cJSON_IsTrue(ok) && cJSON_IsArray(result)) {
             set_dtcs(&l->st, result);
         } else if (!cJSON_IsTrue(ok)) {
@@ -239,7 +260,15 @@ static void on_connected(Link *l)
     SDL_LockMutex(l->lock);
     cJSON *h = cJSON_CreateObject();
     cJSON_AddStringToObject(h, "op", "hello");
+    if (l->token[0])
+        cJSON_AddStringToObject(h, "token", l->token);
     l->id_hello = send_json(l, h);
+    SDL_UnlockMutex(l->lock);
+}
+
+/* Everything the pages show; sent once hello says we may (caller holds the lock). */
+static void subscribe_all(Link *l)
+{
     l->id_params = subscribe(l, "paramStore", "[\"SPEED\",\"RPM\",\"COOLANT_TEMP\",\"FUEL_LEVEL\",\"CONTROL_MODULE_VOLTAGE\",\"LATERAL_G\"]", NULL, 50);
     l->id_np = subscribe(l, "nowPlaying", "[\"hasTrack\",\"playing\",\"shuffled\",\"canSeek\",\"title\",\"artist\",\"durationMs\",\"positionMs\",\"artRevision\"]", NULL, 250);
     l->id_vol = subscribe(l, "volumeController", "[\"percent\",\"muted\"]", NULL, 0);
@@ -259,7 +288,6 @@ static void on_connected(Link *l)
     cJSON_AddStringToObject(g, "object", "obdManager");
     cJSON_AddStringToObject(g, "method", "get_dtc_codes");
     l->id_dtcs = send_json(l, g);
-    SDL_UnlockMutex(l->lock);
 }
 
 static int link_thread(void *arg)
@@ -306,10 +334,12 @@ static int link_thread(void *arg)
     return 0;
 }
 
-Link *link_start(const char *host, int port)
+Link *link_start(const char *host, int port, const char *token)
 {
     Link *l = calloc(1, sizeof *l);
     snprintf(l->host, sizeof l->host, "%s", host);
+    if (token)
+        snprintf(l->token, sizeof l->token, "%s", token);
     l->port = port;
     l->fd = -1;
     l->next_id = 1;
@@ -342,8 +372,23 @@ void link_snapshot(Link *l, State *out)
 {
     SDL_LockMutex(l->lock);
     *out = l->st;
+    l->st.paired_now = false;   /* reported once */
     SDL_UnlockMutex(l->lock);
 }
+
+void link_pair(Link *l, const char *code, const char *name)
+{
+    cJSON *m = cJSON_CreateObject();
+    cJSON_AddStringToObject(m, "op", "pair");
+    cJSON_AddStringToObject(m, "code", code);
+    cJSON_AddStringToObject(m, "name", name);
+    SDL_LockMutex(l->lock);
+    l->st.pair_error[0] = 0;
+    l->id_pair = send_json(l, m);
+    SDL_UnlockMutex(l->lock);
+}
+
+const char *link_token(const Link *l) { return l->token; }
 
 void link_call(Link *l, const char *object, const char *method, const char *args_json)
 {
@@ -375,8 +420,10 @@ unsigned char *link_fetch_art(const Link *l, size_t *len)
     int fd = connect_to(l->host, l->port);
     if (fd < 0)
         return NULL;
-    char req[256];
-    int n = snprintf(req, sizeof req, "GET /art HTTP/1.0\r\nHost: %s:%d\r\nConnection: close\r\n\r\n", l->host, l->port);
+    char req[384];
+    int n = l->token[0]
+        ? snprintf(req, sizeof req, "GET /art HTTP/1.0\r\nHost: %s:%d\r\nAuthorization: Bearer %s\r\nConnection: close\r\n\r\n", l->host, l->port, l->token)
+        : snprintf(req, sizeof req, "GET /art HTTP/1.0\r\nHost: %s:%d\r\nConnection: close\r\n\r\n", l->host, l->port);
     if (!write_all(fd, req, (size_t)n)) {
         close(fd);
         return NULL;

@@ -265,6 +265,8 @@ qt_add_executable(octave
     src/managers/elm327protocol.cpp
     src/managers/obdmanager.h
     src/managers/obdmanager.cpp
+    src/managers/dtcdescriptions.h
+    src/managers/dtcdescriptions.cpp
     src/managers/rfcommsocket.h
     src/managers/rfcommsocket.cpp
     src/managers/obdadapterfinder.h

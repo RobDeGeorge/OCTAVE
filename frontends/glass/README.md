@@ -36,6 +36,10 @@ OCTAVE_PORT=9876 npm run e2e                                       # OCTAVE_HOST
 
 The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backoff up to 8 s) and re-issues every subscription on the new connection. Add `?theme=dark` or `?theme=light` to the URL to force a theme; the rail button cycles auto / dark / light and remembers the choice in the browser.
 
+## Pairing (protocol 2)
+
+On the head unit itself nothing changes: loopback is open. Opened from another device (`--service-bind 0.0.0.0`, the LAN address), the page is public but the service refuses every op until the browser pairs, so a pair screen covers the app: the 6-digit code from the car's Settings, Service, Pair a device, and a name for this device. The token OCTAVE returns stays in this browser (`localStorage`, `glass.token`), goes with `hello` on every connection, and is forgotten under Settings, Device, Forget this device (which also unpairs on the head unit) or when OCTAVE reports it rejected. Covers and exports over the network carry a short-lived media ticket (`mediaTicket`, refreshed before it expires) instead of the token. To try it without a car screen: a developer build with `--dev --service-bind 0.0.0.0`, the page by LAN address, and the code from `{"action":"sim_pairing_code"}` sent over loopback.
+
 ## Pages
 
 - **Home**: the clock (OCTAVE's own text, in the user's format), now playing with transport and seek, the home gauges from `settingsManager.homeOBDParameters`, the vehicle and black-box state.

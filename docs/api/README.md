@@ -75,7 +75,7 @@ Who may use the service (`src/service/servicepairing.h`). A connection is **trus
 
 1. The user opens OCTAVE's Settings > Service > Pair a device: a 6-digit code shows for 2 minutes.
 2. The client sends `{"op":"pair","code":"123456","name":"Kitchen tablet"}` and gets `{"token": "<64 hex>"}`; that connection is trusted at once. Store the token.
-3. Later connections send `{"op":"hello","token":"..."}` first; `hello` answers `"auth": "trusted"` (or an error for an unknown token).
+3. Later connections send `{"op":"hello","token":"..."}` first; `hello` answers `"auth": "trusted"`. An unknown or revoked token is not an error: `hello` answers `"auth": "untrusted", "tokenRejected": true` (and drops any token the connection had), so show your pairing screen.
 4. For images and downloads, a trusted connection asks `{"op":"mediaTicket"}` → `{ticket, expiresIn: 600}` and uses `/art?ticket=...`; never put the token in a URL.
 5. `{"op":"unpair"}` forgets the caller's own device.
 

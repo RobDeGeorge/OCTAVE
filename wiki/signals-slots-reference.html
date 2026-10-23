@@ -769,7 +769,7 @@
             <tr><td><code>read_current_dtc()</code></td><td><code>void</code></td><td>Read pending DTCs (Mode 07)</td></tr>
             <tr><td><code>read_status()</code></td><td><code>void</code></td><td>Read MIL state and DTC count (Mode 01 PID 01) &rarr; <code>milStatusChanged</code>, <code>dtcCountChanged</code></td></tr>
             <tr><td><code>clear_dtc()</code></td><td><code>void</code></td><td>Clear codes (Mode 04) &rarr; <code>dtcClearResult</code></td></tr>
-            <tr><td><code>read_freeze_frame()</code></td><td><code>void</code></td><td>Read freeze-frame DTCs (Mode 02) &rarr; <code>freezeFrameChanged</code></td></tr>
+            <tr><td><code>read_freeze_frame()</code></td><td><code>void</code></td><td>Read freeze frame 0 (Mode 02): the code that stored it and its recorded values &rarr; <code>freezeFrameChanged</code></td></tr>
             <tr><td><code>read_vin()</code></td><td><code>void</code></td><td>Read the VIN again (Mode 09 PID 02) &rarr; <code>vinChanged</code>; runs on Android too (next poll slot)</td></tr>
             <tr><td><code>get_dtc_codes()</code></td><td><code>QVariantList</code></td><td>Last DTC list</td></tr>
             <tr><td><code>get_dtc_count()</code></td><td><code>int</code></td><td>Last DTC count</td></tr>
@@ -905,7 +905,7 @@
             <tr><td><code>dtcCountChanged(int count)</code></td><td>Number of stored DTCs</td></tr>
             <tr><td><code>milStatusChanged(bool status)</code></td><td>Check-engine lamp state</td></tr>
             <tr><td><code>dtcClearResult(bool success, QString message)</code></td><td>Clear-codes result (success, message)</td></tr>
-            <tr><td><code>freezeFrameChanged(QVariantList data)</code></td><td>Freeze-frame DTCs read</td></tr>
+            <tr><td><code>freezeFrameChanged(QVariantList data)</code></td><td>Freeze frame read: <code>[{code, description, values: {paramId: value}}]</code></td></tr>
             <tr><td><code>obdParameterChanged(QString paramId, float value)</code></td><td>One value from a multi-value PID (0x61 and up: torque, boost, odometer, &hellip;); <code>OBDParameterModel</code> routes it by id</td></tr>
             <tr><td><code>parameterSampled(QString paramId, float value)</code></td><td>Every decoded reading, base or multi-value, by parameter id, on desktop and Android; the <a href="#tripRecorder">black box</a> and the value store (<a href="#paramStore"><code>paramStore</code></a>) tap this</td></tr>
             <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>

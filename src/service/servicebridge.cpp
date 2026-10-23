@@ -204,13 +204,15 @@ void ServiceBridge::install(CommandServer &server)
     server.registerOp(QStringLiteral("hello"), [this](const QVariantMap &args) {
         const std::shared_ptr<Connection> c = CommandServer::currentConnection();
         const QString token = args.value(QStringLiteral("token")).toString();
+        // An unknown or revoked token is not an error: the reply says so,
+        // and the client shows its pairing screen
+        bool tokenRejected = false;
         if (c && m_pairing && !token.isEmpty()) {
             const QString id = m_pairing->checkToken(token);
-            if (id.isEmpty())
-                throw CommandError(QStringLiteral("unknown token: pair again"));
-            c->setTokenId(id);
+            tokenRejected = id.isEmpty();
+            c->setTokenId(id);   // a rejected token also drops an earlier one
         }
-        return QVariant(QVariantMap{
+        QVariantMap reply{
             {QStringLiteral("protocolVersion"), kProtocolVersion},
             {QStringLiteral("app"), QVariantMap{{QStringLiteral("version"), m_app.version},
                                                 {QStringLiteral("build"), m_app.debugBuild ? QStringLiteral("debug")
@@ -219,7 +221,10 @@ void ServiceBridge::install(CommandServer &server)
             {QStringLiteral("objects"), m_registry->names()},
             {QStringLiteral("auth"), (!c || trusted(*c)) ? QStringLiteral("trusted") : QStringLiteral("untrusted")},
             {QStringLiteral("loopbackOpen"), m_pairing ? m_pairing->loopbackOpen() : true},
-        });
+        };
+        if (tokenRejected)
+            reply.insert(QStringLiteral("tokenRejected"), true);
+        return QVariant(reply);
     });
 
     if (m_pairing) {

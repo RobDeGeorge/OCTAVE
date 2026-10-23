@@ -408,7 +408,7 @@ private slots:
     void onWorkerDtcResult(const QStringList &codes);
     void onWorkerDtcCleared(bool success, const QString &message);
     void onWorkerMilStatus(bool mil, int dtcCount);
-    void onWorkerFreezeFrame(const QStringList &codes);
+    void onWorkerFreezeFrame(const QStringList &codes, const QVariantMap &values);
     void onWorkerConnectionLost(const QString &reason);
     void onWorkerScanProgress(int progress, const QString &message);
     void onWorkerScanComplete(const QStringList &supported);
@@ -755,7 +755,9 @@ signals:
     void dtcResult(const QStringList &codes);
     void dtcCleared(bool success, const QString &message);
     void milStatus(bool mil, int dtcCount);
-    void freezeFrame(const QStringList &codes);
+    // The code that stored freeze frame 0, and the frame's values by
+    // signal name (native units)
+    void freezeFrame(const QStringList &codes, const QVariantMap &values);
 
     // Scan
     void scanProgress(int progress, const QString &message);
