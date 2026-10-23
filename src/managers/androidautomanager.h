@@ -189,7 +189,10 @@ class AndroidAutoManager : public QObject
 public:
     explicit AndroidAutoManager(QObject *parent = nullptr)
         : QObject(parent), m_provider(new DhuFrameProvider()) {}
-    ~AndroidAutoManager() override { delete m_provider; }
+    // The provider is not ours to delete, as on desktop: main.cpp hands it
+    // to the QML engine (addImageProvider takes ownership), so deleting it
+    // here freed it twice at exit
+    ~AndroidAutoManager() override = default;
     void cleanup() {}
     bool isDhuInstalled() const { return false; }
     bool isDhuEmbedded() const { return false; }
