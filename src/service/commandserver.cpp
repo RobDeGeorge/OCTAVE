@@ -841,7 +841,7 @@ bool CommandServer::start()
     qCInfo(lcCommand).noquote() << "command server listening on" << m_bind.toString() + ':' + QString::number(m_port);
     if (!m_bind.isLoopback())
         qCWarning(lcCommand).noquote() << "command server reachable beyond this machine (" + m_bind.toString()
-                                              + "): it has no authentication";
+                                              + "): clients there must pair (servicepairing.h)";
     std::fprintf(stdout, "\033[1;36m[CMD]\033[0m   Command server on port %u\n", m_port);
     std::fflush(stdout);
     return true;
