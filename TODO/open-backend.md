@@ -7,7 +7,7 @@
 
 Rob, 2026-10-21: "I want other individuals to feel empowered to take this backend and create a frontend in whatever style or way they want, using whatever language or tool they want." A side benefit to confirm with someone who does licensing: a frontend in another process talking over a socket is generally not a derivative work, so the backend's GPL-3.0 stays on the backend.
 
-Where it is documented: `docs/api/` (the published API, its `README.md`: versioning, compatibility table, Streams, Pairing), `wiki/writing-a-frontend.html` (the walkthrough), `wiki/utilities.html#service-protocol` (how the server works).
+Where it is documented: `docs/api/` (the published API, its `README.md`: versioning, compatibility table, Streams, Pairing, Permissions, Simulator, Limits per connection), `wiki/writing-a-frontend.html` (the walkthrough), `wiki/utilities.html#service-protocol` (how the server works).
 
 ---
 
@@ -22,7 +22,8 @@ Where it is documented: `docs/api/` (the published API, its `README.md`: version
   - SDKs: `sdk/python` (stdlib only; pairing, stream records), `sdk/web` (the reference page, pairing form, media tickets), `sdk/typescript` (lane B: typed, the types generated from `docs/api/` and checked in CI).
   - A security review of the service and its fixes: the line protocol only from `{` and HTTP GET only (a browser POST could run an op), `call` / `get` / `set` / `subscribe` limited to what `describe` lists, connection and line limits, write backpressure, an address required in every HTTP `Host`, and a batch of smaller hardening.
   - Frontends: five (TypeScript + Svelte, Python + Textual, Go + Gio, C + SDL2, Rust + egui) proved every QML feature is reachable over the API; they live on the `frontends-experiment` branch, not `main`.
-  - A desktop load baseline (below) and the CMake plan for the core library (below), neither of which needs the car.
+  - A desktop load baseline (now the `media` row of `wiki/utilities.html#many-clients`) and the CMake plan for the core library (below), neither of which needs the car.
+- **2026-10-23 (day):** the frontend platform, `TODO/frontend-platform.md`: the enforced contract, `--sim` in every build, `protocol.json` with generated TypeScript and Go SDKs, installable frontends, scopes per paired device, starter templates, limits per connection. What is left of it is in that file.
 
 ## Left: small follow-ups (desktop)
 
@@ -36,23 +37,11 @@ Nothing here can be done on the desktop. Each was noted when its change landed.
 | Where | Check |
 |---|---|
 | Orange Pi | Idle CPU and redraw rate against v0.9.5 with `--profile` (the value store); waveform CPU with local and phone playback; the Sensors home on a box without qt6-quick3d; the IMU rate with page demand; window size restored after a resize and a restart (also Windows) |
-| Orange Pi | The service load script (`tools/stream/service_load.py`) against the baseline below, with the real phone stream instead of the 300 kbit/s test file |
+| Orange Pi | Many clients (`tools/stream/service_load.py`): `TODO/frontend-platform.md` item 4; here, also once with the real phone stream instead of the 300 kbit/s test file |
 | Orange Pi phone rig | Phone-mirror recovery: a USB pull mid-stream (badge after 2 s, back within the grace, then one past it), unplug on the error page and replug, leaving the page while reconnecting and returning after >10 s, an unauthorized prompt accepted late, a Wi-Fi drop with the stale-serial retry |
 | A phone | Media Room's phone-side track animation and the phone-art theme in a real session; a pairing from a phone's browser on the car's network |
 | Android | An SD-card music folder from the picker (if `/storage/<volume>` isn't readable under All Files Access, persist the tree grant and scan through the content URI: a bigger change, its own TODO row); the picker returning the externalstorage provider for internal and SD trees; `QDir` listing `assets:/frontend/assets/fonts`; the BLE connect states |
 | Any device | The dashboard editor's drag feel with `canPlace` as a C++ call per frame; one real download through the new queue model |
-
-## Service load baseline (desktop, 2026-10-23)
-
-To compare on the Orange Pi. One `octave --headless --dev` (Debug build of night/backend with the wake pipe, AMD Ryzen 7 9700X, Arch Linux), the simulated car, a local track playing; the script is `tools/stream/service_load.py`.
-
-| | Backend CPU (of one core) | Backend RSS |
-|---|---|---|
-| 60 s, no clients | 0.5 % | 400 MB |
-| 120 s, 5 clients (below) | 1.1 % | 414-418 MB |
-
-Clients: `paramStore` every one of the 129 ids with `setParameterDemand` on all, `throttleMs` 40 (15.9 events/s); `nowPlaying` six properties (20.1/s); `audioAnalyzer.levels` with `setDemand` (3.5/s, only on change); `sim_video` over WebSocket and over TCP (30.3 records/s each, no drops). Event latency, as the excess over the fastest delivery seen (the server's `t` is its own monotonic clock, in whole ms): p50 0.5 ms, p95 1.0 ms, max 1.1 ms on every subscription. Measured the same way before the wake pipe (the 20 ms read poll alone): 0.7 % / 1.2-1.4 % CPU, p50 10 ms, max 21 ms.
-Not covered: the test video is 300 kbit/s where a phone sends 8-16 Mbit/s; the RSS is a Debug build's; Windows keeps the 20 ms poll (no wake pipe there).
 
 ## Left: running the core as its own process
 
@@ -77,7 +66,7 @@ Constraints:
 
 - **Keep the car on a tag.** The Jeep runs a tagged release; nothing reaches the Pi except through the release-candidate path (CI dispatch, Dropbox `_OCTAVE_rc` staging, kora VMs, then the Pi). If a step needs a road test, cut an rc for it.
 - **One logical change per commit**, test first (`tests/cpp/`, a temp `XDG_CONFIG_HOME` for anything touching settings), wiki and `docs/api/` in the same commit, so `git bisect` can name a move.
-- **The regression harness:** `./build/octave --dev --profile` with the simulated car before and after, the screenshot stories, the perf MCP; `tools/stream/service_load.py` for the service.
+- **The regression harness:** `./build/octave --dev --profile` with the simulated car before and after, the screenshot stories, the perf MCP; `tools/stream/service_load.py` for the service (its `--check` is the ctest `service_load_check`).
 
 ## Recommended order of operations
 

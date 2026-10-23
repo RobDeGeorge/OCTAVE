@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-10-23 (frontend-platform.md added: anyone can build an OCTAVE frontend)
+**Last updated:** 2026-10-23 (frontend-platform.md trimmed to what is left and moved to M)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -30,6 +30,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [octave-companion-app.md](octave-companion-app.md) | Setup walkthrough for phone debugging, then phone notifications / calls / battery | M, then L | S22 |
 | [phone-spotify-library.md](phone-spotify-library.md) | Step 1 (shared song rows, shuffle/repeat to the phone) M; library reader is a maybe | M … L | S22 + Spotify |
 | [arm64-qt-ffmpeg-lgpl.md](arm64-qt-ffmpeg-lgpl.md) | aarch64 AppImage ships an LGPL FFmpeg for Qt's music playback instead of Ubuntu's GPL one | M (or with a Qt upgrade) | arm64 CI, Pi |
+| [frontend-platform.md](frontend-platform.md) | The frontend platform landed on the desktop (2026-10-23); left: watch the first release run of the `--sim` smoke steps, an installed exec frontend on Windows, macOS and the Pi, many clients measured on the Pi, two items in review (`--pair-code`, web-frontend scopes on the head unit) | S-M | CI, Win11 VM, Pi |
 
 ## 3. Several sessions (L)
 
@@ -39,7 +40,6 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML so first launch doesn't stall | L | Win11 VM, Pi, S22 |
 | [user-primitives.md](user-primitives.md) | Save and share your own styled gauges and gauge groups | L (code widgets XL) | desktop |
 | [open-backend.md](open-backend.md) | The contract is done (2026-10-23); left: two small service follow-ups, the hardware checks noted along the way, and the core library / process split after v1.0 road time | S; library M; split L | desktop, Pi, phone, Android |
-| [frontend-platform.md](frontend-platform.md) | Anyone can build and install a frontend: an enforced API contract, a simulator in release builds, generated SDKs, installable frontends, per-device permissions, templates | M per step; 3 and 4 L | desktop, Pi |
 
 ## 4. New subsystems (XL)
 

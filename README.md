@@ -34,7 +34,7 @@ I daily-drive it in my 2003 Jeep TJ.
 > - **Bluetooth** adapters pair from inside OCTAVE on Linux and the Pi. On Windows and macOS, pair it in system settings and pick its port.
 > - **BLE** adapters work on Android.
 >
-> No car handy? A source build's `--dev` mode drives a simulated one.
+> No car handy? `octave --sim` drives a simulated one, in any build.
 
 <table>
 <tr>
@@ -116,7 +116,7 @@ Pitch, roll, heading, a G-force plot with a trail, altitude and temperature, sam
 <td width="38%" align="center"><img src="frontend/assets/readme/webclient_phone.png" alt="OCTAVE's web client on a phone: live engine gauges, now playing with controls, volume" width="280"></td>
 <td>
 
-Everything the touch screen can do is open to other programs over a small JSON API. Start OCTAVE with `--service --service-bind 0.0.0.0` and open **`http://<head-unit-ip>:9876/`** on your phone (on a network you trust: there's no login): live gauges, now playing, volume. Or run it with **no screen at all** (`--headless`) and make your own UI.
+Everything the touch screen can do is open to other programs over a small JSON API. Start OCTAVE with `--service --service-bind 0.0.0.0` and open **`http://<head-unit-ip>:9876/`** on your phone, enter the pairing code from Settings > Device > Service: live gauges, now playing, volume. Or run it with **no screen at all** (`--headless`) and make your own UI.
 
 ```python
 from octave_client import Client
@@ -128,7 +128,7 @@ with Client() as octave:
         print(event["values"])        # {'RPM': 2210, 'SPEED': 41}
 ```
 
-A stdlib-only [Python SDK](sdk/), a no-build [web client](sdk/web/index.html), the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**.
+[SDKs](sdk/) for Python, TypeScript and Go, a no-build [web client](sdk/web/index.html), [starter projects](templates/) to copy, the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**. Install your frontend as the head unit's screen from Settings > Device > Frontends.
 
 </td>
 </tr>
