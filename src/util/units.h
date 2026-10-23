@@ -11,6 +11,8 @@
 #include <QObject>
 #include <QString>
 
+#include <cmath>
+
 namespace UnitsFn {
 // "m:ss", or "h:mm:ss" from one hour; negative, NaN or infinite -> "0:00"
 QString formatDuration(double ms);
@@ -21,6 +23,9 @@ inline double fToC(double f) { return (f - 32.0) * 5.0 / 9.0; }
 inline double mToFt(double m) { return m * 3.28084; }
 inline double mphToKph(double mph) { return mph * 1.609344; }
 inline double kphToMph(double kph) { return kph / 1.609344; }
+// Amplitude ratio <-> decibels (20 log10); silence reads -120 dB
+inline double linearToDb(double x) { return x > 0 ? 20.0 * std::log10(x) : -120.0; }
+inline double dbToLinear(double db) { return std::pow(10.0, db / 20.0); }
 } // namespace UnitsFn
 
 class Units : public QObject
@@ -35,6 +40,8 @@ public:
     Q_INVOKABLE double cToF(double c) const { return UnitsFn::cToF(c); }
     Q_INVOKABLE double mToFt(double m) const { return UnitsFn::mToFt(m); }
     Q_INVOKABLE double mphToKph(double mph) const { return UnitsFn::mphToKph(mph); }
+    Q_INVOKABLE double linearToDb(double x) const { return UnitsFn::linearToDb(x); }
+    Q_INVOKABLE double dbToLinear(double db) const { return UnitsFn::dbToLinear(db); }
 };
 
 #endif // UNITS_H

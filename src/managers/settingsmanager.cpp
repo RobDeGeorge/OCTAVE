@@ -2,6 +2,7 @@
 
 #include "settingsmanager.h"
 #include "gesturevocabulary.h"
+#include "../util/units.h"
 #include "volumecontroller.h"
 #include "../util/perfscope.h"
 
@@ -1878,6 +1879,19 @@ void SettingsManager::save_scrcpy_audio_duck_enabled(bool enabled)
     m_scrcpyAudioDuckEnabled = enabled;
     updateSetting(QStringLiteral("scrcpyAudioDuckEnabled"), enabled);
     emit scrcpyAudioDuckEnabledChanged(enabled);
+}
+
+double SettingsManager::scrcpyAudioGainDb() const { return UnitsFn::linearToDb(m_scrcpyAudioGain); }
+double SettingsManager::scrcpyAudioDuckLevelDb() const { return UnitsFn::linearToDb(m_scrcpyAudioDuckLevel); }
+
+void SettingsManager::save_scrcpy_audio_gain_db(double db)
+{
+    save_scrcpy_audio_gain(UnitsFn::dbToLinear(qBound(kAudioGainMinDb, db, kAudioGainMaxDb)));
+}
+
+void SettingsManager::save_scrcpy_audio_duck_level_db(double db)
+{
+    save_scrcpy_audio_duck_level(UnitsFn::dbToLinear(qBound(kAudioDuckMinDb, db, kAudioDuckMaxDb)));
 }
 
 void SettingsManager::save_scrcpy_audio_duck_level(double level)

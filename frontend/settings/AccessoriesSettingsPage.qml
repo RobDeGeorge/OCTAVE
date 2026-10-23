@@ -2017,17 +2017,17 @@ Flickable {
                             from: -12
                             to: 18
                             stepSize: 1
-                            value: settingsManager ? Math.round(20 * Math.log(settingsManager.scrcpyAudioGain) / Math.LN10) : 6
+                            value: settingsManager ? Math.round(settingsManager.scrcpyAudioGainDb) : 6
                             Layout.fillWidth: true
                             onPressedChanged: {
                                 if (!pressed && settingsManager) {
-                                    settingsManager.save_scrcpy_audio_gain(Math.pow(10, value / 20))
+                                    settingsManager.save_scrcpy_audio_gain_db(value)
                                 }
                             }
                             Connections {
                                 target: settingsManager
                                 function onScrcpyAudioGainChanged() {
-                                    scrcpyAudioGainSlider.value = Math.round(20 * Math.log(settingsManager.scrcpyAudioGain) / Math.LN10)
+                                    scrcpyAudioGainSlider.value = Math.round(settingsManager.scrcpyAudioGainDb)
                                 }
                             }
                         }
@@ -2086,17 +2086,17 @@ Flickable {
                             from: -40
                             to: -6
                             stepSize: 1
-                            value: settingsManager ? Math.round(20 * Math.log(settingsManager.scrcpyAudioDuckLevel) / Math.LN10) : -20
+                            value: settingsManager ? Math.round(settingsManager.scrcpyAudioDuckLevelDb) : -20
                             Layout.fillWidth: true
                             onPressedChanged: {
                                 if (!pressed && settingsManager) {
-                                    settingsManager.save_scrcpy_audio_duck_level(Math.pow(10, value / 20))
+                                    settingsManager.save_scrcpy_audio_duck_level_db(value)
                                 }
                             }
                             Connections {
                                 target: settingsManager
                                 function onScrcpyAudioDuckLevelChanged() {
-                                    scrcpyAudioDuckLevelSlider.value = Math.round(20 * Math.log(settingsManager.scrcpyAudioDuckLevel) / Math.LN10)
+                                    scrcpyAudioDuckLevelSlider.value = Math.round(settingsManager.scrcpyAudioDuckLevelDb)
                                 }
                             }
                         }

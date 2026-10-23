@@ -114,6 +114,10 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool phoneMirrorEnabled READ phoneMirrorEnabled NOTIFY phoneMirrorEnabledChanged)
     Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize NOTIFY scrcpyDisplaySizeChanged)
     Q_PROPERTY(double scrcpyAudioGain READ scrcpyAudioGain NOTIFY scrcpyAudioGainChanged)
+    // The same two levels in dB, as the Phone Audio sliders show them (the
+    // file and the audio path keep the linear factors above)
+    Q_PROPERTY(double scrcpyAudioGainDb READ scrcpyAudioGainDb NOTIFY scrcpyAudioGainChanged)
+    Q_PROPERTY(double scrcpyAudioDuckLevelDb READ scrcpyAudioDuckLevelDb NOTIFY scrcpyAudioDuckLevelChanged)
     Q_PROPERTY(bool scrcpyAudioDuckEnabled READ scrcpyAudioDuckEnabled NOTIFY scrcpyAudioDuckEnabledChanged)
     Q_PROPERTY(double scrcpyAudioDuckLevel READ scrcpyAudioDuckLevel NOTIFY scrcpyAudioDuckLevelChanged)
     Q_PROPERTY(bool scrcpyPhoneScreenOff READ scrcpyPhoneScreenOff NOTIFY scrcpyPhoneScreenOffChanged)
@@ -246,6 +250,13 @@ public:
     bool phoneMirrorEnabled() const;
     QString scrcpyDisplaySize() const;
     double scrcpyAudioGain() const;
+    double scrcpyAudioGainDb() const;
+    double scrcpyAudioDuckLevelDb() const;
+    // Slider ranges in dB (the savers clamp to them)
+    static constexpr double kAudioGainMinDb = -12.0;
+    static constexpr double kAudioGainMaxDb = 18.0;
+    static constexpr double kAudioDuckMinDb = -40.0;
+    static constexpr double kAudioDuckMaxDb = -6.0;
     bool scrcpyAudioDuckEnabled() const;
     double scrcpyAudioDuckLevel() const;
     bool scrcpyPhoneScreenOff() const;
@@ -512,6 +523,9 @@ public slots:
     void save_scrcpy_audio_gain(double gain);
     void save_scrcpy_audio_duck_enabled(bool enabled);
     void save_scrcpy_audio_duck_level(double level);
+    // dB in, the linear factor saved (clamped to the k*Db ranges)
+    void save_scrcpy_audio_gain_db(double db);
+    void save_scrcpy_audio_duck_level_db(double db);
     void save_scrcpy_phone_screen_off(bool off);
     void save_scrcpy_display_dpi(int dpi);
     void save_scrcpy_bit_rate_usb(int mbps);

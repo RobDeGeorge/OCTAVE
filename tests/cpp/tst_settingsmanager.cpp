@@ -13,6 +13,8 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <cmath>
+
 #include <memory>
 
 #ifdef Q_OS_UNIX
@@ -174,6 +176,24 @@ private slots:
         QVERIFY(!sm.remove_home_obd_parameter("A"));
         QCOMPARE(sm.homeOBDParameters().size(), 7);
         QCOMPARE(sm.m_settings.value("homeOBDParameters").toArray().size(), 7);
+    }
+
+    void phoneAudioLevelsInDecibels()
+    {
+        // The sliders work in dB; the file and the audio path keep linear
+        SettingsManager sm;
+        sm.save_scrcpy_audio_gain_db(6);
+        QVERIFY(std::abs(sm.scrcpyAudioGain() - 1.9953) < 1e-3);
+        QVERIFY(std::abs(sm.property("scrcpyAudioGainDb").toDouble() - 6.0) < 1e-9);
+        QVERIFY(std::abs(sm.m_settings.value("scrcpyAudioGain").toDouble() - 1.9953) < 1e-3);
+        sm.save_scrcpy_audio_gain_db(40);                      // clamped to +18 dB
+        QVERIFY(std::abs(sm.scrcpyAudioGainDb() - 18.0) < 1e-9);
+        sm.save_scrcpy_audio_duck_level_db(-20);
+        QVERIFY(std::abs(sm.scrcpyAudioDuckLevel() - 0.1) < 1e-9);
+        sm.save_scrcpy_audio_duck_level_db(-90);               // clamped to -40 dB
+        QVERIFY(std::abs(sm.scrcpyAudioDuckLevelDb() + 40.0) < 1e-9);
+        sm.save_scrcpy_audio_duck_level(0);                    // silence, from the linear saver
+        QCOMPARE(sm.scrcpyAudioDuckLevelDb(), -120.0);
     }
 
     void everySettingSurvivesARestart()

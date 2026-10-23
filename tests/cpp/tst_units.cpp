@@ -77,6 +77,9 @@ private slots:
         QVERIFY(std::abs(UnitsFn::mToFt(1000) - 3280.84) < 1e-6);
         QVERIFY(std::abs(UnitsFn::mphToKph(60) - 96.56064) < 1e-9);
         QVERIFY(std::abs(UnitsFn::kphToMph(UnitsFn::mphToKph(42)) - 42) < 1e-9);
+        QVERIFY(std::abs(UnitsFn::linearToDb(2.0) - 6.0206) < 1e-4);
+        QVERIFY(std::abs(UnitsFn::dbToLinear(-20) - 0.1) < 1e-12);
+        QCOMPARE(UnitsFn::linearToDb(0), -120.0);
     }
 };
 
