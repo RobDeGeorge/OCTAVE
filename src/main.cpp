@@ -124,6 +124,9 @@ int main(int argc, char *argv[])
     // customization)
     QQuickStyle::setStyle("Basic");
 
+    // Outlives the engine: bindings that format times still run while it
+    // tears down (declared after it, it went first and they read null)
+    Units units;
     QQmlApplicationEngine engine;
 
     // ---- Auto-detect screen scale ----
@@ -456,7 +459,6 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("assetStore", &assetStore);
 
     // Time formatting, compass points and unit conversions (src/util/units)
-    Units units;
     ctx->setContextProperty("units", &units);
 
     // Optional QML modules, checked without loading them: CarMenu's 3D view
