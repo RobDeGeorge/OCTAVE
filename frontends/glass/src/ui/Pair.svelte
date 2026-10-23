@@ -31,7 +31,7 @@
     </div>
     <input class="field" bind:value={name} aria-label="This device's name" placeholder="Name this device" onkeydown={(e) => e.key === 'Enter' && go()} />
     {#if error}<p class="bad">{error}</p>{/if}
-    <p class="small faint">OCTAVE {$hello?.app.version ?? ''}, protocol {$hello?.protocolVersion ?? ''}. The token stays in this browser; forget it under Settings, Device.</p>
+    <p class="small faint">OCTAVE {$hello?.app?.version ?? ''}, protocol {$hello?.protocolVersion ?? ''}. The token stays in this browser; forget it under Settings, Device.</p>
   </div>
 </div>
 

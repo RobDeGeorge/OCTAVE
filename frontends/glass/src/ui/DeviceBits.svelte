@@ -43,7 +43,7 @@
   </div>
 {:else}
   <div class="about small">
-    <div><span class="muted">App</span> {$diag.appVersion || $hello?.app.version} ({$diag.backendName}{$hello?.app.build ? `, ${$hello.app.build}` : ''}{$hello?.app.headless ? ', headless' : ''})</div>
+    <div><span class="muted">App</span> {$diag.appVersion || $hello?.app?.version} ({$diag.backendName}{$hello?.app?.build ? `, ${$hello.app.build}` : ''}{$hello?.app?.headless ? ', headless' : ''})</div>
     <div><span class="muted">Device</span> {$diag.deviceInfo}</div>
     {#if git.hash}<div><span class="muted">Commit</span> <span class="num">{git.hash.slice(0, 10)}</span> {git.date} {git.msg}</div>{/if}
     <div><span class="muted">Logs</span> <span class="num">{$diag.logDir}</span></div>
