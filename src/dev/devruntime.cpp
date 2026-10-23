@@ -4,6 +4,7 @@
 #include "collagebridge.h"
 #include "../service/commandserver.h"
 #include "../service/streamhub.h"
+#include "../service/servicepairing.h"
 #include "coreactions.h"
 #include "devimufeed.h"
 #include "devtoolsmanager.h"
@@ -288,6 +289,20 @@ void Runtime::registerSimActions()
         CommandServer::postGui([this, on] { setVideoSim(on); });
         return QVariantMap{{QStringLiteral("queued"), QStringLiteral("sim_video")}};
     });
+    // A pairing code without the Settings page, for frontend development:
+    // run the app with --service-bind, connect the frontend through the LAN
+    // address (untrusted) and fetch the code here over loopback. Dev builds
+    // with --dev only; like every action it needs a trusted connection
+    QPointer<ServicePairing> pairing = m_app.pairing;
+    m_server->registerAction("sim_pairing_code", [pairing](const QVariantMap &) {
+        return CommandServer::onGui([pairing]() -> QVariant {
+            if (!pairing)
+                throw CommandError(QStringLiteral("no pairing in this run"));
+            pairing->startPairing();
+            return QVariantMap{{QStringLiteral("code"), pairing->pairingCode()},
+                               {QStringLiteral("secondsLeft"), pairing->pairingSecondsLeft()}};
+        });
+    });
     m_server->registerAction("sim_status", [sim, imu](const QVariantMap &) {
         return CommandServer::onGui([sim, imu] {
             QVariantMap st = sim ? sim->status() : QVariantMap();
@@ -298,7 +313,8 @@ void Runtime::registerSimActions()
     });
     std::fprintf(stdout, "[DEV] Simulator actions on the command server: sim_throttle, sim_brake, sim_rev, sim_engine, "
                          "sim_gear, sim_upshift, sim_downshift, sim_speed, sim_rpm, sim_scenario, sim_realistic, "
-                         "sim_dropouts, sim_dropout_now, sim_failure_rate, sim_link, sim_status, sim_imu, sim_video\n");
+                         "sim_dropouts, sim_dropout_now, sim_failure_rate, sim_link, sim_status, sim_imu, sim_video, "
+                         "sim_pairing_code\n");
     std::fflush(stdout);
 }
 
