@@ -1,6 +1,11 @@
 """Library: the songs of the current playlist, the playlists, the phone's queue
 while mirroring, and a spectrum readout from audioAnalyzer."""
 
+import io
+import urllib.parse
+import urllib.request
+
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -12,6 +17,37 @@ from .screens import Confirm, EditValue, Pick
 
 SORTS = ["title", "artist", "album"]
 BARS = " ▁▂▃▄▅▆▇█"
+
+
+COVER_COLS, COVER_ROWS = 32, 8   # 32 x 16 pixels: two per cell, top and bottom of a half block
+
+
+def halfblock(data, cols=COVER_COLS, rows=COVER_ROWS):
+    """An image (bytes) as rows of U+2580: the top pixel in the foreground,
+    the bottom one in the background. None if it can't be decoded."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(data)).convert("RGB").resize((cols, rows * 2), Image.LANCZOS)
+    except Exception:
+        return None
+    px = img.load()
+    out = Text()
+    for y in range(rows):
+        for x in range(cols):
+            top, bottom = px[x, 2 * y], px[x, 2 * y + 1]
+            out.append("▀", style=f"#{top[0]:02x}{top[1]:02x}{top[2]:02x} on #{bottom[0]:02x}{bottom[1]:02x}{bottom[2]:02x}")
+        if y < rows - 1:
+            out.append("\n")
+    return out
+
+
+def fetch_art(host, port, query=""):
+    """GET /art (the current cover) or /art?song= / ?queue=; None on 404 or error."""
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/art{query}", timeout=3) as r:
+            return r.read() if r.status == 200 else None
+    except Exception:
+        return None
 
 
 def spectrum(levels, width):
@@ -51,6 +87,8 @@ class LibraryPane(Pane):
         self.reverse = False
         self.queue = []
         self.visible = False
+        self.covers = {}         # query -> Text or None (no cover)
+        self.cover_query = None
 
     def compose(self) -> ComposeResult:
         with Horizontal():
@@ -59,6 +97,8 @@ class LibraryPane(Pane):
                 yield DataTable(id="lib-playlists", cursor_type="row")
                 yield Label("Phone queue  [dim](Enter skips to it)[/dim]", classes="section", id="lib-queue-label")
                 yield DataTable(id="lib-queue", cursor_type="row")
+                yield Static(id="lib-cover")
+                yield Static(id="lib-cover-label")
             with Vertical(id="lib-right"):
                 yield DataTable(id="lib-songs", cursor_type="row", zebra_stripes=True)
                 yield Static(id="lib-spectrum")
@@ -118,6 +158,8 @@ class LibraryPane(Pane):
         total, artists, albums = data["summary"]
         songs.border_title = (f"{self.current_playlist or 'All'}: {len(self.songs)} songs, {artists} artists, "
                               f"{albums} albums, {total}   sorted by {SORTS[self.sort]}{' (desc)' if self.reverse else ''}")
+        if self.cover_query is None and self.current_file:   # until a row is highlighted: the current track's cover
+            self.show_cover("?song=" + urllib.parse.quote(self.current_file), "now playing")
         pls = self.query_one("#lib-playlists", DataTable)
         pls.clear()
         for name in self.playlists:
@@ -162,6 +204,30 @@ class LibraryPane(Pane):
                 self.app.invoke("audioAnalyzer", "setDemand", CONSUMER, visible, quiet=True)
 
     # ── actions ───────────────────────────────────────────────────────────
+
+    def show_cover(self, query, label):
+        """The cover for ?song= / ?queue= (or the current one), fetched once and cached."""
+        self.cover_query = query
+        self.query_one("#lib-cover-label", Static).update(f"[dim]{label}[/dim]")
+        if query in self.covers:
+            self.query_one("#lib-cover", Static).update(self.covers[query] or "[dim]no cover[/dim]")
+            return
+        link = self.app.link
+
+        def got(art):
+            self.covers[query] = art
+            if self.cover_query == query:
+                self.query_one("#lib-cover", Static).update(art or "[dim]no cover[/dim]")
+        self.app.blocking(lambda _link: halfblock(fetch_art(link.host, link.port, query) or b""), got)
+
+    def on_data_table_row_highlighted(self, event):
+        tid = event.data_table.id
+        if tid == "lib-songs" and event.cursor_row < len(self.songs):
+            song = self.songs[event.cursor_row]
+            self.show_cover("?song=" + urllib.parse.quote(song["file"]), song["title"])
+        elif tid == "lib-queue" and event.cursor_row < len(self.queue):
+            item = self.queue[event.cursor_row]
+            self.show_cover(f"?queue={item.get('id')}", item.get("title", ""))
 
     def selected_song(self):
         table = self.query_one("#lib-songs", DataTable)

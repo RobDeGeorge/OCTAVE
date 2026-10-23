@@ -25,7 +25,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Play a library song | `mediaManager.play_file` | Yes | Yes | Yes | No | No | |
 | Playlists: select, create, delete | `mediaManager.get_playlist_names`, `select_playlist`, `create_playlist`, `delete_playlist` | Yes | Yes | Yes | No | No | |
 | Move a song to a playlist, delete a song | `mediaManager.move_song_to_playlist`, `delete_song`, `get_movable_playlist_names` | Yes | Yes | Yes | No | No | |
-| Library song covers | `mediaManager.get_album_art`, `get_neighbor_album_arts` | Yes | No | No | No | No | API missing: these return head-unit paths; GET /art?song= (lane A 9b) |
+| Library song covers | `mediaManager.get_album_art`, `get_neighbor_album_arts`, `GET /art?song=`, `?queue=` | Yes | No | Yes | No | No | GET /art?song= and ?queue= landed (lane A 9b); console: 32 x 16 half-block covers |
 | Rescan library, strip filenames | `mediaManager.scan_library`, `strip_filenames` | Yes | No | Yes | No | No | console: API pane only |
 | Media folder | `settingsManager.save_media_folder`, `mediaFolder`, `mediaManager.browse_music_folders` | Yes | Partial | Yes | No | No | browsing: `mediaManager.browse_music_folders` (lane A 9, landed); glass: a typed path so far |
 | Waveform / spectrum | `audioAnalyzer.levels`, `setDemand` | Yes | No | Yes | Yes | No | retro-cluster: AUDIO page; console: a one-line spectrum on the Library pane |
@@ -76,7 +76,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 |---|---|---|---|---|---|---|---|
 | Show a dashboard from its spec | `dashboardManager.dashboards`, `loadDashboard`, `supportedSchema` | Yes | Yes | Partial | No | Yes | sunlight draws every widget type in Go; console: the grid and cells as text |
 | Duplicate, delete, restore built-ins | `dashboardManager.duplicateDashboard`, `deleteDashboard`, `restoreBuiltInDashboards`, `hiddenBuiltInCount` | Yes | Yes | Yes | No | No | |
-| Share and import | `dashboardManager.exportDashboard`, `importDashboardFromText`, `lastShareError` | Yes | Yes | Yes | No | No | QML also uses the head unit's clipboard and file picker; exported files are not downloadable (lane A 9c) |
+| Share and import | `dashboardManager.exportDashboard`, `importDashboardFromText`, `lastShareError` | Yes | Yes | Yes | No | No | QML also uses the head unit's clipboard and file picker; exported files are not downloadable (GET /export/..., lane A 9c, landed) |
 | Edit: place, move, resize, PID, props, save | `dashboardManager.saveDashboard`, `normalizedSpec`, `canPlace`, `fitAt`, `uniqueIdForLabel` | Yes | Yes | Partial | No | No | console: the spec as JSON, through `normalizedSpec`, no visual grid editor |
 
 ## Black box (trips)
@@ -87,7 +87,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Trip list and details | `tripRecorder.trips`, `requestDetail`, `detailReady` | Yes | Yes | Yes | Yes | Yes | sunlight: the list and a summary in the user's units |
 | Charts of a trip's values | `tripRecorder.requestSeries`, `seriesReady` | Yes | Yes | Yes | No | No | console: one value at a time as a sparkline |
 | End trip now | `tripRecorder.endTripNow` | Yes | Yes | Yes | Yes | No | |
-| Export, delete, clear history | `tripRecorder.exportTrip`, `deleteTrip`, `clearHistory`, `lastExportPath` | Partial | Yes | Yes | Partial | No | QML: clear history only; exported files stay on the head unit (lane A 9c) |
+| Export, delete, clear history | `tripRecorder.exportTrip`, `deleteTrip`, `clearHistory`, `lastExportPath` | Partial | Yes | Yes | Partial | No | QML: clear history only; exported files stay on the head unit (GET /export/..., lane A 9c, landed) |
 | Black box on / off, size cap, sweep all PIDs, storage | `tripRecorder.setEnabled`, `storageBytes`, `settingsManager.save_black_box_*` | Yes | Yes | Partial | No | No | console: settings table |
 
 ## Sensors and accessories
@@ -124,7 +124,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Network status | `networkManager.isConnected`, `networkName`, `refreshNetwork` | Yes | Yes | Yes | No | No | |
 | Updates: check, apply, restart | `networkManager.checkForUpdates`, `applySelfUpdate`, `restartApp`, `updateStatus`, `selfUpdateStatus` | Yes | Yes | Yes | No | No | |
 | Shut down the device | `networkManager.shutdown_device` | Yes | Yes | Yes | No | No | |
-| Diagnostics: version, device info, recent log, export logs | `diagnosticsManager.appVersion`, `deviceInfo`, `recentLogLines`, `exportLogs`, `logDir` | Yes | Yes | Yes | No | No | the exported bundle stays on the head unit (lane A 9c); clipboard copy is head-unit-local by design |
+| Diagnostics: version, device info, recent log, export logs | `diagnosticsManager.appVersion`, `deviceInfo`, `recentLogLines`, `exportLogs`, `logDir` | Yes | Yes | Yes | No | No | the exported bundle stays on the head unit (GET /export/..., lane A 9c, landed); clipboard copy is head-unit-local by design |
 | About: build, commit, licences | `settingsManager.get_git_commit_*`, `diagnosticsManager.licenseText` | Yes | Partial | Yes | No | No | |
 | Device name | `settingsManager.save_device_name` | Yes | Yes | Yes | No | No | |
 
@@ -133,7 +133,6 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 All of these are backend items, none frontend work:
 
 - The phone mirror picture and Android Auto frames: lane A 12 (contract step 6).
-- Covers of library songs and phone queue items: lane A 9b.
-- Downloading files the app exports (trip CSV, log bundle, dashboard file): lane A 9c. The contents are reachable already (`requestSeries`, `recentLogLines`, `loadDashboard`).
+- Downloading files the app exports (trip CSV, log bundle, dashboard file): `GET /export/trip|dashboard|logs` landed (GET /export/..., lane A 9c, landed); no frontend offers it yet. The contents are reachable anyway (`requestSeries`, `recentLogLines`, `loadDashboard`).
 
 Head-unit-local by design (no gap): the clipboard actions, opening a folder in the head unit's file manager, window size and position.
