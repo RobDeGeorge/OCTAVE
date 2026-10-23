@@ -1,6 +1,6 @@
 #include "coreactions.h"
 
-#include "commandserver.h"
+#include "../service/commandserver.h"
 #include "perfmonitor.h"
 #include "uidriver.h"
 

@@ -51,7 +51,7 @@
             <tr><td>VolumeController</td><td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td><td><code>volumeController</code></td><td>Quadratic curve + dispatch</td></tr>
             <tr><td>Version</td><td><code>project(OCTAVE VERSION …)</code> in <span class="file-path">CMakeLists.txt</span> &rarr; <code>OCTAVE_VERSION</code> define</td><td>&ndash; (surfaced as <code>diagnosticsManager.appVersion</code>)</td><td></td></tr>
             <tr><td>Performance monitor</td><td><span class="file-path">src/dev/perfmonitor.{h,cpp}</span>, <span class="file-path">src/util/perfscope.h</span></td><td><code>perfMonitor</code> (only with <code>--profile</code>)</td><td><code>OCTAVE_DEV_TOOLS</code> builds only</td></tr>
-            <tr><td>Command server</td><td><span class="file-path">src/dev/commandserver.{h,cpp}</span>, <span class="file-path">coreactions.cpp</span>, <span class="file-path">uidriver.{h,cpp}</span></td><td>&ndash;</td><td><code>OCTAVE_DEV_TOOLS</code> builds only, started by <code>--profile</code></td></tr>
+            <tr><td>Command server</td><td><span class="file-path">src/service/commandserver.{h,cpp}</span>, <span class="file-path">coreactions.cpp</span>, <span class="file-path">uidriver.{h,cpp}</span></td><td>&ndash;</td><td><code>OCTAVE_DEV_TOOLS</code> builds only, started by <code>--profile</code></td></tr>
             <tr><td>Android JNI bridges</td><td><span class="file-path">src/platform/androidmediabridge.h</span>, <span class="file-path">src/platform/androidprocessadapter.h</span></td><td>&ndash;</td><td>Android builds only</td></tr>
           </tbody>
         </table>
@@ -160,7 +160,8 @@ QString <span class="fn">logDir</span>();          <span class="cmt">// &lt;app 
             <tr><td><code>octave.phonemirror</code>, <code>octave.phonemirror.client</code></td><td><span class="file-path">src/managers/phonemirrormanager.cpp</span>, <span class="file-path">src/phone_mirror/scrcpyclient.cpp</span></td></tr>
             <tr><td><code>octave.settings</code></td><td><span class="file-path">src/managers/settingsmanager.cpp</span></td></tr>
             <tr><td><code>octave.ui_watchdog</code></td><td><span class="file-path">src/util/uiwatchdog.cpp</span></td></tr>
-            <tr><td><code>octave.dev</code>, <code>octave.dev.command</code>, <code>octave.dev.carsim</code></td><td><span class="file-path">src/dev/devruntime.cpp</span>, <span class="file-path">commandserver.cpp</span>, <span class="file-path">carsim.cpp</span> (<code>OCTAVE_DEV_TOOLS</code> builds only)</td></tr>
+            <tr><td><code>octave.dev</code>, <code>octave.dev.carsim</code></td><td><span class="file-path">src/dev/devruntime.cpp</span>, <span class="file-path">carsim.cpp</span> (<code>OCTAVE_DEV_TOOLS</code> builds only)</td></tr>
+            <tr><td><code>octave.service</code></td><td><span class="file-path">src/service/commandserver.cpp</span> (the service socket; every build)</td></tr>
           </tbody>
         </table>
         <p>Clock, VolumeController and the two Android platform headers have no category (the latter use plain <code>qWarning</code>, which lands under <code>default</code>).</p>
@@ -363,7 +364,7 @@ volumeController.applyVolume(settingsManager.currentVolume());   <span class="cm
 
         <!-- Command server -->
         <h2 id="command-server">Command server</h2>
-        <p><span class="file-path">src/dev/commandserver.{h,cpp}</span> (server), <span class="file-path">src/dev/coreactions.cpp</span> (built-in actions), <span class="file-path">src/dev/uidriver.{h,cpp}</span> (navigation, capture and input), <span class="file-path">src/dev/collagebridge.{h,cpp}</span> (UI collage actions). Started by <code>OctaveDev::Runtime</code> when <code>--profile</code> is passed on an <code>OCTAVE_DEV_TOOLS</code> build. Listens on <code>127.0.0.1:9876</code>; <code>--command-port N</code> (or <code>--command-port=N</code>) moves it. If the port is taken it logs <code>command server could not listen on 127.0.0.1:9876</code> and the app carries on without it.</p>
+        <p><span class="file-path">src/service/commandserver.{h,cpp}</span> (server), <span class="file-path">src/dev/coreactions.cpp</span> (built-in actions), <span class="file-path">src/dev/uidriver.{h,cpp}</span> (navigation, capture and input), <span class="file-path">src/dev/collagebridge.{h,cpp}</span> (UI collage actions). Started by <code>OctaveDev::Runtime</code> when <code>--profile</code> is passed on an <code>OCTAVE_DEV_TOOLS</code> build. Listens on <code>127.0.0.1:9876</code>; <code>--command-port N</code> (or <code>--command-port=N</code>) moves it. If the port is taken it logs <code>command server could not listen on 127.0.0.1:9876</code> and the app carries on without it.</p>
 
         <h3>Protocol</h3>
         <p>One JSON object per line in, one per line out. <code>args</code> is optional.</p>
@@ -372,7 +373,7 @@ volumeController.applyVolume(settingsManager.currentVolume());   <span class="cm
 
 {<span class="str">"action"</span>: <span class="str">"bogus"</span>}
 {<span class="str">"ok"</span>: <span class="kw">false</span>, <span class="str">"error"</span>: <span class="str">"Unknown action: bogus"</span>}</code></pre>
-        <p>Invalid JSON gets <code>{"ok": false, "error": "Invalid JSON: …"}</code>; an exception thrown by a handler (<code>CommandError</code> or any <code>std::exception</code>) is logged on <code>octave.dev.command</code> and returned as <code>error</code>. A client may keep the connection open and send many lines.</p>
+        <p>Invalid JSON gets <code>{"ok": false, "error": "Invalid JSON: …"}</code>; an exception thrown by a handler (<code>CommandError</code> or any <code>std::exception</code>) is logged on <code>octave.service</code> and returned as <code>error</code>. A client may keep the connection open and send many lines.</p>
 
         <h3>Architecture</h3>
         <div class="diagram">

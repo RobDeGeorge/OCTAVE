@@ -2,7 +2,7 @@
 
 #include "carsim.h"
 #include "collagebridge.h"
-#include "commandserver.h"
+#include "../service/commandserver.h"
 #include "coreactions.h"
 #include "devimufeed.h"
 #include "devtoolsmanager.h"

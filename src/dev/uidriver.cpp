@@ -1,6 +1,6 @@
 #include "uidriver.h"
 
-#include "commandserver.h"
+#include "../service/commandserver.h"
 
 #include <QCoreApplication>
 #include <QImage>

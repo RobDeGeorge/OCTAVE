@@ -1,5 +1,5 @@
-#ifndef OCTAVE_DEV_COMMANDSERVER_H
-#define OCTAVE_DEV_COMMANDSERVER_H
+#ifndef OCTAVE_SERVICE_COMMANDSERVER_H
+#define OCTAVE_SERVICE_COMMANDSERVER_H
 
 // TCP command server for driving OCTAVE from scripts (`octave --profile`).
 // One JSON request per line, one JSON reply per line; the dev/ clients (MCP
@@ -14,8 +14,8 @@
 // blocks get_metrics on another connection. Handlers run on that connection
 // thread and use onGui() / postGui() for anything that touches Qt objects.
 //
-// This is meant to grow into the service API sketched in
-// TODO/open-backend.md, not to stay a throwaway dev hook.
+// Moved from src/dev/ to become the transport of the service API
+// (TODO/open-backend.md, contract step 1).
 
 #include <QHash>
 #include <QObject>
@@ -28,7 +28,7 @@
 
 class QThread;
 
-namespace OctaveDev {
+namespace OctaveService {
 
 class CommandTcpServer;
 
@@ -87,6 +87,14 @@ QVariant jsonSafe(const QVariant &value);
 // fails. GUI thread only for GUI objects.
 QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args = {});
 
+} // namespace OctaveService
+
+// The dev tooling (src/dev/) predates the move to src/service/
+namespace OctaveDev {
+using OctaveService::CommandError;
+using OctaveService::CommandServer;
+using OctaveService::invokeByName;
+using OctaveService::jsonSafe;
 } // namespace OctaveDev
 
-#endif // OCTAVE_DEV_COMMANDSERVER_H
+#endif // OCTAVE_SERVICE_COMMANDSERVER_H

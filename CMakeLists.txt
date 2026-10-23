@@ -199,6 +199,8 @@ qt_add_executable(octave
     src/util/fontcatalog.h
     src/util/fontcatalog.cpp
     src/util/pathurl.h
+    src/service/commandserver.h
+    src/service/commandserver.cpp
     src/util/units.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
@@ -383,8 +385,6 @@ if(OCTAVE_DEV_TOOLS)
     target_sources(octave PRIVATE
         src/dev/devruntime.h
         src/dev/devruntime.cpp
-        src/dev/commandserver.h
-        src/dev/commandserver.cpp
         src/dev/coreactions.h
         src/dev/coreactions.cpp
         src/dev/uidriver.h

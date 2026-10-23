@@ -1,6 +1,6 @@
 #include "collagebridge.h"
 
-#include "commandserver.h"
+#include "../service/commandserver.h"
 
 #include <QFile>
 #include <QImage>

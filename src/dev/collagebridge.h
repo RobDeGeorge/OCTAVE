@@ -25,7 +25,10 @@ class QQuickItem;
 
 namespace OctaveDev {
 
-class CommandServer;
+}
+namespace OctaveService { class CommandServer; }
+namespace OctaveDev {
+using OctaveService::CommandServer;
 
 class CollageBridge : public QObject
 {

@@ -28,7 +28,10 @@ namespace OctaveDev {
 
 class CarSim;
 class CollageBridge;
-class CommandServer;
+}
+namespace OctaveService { class CommandServer; }
+namespace OctaveDev {
+using OctaveService::CommandServer;
 class DevImuFeed;
 class DevKeyboardController;
 class DevToolsManager;

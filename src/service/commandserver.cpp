@@ -23,9 +23,9 @@
 #include <cstdio>
 #include <memory>
 
-Q_LOGGING_CATEGORY(lcCommand, "octave.dev.command")
+Q_LOGGING_CATEGORY(lcCommand, "octave.service")
 
-namespace OctaveDev {
+namespace OctaveService {
 
 // ---------------------------------------------------------------------------
 // Listener (own thread) + one thread per client connection
@@ -377,4 +377,4 @@ QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args
                            .arg(args.size()));
 }
 
-} // namespace OctaveDev
+} // namespace OctaveService
