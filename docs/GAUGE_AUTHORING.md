@@ -17,10 +17,10 @@ OBDManager ─ parameterSampled ─▶ paramStore (C++) ─▶ OBDParameterModel
 berryIMU ─ 8 signals ─────────▶   33 ms fold)          gate, demo mode)
 ```
 
-`OBDManager` is the C++ manager in `src/managers/obdmanager.cpp`, registered
-in `src/main.cpp` as the `obdManager` context property.
+`OBDManager` is the C++ manager in `src/managers/obdmanager.cpp`, built in
+`src/appcore.cpp` and exposed as the `obdManager` context property.
 
-You do **not** wire signals yourself. `main.cpp` feeds every decoded value
+You do **not** wire signals yourself. `src/appcore.cpp` feeds every decoded value
 (and the IMU readings) into the C++ `paramStore`, keyed by a short `paramId`
 (e.g. `"RPM"`, `"SPEED"`, `"COOLANT_TEMP"`). Any QML that binds
 `App.OBDParameterModel.liveValue(paramId)` gets live, animated updates for

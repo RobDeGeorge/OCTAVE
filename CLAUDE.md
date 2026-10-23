@@ -55,14 +55,14 @@ python wiki/build_search_index.py                                  # after wiki 
 
 ### Backend — C++ (`src/`, primary for builds & distribution)
 
-Every feature is a C++ **manager class** inheriting from `QObject`. Managers expose state to QML via `Q_PROPERTY`, `Q_INVOKABLE`, and Qt signals. All managers are instantiated in `src/main.cpp` and registered as QML context properties via `engine.rootContext()->setContextProperty(...)`. Build system is CMake; sources are listed explicitly in `CMakeLists.txt`'s `qt_add_executable(octave ...)` call.
+Every feature is a C++ **manager class** inheriting from `QObject`. Managers expose state to QML via `Q_PROPERTY`, `Q_INVOKABLE`, and Qt signals. All managers are members of `AppCore` (`src/appcore.{h,cpp}`: built and wired there with no QML engine, each entered in the service registry by `expose()`); `src/main.cpp` builds the core and registers every entry as a QML context property (`core.exposeTo(ctx)`), so the QML UI and the service protocol (`src/service/`) see the same objects. Build system is CMake; sources are listed explicitly in `CMakeLists.txt`'s `qt_add_executable(octave ...)` call.
 
 Key managers (`src/managers/*.{h,cpp}`):
 - `settingsmanager` — Central settings store, persists JSON to OS-specific config dirs
 - `mediamanager` — Local audio playback via QMediaPlayer
 - `obdmanager` + `elm327protocol` — OBD-II diagnostics
 - `nowplaying` — what is playing and its controls whichever source has them (phone while mirroring, else `mediamanager`); owns the phone-position clock and the phone/local hand-off (context property `nowPlaying`)
-- `parameterstore` — the latest value of every PID / IMU reading as a `QQmlPropertyMap` (context property `paramStore`, one notifying key per id, 33 ms coalescing), fed from `OBDManager::parameterSampled` and the IMU signals in `main.cpp`
+- `parameterstore` — the latest value of every PID / IMU reading as a `QQmlPropertyMap` (context property `paramStore`, one notifying key per id, 33 ms coalescing), fed from `OBDManager::parameterSampled` and the IMU signals in `src/appcore.cpp`
 - `parametercatalog` — title / unit / range / kind / decimals of every OBD PID and IMU reading (context property `parameterCatalog`); new PIDs need a row here as well as a decoder in `elm327protocol` (`tst_parametercatalog` enforces it)
 - `shiftlightmanager` — RPM shift light rules (legacy flag migration, band match, flash phase) fed by `OBDManager::rpmChanged`; the QML overlays and home-card lamp only bind to `active` / `activeFlag` / `lit`
 - `obdadapterfinder` (+ `src/platform/bluezpairer`) — Bluetooth OBD adapter scan / PIN pairing / trust / connect (desktop Linux so far; see `TODO/obd-adapter-discovery.md`)
@@ -75,9 +75,9 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `triprecorder` + `tripstore` — the black box: every OBD reading of every drive into `<config>/history/blackbox.sqlite` (SQLite compiled in from `third_party/sqlite/`, own thread; never go through Qt Sql, its driver is a separate runtime plugin that the Jeep's Ubuntu box did not have) plus one CSV + JSON per trip under `history/trips/`; taps `OBDManager::parameterSampled` and registers a background poll sweep (`setBackgroundDemand`) for every PID the vehicle supports. Viewer: `frontend/TripHistory.qml`
 - `clock`, `networkmanager`, `volumecontroller` — self-explanatory
 
-Developer tooling lives in `src/dev/` (committed, compiled only with the `OCTAVE_DEV_TOOLS` CMake option, inert without `--dev` / `--profile`): `devruntime` wires it up from `main.cpp`, `commandserver` + `coreactions` + `uidriver` are the JSON-lines TCP command server, `perfmonitor` the profiler, `carsim` + `simelm327` a simulated car behind the *real* `OBDManager` (registered with `OBDConnectionWorker::setCustomTransport()` for port `sim://elm327`), `devimufeed` simulated IMU motion, `collagebridge` the collage tool's in-app half, `qml/` the dev overlay. Time hot paths with `OCTAVE_PERF_SCOPE("label")` from `src/util/perfscope.h` (empty in Release). The clients in the gitignored `dev/` tree (MCP servers, screenshot / story / collage / perf scripts, dashboard drivers) launch the C++ binary through `dev/app_launch.py` (`OCTAVE_BIN` to pick one).
+Developer tooling lives in `src/dev/` (committed, compiled only with the `OCTAVE_DEV_TOOLS` CMake option, inert without `--dev` / `--profile`): `devruntime` wires it up from `main.cpp`, `coreactions` + `uidriver` the UI / perf actions it adds to the JSON-lines TCP command server (which lives in `src/service/` with the service protocol, built in every configuration and off unless `--service` / `serviceEnabled` / `--profile` asks for it), `perfmonitor` the profiler, `carsim` + `simelm327` a simulated car behind the *real* `OBDManager` (registered with `OBDConnectionWorker::setCustomTransport()` for port `sim://elm327`), `devimufeed` simulated IMU motion, `collagebridge` the collage tool's in-app half, `qml/` the dev overlay. Time hot paths with `OCTAVE_PERF_SCOPE("label")` from `src/util/perfscope.h` (empty in Release). The clients in the gitignored `dev/` tree (MCP servers, screenshot / story / collage / perf scripts, dashboard drivers) launch the C++ binary through `dev/app_launch.py` (`OCTAVE_BIN` to pick one).
 
-When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMakeLists.txt`, instantiate in `main.cpp`, register as a QML context property.
+When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMakeLists.txt`, add a member to `AppCore` (`src/appcore.h`, in construction order), wire it and `expose("name", &member)` in `src/appcore.cpp` (that is its QML context property and its service object).
 
 ### Change workflow
 

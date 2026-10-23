@@ -377,7 +377,7 @@
         <table>
           <thead><tr><th>Source</th><th>Path</th></tr></thead>
           <tbody>
-            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/main.cpp</span>). The knob's mute button calls <code>volumeController.toggleMute()</code> and the bar's icon follows <code>effectivelyMutedChanged</code>.</td></tr>
+            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/appcore.cpp</span>). The knob's mute button calls <code>volumeController.toggleMute()</code> and the bar's icon follows <code>effectivelyMutedChanged</code>.</td></tr>
             <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
             <tr><td>Startup</td><td><code>currentVolume</code> (from <code>startUpVolume</code>) is applied once by <span class="file-path">src/main.cpp</span>.</td></tr>
           </tbody>

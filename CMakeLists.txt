@@ -182,6 +182,8 @@ message(STATUS "Developer tooling (--dev / --profile): ${OCTAVE_DEV_TOOLS}")
 # ---- Executable ----
 qt_add_executable(octave
     src/main.cpp
+    src/appcore.h
+    src/appcore.cpp
     src/util/logger.h
     src/util/logger.cpp
     src/util/assetstore.cpp

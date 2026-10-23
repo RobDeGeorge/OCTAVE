@@ -928,7 +928,7 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
         <p>
           Values flow through the C++ <a href="signals-slots-reference.html#paramStore"><code>paramStore</code></a>
           (<span class="file-path">src/managers/parameterstore.{h,cpp}</span>, a <code>QQmlPropertyMap</code> with one notifying
-          key per id). <span class="file-path">src/main.cpp</span> feeds it from <code>parameterSampled(id, value)</code>, which
+          key per id). <span class="file-path">src/appcore.cpp</span> feeds it from <code>parameterSampled(id, value)</code>, which
           <code>OBDManager</code> emits for every decoded value, single- and multi-value, on the desktop worker path and on Android
           alike, and from the IMU's <code>pitchChanged</code> .. <code>baroTempChanged</code> signals for <code>PITCH</code>,
           <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>,

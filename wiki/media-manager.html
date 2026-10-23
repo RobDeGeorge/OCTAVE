@@ -679,7 +679,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>set_position</code></td><td>(int)</td><td>Seek to position in ms</td></tr>
             <tr><td><code>get_position</code> / <code>get_duration</code></td><td>() -&gt; float</td><td>Position / duration in ms</td></tr>
             <tr><td><code>is_playing</code> / <code>is_paused</code> / <code>is_muted</code> / <code>is_shuffled</code></td><td>() -&gt; bool</td><td>State flags</td></tr>
-            <tr><td><code>setMuted</code></td><td>(bool)</td><td>Follow <code>VolumeController::mutedChanged</code> (wired in <span class="file-path">main.cpp</span>); call <code>volumeController.toggleMute()</code> instead from QML and handlers</td></tr>
+            <tr><td><code>setMuted</code></td><td>(bool)</td><td>Follow <code>VolumeController::mutedChanged</code> (wired in <span class="file-path">src/appcore.cpp</span>); call <code>volumeController.toggleMute()</code> instead from QML and handlers</td></tr>
             <tr><td><code>toggle_shuffle</code></td><td>()</td><td>Toggle shuffle, persist via SettingsManager</td></tr>
             <tr><td><code>setVolume</code></td><td>(float)</td><td>Set the user volume (0.0-1.0 linear); call <code>volumeController.applyVolume(percent)</code> instead from QML and handlers</td></tr>
             <tr><td><code>getVolume</code></td><td>() -&gt; float</td><td>User's volume (ignores mute and ducking)</td></tr>

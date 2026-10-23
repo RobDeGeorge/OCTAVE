@@ -50,7 +50,7 @@
 
         <div class="info-box info">
           <div class="info-box-title">How managers reach QML</div>
-          Every manager is a <code>QObject</code> registered in <span class="file-path">src/main.cpp</span> with <code>ctx-&gt;setContextProperty(...)</code>, and QML reaches it by that name: <code>mediaManager.next_track()</code>, <code>settingsManager.themeSetting</code>, <code>obdManager.onRpmChanged</code>. Other context values are <code>screenAutoScale</code> (float, short screen edge / 720 clamped to 0.4&ndash;3.0), <code>isAndroid</code> (bool, <code>true</code> only in the Android build), <code>wikiViewerAvailable</code> (bool: an embedded web viewer is available), and <code>wikiHomeUrl</code> (<code>QUrl</code>: the wiki entry point). The <code>qmlRegisterType</code>'d <code>OCTAVE.AndroidAuto.EmbeddedDhuItem</code> and the QML singletons (<code>OBDParameterModel</code>, <code>WidgetCatalog</code>, &hellip;) are documented in <a href="components.html">Components</a>, not here.
+          Every manager is a <code>QObject</code> member of <code>AppCore</code> (<span class="file-path">src/appcore.{h,cpp}</span>), set as a context property by <span class="file-path">src/main.cpp</span>, and QML reaches it by that name: <code>mediaManager.next_track()</code>, <code>settingsManager.themeSetting</code>, <code>obdManager.onRpmChanged</code>. Other context values are <code>screenAutoScale</code> (float, short screen edge / 720 clamped to 0.4&ndash;3.0), <code>isAndroid</code> (bool, <code>true</code> only in the Android build), <code>wikiViewerAvailable</code> (bool: an embedded web viewer is available), and <code>wikiHomeUrl</code> (<code>QUrl</code>: the wiki entry point). The <code>qmlRegisterType</code>'d <code>OCTAVE.AndroidAuto.EmbeddedDhuItem</code> and the QML singletons (<code>OBDParameterModel</code>, <code>WidgetCatalog</code>, &hellip;) are documented in <a href="components.html">Components</a>, not here.
         </div>
 
         <h2 id="registry">Context property registry</h2>
@@ -579,7 +579,7 @@
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>connect_settings_manager(QObject *)</code></td><td><code>void</code></td><td>No-op; the SettingsManager is wired with <code>setSettingsManager()</code> in <code>main.cpp</code></td></tr>
+            <tr><td><code>connect_settings_manager(QObject *)</code></td><td><code>void</code></td><td>No-op; the SettingsManager is wired with <code>setSettingsManager()</code> in <code>src/appcore.cpp</code></td></tr>
             <tr><td><code>_save_playback_state()</code></td><td><code>void</code></td><td>Write song / position / playlist to settings now (Main.qml calls it on close)</td></tr>
             <tr><td><code>_clear_temp_files()</code></td><td><code>void</code></td><td>Delete the extracted cover-art temp files</td></tr>
             <tr><td><code>flush_metadata_store()</code></td><td><code>void</code></td><td>Write the persistent tag cache (<code>&lt;appdata&gt;/metadata_cache.json</code>) if it changed; called at shutdown</td></tr>
@@ -588,7 +588,7 @@
             <tr><td><code>previous_track()</code></td><td><code>void</code></td><td>Go to the previous track</td></tr>
             <tr><td><code>pause()</code></td><td><code>void</code></td><td>Pause playback</td></tr>
             <tr><td><code>toggle_play()</code></td><td><code>void</code></td><td>Play/pause; starts the first track if nothing is loaded</td></tr>
-            <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>Follows <code>volumeController.mutedChanged</code> (wired in <code>main.cpp</code>); call <code>volumeController.toggleMute()</code> from QML</td></tr>
+            <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>Follows <code>volumeController.mutedChanged</code> (wired in <code>src/appcore.cpp</code>); call <code>volumeController.toggleMute()</code> from QML</td></tr>
             <tr><td><code>toggle_shuffle()</code></td><td><code>void</code></td><td>Toggle shuffle and rebuild the queue</td></tr>
             <tr><td><code>setVolume(float volume)</code></td><td><code>void</code></td><td>Set the linear output volume 0.0&ndash;1.0 (called by VolumeController, not QML)</td></tr>
             <tr><td><code>setDucking(float factor)</code></td><td><code>void</code></td><td>Temporarily attenuate the output (1.0 = none, 0.1 = -20 dB) while the mirrored phone makes sound; independent of the user volume</td></tr>
@@ -927,7 +927,7 @@
             <tr><td><code>info(QString id)</code></td><td><code>QVariantMap</code></td><td>One entry as in <code>parameters</code> (hash lookup); empty map for an unknown id</td></tr>
             <tr><td><code>contains(QString id)</code></td><td><code>bool</code></td><td>Whether the id is in the catalog</td></tr>
             <tr><td><code>toDisplay(QString id, QVariant value)</code></td><td><code>QVariant</code></td><td>A value in the gauges' units (the reference OBDParameterModel's scale/offset follow); invalid or non-numeric values and unknown ids pass through</td></tr>
-            <tr><td><code>setDisplayUnits(QString temp, QString speed, QString altitude)</code></td><td><code>void</code></td><td>C++ only: <code>main.cpp</code> feeds SettingsManager's units; emits <code>displayParametersChanged</code> on a change</td></tr>
+            <tr><td><code>setDisplayUnits(QString temp, QString speed, QString altitude)</code></td><td><code>void</code></td><td>C++ only: <code>src/appcore.cpp</code> feeds SettingsManager's units; emits <code>displayParametersChanged</code> on a change</td></tr>
           </tbody>
         </table>
 
@@ -941,7 +941,7 @@
           <tbody>
             <tr><td><code>get(QString id)</code></td><td><code>QVariant</code></td><td>Current value, or invalid / <code>undefined</code> if none yet</td></tr>
             <tr><td><code>snapshot()</code></td><td><code>QVariantMap</code></td><td>Every id that has a value &rarr; its value</td></tr>
-            <tr><td><code>ingest(QString id, float value)</code></td><td><code>void</code></td><td>Record a reading (lands at the next fold). Wired in <code>main.cpp</code>; tests and simulators call it too</td></tr>
+            <tr><td><code>ingest(QString id, float value)</code></td><td><code>void</code></td><td>Record a reading (lands at the next fold). Wired in <code>src/appcore.cpp</code>; tests and simulators call it too</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -990,7 +990,7 @@
         <!-- ShiftLightManager -->
         <h2 id="shiftLightManager">ShiftLightManager <span class="cmt">&mdash; <code>shiftLightManager</code></span></h2>
         <p><span class="file-path">src/managers/shiftlightmanager.h</span> &mdash; QML context property <code>shiftLightManager</code></p>
-        <p>The RPM shift light's rules, fed by <code>OBDManager::rpmChanged</code> (wired in <code>main.cpp</code>). A flag is an RPM band (<code>rpmLow</code>..<code>rpmHigh</code>, both inclusive) with a colour and effects, stored in the <code>rpm_flags</code> setting as a JSON string. When bands overlap the <em>last</em> matching flag wins. A legacy flag (<code>{rpm}</code> with no band) is migrated once on load to <code>rpmLow = rpm</code>, <code>rpmHigh = rpm_max_rpm</code> and written back. The flash timer runs here, so every frontend sees the same phase: a UI binds to <code>active</code>, <code>activeFlag</code> and <code>lit</code> and draws. All <code>rpm_*</code> settings are re-read when any of them changes. Tests: <span class="file-path">tests/cpp/tst_shiftlightmanager.cpp</span>.</p>
+        <p>The RPM shift light's rules, fed by <code>OBDManager::rpmChanged</code> (wired in <code>src/appcore.cpp</code>). A flag is an RPM band (<code>rpmLow</code>..<code>rpmHigh</code>, both inclusive) with a colour and effects, stored in the <code>rpm_flags</code> setting as a JSON string. When bands overlap the <em>last</em> matching flag wins. A legacy flag (<code>{rpm}</code> with no band) is migrated once on load to <code>rpmLow = rpm</code>, <code>rpmHigh = rpm_max_rpm</code> and written back. The flash timer runs here, so every frontend sees the same phase: a UI binds to <code>active</code>, <code>activeFlag</code> and <code>lit</code> and draws. All <code>rpm_*</code> settings are re-read when any of them changes. Tests: <span class="file-path">tests/cpp/tst_shiftlightmanager.cpp</span>.</p>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1124,7 +1124,7 @@
         <!-- ESP32VolumeManager -->
         <h2 id="esp32VolumeManager">ESP32VolumeManager <span class="cmt">&mdash; <code>esp32VolumeManager</code></span></h2>
         <p><span class="file-path">src/managers/esp32volumemanager.h</span> &mdash; QML context property <code>esp32VolumeManager</code></p>
-        <p>Wireless rotary encoder over USB serial (115200 baud). Encoder ticks and button presses arrive as signals; <code>main.cpp</code> routes them through VolumeController, and pushes volume (<code>send_volume_update</code>), mute (<code>send_mute_state</code>) and the LED ring colour (<code>send_theme_color</code>: album-art accent in <code>"theme"</code> mode, <code>esp32LedStaticColor</code> in <code>"static"</code> mode, cyan fallback) back to the knob &mdash; including a full push 500 ms after the knob connects. <code>ResourceError</code>, <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code>, <code>WriteError</code> and a rejected keepalive write are treated as a lost link and trigger auto-reconnect.</p>
+        <p>Wireless rotary encoder over USB serial (115200 baud). Encoder ticks and button presses arrive as signals; <code>src/appcore.cpp</code> routes them through VolumeController, and pushes volume (<code>send_volume_update</code>), mute (<code>send_mute_state</code>) and the LED ring colour (<code>send_theme_color</code>: album-art accent in <code>"theme"</code> mode, <code>esp32LedStaticColor</code> in <code>"static"</code> mode, cyan fallback) back to the knob &mdash; including a full push 500 ms after the knob connects. <code>ResourceError</code>, <code>DeviceNotFoundError</code>, <code>PermissionError</code>, <code>ReadError</code>, <code>WriteError</code> and a rejected keepalive write are treated as a lost link and trigger auto-reconnect.</p>
         <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>Mobile builds compile a no-op stub with the same signatures as desktop: all four properties, every slot below (<code>get_available_ports()</code> returns an empty list, <code>get_connection_status()</code> <code>"Disconnected"</code>, <code>get_connection_detail()</code> <code>"Not available on mobile"</code>, <code>is_connected()</code> <code>false</code>) and the five signals. QML still guards with <code>typeof esp32VolumeManager</code>.</div>
         <h3>Properties</h3>
         <table>
@@ -1475,7 +1475,7 @@
             <tr><td><code>resume_download(QString songId)</code></td><td><code>void</code></td><td>Resume a paused download</td></tr>
             <tr><td><code>clear_download_queue()</code></td><td><code>void</code></td><td>Cancel everything and empty the queue (and the <code>downloadQueue</code> model)</td></tr>
             <tr><td><code>clear_finished_downloads()</code></td><td><code>void</code></td><td>Remove complete / failed (incl. cancelled) rows from <code>downloadQueue</code> and drop their tasks</td></tr>
-            <tr><td><code>connect_settings_manager(QObject *sm)</code></td><td><code>void</code></td><td>Wire the SettingsManager (called from <code>main.cpp</code>)</td></tr>
+            <tr><td><code>connect_settings_manager(QObject *sm)</code></td><td><code>void</code></td><td>Wire the SettingsManager (called from <code>src/appcore.cpp</code>)</td></tr>
             <tr><td><code>set_download_playlist(QString name)</code></td><td><code>void</code></td><td>Target playlist sub-folder for new downloads (<code>""</code> resets to the default)</td></tr>
             <tr><td><code>get_download_playlist()</code></td><td><code>QString</code></td><td>Current target playlist name (default <code>"Downloads"</code>)</td></tr>
             <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Kill running yt-dlp processes at exit</td></tr>

@@ -167,11 +167,11 @@
           <li><strong>Slots</strong> are methods QML can call &mdash; many use snake_case names rather than the usual C++ camelCase (<code>next_track</code>, <code>scan_library</code>, <code>connect_settings_manager</code>), and QML calls them as written</li>
           <li><strong>Properties</strong> expose values with automatic binding updates</li>
           <li>Managers are <strong>self-contained</strong>: each owns its state, timers and threads</li>
-          <li><span class="file-path">src/main.cpp</span> wires cross-manager signals and passes dependencies where needed, for example settings references, the <code>VolumeController</code> fan-out to its outputs, and <code>OBDAdapterFinder</code> handing a connection to <code>OBDManager</code>.</li>
+          <li><span class="file-path">src/appcore.cpp</span> (<code>AppCore</code>, every manager as a member, no QML engine) wires cross-manager signals and passes dependencies where needed, for example settings references, the <code>VolumeController</code> fan-out to its outputs, and <code>OBDAdapterFinder</code> handing a connection to <code>OBDManager</code>.</li>
         </ul>
 
         <h3 id="all-managers">All Managers</h3>
-        <p>Every row below is registered by <span class="file-path">src/main.cpp</span> under the listed context-property name. Mobile stubs are
+        <p>Every row below is a member of <code>AppCore</code> (<span class="file-path">src/appcore.{h,cpp}</span>), entered in its service registry under the listed name; <span class="file-path">src/main.cpp</span> builds the core and sets each registry entry as a context property (<code>core.exposeTo(ctx)</code>), so the QML UI and the <a href="utilities.html#service-protocol">service protocol</a> see the same objects. Mobile stubs are
           header-level <code>#else // Q_OS_MOBILE</code> classes with the same API so QML bindings stay valid.</p>
         <table>
           <thead>
@@ -240,8 +240,8 @@ Text {
 
         <p>
           Every context property must exist before <code>engine.load(Main.qml)</code>: bindings are evaluated at
-          first load, and an unregistered name is an error, not a late binding. <span class="file-path">src/main.cpp</span> therefore registers
-          every manager (including <code>dashboardManager</code>, the last one) ahead of the load, and the dev
+          first load, and an unregistered name is an error, not a late binding. <span class="file-path">src/main.cpp</span> therefore builds the
+          <code>AppCore</code> and exposes every manager (including <code>dashboardManager</code>, the last one) ahead of the load, and the dev
           runtime's <code>beforeLoad()</code> hook runs before it too, so <code>--dev</code> can point the real
           <code>OBDManager</code> at its simulated ELM327 before the QML is loaded.
         </p>
@@ -677,7 +677,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         <!-- Signal Wiring -->
         <h2 id="signal-wiring">Signal Wiring Graph</h2>
         <p>
-          Cross-manager signals are wired in <code>src/main.cpp</code>, mostly as lambdas. This is the central nervous
+          Cross-manager signals are wired in <code>src/appcore.cpp</code> (the <code>wire*()</code> helpers of <code>AppCore</code>), mostly as lambdas. This is the central nervous
           system that connects hardware inputs to software outputs (the ESP32 LED sync block and the volume fan-out to the
           knob are compiled out under <code>Q_OS_MOBILE</code>, where those managers are stubs):
         </p>

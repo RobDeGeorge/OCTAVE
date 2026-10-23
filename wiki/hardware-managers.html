@@ -64,8 +64,8 @@
           <h2>Overview &amp; Platform Availability</h2>
           <p>
             Three managers talk to physical peripherals. Each is a C++ class in <span class="file-path">src/managers/</span>,
-            instantiated and registered as a QML context property in <span class="file-path">src/main.cpp</span>
-            ("Phase 4: Vehicle &amp; Hardware").
+            built and wired as a member of <code>AppCore</code> (<span class="file-path">src/appcore.{h,cpp}</span>) and
+            exposed as a QML context property.
           </p>
           <table>
             <thead><tr><th>Manager</th><th>QML name</th><th>Source</th><th>Log category</th><th>Transport</th></tr></thead>
