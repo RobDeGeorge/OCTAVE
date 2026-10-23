@@ -380,6 +380,29 @@ private slots:
     }
 #endif
 
+    void queueArtOnlyFromTheQueueArtFolder()
+    {
+        // GET /art?queue=<id>: a queue item's own art, nothing else
+        PhoneMirrorManager m;
+        m.onMediaQueue({QVariantMap{{"id", 7}, {"title", "A"}, {"art_uri", "content://a"}},
+                        QVariantMap{{"id", 8}, {"title", "B"}, {"art_uri", "content://b"}}}, 7, "Q");
+        QVERIFY(m.queueArtFile(7).isEmpty());   // art not there yet
+        m.onMediaQueueArt("content://a", QByteArray("\xff\xd8\xffjpeg"));
+        m.publishMediaQueue();
+        const QString file = m.queueArtFile(7);
+        QVERIFY(!file.isEmpty());
+        QVERIFY(file.contains("/temp/phone_queue_art/"));
+        QVERIFY(m.queueArtFile(8).isEmpty());
+        QVERIFY(m.queueArtFile(99).isEmpty());   // not in the queue
+        // An item whose art names a file outside that folder
+        QTemporaryDir elsewhere;
+        QFile o(elsewhere.filePath("x.jpg"));
+        QVERIFY(o.open(QIODevice::WriteOnly));
+        o.close();
+        m.m_mediaQueue = {QVariantMap{{"id", 9}, {"art", QUrl::fromLocalFile(o.fileName()).toString()}}};
+        QVERIFY(m.queueArtFile(9).isEmpty());
+    }
+
     void resetClearsMedia()
     {
         PhoneMirrorManager m;

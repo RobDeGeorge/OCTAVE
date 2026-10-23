@@ -250,8 +250,10 @@ private slots:
         CommandServer server(0);
         server.setPage("<html>client</html>");
         int calls = 0;
-        server.addRoute("/art", [&calls]() {
+        QByteArray seen;
+        server.addRoute("/art", [&calls, &seen](const QByteArray &target) {
             ++calls;
+            seen = target;
             return StaticFiles::Reply{200, "OK", "image/png", "\x89PNG"};
         });
         QVERIFY(server.start());
@@ -261,6 +263,7 @@ private slots:
                  reply.constData());
         QVERIFY(reply.contains("X-Content-Type-Options: nosniff"));
         QCOMPARE(calls, 1);
+        QCOMPARE(seen, QByteArray("/art?rev=7"));   // the handler reads its own query
         // Exact paths only
         QVERIFY(once(server.port(), "GET /art/x HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 404"));
         // An <img> on another site sends no Origin; its Sec-Fetch-Site gives it away

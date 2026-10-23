@@ -162,6 +162,37 @@ private slots:
         QFile::remove(path);
     }
 
+    void libraryArtOnlyFromTheArtCache()
+    {
+        // GET /art?song=: a library song's cover through the manager's own
+        // lookup, and only a file in its art cache
+        auto mm = library({"a.mp3"});
+        QVERIFY(mm->libraryArtFile("a.mp3").isEmpty());          // no cover
+        QVERIFY(mm->libraryArtFile("not-in-library.mp3").isEmpty());
+        QVERIFY(mm->libraryArtFile("../../etc/passwd").isEmpty());
+        QVERIFY(mm->libraryArtFile("").isEmpty());
+
+        QDir().mkpath(mm->m_tempDir);
+        const QString cover = mm->m_tempDir + "/cover_test.jpg";
+        QFile f(cover);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("\xff\xd8\xff");
+        f.close();
+        const QString albumId = mm->_get_album_id("a.mp3");
+        mm->m_albumArtCache.insert(albumId, QUrl::fromLocalFile(cover).toString());
+        QCOMPARE(mm->libraryArtFile("a.mp3"), QFileInfo(cover).canonicalFilePath());
+
+        // A cache entry naming a file elsewhere is never served
+        QTemporaryDir elsewhere;
+        const QString outside = elsewhere.filePath("x.jpg");
+        QFile o(outside);
+        QVERIFY(o.open(QIODevice::WriteOnly));
+        o.close();
+        mm->m_albumArtCache.insert(albumId, QUrl::fromLocalFile(outside).toString());
+        QVERIFY(mm->libraryArtFile("a.mp3").isEmpty());
+        QFile::remove(cover);
+    }
+
 private:
     // A scanned library with one folder ("Road") holding `files`
     std::unique_ptr<MediaManager> library(const QStringList &files)

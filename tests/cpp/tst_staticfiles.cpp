@@ -163,6 +163,22 @@ private slots:
         QCOMPARE(StaticFiles::pathOf("/art"), QByteArray("/art"));
     }
 
+    void queryAndConfinement()
+    {
+        QCOMPARE(StaticFiles::queryValue("/art?song=My%20Song%20%26%20Co.mp3&rev=3", "song"), QStringLiteral("My Song & Co.mp3"));
+        QCOMPARE(StaticFiles::queryValue("/art?song=a+b.mp3", "song"), QStringLiteral("a b.mp3"));
+        QCOMPARE(StaticFiles::queryValue("/art?queue=12#x", "queue"), QStringLiteral("12"));
+        QVERIFY(StaticFiles::queryValue("/art?rev=3", "song").isNull());
+        QVERIFY(StaticFiles::queryValue("/art", "song").isNull());
+        QVERIFY(!StaticFiles::queryValue("/art?song=", "song").isNull());   // present, empty
+
+        QCOMPARE(StaticFiles::insideDir(m_root + "/assets/app.js", m_root), QFileInfo(m_root + "/assets/app.js").canonicalFilePath());
+        QVERIFY(StaticFiles::insideDir(m_root + "/leak.txt", m_root).isEmpty());          // link out
+        QVERIFY(StaticFiles::insideDir(m_root + "/../outside/secret.txt", m_root).isEmpty());
+        QVERIFY(StaticFiles::insideDir(m_root, m_root).isEmpty());                         // the folder itself
+        QVERIFY(StaticFiles::insideDir(m_root + "/nope", m_root).isEmpty());
+    }
+
     void rootMustExist()
     {
         QCOMPARE(StaticFiles::serve(m_tmp.filePath("missing"), "/").status, 404);

@@ -1,5 +1,6 @@
 #include "mediamanager.h"
 #include "../util/folderbrowser.h"
+#include "../service/staticfiles.h"
 #include "../util/perfscope.h"
 #include "../util/units.h"
 #include "settingsmanager.h"
@@ -3222,6 +3223,16 @@ QStringList MediaManager::musicBrowseRoots() const
         roots.append(m_mediaDir);
     roots.removeAll(QString());
     return roots;
+}
+
+QString MediaManager::libraryArtFile(const QString &filename)
+{
+    if (filename.isEmpty() || !m_allMusicFilePaths.contains(filename))
+        return {};
+    const QUrl url(get_album_art(filename));
+    if (!url.isLocalFile())
+        return {};
+    return OctaveService::StaticFiles::insideDir(url.toLocalFile(), m_tempDir);
 }
 
 QVariantMap MediaManager::browse_music_folders(const QString &path)

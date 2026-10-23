@@ -128,12 +128,27 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
             &core.registry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, headless});
         // The current cover, so a client can show it: only nowPlaying's
         // own art file, never a path from the request
+        // /art?song=<library filename> and /art?queue=<phone queue id>: a
+        // library row's or a queue item's cover, resolved only through
+        // the manager's own lookup and only from its own art folder
         QPointer<NowPlaying> nowPlaying = &core.nowPlaying;
-        service.server->addRoute("/art", [nowPlaying]() {
-            const QString url = OctaveService::CommandServer::onGui([nowPlaying]() {
-                return QVariant(nowPlaying ? nowPlaying->artUrl() : QString());
-            }, 5000).toString();
-            return OctaveService::StaticFiles::serveImage(QUrl(url).isLocalFile() ? QUrl(url).toLocalFile() : QString());
+        QPointer<MediaManager> media = &core.mediaManager;
+        QPointer<PhoneMirrorManager> phone = &core.phoneMirrorManager;
+        service.server->addRoute("/art", [nowPlaying, media, phone](const QByteArray &target) {
+            const QString song = OctaveService::StaticFiles::queryValue(target, QStringLiteral("song"));
+            const QString queue = OctaveService::StaticFiles::queryValue(target, QStringLiteral("queue"));
+            const QString file = OctaveService::CommandServer::onGui([=]() -> QVariant {
+                if (!song.isNull())
+                    return media ? media->libraryArtFile(song) : QString();
+                if (!queue.isNull()) {
+                    bool ok = false;
+                    const qint64 id = queue.toLongLong(&ok);
+                    return ok && phone ? phone->queueArtFile(id) : QString();
+                }
+                const QUrl url(nowPlaying ? nowPlaying->artUrl() : QString());
+                return url.isLocalFile() ? url.toLocalFile() : QString();
+            }, 15000).toString();
+            return OctaveService::StaticFiles::serveImage(file);
         });
         // A client that goes without saying so leaves no demand behind
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setParameterDemand"), QStringList());
