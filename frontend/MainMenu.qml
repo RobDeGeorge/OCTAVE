@@ -38,11 +38,7 @@ Item {
     readonly property int positionMs: _np ? _np.positionMs : 0
     readonly property int durationMs: _np ? _np.durationMs : 0
 
-    function formatTime(ms) {
-        var minutes = Math.floor(ms / 60000)
-        var seconds = Math.floor((ms % 60000) / 1000)
-        return minutes + ":" + (seconds < 10 ? "0" : "") + seconds
-    }
+    function formatTime(ms) { return units.formatDuration(ms) }
 
     // Dark background with subtle gradient
     Rectangle {

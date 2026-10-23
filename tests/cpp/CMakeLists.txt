@@ -114,7 +114,7 @@ octave_add_test(tst_downloadmanager
     LIBS Qt6::Gui Qt6::Network Qt6::Concurrent ${_taglib}
     DEFINES OCTAVE_ENABLE_DOWNLOADS)
 octave_add_test(tst_mediamanager
-    SOURCES managers/mediamanager.h managers/mediamanager.cpp
+    SOURCES managers/mediamanager.h managers/mediamanager.cpp util/units.h util/units.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
@@ -127,7 +127,8 @@ octave_add_test(tst_errortoast LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 # QML fixtures (tests/fixtures/), each run in its own qmlfixturehost process
 add_executable(qmlfixturehost qmlfixturehost.cpp
     "${OCTAVE_SRC}/managers/settingsmanager.h" "${OCTAVE_SRC}/managers/settingsmanager.cpp"
-    "${OCTAVE_SRC}/util/assetstore.h" "${OCTAVE_SRC}/util/assetstore.cpp")
+    "${OCTAVE_SRC}/util/assetstore.h" "${OCTAVE_SRC}/util/assetstore.cpp"
+    "${OCTAVE_SRC}/util/units.h" "${OCTAVE_SRC}/util/units.cpp")
 target_include_directories(qmlfixturehost PRIVATE "${OCTAVE_SRC}" "${CMAKE_BINARY_DIR}/generated")
 target_compile_definitions(qmlfixturehost PRIVATE OCTAVE_SOURCE_DIR="${CMAKE_SOURCE_DIR}" OCTAVE_VERSION="${PROJECT_VERSION}")
 target_link_libraries(qmlfixturehost PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
@@ -173,7 +174,7 @@ endif()
 # NowPlaying over the real MediaManager and PhoneMirrorManager
 octave_add_test(tst_nowplaying
     SOURCES managers/nowplaying.h managers/nowplaying.cpp
-            managers/mediamanager.h managers/mediamanager.cpp
+            managers/mediamanager.h managers/mediamanager.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
@@ -201,3 +202,4 @@ set_tests_properties(tst_boot PROPERTIES TIMEOUT 180)
 octave_add_test(tst_audioanalyzer SOURCES managers/audioanalyzer.h managers/audioanalyzer.cpp
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent)
 octave_add_test(tst_qmlmodules SOURCES util/qmlmodules.h util/qmlmodules.cpp LIBS Qt6::Qml)
+octave_add_test(tst_units SOURCES util/units.h util/units.cpp)

@@ -42,21 +42,17 @@ Item {
     readonly property bool showAltitude: _cards.Altitude !== false
     readonly property bool showTemperature: _cards.Temperature !== false
 
-    function headingToCardinal(h) {
-        var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-        var idx = Math.round(h / 45) % 8
-        return dirs[idx]
-    }
+    function headingToCardinal(h) { return units.cardinal(h) }
 
     function tempDisplay(celsius) {
         if (useFahrenheit)
-            return (celsius * 9 / 5 + 32).toFixed(decimalPlaces)
+            return units.cToF(celsius).toFixed(decimalPlaces)
         return celsius.toFixed(decimalPlaces)
     }
 
     function altDisplay(meters) {
         if (useImperial)
-            return (meters * 3.28084).toFixed(decimalPlaces)
+            return units.mToFt(meters).toFixed(decimalPlaces)
         return meters.toFixed(decimalPlaces)
     }
 

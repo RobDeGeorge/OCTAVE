@@ -195,6 +195,8 @@ qt_add_executable(octave
     src/util/qmlmodules.cpp
     src/util/variantlistmodel.h
     src/util/variantlistmodel.cpp
+    src/util/units.h
+    src/util/units.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp
     src/managers/diagnosticsmanager.h

@@ -1,5 +1,6 @@
 #include "mediamanager.h"
 #include "../util/perfscope.h"
+#include "../util/units.h"
 #include "settingsmanager.h"
 
 #include <QDir>
@@ -2875,14 +2876,7 @@ void MediaManager::_calculate_all_stats()
 
 QString MediaManager::_format_duration(qint64 ms)
 {
-    int totalSeconds = static_cast<int>(ms / 1000);
-    int hours = totalSeconds / 3600;
-    int minutes = (totalSeconds % 3600) / 60;
-    int seconds = totalSeconds % 60;
-    return QStringLiteral("%1:%2:%3")
-        .arg(hours)
-        .arg(minutes, 2, 10, QLatin1Char('0'))
-        .arg(seconds, 2, 10, QLatin1Char('0'));
+    return UnitsFn::formatDuration(double(ms));
 }
 
 QString MediaManager::get_total_duration()

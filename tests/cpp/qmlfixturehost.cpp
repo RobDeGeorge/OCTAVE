@@ -28,6 +28,7 @@
 
 #include "managers/settingsmanager.h"
 #include "util/assetstore.h"
+#include "util/units.h"
 
 namespace {
 const QString kRepo = QStringLiteral(OCTAVE_SOURCE_DIR);
@@ -90,6 +91,8 @@ int main(int argc, char *argv[])
     Probe probe(&engine);
     AssetStore assetStore(kRepo + QStringLiteral("/frontend/assets"));
     ctx->setContextProperty(QStringLiteral("assetStore"), &assetStore);
+    Units units;
+    ctx->setContextProperty(QStringLiteral("units"), &units);
     std::unique_ptr<SettingsManager> settings;
 
     if (wiki) {

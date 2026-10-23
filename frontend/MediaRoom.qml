@@ -202,11 +202,7 @@ Item {
         asynchronous: true; cache: true
     }
 
-    function formatTime(ms) {
-        var minutes = Math.floor(ms / 60000)
-        var seconds = Math.floor((ms % 60000) / 1000)
-        return minutes + ":" + (seconds < 10 ? "0" : "") + seconds
-    }
+    function formatTime(ms) { return units.formatDuration(ms) }
 
     // True while card animation is running + a brief settle buffer after,
     // so the blur re-render and visualizer bar Behaviors don't all resume

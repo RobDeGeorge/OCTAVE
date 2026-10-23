@@ -850,12 +850,7 @@ Item {
                                 }
 
                                 Text {
-                                    text: {
-                                        var dur = model.duration || 0
-                                        var m = Math.floor(dur / 60)
-                                        var s = dur % 60
-                                        return m + ":" + (s < 10 ? "0" : "") + s
-                                    }
+                                    text: units.formatSeconds(model.duration || 0)
                                     font.family: downloadPage.globalFont
                                     font.pixelSize: dp(10)
                                     color: dimTextColor

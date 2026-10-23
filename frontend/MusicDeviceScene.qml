@@ -34,13 +34,7 @@ Item {
         : Math.max(0, safeDuration > 0 ? Math.min(playbackPosition, safeDuration) : playbackPosition)
     readonly property real trackProgress: !hasTrack ? 0 : safeDuration > 0 ? safePosition / safeDuration
         : isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0
-    function formatPlaybackTime(milliseconds) {
-        var seconds = Math.floor(Math.max(0, isFinite(milliseconds) ? milliseconds : 0) / 1000)
-        var minutes = Math.floor(seconds / 60)
-        var tail = (seconds % 60).toString().padStart(2, "0")
-        return minutes >= 60 ? Math.floor(minutes / 60) + ":" + (minutes % 60).toString().padStart(2, "0") + ":" + tail
-                             : minutes + ":" + tail
-    }
+    function formatPlaybackTime(milliseconds) { return units.formatDuration(milliseconds) }
     readonly property string elapsedText: formatPlaybackTime(safePosition)
     readonly property string remainingText: hasTrack && safeDuration > 0 ? "−" + formatPlaybackTime(safeDuration - safePosition) : "--:--"
     readonly property string playbackLabel: !hasTrack ? "READY" : loading ? "LOADING" : playing ? "PLAY" : "PAUSE"

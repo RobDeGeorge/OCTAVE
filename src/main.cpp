@@ -37,6 +37,7 @@ extern "C" {
 #include "managers/diagnosticsmanager.h"
 #include "util/logger.h"
 #include "util/qmlmodules.h"
+#include "util/units.h"
 #include "util/uiwatchdog.h"
 #include "managers/clock.h"
 #include "managers/networkmanager.h"
@@ -450,6 +451,10 @@ int main(int argc, char *argv[])
     // Assimp importer) must open themselves — extracted from the APK on Android.
     AssetStore assetStore(frontendDir.absoluteFilePath(QStringLiteral("assets")));
     ctx->setContextProperty("assetStore", &assetStore);
+
+    // Time formatting, compass points and unit conversions (src/util/units)
+    Units units;
+    ctx->setContextProperty("units", &units);
 
     // Optional QML modules, checked without loading them: CarMenu's 3D view
     // needs QtQuick3D (SensorHome greys its card without it); the music
