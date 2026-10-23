@@ -175,7 +175,7 @@
       <span class="name">{spec?.label ?? ''}</span>
       {#if !$list.find((e) => e.id === id)?.builtIn}<button class="btn icon" aria-label="Edit" onclick={() => go('dashboards', `edit/${id}`)}><Icon name="edit" /></button>{/if}
     </div>
-    <div class="stage">
+    <div class="stage" style="--cols:{cols};--rows:{rows}">
       {#if error}<div class="glass panel bad">{error}</div>
       {:else if spec}<DashboardRenderer {spec} consumer="glass-dashboard" />
       {:else}<div class="muted">Loading…</div>{/if}
@@ -193,15 +193,13 @@
     {:else if spec}
       <div class="edit-layout">
         <div class="glass palette">
-          <div class="small muted">Tap a widget, then tap the grid</div>
+          <div class="small muted hint">Tap a widget, then tap the grid</div>
           {#each $widgets as w}
             <button class="pal" class:on={placing?.type === w.type} onclick={() => (placing = placing?.type === w.type ? null : w)}><span class="glyph">{w.glyph}</span>{w.displayName}</button>
           {/each}
-          <div class="row"><span class="small">Columns</span><input class="field tiny num" type="number" min="1" max="48" bind:value={spec.gridColumns} onchange={() => (dirty = true)} /></div>
-          <div class="row"><span class="small">Rows</span><input class="field tiny num" type="number" min="1" max="48" bind:value={spec.gridRows} onchange={() => (dirty = true)} /></div>
         </div>
 
-        <div class="stage grid-stage" bind:this={canvas} role="grid" tabindex="-1" class:placing
+        <div class="stage grid-stage" style="--cols:{cols};--rows:{rows}" bind:this={canvas} role="grid" tabindex="-1" class:placing
              onclick={(e) => { if (placing) { const [c, r] = cellAt(e); placeAt(c, r) } }}
              onkeydown={(e) => { if (e.key === 'Escape') { placing = null; sel = -1 } }}
              onpointermove={move} onpointerup={up} onpointercancel={up}>
@@ -258,6 +256,8 @@
             {/each}
           {:else}
             <p class="muted small">Select a widget to set its reading, range, options and colours. Drag the handle to move it, the corner to resize.</p>
+            <div class="row"><span class="small">Columns</span><input class="field tiny num" type="number" min="1" max="48" bind:value={spec.gridColumns} onchange={() => (dirty = true)} /></div>
+            <div class="row"><span class="small">Rows</span><input class="field tiny num" type="number" min="1" max="48" bind:value={spec.gridRows} onchange={() => (dirty = true)} /></div>
           {/if}
         </div>
       </div>
@@ -305,7 +305,7 @@
   .name-field { flex: 1; }
   .stage { flex: 1; min-height: 0; position: relative; }
   .edit-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 170px 1fr 280px; gap: var(--gap); }
-  .palette, .props { padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .palette, .props { padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-width: 0; }
   .pal { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 12px; border-radius: 14px; font-weight: 600; color: var(--ink-2); text-align: left; }
   .pal.on { background: var(--control-on); color: var(--control-on-ink); }
   .glyph { width: 24px; text-align: center; font-size: 18px; }
@@ -327,7 +327,14 @@
   .sw.theme { background: var(--control); color: var(--ink); font-weight: 700; }
   .ta { min-height: 160px; padding: 12px 16px; font-family: ui-monospace, monospace; font-size: 14px; }
   @media (max-width: 900px) {
-    .edit-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(300px, 1fr) auto; }
-    .palette { flex-direction: row; flex-wrap: wrap; }
+    .edit-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; }
+    .palette { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .palette .pal { flex: none; }
+  }
+  @media (max-aspect-ratio: 1/1) {
+    /* dashboards are laid out for landscape: keep their shape, letterbox the rest */
+    .view { height: auto; min-height: 100%; }
+    .stage { flex: none; aspect-ratio: var(--cols, 12) / var(--rows, 6); width: 100%; min-height: calc(var(--rows, 6) * 52px); }
+    .palette .hint { display: none; }
   }
 </style>

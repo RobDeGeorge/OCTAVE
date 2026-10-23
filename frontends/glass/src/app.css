@@ -150,6 +150,9 @@ select.field { appearance: none; padding-right: 44px; }
 .span-6 { grid-column: span 6; } .span-7 { grid-column: span 7; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
 @media (max-width: 760px) {
   .grid > * { grid-column: span 12; }
+  .page-head { flex-direction: column; align-items: stretch; }
+  .page-head .seg { width: 100%; flex-wrap: nowrap; }
+  .page-head .seg button { flex: 1; padding: 0 6px; min-height: 44px; font-size: 15px; white-space: nowrap; }
   .panel { padding: 20px; }
   :root { --radius: 22px; --gap: 14px; }
   body { font-size: 17px; }
