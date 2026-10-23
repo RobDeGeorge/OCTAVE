@@ -104,6 +104,8 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
     if (!options.error.isEmpty())
         qWarning("Service not started: %s", qPrintable(options.error));
     Service service;
+    if (!options.enabled && options.error.isEmpty())
+        qInfo("Service off (--service, --headless or the serviceEnabled setting turns it on)");
     if (options.enabled) {
         service.server = std::make_unique<OctaveService::CommandServer>(options.port);
         service.server->setBindAddress(options.bind);
