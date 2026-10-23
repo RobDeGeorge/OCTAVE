@@ -1246,6 +1246,28 @@
         },
         {
             "kind": "slot",
+            "name": "apply_settings",
+            "params": [
+                {
+                    "name": "values",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": "QVariantMap"
+        },
+        {
+            "kind": "slot",
+            "name": "applyNowPlayingPreset",
+            "params": [
+                {
+                    "name": "label",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool"
+        },
+        {
+            "kind": "slot",
             "name": "get_setting",
             "params": [
                 {
@@ -2105,6 +2127,13 @@
             "notify": "customThemesChanged",
             "readable": true,
             "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "nowPlayingPresets",
+            "readable": true,
+            "type": "QVariantList",
             "writable": false
         },
         {

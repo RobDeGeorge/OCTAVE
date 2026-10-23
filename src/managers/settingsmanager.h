@@ -103,6 +103,8 @@ class SettingsManager : public QObject
     Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)   // names
     // Every saved custom theme, name -> theme object (as on disk)
     Q_PROPERTY(QVariantMap customThemeData READ customThemeData NOTIFY customThemesChanged)
+    // The Now Playing look presets, [{label, settings: {key: value}}]
+    Q_PROPERTY(QVariantList nowPlayingPresets READ nowPlayingPresets CONSTANT)
     Q_PROPERTY(QVariantList directoryHistory READ directoryHistory NOTIFY directoryHistoryChanged)
 
     // --- Window ---
@@ -245,6 +247,10 @@ public:
     int maxHomeObdParameters() const { return kMaxHomeObdParameters; }
     QVariantList customThemes() const;
     QVariantMap customThemeData() const;
+    static QVariantList nowPlayingPresets();
+    // Keys only an edit of the file may set: save_setting and
+    // apply_settings refuse them (what turns the service on, what it serves)
+    static const QStringList &fileOnlyKeys();
     QVariantList directoryHistory() const;
 
     // Window
@@ -579,6 +585,19 @@ public slots:
 
     // Generic setting access
     void save_setting(const QString &key, const QVariant &value);
+
+    // Many settings at once, each through its own save_* slot (the
+    // settings registry's saveSlot, else save_<snake_case of the key>), so
+    // every rule and notify signal of a single save applies. A value must
+    // already be the slot's type (a bool for a bool, a number for a
+    // number, a string for a string; an int slot rounds). Keys with no
+    // save slot and the file-only keys are refused, never written.
+    // Returns {applied: [keys], refused: {key: reason}}.
+    QVariantMap apply_settings(const QVariantMap &values);
+    // The Now Playing look presets (Minimal, Vinyl, Showcase 3D, Cinema),
+    // each {label, settings}; applyNowPlayingPreset(label) applies one
+    // through apply_settings. False for an unknown label.
+    bool applyNowPlayingPreset(const QString &label);
 
     // ======================================================================
     // Q_INVOKABLE getter methods
