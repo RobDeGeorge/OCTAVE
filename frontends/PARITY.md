@@ -27,7 +27,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Move a song to a playlist, delete a song | `mediaManager.move_song_to_playlist`, `delete_song`, `get_movable_playlist_names` | Yes | Yes | Yes | No | No | |
 | Library song covers | `mediaManager.get_album_art`, `get_neighbor_album_arts` | Yes | No | No | No | No | API missing: these return head-unit paths; GET /art?song= (lane A 9b) |
 | Rescan library, strip filenames | `mediaManager.scan_library`, `strip_filenames` | Yes | No | Yes | No | No | console: API pane only |
-| Media folder | `settingsManager.save_media_folder`, `mediaFolder` | Yes | Partial | Partial | No | No | a path can be typed; API missing: folder browsing (lane A 9) |
+| Media folder | `settingsManager.save_media_folder`, `mediaFolder`, `mediaManager.browse_music_folders` | Yes | Partial | Yes | No | No | browsing: `mediaManager.browse_music_folders` (lane A 9, landed); glass: a typed path so far |
 | Waveform / spectrum | `audioAnalyzer.levels`, `setDemand` | Yes | No | Yes | Yes | No | retro-cluster: AUDIO page; console: a one-line spectrum on the Library pane |
 | Phone media while mirroring | `nowPlaying.*` (follows the phone), `phoneMirrorManager.mediaTitle` / `mediaPlayPause` / ... | Yes | Yes | Partial | Partial | Partial | console, retro-cluster, sunlight: through `nowPlaying` only |
 | Phone queue | `phoneMirrorManager.mediaQueue`, `mediaQueueTitle`, `mediaQueueActiveId`, `mediaSkipToQueueItem` | Yes | No | Yes | No | No | |
@@ -118,7 +118,8 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 |---|---|---|---|---|---|---|---|
 | Every setting by its save slot | `settingsManager.*` properties, `save_*`, `get_settings_registry` | Yes | Yes | Yes | No | No | console: the generic table covers all of them from `describe` |
 | Display: theme, font, UI scale, clock, bottom bar, settings layout | `settingsManager.save_theme_setting`, `save_font_setting`, `save_ui_scale`, `save_clock_*`, `fontCatalog.fonts` | Yes | Yes | Yes | No | Partial | console: theme picker from `themeCatalog` with swatches; sunlight: its own day / night only |
-| Custom themes, Now Playing Studio | `themeCatalog.themes`, `settingsManager.customThemes`, `customThemeData`, `save_custom_theme`, `delete_custom_theme`, the art / background settings | Yes | Partial | Partial | No | No | theme palettes are data now (`themeCatalog`, lane A 7); Now Playing presets and apply_settings: lane A 8 |
+| Custom themes, Now Playing Studio | `themeCatalog.themes`, `settingsManager.customThemes`, `customThemeData`, `save_custom_theme`, `delete_custom_theme`, the art / background settings | Yes | Partial | Partial | No | No | console: Now Playing presets (`nowPlayingPresets`, `applyNowPlayingPreset`) and the theme picker; custom themes only through the settings table |
+| Export and import all settings | `settingsManager.apply_settings` and every property | No | No | Yes | No | No | console: one JSON object out, `apply_settings` back in, refusals listed |
 | Settings sections shown, pinned settings | `settingsManager.save_settings_section_visibility`, `is_settings_section_visible`, `toggle_pin_setting` | Yes | No | Partial | No | No | console: API pane |
 | Network status | `networkManager.isConnected`, `networkName`, `refreshNetwork` | Yes | Yes | Yes | No | No | |
 | Updates: check, apply, restart | `networkManager.checkForUpdates`, `applySelfUpdate`, `restartApp`, `updateStatus`, `selfUpdateStatus` | Yes | Yes | Yes | No | No | |
@@ -133,8 +134,6 @@ All of these are backend items, none frontend work:
 
 - The phone mirror picture and Android Auto frames: lane A 12 (contract step 6).
 - Covers of library songs and phone queue items: lane A 9b.
-- Browsing folders for the media folder: lane A 9.
-- Now Playing Studio presets: lane A 8.
 - Downloading files the app exports (trip CSV, log bundle, dashboard file): lane A 9c. The contents are reachable already (`requestSeries`, `recentLogLines`, `loadDashboard`).
 
 Head-unit-local by design (no gap): the clipboard actions, opening a folder in the head unit's file manager, window size and position.

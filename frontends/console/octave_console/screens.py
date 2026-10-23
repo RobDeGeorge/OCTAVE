@@ -114,3 +114,72 @@ class Pick(ModalScreen):
 
     def action_cancel(self):
         self.dismiss(None)
+
+
+class FolderPick(ModalScreen):
+    """Browse the head unit's folders with mediaManager.browse_music_folders;
+    returns the chosen folder's path, or None."""
+
+    BINDINGS = [Binding("s", "choose", "Use this folder"), Binding("backspace", "up", "Up"),
+                Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, start=""):
+        super().__init__()
+        self.path = ""
+        self.up_path = ""
+        self.entries = []   # [(path, label)]
+        self.start = start
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog wide"):
+            yield Label("[b]Music folder[/b]", id="folder-title")
+            yield OptionList(id="folder-list")
+            yield Static(id="folder-info")
+            yield Static("[dim]Enter opens, Backspace goes up, S uses this folder, Escape cancels[/dim]")
+
+    def on_mount(self):
+        self.open(self.start)
+
+    def open(self, path):
+        self.app.invoke("mediaManager", "browse_music_folders", path, done=self.show)
+
+    def show(self, result):
+        result = result or {}
+        if result.get("error"):
+            self.query_one("#folder-info", Static).update(f"[red]{result['error']}[/red]")
+            if self.path == "" and self.start:   # a stale start path: begin at the roots
+                self.start = ""
+                self.open("")
+            return
+        listing = self.query_one("#folder-list", OptionList)
+        listing.clear_options()
+        if "roots" in result:
+            self.path, self.up_path = "", ""
+            self.entries = [(r.get("path"), f"{r.get('name')}  [dim]{r.get('path')}[/dim]") for r in result["roots"]]
+            info = "Places on the head unit"
+        else:
+            self.path, self.up_path = result.get("path", ""), result.get("parent", "")
+            self.entries = ([(self.up_path, "..")] if self.up_path else [("", ".. (places)")])
+            self.entries += [(d.get("path") if isinstance(d, dict) else f"{self.path}/{d}",
+                              (d.get("name") if isinstance(d, dict) else str(d)) + "/") for d in result.get("dirs") or []]
+            files = result.get("audioFiles")
+            count = len(files) if isinstance(files, list) else (files or 0)
+            info = f"{self.path}: {count} audio file(s) here" + ("  (list cut short)" if result.get("truncated") else "")
+        for i, (_, label) in enumerate(self.entries):
+            listing.add_option(Option(label, id=str(i)))
+        self.query_one("#folder-title", Label).update(f"[b]Music folder[/b]  {self.path or ''}")
+        self.query_one("#folder-info", Static).update(info)
+
+    def on_option_list_option_selected(self, event):
+        self.open(self.entries[int(event.option.id)][0])
+
+    def action_up(self):
+        if self.path:
+            self.open(self.up_path)
+
+    def action_choose(self):
+        if self.path:
+            self.dismiss(self.path)
+
+    def action_cancel(self):
+        self.dismiss(None)

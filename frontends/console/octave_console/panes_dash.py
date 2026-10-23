@@ -38,7 +38,7 @@ def changes(before, after):
 
 
 class DashboardsPane(Pane):
-    SUBSCRIBE = [("dashboardManager", ["dashboards", "lastShareError", "hiddenBuiltInCount"], None, 0)]
+    SUBSCRIBE = [("dashboardManager", ["dashboards", "lastShareError", "lastError", "hiddenBuiltInCount"], None, 0)]
     BINDINGS = [
         Binding("e", "edit", "Edit JSON"),
         Binding("d", "duplicate", "Duplicate"),
@@ -64,7 +64,7 @@ class DashboardsPane(Pane):
         name = event.get("name")
         if name in ("dashboards", "hiddenBuiltInCount"):
             self.show_list()
-        elif name == "lastShareError" and event.get("value"):
+        elif name in ("lastShareError", "lastError") and event.get("value"):
             self.app.notify(f"Dashboards: {event['value']}", severity="error")
 
     def show_list(self):
@@ -133,7 +133,8 @@ class DashboardsPane(Pane):
             if new_id:
                 self.app.status_note(f"saved {new_id}")
             else:
-                self.app.notify("saveDashboard refused it", severity="error")
+                why = self.app.state_of("dashboardManager", "lastError")
+                self.app.notify(f"saveDashboard refused it{': ' + why if why else ''}", severity="error")
         self.app.invoke("dashboardManager", "saveDashboard", spec, done=saved)
 
     def action_duplicate(self):

@@ -14,7 +14,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, DataTable, Input, Label, RichLog, Sparkline, Static, Tree
 
 from .link import CONSUMER
-from .screens import Confirm, EditValue, Pick
+from .screens import Confirm, EditText, EditValue, FolderPick, Pick
 
 HISTORY = 120     # sparkline points per PID
 MAX_PINS = 4
@@ -687,7 +687,8 @@ class SettingsPane(Pane):
     OBJECTS = {"settingsManager"}
     SUBSCRIBE = [("themeCatalog", ["themeNames", "darkThemeNames", "themes", "activeThemeName"], None, 0)]
     BINDINGS = [Binding("slash", "filter", "Filter"), Binding("enter", "edit", "Edit", show=False),
-                Binding("T", "theme", "Theme")]
+                Binding("T", "theme", "Theme"), Binding("p", "preset", "Now Playing preset"),
+                Binding("f", "folder", "Music folder"), Binding("o", "export", "Export"), Binding("i", "import_", "Import")]
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="filter settings (/ to focus)", id="settings-filter")
@@ -748,6 +749,61 @@ class SettingsPane(Pane):
         self.table.border_title = (f"{len(self.shown_names)} of {len(self.props)} settings"
                                    + (f"   theme {theme} (T picks)" if theme else ""))
 
+    def action_preset(self):
+        presets = self.app.state_of("settingsManager", "nowPlayingPresets") or []
+        if not presets:
+            self.app.notify("This OCTAVE has no Now Playing presets", severity="warning")
+            return
+
+        def picked(label):
+            if label:
+                self.app.invoke("settingsManager", "applyNowPlayingPreset", label,
+                                done=lambda ok: self.app.status_note(f"preset {label}" if ok else f"preset {label} refused"))
+        self.app.push_screen(Pick("Now Playing preset", [(p.get("label"), f"{p.get('label')}  [dim]{len(p.get('settings') or {})} settings[/dim]")
+                                                         for p in presets]), picked)
+
+    def action_folder(self):
+        current = self.app.state_of("settingsManager", "mediaFolder") or ""
+
+        def picked(path):
+            if path:
+                self.app.invoke("settingsManager", "save_media_folder", path, note=f"music folder {path}")
+        self.app.push_screen(FolderPick(current), picked)
+
+    def exportable(self):
+        """Every setting with a value, for export (constants and the service's own keys left out)."""
+        values = self.app.state.get("settingsManager", {})
+        return {n: values[n] for n, p in sorted(self.props.items())
+                if n in values and not p.get("constant") and n not in ("serviceEnabled", "serviceWebRoot")}
+
+    def action_export(self):
+        self.app.push_screen(EditText("Settings (copy this; Import applies it back)", json.dumps(self.exportable(), indent=2),
+                                      "Import applies every key through its own save slot, with strict types.", read_only=True))
+
+    def action_import_(self):
+
+        def answered(text):
+            if not text or not text.strip():
+                return
+            try:
+                values = json.loads(text)
+            except ValueError as e:
+                self.app.notify(f"Not JSON: {e}", severity="error")
+                return
+            if not isinstance(values, dict):
+                self.app.notify("Settings are a JSON object of key: value", severity="error")
+                return
+
+            def done(result):
+                result = result or {}
+                applied, refused = result.get("applied") or [], result.get("refused") or {}
+                self.app.notify(f"{len(applied)} setting(s) applied" + (f", {len(refused)} refused" if refused else ""),
+                                severity="warning" if refused else "information")
+                if refused:
+                    self.app.push_screen(EditText("Refused settings", json.dumps(refused, indent=2), read_only=True))
+            self.app.invoke("settingsManager", "apply_settings", values, done=done)
+        self.app.push_screen(EditText("Import settings: paste a JSON object", "", "Only the keys you paste change."), answered)
+
     def action_theme(self):
         """Pick a theme from themeCatalog, each with swatches of its colours."""
         cat = self.app.state.get("themeCatalog", {})
@@ -805,6 +861,9 @@ class SettingsPane(Pane):
         current = self.app.state.get("settingsManager", {}).get(name)
         if prop["type"] == "bool":
             self.write(name, not current)
+            return
+        if name == "mediaFolder":
+            self.action_folder()
             return
         entry = self.registry.get(name, {})
         params = entry.get("params", {}) or {}
