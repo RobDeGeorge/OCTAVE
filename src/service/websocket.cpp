@@ -83,6 +83,17 @@ QString refusal(const HttpRequest &request)
     return {};
 }
 
+QString hostRefusal(const HttpRequest &request)
+{
+    const QString hostHeader = QString::fromLatin1(request.headers.value("host"));
+    const QUrl host(QStringLiteral("http://") + hostHeader);
+    if (hostHeader.isEmpty() || !host.isValid() || host.host().isEmpty())
+        return QStringLiteral("no usable Host header");
+    if (!hostIsLiteral(host.host()))
+        return QStringLiteral("host %1 is a name, not an address (DNS rebinding)").arg(host.host());
+    return {};
+}
+
 QByteArray acceptResponse(const HttpRequest &request)
 {
     const QByteArray accept =

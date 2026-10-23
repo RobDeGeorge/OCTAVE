@@ -182,6 +182,20 @@ public:
         m_httpTrusted = std::move(httpTrusted);
         m_openOps = std::move(openOps);
     }
+    // What one client may cost (M3-M5 of the 2026-10-23 review): before
+    // start(); the defaults are the shipped ones, tests shrink them
+    struct Limits {
+        int maxConnections = 64;            // all clients at once
+        int maxPerAddress = 8;              // per address that isn't loopback
+        int firstByteMs = 10000;            // a connection that says nothing is closed
+        int untrustedIdleMs = 60000;        // an untrusted connection idle this long is closed
+        qint64 maxLineBytes = 1 << 20;      // a JSON line longer than this closes the connection
+        qint64 maxUnsentBytes = 4 << 20;    // above this in the socket, events wait in the bounded queue
+    };
+    void setLimits(const Limits &limits) { m_limits = limits; }
+    const Limits &limits() const { return m_limits; }
+    bool trusted(const Connection &c) const { return !m_trusted || m_trusted(c); }
+
     // Close every connection that presented paired device `tokenId` (its
     // subscriptions and streams end with it): a revoke
     void closeConnectionsOf(const QString &tokenId);
@@ -198,6 +212,7 @@ private:
     QByteArray m_page;
     QString m_webRoot;
     TrustCheck m_trusted;
+    Limits m_limits;
     HttpTrustCheck m_httpTrusted;
     QStringList m_openOps;
     QMutex m_connectionsLock;

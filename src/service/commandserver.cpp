@@ -36,6 +36,7 @@ namespace OctaveService {
 namespace {
 // The connection a request on this (connection) thread came in on
 thread_local std::shared_ptr<Connection> t_connection;
+thread_local QElapsedTimer t_lastHeard;   // the connection's last bytes in
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,21 @@ public:
 protected:
     void incomingConnection(qintptr fd) override
     {
+        {
+            // Every client is a thread: past the cap, refuse at the door
+            QMutexLocker l(&m_lock);
+            int live = 0;
+            for (QThread *c : std::as_const(m_clients))
+                live += c->isFinished() ? 0 : 1;
+            if (live >= m_owner->limits().maxConnections) {
+                l.unlock();
+                QTcpSocket refused;
+                if (refused.setSocketDescriptor(fd))
+                    refused.abort();
+                qCWarning(lcCommand) << "connection refused: already" << live << "clients";
+                return;
+            }
+        }
         QThread *t = QThread::create([this, fd] { serve(fd); });
         t->setObjectName(QStringLiteral("cmd-client"));
         {
@@ -91,9 +107,36 @@ private:
         if (!sock.setSocketDescriptor(fd))
             return;
         qCInfo(lcCommand) << "command client connected:" << sock.peerAddress().toString() << sock.peerPort();
+        // At most maxPerAddress connections from one address on the network
+        const QString address = sock.peerAddress().toString();
+        const bool loopback = sock.peerAddress().isLoopback();
+        if (!loopback) {
+            QMutexLocker l(&m_lock);
+            if (m_perAddress.value(address) >= m_owner->limits().maxPerAddress) {
+                l.unlock();
+                qCWarning(lcCommand).noquote() << "connection refused:" << address << "has too many";
+                sock.abort();
+                return;
+            }
+            ++m_perAddress[address];
+        }
+        struct Release {
+            CommandTcpServer *self;
+            QString address;
+            bool counted;
+            ~Release()
+            {
+                if (!counted)
+                    return;
+                QMutexLocker l(&self->m_lock);
+                if (--self->m_perAddress[address] <= 0)
+                    self->m_perAddress.remove(address);
+            }
+        } release{this, address, !loopback};
         auto connection = std::make_shared<Connection>();
         connection->setPeer(sock.peerAddress().isLoopback(), sock.peerAddress().toString());
         t_connection = connection;
+        t_lastHeard.start();
         m_owner->trackConnection(connection);
 
         // The first non-blank byte says which protocol: only '{' is the
@@ -108,7 +151,14 @@ private:
                     return uchar(c);
             return -1;
         };
+        QElapsedTimer silent;
+        silent.start();
         while (firstByte() < 0 && !m_stopping && sock.state() == QAbstractSocket::ConnectedState) {
+            if (silent.elapsed() > m_owner->limits().firstByteMs) {   // said nothing: gone
+                connection->close();
+                t_connection.reset();
+                return;
+            }
             if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20))
                 buf += sock.readAll();
         }
@@ -132,8 +182,14 @@ private:
             return false;
         // Data that waitForBytesWritten() already pulled in counts too (else
         // a pipelined request would sit there until the next one came)
-        if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20))
+        if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20)) {
             buf += sock.readAll();
+            t_lastHeard.start();
+        }
+        // An untrusted client gets a minute of silence, then it is closed
+        if (const auto c = t_connection; c && t_lastHeard.isValid()
+            && t_lastHeard.elapsed() > m_owner->limits().untrustedIdleMs && !m_owner->trusted(*c))
+            return false;
         return sock.state() == QAbstractSocket::ConnectedState || sock.bytesAvailable() > 0;
     }
 
@@ -166,7 +222,17 @@ private:
             // thread writes to the socket, so the order holds. A stream
             // record goes out as 0xFF, u32 length, the record: a JSON line
             // never starts with 0xFF
-            for (const Connection::Item &item : connection.takeAll()) {
+            // A line still unfinished past the cap: no client needs that
+            if (buf.size() > m_owner->limits().maxLineBytes) {
+                sock.write(R"({"ok":false,"error":"request too long"})" "\n");
+                flush(sock);
+                return;
+            }
+            // A client that doesn't read: leave events in the bounded queue
+            // (it drops the oldest; streams drop to a keyframe)
+            const QList<Connection::Item> items = sock.bytesToWrite() < m_owner->limits().maxUnsentBytes
+                ? connection.takeAll() : QList<Connection::Item>();
+            for (const Connection::Item &item : items) {
                 if (item.binary) {
                     char head[5] = {char(0xFF)};
                     qToBigEndian<quint32>(quint32(item.bytes.size()), head + 1);
@@ -190,6 +256,14 @@ private:
             request = Ws::parseRequest(buf, &headLength);
         if (!request.valid) {
             sock.write(Ws::httpResponse(400, "Bad Request", "text/plain", "bad request\n"));
+            flush(sock);
+            return;
+        }
+        // A name in Host could be a rebinding site's: addresses only, on
+        // every request (the page, /art, /export), not just with an Origin
+        if (const QString why = Ws::hostRefusal(request); !why.isEmpty()) {
+            qCWarning(lcCommand).noquote() << "refused" << sock.peerAddress().toString() << ":" << why;
+            sock.write(Ws::httpResponse(403, "Forbidden", "text/plain", why.toUtf8() + '\n'));
             flush(sock);
             return;
         }
@@ -297,7 +371,9 @@ private:
             }
             // As for lines: replies first, then the events queued meanwhile;
             // a stream record is one binary frame
-            for (const Connection::Item &item : connection.takeAll()) {
+            const QList<Connection::Item> items = sock.bytesToWrite() < m_owner->limits().maxUnsentBytes
+                ? connection.takeAll() : QList<Connection::Item>();
+            for (const Connection::Item &item : items) {
                 if (item.binary)
                     sock.write(Ws::encodeFrame(Ws::Binary, item.bytes));
                 else
@@ -311,6 +387,7 @@ private:
     std::atomic<bool> m_stopping{false};
     QMutex m_lock;
     QList<QThread *> m_clients;
+    QHash<QString, int> m_perAddress;   // live connections per non-loopback address
 };
 
 // ---------------------------------------------------------------------------

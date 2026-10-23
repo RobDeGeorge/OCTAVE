@@ -578,6 +578,47 @@ private slots:
         QCOMPARE(m_fixture.mode(), Fixture::Mode::Fast);
     }
 
+    void aClientThatStopsReadingDropsInsteadOfGrowing()
+    {
+        // M5: events used to move from the bounded queue into the socket's
+        // unbounded write buffer. Past maxUnsentBytes they now stay in the
+        // queue, which drops (a stream back to its next keyframe).
+        CommandServer::Limits limits = m_server->limits();
+        limits.maxUnsentBytes = 64 * 1024;
+        m_server->setLimits(limits);
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QTcpSocket raw;
+        raw.setReadBufferSize(1);   // read nothing more than we must
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 1})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT(hub.wanted("fixture.video"), 3000);
+        hub.publishH264("fixture.video", QByteArray::fromHex("000000016742c01e0000000168ce3c80"), 0, false, true);
+        const QByteArray big(200 * 1024, '\x01');
+        for (int i = 0; i < 300; ++i) {   // 60 MB offered, never read
+            hub.publishH264("fixture.video", QByteArray("\x00\x00\x00\x01\x65", 5) + big, i * 33333, i % 30 == 0, false);
+            QTest::qWait(2);
+        }
+        // Now read it all: the drops were reported, and far less than 60 MB came
+        raw.setReadBufferSize(0);
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 5000) {
+            if (raw.waitForReadyRead(200))
+                in += raw.readAll();
+            else if (in.contains("streamDropped"))
+                break;
+        }
+        QVERIFY2(in.contains("streamDropped"), qPrintable(QString::number(in.size())));
+        QVERIFY2(in.size() < 30 * 1024 * 1024, qPrintable(QString::number(in.size())));
+        raw.abort();
+        QTRY_VERIFY_WITH_TIMEOUT((hub.publishH264("fixture.video", QByteArray::fromHex("0000000165"), 0, true, false),
+                                  !hub.wanted("fixture.video")), 3000);
+    }
+
     void keyValueObjects()
     {
         // paramStore is a QQmlPropertyMap: keys, not declared properties
