@@ -258,6 +258,10 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
         // Protocol v2: pairing (servicepairing.h); a revoked device's
         // connections close
         service.bridge->setPairing(&core.servicePairing);
+        // The installed web frontend's page, in a browser on this device,
+        // holds its manifest's scopes, not loopback's full trust
+        if (webFrontend)
+            service.bridge->setLoopbackBrowserScopes(boot.manifest.scopes);
         QObject::connect(&core.servicePairing, &ServicePairing::revoked, service.server.get(),
                          [server = service.server.get()](const QString &id) { server->closeConnectionsOf(id); });
         // A client that goes without saying so leaves no demand behind

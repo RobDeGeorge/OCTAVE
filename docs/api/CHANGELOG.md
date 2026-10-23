@@ -27,6 +27,7 @@ Added (some landed while 1 was current, but none was released under 1):
 - Object `frontendManager`: installed frontends (`octave-frontend.json`), install from a folder or zip, remove, the active screen.
 - Object `frontendManager`: installed frontends (`octave-frontend.json`), install from a folder or zip, remove, the active screen. An active exec frontend runs with a session token of its manifest's scopes, and loopback trust is off for that run; flag `--qml`.
 - Flag `--pair-code`: a pairing code from the running instance over a per-user local channel, for pairing while no Settings page is on screen.
+- While an installed web frontend is served, a browser on the device holds the frontend's manifest scopes rather than loopback's full trust.
 
 ## Protocol 1
 

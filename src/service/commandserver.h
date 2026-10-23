@@ -106,6 +106,10 @@ public:
     void setPeer(bool loopback, const QString &address);
     bool peerLoopback() const;
     QString peerAddress() const;
+    // A browser: its request carried an Origin or Sec-Fetch-Site header
+    // (the served page's WebSocket, an <img> of it), so a page, not a program
+    void setBrowser(bool browser);
+    bool browser() const;
     // The paired device this connection presented (hello {token}); "" none
     void setTokenId(const QString &id);
     QString tokenId() const;
@@ -128,6 +132,7 @@ private:
     std::atomic<bool> m_wakePending{false};
     void wake();
     bool m_peerLoopback = false;
+    bool m_browser = false;
     QString m_peerAddress, m_tokenId;
     std::atomic<int> m_lastId{0};
     const quint64 m_serial;
