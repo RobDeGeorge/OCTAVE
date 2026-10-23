@@ -100,6 +100,24 @@ signals:
     void loaded(const QVariant &spec, const QJsonObject &meta);
 };
 
+// Consumer-keyed demand, as obdManager / berryIMU have it
+class Demand : public QObject
+{
+    Q_OBJECT
+public:
+    QHash<QString, QStringList> ids;
+    QHash<QString, bool> wanted;
+    int releases = 0;
+    Q_INVOKABLE void setDemand(const QString &consumer, const QStringList &list)
+    {
+        if (list.isEmpty()) { ids.remove(consumer); ++releases; } else { ids.insert(consumer, list); }
+    }
+    Q_INVOKABLE void setWanted(const QString &consumer, bool on)
+    {
+        if (!on) { wanted.remove(consumer); ++releases; } else { wanted.insert(consumer, true); }
+    }
+};
+
 class TstServiceBridge : public QObject
 {
     Q_OBJECT
@@ -276,6 +294,55 @@ private slots:
         const QJsonArray args = m_events.first().value("args").toArray();
         QCOMPARE(args.at(0).toVariant().toMap(), spec);
         QCOMPARE(args.at(1).toObject().value("id").toString(), QStringLiteral("d1"));
+    }
+
+    void aClosedConnectionReleasesItsDemand()
+    {
+        Demand demand;
+        m_registry->add("demand", &demand);
+        m_bridge->releaseOnClose("demand", "setDemand", QStringList());
+        m_bridge->releaseOnClose("demand", "setWanted", false);
+
+        auto other = std::make_unique<QTcpSocket>();
+        other->connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(other->waitForConnected(3000));
+        auto callOn = [this](QTcpSocket &sock, const QByteArray &line) {
+            sock.write(line + '\n');
+            QElapsedTimer t;
+            t.start();
+            QByteArray in;
+            while (!in.contains('\n') && t.elapsed() < 5000) {
+                QCoreApplication::processEvents();
+                if (sock.waitForReadyRead(10))
+                    in += sock.readAll();
+            }
+            return in;
+        };
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["dash", ["RPM", "SPEED"]]})").contains("\"ok\":true"));
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["gone", ["MAF"]]})").contains("\"ok\":true"));
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setWanted", "args": ["g", true]})").contains("\"ok\":true"));
+        // Released by the client itself: nothing left to do on close
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["gone", []]})").contains("\"ok\":true"));
+        // A consumer this connection claimed and another one took over
+        QVERIFY(callOn(*other, R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["shared", ["A"]]})").contains("\"ok\":true"));
+        QVERIFY(result(R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["shared", ["B"]]})").isNull());
+        // And one of m_socket's own
+        QVERIFY(result(R"({"op": "call", "object": "demand", "method": "setDemand", "args": ["mine", ["RPM"]]})").isNull());
+        QCOMPARE(demand.ids.value("dash"), (QStringList{"RPM", "SPEED"}));
+        QVERIFY(demand.wanted.contains("g"));
+        QCOMPARE(demand.releases, 1);
+
+        other->abort();   // killed, no goodbye
+        other.reset();
+        QTRY_VERIFY_WITH_TIMEOUT(!demand.ids.contains("dash"), 3000);
+        QTRY_VERIFY_WITH_TIMEOUT(!demand.wanted.contains("g"), 3000);
+        QCOMPARE(demand.releases, 3);   // dash and g only
+        QCOMPARE(demand.ids.value("shared"), QStringList{"B"});   // the other connection's now
+        QCOMPARE(demand.ids.value("mine"), QStringList{"RPM"});
+        // The surviving connection's claims go when it does
+        m_socket->abort();
+        QTRY_VERIFY_WITH_TIMEOUT(demand.ids.isEmpty(), 3000);
+        QCOMPARE(demand.releases, 5);   // shared and mine
     }
 
     void keyValueObjects()

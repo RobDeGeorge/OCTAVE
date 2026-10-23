@@ -24,6 +24,13 @@
 //       params event) per interval, the latest value winning; `t` is when
 //       the event is sent (a throttled one: the flush), in monotonic ms
 //   unsubscribe {sub}. A connection's subscriptions end with it.
+// Claims (releaseOnClose): a `call` to a consumer-keyed method such as
+// obdManager.setParameterDemand(consumer, ids) is remembered against its
+// connection; when that connection closes, every consumer it still holds
+// is released by calling the method again with the release value ([] /
+// false), so a killed client never leaves the car polled. A consumer
+// released by the client itself, or claimed since by another connection,
+// is left alone.
 // List models (a property holding a QAbstractItemModel, e.g. the download
 // queue): get gives {model: true, count, roles}; rows {object, property,
 // from?, count?} the rows as {role: value} maps; subscribing to the
@@ -42,6 +49,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVariant>
 
 #include <memory>
 
@@ -50,6 +58,7 @@ class QObject;
 namespace OctaveService {
 
 class CommandServer;
+class Connection;
 class ServiceRegistry;
 
 struct AppInfo {
@@ -66,6 +75,13 @@ public:
     // Register the ops on `server` (before or after it starts)
     void install(CommandServer &server);
 
+    // `object`.`method`(consumer, value) claims `consumer` for the calling
+    // connection unless `value` is the release value (an empty list for a
+    // list, false for a bool, else equal to `release`); the connection's
+    // close calls `method`(consumer, release) for each claim it still
+    // holds. Before the server starts.
+    void releaseOnClose(const QString &object, const QString &method, const QVariant &release);
+
 private:
     QObject *object(const QString &name) const;   // throws CommandError if unknown
     QVariant subscribe(const QVariantMap &args);
@@ -76,6 +92,23 @@ private:
     // tell (it holds a weak reference)
     using Subscriptions = QHash<const void *, QHash<int, QPointer<QObject>>>;
     std::shared_ptr<Subscriptions> m_subscriptions = std::make_shared<Subscriptions>();
+
+    // GUI thread only: who holds each claimed consumer
+    struct Claim {
+        QPointer<QObject> object;
+        QByteArray method;
+        QString consumer;
+        QVariant release;
+        const void *connection = nullptr;
+    };
+    struct Claims {
+        QHash<QString, Claim> byKey;              // "object.method\nconsumer"
+        QHash<const void *, bool> hooked;         // connections with a close hook
+    };
+    void noteClaim(const QString &objectName, QObject *o, const QByteArray &method, const QVariantList &args,
+                   const std::shared_ptr<Connection> &connection);
+    std::shared_ptr<Claims> m_claims = std::make_shared<Claims>();
+    QHash<QString, QVariant> m_releases;          // "object.method" -> release value
 
     ServiceRegistry *m_registry;
     AppInfo m_app;
