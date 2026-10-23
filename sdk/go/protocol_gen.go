@@ -19,11 +19,13 @@ type Annotated struct {
 
 // ErrorReply is $defs/errorReply of protocol.json.
 type ErrorReply struct {
-	// One of: unauthorised, forbidden
+	// One of: unauthorised, forbidden, rateLimited
 	Code  string `json:"code,omitempty"`
 	Error string `json:"error"`
 	Id    any    `json:"id,omitempty"`
 	Ok    bool   `json:"ok"`
+	// With rateLimited: wait this long before sending again.
+	RetryAfterMs *int `json:"retryAfterMs,omitempty"`
 }
 
 // MethodDescription is $defs/methodDescription of protocol.json.
@@ -385,6 +387,12 @@ const (
 	// scope it needs and the scopes the device has. HTTP routes answer 401 for
 	// the same reason (`/export/...` needs `files`).
 	CodeForbidden = "forbidden"
+	// The connection sent more ops than its limit (docs/api/README.md, Limits
+	// per connection: 200 a second, 400 at once by default; dev actions are
+	// not counted). The op did not run. `retryAfterMs` says when the next one
+	// would pass; a client that keeps sending regardless (more than 4000
+	// refusals in a second) has its connection closed.
+	CodeRateLimited = "rateLimited"
 	// The connection is not trusted (protocol 2, pairing): it is not on this
 	// device with serviceLoopbackOpen on, and it has presented no valid token.
 	// Every op but `hello` and `pair` answers this until the client pairs or

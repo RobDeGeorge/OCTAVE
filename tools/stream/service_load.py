@@ -497,7 +497,7 @@ def run_scenario(name, ids, seconds, sim):
     for g in groups.values():
         for st in g:
             for k, v in list(st.items()):
-                if isinstance(v, int) and k != "openAtEnd":
+                if isinstance(v, int) and k not in ("openAtEnd", "closed"):
                     st[k] = 0
                 elif isinstance(v, dict):
                     st[k] = {}

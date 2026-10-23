@@ -507,6 +507,22 @@ volumeController.applyVolume(settingsManager.currentVolume());   <span class="cm
           <li><strong>Request rate is what costs.</strong> One client flooding <code>call</code> keeps a core busy (every call is a blocking hop to the GUI thread, which is why the others don't notice: they queue between its calls). Connection churn costs most: each connection gets a thread, and thousands a second take 1.6 to 1.7 cores. On a quad-core Pi that is a third of the machine (not measured yet).</li>
           <li><strong>A client that never reads costs nothing here, and stays connected.</strong> Its events fill the kernel's socket buffers and then 4&nbsp;MB in the socket before they queue (1000 events, the oldest dropped), which at these rates takes minutes, so in a 30&nbsp;s row it is never cut off.</li>
         </ul>
+        <p><strong>Limits</strong> (<code>CommandServer::Limits</code>, <span class="file-path">src/service/commandserver.{h,cpp}</span>; the client's view is in <span class="file-path">docs/api/README.md</span>, "Limits per connection"). From what the table shows, the limits go on request and connection rates, not on subscribers:</p>
+        <ul>
+          <li><strong>Ops a second</strong>, a token bucket per connection (<code>Connection::takeOp</code>, 200 a second, 400 at once), checked in <code>handleLine</code> before trust and before any work; past it the op is answered <code>{"ok": false, "code": "rateLimited", "retryAfterMs": N}</code>. Dev <code>action</code>s are not counted. A connection refused more than 4000 times in one second ignores the answer and is closed.</li>
+          <li><strong>New connections a second</strong> per address (<code>admitConnect</code>, before a thread exists: the peer from <code>getpeername</code>), 20 a second and 100 at once from the network, 100 and 400 from this device, which counts as one address.</li>
+          <li><strong>A reader that stays behind</strong>: once 4&nbsp;MB sit unsent in the socket, events wait in the bounded queue; staying there for 15&nbsp;s closes the connection (<code>keepingUp</code>). At the event rates above that takes many minutes of not reading (a 240&nbsp;s non-reader was still connected: its 6&nbsp;KB a second had not filled the kernel's buffers and the 4&nbsp;MB); it is the phone video that gets there in seconds.</li>
+        </ul>
+        <p>The same rows with the limits, headless:</p>
+        <table>
+          <thead><tr><th>Scenario</th><th>CPU % before</th><th>CPU % with limits</th><th>What the load got</th></tr></thead>
+          <tbody>
+            <tr><td><code>callflood</code></td><td>105.7</td><td>1.4</td><td>closed within its first second: it ignores <code>retryAfterMs</code> (before that rule, answering only its 200 a second and refusing the rest still took 59&nbsp;%)</td></tr>
+            <tr><td><code>churn</code></td><td>171.5</td><td>32.7</td><td>100 cycles/s, about 50,000 connections/s refused at the door</td></tr>
+            <tr><td><code>all</code></td><td>208.6</td><td>34.8</td><td>the 20 subscribers, the WebSocket clients and the video unchanged</td></tr>
+          </tbody>
+        </table>
+        <p>Poll rate, longest poll gap and GUI round trip did not move in these rows either. Tests: <span class="file-path">tests/cpp/tst_servicebridge.cpp</span> (<code>aFloodIsRateLimitedAndNoOneElseIs</code>, <code>aClientThatIgnoresRateLimitedIsClosed</code>, <code>aConnectLoopIsRefusedAtTheDoor</code>, <code>aReaderThatStaysBehindIsClosed</code>).</p>
         <p>Not covered: the Pi (the slowest head unit, still to measure); the test video is 300&nbsp;kbit/s where a phone sends 8-16&nbsp;Mbit/s; RSS is a Debug build's; the harness runs on the same machine (its own CPU is printed under the table, at most about half a core, in the churn rows).</p>
         <h2 id="platform"><code>src/util/</code> and <code>src/platform/</code></h2>
         <p>Both directories are listed explicitly in <code>qt_add_executable(octave …)</code> in <span class="file-path">CMakeLists.txt</span>.</p>

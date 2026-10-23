@@ -64,6 +64,10 @@
       "forbidden": {
         "description": "The connection is trusted but its paired device lacks the permission scope this `set` / `call` / phone stream / dev action needs (docs/api/README.md, Permissions). The message names the member, the scope it needs and the scopes the device has. HTTP routes answer 401 for the same reason (`/export/...` needs `files`).",
         "since": 2
+      },
+      "rateLimited": {
+        "description": "The connection sent more ops than its limit (docs/api/README.md, Limits per connection: 200 a second, 400 at once by default; dev actions are not counted). The op did not run. `retryAfterMs` says when the next one would pass; a client that keeps sending regardless (more than 4000 refusals in a second) has its connection closed.",
+        "since": 2
       }
     },
     "messages": [
@@ -516,7 +520,8 @@
         "id": {},
         "ok": { "const": false },
         "error": { "type": "string" },
-        "code": { "type": "string", "enum": ["unauthorised", "forbidden"] }
+        "code": { "type": "string", "enum": ["unauthorised", "forbidden", "rateLimited"] },
+        "retryAfterMs": { "type": "integer", "minimum": 1, "description": "With rateLimited: wait this long before sending again." }
       },
       "required": ["ok", "error"]
     },

@@ -142,6 +142,22 @@ A car to build against without a car, in every build (release and app store incl
 
 Experimental: not covered by the protocol version, so names and arguments may change in any release. Never call it from a frontend meant for a real car; check `sim.active` if you show simulator controls. The dev tooling's `sim_*` actions are aliases for these methods.
 
+## Limits per connection
+
+What one client may cost (`CommandServer::Limits` in `src/service/commandserver.h`), so a stuck or greedy client never slows the car, the screen or the other clients. Measured with `tools/stream/service_load.py`: [wiki/utilities.html#many-clients](../../wiki/utilities.html#many-clients).
+
+| Limit | Default | What happens |
+|---|---|---|
+| Ops a connection sends | 400 at once, 200 a second sustained | Each op past it is answered at once, without running: `{"ok": false, "id": ..., "error": "too many requests: ...", "code": "rateLimited", "retryAfterMs": N}`. Send it again after `N` ms. Dev `action`s are not counted. A client refused more than 4000 times in one second is not waiting as told: its connection is closed. |
+| Events a client has not read | 4 MB unsent | Events wait in a queue of 1000 instead (the oldest go; `{"event": "dropped", "count": N}` says how many), stream records in 2 MB or 90 (`streamDropped`, then the next keyframe). |
+| Staying at that 4 MB | 15 s | The connection is closed, and its subscriptions, demand and streams go with it. Reconnect and subscribe again. |
+| Connections | 64 in all, 8 from one network address | Further connections are closed at once. |
+| New connections | 20 a second from one network address (100 at once: each of a page's files is one); 100 a second from this device (400 at once) | Closed as soon as they are accepted, before any request is read. All of this device counts as one address, so while a runaway local loop is refused, other new local connections are too; open ones are not affected. Reconnect with back-off (1 s, doubling) and this never trips. |
+| Silence | 10 s before the first byte; 60 s for an untrusted connection | Closed. |
+| One request line | 1 MB | `{"ok": false, "error": "request too long"}`, then closed. |
+
+Error codes so far: `unauthorised` (pair first, "Pairing" above), `forbidden` ("Permissions" above), `rateLimited`. A client should act on `code` and show `error`.
+
 ## Values
 
 `parameters.json` lists each value in its native unit (°C, MPH for speed, km for distances, kPa, ...). `paramStore` values and `subscribe` `params` events are native too. `parameterCatalog.displayParameters` and `parameterCatalog.toDisplay(id, value)` convert to the units the user picked (`settingsManager.gaugeTempUnit`, `gaugeSpeedUnit`).
