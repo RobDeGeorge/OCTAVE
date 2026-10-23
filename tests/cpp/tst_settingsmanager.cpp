@@ -6,6 +6,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -144,6 +145,35 @@ private slots:
                  QJsonDocument::fromJson(json.toUtf8()).object());
         sm.delete_custom_theme(QStringLiteral("Dusk"));
         QVERIFY(sm.customThemeData().isEmpty());
+    }
+
+    void homeCardsAreCappedUniqueAndMove()
+    {
+        // The OBD settings page asks; the manager enforces (it was the page's
+        // job: a cap of 8 in three places, a swap for a move)
+        SettingsManager sm;
+        sm.save_home_obd_parameters({"SPEED", "RPM", "SPEED", "", "COOLANT_TEMP"});
+        QCOMPARE(sm.homeOBDParameters(), (QVariantList{"SPEED", "RPM", "COOLANT_TEMP"}));
+        QVERIFY(!sm.add_home_obd_parameter("RPM"));                  // already there
+        QVERIFY(sm.add_home_obd_parameter("OIL_TEMP", 1));
+        QCOMPARE(sm.homeOBDParameters(), (QVariantList{"SPEED", "OIL_TEMP", "RPM", "COOLANT_TEMP"}));
+        for (const char *id : {"A", "B", "C", "D"})
+            QVERIFY(sm.add_home_obd_parameter(id));
+        QCOMPARE(sm.homeOBDParameters().size(), SettingsManager::kMaxHomeObdParameters);
+        QVERIFY(!sm.add_home_obd_parameter("E"));                    // full
+        QCOMPARE(sm.property("maxHomeObdParameters").toInt(), 8);
+
+        // Move, not swap: SPEED to index 2 shifts OIL_TEMP and RPM left
+        QVERIFY(sm.move_home_obd_parameter(0, 2));
+        QCOMPARE(sm.homeOBDParameters().mid(0, 4), (QVariantList{"OIL_TEMP", "RPM", "SPEED", "COOLANT_TEMP"}));
+        QVERIFY(sm.move_home_obd_parameter(0, 99));                  // past the end: last
+        QCOMPARE(sm.homeOBDParameters().last().toString(), QStringLiteral("OIL_TEMP"));
+        QVERIFY(!sm.move_home_obd_parameter(3, 3));
+
+        QVERIFY(sm.remove_home_obd_parameter("A"));
+        QVERIFY(!sm.remove_home_obd_parameter("A"));
+        QCOMPARE(sm.homeOBDParameters().size(), 7);
+        QCOMPARE(sm.m_settings.value("homeOBDParameters").toArray().size(), 7);
     }
 
     void everySettingSurvivesARestart()

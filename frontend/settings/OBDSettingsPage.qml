@@ -976,11 +976,8 @@ Item {
             }
 
             // Current home parameters list (reactive)
-            property var homeParams: settingsManager ? settingsManager.get_home_obd_parameters() : []
-
-            function refreshHomeParams() {
-                homeParams = settingsManager ? settingsManager.get_home_obd_parameters() : [];
-            }
+            readonly property var homeParams: settingsManager ? settingsManager.homeOBDParameters : []
+            readonly property int maxHome: settingsManager ? settingsManager.maxHomeObdParameters : 8
 
             function isOnHomeGrid(paramId) {
                 return homeParams.indexOf(paramId) !== -1;
@@ -1157,15 +1154,8 @@ Item {
                             if (pageRoot.dragSource === "right" && pageRoot.draggedParam !== "") {
                                 // Remove from home grid — defer save so delegate isn't
                                 // destroyed while the MouseArea onReleased is still running
-                                var hp = settingsManager.get_home_obd_parameters();
-                                var idx = hp.indexOf(pageRoot.draggedParam);
-                                if (idx !== -1) {
-                                    hp.splice(idx, 1);
-                                    var hpCopy = hp.slice();
-                                    Qt.callLater(function() {
-                                        settingsManager.save_home_obd_parameters(hpCopy);
-                                    });
-                                }
+                                var id = pageRoot.draggedParam;
+                                Qt.callLater(function() { settingsManager.remove_home_obd_parameter(id) });
                             }
                         }
 
@@ -1257,7 +1247,6 @@ Item {
                                         Connections {
                                             target: settingsManager
                                             function onHomeOBDParametersChanged() {
-                                                parametersCard.refreshHomeParams();
                                                 leftCard.onHome = parametersCard.isOnHomeGrid(leftCard.paramId);
                                             }
                                         }
@@ -1375,7 +1364,7 @@ Item {
                                                         } else {
                                                             // Horizontal/diagonal → drag-and-drop
                                                             if (!leftCard.isEnabled) return;
-                                                            if (parametersCard.homeParams.length >= 8 && !leftCard.onHome) return;
+                                                            if (parametersCard.homeParams.length >= parametersCard.maxHome && !leftCard.onHome) return;
 
                                                             dragging = true;
                                                             pageRoot.draggedParam = leftCard.paramId;
@@ -1467,8 +1456,8 @@ Item {
                             Item { Layout.fillWidth: true }
 
                             Text {
-                                text: rightPanel.homeCount + " / 8"
-                                color: rightPanel.homeCount >= 8 ? App.Style.statusWarning : App.Style.secondaryTextColor
+                                text: rightPanel.homeCount + " / " + parametersCard.maxHome
+                                color: rightPanel.homeCount >= parametersCard.maxHome ? App.Style.statusWarning : App.Style.secondaryTextColor
                                 font.pixelSize: App.Spacing.overallText * 0.8
                                 font.family: App.Style.fontFamily
                             }
@@ -1505,31 +1494,16 @@ Item {
                                     // preventing cleanup code from running (floating proxy bug).
                                     if (pageRoot.dragSource === "left" && pageRoot.draggedParam !== "") {
                                         // Add to home grid at drop position
-                                        var hp = settingsManager.get_home_obd_parameters();
-                                        if (hp.indexOf(pageRoot.draggedParam) === -1 && hp.length < 8) {
-                                            var targetIdx = calculateDropIndex(drop.x, drop.y);
-                                            hp.splice(targetIdx, 0, pageRoot.draggedParam);
-                                            var hpCopy = hp.slice();
-                                            Qt.callLater(function() {
-                                                settingsManager.save_home_obd_parameters(hpCopy);
-                                            });
-                                        }
+                                        // The manager refuses a duplicate or a full grid
+                                        var addId = pageRoot.draggedParam;
+                                        var addAt = calculateDropIndex(drop.x, drop.y);
+                                        Qt.callLater(function() { settingsManager.add_home_obd_parameter(addId, addAt) });
                                     } else if (pageRoot.dragSource === "right" && pageRoot.draggedParam !== "") {
                                         // Swap positions within grid
-                                        var hp2 = settingsManager.get_home_obd_parameters();
+                                        // Move within the grid: the cards in between shift
                                         var fromIdx = pageRoot.dragSourceIndex;
-                                        if (fromIdx >= 0 && fromIdx < hp2.length) {
-                                            var targetIdx = calculateDropIndex(drop.x, drop.y);
-                                            if (targetIdx !== fromIdx && targetIdx >= 0 && targetIdx < hp2.length) {
-                                                var temp = hp2[fromIdx];
-                                                hp2[fromIdx] = hp2[targetIdx];
-                                                hp2[targetIdx] = temp;
-                                                var hp2Copy = hp2.slice();
-                                                Qt.callLater(function() {
-                                                    settingsManager.save_home_obd_parameters(hp2Copy);
-                                                });
-                                            }
-                                        }
+                                        var toIdx = calculateDropIndex(drop.x, drop.y);
+                                        Qt.callLater(function() { settingsManager.move_home_obd_parameter(fromIdx, toIdx) });
                                     }
                                 }
 
@@ -1782,7 +1756,7 @@ Item {
 
                                 visible: rightDropArea.containsDrag &&
                                          pageRoot.dragSource === "left" &&
-                                         _count < 8 &&
+                                         _count < parametersCard.maxHome &&
                                          (_count === 0 || _nextRow < _rows) &&
                                          pageRoot.dropPreviewIndex >= _count
 
@@ -1865,9 +1839,6 @@ Item {
                 target: settingsManager
                 function onSupportedOBDParametersChanged() {
                     parametersCard.supportedParamsVersion++;
-                }
-                function onHomeOBDParametersChanged() {
-                    parametersCard.refreshHomeParams();
                 }
             }
         }

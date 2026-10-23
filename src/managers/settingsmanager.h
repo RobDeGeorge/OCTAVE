@@ -98,6 +98,8 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool blackBoxSweepAll READ blackBoxSweepAll NOTIFY blackBoxSweepAllChanged)
     Q_PROPERTY(int blackBoxMaxMB READ blackBoxMaxMB NOTIFY blackBoxMaxMBChanged)
     Q_PROPERTY(QVariantList homeOBDParameters READ homeOBDParameters NOTIFY homeOBDParametersChanged)
+    // The home screen holds at most this many OBD cards
+    Q_PROPERTY(int maxHomeObdParameters READ maxHomeObdParameters CONSTANT)
     Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)   // names
     // Every saved custom theme, name -> theme object (as on disk)
     Q_PROPERTY(QVariantMap customThemeData READ customThemeData NOTIFY customThemesChanged)
@@ -229,6 +231,8 @@ public:
     bool blackBoxSweepAll() const;
     int blackBoxMaxMB() const;
     QVariantList homeOBDParameters() const;
+    static constexpr int kMaxHomeObdParameters = 8;
+    int maxHomeObdParameters() const { return kMaxHomeObdParameters; }
     QVariantList customThemes() const;
     QVariantMap customThemeData() const;
     QVariantList directoryHistory() const;
@@ -476,7 +480,15 @@ public slots:
     void save_black_box_max_mb(int megabytes);
     void save_obd_parameter_enabled(const QString &parameter, bool enabled);
     void save_supported_obd_parameters(const QVariantList &parameters);
+    // The whole list (deduplicated, empty ids dropped, capped at
+    // kMaxHomeObdParameters); the editor uses the three below
     void save_home_obd_parameters(const QVariantList &parameters);
+    // Add at `index` (-1 = the end); false if already there or full
+    bool add_home_obd_parameter(const QString &id, int index = -1);
+    bool remove_home_obd_parameter(const QString &id);
+    // Move the card at `from` to `to` (past the end = last); the cards in
+    // between shift by one
+    bool move_home_obd_parameter(int from, int to);
 
     // Directory history
     void save_to_directory_history(const QString &folderPath);

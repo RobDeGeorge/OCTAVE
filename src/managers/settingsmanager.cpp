@@ -1578,14 +1578,51 @@ void SettingsManager::save_supported_obd_parameters(const QVariantList &paramete
 void SettingsManager::save_home_obd_parameters(const QVariantList &parameters)
 {
     qCDebug(lcSettings) << "Saving home OBD parameters";
-    m_homeObdParameters = parameters;
+    QVariantList clean;
+    for (const QVariant &v : parameters) {
+        const QString id = v.toString();
+        if (!id.isEmpty() && !clean.contains(id) && clean.size() < kMaxHomeObdParameters)
+            clean.append(id);
+    }
+    m_homeObdParameters = clean;
     QJsonObject settings = loadSettings();
     QJsonArray arr;
-    for (const auto &v : parameters)
+    for (const auto &v : clean)
         arr.append(v.toString());
     settings[QStringLiteral("homeOBDParameters")] = arr;
     saveSettings(settings);
     emit homeOBDParametersChanged();
+}
+
+bool SettingsManager::add_home_obd_parameter(const QString &id, int index)
+{
+    if (id.isEmpty() || m_homeObdParameters.contains(id) || m_homeObdParameters.size() >= kMaxHomeObdParameters)
+        return false;
+    QVariantList list = m_homeObdParameters;
+    list.insert(index < 0 || index > list.size() ? list.size() : index, id);
+    save_home_obd_parameters(list);
+    return true;
+}
+
+bool SettingsManager::remove_home_obd_parameter(const QString &id)
+{
+    QVariantList list = m_homeObdParameters;
+    if (!list.removeOne(id))
+        return false;
+    save_home_obd_parameters(list);
+    return true;
+}
+
+bool SettingsManager::move_home_obd_parameter(int from, int to)
+{
+    const int n = int(m_homeObdParameters.size());
+    to = qMin(to, n - 1);   // dropped past the last card: it goes last
+    if (from < 0 || from >= n || to < 0 || from == to)
+        return false;
+    QVariantList list = m_homeObdParameters;
+    list.move(from, to);
+    save_home_obd_parameters(list);
+    return true;
 }
 
 // --- Directory history ---
