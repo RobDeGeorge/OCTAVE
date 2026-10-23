@@ -60,6 +60,5 @@ The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backo
 ## Known gaps
 
 - No phone-mirror video and no waveform: media streams are not on the service yet (`TODO/open-backend.md`, step 6).
-- The dashboard editor's drag and resize were checked by hand, not by the scripted browser run that covers the rest.
 - Download search was exercised only as far as the backend's own error path (the test machine had no yt-dlp).
 - The volume slider sends `applyVolume` while dragging; on a slow link the knob can lag the finger.

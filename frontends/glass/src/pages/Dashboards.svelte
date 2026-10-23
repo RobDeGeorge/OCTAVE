@@ -109,7 +109,8 @@
       const n = clamp({ ...cl, col: c - drag.dc, row: r - drag.dr })
       if ((n.col !== cl.col || n.row !== cl.row) && free(n, drag.i)) { spec.cells[drag.i] = n; dirty = true }
     } else {
-      const n = clamp({ ...cl, colSpan: Math.max(1, c - cl.col + 1), rowSpan: Math.max(1, r - cl.row + 1) })
+      // grow up to the grid's edge, never past it (clamp would shift the cell instead)
+      const n = clamp({ ...cl, colSpan: Math.max(1, Math.min(c - cl.col + 1, cols - cl.col)), rowSpan: Math.max(1, Math.min(r - cl.row + 1, rows - cl.row)) })
       if ((n.colSpan !== cl.colSpan || n.rowSpan !== cl.rowSpan) && free(n, drag.i)) { spec.cells[drag.i] = n; dirty = true }
     }
   }
@@ -133,7 +134,7 @@
     if (!spec) return
     if (!spec.id) spec.id = await octave.call<string>('dashboardManager', 'uniqueIdForLabel', spec.label || 'dashboard').catch(() => '')
     const r = await act(octave.call<string>('dashboardManager', 'saveDashboard', $state.snapshot(spec)))
-    if (r) { toast('Saved'); dirty = false; if (!spec.id || spec.id !== r) { spec.id = r; go('dashboards', `edit/${r}`) } }
+    if (r) { toast('Saved'); dirty = false; spec.id = r; if (id !== r) go('dashboards', `edit/${r}`) }
     else toast($shareError || 'Could not save', 'bad')
   }
   const pidCandidates = $derived(meta ? $catalogOrder.filter((pid) => acceptsKind(meta, $catalog.get(pid)?.kind ?? '')).filter((pid) => !pidQ || ($catalog.get(pid)?.title ?? pid).toLowerCase().includes(pidQ.toLowerCase())) : [])
@@ -157,10 +158,10 @@
             <span class="small muted">{e.builtIn ? 'Built in' : 'Yours'} · {e.id}</span>
           </button>
           <div class="acts">
-            <button class="btn icon" aria-label="Edit {e.label}" onclick={() => go('dashboards', `edit/${e.id}`)}><Icon name="edit" /></button>
+            {#if !e.builtIn}<button class="btn icon" aria-label="Edit {e.label}" onclick={() => go('dashboards', `edit/${e.id}`)}><Icon name="edit" /></button>{/if}
             <button class="btn icon" aria-label="Copy {e.label}" onclick={() => { askCopy = e; copyName = `${e.label} copy` }}><Icon name="copy" /></button>
             <button class="btn icon" aria-label="Share {e.label}" onclick={() => share(e)}><Icon name="share" /></button>
-            <button class="btn icon danger" aria-label="Delete {e.label}" onclick={() => (askDelete = e)}><Icon name="trash" /></button>
+            {#if !e.builtIn}<button class="btn icon danger" aria-label="Delete {e.label}" onclick={() => (askDelete = e)}><Icon name="trash" /></button>{/if}
           </div>
         </div>
       {/each}
@@ -172,7 +173,7 @@
     <div class="viewbar">
       <button class="btn icon" aria-label="Back" onclick={() => go('dashboards')}><Icon name="back" /></button>
       <span class="name">{spec?.label ?? ''}</span>
-      <button class="btn icon" aria-label="Edit" onclick={() => go('dashboards', `edit/${id}`)}><Icon name="edit" /></button>
+      {#if !$list.find((e) => e.id === id)?.builtIn}<button class="btn icon" aria-label="Edit" onclick={() => go('dashboards', `edit/${id}`)}><Icon name="edit" /></button>{/if}
     </div>
     <div class="stage">
       {#if error}<div class="glass panel bad">{error}</div>
@@ -273,7 +274,7 @@
 {/if}
 {#if askDelete}
   <Modal title="Delete {askDelete.label}?" onclose={() => (askDelete = null)}>
-    <p class="muted">{askDelete.builtIn ? 'A built-in dashboard is hidden, and can be restored from the chooser.' : 'The file is removed. This cannot be undone.'}</p>
+    <p class="muted">The file is removed. This cannot be undone.</p>
     <button class="btn danger on" onclick={async () => { const ok = await act(octave.call<boolean>('dashboardManager', 'deleteDashboard', askDelete!.id)); askDelete = null; toast(ok ? 'Deleted' : 'Could not delete', ok ? 'ok' : 'bad') }}>Delete</button>
   </Modal>
 {/if}
