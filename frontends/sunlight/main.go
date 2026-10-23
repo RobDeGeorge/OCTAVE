@@ -71,6 +71,9 @@ type App struct {
 
 	dtc   dtcUI
 	trips tripsUI
+	pair  pairUI
+
+	pairDone chan error // the pairing goroutine's answer, read by the frame
 
 	dashIndex int
 	dashWant  string // --dash, until the list arrives
@@ -92,10 +95,12 @@ func main() {
 	nightMode := flag.Bool("night", false, "start in night mode (white on black)")
 	start := flag.String("page", "drive", "drive, dash, media, dtc or trips")
 	dashID := flag.String("dash", "", "dashboard id to open on the DASH page")
+	token := flag.String("token", os.Getenv("OCTAVE_TOKEN"), "a paired device's token (protocol 2, over the network); default OCTAVE_TOKEN, then the token file")
+	tokenFile := flag.String("token-file", link.DefaultTokens().Path, "where tokens are kept, one per host:port (0600)")
 	flag.Parse()
 
 	a := &App{addr: net.JoinHostPort(*host, strconv.Itoa(*port)), nightMode: *nightMode, fullscreen: *full,
-		dashWant: *dashID, specs: map[string]*dash.Spec{}, loading: map[string]bool{}, cells: map[int]*cellUI{}}
+		dashWant: *dashID, pairDone: make(chan error, 1), specs: map[string]*dash.Spec{}, loading: map[string]bool{}, cells: map[int]*cellUI{}}
 	for i, n := range pageNames {
 		if n == upper(*start) {
 			a.page = page(i)
@@ -108,6 +113,11 @@ func main() {
 	}
 	a.painter.th = newTheme()
 	a.session = link.NewSession(a.addr, a.win.Invalidate)
+	a.session.Tokens = link.Tokens{Path: *tokenFile}
+	a.session.Token = *token
+	if a.session.Token == "" {
+		a.session.Token = a.session.Tokens.Get(a.addr)
+	}
 	stop := make(chan struct{})
 	go a.session.Run(stop)
 	go func() {
@@ -149,6 +159,7 @@ func (a *App) keys(gtx C) {
 	for {
 		ev, ok := gtx.Event(key.Filter{Name: ""}, key.Filter{Name: key.NameLeftArrow}, key.Filter{Name: key.NameRightArrow},
 			key.Filter{Name: key.NameUpArrow}, key.Filter{Name: key.NameDownArrow}, key.Filter{Name: key.NameF11},
+			key.Filter{Name: key.NameDeleteBackward}, key.Filter{Name: key.NameReturn}, key.Filter{Name: key.NameEnter},
 			key.Filter{Name: "Q", Required: key.ModCtrl})
 		if !ok {
 			return
@@ -158,6 +169,17 @@ func (a *App) keys(gtx C) {
 			continue
 		}
 		st := a.session.State
+		if a.session.NeedsPairing() && !e.Modifiers.Contain(key.ModCtrl) {
+			switch {
+			case e.Name == key.NameDeleteBackward:
+				a.pairKey("DEL")
+			case e.Name == key.NameReturn || e.Name == key.NameEnter:
+				a.pairKey("PAIR")
+			default:
+				a.pairKey(string(e.Name))
+			}
+			continue
+		}
 		switch {
 		case e.Name == "Q" && e.Modifiers.Contain(key.ModCtrl):
 			a.session.Close()
@@ -204,6 +226,11 @@ func (a *App) frame(gtx C) {
 	a.topBar(p, bar.Inset(gap))
 	p.Fill(image.Rect(0, bar.Max.Y, full.Dx(), bar.Max.Y+p.Rule()), pal.Ink)
 	body := image.Rect(gap, bar.Max.Y+p.Rule()+gap, full.Dx()-gap, full.Dy()-gap)
+	if a.session.NeedsPairing() {
+		a.session.Demand(nil)
+		a.pairPage(p, body)
+		return
+	}
 	switch a.page {
 	case pageDrive:
 		a.session.Demand(driveIDs)
@@ -626,7 +653,11 @@ func (a *App) fetchArt() {
 	}
 	go func() {
 		cl := http.Client{Timeout: 5 * time.Second}
-		resp, err := cl.Get("http://" + a.addr + "/art")
+		req, _ := http.NewRequest(http.MethodGet, "http://"+a.addr+"/art", nil)
+		if h := a.session.AuthHeader(); h != "" {
+			req.Header.Set("Authorization", h) // never the token in a URL
+		}
+		resp, err := cl.Do(req)
 		var img image.Image
 		if err == nil {
 			defer resp.Body.Close()
@@ -671,4 +702,13 @@ func upper(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// deviceName is how this screen shows in OCTAVE's list of paired devices.
+func deviceName() string {
+	host, _ := os.Hostname()
+	if host == "" {
+		return "OCTAVE Sunlight"
+	}
+	return "OCTAVE Sunlight on " + host
 }

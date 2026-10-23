@@ -296,3 +296,81 @@ func sortTrips(list []trip) {
 		}
 	}
 }
+
+// ── PAIR ────────────────────────────────────────────────────────────────
+
+// pairUI is the code entry shown while the service wants this screen paired.
+type pairUI struct {
+	keys [12]widget.Clickable // 1-9, DEL, 0, PAIR
+	code string
+	err  string
+	busy bool
+}
+
+func (a *App) pairPage(p *Painter, r image.Rectangle) {
+	pal := p.pal
+	ui := &a.pair
+	select {
+	case err := <-a.pairDone:
+		ui.busy, ui.code = false, ""
+		if err != nil {
+			ui.err = err.Error()
+		}
+	default:
+	}
+	gap := p.Rule() * 2
+	left := image.Rect(r.Min.X, r.Min.Y, r.Min.X+r.Dx()*45/100, r.Max.Y)
+	right := image.Rect(left.Max.X+gap*2, r.Min.Y, r.Max.X, r.Max.Y)
+	rows := split(left, 6, gap, true)
+	p.Text(rows[0], "PAIR THIS SCREEN", sansBold, 0, Left, pal.Ink)
+	p.Text(rows[1], "ON THE HEAD UNIT: SETTINGS > SERVICE", sansBold, 0, Left, pal.Ink)
+	p.Text(rows[2], "> PAIR A DEVICE, THEN TYPE ITS CODE", sansBold, 0, Left, pal.Ink)
+	boxes := split(image.Rect(left.Min.X, rows[3].Min.Y, left.Max.X, rows[4].Max.Y), 6, gap, false)
+	for i, b := range boxes {
+		p.Box(b, pal.Ink)
+		if i < len(ui.code) {
+			p.Text(b.Inset(p.Rule()*3), ui.code[i:i+1], monoBold, 0, Center, pal.Ink)
+		}
+	}
+	msg := ui.err
+	if ui.busy {
+		msg = "PAIRING..."
+	}
+	if msg != "" {
+		p.Text(rows[5], upper(msg), sansBold, 0, Left, pal.Accent)
+	}
+	labels := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "DEL", "0", "PAIR"}
+	keyRows := split(right, 4, gap, true)
+	for i, label := range labels {
+		k := split(keyRows[i/3], 3, gap, false)[i%3]
+		if p.Button(k, &ui.keys[i], label, label == "PAIR" && len(ui.code) == 6) {
+			a.pairKey(label)
+		}
+	}
+}
+
+// pairKey takes a digit, DEL or PAIR from the keypad or the keyboard.
+func (a *App) pairKey(key string) {
+	ui := &a.pair
+	switch {
+	case ui.busy:
+	case key == "DEL":
+		if len(ui.code) > 0 {
+			ui.code = ui.code[:len(ui.code)-1]
+		}
+	case key == "PAIR":
+		if len(ui.code) != 6 {
+			ui.err = "the code has 6 digits"
+			return
+		}
+		code := ui.code
+		ui.busy, ui.err = true, ""
+		go func() {
+			a.pairDone <- a.session.Pair(code, deviceName())
+			a.win.Invalidate()
+		}()
+	case len(key) == 1 && key[0] >= '0' && key[0] <= '9' && len(ui.code) < 6:
+		ui.code += key
+		ui.err = ""
+	}
+}
