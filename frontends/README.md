@@ -7,6 +7,7 @@ OCTAVE's managers are served to any program over the service API (`docs/api/`, `
 | [`glass/`](glass/) | TypeScript + Svelte 5 (browser, served by the app with `--web-root`) | frosted glass tablet UI, light and dark | aims at everything the QML app does |
 | [`console/`](console/) | Python + Textual (terminal) | dense, keyboard-first operator console | live data, OBD and trouble codes, trips, every setting, downloads, an API explorer |
 | [`sunlight/`](sunlight/) | Go + Gio (native) | brutalist black on white for direct sunlight, inverted night mode | drive readouts, every saved dashboard drawn from its JSON spec, media with the cover |
+| [`arcade/`](arcade/) | C11 + SDL2 (native) | 8-bit arcade dashboard: 320x200 pixels scaled up, own pixel font, 16 colours | drive readouts, media with a palette-crushed cover, trouble codes |
 | [`retro-cluster/`](retro-cluster/) | Rust + egui (native) | 1980s vacuum-fluorescent instrument cluster | driving gauges, every PID, trouble codes, trips, a spectrum analyzer, media with a dot-matrix cover |
 
 Each has a README: how to run it, its keys, its pages, which API objects it uses, and what it can't do yet.

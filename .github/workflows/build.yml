@@ -224,6 +224,12 @@ jobs:
           go test -tags novulkan ./...
           go build -tags novulkan -o /dev/null .
 
+      - name: arcade (C + SDL2)
+        run: |
+          sudo apt-get install -y libsdl2-dev
+          cmake -S frontends/arcade -B build-arcade -DCMAKE_BUILD_TYPE=Release -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          cmake --build build-arcade -j4
+
   # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)
   # ---------------------------------------------------------------------------
