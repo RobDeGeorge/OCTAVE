@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QJSValue>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -503,6 +504,19 @@ QVariant jsonSafe(const QVariant &value)
     const QMetaType type = value.metaType();
     if (type == QMetaType::fromType<QJSValue>())
         return jsonSafe(value.value<QJSValue>().toVariant());
+    // A QVariant holding a QVariant: the value inside
+    if (type == QMetaType::fromType<QVariant>())
+        return jsonSafe(value.value<QVariant>());
+    if (type == QMetaType::fromType<QJsonValue>())
+        return jsonSafe(value.value<QJsonValue>().toVariant());
+    if (type == QMetaType::fromType<QJsonObject>())
+        return jsonSafe(value.value<QJsonObject>().toVariantMap());
+    if (type == QMetaType::fromType<QJsonArray>())
+        return jsonSafe(value.value<QJsonArray>().toVariantList());
+    if (type == QMetaType::fromType<QJsonDocument>()) {
+        const QJsonDocument doc = value.value<QJsonDocument>();
+        return doc.isArray() ? jsonSafe(doc.array().toVariantList()) : jsonSafe(doc.object().toVariantMap());
+    }
     switch (type.id()) {
     case QMetaType::Bool:
     case QMetaType::Int:
@@ -623,12 +637,15 @@ QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args
         }
         if (!ok)
             continue;
+        // A QVariant return is written into `ret` itself; QVariant(rt) would
+        // wrap a second QVariant around it
         QVariant ret;
         const QMetaType rt = m.returnMetaType();
-        if (rt.isValid() && rt.id() != QMetaType::Void)
+        const bool variantReturn = rt == QMetaType::fromType<QVariant>();
+        if (rt.isValid() && rt.id() != QMetaType::Void && !variantReturn)
             ret = QVariant(rt);
         QVarLengthArray<void *, 8> argv;
-        argv.append(ret.isValid() ? ret.data() : nullptr);
+        argv.append(variantReturn ? &ret : (ret.isValid() ? ret.data() : nullptr));
         for (QVariant &c : converted) {
             if (m.parameterMetaType(argv.size() - 1) == QMetaType::fromType<QVariant>())
                 argv.append(&c);   // the QVariant wrapping the value

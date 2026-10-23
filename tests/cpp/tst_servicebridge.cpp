@@ -74,6 +74,32 @@ private:
     Mode m_preferred = Mode::Off;
 };
 
+// Members typed QVariant or Qt JSON: the value inside goes on the wire,
+// never the type's name (dashboardManager.loadDashboard() returns QVariant)
+class Shapes : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QVariant spec READ spec NOTIFY specChanged)
+    Q_PROPERTY(QJsonObject json READ json CONSTANT)
+
+public:
+    QVariant spec() const { return QVariantMap{{"schema", 1}, {"cells", QVariantList{"a", 2}}}; }
+    QJsonObject json() const { return QJsonObject{{"k", "v"}}; }
+
+    Q_INVOKABLE QVariant variantMap() const { return spec(); }
+    Q_INVOKABLE QVariant variantList() const { return QVariantList{1, "two", QVariantMap{{"three", 3}}}; }
+    Q_INVOKABLE QVariant variantString() const { return QStringLiteral("text"); }
+    Q_INVOKABLE QVariant variantNone() const { return {}; }
+    Q_INVOKABLE QVariant echo(const QVariant &v) const { return v; }
+    Q_INVOKABLE QJsonValue jsonValue() const { return QJsonValue(QJsonObject{{"n", 1.5}}); }
+    Q_INVOKABLE QJsonObject jsonObject() const { return QJsonObject{{"a", QJsonArray{1, 2}}}; }
+    Q_INVOKABLE QJsonArray jsonArray() const { return QJsonArray{"x", QJsonObject{{"y", true}}}; }
+
+signals:
+    void specChanged();
+    void loaded(const QVariant &spec, const QJsonObject &meta);
+};
+
 class TstServiceBridge : public QObject
 {
     Q_OBJECT
@@ -218,6 +244,38 @@ private slots:
         QVERIFY(result(R"({"op": "call", "object": "fixture", "method": "setMode", "args": ["Slow"]})").isNull());
         QCOMPARE(m_fixture.mode(), Fixture::Mode::Slow);
         QVERIFY(error(R"({"op": "call", "object": "fixture", "method": "greet", "args": []})").contains("no method"));
+    }
+
+    void variantAndJsonValuesAreSerialised()
+    {
+        Shapes shapes;
+        m_registry->add("shapes", &shapes);
+        const QVariantMap spec{{"schema", 1}, {"cells", QVariantList{"a", 2}}};
+        // Returns
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "variantMap"})").toMap(), spec);
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "variantList"})").toList(),
+                 (QVariantList{1, "two", QVariantMap{{"three", 3}}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "variantString"})").toString(), QStringLiteral("text"));
+        QJsonObject none = send(R"({"op": "call", "object": "shapes", "method": "variantNone"})");
+        QVERIFY(none.value("ok").toBool());
+        QVERIFY(none.contains("result") && none.value("result").isNull());
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "echo", "args": [{"x": [1]}]})").toMap(),
+                 (QVariantMap{{"x", QVariantList{1}}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "jsonValue"})").toMap(), (QVariantMap{{"n", 1.5}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "jsonObject"})").toMap(),
+                 (QVariantMap{{"a", QVariantList{1, 2}}}));
+        QCOMPARE(result(R"({"op": "call", "object": "shapes", "method": "jsonArray"})").toList(),
+                 (QVariantList{"x", QVariantMap{{"y", true}}}));
+        // Properties
+        QCOMPARE(result(R"({"op": "get", "object": "shapes", "property": "spec"})").toMap(), spec);
+        QCOMPARE(result(R"({"op": "get", "object": "shapes", "property": "json"})").toMap(), (QVariantMap{{"k", "v"}}));
+        // Signal arguments
+        QVERIFY(result(R"({"op": "subscribe", "object": "shapes", "signals": ["loaded"]})").toMap().value("sub").toInt() > 0);
+        emit shapes.loaded(spec, QJsonObject{{"id", "d1"}});
+        QTRY_COMPARE_WITH_TIMEOUT(collect().size(), 1, 2000);
+        const QJsonArray args = m_events.first().value("args").toArray();
+        QCOMPARE(args.at(0).toVariant().toMap(), spec);
+        QCOMPARE(args.at(1).toObject().value("id").toString(), QStringLiteral("d1"));
     }
 
     void keyValueObjects()
