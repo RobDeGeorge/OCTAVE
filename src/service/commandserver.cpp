@@ -1,4 +1,5 @@
 #include "commandserver.h"
+#include "memberscope.h"
 #include "staticfiles.h"
 #include "websocket.h"
 
@@ -792,7 +793,7 @@ bool convertTo(QVariant &value, QMetaType type)
     return value.convert(type);
 }
 
-QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args)
+QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args, bool serviceOnly)
 {
     if (!obj)
         throw CommandError(QStringLiteral("no object for %1()").arg(QLatin1String(method)));
@@ -800,6 +801,8 @@ QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args
     for (int i = 0; i < mo->methodCount(); ++i) {
         const QMetaMethod m = mo->method(i);
         if (m.name() != method || m.parameterCount() != args.size())
+            continue;
+        if (serviceOnly && !MemberScope::callable(mo, i))
             continue;
         // Convert each argument to the parameter's type; a QVariant parameter
         // (QML JS functions) takes the value as is
