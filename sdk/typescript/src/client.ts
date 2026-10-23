@@ -3,44 +3,29 @@
 // records. Reconnects with backoff and re-issues every subscription; requests
 // are matched to replies by id; subscriptions deliver through callbacks, so
 // any UI layer (Svelte stores, React state, a terminal) sits on top.
-import { parseRecord, type StreamHandlers, type StreamInfo } from './stream.js'
+import { parseRecord, type StreamHandlers } from './stream.js'
+import {
+  PROTOCOL_VERSION as SPEC_VERSION, type Json, type Op, type Ops, type HelloReply, type ObjectDescription, type ServiceEvent, type Reply, type StreamInfo,
+} from './protocol.js'
 
-/** The protocol version this client was written against (docs/api/README.md). */
-export const PROTOCOL_VERSION = 1
-/** The versions this client accepts: 1, and 2 (pairing; everything else is additive). */
+/** The protocol version this client was written against: the one docs/api/protocol.json describes. */
+export const PROTOCOL_VERSION = SPEC_VERSION
+/** The versions this client accepts: 1 (no pairing) and 2 (everything else is additive). */
 export const PROTOCOL_VERSIONS = [1, 2]
 
-export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
+export type { Json, ServiceEvent } from './protocol.js'
 export type Status = 'connecting' | 'online' | 'offline' | 'mismatch'
 
-export interface Hello {
-  protocolVersion: number
-  app: { version: string; build: string; headless: boolean }
-  objects: string[]
-  /** Protocol 2: whether this connection may use the service, and whether loopback is open without pairing. */
-  auth?: 'trusted' | 'untrusted'
-  loopbackOpen?: boolean
+/** The `hello` reply (generated: protocol.ts). `app` and `objects` are present on a trusted connection. */
+export type Hello = HelloReply
+/** One object's properties, methods and signals, as `describe` answers (generated: protocol.ts). */
+export type Description = ObjectDescription
+export type { PropertyDescription as PropertyMeta, MethodDescription as MethodMeta, SignalDescription as SignalMeta, ParamDescription as ParamMeta, ModelEvent as ModelChange } from './protocol.js'
+
+/** A failure reply: `message` is the server's `error`, `code` its stable code when it has one ("unauthorised"). */
+export class OctaveError extends Error {
+  constructor(message: string, readonly code?: string) { super(message) }
 }
-export interface PropertyMeta { name: string; type: string; readable: boolean; writable: boolean; constant?: boolean; notify?: string; enum?: string[] }
-export interface ParamMeta { name: string; type: string }
-export interface MethodMeta { name: string; kind: string; params: ParamMeta[]; returns?: string }
-export interface SignalMeta { name: string; params: ParamMeta[] }
-export interface Description { object: string; class: string; properties: PropertyMeta[]; methods: MethodMeta[]; signals: SignalMeta[]; enums?: Record<string, string[]> }
-
-export type ModelChange =
-  | { change: 'reset' | 'insert' | 'update'; first: number; last: number; rows: Record<string, Json>[] }
-  | { change: 'remove'; first: number; last: number }
-
-export type ServiceEvent =
-  | { event: 'property'; sub: number; object: string; name: string; value: Json; t?: number }
-  | { event: 'params'; sub: number; object: string; values: Record<string, number | null> }
-  | { event: 'signal'; sub: number; object: string; name: string; args: Json[] }
-  | ({ event: 'model'; sub: number; object: string; name: string } & ModelChange)
-  | { event: 'dropped'; count: number }
-  | { event: 'streamConfig'; stream: number; codec?: string; width?: number; height?: number }
-  | { event: 'streamDropped'; stream: number; count: number }
-
-export class OctaveError extends Error {}
 
 export interface SubscribeOptions { properties?: string[]; signals?: string[]; throttleMs?: number }
 export interface Subscription { object: string; options: SubscribeOptions; handler: (e: ServiceEvent) => void; id: number }
@@ -107,7 +92,7 @@ export class OctaveClient {
   /** Forget this device on the head unit, and the token here. */
   async unpair(): Promise<void> { await this.request('unpair', {}); this.token = undefined }
   /** A short-lived ticket for /art and /export URLs (never put the token in a URL). */
-  mediaTicket(): Promise<{ ticket: string; expiresIn: number }> { return this.request('mediaTicket', {}) as unknown as Promise<{ ticket: string; expiresIn: number }> }
+  mediaTicket(): Promise<Ops['mediaTicket']['reply']> { return this.request('mediaTicket', {}) }
   /** The last `hello` reply, once online. */
   get hello(): Hello | null { return this._hello }
 
@@ -203,21 +188,25 @@ export class OctaveClient {
       for (const sub of this.subs) if (sub.id === e.sub) sub.handler(e)
       return
     }
-    const p = this.pending.get(msg.id as number)
+    const reply = msg as unknown as Reply
+    const p = this.pending.get(reply.id as number)
     if (!p) return
-    this.pending.delete(msg.id as number)
+    this.pending.delete(reply.id as number)
+    if (!reply.ok) { p.reject(new OctaveError(String(reply.error ?? 'unknown error'), reply.code)); return }
     // A subscribe reply names the id; its first events follow at once, so
     // the id is recorded here, not in a promise continuation
-    if (msg.ok && p.sub) p.sub.id = (msg.result as { sub: number }).sub
+    if (p.sub) p.sub.id = (reply.result as { sub: number }).sub
     // Likewise a stream's first record can be dispatched in the same task as its reply
-    if (msg.ok && p.stream) this.streams.set((msg.result as { stream: number }).stream, p.stream)
-    if (msg.ok) p.resolve(msg.result as Json)
-    else p.reject(new OctaveError(String(msg.error ?? 'unknown error')))
+    if (p.stream) this.streams.set((reply.result as { stream: number }).stream, p.stream)
+    p.resolve(reply.result)
   }
 
   // ── requests ──────────────────────────────────────────────────────────
 
-  /** Any op. While (re)connecting the request waits for the link rather than failing. */
+  /** Any op, typed by protocol.json for the ones it knows (`request('get', { object, property })`).
+   *  While (re)connecting the request waits for the link rather than failing. */
+  request<O extends Op>(op: O, args: Ops[O]['args']): Promise<Ops[O]['reply']>
+  request<O extends string>(op: O extends Op ? never : O, args?: Record<string, unknown>): Promise<Json>
   async request(op: string, args: Record<string, unknown> = {}): Promise<Json> {
     if (this._status !== 'online') await this.whenOnline()
     return this.send0(op, args)
@@ -237,10 +226,10 @@ export class OctaveClient {
     return this.request('get', property ? { object, property } : { object }) as Promise<T>
   }
   set<T = Json>(object: string, property: string, value: unknown): Promise<T> {
-    return this.request('set', { object, property, value }) as Promise<T>
+    return this.request('set', { object, property, value: value as Json }) as Promise<T>
   }
   call<T = Json>(object: string, method: string, ...args: unknown[]): Promise<T> {
-    return this.request('call', { object, method, args }) as Promise<T>
+    return this.request('call', { object, method, args: args as Json[] }) as Promise<T>
   }
   rows<T = Record<string, Json>>(object: string, property: string, from = 0, count?: number): Promise<T[]> {
     return this.request('rows', { object, property, from, ...(count !== undefined ? { count } : {}) }) as Promise<T[]>

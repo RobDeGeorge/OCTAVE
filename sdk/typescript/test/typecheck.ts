@@ -30,3 +30,13 @@ trips.call('requestSeries', 1, 2, 3)
 
 const names: (keyof Objects)[] = ['nowPlaying', 'settingsManager']
 void names; void ok1; void ok2; void ok3; void ok4; void ok5
+
+// The envelope is generated from docs/api/protocol.json: known ops are typed
+const r1: Promise<import('../src/index.js').HelloReply> = client.request('hello', { token: 'abc' })
+const r2: Promise<import('../src/index.js').SubscribeReply> = client.request('subscribe', { object: 'nowPlaying', properties: ['title'] })
+// @ts-expect-error `object` is required
+client.request('get', { property: 'percent' })
+// @ts-expect-error a code is a string
+client.request('pair', { code: 123456, name: 'x' })
+const r3: Promise<import('../src/index.js').Json> = client.request('someFutureOp', { a: 1 })   // unknown ops still go through
+void r1; void r2; void r3

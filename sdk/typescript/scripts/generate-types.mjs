@@ -2,8 +2,12 @@
 // Generates src/types.ts from docs/api/*.json: one interface per object
 // (properties, methods with argument tuples and return types, signal
 // argument tuples), enums as string unions, and `Objects` mapping names to
-// them. `--check` compares with the committed file instead and exits 1 if
-// it differs, so stale types fail `npm test` the way tst_apidocs fails ctest.
+// them. A member's `deprecated` text becomes a JSDoc @deprecated tag (so an
+// editor strikes it through and a lint rule can flag it) and `stability:
+// experimental` an @experimental tag, on the member and on a whole object.
+// `--check` compares with the committed file instead and exits 1 if it
+// differs, so stale types fail `npm test` the way tst_apidocs fails ctest;
+// `--stdout` prints it (tests).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +21,20 @@ const scalar = {
   int: 'number', uint: 'number', long: 'number', qlonglong: 'number', qulonglong: 'number', float: 'number', double: 'number', qreal: 'number',
   QStringList: 'string[]', QVariantList: 'unknown[]', QVariantMap: 'Record<string, unknown>', QVariant: 'unknown',
   'QObject*': 'unknown', 'QAbstractListModel*': 'ModelSummary', void: 'void', '': 'void',
+}
+
+/** The JSDoc tags for a member's (or an object's) annotations. */
+function tags(member) {
+  const t = []
+  if (member.deprecated) t.push(`@deprecated ${member.deprecated}`)
+  if (member.stability === 'experimental') t.push('@experimental not covered by the protocol version; may change or go in any release')
+  return t
+}
+function docLine(indent, head, member) {
+  const lines = [head, ...tags(member)].filter(Boolean)
+  if (!lines.length) return ''
+  if (lines.length === 1) return `${indent}/** ${lines[0]} */\n`
+  return `${indent}/**\n${lines.map((l) => `${indent} * ${l}`).join('\n')}\n${indent} */\n`
 }
 
 function tsType(qt, enums, cls) {
@@ -40,10 +58,11 @@ for (const name of objects) {
   }
   const iface = cls
   names.push([name, iface])
-  out += `\n/** ${name} (${cls}) */\nexport interface ${iface} {\n  properties: {\n`
+  out += '\n' + docLine('', `${name} (${cls})`, d) + `export interface ${iface} {\n  properties: {\n`
   for (const p of d.properties) {
     const t = p.enum ? p.enum.map((k) => JSON.stringify(k)).join(' | ') : tsType(p.type, enums, cls)
-    out += `    /** ${p.type}${p.writable ? ', writable' : ''}${p.constant ? ', constant' : ''}${p.notify ? `, notify ${p.notify}` : ''} */\n    ${p.name}: ${t}\n`
+    out += docLine('    ', `${p.type}${p.writable ? ', writable' : ''}${p.constant ? ', constant' : ''}${p.notify ? `, notify ${p.notify}` : ''}`, p)
+    out += `    ${p.name}: ${t}\n`
   }
   out += `  }\n  methods: {\n`
   const byName = new Map()
@@ -51,6 +70,7 @@ for (const name of objects) {
   for (const [mn, overloads] of byName) {
     const args = overloads.map((m) => `[${m.params.map((a) => `${a.name || 'arg'}: ${tsType(a.type, enums, cls)}`).join(', ')}]`)
     const rets = [...new Set(overloads.map((m) => tsType(m.returns ?? '', enums, cls)))]
+    out += docLine('    ', '', overloads.find((m) => m.deprecated || m.stability) ?? {})
     out += `    ${mn}: { args: ${[...new Set(args)].join(' | ')}; returns: ${rets.join(' | ')} }\n`
   }
   out += `  }\n  signals: {\n`
@@ -58,6 +78,7 @@ for (const name of objects) {
   for (const s of d.signals) { if (!sigs.has(s.name)) sigs.set(s.name, []); sigs.get(s.name).push(s) }
   for (const [sn, overloads] of sigs) {
     const tuples = [...new Set(overloads.map((s) => `[${s.params.map((a) => `${a.name || 'arg'}: ${tsType(a.type, enums, cls)}`).join(', ')}]`))]
+    out += docLine('    ', '', overloads.find((s) => s.deprecated || s.stability) ?? {})
     out += `    ${sn}: ${tuples.join(' | ')}\n`
   }
   out += `  }\n}\n`
@@ -65,7 +86,9 @@ for (const name of objects) {
 out += `\n/** Every object the service exposes, by its name in \`hello\`. */\nexport interface Objects {\n${names.map(([n, i]) => `  ${n}: ${i}`).join('\n')}\n}\n`
 out += `\nexport const PROTOCOL_VERSION_OF_TYPES = ${index.protocolVersion}\n`
 
-if (process.argv.includes('--check')) {
+if (process.argv.includes('--stdout')) {
+  process.stdout.write(out)
+} else if (process.argv.includes('--check')) {
   const have = fs.existsSync(outFile) ? fs.readFileSync(outFile, 'utf8') : ''
   if (have !== out) {
     console.error(`src/types.ts is stale against ${apiDir}: run \`npm run generate\` and commit the result.`)

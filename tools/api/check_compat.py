@@ -225,12 +225,16 @@ def main():
     old_v = old_tree.get("index.json", {}).get("protocolVersion")
     new_v = new_tree.get("index.json", {}).get("protocolVersion")
     breaks, adds = compare(old_tree, new_tree)
+    spec_v = new_tree.get("protocol.json", {}).get("protocolVersion")
 
     label = git("rev-parse", "--short", base).stdout.strip() or base
     print(f"API at {label}: protocol {old_v}; working tree: protocol {new_v}")
     print(f"  {len(breaks)} breaking, {len(adds)} additive")
 
     failed = False
+    if spec_v is not None and spec_v != new_v:
+        print(f"FAIL: docs/api/protocol.json says protocol {spec_v}, index.json says {new_v}")
+        failed = True
     if new_v is not None and old_v is not None and new_v < old_v:
         print(f"FAIL: protocolVersion went down ({old_v} -> {new_v})")
         failed = True

@@ -9,11 +9,18 @@ What a frontend, a script or another program can read and drive in OCTAVE, witho
 | `index.json` | `protocolVersion` and every object's name → C++ class | generated |
 | `<object>.json` | one object: `properties` (type, readable / writable / constant, `notify` signal, `enum` keys), `methods` (`params`, `returns`, `kind`: slot or invokable), `signals` (`params`), `enums`. Exactly what the `describe` op returns | generated |
 | `parameters.json` | every OBD PID and IMU reading: id, title, native unit, range, kind, decimals (`parameterCatalog.parameters`) | generated |
+| `protocol.json` | the protocol envelope, JSON Schema style: the transports, every op with its arguments and reply, the error form and codes, the event shapes, the stream record, the HTTP routes, the pairing flow ("Protocol spec" below) | hand-written, checked against the server by `sdk/python/tests/test_protocol_spec.py` |
 | `dashboard-spec.schema.json` | JSON Schema of a dashboard file (`schema: 1`) | hand-written from `DashboardManager::normalizeSpec` |
 | `widget-catalog.json` | the widget types a dashboard cell can use: display name, glyph, default span, `supportedKinds`, label / range / colour flags, `editableProps` (`{key, label, kind, def, min?, max?, options?}`), `colorSwatches` (`dashboardManager.widgetCatalog`, from `frontend/dashboards/widget-catalog.json`) | generated |
 | `README.md` | this file | hand-written |
 
 The generated files come from the meta-objects of the desktop build (Linux, downloads on). Mobile builds stub some managers and `OCTAVE_ENABLE_DOWNLOADS=OFF` stubs `downloadManager`; a client finds out at run time with `describe`.
+
+## Protocol spec
+
+[`protocol.json`](protocol.json) is the half of the API that no meta-object produces: the ops (`hello`, `describe`, `get`, `set`, `call`, `rows`, `subscribe` / `unsubscribe`, `stream` / `unstream`, `pair` / `unpair`, `mediaTicket`) with the schema of each one's arguments and reply, the reply envelope and the error codes, every event (`property`, `signal`, `params`, `model`, `dropped`, `streamConfig`, `streamDropped`), the binary record and its framing on both transports, the HTTP routes with their query keys and status codes, the pairing flow and its limits, and the shape of an object description (what `describe` and the `<object>.json` files hold, annotations included). It carries `protocolVersion` like `index.json`, and each op and route says `since` which version. Code generators read it: `sdk/typescript` and `sdk/go` build their envelope from it, the object files give them the objects.
+
+It is hand-written, so a test keeps it honest: `sdk/python/tests/test_protocol_spec.py` (ctest `sdk_python`) starts `octave --headless`, checks that the ops it lists are exactly the ops the server reports (`describe` with no object answers `ops`), and validates real replies, errors and events against the schemas strictly, so a field the server sends that the spec does not describe fails, as does an op in either place but not the other. `tools/api/jsonschema_lite.py` is the validator (the 2020-12 subset the spec uses). A change to `src/service/servicebridge.cpp`, `commandserver.cpp`, `streamhub.cpp` or the routes in `main.cpp` lands with its line in `protocol.json` and, when it is a break, a protocol bump and a changelog entry like any other.
 
 ## Streams
 
@@ -73,7 +80,7 @@ Every member is **stable** unless marked: covered by the version, so it changes 
 
 ### Enforced
 
-`tools/api/check_compat.py` compares this directory with the base of a change (CI's `lint` job: the PR's base branch, or the commit before a push) and fails when a stable member, a parameter id or a parameter's unit is removed or changed without `kProtocolVersion` going up, or when the new version's section in [CHANGELOG.md](CHANGELOG.md) does not name each break as `object.member`. `python tools/api/check_compat.py --draft` lists every change, breaking and additive, for the changelog. What it does not see: the meaning of a value, the ops and their arguments (`src/service/servicebridge.cpp`), the stream record format and the HTTP routes; those still need a reviewer and a changelog line.
+`tools/api/check_compat.py` compares this directory with the base of a change (CI's `lint` job: the PR's base branch, or the commit before a push) and fails when a stable member, a parameter id or a parameter's unit is removed or changed without `kProtocolVersion` going up, or when the new version's section in [CHANGELOG.md](CHANGELOG.md) does not name each break as `object.member`. `python tools/api/check_compat.py --draft` lists every change, breaking and additive, for the changelog. What it does not see: the meaning of a value, and the envelope (the ops and their arguments, the events, the stream record, the HTTP routes), which `protocol.json` describes and `test_protocol_spec.py` checks against the server; a change there still needs a reviewer and a changelog line. `check_compat` does check that `protocol.json` and `index.json` agree on the version.
 
 Not covered by the version: the dev-only `action` vocabulary (`navigate`, `click`, `screenshot`, `sim_*`, ...), which exists only with `--profile` in a developer build and may change at any time.
 

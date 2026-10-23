@@ -20,6 +20,8 @@ Added (some landed while 1 was current, but none was released under 1):
 - `settingsManager.save_media_folder` returns whether it saved (it returned nothing).
 - Every member's `stability` (`experimental` when it is not covered by the version) and `deprecated` in `describe` and `docs/api/`.
 - Permissions: `pair` takes `scopes` (absent: `full`, as before) and answers the granted `scopes`, as does a trusted `hello`; every method and writable property lists its `scope`; error code `forbidden`. The dev `action` form needs `full`.
+- `describe` with no object also answers `ops`, the op names the server has.
+- `docs/api/protocol.json`: the envelope (ops, errors, events, stream records, HTTP routes, pairing) as JSON Schema, checked against the server by `sdk_python`.
 
 ## Protocol 1
 

@@ -411,15 +411,21 @@ void ServiceBridge::install(CommandServer &server)
     server.registerOp(QStringLiteral("unsubscribe"), [this](const QVariantMap &args) { return unsubscribe(args); });
 
     // Meta-objects are static data: no GUI-thread hop needed
-    server.registerOp(QStringLiteral("describe"), [this](const QVariantMap &args) {
+    // Without an object: every object, plus the ops this server answers
+    // (`ops`, additive), so a client or the spec test (docs/api/protocol.json)
+    // can compare what it knows with what is there
+    server.registerOp(QStringLiteral("describe"), [this, &server](const QVariantMap &args) {
         const QString name = args.value(QStringLiteral("object")).toString();
         if (!name.isEmpty())
             return QVariant(describeObject(object(name)));
         QVariantMap all;
         for (const QString &n : m_registry->names())
             all.insert(n, describeObject(m_registry->object(n)));
+        QStringList ops = server.ops();
+        ops.sort();
         return QVariant(QVariantMap{{QStringLiteral("protocolVersion"), kProtocolVersion},
-                                    {QStringLiteral("objects"), all}});
+                                    {QStringLiteral("objects"), all},
+                                    {QStringLiteral("ops"), ops}});
     });
 }
 
