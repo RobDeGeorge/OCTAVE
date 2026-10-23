@@ -80,14 +80,14 @@ def main():
     octave.subscribe("paramStore", properties=PIDS, throttle_ms=200)
     octave.subscribe("nowPlaying", properties=["hasTrack", "title", "artist", "playing", "artRevision"], throttle_ms=250)
 
-    values, track, seen_cover = {}, {}, [None]
+    values, track, seen_cover, pressed = {}, {}, [None], [False]
     if args.check is None:
         print("Enter toggles play / pause, Ctrl-C quits.")
         threading.Thread(target=lambda: [octave.call("nowPlaying", "togglePlay") for _ in sys.stdin], daemon=True).start()
-    else:
-        octave.call("nowPlaying", "togglePlay")   # nothing loaded yet starts the first track
 
     def show():
+        if args.check is not None and not sys.stdout.isatty():
+            return
         readings = "  ".join(f"{pid} {values[pid]:.{info[pid]['decimals']}f} {info[pid]['unit']}" for pid in PIDS if values.get(pid) is not None)
         state = ("playing" if track.get("playing") else "paused") if track.get("hasTrack") else "nothing playing"
         line = f"{readings:32} | {state}: {track.get('title', '')}" + (f"  cover: {seen_cover[0]}" if seen_cover[0] else "")
@@ -103,6 +103,9 @@ def main():
                     track[event["name"]] = event["value"]
                     if event["name"] == "artRevision" and track.get("hasTrack"):
                         seen_cover[0] = fetch_cover(octave, args.host, args.port, event["value"])
+                    if args.check is not None and event["name"] == "playing" and not event["value"] and not pressed[0]:
+                        pressed[0] = True
+                        octave.call("nowPlaying", "togglePlay")   # press Play once (nothing loaded yet starts the first track)
                 else:
                     continue
                 show()
@@ -117,7 +120,7 @@ def main():
 
     if args.check is not None:
         ok = values.get("RPM", 0) > 0 and "SPEED" in values and track.get("hasTrack") and track.get("playing")
-        print("hello-car-python:", "all checks passed" if ok else f"FAIL values={values} track={track}")
+        print("hello-car-python:", f"all checks passed: {values} {track.get('title')}" if ok else f"FAIL values={values} track={track}")
         sys.exit(0 if ok else 1)
 
 

@@ -1,0 +1,38 @@
+Running as unit: run-p361229-i4579807.scope; invocation ID: ee608d6bc34f4a7895a2536805de1967
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- QtQuick3D found — 3D vehicle view enabled
+-- QtQuick3D AssetUtils + QuickTimeline found — music player objects enabled
+-- Built-in phone mirror decoder (libavcodec): ON
+-- Developer tooling (--dev / --profile): OFF
+-- Build commit: ebe0ff9 (2026-10-23 11:52:44 -0700)
+-- C++ tests (ctest): OFF
+-- Configuring done (0.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/zion/octave-night/web/build-release
+[  1%] Built target octave_qmlimportscan
+[  1%] Built target octave_sqlite_autogen_timestamp_deps
+[  2%] Automatic MOC for target octave_sqlite
+[  2%] Built target octave_sqlite_autogen
+[  6%] Built target octave_sqlite
+[  6%] Built target octave_autogen_timestamp_deps
+[  7%] Automatic MOC for target octave
+AutoMoc warning
+---------------
+"SRC:/src/main.cpp"
+includes the moc file "main.moc", but does not contain a Q_OBJECT, Q_GADGET, Q_NAMESPACE, Q_NAMESPACE_EXPORT, Q_GADGET_EXPORT or Q_ENUM_NS macro.
+
+AutoMoc: /home/zion/octave-night/web/src/main.cpp: note: No relevant classes found. No output generated.
+[  7%] Built target octave_autogen
+[  8%] Running rcc for resource wiki
+[ 10%] Building CXX object CMakeFiles/octave.dir/build-release/.qt/rcc/qrc_wiki.cpp.o
+[ 11%] Building CXX object CMakeFiles/octave.dir/octave_autogen/mocs_compilation.cpp.o
+[ 12%] Building CXX object CMakeFiles/octave.dir/src/appcore.cpp.o
+[ 15%] Building CXX object CMakeFiles/octave.dir/src/managers/frontendmanager.cpp.o
+[ 15%] Building CXX object CMakeFiles/octave.dir/src/main.cpp.o
+[ 16%] Building CXX object CMakeFiles/octave.dir/src/managers/networkmanager.cpp.o
+[ 17%] Building CXX object CMakeFiles/octave.dir/src/managers/settingsmanager.cpp.o
+[ 18%] Building CXX object CMakeFiles/octave.dir/src/managers/frontendsupervisor.cpp.o
+[ 20%] Linking CXX executable octave
+[100%] Built target octave
+exit 0

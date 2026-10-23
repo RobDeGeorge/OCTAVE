@@ -5,7 +5,7 @@ The smallest OCTAVE frontend in Go: two live readings, the track with play / pau
 ## Run
 
 ```bash
-./build/octave --headless --sim            # a simulated car, no window (any build; or --service with the UI)
+octave --headless --sim                    # the release download (or ./build/octave): a simulated car, no window; or --service with the UI
 cd templates/hello-car-go && go run .
 ```
 
@@ -13,7 +13,7 @@ Enter toggles play / pause, Ctrl-C quits. From another machine, start OCTAVE wit
 
 Make the numbers move with the simulator: `octave.NewSim(c).SetThrottle(40)`, or a scenario (`docs/api/README.md`, "Simulator").
 
-**The dependency.** `go.mod` requires `github.com/RobDeGeorge/OCTAVE/sdk/go` and, while this folder sits inside the OCTAVE checkout, points it at `../../sdk/go` with a `replace` line so it builds from the same tree. When you copy the folder out, delete the `replace` line and `go get github.com/RobDeGeorge/OCTAVE/sdk/go@main` (or keep a `replace` to wherever your copy of the SDK is).
+**The dependency.** `go.mod` requires `github.com/RobDeGeorge/OCTAVE/sdk/go` and points it at `../../sdk/go` with a `replace` line, which holds only while this folder sits inside the OCTAVE checkout. When you copy the folder out, `go run` stops with `replacement directory ../../sdk/go does not exist`: edit that line to the SDK folder of your OCTAVE checkout (`replace github.com/RobDeGeorge/OCTAVE/sdk/go => /path/to/OCTAVE/sdk/go`), or copy `sdk/go` next to your project and point it there. Once the module is tagged on GitHub, deleting the line and `go get github.com/RobDeGeorge/OCTAVE/sdk/go@latest` will do instead.
 
 ## What it uses
 

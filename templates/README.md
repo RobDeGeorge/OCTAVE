@@ -11,7 +11,7 @@ Copy one of these folders and you have an OCTAVE frontend that connects, pairs w
 Try one against a car you do not have:
 
 ```bash
-./build/octave --headless --sim --web-root templates/hello-car-js     # any build: the simulated car and the service, no window
+octave --headless --sim --web-root templates/hello-car-js             # the release download, or ./build/octave: the simulated car and the service, no window
 ```
 
 then open <http://127.0.0.1:9876/>, or run the Python or Go one against the same app. The car idles until something drives it: `{"op":"call","object":"sim","method":"setThrottle","args":[40]}` over the service, or a scenario (`docs/api/README.md`, "Simulator").

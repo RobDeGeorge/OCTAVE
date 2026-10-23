@@ -60,7 +60,7 @@ octave --headless             <span class="cmt"># no UI at all: your frontend is
         </ul>
         <pre><code><span class="cmt"># a whole session by hand</span>
 $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","property":"percent","id":2}\n' | nc -q1 127.0.0.1 9876
-{"id":1,"ok":true,"result":{"app":{"build":"release","headless":false,"version":"1.0.0"},"objects":["settingsManager",...],"protocolVersion":1}}
+{"id":1,"ok":true,"result":{"app":{"build":"release","headless":true,"version":"0.9.5"},"auth":"trusted","loopbackOpen":true,"objects":["settingsManager",...],"protocolVersion":2,"scopes":["full"]}}
 {"id":2,"ok":true,"result":32}</code></pre>
         <p>Every reply has <code>ok</code>; a failure has <code>"ok": false</code> and an <code>error</code> string. Anything with an <code>event</code> key is not a reply but a subscription event, and can arrive between replies.</p>
 
@@ -100,7 +100,7 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
           <li><span class="file-path">templates/hello-car-python/</span>: a terminal program on the Python client (<span class="file-path">sdk/python/octave_client</span>, copied into the folder).</li>
           <li><span class="file-path">templates/hello-car-go/</span>: the same in Go on <span class="file-path">sdk/go</span> as a module dependency.</li>
         </ul>
-        <pre><code>./build/octave --headless --sim --web-root templates/hello-car-js   <span class="cmt"># any build: the simulated car, no window; open http://127.0.0.1:9876/</span>
+        <pre><code>octave --headless --sim --web-root templates/hello-car-js           <span class="cmt"># the download from step 1 (or ./build/octave): the simulated car, no window; open http://127.0.0.1:9876/</span>
 python templates/hello-car-python/hello_car.py                         <span class="cmt"># or, against the same app, the Python one...</span>
 cd templates/hello-car-go &amp;&amp; go run .                                 <span class="cmt"># ...or the Go one</span></code></pre>
         <p>The simulated car idles until something drives it: <code>{"op":"call","object":"sim","method":"setThrottle","args":[40]}</code> over the service, or a scenario (<span class="file-path">docs/api/README.md</span>, "Simulator"). Each template has a check (<code>test/</code>, or <code>go test</code>) that runs it against <code>--headless --sim</code> on a free port; ctest runs them as <code>template_js</code>, <code>template_python</code> and <code>template_go</code>, so a template that stops working fails the build.</p>
@@ -254,6 +254,11 @@ client.connect()
 
         <h2 id="limits">What Is Not Available Yet</h2>
         <ul>
+          <li>Encryption: the service speaks plain TCP and WebSocket. Pairing keeps strangers out of the car; it does not hide the traffic.</li>
+          <li>A web frontend's manifest <code>scopes</code> are shown to the user but not enforced on the head unit's own browser while <code>serviceLoopbackOpen</code> is on; over the network the paired device's permissions apply.</li>
+          <li>Installed <code>exec</code> frontends on Android, iOS and the browser build.</li>
+          <li>The Go SDK as a published module: until it is tagged, a Go project points a <code>replace</code> line at <span class="file-path">sdk/go</span> (the Go template's README says how).</li>
+          <li>The phone's screen to a client without the <code>phone</code> permission, and Bluetooth adapter pairing anywhere but desktop Linux.</li>
         </ul>
 
         <div class="related-pages">

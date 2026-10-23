@@ -54,7 +54,7 @@ Every keyframe record carries the current SPS and PPS first, so a decoder can st
 
 **Developing without a phone.** `octave --headless --sim` (any build) and `sim.setVideo(true)` loop a test clip (`tests/data/stream-test.h264`, compiled in: 640x360 for 2 s, then 1280x720, 30 fps; made by `tools/stream/make_test_h264.sh`) into the phone stream, so the config change is exercised. See [Simulator](#simulator).
 
-**Security.** A read under the same rules as every op (loopback by default, the browser Origin rule). The phone screen is sensitive: when pairing lands, `stream` will need an authorised client like every other op.
+**Security.** `stream` needs a trusted connection like every op ("Pairing" below); the phone's screen is sensitive, so `phoneMirrorManager.video` also needs the `phone` permission ("Permissions"), while `androidAutoManager.frames` is a read.
 
 ## Regenerating
 
@@ -91,7 +91,7 @@ Not covered by the version: the `sim` object (experimental, see [Simulator](#sim
 Who may use the service (`src/service/servicepairing.h`). A connection is **trusted** when its peer is on this device and the setting `serviceLoopbackOpen` is true (the default), or when it has presented a paired device's token. Every op and action except `hello` and `pair` needs trust, checked as each op runs; an untrusted connection gets `{"ok": false, "error": "not paired: ...", "code": "unauthorised"}`. The page and `--web-root` files are public (they carry the pairing form); `/art` and `/export/...` need trust: a media ticket (`?ticket=`) from a browser, or `Authorization: Bearer <token>`.
 
 1. The user opens OCTAVE's Settings > Service > Pair a device: a 6-digit code shows for 2 minutes.
-2. The client sends `{"op":"pair","code":"123456","name":"Kitchen tablet"}` and gets `{"token": "<64 hex>"}`; that connection is trusted at once. Store the token.
+2. The client sends `{"op":"pair","code":"123456","name":"Kitchen tablet","scopes":["media"]}` and gets `{"token": "<64 hex>", "scopes": ["read", "media"]}`; that connection is trusted at once. Store the token. Without `scopes` the device gets `full` ("Permissions" below).
 3. Later connections send `{"op":"hello","token":"..."}` first; `hello` answers `"auth": "trusted"`. An unknown or revoked token is not an error: `hello` answers `"auth": "untrusted", "tokenRejected": true` (and drops any token the connection had), so show your pairing screen.
 4. For images and downloads, a trusted connection asks `{"op":"mediaTicket"}` → `{ticket, expiresIn: 600}` and uses `/art?ticket=...`; never put the token in a URL.
 5. `{"op":"unpair"}` forgets the caller's own device.
