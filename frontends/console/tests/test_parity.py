@@ -449,3 +449,19 @@ async def test_download_last_export(sdk, tmp_path):
         app.screen.query_one("Input").value = str(target)
         await pilot.press("enter")
         assert await wait_for(pilot, lambda: target.exists() and target.stat().st_size > 0)
+
+
+def test_token_store(tmp_path):
+    import os
+    import stat
+
+    from octave_console.link import TokenStore
+    store = TokenStore(tmp_path / "sub" / "tokens.json")
+    assert store.get("127.0.0.1:9876") is None
+    store.put("127.0.0.1:9876", "ab" * 32)
+    store.put("10.0.0.5:9876", "cd" * 32)
+    assert store.get("127.0.0.1:9876") == "ab" * 32
+    assert stat.S_IMODE(os.stat(store.path).st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(store.path.parent).st_mode) == 0o700
+    store.put("127.0.0.1:9876", None)   # forgotten (revoked)
+    assert store.get("127.0.0.1:9876") is None and store.get("10.0.0.5:9876") == "cd" * 32

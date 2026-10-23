@@ -17,6 +17,8 @@ cd frontends/console
 ~/venvs/octave-console/bin/python -m octave_console    # --host H --port P --tab live|obd|trips|library|downloads|dash|car|phone|system|settings|api
 ```
 
+Over the network (OCTAVE started with `--service-bind`), protocol 2 wants the console paired: it shows a pair screen, you type the 6-digit code from OCTAVE's Settings > Service > Pair a device, and the token is kept in `$XDG_CONFIG_HOME/octave-console/tokens.json` (mode 0600, one per host:port; `--token-file` elsewhere, `--token` or `OCTAVE_TOKEN` to pass one). A revoked token is forgotten and it asks again. On the head unit itself nothing is asked while `serviceLoopbackOpen` is on (the default). Covers and downloads send the token as `Authorization: Bearer`, never in a URL.
+
 Start it before or after OCTAVE: until the service answers, the status line shows NO LINK and it retries every second. It reconnects the same way if OCTAVE restarts. Needs Python 3.10 or newer and a terminal of about 120x32 or more.
 
 | Key | Does |

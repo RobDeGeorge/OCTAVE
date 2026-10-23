@@ -183,3 +183,40 @@ class FolderPick(ModalScreen):
 
     def action_cancel(self):
         self.dismiss(None)
+
+
+class PairScreen(ModalScreen):
+    """Ask for the 6-digit code OCTAVE shows in Settings > Service > Pair a device.
+    Returns (code, name), or None."""
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, address, name, error=""):
+        super().__init__()
+        self.address = address
+        self.device_name = name
+        self.error = error
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog"):
+            yield Label(f"[b]Pair with OCTAVE at {self.address}[/b]")
+            yield Static("On the head unit: Settings > Service > Pair a device. Type the 6-digit code it shows "
+                         "(valid for 2 minutes).")
+            yield Input(placeholder="123456", id="pair-code", max_length=6, restrict=r"[0-9]*")
+            yield Input(self.device_name, id="pair-name")
+            if self.error:
+                yield Static(f"[red]{self.error}[/red]")
+            yield Static("[dim]Enter pairs, Escape stays unpaired[/dim]")
+
+    def on_mount(self):
+        self.query_one("#pair-code", Input).focus()
+
+    def on_input_submitted(self, event):
+        code = self.query_one("#pair-code", Input).value.strip()
+        if len(code) == 6:
+            self.dismiss((code, self.query_one("#pair-name", Input).value.strip() or "OCTAVE console"))
+        else:
+            self.query_one("#pair-code", Input).focus()
+
+    def action_cancel(self):
+        self.dismiss(None)

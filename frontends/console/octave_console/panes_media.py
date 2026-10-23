@@ -41,10 +41,11 @@ def halfblock(data, cols=COVER_COLS, rows=COVER_ROWS):
     return out
 
 
-def fetch_art(host, port, query=""):
+def fetch_art(host, port, query="", headers=None):
     """GET /art (the current cover) or /art?song= / ?queue=; None on 404 or error."""
     try:
-        with urllib.request.urlopen(f"http://{host}:{port}/art{query}", timeout=3) as r:
+        req = urllib.request.Request(f"http://{host}:{port}/art{query}", headers=headers or {})
+        with urllib.request.urlopen(req, timeout=3) as r:
             return r.read() if r.status == 200 else None
     except Exception:
         return None
@@ -218,7 +219,7 @@ class LibraryPane(Pane):
             self.covers[query] = art
             if self.cover_query == query:
                 self.query_one("#lib-cover", Static).update(art or "[dim]no cover[/dim]")
-        self.app.blocking(lambda _link: halfblock(fetch_art(link.host, link.port, query) or b""), got)
+        self.app.blocking(lambda _link: halfblock(fetch_art(link.host, link.port, query, link.http_headers()) or b""), got)
 
     def on_data_table_row_highlighted(self, event):
         tid = event.data_table.id
