@@ -17,7 +17,7 @@
 
 **Windows · macOS · Linux · Raspberry Pi / Orange Pi · Android**
 
-### [⬇️ Download](https://github.com/RobDeGeorge/OCTAVE/releases/latest) &nbsp;·&nbsp; [📖 Wiki](https://robdegeorge.com/OCTAVE/) &nbsp;·&nbsp; [🔌 Build your own frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html)
+### [Download](https://github.com/RobDeGeorge/OCTAVE/releases/latest) &nbsp;·&nbsp; [Wiki](https://robdegeorge.com/OCTAVE/) &nbsp;·&nbsp; [Build your own frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html)
 
 </div>
 
@@ -27,7 +27,7 @@ Stock head units are locked boxes. Phone projection hides the car behind your ph
 
 I daily-drive it in my 2003 Jeep TJ.
 
-> 🔌 **Getting data from your car:** plug an ELM327 OBD-II adapter (the cheap $15–30 kind) into the port under your dash. Every car sold in the US since 1996 has one.
+> **Getting data from your car:** plug an ELM327 OBD-II adapter (the cheap $15–30 kind) into the port under your dash. Every car sold in the US since 1996 has one.
 > - **USB** adapters work on every platform.
 > - **Bluetooth** adapters pair from inside OCTAVE on Linux and the Pi. On Windows and macOS, pair it in system settings and pick its port.
 > - **BLE** adapters work on Android.
@@ -36,20 +36,20 @@ I daily-drive it in my 2003 Jeep TJ.
 
 <table>
 <tr>
-<td width="33%" align="center"><a href="#-music-that-paints-the-whole-dash"><img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room"></a><br><b>🎨 Music paints the dash</b><br><sub>Every song recolours the UI</sub></td>
-<td width="33%" align="center"><a href="#-gauges-you-design-on-the-screen"><img src="frontend/assets/readme/dashboards_sport.png" alt="Sport dashboard"></a><br><b>📊 Gauges you design</b><br><sub>Drag-and-drop editor, 129 live readings</sub></td>
-<td width="33%" align="center"><a href="#-a-black-box-for-every-drive"><img src="frontend/assets/readme/blackbox_coolant.png" alt="Trip history chart"></a><br><b>🧠 A black box</b><br><sub>Every drive recorded and charted</sub></td>
+<td width="33%" align="center"><a href="#music-that-paints-the-whole-dash"><img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room"></a><br><b>Music paints the dash</b><br><sub>Every song recolours the UI</sub></td>
+<td width="33%" align="center"><a href="#gauges-you-design-on-the-screen"><img src="frontend/assets/readme/dashboards_sport.png" alt="Sport dashboard"></a><br><b>Gauges you design</b><br><sub>Drag-and-drop editor, 129 live readings</sub></td>
+<td width="33%" align="center"><a href="#a-black-box-for-every-drive"><img src="frontend/assets/readme/blackbox_coolant.png" alt="Trip history chart"></a><br><b>A black box</b><br><sub>Every drive recorded and charted</sub></td>
 </tr>
 <tr>
-<td align="center"><a href="#-your-phone-on-the-dash"><img src="frontend/assets/readme/mirror_live.png" alt="Phone mirroring"></a><br><b>📱 Your phone on the dash</b><br><sub>USB or Wi-Fi, nothing to install</sub></td>
-<td align="center"><a href="#-shift-light-warnings-and-trouble-codes"><img src="frontend/assets/readme/shiftlight_strobe.png" alt="Shift light"></a><br><b>🚨 Shift light & codes</b><br><sub>Read and clear the check-engine light</sub></td>
-<td align="center"><a href="#-drive-it-from-anything"><img src="frontend/assets/readme/webclient_tile.png" alt="OCTAVE's web client on a phone"></a><br><b>🔌 Open API</b><br><sub>Drive it from a browser or a script</sub></td>
+<td align="center"><a href="#your-phone-on-the-dash"><img src="frontend/assets/readme/mirror_live.png" alt="Phone mirroring"></a><br><b>Your phone on the dash</b><br><sub>USB or Wi-Fi, nothing to install</sub></td>
+<td align="center"><a href="#shift-light-warnings-and-trouble-codes"><img src="frontend/assets/readme/shiftlight_strobe.png" alt="Shift light"></a><br><b>Shift light & codes</b><br><sub>Read and clear the check-engine light</sub></td>
+<td align="center"><a href="#drive-it-from-anything"><img src="frontend/assets/readme/webclient_tile.png" alt="OCTAVE's web client on a phone"></a><br><b>Open API</b><br><sub>Drive it from a browser or a script</sub></td>
 </tr>
 </table>
 
 ---
 
-## 🎨 Music that paints the whole dash
+## Music that paints the whole dash
 
 <p align="center"><img src="frontend/assets/readme/media.webp" alt="Skipping tracks: the accent, glow and background follow each album's art" width="900"></p>
 
@@ -60,7 +60,7 @@ Skip a track and the whole interface takes its colours from the cover art. Local
   <img src="frontend/assets/readme/library_search.png" alt="Searching YouTube Music for David Bowie, each result with album art and a download button" width="49%">
 </p>
 
-## 📊 Gauges you design on the screen
+## Gauges you design on the screen
 
 <p align="center"><img src="frontend/assets/readme/dashboards.webp" alt="The dashboard chooser with live miniatures, then Sport, Performance, TJ Wrangler and Full Grid under load" width="900"></p>
 
@@ -75,13 +75,13 @@ No code and no JSON: tap an empty cell, pick a gauge, pick what it shows, drag i
   <img src="frontend/assets/readme/dashboards_tj_wrangler.png" alt="TJ Wrangler 4.0 dashboard: fuel trims, O2 sensors, timing and pressures" width="49%">
 </p>
 
-## 🧠 A black box for every drive
+## A black box for every drive
 
 <p align="center"><img src="frontend/assets/readme/blackbox.webp" alt="Trip History: the drive in progress recording at the top, then a past drive's stats and its coolant and voltage charts" width="900"></p>
 
 OCTAVE records **every reading of every drive**, quietly, in the background. Open Trip History to see each drive's distance, top speed, peak coolant, voltage and fuel used, and chart any parameter over the whole trip. Export a drive as CSV, or open the files yourself.
 
-## 🚨 Shift light, warnings and trouble codes
+## Shift light, warnings and trouble codes
 
 <p align="center"><img src="frontend/assets/readme/shiftlight.webp" alt="Revving up: the shift lamp turns green, flashes yellow, then the whole screen strobes red" width="900"></p>
 
@@ -91,13 +91,13 @@ Set your own RPM bands: the lamp goes green, flashes yellow, and at the top **th
 
 Check-engine light on? Read the stored and pending codes in plain English, grab the freeze frame, and clear them, right from the dash.
 
-## 📱 Your phone on the dash
+## Your phone on the dash
 
 <p align="center"><img src="frontend/assets/readme/mirror_live.png" alt="A Samsung phone's DeX desktop mirrored onto the head unit" width="900"></p>
 
 Plug in an Android phone, or pair it once over Wi-Fi by scanning a QR code. OCTAVE mirrors a DeX-style desktop onto the dash with its own built-in client: **nothing to install on the phone**. A bumped USB cable picks up where it left off instead of starting over.
 
-## 🚙 The car, live in 3D
+## The car, live in 3D
 
 <p align="center"><img src="frontend/assets/readme/jeep.webp" alt="A rigged 3D Jeep TJ: doors, hood and tailgate open, lights on, steering and wheels turning, tilted by the IMU" width="900"></p>
 
@@ -107,7 +107,7 @@ A rigged model of the Jeep with working doors, hood, tailgate, lights, steering 
 
 Pitch, roll, heading, a G-force plot with a trail, altitude and temperature, sampled at 200 Hz.
 
-## 🔌 Drive it from anything
+## Drive it from anything
 
 <table>
 <tr>
@@ -134,17 +134,17 @@ A stdlib-only [Python SDK](sdk/), a no-build [web client](sdk/web/index.html), t
 
 ---
 
-## ⬇️ Install
+## Install
 
 Grab the file for your platform from **[Releases](https://github.com/RobDeGeorge/OCTAVE/releases/latest)**. No toolchain needed.
 
 | Platform | File | |
 |---|---|---|
-| 🪟 Windows | `OCTAVE-<version>-windows-x86_64.exe` | Run the installer |
-| 🍎 macOS | `OCTAVE-<version>-macos.dmg` | Drag to Applications |
-| 🐧 Linux | `OCTAVE-<version>-linux-x86_64.AppImage` | `chmod +x`, then run |
-| 🍓 Raspberry Pi / Orange Pi (64-bit) | `OCTAVE-<version>-linux-aarch64.AppImage` | `chmod +x`, then run |
-| 🤖 Android | `OCTAVE-<version>-android-arm64-v8a.apk` | Sideload it |
+| Windows | `OCTAVE-<version>-windows-x86_64.exe` | Run the installer |
+| macOS | `OCTAVE-<version>-macos.dmg` | Drag to Applications |
+| Linux | `OCTAVE-<version>-linux-x86_64.AppImage` | `chmod +x`, then run |
+| Raspberry Pi / Orange Pi (64-bit) | `OCTAVE-<version>-linux-aarch64.AppImage` | `chmod +x`, then run |
+| Android | `OCTAVE-<version>-android-arm64-v8a.apk` | Sideload it |
 
 <details>
 <summary>Platform notes</summary>
@@ -158,27 +158,27 @@ Grab the file for your platform from **[Releases](https://github.com/RobDeGeorge
 
 | | OCTAVE | Crankshaft | OpenAuto Pro | Stock Android Auto |
 |---|---|---|---|---|
-| Open source | ✅ GPLv3 | ✅ | partial | ❌ |
-| Works without a phone | ✅ | ❌ AA projection | ❌ AA projection | ❌ |
-| Live OBD-II, your own dashboards | ✅ | ❌ | limited | ❌ |
-| Records every drive | ✅ | ❌ | ❌ | ❌ |
-| Phone mirroring | ✅ nothing to install | AA only | AA only | n/a |
-| Open API for your own UI | ✅ | ❌ | ❌ | ❌ |
-| Fully themable / forkable UI | ✅ QML | limited | limited | ❌ |
-| Develop on your laptop | ✅ Win / macOS / Linux | Pi only | Pi only | n/a |
+| Open source | Yes, GPLv3 | Yes | partial | No |
+| Works without a phone | Yes | No, AA projection | No, AA projection | No |
+| Live OBD-II, your own dashboards | Yes | No | limited | No |
+| Records every drive | Yes | No | No | No |
+| Phone mirroring | Yes, nothing to install | AA only | AA only | n/a |
+| Open API for your own UI | Yes | No | No | No |
+| Fully themable / forkable UI | Yes, QML | limited | limited | No |
+| Develop on your laptop | Yes, Win / macOS / Linux | Pi only | Pi only | n/a |
 
 ## Everything else it does
 
-- 🎛️ **ESP32 wireless volume knob** with an LED ring that matches the theme
-- 👋 **Gesture sensor** (PAJ7620U2): wave to skip, pause or change the volume
-- 🔵 **Bluetooth OBD adapters** found, paired and connected from the app on Linux; BLE adapters on Android
-- ⚙️ **100+ settings**, all on the screen, all saved
-- 📖 **The whole wiki inside the app**, readable offline
-- 🩺 **Logs and crash traces** you can export from the dash when something goes wrong
+- **ESP32 wireless volume knob** with an LED ring that matches the theme
+- **Gesture sensor** (PAJ7620U2): wave to skip, pause or change the volume
+- **Bluetooth OBD adapters** found, paired and connected from the app on Linux; BLE adapters on Android
+- **100+ settings**, all on the screen, all saved
+- **The whole wiki inside the app**, readable offline
+- **Logs and crash traces** you can export from the dash when something goes wrong
 
 ---
 
-## 🛠️ Hack on it
+## Hack on it
 
 OCTAVE is C++ / Qt 6 with a QML frontend, built with CMake, small enough to fork. `--dev` runs it with a **simulated car** (warm-up, overheating and low-fuel scenarios) and simulated motion, so you can work on gauges at your desk.
 
@@ -231,7 +231,7 @@ To stay on the VPN, sign in through a cookies file instead:
 
 </details>
 
-## 🗺️ What's next
+## What's next
 
 - **Android on the Play Store**: the APK runs today as a sideload ([plan](TODO/android-cpp-port.md))
 - **Health trends across drives** on top of the black box ([plan](TODO/trip-history.md))
@@ -240,11 +240,11 @@ To stay on the VPN, sign in through a cookies file instead:
 
 Every plan lives in [`TODO/`](TODO/).
 
-## 📖 Documentation
+## Documentation
 
 The **[wiki](https://robdegeorge.com/OCTAVE/)** covers the architecture, every manager and page, every setting, hardware setup and the build guides. The same pages ship in [`wiki/`](wiki/index.html) and inside the app. Building gauges: [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md). Building a frontend: [Writing a Frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html) and [`docs/api/`](docs/api/README.md).
 
-## 🤝 Contributing
+## Contributing
 
 Pull requests and bug reports are welcome. Built a dashboard, a sensor integration, a port to new hardware, or your own frontend? Open an issue or a PR. I'd love to see it.
 
