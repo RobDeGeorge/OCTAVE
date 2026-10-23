@@ -4,7 +4,7 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "downloadManager", "esp32VolumeManager", "fontCatalog", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "themeCatalog", "tripRecorder", "units", "volumeController"}
+var ObjectNames = []string{"androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "downloadManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "themeCatalog", "tripRecorder", "units", "volumeController"}
 
 // AndroidAutoManager is the service object "androidAutoManager" (C++ AndroidAutoManager); NewAndroidAutoManager(c) binds it to a client.
 type AndroidAutoManager struct{ c *Client }
@@ -721,6 +721,86 @@ func (o FontCatalog) GetFonts() (v []any, err error) {
 // GetSymbolFamily reads the property "symbolFamily" (QString).
 func (o FontCatalog) GetSymbolFamily() (v string, err error) {
 	err = o.c.Get("fontCatalog", "symbolFamily", &v)
+	return
+}
+
+// FrontendManager is the service object "frontendManager" (C++ FrontendManager); NewFrontendManager(c) binds it to a client.
+type FrontendManager struct{ c *Client }
+
+// NewFrontendManager binds "frontendManager" to c.
+func NewFrontendManager(c *Client) FrontendManager { return FrontendManager{c} }
+
+// Name is the object's name on the wire.
+func (FrontendManager) Name() string { return "frontendManager" }
+
+// GetFrontends reads the property "frontends" (QVariantList).
+func (o FrontendManager) GetFrontends() (v []any, err error) {
+	err = o.c.Get("frontendManager", "frontends", &v)
+	return
+}
+
+// GetActiveId reads the property "activeId" (QString).
+func (o FrontendManager) GetActiveId() (v string, err error) {
+	err = o.c.Get("frontendManager", "activeId", &v)
+	return
+}
+
+// GetRunningId reads the property "runningId" (QString).
+func (o FrontendManager) GetRunningId() (v string, err error) {
+	err = o.c.Get("frontendManager", "runningId", &v)
+	return
+}
+
+// GetForcedQml reads the property "forcedQml" (bool).
+func (o FrontendManager) GetForcedQml() (v bool, err error) {
+	err = o.c.Get("frontendManager", "forcedQml", &v)
+	return
+}
+
+// GetForcedQmlReason reads the property "forcedQmlReason" (QString).
+func (o FrontendManager) GetForcedQmlReason() (v string, err error) {
+	err = o.c.Get("frontendManager", "forcedQmlReason", &v)
+	return
+}
+
+// GetLastError reads the property "lastError" (QString).
+func (o FrontendManager) GetLastError() (v string, err error) {
+	err = o.c.Get("frontendManager", "lastError", &v)
+	return
+}
+
+// InstallFromFolder calls installFromFolder(QString) -> QString.
+func (o FrontendManager) InstallFromFolder(path string) (v string, err error) {
+	err = o.c.Call("frontendManager", "installFromFolder", &v, path)
+	return
+}
+
+// InstallFromZip calls installFromZip(QString) -> QString.
+func (o FrontendManager) InstallFromZip(path string) (v string, err error) {
+	err = o.c.Call("frontendManager", "installFromZip", &v, path)
+	return
+}
+
+// Remove calls remove(QString) -> bool.
+func (o FrontendManager) Remove(id string) (v bool, err error) {
+	err = o.c.Call("frontendManager", "remove", &v, id)
+	return
+}
+
+// SetActive calls setActive(QString) -> bool.
+func (o FrontendManager) SetActive(id string) (v bool, err error) {
+	err = o.c.Call("frontendManager", "setActive", &v, id)
+	return
+}
+
+// ClearForcedQml calls clearForcedQml().
+func (o FrontendManager) ClearForcedQml() error {
+	return o.c.Call("frontendManager", "clearForcedQml", nil)
+}
+
+// ManifestOf calls manifestOf(QString) -> QVariantMap.
+func (o FrontendManager) ManifestOf(id string) (v map[string]any, err error) {
+	err = o.c.Call("frontendManager", "manifestOf", &v, id)
 	return
 }
 

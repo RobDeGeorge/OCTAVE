@@ -1,0 +1,149 @@
+{
+    "class": "FrontendManager",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "installFromFolder",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "system"
+        },
+        {
+            "kind": "invokable",
+            "name": "installFromZip",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "system"
+        },
+        {
+            "kind": "invokable",
+            "name": "remove",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "system"
+        },
+        {
+            "kind": "invokable",
+            "name": "setActive",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "system"
+        },
+        {
+            "kind": "invokable",
+            "name": "clearForcedQml",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "system"
+        },
+        {
+            "kind": "invokable",
+            "name": "manifestOf",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read"
+        }
+    ],
+    "object": "frontendManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "frontends",
+            "notify": "frontendsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "activeId",
+            "notify": "activeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "runningId",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "forcedQml",
+            "notify": "activeChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "forcedQmlReason",
+            "notify": "activeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastError",
+            "notify": "lastErrorChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "frontendsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "activeChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastErrorChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "installed",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ]
+        }
+    ]
+}

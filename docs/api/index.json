@@ -10,6 +10,7 @@
         "downloadManager": "DownloadManager",
         "esp32VolumeManager": "ESP32VolumeManager",
         "fontCatalog": "FontCatalog",
+        "frontendManager": "FrontendManager",
         "gestureSensor": "GestureManager",
         "mediaManager": "MediaManager",
         "networkManager": "NetworkManager",

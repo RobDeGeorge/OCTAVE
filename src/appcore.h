@@ -41,6 +41,7 @@
 #include "managers/dashboardmanager.h"
 #include "util/fontcatalog.h"
 #include "sim/simulator.h"
+#include "managers/frontendmanager.h"
 
 class QQmlContext;
 class Units;
@@ -91,6 +92,8 @@ public:
     // The simulated car, inert unless main.cpp starts it (--sim, --dev, the
     // browser demo)
     Simulator sim;
+    // Installed frontends (<config>/frontends) and which one is the screen
+    FrontendManager frontendManager;
 
 private:
     void expose(const char *name, QObject *object);

@@ -30,7 +30,10 @@
 // token (revoked with it), for <img src="/art?ticket=..."> and downloads.
 //
 // serviceLoopbackOpen trusts any process on this device, a local reverse
-// proxy included: a proxy setup must set it false.
+// proxy included: a proxy setup must set it false. While an installed exec
+// frontend is the screen (frontendmanager.h) main.cpp turns it off for the
+// run, so that frontend, which is a process on this device, has only the
+// scopes of the session token OCTAVE gives it (addSessionDevice).
 //
 // This object is a QML context property for the Settings page but NOT a
 // service object: no client, paired or not, can mint a code, list devices,
@@ -48,6 +51,8 @@
 #include <QTimer>
 #include <QVariantList>
 
+#include <atomic>
+
 class SettingsManager;
 
 class ServicePairing : public QObject
@@ -55,7 +60,7 @@ class ServicePairing : public QObject
     Q_OBJECT
     Q_PROPERTY(QString pairingCode READ pairingCode NOTIFY pairingChanged)   // "" when none
     Q_PROPERTY(int pairingSecondsLeft READ pairingSecondsLeft NOTIFY pairingChanged)
-    Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)      // [{id, name, created, lastUsed, scopes}]
+    Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)      // [{id, name, created, lastUsed, scopes, session}]
     Q_PROPERTY(bool serviceEnabled READ serviceEnabled NOTIFY serviceEnabledChanged)
     Q_PROPERTY(bool loopbackOpen READ loopbackOpen CONSTANT)
 
@@ -81,6 +86,13 @@ public:
     Q_INVOKABLE void revoke(const QString &id);
     // Narrow (or widen) what a paired device may do; unknown scopes are ignored
     Q_INVOKABLE void setDeviceScopes(const QString &id, const QStringList &scopes);
+    // A token for a program OCTAVE starts itself (an exec frontend): a
+    // device held in memory only, never written to the settings file, gone
+    // at exit or with revoke(*id). `scopes` as in pair() (empty: full).
+    // GUI thread
+    QString addSessionDevice(const QString &name, const QStringList &scopes, QString *id);
+    // Loopback trust for this run only, not saved; before the service starts
+    void setLoopbackOpenForRun(bool open) { m_loopbackOpen = open; }
     // The service at the next start (serviceEnabled); takes effect then
     Q_INVOKABLE void setServiceEnabled(bool on);
 
@@ -120,6 +132,7 @@ private:
         QString id, name, hash;
         qint64 created = 0, lastUsed = 0;
         QStringList scopes{QStringLiteral("full")};
+        bool session = false;   // addSessionDevice: not persisted
     };
     void persist();   // GUI thread
     void persistLater();
@@ -145,7 +158,7 @@ private:
     QElapsedTimer m_lastUsedWrite;
     QTimer m_tick;   // the countdown on screen, and the code's expiry
     bool m_serviceEnabled = false;
-    bool m_loopbackOpen = true;
+    std::atomic<bool> m_loopbackOpen{true};
 };
 
 #endif // OCTAVE_SERVICE_SERVICEPAIRING_H

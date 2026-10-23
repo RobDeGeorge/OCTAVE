@@ -44,6 +44,7 @@
             <li><a href="#phoneMirrorManager">PhoneMirrorManager</a></li>
             <li><a href="#downloadManager">DownloadManager</a></li>
             <li><a href="#dashboardManager">DashboardManager</a></li>
+            <li><a href="#frontendManager">FrontendManager</a></li>
             <li><a href="#perfMonitor">PerfMonitor</a> <span class="platform-badge desktop">developer only</span></li>
           </ul>
         </nav>
@@ -86,6 +87,7 @@
             <tr><td><a href="#phoneMirrorManager"><code>phoneMirrorManager</code></a></td><td><code>PhoneMirrorManager</code> &mdash; <span class="file-path">src/managers/phonemirrormanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#downloadManager"><code>downloadManager</code></a></td><td><code>DownloadManager</code> &mdash; <span class="file-path">src/managers/downloadmanager.h</span></td><td>Stub class when <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
             <tr><td><a href="#dashboardManager"><code>dashboardManager</code></a></td><td><code>DashboardManager</code> &mdash; <span class="file-path">src/managers/dashboardmanager.h</span></td><td></td></tr>
+            <tr><td><a href="#frontendManager"><code>frontendManager</code></a></td><td><code>FrontendManager</code> &mdash; <span class="file-path">src/managers/frontendmanager.h</span></td><td></td></tr>
             <tr><td><a href="#perfMonitor"><code>perfMonitor</code></a></td><td><code>PerfMonitor</code> &mdash; <span class="file-path">src/dev/perfmonitor.h</span></td><td>Only with <code>--profile</code>, in <code>OCTAVE_DEV_TOOLS</code> builds; registered by <code>OctaveDev::Runtime</code></td></tr>
           </tbody>
         </table>
@@ -1548,6 +1550,42 @@
           <tbody>
             <tr><td><code>dashboardsChanged()</code></td><td>After any rescan (save, delete, duplicate, import, <code>refresh()</code>, or the user dir changing on disk)</td></tr>
             <tr><td><code>lastShareErrorChanged()</code></td><td>When <code>lastShareError</code> changes</td></tr>
+          </tbody>
+        </table>
+
+        <!-- FrontendManager -->
+        <h2 id="frontendManager">FrontendManager <span class="cmt">&mdash; <code>frontendManager</code></span></h2>
+        <p><span class="file-path">src/managers/frontendmanager.h</span>, <span class="file-path">src/managers/frontendmanifest.h</span> &mdash; QML context property and service object <code>frontendManager</code> (changes need the <code>system</code> permission)</p>
+        <p>Installed frontends in <code>&lt;app data&gt;/frontends/&lt;id&gt;/</code>, each with an <code>octave-frontend.json</code>, and which one is the screen from the next start (see <a href="writing-a-frontend.html#install">Writing a Frontend</a>).</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>frontends</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>frontendsChanged</code></td><td><code>[{id, name, version, description, kind, protocol, scopes, command, active, compatible, problem, path}]</code>; a broken folder is listed with its <code>problem</code></td></tr>
+            <tr><td><code>activeId</code></td><td><code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td>The frontend used from the next start; <code>""</code> for the built-in QML UI</td></tr>
+            <tr><td><code>runningId</code></td><td><code>QString</code></td><td>constant</td><td>&mdash;</td><td>What this run shows, decided at start (<code>""</code> = the QML UI)</td></tr>
+            <tr><td><code>forcedQml</code>, <code>forcedQmlReason</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td><code>USE_QML</code> is present (an exec frontend is not started) and its text</td></tr>
+            <tr><td><code>lastError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorChanged</code></td><td>Why the last install / remove / <code>setActive</code> failed; <code>""</code> after a success</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>installFromFolder(QString path)</code></td><td><code>QString</code></td><td>Copy a frontend folder in after checking it (manifest, protocol, a program for this platform, no links, at most 10000 files and 256 MB); nothing in it runs. The id, or <code>""</code> with <code>lastError</code></td></tr>
+            <tr><td><code>installFromZip(QString path)</code></td><td><code>QString</code></td><td>Same from a <code>.zip</code> of the folder or of its contents; an entry naming a path outside the folder, a link or a size that doesn't match refuses the whole zip</td></tr>
+            <tr><td><code>remove(QString id)</code></td><td><code>bool</code></td><td>Delete an installed frontend (not the one running)</td></tr>
+            <tr><td><code>setActive(QString id)</code></td><td><code>bool</code></td><td>The screen from the next start; <code>""</code> = the QML UI. Refuses one that can't run here</td></tr>
+            <tr><td><code>clearForcedQml()</code></td><td><code>void</code></td><td>Delete <code>USE_QML</code></td></tr>
+            <tr><td><code>manifestOf(QString id)</code></td><td><code>QVariantMap</code></td><td>One row of <code>frontends</code>, <code>{}</code> if none</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code></td><td>As the properties change</td></tr>
+            <tr><td><code>installed(QString id)</code></td><td>An install finished</td></tr>
           </tbody>
         </table>
 

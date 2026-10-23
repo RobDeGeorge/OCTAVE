@@ -98,9 +98,13 @@ if(EMSCRIPTEN)
     target_compile_options(octave_sqlite PRIVATE -pthread)
 endif()
 
-# Qt6::CorePrivate is an imported target provided by Qt6::Core — not a
-# separately-findable component. Linking it grants access to private headers
-# (QtAndroidPrivate::requestPermission on Android).
+# Qt6::CorePrivate grants access to private headers (QZipReader for
+# frontend installs, QtAndroidPrivate::requestPermission on Android). Up to
+# Qt 6.8 it comes with Qt6::Core; from 6.9 it is its own package.
+set(QT_NO_PRIVATE_MODULE_WARNING ON)   # the use is deliberate and small
+if(NOT TARGET Qt6::CorePrivate)
+    find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
+endif()
 
 # TagLib only available on desktop (no pkg-config on Android host; mobile uses Qt metadata fallback).
 # Windows: vcpkg ships taglib's CMake config — find_package is the supported path there.
@@ -290,6 +294,10 @@ qt_add_executable(octave
     src/managers/tripstore.cpp
     src/managers/triprecorder.h
     src/managers/triprecorder.cpp
+    src/managers/frontendmanifest.h
+    src/managers/frontendmanifest.cpp
+    src/managers/frontendmanager.h
+    src/managers/frontendmanager.cpp
     # The simulator (--sim, the `sim` object, the browser demo): in every
     # build, inert unless started
     src/sim/simulator.h
@@ -366,6 +374,8 @@ target_link_libraries(octave PRIVATE
     Qt6::Multimedia
     Qt6::Network
     Qt6::Concurrent
+    # QZipReader (private, in QtCore since 6.2): installing a frontend from a .zip
+    Qt6::CorePrivate
     octave_sqlite
 )
 if(EMSCRIPTEN)

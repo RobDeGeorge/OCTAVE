@@ -154,6 +154,10 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     // The simulator: `active` false and every control a no-op unless started
     expose("sim", &sim);
 
+    // Other screens: installed web / exec frontends, chosen from the next start
+    frontendManager.setRoot(SettingsManager::getAppDataDir() + QStringLiteral("/frontends"));
+    expose("frontendManager", &frontendManager);
+
     wireInputs();
     wireKnobLed();
 }

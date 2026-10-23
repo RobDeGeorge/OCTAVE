@@ -29,6 +29,7 @@
             <li><a href="#first">Your First Frontend in 60 Lines</a></li>
             <li><a href="#recipes">Recipes</a></li>
             <li><a href="#headless">Being the Only UI</a></li>
+            <li><a href="#install">Installing Your Frontend</a></li>
             <li><a href="#rules">Versioning and Security</a></li>
             <li><a href="#limits">What Is Not Available Yet</a></li>
           </ul>
@@ -188,6 +189,24 @@ client.connect()
         <p><code>octave --headless</code> runs every manager and the service with no QML engine and no window (the offscreen Qt platform), using about a fifth less memory than the full app. Music, OBD polling, the black box, the knob, gestures and the IMU all keep working; your frontend is the screen. It needs the service, so it exits if the service can't start. <code>hello</code> reports <code>"headless": true</code>.</p>
         <p><code>octave --headless --sim</code> (<a href="#start">step 1</a>, any build) adds the simulated car behind the real <code>OBDManager</code> and simulated IMU motion, so OBD values, the G-force and the compass move with no adapter and no QML UI. Drive it with the <code>sim</code> object on the same port, for example <code>{"op":"call","object":"sim","method":"setThrottle","args":[80]}</code> or <code>{"op":"call","object":"sim","method":"scenario","args":["hot"]}</code>.</p>
         <p>The SDK's <code>launch_headless()</code> starts one with a throwaway config, the easiest way to test a frontend or a script: <span class="file-path">sdk/python/tests/test_client.py</span> does exactly that.</p>
+
+        <h2 id="install">Installing Your Frontend</h2>
+        <p>A frontend ships as a folder (or a <code>.zip</code> of one) with an <code>octave-frontend.json</code> at its top:</p>
+        <pre><code>{
+  "id": "com.example.dash",          <span class="cmt">// lower case, digits, . _ -: its folder name on the head unit</span>
+  "name": "Example Dash",
+  "version": "1.2.0",
+  "description": "Big gauges for the track",
+  "protocol": [2, 2],                <span class="cmt">// the protocol versions it speaks, min and max</span>
+  "scopes": ["read", "media"],       <span class="cmt">// the permissions it asks for (docs/api/README.md, "Permissions")</span>
+  "web":  {"root": "dist"}           <span class="cmt">// a folder with index.html, served at GET /</span>
+  <span class="cmt">// or</span>
+  "exec": {"linux":   ["bin/dash", "--fullscreen"],
+           "windows": ["dash.exe"],
+           "macos":   ["bin/dash"]}  <span class="cmt">// a program and its arguments per platform</span>
+}</code></pre>
+        <p>Exactly one of <code>web</code> and <code>exec</code>. Paths are relative to the folder and can't leave it. An exec program is either inside the folder (<code>bin/dash</code>) or a bare name found on <code>PATH</code> (<code>python3</code>, with your script as an argument); <code>{dir}</code> in an argument becomes the folder. <code>scopes</code> defaults to <code>["read"]</code>. Unknown keys are ignored, so a manifest written for a newer OCTAVE still installs on this one if its <code>protocol</code> range fits.</p>
+        <p><code>frontendManager</code> (<a href="signals-slots-reference.html#frontendManager">reference</a>) installs one: <code>installFromFolder(path)</code> or <code>installFromZip(path)</code> copies it to <span class="file-path">&lt;config&gt;/frontends/&lt;id&gt;/</span> after checking the manifest, that this OCTAVE speaks one of its protocol versions, that it has a program for this platform, and that it holds no links, nothing outside its folder (a zip entry like <code>../x</code> refuses the whole zip), at most 10&nbsp;000 files and 256&nbsp;MB. Nothing in it runs at install. Installing the same id again replaces it. <code>setActive(id)</code> makes it the screen from the next start (<code>""</code> goes back to the built-in QML UI), <code>remove(id)</code> deletes it. These need the <code>system</code> permission.</p>
 
         <h2 id="rules">Versioning and Security</h2>
         <ul>
