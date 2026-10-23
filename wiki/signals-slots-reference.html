@@ -686,7 +686,8 @@
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>setViewActive(bool active)</code></td><td><code>void</code></td><td>A view showing the bars is on screen; the only call a frontend makes. Nothing runs and no file is decoded while no view is active</td></tr>
+            <tr><td><code>setViewActive(bool active)</code></td><td><code>void</code></td><td>A view showing the bars is on screen: the QML UI's consumer, <code>setDemand("view", active)</code>. Nothing runs and no file is decoded while no consumer wants the bars</td></tr>
+            <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td><code>void</code></td><td>A frontend's bars are on screen under its own consumer name; runs while any consumer wants them; released when its service connection closes</td></tr>
             <tr><td><code>setPlaying(bool)</code>, <code>setLocalFile(QString path)</code>, <code>setPosition(qint64 ms)</code></td><td><code>void</code></td><td>What is playing, fed by <code>main.cpp</code> from <code>nowPlaying.playing</code>, <code>MediaManager::currentMediaChanged</code> and <code>MediaManager::positionChanged</code> (local bars change at that 100 ms rate)</td></tr>
             <tr><td><code>analyze_file(QString filePath)</code></td><td><code>void</code></td><td>Decode a file and pre-compute FFT levels in 100 ms chunks off the GUI thread (QtConcurrent / ThreadPoolExecutor); a file requested mid-analysis is queued</td></tr>
             <tr><td><code>update_position(float positionSeconds)</code></td><td><code>void</code></td><td>Select the chunk for a playback position (seconds) and emit <code>fftDataChanged</code> when active</td></tr>

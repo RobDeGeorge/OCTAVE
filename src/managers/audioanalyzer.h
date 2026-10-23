@@ -6,6 +6,7 @@
 #include <QString>
 #include <QByteArray>
 #include <QMap>
+#include <QSet>
 #include <QVector>
 #include <QFuture>
 #include <QFutureWatcher>
@@ -23,8 +24,10 @@
 // OCTAVE plays, every kLiveFrameMs (the window is 100 ms). main.cpp feeds it
 // what is playing (NowPlaying's source and play state, MediaManager's track
 // and position); a frontend only says whether its bars are on screen
-// (setViewActive) and draws `levels`. Nothing runs, and no file is decoded,
-// while no view is.
+// (setDemand(consumer, wanted); the QML UI's setViewActive is the consumer
+// "view") and draws `levels`. Nothing runs, and no file is decoded, while no
+// consumer wants the bars. Over the service a consumer is released when its
+// connection closes.
 class AudioAnalyzer : public QObject
 {
     Q_OBJECT
@@ -44,8 +47,12 @@ signals:
     void analysisStarted();
 
 public slots:
-    // A view showing the bars is on screen (and not mid-animation)
+    // A view showing the bars is on screen (and not mid-animation): the
+    // QML UI's own consumer, setDemand("view", active)
     void setViewActive(bool active);
+    // A frontend's bars are on screen (consumer = a stable name of its
+    // own); the analysis runs while any consumer wants them
+    void setDemand(const QString &consumer, bool wanted);
     // What is playing (main.cpp): local or phone, playing or not, and the
     // local track's full path ("" for none). A new track is analysed once a
     // view is active.
@@ -91,7 +98,8 @@ private:
 
     // Driving: bars move while a view is active and something plays
     void refreshActive();
-    bool               m_viewActive = false;
+    bool               m_viewActive = false;   // any consumer in m_demand
+    QSet<QString>      m_demand;
     bool               m_playing    = false;
     QString            m_localFile;
     qint64             m_positionMs = 0;

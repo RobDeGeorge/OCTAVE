@@ -139,6 +139,7 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setParameterDemand"), QStringList());
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setBackgroundDemand"), QStringList());
         service.bridge->releaseOnClose(QStringLiteral("berryIMU"), QStringLiteral("setDemand"), false);
+        service.bridge->releaseOnClose(QStringLiteral("audioAnalyzer"), QStringLiteral("setDemand"), false);
         service.bridge->install(*service.server);
     }
     return service;
