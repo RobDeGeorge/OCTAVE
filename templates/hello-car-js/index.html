@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hello, car</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #14181d; color: #e8ecf1; }
+    main { width: min(92vw, 640px); display: grid; gap: 24px; }
+    .readings { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .reading { background: #1d232b; border-radius: 16px; padding: 20px 24px; }
+    .reading b { display: block; font-size: 56px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+    .reading span { color: #9aa6b4; }
+    .track { display: flex; align-items: center; gap: 16px; background: #1d232b; border-radius: 16px; padding: 16px 20px; }
+    .track img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; }
+    .track div { flex: 1; min-width: 0; }
+    .track div > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #artist { color: #9aa6b4; }
+    button { font: inherit; font-size: 18px; padding: 12px 22px; border: 0; border-radius: 999px; background: #e8ecf1; color: #14181d; min-width: 96px; }
+    #status, #pair-error { color: #9aa6b4; font-size: 14px; }
+    #pair-error { color: #f0a080; }
+    input { font: inherit; font-size: 24px; letter-spacing: 0.2em; width: 8ch; padding: 8px 12px; border-radius: 8px; border: 1px solid #39424d; background: #1d232b; color: inherit; }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="pairing" hidden>
+      <p>This browser is not on the head unit. Open Settings &gt; Service &gt; Pair a device on OCTAVE and type the code:</p>
+      <input id="code" inputmode="numeric" maxlength="7" placeholder="123456" aria-label="Pairing code">
+      <button id="pair">Pair</button>
+      <p id="pair-error"></p>
+    </section>
+    <section class="readings">
+      <div class="reading"><b id="rpm">–</b><span><span id="rpm-label">RPM</span> <em id="rpm-unit"></em></span></div>
+      <div class="reading"><b id="speed">–</b><span><span id="speed-label">Speed</span> <em id="speed-unit"></em></span></div>
+    </section>
+    <section class="track">
+      <img id="art" alt="" hidden>
+      <div><strong id="title">…</strong><span id="artist"></span></div>
+      <button id="play">Play</button>
+    </section>
+    <p id="status">connecting…</p>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

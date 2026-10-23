@@ -71,3 +71,7 @@ cmake_install.cmake
 Makefile
 compile_commands.json
 build-rhea/
+
+# Starter templates: a pairing token and a saved cover from running one
+templates/*/.token
+templates/*/cover.*

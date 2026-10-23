@@ -25,6 +25,7 @@
             <li><a href="#discover">3. Discover</a></li>
             <li><a href="#read">4. Read and Subscribe</a></li>
             <li><a href="#control">5. Control</a></li>
+            <li><a href="#template">Start from a Template</a></li>
             <li><a href="#first">Your First Frontend in 60 Lines</a></li>
             <li><a href="#recipes">Recipes</a></li>
             <li><a href="#headless">Being the Only UI</a></li>
@@ -90,6 +91,18 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
 {"op":"set","object":"volumeController","property":"muted","value":true,"id":7}
 {"op":"call","object":"settingsManager","method":"save_show_clock","args":[false],"id":8}</code></pre>
         <p>Most state is read-only and changes through a method, the same one the touch screen calls: settings through their <code>save_*</code> slots, media through <code>nowPlaying</code>, volume through <code>volumeController</code>. Arguments are converted to the declared types (an enum by name or number), and overloads are told apart by argument count. Methods run on the app's GUI thread, so a slow one holds the bundled UI just as a tap would.</p>
+
+        <h2 id="template">Start from a Template</h2>
+        <p>The quickest start is a copy of one of the folders in <span class="file-path">templates/</span>: each is a complete frontend under 200 lines that connects, pairs when it is not on the head unit (asking only for the <code>media</code> permission), shows RPM and speed live, plays and pauses, and shows the cover, with its own README and no path into the rest of the repo.</p>
+        <ul>
+          <li><span class="file-path">templates/hello-car-js/</span>: plain JavaScript in a browser, served by the app itself. <code>octave.js</code> is the whole protocol in 60 lines; <code>app.js</code> the page.</li>
+          <li><span class="file-path">templates/hello-car-python/</span>: a terminal program on the Python client (<span class="file-path">sdk/python/octave_client</span>, copied into the folder).</li>
+          <li><span class="file-path">templates/hello-car-go/</span>: the same in Go on <span class="file-path">sdk/go</span> as a module dependency.</li>
+        </ul>
+        <pre><code>./build/octave --headless --sim --web-root templates/hello-car-js   <span class="cmt"># any build: the simulated car, no window; open http://127.0.0.1:9876/</span>
+python templates/hello-car-python/hello_car.py                         <span class="cmt"># or, against the same app, the Python one...</span>
+cd templates/hello-car-go &amp;&amp; go run .                                 <span class="cmt"># ...or the Go one</span></code></pre>
+        <p>The simulated car idles until something drives it: <code>{"op":"call","object":"sim","method":"setThrottle","args":[40]}</code> over the service, or a scenario (<span class="file-path">docs/api/README.md</span>, "Simulator"). Each template has a check (<code>test/</code>, or <code>go test</code>) that runs it against <code>--headless --sim</code> on a free port; ctest runs them as <code>template_js</code>, <code>template_python</code> and <code>template_go</code>, so a template that stops working fails the build.</p>
 
         <h2 id="first">Your First Frontend in 60 Lines</h2>
         <p>Everything above, in one page on the TypeScript SDK (<span class="file-path">sdk/typescript</span>): it connects to the app that serves it, pairs when the browser is not on the head unit, shows two live readings, the track with transport, and the cover. The whole thing is <span class="file-path">sdk/typescript/examples/first-frontend/</span>: <span class="file-path">index.html</span> (a status line, a pair form, two gauges, a now-playing row) and this <span class="file-path">app.js</span>, no framework and no bundler.</p>
