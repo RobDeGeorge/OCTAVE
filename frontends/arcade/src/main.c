@@ -1,7 +1,10 @@
 /* OCTAVE Arcade: a C + SDL2 frontend over the service API, drawn like an
  * 8-bit arcade dashboard on a 320x200 canvas scaled up whole. */
 #include <SDL.h>
+#include <fcntl.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -83,9 +86,17 @@ int main(int argc, char **argv)
         if (s.paired_now) {
             /* a new token: keep it for the next run */
             if (token_file) {
-                FILE *f = fopen(token_file, "w");
-                if (f) { fputs(link_token(link), f); fputc('\n', f); fclose(f); snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, TOKEN SAVED"); }
-                else snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, CANNOT SAVE TOKEN");
+                /* the token is a credential: owner-only, whether the file is new or not */
+                int fd = open(token_file, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+                FILE *f = fd >= 0 ? fdopen(fd, "w") : NULL;
+                if (f) {
+                    fchmod(fd, 0600);
+                    fputs(link_token(link), f); fputc('\n', f); fclose(f);
+                    snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, TOKEN SAVED");
+                } else {
+                    if (fd >= 0) close(fd);
+                    snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, CANNOT SAVE TOKEN");
+                }
             } else {
                 printf("paired; token: %s\n", link_token(link));
                 snprintf(ui.token_note, sizeof ui.token_note, "PAIRED, TOKEN ON STDOUT");
