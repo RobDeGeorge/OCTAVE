@@ -26,5 +26,5 @@
         "units": "Units",
         "volumeController": "VolumeController"
     },
-    "protocolVersion": 1
+    "protocolVersion": 2
 }

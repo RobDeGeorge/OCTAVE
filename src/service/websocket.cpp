@@ -120,7 +120,7 @@ QByteArray httpResponse(int status, const QByteArray &reason, const QByteArray &
            + QByteArrayLiteral("\r\nContent-Length: ") + QByteArray::number(body.size())
            + QByteArrayLiteral("\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff"
                                "\r\nContent-Security-Policy: ") + csp
-           + QByteArrayLiteral("\r\n") + extraHeaders
+           + QByteArrayLiteral("\r\nReferrer-Policy: no-referrer\r\n") + extraHeaders
            + QByteArrayLiteral("Connection: close\r\n\r\n")
            + body;
 }

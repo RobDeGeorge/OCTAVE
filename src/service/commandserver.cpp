@@ -91,7 +91,9 @@ private:
             return;
         qCInfo(lcCommand) << "command client connected:" << sock.peerAddress().toString() << sock.peerPort();
         auto connection = std::make_shared<Connection>();
+        connection->setPeer(sock.peerAddress().isLoopback(), sock.peerAddress().toString());
         t_connection = connection;
+        m_owner->trackConnection(connection);
 
         // The first byte says which protocol: a JSON line starts with '{',
         // HTTP (a WebSocket upgrade or the reference page) with "GET"
@@ -114,6 +116,9 @@ private:
     bool pump(QTcpSocket &sock, QByteArray &buf)
     {
         if (m_stopping || sock.state() != QAbstractSocket::ConnectedState)
+            return false;
+        // Closed from elsewhere (its device revoked): drop the socket
+        if (const auto c = t_connection; c && c->isClosed())
             return false;
         // Data that waitForBytesWritten() already pulled in counts too (else
         // a pipelined request would sit there until the next one came)
@@ -189,6 +194,12 @@ private:
         }
         if (!Ws::isUpgrade(request) && request.method == "GET") {
             if (const CommandServer::Route route = m_owner->route(StaticFiles::pathOf(request.path))) {
+                if (!m_owner->httpTrusted(connection, request.headers, request.path)) {
+                    sock.write(Ws::httpResponse(401, "Unauthorized", "text/plain", "pair first; use a media ticket\n",
+                                                Ws::webRootCsp(request.headers.value("host"))));
+                    flush(sock);
+                    return;
+                }
                 StaticFiles::Reply r;
                 try {
                     r = route(request.path);
@@ -365,6 +376,65 @@ void Connection::close()
         CommandServer::postGui(std::move(c));
 }
 
+void Connection::setPeer(bool loopback, const QString &address)
+{
+    QMutexLocker l(&m_lock);
+    m_peerLoopback = loopback;
+    m_peerAddress = address;
+}
+
+bool Connection::peerLoopback() const
+{
+    QMutexLocker l(&m_lock);
+    return m_peerLoopback;
+}
+
+QString Connection::peerAddress() const
+{
+    QMutexLocker l(&m_lock);
+    return m_peerAddress;
+}
+
+void Connection::setTokenId(const QString &id)
+{
+    QMutexLocker l(&m_lock);
+    m_tokenId = id;
+}
+
+QString Connection::tokenId() const
+{
+    QMutexLocker l(&m_lock);
+    return m_tokenId;
+}
+
+void CommandServer::trackConnection(const std::shared_ptr<Connection> &c)
+{
+    QMutexLocker l(&m_connectionsLock);
+    m_connections.removeIf([](const std::weak_ptr<Connection> &w) { return w.expired(); });
+    m_connections.append(c);
+}
+
+bool CommandServer::httpTrusted(const Connection &c, const QHash<QByteArray, QByteArray> &headers,
+                                const QByteArray &target) const
+{
+    return !m_httpTrusted || m_httpTrusted(c, headers, target);
+}
+
+void CommandServer::closeConnectionsOf(const QString &tokenId)
+{
+    if (tokenId.isEmpty())
+        return;
+    QList<std::shared_ptr<Connection>> doomed;
+    {
+        QMutexLocker l(&m_connectionsLock);
+        for (const auto &w : std::as_const(m_connections))
+            if (auto c = w.lock(); c && c->tokenId() == tokenId)
+                doomed.append(c);
+    }
+    for (const auto &c : doomed)
+        c->close();   // its cleanups (subscriptions, streams, demand) run; its thread drops the socket
+}
+
 bool Connection::isClosed() const
 {
     QMutexLocker l(&m_lock);
@@ -487,6 +557,16 @@ QByteArray CommandServer::handleLine(const QByteArray &line)
         const QString name = cmd.value(isOp ? QStringLiteral("op") : QStringLiteral("action")).toString();
         if (cmd.contains(QStringLiteral("id")))
             reply[QStringLiteral("id")] = cmd.value(QStringLiteral("id"));
+        // Trust is checked as each op runs, so a revoke takes effect at once
+        if (m_trusted && !m_openOps.contains(name)) {
+            const std::shared_ptr<Connection> c = currentConnection();
+            if (!c || !m_trusted(*c)) {
+                reply[QStringLiteral("ok")] = false;
+                reply[QStringLiteral("error")] = QStringLiteral("not paired: pair with the code shown in OCTAVE's Settings");
+                reply[QStringLiteral("code")] = QStringLiteral("unauthorised");
+                return QJsonDocument(reply).toJson(QJsonDocument::Compact) + '\n';
+            }
+        }
         try {
             QVariant result;
             if (isOp) {

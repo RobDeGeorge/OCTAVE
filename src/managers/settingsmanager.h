@@ -248,6 +248,10 @@ public:
     QVariantList customThemes() const;
     QVariantMap customThemeData() const;
     static QVariantList nowPlayingPresets();
+    // A file-only key written by its owner in C++ (ServicePairing: the
+    // service switch and the paired devices); never reachable from QML or
+    // the service. Other keys are ignored.
+    void saveFileOnlySetting(const QString &key, const QVariant &value);
     // Keys only an edit of the file may set: save_setting and
     // apply_settings refuse them (what turns the service on, what it serves)
     static const QStringList &fileOnlyKeys();

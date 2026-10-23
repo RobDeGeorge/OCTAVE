@@ -9,6 +9,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTcpSocket>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QThread>
 #include <QtEndian>
@@ -21,6 +24,9 @@
 #include "service/servicebridge.h"
 #include "service/serviceregistry.h"
 #include "service/streamhub.h"
+#include "service/servicepairing.h"
+#include "service/staticfiles.h"
+#include "managers/settingsmanager.h"
 
 using namespace OctaveService;
 
@@ -413,6 +419,87 @@ private slots:
                                   !hub.wanted("fixture.video")), 3000);
     }
 
+    void pairingGatesEverythingButHelloAndPair()
+    {
+        // Protocol v2 with loopback closed: this test's client is treated as
+        // one on the network
+        QTemporaryDir cfg;
+        qputenv("HOME", cfg.path().toUtf8());
+        qputenv("XDG_CONFIG_HOME", (cfg.path() + "/config").toUtf8());
+        QDir().mkpath(SettingsManager::getAppDataDir());
+        QFile f(SettingsManager::getAppDataDir() + "/settingsConfigure.json");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"serviceLoopbackOpen": false})");
+        f.close();
+        SettingsManager settings;
+        ServicePairing pairing(&settings);
+        QVERIFY(!pairing.loopbackOpen());
+
+        ServiceRegistry registry;
+        registry.add("fixture", &m_fixture);
+        CommandServer server(0);
+        ServiceBridge bridge(&registry, AppInfo{"9", false, true});
+        bridge.setPairing(&pairing);
+        bridge.install(server);
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        QObject::connect(&pairing, &ServicePairing::revoked, &server,
+                         [&server](const QString &id) { server.closeConnectionsOf(id); });
+        QVERIFY(server.start());
+
+        LineClient a(server.port());
+        QJsonObject hello = a.send(R"({"op": "hello", "id": 1})");
+        QCOMPARE(hello.value("result").toObject().value("protocolVersion").toInt(), 2);
+        QCOMPARE(hello.value("result").toObject().value("auth").toString(), QStringLiteral("untrusted"));
+        QJsonObject refused = a.send(R"({"op": "get", "object": "fixture", "property": "level", "id": 2})");
+        QCOMPARE(refused.value("ok").toBool(), false);
+        QCOMPARE(refused.value("code").toString(), QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"action": "ping"})").value("code").toString(), QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"op": "stream", "object": "fixture", "name": "video"})").value("code").toString(),
+                 QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"op": "mediaTicket"})").value("code").toString(), QStringLiteral("unauthorised"));
+
+        // Pair with the code the head unit shows
+        pairing.startPairing();
+        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
+        const QJsonObject paired = a.send(QStringLiteral(R"({"op": "pair", "code": "%1", "name": "test", "id": 3})")
+                                              .arg(pairing.pairingCode()).toUtf8());
+        const QString token = paired.value("result").toObject().value("token").toString();
+        QCOMPARE(token.size(), 64);
+        QCOMPARE(a.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), true);
+
+        // A new connection is untrusted until hello {token}
+        LineClient b(server.port());
+        QCOMPARE(b.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), false);
+        QCOMPARE(b.send(QStringLiteral(R"({"op": "hello", "token": "%1"})").arg(token).toUtf8())
+                     .value("result").toObject().value("auth").toString(), QStringLiteral("trusted"));
+        QVERIFY(b.send(R"({"op": "hello", "token": "nope"})").value("error").toString().contains("unknown token"));
+        QCOMPARE(b.send(R"({"op": "subscribe", "object": "fixture", "properties": ["level"]})").value("ok").toBool(), true);
+
+        // HTTP: /art needs a ticket or the bearer token; never the token in the URL
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+        QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 401"));
+        QVERIFY(once(server.port(), "GET /art?token=" + token.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 401"));
+        const QByteArray bearer = once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\nAuthorization: Bearer "
+                                                          + token.toLatin1() + "\r\n\r\n");
+        QVERIFY2(bearer.startsWith("HTTP/1.1 200") && bearer.contains("Referrer-Policy: no-referrer"), bearer.constData());
+        const QString ticket = b.send(R"({"op": "mediaTicket"})").value("result").toObject().value("ticket").toString();
+        QVERIFY(once(server.port(), "GET /art?ticket=" + ticket.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 200"));
+
+        // Revoked from Settings: both its connections close, the ticket dies
+        pairing.revoke(pairing.checkToken(token));
+        QTRY_VERIFY_WITH_TIMEOUT(b.socket.state() == QAbstractSocket::UnconnectedState
+                                     || (b.socket.waitForReadyRead(50), b.socket.state() == QAbstractSocket::UnconnectedState),
+                                 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(a.socket.state() == QAbstractSocket::UnconnectedState
+                                     || (a.socket.waitForReadyRead(50), a.socket.state() == QAbstractSocket::UnconnectedState),
+                                 5000);
+        QVERIFY(once(server.port(), "GET /art?ticket=" + ticket.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 401"));
+        server.stop();
+    }
+
     void keyValueObjects()
     {
         // paramStore is a QQmlPropertyMap: keys, not declared properties
@@ -606,6 +693,55 @@ private slots:
     }
 
 private:
+    // A second client of its own server (pumping this thread's events while
+    // it waits, since get / set / call hop to it)
+    struct LineClient {
+        QTcpSocket socket;
+        explicit LineClient(quint16 port)
+        {
+            socket.connectToHost(QHostAddress::LocalHost, port);
+            socket.waitForConnected(3000);
+        }
+        QJsonObject send(const QByteArray &line)
+        {
+            socket.write(line + '\n');
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < 5000) {
+                QCoreApplication::processEvents();
+                if (socket.bytesAvailable() > 0 || socket.waitForReadyRead(10)) {
+                    m_buf += socket.readAll();
+                    int nl;
+                    while ((nl = m_buf.indexOf('\n')) >= 0) {
+                        const QJsonObject o = QJsonDocument::fromJson(m_buf.left(nl)).object();
+                        m_buf.remove(0, nl + 1);
+                        if (o.contains("ok"))
+                            return o;
+                    }
+                }
+            }
+            return {};
+        }
+        QByteArray m_buf;
+    };
+    static QByteArray once(quint16 port, const QByteArray &request)
+    {
+        QTcpSocket s;
+        s.connectToHost(QHostAddress::LocalHost, port);
+        if (!s.waitForConnected(3000))
+            return {};
+        s.write(request);
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 3000 && s.state() == QAbstractSocket::ConnectedState) {
+            QCoreApplication::processEvents();
+            if (s.waitForReadyRead(20))
+                in += s.readAll();
+        }
+        return in + s.readAll();
+    }
+
     QVariant result(const QByteArray &line)
     {
         const QJsonObject r = send(line);

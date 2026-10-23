@@ -89,6 +89,15 @@ public:
     bool isClosed() const;
     int nextId() { return ++m_lastId; }
 
+    // Who is on the other end (set by the connection's own thread; read by
+    // the trust check and by a revoke on the GUI thread)
+    void setPeer(bool loopback, const QString &address);
+    bool peerLoopback() const;
+    QString peerAddress() const;
+    // The paired device this connection presented (hello {token}); "" none
+    void setTokenId(const QString &id);
+    QString tokenId() const;
+
 private:
     mutable QMutex m_lock;
     QList<Item> m_queue;
@@ -96,6 +105,8 @@ private:
     int m_records = 0;
     int m_dropped = 0;
     bool m_closed = false;
+    bool m_peerLoopback = false;
+    QString m_peerAddress, m_tokenId;
     std::atomic<int> m_lastId{0};
     std::vector<std::function<void()>> m_cleanups;
 };
@@ -159,6 +170,25 @@ public:
     // Called from connection threads
     QByteArray handleLine(const QByteArray &line);
 
+    // Trust (servicepairing.h): `trusted(connection)` decides every op and
+    // action but the `open` ones; `httpTrusted(connection, headers,
+    // target)` decides the routes (/art, /export). Unset = everyone (tests,
+    // and before main.cpp wires pairing). Before start().
+    using TrustCheck = std::function<bool(const Connection &)>;
+    using HttpTrustCheck = std::function<bool(const Connection &, const QHash<QByteArray, QByteArray> &, const QByteArray &)>;
+    void setTrust(TrustCheck trusted, HttpTrustCheck httpTrusted, QStringList openOps)
+    {
+        m_trusted = std::move(trusted);
+        m_httpTrusted = std::move(httpTrusted);
+        m_openOps = std::move(openOps);
+    }
+    // Close every connection that presented paired device `tokenId` (its
+    // subscriptions and streams end with it): a revoke
+    void closeConnectionsOf(const QString &tokenId);
+    // Connection threads
+    void trackConnection(const std::shared_ptr<Connection> &c);
+    bool httpTrusted(const Connection &c, const QHash<QByteArray, QByteArray> &headers, const QByteArray &target) const;
+
 private:
     QVariant dispatch(const QString &action, const QVariantMap &args);
     QVariant dispatchOp(const QString &op, const QVariantMap &args);
@@ -167,6 +197,11 @@ private:
     QHostAddress m_bind = QHostAddress(QHostAddress::LocalHost);
     QByteArray m_page;
     QString m_webRoot;
+    TrustCheck m_trusted;
+    HttpTrustCheck m_httpTrusted;
+    QStringList m_openOps;
+    QMutex m_connectionsLock;
+    QList<std::weak_ptr<Connection>> m_connections;
     QHash<QByteArray, Route> m_routes;
     mutable QReadWriteLock m_lock;
     QHash<QString, Handler> m_handlers;
