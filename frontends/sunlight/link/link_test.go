@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -207,5 +209,73 @@ func TestHelloAcceptsKnownVersionsOnly(t *testing.T) {
 		if (err == nil) != ok {
 			t.Fatalf("protocol %d: err %v", version, err)
 		}
+	}
+}
+
+func TestTokensFile(t *testing.T) {
+	tok := Tokens{Path: filepath.Join(t.TempDir(), "sub", "tokens.json")}
+	if tok.Get("a:1") != "" {
+		t.Fatal("token before any was stored")
+	}
+	if err := tok.Put("a:1", "aa"); err != nil {
+		t.Fatal(err)
+	}
+	_ = tok.Put("b:2", "bb")
+	if tok.Get("a:1") != "aa" || tok.Get("b:2") != "bb" {
+		t.Fatal("tokens not kept per address")
+	}
+	for path, want := range map[string]os.FileMode{tok.Path: 0o600, filepath.Dir(tok.Path): 0o700} {
+		if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != want {
+			t.Fatalf("%s: mode %v, want %v", path, fi.Mode().Perm(), want)
+		}
+	}
+	_ = tok.Put("a:1", "")
+	if tok.Get("a:1") != "" || tok.Get("b:2") != "bb" {
+		t.Fatal("forgetting one token touched another")
+	}
+}
+
+func TestHelloTrustAndPair(t *testing.T) {
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		sc := bufio.NewScanner(conn)
+		for sc.Scan() {
+			var req map[string]any
+			_ = json.Unmarshal(sc.Bytes(), &req)
+			reply := map[string]any{"id": req["id"], "ok": true}
+			switch req["op"] {
+			case "hello":
+				reply["result"] = map[string]any{"protocolVersion": 2, "auth": "untrusted", "app": map[string]any{"version": "1"}}
+			case "pair":
+				if req["code"] == "123456" {
+					reply["result"] = map[string]any{"token": "ff00"}
+				} else {
+					reply["ok"], reply["error"] = false, "wrong code"
+				}
+			}
+			line, _ := json.Marshal(reply)
+			conn.Write(append(line, '\n'))
+		}
+	}()
+	c, err := Dial(ln.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	h, err := c.HelloToken("")
+	if err != nil || h.Trusted {
+		t.Fatalf("hello: %+v %v", h, err)
+	}
+	if _, err := c.Pair("000000", "x"); err == nil {
+		t.Fatal("a wrong code paired")
+	}
+	if tok, err := c.Pair("123456", "x"); err != nil || tok != "ff00" {
+		t.Fatalf("pair: %q %v", tok, err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -39,10 +40,14 @@ type Session struct {
 	Addr     string
 	State    *State
 	OnChange func() // called after each batch of events, from the session goroutine
+	Token    string // a paired device's token (protocol 2), "" for none
+	Tokens   Tokens // where a new token is kept
 
-	mu     sync.Mutex
-	client *Client
-	demand []string
+	mu       sync.Mutex
+	client   *Client
+	demand   []string
+	paired   chan struct{}
+	needPair bool
 }
 
 // NewSession makes a session; call Run in a goroutine.
@@ -72,7 +77,37 @@ func (s *Session) Run(stop <-chan struct{}) {
 			time.Sleep(time.Second)
 			continue
 		}
-		version, err := c.Hello()
+		hello, err := c.HelloToken(s.Token)
+		if err != nil && s.Token != "" && strings.Contains(err.Error(), "token") {
+			// revoked or unknown: forget it and ask to pair again
+			s.setToken("")
+			c.Close()
+			continue
+		}
+		if err == nil && hello.TokenRejected && s.Token != "" {
+			s.setToken("")
+		}
+		if err == nil && !hello.Trusted {
+			// another device (or loopback closed): wait until the user pairs on this connection
+			s.mu.Lock()
+			s.client, s.needPair, s.paired = c, true, make(chan struct{})
+			paired := s.paired
+			s.mu.Unlock()
+			s.State.SetLink(false, "NOT PAIRED: ENTER THE CODE", hello.Version)
+			s.changed()
+			select {
+			case <-paired:
+			case <-stop:
+				c.Close()
+				return
+			case <-c.Done():
+				err = errLinkClosed
+			}
+			s.mu.Lock()
+			s.needPair = false
+			s.mu.Unlock()
+		}
+		version := hello.Version
 		if err == nil {
 			// only the live values are essential; an older app may lack a property
 			for _, sub := range subscriptions {
@@ -131,6 +166,52 @@ func (s *Session) pump(c *Client) {
 			}
 		}
 	}
+}
+
+// NeedsPairing says whether the service is waiting for a pairing code.
+func (s *Session) NeedsPairing() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.needPair
+}
+
+// Pair sends the code on the waiting connection, keeps the token, and lets
+// the session go on to subscribe.
+func (s *Session) Pair(code, name string) error {
+	s.mu.Lock()
+	c, ch := s.client, s.paired
+	s.mu.Unlock()
+	if c == nil || ch == nil {
+		return errNotConnected
+	}
+	token, err := c.Pair(code, name)
+	if err != nil {
+		return err
+	}
+	s.setToken(token)
+	close(ch)
+	return nil
+}
+
+func (s *Session) setToken(token string) {
+	s.mu.Lock()
+	s.Token = token
+	s.mu.Unlock()
+	if s.Tokens.Path != "" {
+		if err := s.Tokens.Put(s.Addr, token); err != nil {
+			log.Printf("token file: %v", err)
+		}
+	}
+}
+
+// AuthHeader is the Authorization header for GET /art and /export ("" without a token).
+func (s *Session) AuthHeader() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Token == "" {
+		return ""
+	}
+	return "Bearer " + s.Token
 }
 
 // Client returns the live client, or nil.
@@ -213,4 +294,7 @@ type linkError string
 
 func (e linkError) Error() string { return string(e) }
 
-const errNotConnected = linkError("not connected")
+const (
+	errNotConnected = linkError("not connected")
+	errLinkClosed   = linkError("connection closed")
+)

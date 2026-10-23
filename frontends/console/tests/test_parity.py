@@ -449,3 +449,55 @@ async def test_download_last_export(sdk, tmp_path):
         app.screen.query_one("Input").value = str(target)
         await pilot.press("enter")
         assert await wait_for(pilot, lambda: target.exists() and target.stat().st_size > 0)
+
+
+def test_token_store(tmp_path):
+    import os
+    import stat
+
+    from octave_console.link import TokenStore
+    store = TokenStore(tmp_path / "sub" / "tokens.json")
+    assert store.get("127.0.0.1:9876") is None
+    store.put("127.0.0.1:9876", "ab" * 32)
+    store.put("10.0.0.5:9876", "cd" * 32)
+    assert store.get("127.0.0.1:9876") == "ab" * 32
+    assert stat.S_IMODE(os.stat(store.path).st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(store.path.parent).st_mode) == 0o700
+    store.put("127.0.0.1:9876", None)   # forgotten (revoked)
+    assert store.get("127.0.0.1:9876") is None and store.get("10.0.0.5:9876") == "cd" * 32
+
+
+PAIR_HOST = __import__("os").environ.get("OCTAVE_PAIR_HOST")   # this machine's LAN address, OCTAVE on --service-bind 0.0.0.0
+
+
+@pytest.mark.skipif(not PAIR_HOST, reason="set OCTAVE_PAIR_HOST (OCTAVE bound beyond loopback) to test pairing")
+async def test_pairing_over_the_network(tmp_path):
+    """Connected through the LAN address the console is untrusted: it shows the
+    pair screen, takes the code (from the dev action sim_pairing_code, sent on
+    loopback), stores the token 0600, and goes on as a trusted client."""
+    import json
+    import os
+    import socket
+    import stat
+    with socket.create_connection(("127.0.0.1", PORT), timeout=3) as s:
+        s.sendall(b'{"action":"sim_pairing_code"}\n')
+        code = json.loads(s.makefile().readline())["result"]["code"]
+    token_file = tmp_path / "tokens.json"
+    app = OctaveConsole(PAIR_HOST, PORT, start_tab="live", token_file=str(token_file))
+    async with app.run_test(size=SIZE) as pilot:
+        assert await wait_for(pilot, lambda: screen_name(app) == "PairScreen")
+        assert "NOT PAIRED" in str(app.query_one("#status").render())
+        await pilot.pause(0.3)
+        shot(app, "pair")
+        await pilot.press(*str(code), "enter")
+        assert await wait_for(pilot, lambda: app.connected and app.query_one("#pane-live").order, timeout=10)
+        assert stat.S_IMODE(os.stat(token_file).st_mode) == 0o600
+        token = json.loads(token_file.read_text())[f"{PAIR_HOST}:{PORT}"]
+    with Client(PAIR_HOST, PORT, token=token) as paired:
+        assert paired.server["auth"] == "trusted"
+        paired.request("unpair")   # leave no paired device behind
+    # the token is void now: the next start drops it and asks to pair again
+    app = OctaveConsole(PAIR_HOST, PORT, start_tab="live", token_file=str(token_file))
+    async with app.run_test(size=SIZE) as pilot:
+        assert await wait_for(pilot, lambda: screen_name(app) == "PairScreen")
+        assert f"{PAIR_HOST}:{PORT}" not in json.loads(token_file.read_text())

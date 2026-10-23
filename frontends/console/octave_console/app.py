@@ -1,6 +1,7 @@
 """OCTAVE console: an operator's terminal UI over the service API."""
 
 import os
+import socket
 import time
 import urllib.request
 from functools import partial
@@ -13,8 +14,8 @@ from textual.command import DiscoveryHit, Hit, Provider
 from textual.css.query import NoMatches
 from textual.widgets import Footer, Static, TabbedContent, TabPane
 
-from .link import Link, Linked, OctaveError, OctaveEvent, Unlinked
-from .screens import EditValue
+from .link import Link, Linked, NeedPairing, OctaveError, OctaveEvent, TokenStore, Unlinked
+from .screens import EditValue, PairScreen
 from .panes import DownloadsPane, ExplorerPane, LivePane, ObdPane, SettingsPane, TripsPane, fmt_duration
 from .panes_car import CarPane
 from .panes_dash import DashboardsPane
@@ -168,9 +169,9 @@ class OctaveConsole(App):
         Binding("q", "quit", "Quit"),
     ]
 
-    def __init__(self, host="127.0.0.1", port=9876, start_tab="live"):
+    def __init__(self, host="127.0.0.1", port=9876, start_tab="live", token=None, token_file=None):
         super().__init__()
-        self.link = Link(self, host, port)
+        self.link = Link(self, host, port, token=token, tokens=TokenStore(token_file))
         self.state = {}         # object -> {property: value}
         self.describe = {}      # object -> describe entry
         self.server = {}
@@ -231,6 +232,31 @@ class OctaveConsole(App):
             pane.linked()
             pane.shown(pane is self.active_pane())
         self.refresh_bars()
+
+    def on_need_pairing(self, message: NeedPairing, error=""):
+        self.connected = False
+        self.link_reason = "NOT PAIRED: " + message.reason
+        self.refresh_bars()
+
+        def answered(result):
+            if result is None:
+                return
+            code, name = result
+
+            def pair(link):
+                try:
+                    link.pair(code, name)
+                    return None
+                except OctaveError as e:
+                    return str(e)
+
+            def done(err):
+                if err:
+                    self.on_need_pairing(message, error=err)
+                else:
+                    self.status_note("paired; the token is saved")
+            self.blocking(pair, done)
+        self.push_screen(PairScreen(self.link.address, f"OCTAVE console on {socket.gethostname()}", error), answered)
 
     def on_unlinked(self, message: Unlinked):
         self.connected = False
@@ -305,7 +331,8 @@ class OctaveConsole(App):
 
         def fetch(_link):
             try:
-                with urllib.request.urlopen(f"http://{host}:{port}/export/{kind}", timeout=10) as r:
+                req = urllib.request.Request(f"http://{host}:{port}/export/{kind}", headers=self.link.http_headers())
+                with urllib.request.urlopen(req, timeout=10) as r:
                     return r.read(), r.headers.get("Content-Type", "")
             except Exception as e:
                 return None, str(e)

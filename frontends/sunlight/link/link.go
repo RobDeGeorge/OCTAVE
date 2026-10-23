@@ -58,6 +58,7 @@ type Client struct {
 	pending map[int64]chan Message
 	closed  bool
 	events  chan Message
+	done    chan struct{} // closed when the connection goes
 	Timeout time.Duration
 }
 
@@ -67,7 +68,8 @@ func Dial(addr string, timeout time.Duration) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Client{conn: conn, pending: map[int64]chan Message{}, events: make(chan Message, 1024), Timeout: 10 * time.Second}
+	c := &Client{conn: conn, pending: map[int64]chan Message{}, events: make(chan Message, 1024),
+		done: make(chan struct{}), Timeout: 10 * time.Second}
 	go c.read()
 	return c, nil
 }
@@ -106,7 +108,11 @@ func (c *Client) read() {
 	}
 	c.mu.Unlock()
 	close(c.events)
+	close(c.done)
 }
+
+// Done is closed when the connection goes.
+func (c *Client) Done() <-chan struct{} { return c.done }
 
 // Close ends the connection.
 func (c *Client) Close() { c.conn.Close() }
@@ -187,21 +193,58 @@ func (c *Client) Subscribe(object string, properties, signals []string, throttle
 
 // Hello checks the protocol version and returns the app version.
 func (c *Client) Hello() (string, error) {
-	raw, err := c.Request("hello", nil)
+	h, err := c.HelloToken("")
+	return h.Version, err
+}
+
+// HelloReply is what hello says about the app and this connection.
+type HelloReply struct {
+	Version string
+	Trusted bool // protocol 1 has no pairing: always true there
+	// TokenRejected: the token sent was revoked or unknown (drop it, pair again)
+	TokenRejected bool
+}
+
+// HelloToken says hello with a paired device's token ("" for none).
+func (c *Client) HelloToken(token string) (HelloReply, error) {
+	var args map[string]any
+	if token != "" {
+		args = map[string]any{"token": token}
+	}
+	raw, err := c.Request("hello", args)
 	if err != nil {
-		return "", err
+		return HelloReply{}, err
 	}
 	var h struct {
-		ProtocolVersion int `json:"protocolVersion"`
+		ProtocolVersion int    `json:"protocolVersion"`
+		Auth            string `json:"auth"`
+		TokenRejected   bool   `json:"tokenRejected"`
 		App             struct {
 			Version string `json:"version"`
 		} `json:"app"`
 	}
 	if err := json.Unmarshal(raw, &h); err != nil {
+		return HelloReply{}, err
+	}
+	reply := HelloReply{Version: h.App.Version, Trusted: h.Auth == "" || h.Auth == "trusted", TokenRejected: h.TokenRejected}
+	if !slices.Contains(ProtocolVersions, h.ProtocolVersion) {
+		return reply, fmt.Errorf("the app speaks protocol %d, sunlight knows %v", h.ProtocolVersion, ProtocolVersions)
+	}
+	return reply, nil
+}
+
+// Pair trades the 6-digit code from OCTAVE's Settings for a token; the
+// connection is trusted from then on.
+func (c *Client) Pair(code, name string) (string, error) {
+	raw, err := c.Request("pair", map[string]any{"code": code, "name": name})
+	if err != nil {
 		return "", err
 	}
-	if !slices.Contains(ProtocolVersions, h.ProtocolVersion) {
-		return "", fmt.Errorf("the app speaks protocol %d, sunlight knows %v", h.ProtocolVersion, ProtocolVersions)
+	var r struct {
+		Token string `json:"token"`
 	}
-	return h.App.Version, nil
+	if err := json.Unmarshal(raw, &r); err != nil || r.Token == "" {
+		return "", fmt.Errorf("pair: no token in the reply")
+	}
+	return r.Token, nil
 }

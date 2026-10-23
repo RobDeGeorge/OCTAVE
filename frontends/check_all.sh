@@ -96,10 +96,19 @@ skip() { record "$1" SKIP 0 "$2"; echo "... $1 skipped: $2"; }
 # (--web-root) and the e2e drives the real page
 web_root=()
 glass_built=0
+npm_deps() {   # npm ci when node_modules is missing or older than package-lock.json
+    if [ ! -e node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+        npm ci --no-audit --no-fund
+    fi
+}
+sdk_ts_deps() {   # glass builds sdk/typescript (a path dependency) in its pre-scripts
+    cd "$repo/sdk/typescript" && npm_deps
+}
 if wanted glass && command -v npm >/dev/null; then
     glass_build() {
+        sdk_ts_deps || return 1
         cd "$here/glass" || return 1
-        [ -d node_modules ] || npm ci --no-audit --no-fund || return 1
+        npm_deps || return 1
         npm run check && npm run build
     }
     run glass-build "npm run check, npm run build" glass_build
@@ -197,6 +206,16 @@ if wanted glass; then
             cd "$here/glass" && npm run e2e && ! grep -qi "nothing to test" "$work/logs/glass-e2e.log"
         }
         run glass-e2e "npm run e2e on the served build" glass_e2e
+    fi
+fi
+
+# sdk/typescript: its own tests (types current, typecheck, unit tests)
+if wanted sdk-typescript; then
+    if command -v npm >/dev/null; then
+        sdk_ts_tests() { sdk_ts_deps && npm test; }
+        run sdk-typescript "npm test" sdk_ts_tests
+    else
+        skip sdk-typescript "no npm"
     fi
 fi
 

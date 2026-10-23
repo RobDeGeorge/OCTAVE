@@ -1,6 +1,6 @@
 # Sunlight (experimental)
 
-A third OCTAVE frontend, written to prove the open backend: **Go + Gio** instead of C++ / QML, and a brutalist screen built to be read in direct sunlight on the Pi instead of the bundled UI's look. Black on white (an inverted night mode is one tap away), huge numerals, thick rules, hard edges, no gradients or blur, and one accent colour (signal orange) for anything worth a glance. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 and 2; pairing for remote use is still to come) with its own client in plain `net` + `encoding/json`. The QML UI in `frontend/` stays the default; this one is a side experiment and is not shipped; CI runs `go vet`, `go test` and a build.
+A third OCTAVE frontend, written to prove the open backend: **Go + Gio** instead of C++ / QML, and a brutalist screen built to be read in direct sunlight on the Pi instead of the bundled UI's look. Black on white (an inverted night mode is one tap away), huge numerals, thick rules, hard edges, no gradients or blur, and one accent colour (signal orange) for anything worth a glance. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 and 2, with pairing) with its own client in plain `net` + `encoding/json`. The QML UI in `frontend/` stays the default; this one is a side experiment and is not shipped; CI runs `go vet`, `go test` and a build.
 
 It renders the user's dashboards straight from their `schema: 1` JSON, with its own Go drawing of every gauge type: the dashboard format is usable from another language, with no QML involved.
 
@@ -12,8 +12,10 @@ It renders the user's dashboards straight from their `schema: 1` JSON, with its 
 ./build/octave --dev --service           # or: the simulated car, for trying it at a desk
 
 cd frontends/sunlight
-go run -tags novulkan .                  # --host H --port P --fullscreen --night --page drive|dash|media|dtc|trips --dash ID
+go run -tags novulkan .                  # --host H --port P --fullscreen --night --page drive|dash|media|dtc|trips --dash ID --token T --token-file F
 ```
+
+Over the network (OCTAVE started with `--service-bind`), protocol 2 wants the screen paired: sunlight shows a keypad, you type the 6-digit code from OCTAVE's Settings > Service > Pair a device and press PAIR (or type it and Enter). The token is kept in `$XDG_CONFIG_HOME/octave-sunlight/tokens.json` (mode 0600, one per host:port; `--token-file` elsewhere, `--token` or `OCTAVE_TOKEN` to pass one), and a revoked one is forgotten so it asks again. The cover is fetched with the token as `Authorization: Bearer`, never in a URL. On the head unit itself nothing is asked while `serviceLoopbackOpen` is on (the default).
 
 Start it before or after OCTAVE: until the service answers, the top bar shows NO SIGNAL in orange and it retries every second. Needs Go 1.24 or newer. Gio builds against the Wayland, X11, EGL and xkbcommon dev packages (Debian / Raspberry Pi OS: `libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libxfixes-dev`). The `novulkan` tag drops Gio's optional Vulkan renderer, so the Vulkan headers are not needed; it draws with OpenGL ES either way.
 
