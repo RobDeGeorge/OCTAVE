@@ -44,6 +44,19 @@ const DIAG_ROWS: usize = 15;
 enum Page {
     Drive,
     Diag,
+    Codes,
+    Trips,
+}
+
+/// Page-local state the draw code reads and changes.
+#[derive(Default)]
+struct PageState {
+    diag_page: usize,
+    /// CLEAR CODES was pressed once; a second press within 4 s clears
+    clear_armed: Option<Instant>,
+    trip_index: usize,
+    /// The trip whose detail was last asked for
+    detail_asked: Option<i64>,
 }
 
 struct Args {
@@ -62,10 +75,17 @@ fn parse_args() -> Args {
             "--host" => host = it.next().unwrap_or(host),
             "--port" => port = it.next().and_then(|p| p.parse().ok()).unwrap_or(port),
             "--fullscreen" => a.fullscreen = true,
-            "--page" => a.page = if it.next().as_deref() == Some("diag") { Page::Diag } else { Page::Drive },
+            "--page" => {
+                a.page = match it.next().as_deref() {
+                    Some("diag") => Page::Diag,
+                    Some("dtc") => Page::Codes,
+                    Some("trips") => Page::Trips,
+                    _ => Page::Drive,
+                }
+            }
             "--theme" => a.theme = it.next().and_then(|t| t.parse().ok()).unwrap_or(0) % PALETTES.len(),
             "-h" | "--help" => {
-                println!("retro-cluster [--host 127.0.0.1] [--port 9876] [--fullscreen] [--theme 0|1|2] [--page drive|diag]");
+                println!("retro-cluster [--host 127.0.0.1] [--port 9876] [--fullscreen] [--theme 0|1|2] [--page drive|diag|dtc|trips]");
                 println!("keys: Space play/pause  Left/Right prev/next  +/- volume  M mute");
                 println!("      Tab page  T theme  F11 fullscreen  Ctrl+Q quit");
                 std::process::exit(0);
@@ -106,7 +126,7 @@ struct Cluster {
     last_frame: Instant,
     rpm_smooth: f64,
     speed_smooth: f64,
-    diag_page: usize,
+    pages: PageState,
     sent_demand: Option<Vec<String>>,
     fullscreen: bool,
 }
@@ -123,7 +143,7 @@ impl Cluster {
             last_frame: Instant::now(),
             rpm_smooth: 0.0,
             speed_smooth: 0.0,
-            diag_page: 0,
+            pages: PageState::default(),
             sent_demand: None,
             fullscreen: args.fullscreen,
         }
@@ -139,8 +159,10 @@ impl Cluster {
             Page::Diag => {
                 let all = self.diag_ids(s);
                 let per = DIAG_COLS * DIAG_ROWS;
-                all.into_iter().skip(self.diag_page * per).take(per).collect()
+                all.into_iter().skip(self.pages.diag_page * per).take(per).collect()
             }
+            // Trouble codes and trips poll nothing; keep the speed for the header
+            Page::Codes | Page::Trips => vec!["SPEED".to_string(), "RPM".to_string()],
         };
         if self.sent_demand.as_ref() != Some(&want) {
             self.link.demand(want.clone());
@@ -171,7 +193,12 @@ impl Cluster {
                 self.link.call("volumeController", "toggleMute", vec![]);
             }
             if i.key_pressed(Key::Tab) {
-                self.page = if page == Page::Drive { Page::Diag } else { Page::Drive };
+                self.page = match page {
+                    Page::Drive => Page::Diag,
+                    Page::Diag => Page::Codes,
+                    Page::Codes => Page::Trips,
+                    Page::Trips => Page::Drive,
+                };
             }
             if i.key_pressed(Key::T) {
                 self.theme = (self.theme + 1) % PALETTES.len();
@@ -254,8 +281,10 @@ impl eframe::App for Cluster {
             }
             Page::Diag => {
                 let ids = self.diag_ids(&s);
-                ctx.diag(&ids, &mut self.diag_page, &mut actions);
+                ctx.diag(&ids, &mut self.pages.diag_page, &mut actions);
             }
+            Page::Codes => ctx.codes(&mut self.pages, &mut actions),
+            Page::Trips => ctx.trips(&mut self.pages, &mut actions),
         }
         ctx.deck(&mut actions);
         if !online && self_test.is_none() {
@@ -340,13 +369,15 @@ impl Draw<'_> {
         self.label(36.0, 16.0, 4.0, "OCTAVE", pal.lit);
         self.label(38.0, 50.0, 1.7, "RETRO CLUSTER", self.dim());
 
-        if self.key("drive", 300.0, 12.0, 120.0, 46.0, "DRIVE", page == Page::Drive) {
-            actions.push(Action::Page(Page::Drive));
+        let tabs = [("DRIVE", Page::Drive, 92.0), ("DIAG", Page::Diag, 80.0), ("DTC", Page::Codes, 72.0), ("TRIPS", Page::Trips, 88.0)];
+        let mut x = 210.0;
+        for (name, p, w) in tabs {
+            if self.key(name, x, 12.0, w, 46.0, name, page == p) {
+                actions.push(Action::Page(p));
+            }
+            x += w + 8.0;
         }
-        if self.key("diag", 432.0, 12.0, 120.0, 46.0, "DIAG", page == Page::Diag) {
-            actions.push(Action::Page(Page::Diag));
-        }
-        if self.key("theme", 564.0, 12.0, 150.0, 46.0, pal.name, false) {
+        if self.key("theme", x, 12.0, 92.0, 46.0, pal.name, false) {
             actions.push(Action::Theme);
         }
 
@@ -359,11 +390,11 @@ impl Draw<'_> {
             ("REC", self.s.recording || test, pal.hot),
             ("SHIFT", (self.s.shift_active && self.s.shift_lit) || test, pal.hot),
         ];
-        let mut x = 738.0;
+        let mut x = 760.0;
         for (name, on, color) in lamps {
-            let w = if name.len() > 3 { 74.0 } else { 54.0 };
+            let w = 14.0 + name.len() as f32 * 11.0;
             vfd::lamp(self.painter, self.cv.r(x, 20.0, w, 30.0), name, on, color, &pal);
-            x += w + 8.0;
+            x += w + 6.0;
         }
 
         // The clock: the app's own string when it has sent one (it follows
@@ -550,6 +581,177 @@ impl Draw<'_> {
             self.label(52.0, 530.0, 1.4, "WARNING: THIS CLUSTER SPEAKS PROTOCOL 1", pal.hot);
         }
         let _ = actions;
+    }
+
+    /// Trouble codes: the check-engine lamp, the stored codes, the freeze
+    /// frame, and a two-press clear.
+    fn codes(&mut self, ps: &mut PageState, actions: &mut Vec<Action>) {
+        let pal = self.pal;
+        let s = self.s;
+        let frame = self.cv.r(30.0, 78.0, 1220.0, 492.0);
+        vfd::window(self.painter, frame, &pal);
+
+        let mil = s.mil || self.self_test.is_some();
+        let blink = (self.t * 1.5) as i64 % 2 == 0;
+        vfd::lamp(self.painter, self.cv.r(56.0, 100.0, 330.0, 70.0), "CHECK ENGINE", mil && blink, pal.warn, &pal);
+        self.label(420.0, 104.0, 2.0, "STORED CODES", self.dim());
+        vfd::seg_number(self.painter, self.cv.r(420.0, 124.0, 90.0, 48.0), 2, self.online.then_some(s.dtcs.len() as f64), 0, &pal, pal.lit);
+
+        if s.dtcs.is_empty() {
+            let msg = if self.online { "NO CODES STORED" } else { "--" };
+            self.label(56.0, 220.0, 4.0, msg, pal.lit);
+        }
+        for (i, d) in s.dtcs.iter().take(6).enumerate() {
+            let y = 200.0 + i as f32 * 52.0;
+            self.label(56.0, y, 4.5, &d.code, pal.warn);
+            let desc = if d.description.is_empty() { "NO DESCRIPTION FROM THE ECU" } else { &d.description };
+            let desc: String = desc.chars().take(52).collect();
+            self.label(240.0, y + 10.0, 2.0, &desc, self.dim());
+        }
+        if s.dtcs.len() > 6 {
+            self.label(56.0, 516.0, 2.0, &format!("+{} MORE", s.dtcs.len() - 6), self.dim());
+        }
+
+        // Keys on the right
+        let kx = 900.0;
+        if self.key("read", kx, 100.0, 330.0, 64.0, "READ CODES", false) {
+            actions.push(Action::Call("obdManager", "read_dtc", vec![]));
+        }
+        if self.key("freeze", kx, 180.0, 330.0, 64.0, "FREEZE FRAME", !s.freeze.is_empty()) {
+            actions.push(Action::Call("obdManager", "read_freeze_frame", vec![]));
+        }
+        let armed = ps.clear_armed.is_some_and(|at| at.elapsed() < Duration::from_secs(4));
+        if !armed {
+            ps.clear_armed = None;
+        }
+        let clear_label = if armed { "PRESS AGAIN TO CLEAR" } else { "CLEAR CODES" };
+        if self.key("clear", kx, 260.0, 330.0, 64.0, clear_label, armed) {
+            if armed {
+                actions.push(Action::Call("obdManager", "clear_dtc", vec![]));
+                ps.clear_armed = None;
+            } else {
+                ps.clear_armed = Some(Instant::now());
+            }
+        }
+        if armed {
+            self.label(kx, 334.0, 1.8, "ERASES CODES + FREEZE FRAME", pal.hot);
+        }
+        if let Some((ok, msg, at)) = &s.dtc_result
+            && at.elapsed() < Duration::from_secs(10)
+        {
+            let text: String = format!("{} {}", if *ok { "CLEARED." } else { "CLEAR FAILED:" }, msg).chars().take(30).collect();
+            self.label(kx, 360.0, 1.8, &text, if *ok { pal.lit } else { pal.hot });
+        }
+        self.label(kx, 404.0, 2.0, "FREEZE FRAME", self.dim());
+        if s.freeze.is_empty() {
+            self.label(kx, 430.0, 2.6, "NONE", pal.ghost);
+        }
+        for (i, d) in s.freeze.iter().take(3).enumerate() {
+            self.label(kx, 430.0 + i as f32 * 30.0, 2.6, &d.code, pal.lit);
+        }
+    }
+
+    /// The black box: recorded drives, and one drive's summary.
+    fn trips(&mut self, ps: &mut PageState, actions: &mut Vec<Action>) {
+        let pal = self.pal;
+        let s = self.s;
+        let frame = self.cv.r(30.0, 78.0, 1220.0, 492.0);
+        vfd::window(self.painter, frame, &pal);
+        self.label(52.0, 94.0, 2.2, "BLACK BOX", pal.lit);
+        self.label(240.0, 96.0, 1.8, &format!("{} DRIVES", s.trips.len()), self.dim());
+
+        // Newest first
+        let trips: Vec<&link::Trip> = s.trips.iter().rev().collect();
+        if trips.is_empty() {
+            self.label(56.0, 150.0, 3.0, if self.online { "NO DRIVES RECORDED" } else { "--" }, pal.ghost);
+            return;
+        }
+        ps.trip_index = ps.trip_index.min(trips.len() - 1);
+        let rows = 11usize;
+        let first = ps.trip_index.saturating_sub(rows - 1);
+        for (n, t) in trips.iter().enumerate().skip(first).take(rows) {
+            let y = 132.0 + (n - first) as f32 * 38.0;
+            let r = self.cv.r(46.0, y - 6.0, 560.0, 34.0);
+            let selected = n == ps.trip_index;
+            if selected {
+                self.painter.rect_filled(r, 4.0, pal.ghost);
+            }
+            if self.ui.interact(r, egui::Id::unique(("trip", t.id)), Sense::click()).clicked() {
+                ps.trip_index = n;
+            }
+            let when = t.start_iso.replace('T', " ");
+            let when: String = when.chars().take(16).collect();
+            let dur = t.duration_s as i64;
+            let dur = format!("{}:{:02}:{:02}", dur / 3600, (dur / 60) % 60, dur % 60);
+            let c = if selected { pal.lit } else { self.dim() };
+            self.label(56.0, y, 2.2, &when, c);
+            self.label(290.0, y, 2.2, &dur, c);
+            if t.open {
+                self.label(420.0, y, 2.2, "REC", pal.hot);
+            } else {
+                self.label(420.0, y, 2.2, &t.vehicle.to_uppercase().chars().take(14).collect::<String>(), c);
+            }
+        }
+        if self.key("tup", 620.0, 132.0, 64.0, 60.0, "▲", ps.trip_index > 0) && ps.trip_index > 0 {
+            ps.trip_index -= 1;
+        }
+        if self.key("tdn", 620.0, 470.0, 64.0, 60.0, "▼", ps.trip_index + 1 < trips.len()) && ps.trip_index + 1 < trips.len() {
+            ps.trip_index += 1;
+        }
+
+        let trip = trips[ps.trip_index];
+        if ps.detail_asked != Some(trip.id) {
+            ps.detail_asked = Some(trip.id);
+            actions.push(Action::Call("tripRecorder", "requestDetail", vec![json!(trip.id)]));
+        }
+        let x = 720.0;
+        self.label(x, 132.0, 2.0, "SUMMARY", self.dim());
+        let Some(d) = s.trip_details.get(&trip.id) else {
+            self.label(x, 170.0, 2.4, "READING...", pal.ghost);
+            return;
+        };
+        // The summary is in native units; show the user's
+        let conv = |id: &str, v: Option<f64>| -> Option<(f64, String)> {
+            let v = v?;
+            Some(match s.catalog.get(id) {
+                Some(i) => (v * i.scale + i.offset, i.unit.clone()),
+                None => (v, String::new()),
+            })
+        };
+        let f = |k: &str| d[k].as_f64();
+        let fmt = |v: Option<(f64, String)>, dec: usize| v.map(|(v, u)| format!("{v:.dec$} {u}")).unwrap_or_else(|| "--".into());
+        let miles = f("distanceMiles");
+        let rows: Vec<(&str, String)> = vec![
+            ("DURATION", { let x = f("durationS").unwrap_or(0.0) as i64; format!("{}:{:02}:{:02}", x / 3600, (x / 60) % 60, x % 60) }),
+            ("DISTANCE", miles.map(|m| format!("{m:.1} MI")).unwrap_or_else(|| "--".into())),
+            ("MAX SPEED", fmt(conv("SPEED", f("maxSpeed")), 0)),
+            ("MAX RPM", fmt(conv("RPM", f("maxRpm")), 0)),
+            ("MAX COOLANT", fmt(conv("COOLANT_TEMP", f("maxCoolant")), 0)),
+            ("VOLTAGE", match (f("minVoltage"), f("maxVoltage")) { (Some(a), Some(b)) => format!("{a:.1}-{b:.1} V"), _ => "--".into() }),
+            ("SAMPLES", trip.samples.to_string()),
+            ("EVENTS", d["eventCount"].as_i64().unwrap_or(0).to_string()),
+        ];
+        for (i, (k, v)) in rows.iter().enumerate() {
+            let y = 164.0 + i as f32 * 34.0;
+            self.label(x, y, 2.0, k, self.dim());
+            self.label_right(1226.0, y, 2.4, &v.to_uppercase(), pal.lit);
+        }
+        if let Some(ev) = d["events"].as_array().and_then(|e| e.first()) {
+            let text = format!("{} {}", ev["kind"].as_str().unwrap_or(""), ev["detail"].as_str().unwrap_or(""));
+            let text: String = text.to_uppercase().chars().take(40).collect();
+            self.label(x, 444.0, 1.8, &text, pal.warn);
+        }
+        if self.key("export", x, 470.0, 240.0, 60.0, "EXPORT", false) {
+            actions.push(Action::Call("tripRecorder", "exportTrip", vec![json!(trip.id)]));
+        }
+        if trip.open && self.key("endtrip", x + 256.0, 470.0, 250.0, 60.0, "END TRIP", true) {
+            actions.push(Action::Call("tripRecorder", "endTripNow", vec![]));
+        }
+        if let Some(path) = &s.export_path {
+            let name = path.rsplit('/').next().unwrap_or(path);
+            let text: String = format!("SAVED {name}").chars().take(60).collect();
+            self.label(x, 540.0, 1.4, &text, self.dim());
+        }
     }
 
     /// The tape deck: what's playing, the transport keys and the volume.

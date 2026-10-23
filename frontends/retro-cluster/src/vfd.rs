@@ -31,7 +31,7 @@ pub const PALETTES: [Palette; 3] = [
         hot: Color32::from_rgb(255, 52, 36),
     },
     Palette {
-        name: "P1 GREEN",
+        name: "GREEN",
         bg: Color32::from_rgb(3, 8, 5),
         glass: Color32::from_rgb(6, 16, 9),
         bezel: Color32::from_rgb(24, 44, 30),
@@ -41,7 +41,7 @@ pub const PALETTES: [Palette; 3] = [
         hot: Color32::from_rgb(255, 60, 40),
     },
     Palette {
-        name: "VFD CYAN",
+        name: "CYAN",
         bg: Color32::from_rgb(3, 7, 9),
         glass: Color32::from_rgb(5, 14, 17),
         bezel: Color32::from_rgb(22, 40, 46),

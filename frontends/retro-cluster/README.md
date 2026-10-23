@@ -23,7 +23,7 @@ Start the cluster before or after OCTAVE: until the service answers it shows NO 
 | Left / Right | previous / next track |
 | + / - (or Up / Down) | volume by 5 |
 | M | mute |
-| Tab | DRIVE / DIAG page |
+| Tab | next page (DRIVE, DIAG, DTC, TRIPS) |
 | T | theme (amber, P1 green, VFD cyan) |
 | F11 | fullscreen |
 | Ctrl+Q | quit |
@@ -34,6 +34,8 @@ All the keys are on screen too, for the touch panel. Tap the tape (the progress 
 
 - **DRIVE**: sweep tachometer (shift-light flash from `shiftLightManager`), speed, coolant / oil (intake air if the car has no oil PID) / fuel / voltage ladders, a trip computer (load, throttle, MAF, MAP), the black-box trip timer, and the tape deck.
 - **DIAG**: every PID the vehicle reports, live, three columns of fifteen per page.
+- **DTC**: the check-engine lamp, the stored trouble codes, the freeze frame, read buttons, and a clear that needs a second press within 4 s.
+- **TRIPS**: the black box's recorded drives (newest first) and the selected drive's summary in the user's units; export a drive, or end the one being recorded.
 
 ## What it uses from the API
 
@@ -41,10 +43,11 @@ All the keys are on screen too, for the touch panel. Tap the tape (the progress 
 |---|---|
 | `paramStore` | every reading (one `subscribe`, 40 ms batches) |
 | `parameterCatalog.displayParameters` | titles, units, ranges, and `displayScale` / `displayOffset`, so the gauges follow the user's °F / km/h choice |
-| `obdManager` | `setParameterDemand("retro-cluster", ids)` for the PIDs on the current page; `connected`, `vehicleSupportedParameters`, VIN, make, year |
+| `obdManager` | `setParameterDemand("retro-cluster", ids)` for the PIDs on the current page; `connected`, `vehicleSupportedParameters`, VIN, make, year; `read_dtc`, `clear_dtc`, `read_freeze_frame`, `get_dtc_codes` / `get_mil_status` / `get_freeze_frame` and their change signals, `dtcClearResult` |
 | `nowPlaying` | track, position, source, `togglePlay` / `next` / `previous` / `seek` / `toggleShuffle` |
 | `volumeController` | `percent`, `muted`, `applyVolume`, `toggleMute` |
-| `shiftLightManager`, `tripRecorder`, `clock` | the SHIFT and REC lamps, the trip timer, the clock text |
+| `tripRecorder` | `trips`, `requestDetail` / `detailReady`, `exportTrip` / `exportFinished`, `endTripNow`, the REC lamp and the trip timer |
+| `shiftLightManager`, `clock` | the SHIFT lamp, the clock text |
 
 `src/link.rs` is the whole client (about 450 lines, `std::net` plus `serde_json`): a thread connects, subscribes, folds events into a `State` the UI reads, and reconnects. `src/vfd.rs` holds the drawing primitives, `src/main.rs` the layout, on a 1280x800 canvas scaled to the window.
 

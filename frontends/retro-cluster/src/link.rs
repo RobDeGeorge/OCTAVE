@@ -71,6 +71,24 @@ impl NowPlaying {
     }
 }
 
+/// One row of `tripRecorder.trips`.
+#[derive(Clone, Debug)]
+pub struct Trip {
+    pub id: i64,
+    pub start_iso: String,
+    pub duration_s: f64,
+    pub samples: i64,
+    pub open: bool,
+    pub vehicle: String,
+}
+
+/// A trouble code as `obdManager` reports it.
+#[derive(Clone, Debug)]
+pub struct Dtc {
+    pub code: String,
+    pub description: String,
+}
+
 pub struct State {
     pub link: LinkState,
     pub address: String,
@@ -98,6 +116,15 @@ pub struct State {
     pub recording: bool,
     pub trip_elapsed_s: i64,
     pub clock: Option<String>,
+    pub dtcs: Vec<Dtc>,
+    pub mil: bool,
+    pub freeze: Vec<Dtc>,
+    /// The last clear: success, the app's message, when
+    pub dtc_result: Option<(bool, String, Instant)>,
+    pub trips: Vec<Trip>,
+    /// `tripRecorder.requestDetail` answers, by trip id
+    pub trip_details: HashMap<i64, Value>,
+    pub export_path: Option<String>,
     pub last_error: Option<String>,
     /// When the last event arrived, for the RX lamp.
     pub last_rx: Option<Instant>,
@@ -131,6 +158,13 @@ impl State {
             recording: false,
             trip_elapsed_s: 0,
             clock: None,
+            dtcs: Vec::new(),
+            mil: false,
+            freeze: Vec::new(),
+            dtc_result: None,
+            trips: Vec::new(),
+            trip_details: HashMap::new(),
+            export_path: None,
             last_error: None,
             last_rx: None,
             dropped: 0,
@@ -175,9 +209,23 @@ impl State {
                 self.apply_property(object, name, &ev["value"]);
             }
             Some("signal") => {
-                if ev["object"] == "clock" && ev["name"] == "timeChanged" {
-                    let text = ev["args"][0].as_str().unwrap_or("").to_string();
-                    self.clock = Some(text);
+                let args = &ev["args"];
+                match (ev["object"].as_str().unwrap_or(""), ev["name"].as_str().unwrap_or("")) {
+                    ("clock", "timeChanged") => self.clock = Some(args[0].as_str().unwrap_or("").to_string()),
+                    ("obdManager", "dtcCodesChanged") => self.dtcs = dtc_list(&args[0]),
+                    ("obdManager", "freezeFrameChanged") => self.freeze = dtc_list(&args[0]),
+                    ("obdManager", "milStatusChanged") => self.mil = args[0].as_bool().unwrap_or(false),
+                    ("obdManager", "dtcClearResult") => {
+                        let ok = args[0].as_bool().unwrap_or(false);
+                        self.dtc_result = Some((ok, args[1].as_str().unwrap_or("").to_string(), Instant::now()));
+                    }
+                    ("tripRecorder", "detailReady") => {
+                        if let Some(id) = args[0].as_i64() {
+                            self.trip_details.insert(id, args[1].clone());
+                        }
+                    }
+                    ("tripRecorder", "exportFinished") => self.export_path = args[1].as_str().map(String::from),
+                    _ => {}
                 }
             }
             Some("dropped") => self.dropped += ev["count"].as_u64().unwrap_or(0),
@@ -227,6 +275,7 @@ impl State {
             ("tripRecorder", "recording") => self.recording = b(),
             ("tripRecorder", "currentTripElapsedS") => self.trip_elapsed_s = i(),
             ("parameterCatalog", "displayParameters") => self.load_catalog(v),
+            ("tripRecorder", "trips") => self.trips = trip_list(v),
             _ => {}
         }
     }
@@ -252,6 +301,50 @@ impl State {
             self.catalog.insert(id.to_string(), info);
         }
     }
+
+    /// The result of a call this client reads back, by "object.method".
+    fn apply_result(&mut self, what: &str, v: &Value) {
+        match what {
+            "obdManager.get_dtc_codes" => self.dtcs = dtc_list(v),
+            "obdManager.get_freeze_frame" => self.freeze = dtc_list(v),
+            "obdManager.get_mil_status" => self.mil = v.as_bool().unwrap_or(false),
+            _ => {}
+        }
+    }
+}
+
+fn dtc_list(v: &Value) -> Vec<Dtc> {
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .map(|d| Dtc {
+                    code: d["code"].as_str().unwrap_or("").to_string(),
+                    description: d["description"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn trip_list(v: &Value) -> Vec<Trip> {
+    let Some(rows) = v.as_array() else { return Vec::new() };
+    rows.iter()
+        .filter_map(|t| {
+            let vehicle = match (t["modelYear"].as_i64(), t["make"].as_str()) {
+                (Some(y), Some(m)) if y > 0 && !m.is_empty() => format!("{y} {m}"),
+                (_, Some(m)) => m.to_string(),
+                _ => String::new(),
+            };
+            Some(Trip {
+                id: t["id"].as_i64()?,
+                start_iso: t["startIso"].as_str().unwrap_or("").to_string(),
+                duration_s: t["durationS"].as_f64().unwrap_or(0.0),
+                samples: t["sampleCount"].as_i64().unwrap_or(0),
+                open: t["open"].as_bool().unwrap_or(false),
+                vehicle,
+            })
+        })
+        .collect()
 }
 
 fn string_list(v: &Value) -> Vec<String> {
@@ -349,11 +442,15 @@ fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Ar
             }
             ok &= send(&mut stream, msg, format!("subscribe {object}"));
         }
-        ok &= send(
-            &mut stream,
-            json!({"op": "subscribe", "object": "clock", "signals": ["timeChanged"]}),
-            "subscribe clock".into(),
-        );
+        for (object, signals) in signal_subscriptions() {
+            let msg = json!({"op": "subscribe", "object": object, "signals": signals});
+            ok &= send(&mut stream, msg, format!("subscribe {object}"));
+        }
+        // Signals only report changes: read the trouble codes as they stand
+        for method in ["get_dtc_codes", "get_mil_status", "get_freeze_frame"] {
+            let msg = json!({"op": "call", "object": "obdManager", "method": method, "args": []});
+            ok &= send(&mut stream, msg, format!("obdManager.{method}"));
+        }
         ok &= send(&mut stream, demand_msg(&demand), "demand".into());
 
         while ok && alive.load(Ordering::Relaxed) {
@@ -406,9 +503,17 @@ fn subscriptions() -> Vec<(&'static str, Vec<&'static str>, u64)> {
             0,
         ),
         ("shiftLightManager", vec!["lit", "active"], 0),
-        ("tripRecorder", vec!["recording", "currentTripElapsedS"], 0),
+        ("tripRecorder", vec!["recording", "currentTripElapsedS", "trips"], 0),
         // Every reading, merged into one event per 40 ms
         ("paramStore", vec![], 40),
+    ]
+}
+
+fn signal_subscriptions() -> Vec<(&'static str, Vec<&'static str>)> {
+    vec![
+        ("clock", vec!["timeChanged"]),
+        ("obdManager", vec!["dtcCodesChanged", "milStatusChanged", "freezeFrameChanged", "dtcClearResult"]),
+        ("tripRecorder", vec!["detailReady", "exportFinished"]),
     ]
 }
 
@@ -430,7 +535,9 @@ fn read_loop(
             let what = pending.lock().unwrap().remove(&id).unwrap_or_default();
             if msg["ok"] != true {
                 s.last_error = Some(format!("{what}: {}", msg["error"].as_str().unwrap_or("error")));
-            } else if what == "hello" {
+            } else if what != "hello" {
+                s.apply_result(&what, &msg["result"]);
+            } else {
                 let r = &msg["result"];
                 s.link = LinkState::Online;
                 s.protocol = r["protocolVersion"].as_i64();
