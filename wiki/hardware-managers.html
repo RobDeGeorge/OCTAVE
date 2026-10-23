@@ -911,7 +911,7 @@ tz = yw*qz - yz*qw</code></pre>
 
         <section id="gesture-mapping">
           <h3>Action Mapping &amp; Settings</h3>
-          <p>Each gesture maps to an action string. The default (the <code>gestureMapping</code> default in <span class="file-path">src/managers/settingsmanager.cpp</span>, duplicated as the built-in fallback in <span class="file-path">gesturemanager.cpp</span>):</p>
+          <p>Each gesture maps to an action string. The vocabulary is one table, <span class="file-path">src/managers/gesturevocabulary.h</span>: the nine gestures, the actions (with their labels, <code>none</code> = "Disabled") and the default mapping, which is both the <code>gestureMapping</code> settings default and GestureManager's fallback. The Accessories page lists <code>gestureSensor.gestures</code> and <code>gestureSensor.actions</code> rather than its own copy:</p>
           <pre><code><span class="str">"gestureMapping"</span>: {
     <span class="str">"RIGHT"</span>:             <span class="str">"next_track"</span>,
     <span class="str">"LEFT"</span>:              <span class="str">"previous_track"</span>,

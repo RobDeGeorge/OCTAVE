@@ -127,6 +127,31 @@ private slots:
         QCOMPARE(saved.count(), 0);
     }
 
+    void gestureVocabularyIsOneTable()
+    {
+        // The settings page lists GestureManager's gestures and actions (they
+        // were a QML copy); every gesture has a default action, every default
+        // action is offered, and the settings default is the same mapping
+        GestureManager gesture;
+        const QStringList gestures = gesture.property("gestures").toStringList();
+        QCOMPARE(gestures.size(), 9);
+        QVERIFY(gestures.contains("WAVE"));
+        QStringList actionKeys;
+        for (const QVariant &a : gesture.property("actions").toList())
+            actionKeys << a.toMap().value("key").toString();
+        QVERIFY(actionKeys.contains("none"));
+        const QVariantMap defaults = GestureVocabulary::defaultMapping();
+        QCOMPARE(defaults.size(), gestures.size());
+        for (const QString &g : gestures) {
+            QVERIFY2(defaults.contains(g), qPrintable(g));
+            QVERIFY2(actionKeys.contains(defaults.value(g).toString()), qPrintable(g));
+        }
+        SettingsManager settings;
+        const QVariantMap saved = settings.get_gesture_mapping_dict();
+        for (const QString &g : gestures)
+            QCOMPARE(saved.value(g), defaults.value(g));
+    }
+
 private:
     std::unique_ptr<QTemporaryDir> m_tmp;
 };

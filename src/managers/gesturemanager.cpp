@@ -537,15 +537,9 @@ void GestureWorker::run()
 QMap<QString, QString> GestureManager::defaultGestureMapping()
 {
     QMap<QString, QString> mapping;
-    mapping[QStringLiteral("RIGHT")]             = QStringLiteral("next_track");
-    mapping[QStringLiteral("LEFT")]              = QStringLiteral("previous_track");
-    mapping[QStringLiteral("UP")]                = QStringLiteral("volume_up");
-    mapping[QStringLiteral("DOWN")]              = QStringLiteral("volume_down");
-    mapping[QStringLiteral("FORWARD")]           = QStringLiteral("play_pause");
-    mapping[QStringLiteral("BACKWARD")]          = QStringLiteral("mute_toggle");
-    mapping[QStringLiteral("CLOCKWISE")]         = QStringLiteral("volume_up");
-    mapping[QStringLiteral("COUNTER-CLOCKWISE")] = QStringLiteral("volume_down");
-    mapping[QStringLiteral("WAVE")]              = QStringLiteral("play_pause");
+    const QVariantMap defaults = GestureVocabulary::defaultMapping();
+    for (auto it = defaults.constBegin(); it != defaults.constEnd(); ++it)
+        mapping.insert(it.key(), it.value().toString());
     return mapping;
 }
 

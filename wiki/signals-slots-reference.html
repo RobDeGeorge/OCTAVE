@@ -1204,6 +1204,8 @@
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td><code>"Connected"</code> / <code>"Disconnected"</code> (mobile stub: <code>"Disabled on mobile"</code>); read by the Accessories widget</td></tr>
+          <tr><td><code>gestures</code></td><td><code>QStringList</code></td><td>constant</td><td>&mdash;</td><td>The nine gestures the sensor reports, in settings-page order (<span class="file-path">gesturevocabulary.h</span>)</td></tr>
+            <tr><td><code>actions</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td><code>{key, label}</code> per action a gesture can trigger, <code>none</code> ("Disabled") last; the mobile stub has both</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>

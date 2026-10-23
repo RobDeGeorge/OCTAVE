@@ -29,17 +29,15 @@ Flickable {
     Component.onCompleted: refreshPorts()
 
     // ── Gesture mapping model ──────────────────────────────────
-    property var actionOptions: ["next_track", "previous_track", "volume_up", "volume_down", "play_pause", "mute_toggle", "none"]
-    property var actionLabels: {
-        "next_track": "Next Track",
-        "previous_track": "Previous Track",
-        "volume_up": "Volume Up",
-        "volume_down": "Volume Down",
-        "play_pause": "Play / Pause",
-        "mute_toggle": "Mute Toggle",
-        "none": "Disabled"
+    // The vocabulary is GestureManager's (gesturevocabulary.h)
+    readonly property var _actions: (typeof gestureSensor !== "undefined" && gestureSensor) ? gestureSensor.actions : []
+    readonly property var actionOptions: _actions.map(function(a) { return a.key })
+    readonly property var actionLabels: {
+        var labels = {}
+        for (var i = 0; i < _actions.length; i++) labels[_actions[i].key] = _actions[i].label
+        return labels
     }
-    property var gestureNames: ["RIGHT", "LEFT", "UP", "DOWN", "FORWARD", "BACKWARD", "CLOCKWISE", "COUNTER-CLOCKWISE", "WAVE"]
+    readonly property var gestureNames: (typeof gestureSensor !== "undefined" && gestureSensor) ? gestureSensor.gestures : []
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
     // False when the host shows tileModel as a tile grid instead of this

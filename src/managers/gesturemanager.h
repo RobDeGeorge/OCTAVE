@@ -1,6 +1,8 @@
 #ifndef GESTUREMANAGER_H
 #define GESTUREMANAGER_H
 
+#include "gesturevocabulary.h"
+
 // PAJ7620U2 gesture sensor uses Linux I2C — excluded on mobile builds.
 #ifndef Q_OS_MOBILE
 
@@ -79,12 +81,18 @@ class GestureManager : public QObject
     Q_OBJECT
     // Read by AccessoriesWidget.qml; mirrors the mobile stub's property.
     Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
+    // The gestures the sensor reports and the actions they can map to
+    // ({key, label}); see gesturevocabulary.h
+    Q_PROPERTY(QStringList gestures READ gestures CONSTANT)
+    Q_PROPERTY(QVariantList actions READ actions CONSTANT)
 
 public:
     explicit GestureManager(QObject *parent = nullptr);
     ~GestureManager() override;
 
     void connect_settings_manager(SettingsManager *settingsManager);
+    QStringList gestures() const { return GestureVocabulary::gestures(); }
+    QVariantList actions() const { return GestureVocabulary::actions(); }
 
 signals:
     void gestureDetected(const QString &gesture);
@@ -139,8 +147,14 @@ class GestureManager : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
+    // The gestures the sensor reports and the actions they can map to
+    // ({key, label}); see gesturevocabulary.h
+    Q_PROPERTY(QStringList gestures READ gestures CONSTANT)
+    Q_PROPERTY(QVariantList actions READ actions CONSTANT)
 public:
     explicit GestureManager(QObject *parent = nullptr) : QObject(parent) {}
+    QStringList gestures() const { return GestureVocabulary::gestures(); }
+    QVariantList actions() const { return GestureVocabulary::actions(); }
     void connect_settings_manager(SettingsManager *) {}
 
 signals:

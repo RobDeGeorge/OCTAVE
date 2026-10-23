@@ -234,6 +234,7 @@ qt_add_executable(octave
     src/managers/berryimumanager.h
     src/managers/berryimumanager.cpp
     src/managers/gesturemanager.h
+    src/managers/gesturevocabulary.h
     src/managers/gesturemanager.cpp
     src/managers/phonemirrormanager.h
     src/managers/phonemirrormanager.cpp

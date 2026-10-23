@@ -1,6 +1,7 @@
 // OCTAVE Settings Manager
 
 #include "settingsmanager.h"
+#include "gesturevocabulary.h"
 #include "volumecontroller.h"
 #include "../util/perfscope.h"
 
@@ -300,17 +301,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
 
     // Gesture
     d[QStringLiteral("gestureSensorEnabled")]    = true;
-    QJsonObject gmap;
-    gmap[QStringLiteral("RIGHT")]              = QStringLiteral("next_track");
-    gmap[QStringLiteral("LEFT")]               = QStringLiteral("previous_track");
-    gmap[QStringLiteral("UP")]                 = QStringLiteral("volume_up");
-    gmap[QStringLiteral("DOWN")]               = QStringLiteral("volume_down");
-    gmap[QStringLiteral("FORWARD")]            = QStringLiteral("play_pause");
-    gmap[QStringLiteral("BACKWARD")]           = QStringLiteral("mute_toggle");
-    gmap[QStringLiteral("CLOCKWISE")]          = QStringLiteral("volume_up");
-    gmap[QStringLiteral("COUNTER-CLOCKWISE")]  = QStringLiteral("volume_down");
-    gmap[QStringLiteral("WAVE")]               = QStringLiteral("play_pause");
-    d[QStringLiteral("gestureMapping")]          = gmap;
+    d[QStringLiteral("gestureMapping")]          = QJsonObject::fromVariantMap(GestureVocabulary::defaultMapping());
     d[QStringLiteral("gestureVolumeStep")]       = 5;
     d[QStringLiteral("gestureCooldown")]         = 300;
     d[QStringLiteral("pinnedSettings")]          = QJsonArray();
