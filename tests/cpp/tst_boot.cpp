@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
@@ -135,6 +136,9 @@ private slots:
         QVERIFY2(connected.contains(R"("result":true)"), qPrintable(connected + app.readAll().right(3000)));
         const QByteArray throttle = request(app, port, R"({"action": "sim_throttle", "args": {"value": 60}})");
         QVERIFY2(throttle.contains(R"("queued":"sim_throttle")"), throttle.constData());
+        // A pairing code without the Settings page (frontend development)
+        const QByteArray code = request(app, port, R"({"action": "sim_pairing_code"})");
+        QVERIFY2(QRegularExpression(R"("code":"\d{6}")").match(QString::fromUtf8(code)).hasMatch(), code.constData());
         const QByteArray status = request(app, port, R"({"action": "sim_status"})");
         QVERIFY2(status.startsWith(R"({"ok":true)") && status.contains("\"imu\""), status.constData());
 

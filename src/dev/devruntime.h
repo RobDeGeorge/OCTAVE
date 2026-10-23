@@ -26,6 +26,7 @@
 #include <QStringList>
 
 class BerryIMUManager;
+class ServicePairing;
 class OBDManager;
 class QQmlApplicationEngine;
 class QQuickItem;
@@ -54,6 +55,7 @@ struct AppObjects {
     OBDManager *obd = nullptr;
     BerryIMUManager *imu = nullptr;
     QDir projectRoot;   // checkout root: frontend/, src/dev/qml/, dev/perf/logs/
+    ServicePairing *pairing = nullptr;   // sim_pairing_code: a code without the Settings page
 };
 
 class Runtime : public QObject

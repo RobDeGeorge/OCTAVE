@@ -307,7 +307,7 @@ int runHeadless(QGuiApplication &app, bool smokeTest)
     const QDir frontendDir = findFrontendDir();
     OctaveDev::Runtime devRuntime(app.arguments(), {nullptr, &core.settingsManager, &core.mediaManager, &core.volumeController,
                                                     &core.nowPlaying, &core.obdManager, &core.berryIMU,
-                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.servicePairing});
     devRuntime.startHeadless(service.server.get());
 #endif
     if (!service.server || !service.server->start()) {
@@ -600,7 +600,7 @@ int main(int argc, char *argv[])
     // ---- Developer tooling (inactive unless --dev / --profile) ----
 #ifdef OCTAVE_DEV_TOOLS
     OctaveDev::Runtime devRuntime(app.arguments(), {&engine, &settingsManager, &core.mediaManager, &core.volumeController, &core.nowPlaying, &core.obdManager, &core.berryIMU,
-                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.servicePairing});
     devRuntime.beforeLoad();
 #else
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))

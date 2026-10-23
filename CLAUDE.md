@@ -84,7 +84,7 @@ When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMa
 
 1. Implement in C++ (`src/`); QML in `frontend/`.
 2. Build and test: `cmake --build build -j && ctest --test-dir build`. Add or extend a QtTest in `tests/cpp/` for logic changes (`octave_add_test()` in its CMakeLists; give anything that touches settings a temp `XDG_CONFIG_HOME`). Drive the result with `./build/octave --dev --profile` and the dev tooling (screenshots, stories, dashboard drivers, MCP tools) when it touches the UI.
-3. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes. When a manager's public surface changes (a `Q_PROPERTY`, `Q_INVOKABLE`, slot or signal, or a PID), regenerate the published API in the same commit: `./build/octave --dump-api docs/api && venv/bin/python wiki/build_api_reference.py` (`tst_apidocs` fails otherwise). A breaking change also bumps `kProtocolVersion` (`src/service/protocol.h`, `docs/api/README.md`).
+3. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes. When a manager's public surface changes (a `Q_PROPERTY`, `Q_INVOKABLE`, slot or signal, or a PID), regenerate the published API in the same commit: `./build/octave --dump-api docs/api && venv/bin/python wiki/build_api_reference.py && npm --prefix sdk/typescript run generate` (`tst_apidocs` fails otherwise, and so does `sdk/typescript`'s `npm test` in CI). A breaking change also bumps `kProtocolVersion` (`src/service/protocol.h`, `docs/api/README.md`).
 
 ### Service API (`src/service/`, `sdk/`, `docs/api/`)
 
