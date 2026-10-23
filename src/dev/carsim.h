@@ -10,6 +10,7 @@
 // mutex. The state is held by shared_ptr so a worker thread still finishing
 // at shutdown never reads a destroyed object.
 
+#include <QElapsedTimer>
 #include <QMutex>
 #include <QObject>
 #include <QSet>
@@ -67,10 +68,23 @@ public:
     template <typename F> void updateLink(F &&f) { QMutexLocker l(&m_lock); f(m_link); }
     bool linkDown() const;
 
+    // Mode 01 replies the adapter has sent (the OBD poll), for sim_status:
+    // the load harness (tools/stream/service_load.py) reads how many and the
+    // longest gap between two since its last look
+    void notePoll();
+    struct PollStats {
+        qint64 count = 0;
+        qint64 maxGapMs = 0;   // since the last takePollStats()
+    };
+    PollStats takePollStats() const;
+
 private:
     mutable QMutex m_lock;
     CarValues m_values;
     LinkSettings m_link;
+    QElapsedTimer m_sinceLastPoll;
+    qint64 m_polls = 0;
+    mutable qint64 m_maxPollGapMs = 0;
 };
 
 class CarSim : public QObject
