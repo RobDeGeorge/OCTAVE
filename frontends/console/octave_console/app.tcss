@@ -106,7 +106,7 @@ Sparkline > .sparkline--max-color {
 }
 
 /* Trips */
-#trips {
+#trip-list {
     width: 1fr;
 }
 
@@ -152,4 +152,91 @@ Confirm, EditValue {
     border: thick #e0a030;
     background: $surface;
     padding: 1 2;
+}
+
+/* Library */
+#lib-left {
+    width: 36;
+}
+
+#lib-playlists {
+    height: 1fr;
+}
+
+#lib-queue {
+    height: 1fr;
+}
+
+#lib-right {
+    width: 1fr;
+}
+
+#lib-spectrum {
+    height: 1;
+    color: #e0a030;
+}
+
+#lib-status {
+    height: 1;
+    color: $text-muted;
+}
+
+/* Dashboards */
+#dash-list {
+    width: 60;
+}
+
+#dash-preview {
+    width: 1fr;
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* Car, Phone, System: two columns */
+#car-left, #car-right, #phone-left, #phone-right, #sys-left, #sys-right {
+    width: 1fr;
+}
+
+#shift-flags {
+    height: 8;
+}
+
+#gestures {
+    height: 12;
+}
+
+#esp-ports {
+    height: 1fr;
+}
+
+#phone-devices {
+    height: 6;
+}
+
+#phone-log, #sys-log {
+    height: 1fr;
+    border: round $primary-darken-2;
+}
+
+/* Trips chart */
+#trip-chart {
+    height: 4;
+}
+
+#trip-chart-label {
+    height: 1;
+}
+
+.dialog.wide {
+    width: 100;
+    height: 36;
+}
+
+.dialog.wide TextArea {
+    height: 1fr;
+}
+
+#pick {
+    height: auto;
+    max-height: 24;
 }

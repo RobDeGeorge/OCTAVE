@@ -227,7 +227,7 @@ async def test_trips_list_and_detail():
         await linked(pilot, app)
         pane = app.query_one("#pane-trips")
         assert await wait_for(pilot, lambda: pane.ids)
-        await pilot.click("#trips")
+        await pilot.click("#trip-list")
         await pilot.press("enter")
         assert await wait_for(pilot, lambda: f"Trip {pane.ids[0]}" in str(app.query_one("#trip-detail").render()))
         shot(app, "trips")

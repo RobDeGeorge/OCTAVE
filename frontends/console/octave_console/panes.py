@@ -14,7 +14,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, DataTable, Input, Label, RichLog, Sparkline, Static, Tree
 
 from .link import CONSUMER
-from .screens import Confirm, EditValue
+from .screens import Confirm, EditValue, Pick
 
 HISTORY = 120     # sparkline points per PID
 MAX_PINS = 4
@@ -40,6 +40,7 @@ def short(value, width=60):
 
 class Pane(Vertical):
     OBJECTS: set = set()
+    SUBSCRIBE: list = []   # [(object, properties, signals, throttle ms)] made on every connect
 
     def octave(self, event):
         """An event from one of OBJECTS (the state is already updated)."""
@@ -65,11 +66,14 @@ class LivePane(Pane):
     """Every PID the vehicle reports, sortable, with sparklines for pinned ones.
     Only the visible rows (and the pins) are registered as demand."""
 
-    OBJECTS = {"paramStore", "parameterCatalog", "obdManager"}
+    OBJECTS = {"paramStore", "parameterCatalog", "obdManager", "settingsManager"}
     COLUMNS = [("id", "ID"), ("title", "Parameter"), ("value", "Value"), ("unit", "Unit"), ("min", "Min"),
-               ("max", "Max"), ("pin", "")]
+               ("max", "Max"), ("pin", ""), ("home", "Home")]
     BINDINGS = [
         Binding("p", "pin", "Pin sparkline"),
+        Binding("h", "home", "Home card"),
+        Binding("K", "home_move(-1)", "Home earlier", show=False),
+        Binding("J", "home_move(1)", "Home later", show=False),
         Binding("s", "sort_next", "Sort"),
         Binding("r", "sort_reverse", "Reverse"),
     ]
@@ -103,6 +107,9 @@ class LivePane(Pane):
         obj = event.get("object")
         if obj == "paramStore" or event.get("event") == "params":
             self.take_values(event.get("values", {}))
+        elif event.get("name") == "homeOBDParameters":
+            for pid in self.order:
+                self.table.update_cell(pid, "home", self.home_cell(pid))
         elif event.get("name") in ("displayParameters", "vehicleSupportedParameters"):
             self.catalog = {row["id"]: row for row in self.app.state_of("parameterCatalog", "displayParameters", [])}
             self.rebuild()
@@ -154,15 +161,41 @@ class LivePane(Pane):
             row = self.catalog[pid]
             self.table.add_row(pid, row.get("title", pid), self.value_cell(pid), row.get("unit", ""),
                                fmt_number(row.get("min"), 0), fmt_number(row.get("max"), 0),
-                               "*" if pid in self.pins else "", key=pid)
+                               "*" if pid in self.pins else "", self.home_cell(pid), key=pid)
         self.order = ids
         if cursor in ids:
             self.table.move_cursor(row=ids.index(cursor))
         sort_label = dict(self.COLUMNS)[self.sort_key] or "pinned"
         self.table.border_title = f"Live data: {len(ids)} PIDs, sorted by {sort_label}{' (desc)' if self.reverse else ''}"
 
+    def home_ids(self):
+        return list(self.app.state_of("settingsManager", "homeOBDParameters", []) or [])
+
+    def home_cell(self, pid):
+        home = self.home_ids()
+        return str(home.index(pid) + 1) if pid in home else ""
+
+    def action_home(self):
+        """Add the row's PID to the home screen's OBD cards, or take it off."""
+        if not self.order:
+            return
+        pid = self.order[self.table.cursor_row]
+        if pid in self.home_ids():
+            self.app.invoke("settingsManager", "remove_home_obd_parameter", pid, note=f"{pid} off the home screen")
+        else:
+            self.app.invoke("settingsManager", "add_home_obd_parameter", pid, note=f"{pid} on the home screen")
+
+    def action_home_move(self, delta):
+        home = self.home_ids()
+        pid = self.order[self.table.cursor_row] if self.order else None
+        if pid in home and 0 <= home.index(pid) + delta < len(home):
+            i = home.index(pid)
+            self.app.invoke("settingsManager", "move_home_obd_parameter", i, i + delta, note=f"{pid} moved")
+
     def on_data_table_header_selected(self, event):
         key = event.column_key.value
+        if key == "home":
+            return
         if key == self.sort_key:
             self.reverse = not self.reverse
         else:
@@ -239,13 +272,14 @@ class LivePane(Pane):
 
 
 class ObdPane(Pane):
-    OBJECTS = {"obdManager", "obdAdapterFinder"}
+    OBJECTS = {"obdManager", "obdAdapterFinder", "settingsManager"}
     BINDINGS = [
         Binding("c", "connect", "Connect"),
         Binding("R", "reconnect", "Reconnect"),
         Binding("t", "read_dtc", "Read DTCs"),
         Binding("f", "freeze", "Freeze frame"),
         Binding("X", "clear_dtc", "Clear DTCs"),
+        Binding("x", "forget_adapter", "Forget saved", show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -257,12 +291,18 @@ class ObdPane(Pane):
                     yield Button("Reconnect", id="obd-reconnect", compact=True)
                     yield Button("Disconnect", id="obd-close", compact=True)
                     yield Button("Scan car", id="obd-scan", compact=True)
-                yield Label("Adapters  [dim](Enter connects)[/dim]", classes="section")
+                with Horizontal(classes="buttons"):
+                    yield Button("Force", id="obd-force", compact=True)
+                    yield Button("Reset", id="obd-reset", compact=True)
+                    yield Button("Direct MAC…", id="obd-direct", compact=True)
+                yield Label("Adapters  [dim](Enter connects, x forgets a saved one)[/dim]", classes="section")
                 yield DataTable(id="adapters", cursor_type="row")
                 with Horizontal(classes="buttons"):
                     yield Button("Refresh ports", id="obd-ports", compact=True)
                     yield Button("Bluetooth scan", id="bt-scan", compact=True)
                     yield Button("Stop", id="bt-stop", compact=True)
+                    yield Button("Power on", id="bt-power", compact=True)
+                    yield Button("Cancel", id="bt-cancel", compact=True)
                 yield Static(id="bt-status")
             with Vertical(id="obd-right"):
                 yield Label("Trouble codes", classes="section")
@@ -271,6 +311,9 @@ class ObdPane(Pane):
                     yield Button("Read", id="dtc-read", variant="primary", compact=True)
                     yield Button("Clear…", id="dtc-clear", variant="error", compact=True)
                     yield Button("Freeze frame", id="dtc-freeze", compact=True)
+                    yield Button("Pending", id="dtc-current", compact=True)
+                    yield Button("Status", id="dtc-status", compact=True)
+                    yield Button("Diag mode", id="dtc-diag", compact=True)
                 yield Static(id="freeze", classes="box")
                 yield Label("Connection log", classes="section")
                 yield RichLog(id="obd-log", max_lines=500, wrap=True)
@@ -295,6 +338,9 @@ class ObdPane(Pane):
                 self.app.invoke("obdManager", "read_dtc", quiet=True)
             elif name == "connectionLogLineAppended":
                 self.query_one("#obd-log", RichLog).write(args[0] if args else "")
+            elif name in ("scanOutputChanged", "dtcCountChanged"):
+                self.query_one("#obd-log", RichLog).write(
+                    f"[dim]{'DTC count: ' if name == 'dtcCountChanged' else ''}{args[0] if args else ''}[/dim]")
             elif name == "scanProgressChanged":
                 self.app.status_note(f"vehicle scan {args[0]}% {args[1] if len(args) > 1 else ''}")
             return
@@ -303,7 +349,7 @@ class ObdPane(Pane):
             log.clear()
             for line in event.get("value") or []:
                 log.write(line)
-        elif name in ("availableAdapters", "devices"):
+        elif name in ("availableAdapters", "devices", "obdSavedAdapters"):
             self.show_adapters()
         self.render_status()
 
@@ -321,7 +367,8 @@ class ObdPane(Pane):
             f"VIN      {s.get('vin') or '-'}",
             f"PIDs     {len(s.get('vehicleSupportedParameters') or [])} supported"
             + ("" if s.get("vehicleScanComplete", True) else " (scanning)"),
-            f"MIL      {'[red]ON[/red]' if self.app.state.get('_mil') else 'off'}",
+            f"MIL      {'[red]ON[/red]' if self.app.state.get('_mil') else 'off'}"
+            + ("   [b]diagnostic mode[/b]" if self.diag_mode else ""),
         ]
         self.query_one("#obd-status", Static).update("\n".join(lines))
         bt = ("Bluetooth: " + ("on" if f.get("bluetoothOn") else "off") + (", scanning" if f.get("scanning") else "")
@@ -337,6 +384,10 @@ class ObdPane(Pane):
         for a in self.app.state_of("obdManager", "availableAdapters", []) or []:
             self.adapters.append(("obd", a.get("identifier")))
             table.add_row(a.get("name", ""), a.get("kind", ""), a.get("identifier", ""), "port")
+        for a in self.app.state_of("settingsManager", "obdSavedAdapters", []) or []:
+            mac = a.get("mac", "") if isinstance(a, dict) else str(a)
+            self.adapters.append(("saved", mac))
+            table.add_row(a.get("name", "") if isinstance(a, dict) else mac, "saved", mac, "direct")
         for d in self.app.state_of("obdAdapterFinder", "devices", []) or []:
             self.adapters.append(("bt", d.get("address")))
             name = d.get("name", "") + (" *" if d.get("likelyObd") else "")
@@ -367,12 +418,19 @@ class ObdPane(Pane):
         self.app.invoke("obdManager", "get_dtc_codes", done=got, quiet=True)
         self.app.invoke("obdManager", "get_freeze_frame", done=self.show_freeze, quiet=True)
 
+        def mode(m):
+            self.diag_mode = bool(m)
+            self.render_status()
+        self.app.invoke("obdManager", "is_diagnostic_mode", done=mode, quiet=True)
+
     def on_data_table_row_selected(self, event):
         if event.data_table.id != "adapters" or event.cursor_row >= len(self.adapters):
             return
         via, address = self.adapters[event.cursor_row]
         if via == "obd":
             self.app.invoke("obdManager", "connect_to_adapter", address, note=f"connecting to {address}")
+        elif via == "saved":
+            self.app.invoke("obdManager", "connect_direct", address, note=f"connecting to {address}")
         else:
             self.app.invoke("obdAdapterFinder", "connectAdapter", address, note=f"pairing {address}")
 
@@ -384,13 +442,49 @@ class ObdPane(Pane):
             "obd-ports": lambda: self.app.invoke("obdManager", "refresh_ports", note="refreshing ports"),
             "bt-scan": lambda: self.app.invoke("obdAdapterFinder", "startScan", note="Bluetooth scan"),
             "bt-stop": lambda: self.app.invoke("obdAdapterFinder", "stopScan"),
+            "bt-power": lambda: self.app.invoke("obdAdapterFinder", "powerOn", note="Bluetooth on"),
+            "bt-cancel": lambda: self.app.invoke("obdAdapterFinder", "cancel"),
+            "obd-force": lambda: self.app.invoke("obdManager", "force_connect", note="force connecting"),
+            "obd-reset": lambda: self.app.invoke("obdManager", "reset_connection", note="connection reset"),
+            "obd-direct": self.action_direct,
+            "dtc-current": lambda: self.app.invoke("obdManager", "read_current_dtc", note="reading pending codes"),
+            "dtc-status": lambda: self.app.invoke("obdManager", "read_status", note="reading status"),
+            "dtc-diag": self.action_diag,
             "dtc-read": self.action_read_dtc, "dtc-clear": self.action_clear_dtc, "dtc-freeze": self.action_freeze,
         }
         if event.button.id in actions:
             actions[event.button.id]()
 
+    diag_mode = False
+
     def action_connect(self):
         self.app.invoke("obdManager", "connect_obd", note="connecting")
+
+    def action_diag(self):
+        """Enter or leave diagnostic mode (polling pauses while in it)."""
+        def now(mode):
+            self.diag_mode = bool(mode)
+            self.render_status()
+        method = "exit_diagnostic_mode" if self.diag_mode else "enter_diagnostic_mode"
+        self.app.invoke("obdManager", method, note=method.replace("_", " "),
+                        done=lambda _: self.app.invoke("obdManager", "is_diagnostic_mode", done=now))
+
+    def action_direct(self):
+        def answered(mac):
+            if mac and mac.strip():
+                self.app.invoke("obdManager", "connect_direct", mac.strip(), note=f"connecting to {mac.strip()}")
+        self.app.push_screen(EditValue("Connect straight to a Bluetooth adapter (MAC)", "", "AA:BB:CC:DD:EE:FF"), answered)
+
+    def action_forget_adapter(self):
+        table = self.query_one("#adapters", DataTable)
+        if table.cursor_row >= len(self.adapters) or self.adapters[table.cursor_row][0] != "saved":
+            return
+        mac = self.adapters[table.cursor_row][1]
+
+        def answered(yes):
+            if yes:
+                self.app.invoke("settingsManager", "remove_obd_saved_adapter", mac, note=f"forgot {mac}")
+        self.app.push_screen(Confirm(f"Forget the saved adapter {mac}?"), answered)
 
     def action_reconnect(self):
         self.app.invoke("obdManager", "reconnect", note="reconnecting")
@@ -420,19 +514,25 @@ class TripsPane(Pane):
         Binding("d", "delete", "Delete"),
         Binding("E", "end_trip", "End trip now"),
         Binding("g", "refresh", "Refresh"),
+        Binding("c", "chart", "Chart a value"),
+        Binding("C", "clear_history", "Clear history"),
     ]
 
     def compose(self) -> ComposeResult:
         with Horizontal():
-            self.table = DataTable(id="trips", cursor_type="row", zebra_stripes=True)
+            self.table = DataTable(id="trip-list", cursor_type="row", zebra_stripes=True)
             yield self.table
             with Vertical(id="trip-side"):
                 yield Static(id="trip-live", classes="box")
+                yield Static(id="trip-chart-label")
+                yield Sparkline([], id="trip-chart", summary_function=max)
                 yield Static("Select a trip and press Enter", id="trip-detail", classes="box")
 
     def on_mount(self):
         self.table.add_columns("Started", "Duration", "Samples", "Vehicle", "State")
         self.ids = []
+        self.show_trips(self.app.state_of("tripRecorder", "trips", []) or [])
+        self.show_live()
 
     def octave(self, event):
         name = event.get("name")
@@ -441,6 +541,9 @@ class TripsPane(Pane):
         elif name == "detailReady":
             tid, detail = (event.get("args") + [None, None])[:2]
             self.show_detail(tid, detail)
+        elif name == "seriesReady":
+            tid, pid, points = (event.get("args") + [None, None, None])[:3]
+            self.show_series(tid, pid, points or [])
         elif name == "exportFinished":
             tid, path = (event.get("args") + [None, ""])[:2]
             self.app.notify(f"Trip exported to {path}" if path else "Export failed",
@@ -498,6 +601,37 @@ class TripsPane(Pane):
     def on_data_table_row_selected(self, event):
         self.action_detail()
 
+    def show_series(self, tid, pid, points):
+        values = [p.get("v") for p in points if isinstance(p, dict) and isinstance(p.get("v"), (int, float))]
+        row = {r["id"]: r for r in self.app.state_of("parameterCatalog", "displayParameters", []) or []}.get(pid, {})
+        scale, offset = row.get("displayScale", 1), row.get("displayOffset", 0)
+        values = [v * scale + offset for v in values]
+        self.query_one("#trip-chart", Sparkline).data = values or [0]
+        span = f"{points[0].get('t', 0):.0f}-{points[-1].get('t', 0):.0f} s" if points else ""
+        dec = row.get("decimals", 1)
+        self.query_one("#trip-chart-label", Static).update(
+            f"[b]{row.get('title', pid)}[/b] trip {tid}: {len(values)} points {span}"
+            + (f"  min {fmt_number(min(values), dec)} max {fmt_number(max(values), dec)} {row.get('unit', '')}" if values else ""))
+
+    def action_chart(self):
+        tid = self.selected()
+        if tid is None:
+            return
+        rows = self.app.state_of("parameterCatalog", "displayParameters", []) or []
+        supported = set(self.app.state_of("obdManager", "vehicleSupportedParameters", []) or [])
+        choices = [(r["id"], f"{r.get('title', r['id'])} ({r['id']})") for r in rows if not supported or r["id"] in supported]
+
+        def picked(pid):
+            if pid:
+                self.app.invoke("tripRecorder", "requestSeries", tid, pid, 400, note=f"charting {pid}")
+        self.app.push_screen(Pick(f"Chart a value of trip {tid}", choices), picked)
+
+    def action_clear_history(self):
+        def answered(yes):
+            if yes:
+                self.app.invoke("tripRecorder", "clearHistory", note="black box history cleared")
+        self.app.push_screen(Confirm("Delete every recorded trip?\n\nThe whole black box history goes for good."), answered)
+
     def action_detail(self):
         tid = self.selected()
         if tid is not None:
@@ -551,7 +685,9 @@ class SettingsPane(Pane):
     else save_setting(key, value)."""
 
     OBJECTS = {"settingsManager"}
-    BINDINGS = [Binding("slash", "filter", "Filter"), Binding("enter", "edit", "Edit", show=False)]
+    SUBSCRIBE = [("themeCatalog", ["themeNames", "darkThemeNames", "themes", "activeThemeName"], None, 0)]
+    BINDINGS = [Binding("slash", "filter", "Filter"), Binding("enter", "edit", "Edit", show=False),
+                Binding("T", "theme", "Theme")]
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="filter settings (/ to focus)", id="settings-filter")
@@ -588,6 +724,9 @@ class SettingsPane(Pane):
 
     def octave(self, event):
         name = event.get("name")
+        if event.get("object") == "themeCatalog":
+            self.rebuild_title()
+            return
         if name in self.shown_names:
             self.table.update_cell(name, "value", short(event.get("value"), 70), update_width=True)
 
@@ -602,7 +741,33 @@ class SettingsPane(Pane):
                 continue
             self.shown_names.append(name)
             self.table.add_row(name, label, self.props[name]["type"], short(values.get(name), 70), key=name)
-        self.table.border_title = f"{len(self.shown_names)} of {len(self.props)} settings"
+        self.rebuild_title()
+
+    def rebuild_title(self):
+        theme = self.app.state_of("themeCatalog", "activeThemeName")
+        self.table.border_title = (f"{len(self.shown_names)} of {len(self.props)} settings"
+                                   + (f"   theme {theme} (T picks)" if theme else ""))
+
+    def action_theme(self):
+        """Pick a theme from themeCatalog, each with swatches of its colours."""
+        cat = self.app.state.get("themeCatalog", {})
+        names, themes = cat.get("themeNames") or [], cat.get("themes") or {}
+        if not names:
+            self.app.notify("This OCTAVE has no themeCatalog: edit themeSetting in the table", severity="warning")
+            return
+        dark = set(cat.get("darkThemeNames") or [])
+
+        def swatch(name):
+            pal = themes.get(name) or {}
+            colours = [v for k, v in pal.items() if isinstance(v, str) and v.startswith("#")
+                       and any(w in k.lower() for w in ("base", "background", "accent", "text"))][:4]
+            return " ".join(f"[{c}]██[/]" for c in colours)
+        choices = [(n, f"{swatch(n)}  {n}{'  (dark)' if n in dark else ''}") for n in names]
+
+        def picked(name):
+            if name:
+                self.write("themeSetting", name)
+        self.app.push_screen(Pick("Theme", choices, cat.get("activeThemeName")), picked)
 
     def on_input_changed(self, event):
         if event.input.id == "settings-filter":
@@ -693,6 +858,7 @@ class DownloadsPane(Pane):
         Binding("P", "pause", "Pause"),
         Binding("u", "resume", "Resume"),
         Binding("x", "cancel", "Cancel"),
+        Binding("t", "target", "Target playlist"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -702,7 +868,7 @@ class DownloadsPane(Pane):
                 yield Label("Results  [dim](Enter downloads, n more)[/dim]", classes="section")
                 yield DataTable(id="dl-results", cursor_type="row", zebra_stripes=True)
             with Vertical():
-                yield Label("Queue  [dim](P pause, u resume, x cancel)[/dim]", classes="section")
+                yield Label("Queue  [dim](P pause, u resume, x cancel, Enter plays a finished one)[/dim]", classes="section")
                 yield DataTable(id="dl-queue", cursor_type="row", zebra_stripes=True)
                 with Horizontal(classes="buttons"):
                     yield Button("Clear finished", id="dl-clear-finished", compact=True)
@@ -733,7 +899,8 @@ class DownloadsPane(Pane):
             text = "[yellow]Downloads are not available in this build[/yellow]"
         else:
             text = (("[b]searching…[/b]  " if s.get("isSearching") else "")
-                    + f"{s.get('activeDownloads', 0)} active  →  {s.get('downloadPath', '')}")
+                    + f"{s.get('activeDownloads', 0)} active  →  {s.get('downloadPath', '')}"
+                    + f"   playlist: {self.target or 'none'} (t)")
         self.query_one("#dl-status", Static).update(text + (f"\n{self.message}" if self.message else ""))
 
     def show_tables(self):
@@ -759,7 +926,30 @@ class DownloadsPane(Pane):
     def action_more(self):
         self.app.invoke("downloadManager", "search_more", quiet=True)
 
+    target = ""
+
+    def action_target(self):
+        def got(names):
+            def picked(name):
+                if name is not None:
+                    self.app.invoke("downloadManager", "set_download_playlist", name, note=f"downloads go to {name or 'the library'}",
+                                    done=lambda _: self.load_target())
+            self.app.push_screen(Pick("Put new downloads in", [("", "(the library, no playlist)")] + [(n, n) for n in names or []],
+                                      self.target), picked)
+        self.app.invoke("mediaManager", "get_movable_playlist_names", done=got)
+
+    def load_target(self):
+        def got(name):
+            self.target = name or ""
+            self.show_status()
+        self.app.invoke("downloadManager", "get_download_playlist", done=got, quiet=True)
+
     def on_data_table_row_selected(self, event):
+        if event.data_table.id == "dl-queue" and event.cursor_row < len(self.queue.rows):
+            r = self.queue.rows[event.cursor_row]
+            if r.get("filePath"):
+                self.app.invoke("mediaManager", "play_file_at_path", r["filePath"], note=f"playing {r.get('songName') or r.get('name')}")
+            return
         if event.data_table.id == "dl-results" and event.cursor_row < len(self.results.rows):
             r = self.results.rows[event.cursor_row]
             self.app.invoke("downloadManager", "download", r.get("song_id"), r.get("name"),
@@ -790,6 +980,7 @@ class DownloadsPane(Pane):
             self.app.invoke("downloadManager", "clear_download_queue")
 
     def linked(self):
+        self.load_target()
         for prop, model in (("searchResults", self.results), ("downloadQueue", self.queue)):
             def got(rows, model=model):
                 model.rows = rows or []

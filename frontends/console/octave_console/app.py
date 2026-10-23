@@ -11,15 +11,25 @@ from textual.widgets import Footer, Static, TabbedContent, TabPane
 
 from .link import Link, Linked, OctaveError, OctaveEvent, Unlinked
 from .panes import DownloadsPane, ExplorerPane, LivePane, ObdPane, SettingsPane, TripsPane, fmt_duration
+from .panes_car import CarPane
+from .panes_dash import DashboardsPane
+from .panes_media import LibraryPane
+from .panes_system import PhonePane, SystemPane
 
-PANES = [  # (id, title, class)
+PANES = [  # (id, title, class); the title's first character is its key
     ("live", "1 Live", LivePane),
     ("obd", "2 OBD", ObdPane),
     ("trips", "3 Trips", TripsPane),
-    ("settings", "4 Settings", SettingsPane),
+    ("library", "4 Library", LibraryPane),
     ("downloads", "5 Downloads", DownloadsPane),
-    ("api", "6 API", ExplorerPane),
+    ("dash", "6 Dashboards", DashboardsPane),
+    ("car", "7 Car", CarPane),
+    ("phone", "8 Phone", PhonePane),
+    ("system", "9 System", SystemPane),
+    ("settings", "0 Settings", SettingsPane),
+    ("api", "` API", ExplorerPane),
 ]
+TAB_KEYS = {"`": "grave_accent"}
 
 
 class StatusLine(Static):
@@ -148,7 +158,7 @@ class OctaveConsole(App):
         Binding("minus", "volume(-5)", "Vol-", key_display="-"),
         Binding("m", "mute", "Mute"),
         Binding("z", "shuffle", "Shuffle", show=False),
-        *[Binding(str(i + 1), f"tab('{pid}')", title[2:], show=False) for i, (pid, title, _) in enumerate(PANES)],
+        *[Binding(TAB_KEYS.get(title[0], title[0]), f"tab('{pid}')", title[2:], show=False) for pid, title, _ in PANES],
         Binding("ctrl+p", "command_palette", "Palette"),
         Binding("q", "quit", "Quit"),
     ]
@@ -207,6 +217,9 @@ class OctaveConsole(App):
         self.connected = True
         self.state.clear()
         for pane in self.panes:
+            for obj, props, sigs, throttle in pane.SUBSCRIBE:
+                args = {"object": obj, **({"properties": props} if props else {}), **({"signals": sigs} if sigs else {})}
+                self.req("subscribe", quiet=True, **args, **({"throttleMs": throttle} if throttle else {}))
             pane.linked()
             pane.shown(pane is self.active_pane())
         self.refresh_bars()
@@ -232,7 +245,9 @@ class OctaveConsole(App):
         elif kind == "dropped":
             self.note = f"{ev.get('count')} events dropped"
         for pane in self.panes:
-            if obj in pane.OBJECTS:
+            if not pane.is_mounted:   # still composing at startup; it renders from state when it is
+                continue
+            if obj in pane.OBJECTS or any(obj == sub[0] for sub in pane.SUBSCRIBE):
                 pane.octave(ev)
         if obj in ("nowPlaying", "volumeController", "obdManager", "tripRecorder", "clock"):
             self.refresh_bars()
@@ -258,6 +273,17 @@ class OctaveConsole(App):
         if done:
             self.call_from_thread(done, result)
 
+    @work(thread=True, group="octave")
+    def blocking(self, fn, done=None):
+        """Run fn(link) on a worker thread (several calls in a row); done(result) on the UI thread."""
+        try:
+            result = fn(self.link)
+        except OctaveError as e:
+            self.call_from_thread(self.notify, str(e), severity="error")
+            return
+        if done:
+            self.call_from_thread(done, result)
+
     def invoke(self, obj, method, *args, done=None, failed=None, note=None, quiet=False):
         self.req("call", object=obj, method=method, args=list(args), done=done, failed=failed, note=note, quiet=quiet)
 
@@ -268,6 +294,8 @@ class OctaveConsole(App):
     # ── global actions ────────────────────────────────────────────────────
 
     def action_tab(self, pid):
+        # TabbedContent follows focus: a focused widget left in the old pane would pull its tab back
+        self.screen.set_focus(None)
         self.query_one(TabbedContent).active = pid
 
     def action_play(self):
