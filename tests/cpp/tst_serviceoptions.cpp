@@ -61,6 +61,17 @@ private slots:
         QVERIFY(!parseServiceOptions({"octave", "--profile"}, false, false).enabled);
     }
 
+    void headlessImpliesIt()
+    {
+        ServiceOptions o = parseServiceOptions({"octave", "--headless"}, false, false);
+        QVERIFY(o.enabled);
+        QVERIFY(o.loopbackOnly());
+        o = parseServiceOptions({"octave", "--headless", "--service", "7002"}, false, false);
+        QCOMPARE(o.port, quint16(7002));
+        // ...but not past a bad value
+        QVERIFY(!parseServiceOptions({"octave", "--headless", "--service-bind", "x"}, false, false).enabled);
+    }
+
     void bindAddress()
     {
         ServiceOptions o = parseServiceOptions({"octave", "--service", "--service-bind", "0.0.0.0"}, false, false);

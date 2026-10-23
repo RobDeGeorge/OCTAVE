@@ -1,5 +1,6 @@
 #include <QGuiApplication>
 #include <cstring>
+#include <memory>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QSslSocket>
@@ -47,6 +48,136 @@ extern "C" {
 #include "dev/devruntime.h"
 #endif
 
+namespace {
+
+// frontend/: next to the binary (packages), or one level up (build/)
+QDir findFrontendDir()
+{
+#ifdef Q_OS_ANDROID
+    // On Android, frontend/ is bundled as assets (see android/assets/frontend
+    // symlink). Qt supports the "assets:" URL scheme for anything under assets/.
+    return QDir(QStringLiteral("assets:/frontend"));
+#else
+    const QString appDir = QGuiApplication::applicationDirPath();
+    QDir frontendDir(appDir);
+    if (!frontendDir.cd("frontend")) {
+        frontendDir = QDir(appDir);
+        frontendDir.cdUp();  // build/ -> project root
+        if (!frontendDir.cd("frontend")) {
+            qWarning("Could not locate frontend/ directory");
+        }
+    }
+    return frontendDir;
+#endif
+}
+
+// The command server + the service protocol (src/service/), when asked
+// for: --service, the serviceEnabled setting, --headless, or --profile with
+// the dev tools; loopback only unless --service-bind. Not started yet: the
+// dev runtime adds its actions first. The bridge outlives the server (the
+// server's ops call into it), so members are in that order.
+struct Service {
+    std::unique_ptr<OctaveService::ServiceBridge> bridge;
+    std::unique_ptr<OctaveService::CommandServer> server;
+};
+
+Service makeService(const QStringList &arguments, AppCore &core, bool headless)
+{
+#ifdef OCTAVE_DEV_TOOLS
+    constexpr bool devToolsBuild = true;
+#else
+    constexpr bool devToolsBuild = false;
+#endif
+#ifdef QT_DEBUG
+    constexpr bool debugBuild = true;
+#else
+    constexpr bool debugBuild = false;
+#endif
+    const OctaveService::ServiceOptions options = OctaveService::parseServiceOptions(
+        arguments, core.settingsManager.get_setting(QStringLiteral("serviceEnabled")).toBool(), devToolsBuild);
+    if (!options.error.isEmpty())
+        qWarning("Service not started: %s", qPrintable(options.error));
+    Service service;
+    if (options.enabled) {
+        service.server = std::make_unique<OctaveService::CommandServer>(options.port);
+        service.server->setBindAddress(options.bind);
+        service.bridge = std::make_unique<OctaveService::ServiceBridge>(
+            &core.registry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, headless});
+        service.bridge->install(*service.server);
+    }
+    return service;
+}
+
+// SIGTERM/SIGINT (launcher scripts, systemd, Ctrl-C) must run the
+// aboutToQuit cleanup, otherwise child processes and adb forwards are
+// orphaned. Self-pipe trick: the handler only writes a byte; the notifier
+// turns it into app.quit() on the event loop.
+void quitOnSignals(QCoreApplication &app)
+{
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MOBILE)
+    static int quitPipe[2] = {-1, -1};
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, quitPipe) == 0) {
+        auto onSignal = [](int) { const char b = 1; (void)::write(quitPipe[0], &b, 1); };
+        std::signal(SIGTERM, onSignal);
+        std::signal(SIGINT, onSignal);
+        auto *quitNotifier = new QSocketNotifier(quitPipe[1], QSocketNotifier::Read, &app);
+        QObject::connect(quitNotifier, &QSocketNotifier::activated, &app, [] {
+            char b; (void)::read(quitPipe[1], &b, 1);
+            qInfo() << "Signal received, shutting down";
+            QCoreApplication::quit();
+        });
+    }
+#else
+    Q_UNUSED(app);
+#endif
+}
+
+#ifndef Q_OS_MOBILE
+// --headless: every manager and the service, no QML engine and no window
+// (TODO/open-backend.md, contract step 2). Another frontend, a script or
+// the SDK drives it over the service protocol; video (phone mirror,
+// Android Auto) has nowhere to go and is not decoded for anyone.
+int runHeadless(QGuiApplication &app, bool smokeTest)
+{
+    if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
+        qWarning("--dev / --profile need the QML UI; ignored with --headless");
+
+    // A stalled event loop still gets logged (octave.ui_watchdog)
+    UiWatchdog uiWatchdog;
+    uiWatchdog.start();
+    Units units;
+    AppCore core(findFrontendDir(), &units);
+    // The QML engine owns this provider in a normal run; here nobody does.
+    // Declared after `core`, so it goes first: safe, because core.shutdown()
+    // has run AndroidAutoManager::cleanup() by then and DhuCapture's
+    // destructor never touches the provider
+    std::unique_ptr<QQuickImageProvider> dhuFrames(core.androidAutoManager.frameProvider());
+
+    Service service = makeService(app.arguments(), core, true);
+    if (!service.server || !service.server->start()) {
+        qCritical("--headless: the service did not start, nothing could reach the app; exiting");
+        core.shutdown();
+        return 1;
+    }
+    qInfo("Headless: %d objects served on port %u", int(core.registry.names().size()), service.server->port());
+    if (smokeTest) {
+        qInfo("Smoke test: headless core up, exiting in 5 s");
+        QTimer::singleShot(5000, &app, [&app]() { app.exit(0); });
+    }
+
+    quitOnSignals(app);
+    QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
+        service.server->stop();   // no client reaches a manager while it cleans up
+        uiWatchdog.stop();
+        core.shutdown();
+        OctaveLog::flush();
+    });
+    return app.exec();
+}
+#endif
+
+} // namespace
+
 int main(int argc, char *argv[])
 {
     // Persistent logging + crash handlers first, so anything the managers
@@ -56,13 +187,33 @@ int main(int argc, char *argv[])
     // exit 0. A packaged build that cannot start (missing DLL, no frontend/)
     // exits non-zero or never starts, so CI can launch the real artifact.
     bool smokeTest = false;
+    // --headless: the managers and the service, no UI (runHeadless)
+    bool headless = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0)
             debugLogging = true;
         else if (std::strcmp(argv[i], "--smoke") == 0)
             smokeTest = true;
+        else if (std::strcmp(argv[i], "--headless") == 0)
+            headless = true;
     }
     OctaveLog::install(debugLogging);
+
+#ifndef Q_OS_MOBILE
+    if (headless) {
+        // No window: the offscreen platform unless the caller picked one.
+        // QGuiApplication still, for the fonts and images the managers use.
+        if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+            qputenv("QT_QPA_PLATFORM", "offscreen");
+        QGuiApplication app(argc, argv);
+        app.setOrganizationName("OCTAVE");
+        app.setApplicationName("OCTAVE");
+        return runHeadless(app, smokeTest);
+    }
+#else
+    if (headless)
+        qWarning("--headless is for desktop and the Pi; ignored");
+#endif
 
 #ifdef OCTAVE_HAVE_WEBENGINE
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
@@ -123,22 +274,7 @@ int main(int argc, char *argv[])
 #endif
 
     // ---- frontend/: QML, fonts, dashboard presets ----
-#ifdef Q_OS_ANDROID
-    // On Android, frontend/ is bundled as assets (see android/assets/frontend
-    // symlink). Qt supports the "assets:" URL scheme for anything under assets/.
-    QDir frontendDir(QStringLiteral("assets:/frontend"));
-#else
-    QString appDir = QGuiApplication::applicationDirPath();
-    // In development, the binary is in build/ — frontend/ is one level up.
-    QDir frontendDir(appDir);
-    if (!frontendDir.cd("frontend")) {
-        frontendDir = QDir(appDir);
-        frontendDir.cdUp();  // build/ -> project root
-        if (!frontendDir.cd("frontend")) {
-            qWarning("Could not locate frontend/ directory");
-        }
-    }
-#endif
+    const QDir frontendDir = findFrontendDir();
 
     // A hung event loop gets logged (octave.ui_watchdog) instead of vanishing
     UiWatchdog uiWatchdog;
@@ -220,33 +356,8 @@ int main(int argc, char *argv[])
                  "(--service still starts the service)");
 #endif
 
-    // ---- Service: the command server + the service protocol (src/service/) ----
-    // Off unless asked for (--service, the serviceEnabled setting, or
-    // --profile with the dev tools); loopback only unless --service-bind.
-#ifdef OCTAVE_DEV_TOOLS
-    constexpr bool devToolsBuild = true;
-#else
-    constexpr bool devToolsBuild = false;
-#endif
-    const OctaveService::ServiceOptions serviceOptions = OctaveService::parseServiceOptions(
-        app.arguments(), settingsManager.get_setting(QStringLiteral("serviceEnabled")).toBool(), devToolsBuild);
-    if (!serviceOptions.error.isEmpty())
-        qWarning("Service not started: %s", qPrintable(serviceOptions.error));
-    // The bridge outlives the server: the server's ops call into it
-    std::unique_ptr<OctaveService::ServiceBridge> serviceBridge;
-    std::unique_ptr<OctaveService::CommandServer> commandServer;
-    if (serviceOptions.enabled) {
-        commandServer = std::make_unique<OctaveService::CommandServer>(serviceOptions.port);
-        commandServer->setBindAddress(serviceOptions.bind);
-#ifdef QT_DEBUG
-        constexpr bool debugBuild = true;
-#else
-        constexpr bool debugBuild = false;
-#endif
-        serviceBridge = std::make_unique<OctaveService::ServiceBridge>(
-            &core.registry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, false});
-        serviceBridge->install(*commandServer);
-    }
+    // ---- Service (makeService: off unless asked for) ----
+    Service service = makeService(app.arguments(), core, false);
 
     // ---- Load Main.qml ----
 #ifdef Q_OS_ANDROID
@@ -265,10 +376,10 @@ int main(int argc, char *argv[])
         return -1;
     }
 #ifdef OCTAVE_DEV_TOOLS
-    devRuntime.afterLoad(commandServer.get());   // its UI / perf / sim actions, with --profile
+    devRuntime.afterLoad(service.server.get());   // its UI / perf / sim actions, with --profile
 #endif
-    if (commandServer)
-        commandServer->start();
+    if (service.server)
+        service.server->start();
     if (smokeTest) {
         qInfo("Smoke test: Main.qml loaded, exiting in 5 s");
         // CI greps this line: release builds must ship the phone-mirror decoder + adb
@@ -286,32 +397,15 @@ int main(int argc, char *argv[])
     QObject::connect(&app, &QGuiApplication::lastWindowClosed,
                      &app, &QGuiApplication::quit);
 
-#if !defined(Q_OS_WIN) && !defined(Q_OS_MOBILE)
-    // SIGTERM/SIGINT (launcher scripts, systemd, Ctrl-C) must run the
-    // aboutToQuit cleanup below, otherwise child processes and adb forwards
-    // are orphaned. Self-pipe trick: the handler only writes a byte; the
-    // notifier turns it into app.quit() on the event loop.
-    static int quitPipe[2] = {-1, -1};
-    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, quitPipe) == 0) {
-        auto onSignal = [](int) { const char b = 1; (void)::write(quitPipe[0], &b, 1); };
-        std::signal(SIGTERM, onSignal);
-        std::signal(SIGINT, onSignal);
-        auto *quitNotifier = new QSocketNotifier(quitPipe[1], QSocketNotifier::Read, &app);
-        QObject::connect(quitNotifier, &QSocketNotifier::activated, &app, [] {
-            char b; (void)::read(quitPipe[1], &b, 1);
-            qInfo() << "Signal received, shutting down";
-            QCoreApplication::quit();
-        });
-    }
-#endif
+    quitOnSignals(app);
 
     // Cleanup on quit
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {
 #ifdef OCTAVE_DEV_TOOLS
         devRuntime.shutdown();   // the perf log and a UI recording go first
 #endif
-        if (commandServer)
-            commandServer->stop();   // no client reaches a manager while it cleans up
+        if (service.server)
+            service.server->stop();   // no client reaches a manager while it cleans up
         uiWatchdog.stop();
         core.shutdown();   // hardware, players, the open trip, then the settings flush
         OctaveLog::flush();                   // last: everything the cleanup above logged reaches disk

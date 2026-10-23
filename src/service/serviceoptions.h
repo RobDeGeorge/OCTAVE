@@ -12,6 +12,8 @@
 //   setting serviceEnabled    on at every start (default false)
 //   --profile                 implies --service in a build with the dev
 //                             tools (OCTAVE_DEV_TOOLS), as it always has
+//   --headless                implies --service: with no UI it is the only
+//                             way in
 //
 // Pure, so tst_serviceoptions covers the parsing.
 

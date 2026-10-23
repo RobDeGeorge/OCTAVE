@@ -167,7 +167,7 @@
           <li><strong>Slots</strong> are methods QML can call &mdash; many use snake_case names rather than the usual C++ camelCase (<code>next_track</code>, <code>scan_library</code>, <code>connect_settings_manager</code>), and QML calls them as written</li>
           <li><strong>Properties</strong> expose values with automatic binding updates</li>
           <li>Managers are <strong>self-contained</strong>: each owns its state, timers and threads</li>
-          <li><span class="file-path">src/appcore.cpp</span> (<code>AppCore</code>, every manager as a member, no QML engine) wires cross-manager signals and passes dependencies where needed, for example settings references, the <code>VolumeController</code> fan-out to its outputs, and <code>OBDAdapterFinder</code> handing a connection to <code>OBDManager</code>.</li>
+          <li><span class="file-path">src/appcore.cpp</span> (<code>AppCore</code>, every manager as a member, no QML engine; <code>octave --headless</code> runs it with no engine at all) wires cross-manager signals and passes dependencies where needed, for example settings references, the <code>VolumeController</code> fan-out to its outputs, and <code>OBDAdapterFinder</code> handing a connection to <code>OBDManager</code>.</li>
         </ul>
 
         <h3 id="all-managers">All Managers</h3>

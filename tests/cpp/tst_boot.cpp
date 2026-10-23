@@ -3,7 +3,8 @@
 // that calls something missing (a removed slot once broke boot while every
 // other test passed). With the dev tooling built, `--dev --profile` must boot
 // too and answer on its command server, and `--service` must serve the
-// service protocol in any build without the dev-only actions.
+// service protocol in any build without the dev-only actions; `--headless`
+// must bring the managers and the service up with no QML at all.
 
 #include <QElapsedTimer>
 #include <QProcess>
@@ -74,6 +75,27 @@ private slots:
         QVERIFY2(actions.startsWith(R"({"ok":true)"), actions.constData());
         for (const char *dev : {"\"click\"", "\"screenshot\"", "\"navigate\"", "\"sim_throttle\""})
             QVERIFY2(!actions.contains(dev), actions.constData());
+        QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
+    }
+
+    void headlessServesWithoutQml()
+    {
+        QTemporaryDir tmp;
+        const quint16 port = quint16(20003 + QCoreApplication::applicationPid() % 20000);
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--headless", "--service", QString::number(port), "--smoke"});
+        QVERIFY(app.waitForStarted(10000));
+
+        const QByteArray hello = request(app, port, R"({"op": "hello"})");
+        const QByteArray get = request(app, port, R"({"op": "get", "object": "volumeController", "property": "percent"})");
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(hello.contains(R"("headless":true)"), qPrintable(hello + out.right(3000)));
+        QVERIFY2(get.startsWith(R"({"ok":true)"), get.constData());
+        QVERIFY2(out.contains("Smoke test: headless core up"), qPrintable(out.right(3000)));
+        QVERIFY2(!out.contains("Main.qml"), qPrintable(out.right(3000)));   // no engine, no UI
         QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
     }
 

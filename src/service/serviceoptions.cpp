@@ -50,6 +50,8 @@ ServiceOptions parseServiceOptions(const QStringList &arguments, bool settingEna
                 : (i + 1 < arguments.size() ? arguments.at(++i) : QString());
             if (!o.bind.setAddress(text))
                 o.error = QStringLiteral("not an address: %1").arg(text);
+        } else if (a == QLatin1String("--headless")) {
+            asked = true;
         } else if (a == QLatin1String("--profile") && devToolsBuild) {
             asked = true;
         }
