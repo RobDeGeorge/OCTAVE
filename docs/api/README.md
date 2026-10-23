@@ -10,6 +10,7 @@ What a frontend, a script or another program can read and drive in OCTAVE, witho
 | `<object>.json` | one object: `properties` (type, readable / writable / constant, `notify` signal, `enum` keys), `methods` (`params`, `returns`, `kind`: slot or invokable), `signals` (`params`), `enums`. Exactly what the `describe` op returns | generated |
 | `parameters.json` | every OBD PID and IMU reading: id, title, native unit, range, kind, decimals (`parameterCatalog.parameters`) | generated |
 | `dashboard-spec.schema.json` | JSON Schema of a dashboard file (`schema: 1`) | hand-written from `DashboardManager::normalizeSpec` |
+| `widget-catalog.json` | the widget types a dashboard cell can use: display name, glyph, default span, `supportedKinds`, label / range / colour flags, `editableProps` (`{key, label, kind, def, min?, max?, options?}`), `colorSwatches` (`dashboardManager.widgetCatalog`, from `frontend/dashboards/widget-catalog.json`) | generated |
 | `README.md` | this file | hand-written |
 
 The generated files come from the meta-objects of the desktop build (Linux, downloads on). Mobile builds stub some managers and `OCTAVE_ENABLE_DOWNLOADS=OFF` stubs `downloadManager`; a client finds out at run time with `describe`.

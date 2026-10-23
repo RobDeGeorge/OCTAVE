@@ -1,0 +1,529 @@
+{
+  "schema": 1,
+  "_comment": "The dashboard widget catalog: the widget types a dashboard spec can use. Read by DashboardManager (dashboardManager.widgetCatalog, normalizeSpec) and by frontend/dashboards/WidgetCatalog.qml, which adds only each type's QML url. docs/GAUGE_AUTHORING.md documents the fields.",
+  "widgets": [
+    {
+      "type": "CircularGauge",
+      "displayName": "Circular",
+      "glyph": "◯",
+      "defaultColSpan": 4,
+      "defaultRowSpan": 4,
+      "supportedKinds": [
+        "*"
+      ],
+      "labelProps": true,
+      "rangeProps": true,
+      "colorProps": [
+        "fillColor",
+        "needleColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showNeedle",
+          "label": "Needle",
+          "kind": "bool",
+          "def": false
+        },
+        {
+          "key": "showTicks",
+          "label": "Ticks",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showCenterReadout",
+          "label": "Readout",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "redlineStart",
+          "label": "Redline start",
+          "kind": "real",
+          "def": null,
+          "paramUnit": true
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "majorTickCount",
+          "label": "Major ticks",
+          "kind": "int",
+          "def": 9,
+          "min": 2,
+          "max": 20
+        },
+        {
+          "key": "minorTicksPerMajor",
+          "label": "Minor per major",
+          "kind": "int",
+          "def": 5,
+          "min": 0,
+          "max": 10
+        },
+        {
+          "key": "startAngle",
+          "label": "Start angle",
+          "kind": "real",
+          "def": 135,
+          "min": 0,
+          "max": 360
+        },
+        {
+          "key": "sweepAngle",
+          "label": "Sweep angle",
+          "kind": "real",
+          "def": 270,
+          "min": 30,
+          "max": 360
+        }
+      ]
+    },
+    {
+      "type": "ArcGauge",
+      "displayName": "Arc",
+      "glyph": "◠",
+      "defaultColSpan": 6,
+      "defaultRowSpan": 3,
+      "supportedKinds": [
+        "*"
+      ],
+      "labelProps": true,
+      "rangeProps": true,
+      "colorProps": [
+        "fillColor",
+        "needleColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showNeedle",
+          "label": "Needle",
+          "kind": "bool",
+          "def": false
+        },
+        {
+          "key": "showTicks",
+          "label": "Ticks",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showReadout",
+          "label": "Readout",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "redlineStart",
+          "label": "Redline start",
+          "kind": "real",
+          "def": null,
+          "paramUnit": true
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "majorTickCount",
+          "label": "Major ticks",
+          "kind": "int",
+          "def": 5,
+          "min": 2,
+          "max": 20
+        },
+        {
+          "key": "minorTicksPerMajor",
+          "label": "Minor per major",
+          "kind": "int",
+          "def": 4,
+          "min": 0,
+          "max": 10
+        }
+      ]
+    },
+    {
+      "type": "BarGauge",
+      "displayName": "Bar",
+      "glyph": "▮",
+      "defaultColSpan": 3,
+      "defaultRowSpan": 2,
+      "supportedKinds": [
+        "percentage",
+        "temperature",
+        "numeric",
+        "pressure",
+        "voltage"
+      ],
+      "labelProps": true,
+      "rangeProps": true,
+      "colorProps": [
+        "fillColor"
+      ],
+      "editableProps": [
+        {
+          "key": "orientation",
+          "label": "Orientation",
+          "kind": "enum",
+          "def": "horizontal",
+          "options": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        {
+          "key": "warnAbove",
+          "label": "Warn above",
+          "kind": "real",
+          "def": null,
+          "paramUnit": true
+        },
+        {
+          "key": "showLabel",
+          "label": "Label",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showValue",
+          "label": "Value",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 4
+        }
+      ]
+    },
+    {
+      "type": "LinearGauge",
+      "displayName": "Linear",
+      "glyph": "↔",
+      "defaultColSpan": 4,
+      "defaultRowSpan": 2,
+      "supportedKinds": [
+        "bidirectional"
+      ],
+      "labelProps": true,
+      "rangeProps": true,
+      "colorProps": [
+        "fillColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showTicks",
+          "label": "Ticks",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "majorTickCount",
+          "label": "Major ticks",
+          "kind": "int",
+          "def": 5,
+          "min": 2,
+          "max": 20
+        },
+        {
+          "key": "minorTicksPerMajor",
+          "label": "Minor per major",
+          "kind": "int",
+          "def": 4,
+          "min": 0,
+          "max": 10
+        }
+      ]
+    },
+    {
+      "type": "DigitalReadout",
+      "displayName": "Digital",
+      "glyph": "88",
+      "defaultColSpan": 4,
+      "defaultRowSpan": 2,
+      "supportedKinds": [
+        "*"
+      ],
+      "labelProps": true,
+      "rangeProps": false,
+      "colorProps": [
+        "valueColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showTitle",
+          "label": "Title",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showUnit",
+          "label": "Unit",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "padDigits",
+          "label": "Pad digits",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 8
+        },
+        {
+          "key": "valueScale",
+          "label": "Digit size",
+          "kind": "real",
+          "def": 3.5,
+          "min": 0.5,
+          "max": 12
+        }
+      ]
+    },
+    {
+      "type": "SparklineGauge",
+      "displayName": "Sparkline",
+      "glyph": "∿",
+      "defaultColSpan": 6,
+      "defaultRowSpan": 2,
+      "supportedKinds": [
+        "*"
+      ],
+      "labelProps": true,
+      "rangeProps": true,
+      "colorProps": [
+        "lineColor"
+      ],
+      "editableProps": [
+        {
+          "key": "autoScale",
+          "label": "Auto-scale",
+          "kind": "bool",
+          "def": false
+        },
+        {
+          "key": "fillBelow",
+          "label": "Area fill",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showHeader",
+          "label": "Header",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "maxSamples",
+          "label": "Samples",
+          "kind": "int",
+          "def": 60,
+          "min": 10,
+          "max": 300
+        },
+        {
+          "key": "sampleIntervalMs",
+          "label": "Sample (ms)",
+          "kind": "int",
+          "def": 500,
+          "min": 100,
+          "max": 5000
+        }
+      ]
+    },
+    {
+      "type": "WarningLight",
+      "displayName": "Warning",
+      "glyph": "⚠",
+      "defaultColSpan": 2,
+      "defaultRowSpan": 2,
+      "supportedKinds": [
+        "*"
+      ],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "activeColor"
+      ],
+      "editableProps": [
+        {
+          "key": "label",
+          "label": "Light text",
+          "kind": "string",
+          "def": ""
+        },
+        {
+          "key": "triggerAbove",
+          "label": "Trigger above",
+          "kind": "real",
+          "def": null,
+          "paramUnit": true
+        },
+        {
+          "key": "triggerBelow",
+          "label": "Trigger below",
+          "kind": "real",
+          "def": null,
+          "paramUnit": true
+        },
+        {
+          "key": "pulse",
+          "label": "Pulse",
+          "kind": "bool",
+          "def": false
+        }
+      ]
+    },
+    {
+      "type": "GForceGauge",
+      "displayName": "G-Force",
+      "glyph": "◎",
+      "defaultColSpan": 4,
+      "defaultRowSpan": 4,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "dotColor"
+      ],
+      "editableProps": [
+        {
+          "key": "maxG",
+          "label": "Max G",
+          "kind": "real",
+          "def": 1.5,
+          "min": 0.2,
+          "max": 5
+        },
+        {
+          "key": "showTrail",
+          "label": "Trail",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showValue",
+          "label": "Readout",
+          "kind": "bool",
+          "def": true
+        }
+      ]
+    },
+    {
+      "type": "CompassGauge",
+      "displayName": "Compass",
+      "glyph": "N",
+      "defaultColSpan": 4,
+      "defaultRowSpan": 4,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "northColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showDegrees",
+          "label": "Degrees",
+          "kind": "bool",
+          "def": true
+        }
+      ]
+    },
+    {
+      "type": "NowPlayingWidget",
+      "displayName": "Now Playing",
+      "glyph": "♪",
+      "defaultColSpan": 6,
+      "defaultRowSpan": 2,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "progressColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showArt",
+          "label": "Album art",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showArtist",
+          "label": "Artist",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showProgress",
+          "label": "Progress",
+          "kind": "bool",
+          "def": true
+        }
+      ]
+    },
+    {
+      "type": "MediaControlsWidget",
+      "displayName": "Media Keys",
+      "glyph": "▶",
+      "defaultColSpan": 4,
+      "defaultRowSpan": 2,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "accentColor"
+      ],
+      "editableProps": []
+    }
+  ],
+  "colorSwatches": [
+    "#00BFFF",
+    "#2ECC71",
+    "#F1C40F",
+    "#E67E22",
+    "#E74C3C",
+    "#FF00AA",
+    "#9C27B0",
+    "#FFFFFF"
+  ]
+}

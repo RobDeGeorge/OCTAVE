@@ -119,7 +119,7 @@ octave_add_test(tst_mediamanager
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
 octave_add_test(tst_musicdeviceassets)
-octave_add_test(tst_vehiclegate SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_vehiclegate SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp util/dashboardgrid.h util/dashboardgrid.cpp managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 
 octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
 octave_add_test(tst_errortoast LIBS Qt6::Gui Qt6::Qml Qt6::Quick)

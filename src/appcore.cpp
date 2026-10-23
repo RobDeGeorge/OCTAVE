@@ -143,6 +143,7 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     // Dashboards (data-driven dashboards + user-authored presets), see
     // TODO/dashboards-roadmap.md
     dashboardManager.setPresetsDir(frontendDir.absoluteFilePath(QStringLiteral("dashboards/presets")));
+    dashboardManager.setWidgetCatalogFile(frontendDir.absoluteFilePath(QStringLiteral("dashboards/widget-catalog.json")));
     dashboardManager.setUserDir(SettingsManager::getAppDataDir() + QStringLiteral("/dashboards"));
     expose("dashboardManager", &dashboardManager);
 
