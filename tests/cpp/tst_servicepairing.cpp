@@ -88,7 +88,9 @@ private slots:
         QVERIFY(ServicePairing(&settings).loopbackOpen());
     }
 
-    void wrongCodesVoidItAndAreRateLimited()
+    // Guesses are limited per address: no number of wrong codes from
+    // elsewhere voids the owner's code or holds up their attempt
+    void wrongCodesAreLimitedPerAddress()
     {
         SettingsManager settings;
         ServicePairing p(&settings);
@@ -96,20 +98,76 @@ private slots:
         const QString code = p.pairingCode();
         const QString wrong = code == "000000" ? "000001" : "000000";
         QString error;
-        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
         QVERIFY(p.pair(wrong, "x", "10.0.0.4", &error).isEmpty());
         QCOMPARE(error, QStringLiteral("wrong code"));
-        QVERIFY(p.pair(code, "x", "10.0.1.5", &error).isEmpty());   // within a second, even the right one
+        QVERIFY(p.pair(wrong, "x", "10.0.0.4", &error).isEmpty());   // the same address again at once
         QVERIFY(error.contains("too fast"));
-        // kMaxTries wrong codes in all (from many addresses, each under its
-        // own limit) void the code
-        for (int i = 1; i < ServicePairing::kMaxTries; ++i) {
-            QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
-            p.pair(wrong, "x", QStringLiteral("10.0.2.%1").arg(i), &error);
+        // Many wrong codes from many addresses, each under its own limits,
+        // neither void the code nor delay another address
+        for (int i = 1; i < 10; ++i)
+            QCOMPARE(p.pair(wrong, "x", QStringLiteral("10.0.2.%1").arg(i), &error), QString());
+        QCOMPARE(p.pairingCode(), code);
+        QTest::qWait(1010);   // the global ceiling's second
+        QVERIFY(!p.pair(code, "owner", "10.0.3.6", &error).isEmpty());   // the owner, at once
+    }
+
+    void anAttackerAtTwoAddressesCannotVoidOrStarveTheOwner()
+    {
+        SettingsManager settings;
+        ServicePairing p(&settings);
+        p.startPairing();
+        const QString code = p.pairingCode();
+        const QString wrong = code == "000000" ? "000001" : "000000";
+        QString error;
+        // Two addresses guessing as fast as they are allowed, until both are locked out
+        for (int i = 0; i < ServicePairing::kMaxFailuresPerPeer; ++i) {
+            QTest::qWait(i == 0 ? 0 : ServicePairing::kAttemptIntervalMs + 10);
+            p.pair(wrong, "a", "10.0.0.1", &error);
+            p.pair(wrong, "b", "10.0.0.2", &error);
         }
-        QVERIFY(p.pairingCode().isEmpty());
-        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
-        QVERIFY(p.pair(code, "x", "10.0.3.6", &error).isEmpty());
+        QVERIFY(p.pair(wrong, "a", "10.0.0.1", &error).isEmpty());
+        QVERIFY(error.contains("this address"));
+        QCOMPARE(p.pairingCode(), code);                                   // not voided
+        QVERIFY(!p.pair(code, "owner", "10.0.0.3", &error).isEmpty());    // not starved: the owner pairs at once
+    }
+
+    void loopbackIsNeverThrottled()
+    {
+        SettingsManager settings;
+        ServicePairing p(&settings);
+        p.startPairing();
+        const QString code = p.pairingCode();
+        const QString wrong = code == "000000" ? "000001" : "000000";
+        QString error;
+        for (const char *local : {"127.0.0.1", "::1", "::ffff:127.0.0.1", ""}) {
+            for (int i = 0; i < 2 * ServicePairing::kMaxFailuresPerPeer; ++i) {
+                QVERIFY(p.pair(wrong, "local", QLatin1String(local), &error).isEmpty());
+                QCOMPARE(error, QStringLiteral("wrong code"));   // never too fast, never locked
+            }
+        }
+        QVERIFY(!p.pair(code, "local", "127.0.0.1", &error).isEmpty());
+        // and a local loop has not used up the network's ceiling
+        p.startPairing();
+        QVERIFY(!p.pair(p.pairingCode(), "net", "10.0.0.8", &error).isEmpty());
+    }
+
+    void theGlobalCeilingHolds()
+    {
+        SettingsManager settings;
+        ServicePairing p(&settings);
+        p.startPairing();
+        const QString code = p.pairingCode();
+        const QString wrong = code == "000000" ? "000001" : "000000";
+        QString error;
+        for (int i = 0; i < ServicePairing::kMaxAttemptsPerSecond; ++i) {
+            p.pair(wrong, "x", QStringLiteral("10.1.%1.1").arg(i), &error);
+            QCOMPARE(error, QStringLiteral("wrong code"));
+        }
+        QVERIFY(p.pair(wrong, "x", "10.2.0.1", &error).isEmpty());
+        QVERIFY(error.contains("too many pairing attempts"));
+        QVERIFY(p.pair(code, "x", "10.2.0.2", &error).isEmpty());   // even the right code waits for the next second
+        QTest::qWait(1010);
+        QVERIFY(!p.pair(code, "x", "10.2.0.2", &error).isEmpty());
     }
 
     void addressesCountByPrefix()

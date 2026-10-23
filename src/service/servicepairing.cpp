@@ -137,7 +137,6 @@ void ServicePairing::startPairing()
         QMutexLocker l(&m_lock);
         m_code = QStringLiteral("%1").arg(QRandomGenerator::system()->bounded(1000000), 6, 10, QLatin1Char('0'));
         m_codeAge.start();
-        m_tries = 0;
     }
     m_tick.start();
     qCInfo(lcPairing) << "pairing code shown";
@@ -174,19 +173,41 @@ QString ServicePairing::pair(const QString &code, const QString &name, const QSt
                 *error = why;
             return QString();
         };
+        // Guesses are limited per address, never across addresses, so no
+        // number of wrong codes from elsewhere voids this code or holds up
+        // the owner's attempt; and never for this device's own processes,
+        // which are trusted anyway (and a local loop must not lock the
+        // network out). A refusal here costs the address nothing.
         const QString key = peerKey(peer);
-        if (m_failuresByPeer.value(key) >= kMaxFailuresPerPeer)
-            return refuse(QStringLiteral("too many wrong codes from this address"));
-        // One attempt a second across every client
-        if (m_lastAttempt.isValid() && m_lastAttempt.elapsed() < kAttemptIntervalMs)
-            return refuse(QStringLiteral("too fast, try again in a second"));
-        m_lastAttempt.start();
+        const bool local = peer.isEmpty() || QHostAddress(peer).isLoopback();
+        if (!m_clock.isValid())
+            m_clock.start();
+        const qint64 now = m_clock.elapsed();
+        if (!local) {
+            if (m_failuresByPeer.value(key) >= kMaxFailuresPerPeer)
+                return refuse(QStringLiteral("too many wrong codes from this address"));
+            if (const auto it = m_lastAttemptByPeer.constFind(key);
+                it != m_lastAttemptByPeer.cend() && now - it.value() < kAttemptIntervalMs)
+                return refuse(QStringLiteral("too fast, try again in a second"));
+            // The ceiling over every address: a guesser spread over many
+            // still sees at most kMaxAttemptsPerSecond codes a second
+            if (now - m_windowStart >= 1000) {
+                m_windowStart = now;
+                m_windowAttempts = 0;
+            }
+            if (m_windowAttempts >= kMaxAttemptsPerSecond)
+                return refuse(QStringLiteral("too many pairing attempts right now, try again in a second"));
+            ++m_windowAttempts;
+            // A table of last attempts by address, kept to the recent ones
+            if (m_lastAttemptByPeer.size() > 4096)
+                m_lastAttemptByPeer.removeIf([now](const auto &e) { return now - e.value() >= kAttemptIntervalMs; });
+            m_lastAttemptByPeer.insert(key, now);
+        }
         if (m_code.isEmpty() || m_codeAge.elapsed() >= kCodeLifetimeMs)
             return refuse(QStringLiteral("no pairing code is showing on the head unit"));
         if (!sameBytes(code.toLatin1(), m_code.toLatin1())) {
-            ++m_failuresByPeer[key];
-            if (++m_tries >= kMaxTries)
-                m_code.clear();   // void: the head unit has to show a new one
+            if (!local)
+                ++m_failuresByPeer[key];
             return refuse(QStringLiteral("wrong code"));
         }
         m_code.clear();   // single use
@@ -194,8 +215,8 @@ QString ServicePairing::pair(const QString &code, const QString &name, const QSt
         deviceName = name.simplified().left(64);
         if (deviceName.isEmpty())
             deviceName = QStringLiteral("Device");
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        m_devices.append(Device{randomHex(8), deviceName, hashOf(token), now, now, granted});
+        const qint64 when = QDateTime::currentMSecsSinceEpoch();
+        m_devices.append(Device{randomHex(8), deviceName, hashOf(token), when, when, granted});
     }
     qCInfo(lcPairing).noquote() << "paired" << deviceName << "from" << peer << "with" << granted.join(QLatin1Char(' '));
     QMetaObject::invokeMethod(this, [this, deviceName] {
