@@ -13,6 +13,9 @@ Third-party code bundled in this repository:
 - QR Code generator library, Copyright (c) Project Nayuki, MIT License
   (https://www.nayuki.io/page/qr-code-generator-library).
   src/phone_mirror/qrcodegen.{hpp,cpp}
+- coi-serviceworker 0.1.7, Copyright (c) 2021 Guido Zuidhof, MIT License
+  (https://github.com/gzuidhof/coi-serviceworker; packaging/wasm/LICENSE.coi-serviceworker).
+  packaging/wasm/coi-serviceworker.js, served with the WebAssembly build
 - phone_server/: fork of the scrcpy server, Apache License 2.0 (see phone_server/LICENSE.scrcpy)
 - SQLite 3.54.1 amalgamation, public domain (https://sqlite.org/copyright.html).
   third_party/sqlite/sqlite3.{c,h}, compiled in for the black box trip store

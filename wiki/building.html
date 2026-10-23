@@ -27,6 +27,7 @@
             <li><a href="#linux">Linux Build</a></li>
             <li><a href="#ci-cd">GitHub Actions CI/CD</a></li>
             <li><a href="#android">Android APK Build</a></li>
+            <li><a href="#wasm">WebAssembly (Browser) Build</a></li>
             <li><a href="#phone-server">Phone Server Jar &amp; adb</a></li>
             <li><a href="#troubleshooting">Build Troubleshooting</a></li>
           </ul>
@@ -34,7 +35,7 @@
 
         <!-- Quick Start -->
         <h2 id="quick-start">Quick Start</h2>
-        <p>Every shipped binary (Windows <code>.exe</code>, macOS <code>.dmg</code>, Linux x86_64 and aarch64 AppImages, Android <code>.apk</code>) is built from the C++ / Qt 6 tree in <span class="file-path">src/</span> with CMake. There is no <code>.deb</code> and no Flatpak (see <a href="#design-decisions">Design Decisions</a>).</p>
+        <p>Every shipped binary (Windows <code>.exe</code>, macOS <code>.dmg</code>, Linux x86_64 and aarch64 AppImages, Android <code>.apk</code>, and the <a href="#wasm">browser build</a> at <code>robdegeorge.com/OCTAVE/</code>) is built from the C++ / Qt 6 tree in <span class="file-path">src/</span> with CMake. There is no <code>.deb</code> and no Flatpak (see <a href="#design-decisions">Design Decisions</a>).</p>
         <pre><code><span class="cmt"># Configure + build (Debug, current platform)</span>
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
@@ -274,6 +275,33 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
         </div>
 
         <!-- Phone server / adb -->
+        <!-- WebAssembly -->
+        <h2 id="wasm">WebAssembly (Browser) Build</h2>
+        <p>OCTAVE runs in the browser at <a href="https://robdegeorge.com/OCTAVE/">robdegeorge.com/OCTAVE/</a> as a demo: the simulated car, every page, no hardware. It is a <strong>Qt for WebAssembly</strong> build of the same C++ tree, published by <span class="file-path">.github/workflows/wiki-pages.yml</span> together with this wiki (<a href="development.html#ci">Development</a>) on every push to <code>main</code> that touches <span class="file-path">src/</span>, <span class="file-path">frontend/</span>, <span class="file-path">CMakeLists.txt</span>, <span class="file-path">packaging/wasm/</span> or <span class="file-path">wiki/</span>. It is not part of the release matrix.</p>
+        <h3>Toolchain</h3>
+        <p><strong>Qt 6.12.0 <code>wasm_multithread</code></strong> plus a matching desktop kit for the host tools (<code>moc</code>, <code>qsb</code>, <code>balsam</code>, <code>qmlimportscanner</code>), both with the modules <code>qt5compat qtmultimedia qtquick3d qtquicktimeline qtwebsockets qtshadertools</code>, and <strong>emsdk 5.0.5</strong> (<code>QT_EMCC_RECOMMENDED_VERSION</code> for Qt 6.12; the build warns on any other version).</p>
+        <pre><code>aqt install-qt all_os wasm 6.12.0 wasm_multithread -O ~/Qt -m qt5compat qtmultimedia qtquick3d qtquicktimeline qtwebsockets qtshadertools
+aqt install-qt linux desktop 6.12.0 linux_gcc_64 -O ~/Qt -m qt5compat qtmultimedia qtquick3d qtquicktimeline qtwebsockets qtshadertools
+git clone https://github.com/emscripten-core/emsdk ~/emsdk &amp;&amp; ~/emsdk/emsdk install 5.0.5 &amp;&amp; ~/emsdk/emsdk activate 5.0.5</code></pre>
+        <h3>Build</h3>
+        <p><span class="file-path">packaging/wasm/build.sh</span> is what CI runs and what to run locally. It sources <code>emsdk_env.sh</code> if <code>emcc</code> is not on <code>PATH</code>, configures with <code>qt-cmake</code> (Release, Ninja, <code>OCTAVE_ENABLE_DOWNLOADS</code> / <code>OCTAVE_BUILD_TESTS</code> / <code>OCTAVE_DEV_TOOLS</code> off), builds, and with <code>OUT_DIR</code> stages the site: <code>octave.js</code>, <code>octave.wasm</code>, <code>octave.data</code>, <code>qtloader.js</code> and the page files from <span class="file-path">packaging/wasm/</span>.</p>
+        <pre><code>QT_WASM=~/Qt/6.12.0/wasm_multithread QT_HOST=~/Qt/6.12.0/gcc_64 \
+OUT_DIR=/tmp/octave-site packaging/wasm/build.sh
+<span class="cmt"># variables: QT_WASM, QT_HOST (or QT_HOST_PATH), BUILD_DIR (build-wasm), OUT_DIR, EMSDK (~/emsdk), JOBS</span></code></pre>
+        <h3>What the target changes</h3>
+        <p>Everything is gated on CMake's <code>EMSCRIPTEN</code>, which defines <code>OCTAVE_WASM</code> and <code>Q_OS_MOBILE</code>:</p>
+        <ul>
+          <li>Qt SerialPort and Bluetooth, TagLib and FFmpeg are dropped. <span class="file-path">src/platform/wasm/</span> holds the stand-ins: a <code>QSerialPort</code> / <code>QSerialPortInfo</code> whose <code>open()</code> always fails, and inert <span class="file-path">obdadapterfinder_wasm.cpp</span> / <span class="file-path">networkmanager_wasm.cpp</span> used instead of the real sources (<code>HEADER_FILE_ONLY</code> on the originals). <code>QProcess</code> users (the settings manager's git/curl, the OBD manager destructor) sit behind <code>#if QT_CONFIG(process)</code>; the IMU manager and the dev IMU feed take their desktop (no I&sup2;C) branch.</li>
+          <li><code>-sDISABLE_EXCEPTION_CATCHING=0</code>: Assimp's glTF1 probe throws on <code>.glb</code>, so C++ exceptions stay enabled.</li>
+          <li><span class="file-path">frontend/</span> is staged by <span class="file-path">packaging/wasm/stage_frontend.cmake</span> into <span class="file-path">build-wasm/wasm_fs</span> (a build step whose stamp is in <code>LINK_DEPENDS</code>, so a QML edit relinks) and preloaded at <code>/frontend</code> in the page's in-memory filesystem: that is <code>octave.data</code>. The README screenshots, <span class="file-path">assets/-src</span> and the full-size <code>jeep_tj_2003.glb</code> are excluded.</li>
+          <li><span class="file-path">src/platform/wasm/webdemo.{h,cpp}</span> (<code>WebDemo</code>, built by <span class="file-path">main.cpp</span> under <code>#ifdef OCTAVE_WASM</code>) points the real <code>OBDManager</code> at <span class="file-path">src/dev</span>'s <code>CarSim</code> + <code>SimElm327</code> (port <code>sim://elm327</code>, realistic mode off), feeds the IMU through <code>DevImuFeed</code>, and runs an autopilot: idle with throttle blips, pull away to a 35&ndash;70 mph target, cruise, coast, brake to a stop.</li>
+        </ul>
+        <h3>What works, what does not</h3>
+        <p>In the browser: home, the OBD pages, every dashboard, the 3D Jeep, sensors, settings and trip recording (SQLite in memory). Not there: persistence across reloads (MEMFS), a music library (empty), hardware, and the service / command server.</p>
+        <p>Sizes: <code>octave.wasm</code> 48 MB and <code>octave.data</code> 29 MB raw; GitHub Pages serves both gzipped, about 25 MB over the wire.</p>
+        <h3>The page and the headers</h3>
+        <p><span class="file-path">packaging/wasm/index.html</span> replaces Qt's generated page: it downloads the two big files with a progress bar, compiles the module and hands both to Qt's <code>qtLoad()</code>. Threaded WebAssembly needs cross-origin isolation (COOP/COEP headers), which GitHub Pages cannot send, so the vendored <span class="file-path">coi-serviceworker.js</span> (MIT, 0.1.7) adds them and reloads once on first visit. Locally, any static server that sends the headers works; <span class="file-path">packaging/wasm/README.md</span> has a one-liner.</p>
+
         <h2 id="phone-server">Phone Server Jar &amp; adb</h2>
         <p>No scrcpy binary is bundled or required. The phone server and adb are distributed with OCTAVE; their bundled LICENSE / NOTICE files describe the applicable terms:</p>
         <ul>

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
-#ifdef Q_OS_MOBILE
+#if defined(Q_OS_MOBILE) && !defined(OCTAVE_WASM)   // wasm runs the desktop IMU manager
 
 // The QtSensors-backed mobile manager has no I2C worker to stand in for
 namespace OctaveDev {

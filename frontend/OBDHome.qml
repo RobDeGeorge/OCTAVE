@@ -25,10 +25,11 @@ Item {
         ? settingsManager.get_setting_with_default("lastOBDPage", "")
         : ""
 
-    // Connection status
-    property string connectionStatus: "Disconnected"
-    property string connectionDetail: ""
-    property bool connected: obdManager ? obdManager.is_connected() : false
+    // Connection status: bound to the manager, so a page built after the
+    // link came up (the startup pre-build, the browser demo) shows it too
+    readonly property string connectionStatus: obdManager ? obdManager.connectionStatus : "Disconnected"
+    readonly property string connectionDetail: obdManager ? obdManager.connectionDetail : ""
+    readonly property bool connected: obdManager ? obdManager.connected : false
     // Every step toward a link (the BLE ones included), from the manager's state
     readonly property bool connecting: !!obdManager && obdManager.connectionState === OBDManager.Connecting
 
@@ -36,19 +37,6 @@ Item {
     // 60 lines). Most useful on Android where the BLE state machine has many
     // steps and silent failures are easy unless each transition shows.
     readonly property var connectionLog: obdManager ? obdManager.connectionLog : []
-
-    Connections {
-        target: obdManager
-        enabled: obdManager !== null
-
-        function onConnectionStatusChanged(status) {
-            obdHome.connectionStatus = status
-            obdHome.connected = obdManager.is_connected()
-        }
-        function onConnectionStatusDetailChanged(detail) {
-            obdHome.connectionDetail = detail
-        }
-    }
 
     // Helper to push a subpage
     function pushSubpage(qmlFile) {

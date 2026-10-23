@@ -93,11 +93,13 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
 OBDManager::~OBDManager()
 {
     // Don't let a still-running rfcomm bind call back into a dying manager
+#if QT_CONFIG(process)
     if (m_rfcommBindProc) {
         m_rfcommBindProc->disconnect();
         m_rfcommBindProc->kill();
         m_rfcommBindProc->waitForFinished(1000);
     }
+#endif
     close();
 }
 

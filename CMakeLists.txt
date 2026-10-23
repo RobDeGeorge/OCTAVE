@@ -15,6 +15,12 @@ set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Co
 if(ANDROID)
     list(APPEND OCTAVE_QT_COMPONENTS Sensors)
 endif()
+# WebAssembly (the browser demo at robdegeorge.com/OCTAVE/): no serial ports
+# or Bluetooth in a browser, so the OBD transports are compiled out and the
+# simulated car is the only adapter (OCTAVE_WASM).
+if(EMSCRIPTEN)
+    list(REMOVE_ITEM OCTAVE_QT_COMPONENTS SerialPort Bluetooth)
+endif()
 find_package(Qt6 REQUIRED COMPONENTS ${OCTAVE_QT_COMPONENTS})
 
 # The offline wiki viewer is loaded on demand. Keep builds without a desktop
@@ -87,6 +93,10 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     find_package(Threads REQUIRED)
     target_link_libraries(octave_sqlite PUBLIC Threads::Threads)
 endif()
+if(EMSCRIPTEN)
+    # the multithreaded Qt kit links with shared memory: every object needs atomics
+    target_compile_options(octave_sqlite PRIVATE -pthread)
+endif()
 
 # Qt6::CorePrivate is an imported target provided by Qt6::Core — not a
 # separately-findable component. Linking it grants access to private headers
@@ -95,7 +105,7 @@ endif()
 # TagLib only available on desktop (no pkg-config on Android host; mobile uses Qt metadata fallback).
 # Windows: vcpkg ships taglib's CMake config — find_package is the supported path there.
 # Linux/macOS: pkg-config remains the easiest route (apt's libtag1-dev / Homebrew's taglib both ship .pc files).
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT EMSCRIPTEN)
     if(WIN32)
         find_package(taglib CONFIG REQUIRED)
     else()
@@ -116,7 +126,7 @@ option(OCTAVE_REQUIRE_FFMPEG "Fail configure when libavcodec/libavutil are missi
 # libraries bundled into the package). Empty = use whatever pkg-config finds.
 set(OCTAVE_FFMPEG_ROOT "" CACHE PATH "Install prefix of packaging/ffmpeg/build-h264-decoder.sh (static LGPL decoder)")
 set(OCTAVE_HAVE_FFMPEG OFF)
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT EMSCRIPTEN)
     if(OCTAVE_FFMPEG_ROOT)
         if(WIN32)
             message(FATAL_ERROR "OCTAVE_FFMPEG_ROOT is for Linux / macOS; Windows uses vcpkg's ffmpeg[core,avcodec]")
@@ -319,6 +329,8 @@ target_compile_definitions(octave PRIVATE
     # Activate existing #ifndef Q_OS_MOBILE guards on Android (and iOS later).
     # Without this define the guards are no-ops and desktop-only code compiles on mobile.
     $<$<BOOL:${ANDROID}>:Q_OS_MOBILE>
+    $<$<BOOL:${EMSCRIPTEN}>:Q_OS_MOBILE>
+    $<$<BOOL:${EMSCRIPTEN}>:OCTAVE_WASM>
 )
 
 target_link_libraries(octave PRIVATE
@@ -330,10 +342,32 @@ target_link_libraries(octave PRIVATE
     Qt6::Multimedia
     Qt6::Network
     Qt6::Concurrent
-    Qt6::SerialPort
-    Qt6::Bluetooth
     octave_sqlite
 )
+if(EMSCRIPTEN)
+    # Stand-ins for Qt SerialPort / Bluetooth, which have no wasm port
+    target_include_directories(octave PRIVATE "${CMAKE_SOURCE_DIR}/src/platform/wasm")
+    target_sources(octave PRIVATE
+        src/platform/wasm/QSerialPort
+        src/platform/wasm/qserialport_wasm.h
+        src/platform/wasm/QSerialPortInfo
+        src/platform/wasm/obdadapterfinder_wasm.cpp
+        src/platform/wasm/networkmanager_wasm.cpp
+        # the demo car: the dev tooling's simulator, driven by an autopilot
+        src/platform/wasm/webdemo.h
+        src/platform/wasm/webdemo.cpp
+        src/dev/carsim.h
+        src/dev/carsim.cpp
+        src/dev/simelm327.h
+        src/dev/simelm327.cpp
+        src/dev/devimufeed.h
+        src/dev/devimufeed.cpp
+    )
+    set_source_files_properties(src/managers/obdadapterfinder.cpp src/managers/networkmanager.cpp
+                                PROPERTIES HEADER_FILE_ONLY ON)
+else()
+    target_link_libraries(octave PRIVATE Qt6::SerialPort Qt6::Bluetooth)
+endif()
 # Desktop Linux pairs OBD adapters through BlueZ over D-Bus (PIN agent +
 # trust), see src/platform/bluezpairer.h. Qt Bluetooth already depends on
 # Qt DBus there, so this adds no new runtime library.
@@ -390,6 +424,8 @@ if(ANDROID)
     target_link_libraries(octave PRIVATE Qt6::Sensors Qt6::CorePrivate)
 elseif(WIN32)
     target_link_libraries(octave PRIVATE TagLib::tag)
+elseif(EMSCRIPTEN)
+    # no TagLib: MediaManager falls back to Qt's metadata as on Android
 else()
     target_link_libraries(octave PRIVATE PkgConfig::TAGLIB)
 endif()
@@ -500,6 +536,36 @@ endif()
 # automatically when the parent has no console.
 if(WIN32)
     set_target_properties(octave PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
+# ---- WebAssembly packaging (the browser demo) ----
+if(EMSCRIPTEN)
+    # Qt for WebAssembly is static: qmlimportscanner reads frontend/ to decide
+    # which QML plugins to link, as for the APK.
+    set_target_properties(octave PROPERTIES QT_QML_ROOT_PATH "${CMAKE_SOURCE_DIR}/frontend")
+    # frontend/ is loaded from disk at runtime (findFrontendDir), so it goes
+    # into the page's in-memory filesystem at /frontend (octave.data, fetched
+    # before main). Emscripten packs it at link time, so any frontend/ change
+    # restages it (packaging/wasm/stage_frontend.cmake) and relinks.
+    set(OCTAVE_WASM_FS "${CMAKE_BINARY_DIR}/wasm_fs")
+    file(GLOB_RECURSE _octave_frontend_files CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/frontend/*")
+    add_custom_command(
+        OUTPUT "${OCTAVE_WASM_FS}/stamp"
+        COMMAND "${CMAKE_COMMAND}" -DSRC=${CMAKE_SOURCE_DIR}/frontend -DDEST=${OCTAVE_WASM_FS}
+                -DSTAMP=${OCTAVE_WASM_FS}/stamp -P ${CMAKE_SOURCE_DIR}/packaging/wasm/stage_frontend.cmake
+        DEPENDS ${_octave_frontend_files} "${CMAKE_SOURCE_DIR}/packaging/wasm/stage_frontend.cmake"
+        COMMENT "Staging frontend/ for the WebAssembly filesystem image"
+        VERBATIM)
+    add_custom_target(octave_wasm_fs DEPENDS "${OCTAVE_WASM_FS}/stamp")
+    add_dependencies(octave octave_wasm_fs)
+    set_property(TARGET octave APPEND PROPERTY LINK_DEPENDS "${OCTAVE_WASM_FS}/stamp")
+    target_link_options(octave PRIVATE
+        "--preload-file=${OCTAVE_WASM_FS}/frontend@/frontend"
+        "-sINITIAL_MEMORY=256MB"
+        # Assimp (Quick3D's RuntimeLoader, the 3D Jeep) probes a .glb with
+        # its glTF 1 reader, which throws and expects to be caught; with
+        # Emscripten's default of no catching that throw aborts the page
+        "-sDISABLE_EXCEPTION_CATCHING=0")
 endif()
 
 # ---- Android packaging ----

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OCTAVE (Open-source Cross-platform Telematics for Augmented Vehicle Experience) is a **C++ / Qt 6 / QML** infotainment system designed for vehicles. It runs on Windows, macOS, Linux, Raspberry Pi, iOS, and Android.
+OCTAVE (Open-source Cross-platform Telematics for Augmented Vehicle Experience) is a **C++ / Qt 6 / QML** infotainment system designed for vehicles. It runs on Windows, macOS, Linux, Raspberry Pi, iOS, and Android, and as a browser demo (WebAssembly) at robdegeorge.com/OCTAVE/.
 
 ### C++ only
 
-OCTAVE is a **C++ / Qt 6** app (`src/`) with a QML frontend (`frontend/`). Every shipped binary on every platform (Windows `.exe`, macOS `.dmg`, Linux AppImage, Android `.apk`, iOS `.ipa` once enabled) is built from the C++ tree.
+OCTAVE is a **C++ / Qt 6** app (`src/`) with a QML frontend (`frontend/`). Every shipped binary on every platform (Windows `.exe`, macOS `.dmg`, Linux AppImage, Android `.apk`, iOS `.ipa` once enabled, the WebAssembly browser demo) is built from the C++ tree.
 
 Until 2026-10-18 there was also a Python / PySide6 backend (`backend/`, `main.py`). It was frozen at the `python-final` branch (`b5463c9`, with its own wiki) and deleted from `main`. Don't reintroduce a Python backend, Python-on-Android (buildozer / p4a) or a PyInstaller pipeline.
 
@@ -140,6 +140,10 @@ User settings stored in `settingsConfigure.json` at OS-specific paths:
 
 Rotating log files in `logs/` subdirectory of the config path:
 `octave-cpp.log` (5 MB, 3 backups), `octave-cpp-error.log` (WARNING+ plus crash backtraces; 2 MB, 5 backups), `octave-cpp-debug.log` (debug only; 10 MB, 2 backups), written by `src/util/logger.cpp`.
+
+### WebAssembly (browser demo)
+
+`packaging/wasm/build.sh` (Qt 6.12 `wasm_multithread` kit + emsdk 5.0.5, `QT_WASM` / `QT_HOST`) builds the app for the browser; `.github/workflows/wiki-pages.yml` publishes it at robdegeorge.com/OCTAVE/ with the wiki at `/OCTAVE/wiki/`. `EMSCRIPTEN` in CMake defines `OCTAVE_WASM` and `Q_OS_MOBILE` and drops Qt SerialPort / Bluetooth, TagLib and FFmpeg. `src/platform/wasm/` holds what replaces them: stand-in `QSerialPort` / `QSerialPortInfo` headers whose ports never open, inert `obdadapterfinder_wasm.cpp` / `networkmanager_wasm.cpp` (swapped in for the real `.cpp`), and `webdemo` (the real `OBDManager` on `src/dev`'s simulated car, driven by an autopilot, plus `DevImuFeed`). Guard any new `QProcess` use with `#if QT_CONFIG(process)` and new hardware APIs with `OCTAVE_WASM`, or the browser build breaks. `frontend/` is staged into the page's filesystem by `packaging/wasm/stage_frontend.cmake` (keep big unused assets out of it: every MB is downloaded by every visitor). Threads need cross-origin isolation, which `packaging/wasm/coi-serviceworker.js` provides on GitHub Pages; serve local builds with COOP/COEP headers.
 
 ### Build & CI
 

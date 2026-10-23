@@ -1,0 +1,200 @@
+<!doctype html>
+<!--
+  OCTAVE in the browser: the host page for the Qt for WebAssembly build.
+  Replaces the octave.html that Qt generates next to octave.js / octave.wasm /
+  octave.data / qtloader.js. Same qtLoad() API (Qt 6.12). See README.md.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Device size at scale 1: CSS pixels map 1:1 to Qt device independent pixels. -->
+  <meta name="viewport" content="width=device-width, height=device-height, user-scalable=0">
+  <meta name="description" content="OCTAVE, the open-source car infotainment system, running in your browser with a simulated car.">
+  <meta name="color-scheme" content="dark">
+  <title>OCTAVE</title>
+  <!-- Threaded WebAssembly needs cross-origin isolation (COOP/COEP). GitHub Pages
+       cannot send those headers, so this service worker adds them and reloads once.
+       Must be the first script. Vendored, MIT: LICENSE.coi-serviceworker. -->
+  <script src="coi-serviceworker.js"></script>
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --panel: #14181d;
+      --text: #e6e9ec;
+      --muted: #8a949e;
+      --accent: #3ddc97;
+      --error: #ff6b6b;
+      --track: #232a31;
+    }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+
+    /* The Qt screen: full viewport, hidden until onLoaded. */
+    #screen { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+
+    /* Loading / error panel. */
+    #loader {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      padding: 16px; box-sizing: border-box;
+    }
+    .card { width: min(100%, 420px); }
+    .brand { font-size: 2.25rem; font-weight: 700; letter-spacing: 0.18em; margin: 0; }
+    .tagline { color: var(--muted); margin: 0.35rem 0 1.75rem; font-size: 0.95rem; }
+    .bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+    .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.15s linear; }
+    .bar.indeterminate > div { width: 30%; animation: slide 1.2s ease-in-out infinite; }
+    @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+    #status { margin: 0.75rem 0 0; font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.2em; }
+    #error { display: none; margin: 1rem 0 0; padding: 0.75rem 1rem; background: var(--panel); border-left: 3px solid var(--error); font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
+    .error #error { display: block; }
+    .error .bar > div { background: var(--error); animation: none; width: 100%; }
+    .note { margin: 2rem 0 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+    .note a { color: var(--accent); text-decoration: none; }
+    .note a:hover { text-decoration: underline; }
+    .links { margin-top: 0.5rem; }
+    .links a + a::before { content: "\00b7"; color: var(--muted); margin: 0 0.5rem; }
+    noscript { display: block; margin-top: 1rem; color: var(--error); }
+  </style>
+</head>
+<body>
+  <div id="loader">
+    <div class="card">
+      <h1 class="brand">OCTAVE</h1>
+      <p class="tagline">Open-source car infotainment, running in your browser.</p>
+      <div class="bar indeterminate"><div id="fill"></div></div>
+      <p id="status">Starting</p>
+      <pre id="error"></pre>
+      <noscript>JavaScript is disabled. Please enable it to run OCTAVE.</noscript>
+      <p class="note">
+        Demo: a simulated car, no hardware. Loads about 80 MB once; Chrome, Edge or Firefox on a desktop work best.
+        <span class="links"><a href="wiki/">Wiki</a><a href="https://github.com/RobDeGeorge/OCTAVE">Source</a><a href="https://github.com/RobDeGeorge/OCTAVE/releases/latest">Download</a></span>
+      </p>
+    </div>
+  </div>
+  <div id="screen"></div>
+
+  <script src="octave.js"></script>
+  <script src="qtloader.js"></script>
+  <script>
+    (async function () {
+      const loader = document.getElementById('loader');
+      const screen = document.getElementById('screen');
+      const bar = document.querySelector('.bar');
+      const fill = document.getElementById('fill');
+      const status = document.getElementById('status');
+      const errorBox = document.getElementById('error');
+
+      const MB = 1024 * 1024;
+      const fmt = (n) => (n / MB).toFixed(1) + ' MB';
+
+      // The two big downloads, fetched here with progress so the page can show
+      // a real percentage instead of Emscripten's "Downloading data..." text.
+      const files = {
+        'octave.wasm': { loaded: 0, total: 0 },
+        'octave.data': { loaded: 0, total: 0 },
+      };
+      let phase = 'Downloading';
+      function render() {
+        const loaded = Object.values(files).reduce((a, f) => a + f.loaded, 0);
+        const total = Object.values(files).reduce((a, f) => a + f.total, 0);
+        if (total > 0) {
+          bar.classList.remove('indeterminate');
+          fill.style.width = Math.min(100, 100 * loaded / total).toFixed(1) + '%';
+          status.textContent = phase + ' ' + fmt(loaded) + ' of ' + fmt(total);
+        } else {
+          status.textContent = phase;
+        }
+      }
+      async function download(name) {
+        const response = await fetch(name);
+        if (!response.ok)
+          throw new Error('Could not download ' + name + ' (HTTP ' + response.status + ')');
+        const entry = files[name];
+        entry.total = Number(response.headers.get('Content-Length')) || 0;
+        if (!response.body || !entry.total) {
+          const buffer = await response.arrayBuffer();
+          entry.loaded = entry.total = buffer.byteLength;
+          render();
+          return buffer;
+        }
+        const reader = response.body.getReader();
+        const chunks = [];
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          entry.loaded += value.byteLength;
+          render();
+        }
+        const buffer = new Uint8Array(entry.loaded);
+        let offset = 0;
+        for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.byteLength; }
+        return buffer.buffer;
+      }
+      function fail(message) {
+        loader.classList.add('error');
+        bar.classList.remove('indeterminate');
+        status.textContent = 'OCTAVE could not start.';
+        errorBox.textContent = message;
+        screen.style.display = 'none';
+        loader.style.display = 'flex';
+      }
+
+      if (typeof WebAssembly === 'undefined') {
+        fail('This browser does not support WebAssembly.');
+        return;
+      }
+      if (!window.crossOriginIsolated) {
+        // coi-serviceworker registers and reloads the page; this text only shows
+        // if that failed (service workers off, private window on some browsers).
+        status.textContent = 'Enabling cross-origin isolation';
+        if (!('serviceWorker' in navigator)) {
+          fail('This page needs cross-origin isolation for multithreaded WebAssembly, and service workers are not available in this browser or mode.');
+          return;
+        }
+        // Give the service worker time to install and reload before giving up.
+        setTimeout(() => {
+          if (!window.crossOriginIsolated)
+            fail('Cross-origin isolation did not come up. Reload the page; if it keeps failing, your browser may block service workers here.');
+        }, 8000);
+        return;
+      }
+
+      try {
+        render();
+        const [wasmBytes, dataBytes] = await Promise.all([download('octave.wasm'), download('octave.data')]);
+        phase = 'Compiling';
+        fill.style.width = '';
+        bar.classList.add('indeterminate');
+        status.textContent = phase;
+        const module = await WebAssembly.compile(wasmBytes);
+        phase = 'Starting';
+        status.textContent = phase;
+
+        await qtLoad({
+          // Hand Emscripten the package we already downloaded (name is octave.data).
+          getPreloadedPackage: (name, size) => dataBytes,
+          qt: {
+            module: Promise.resolve(module),
+            entryFunction: window.octave_entry,
+            containerElements: [screen],
+            onLoaded: () => {
+              loader.style.display = 'none';
+              screen.style.display = 'block';
+            },
+            onExit: (exit) => {
+              if (exit.crashed)
+                fail('Crashed: ' + (exit.text || 'unknown error'));
+              else
+                fail('OCTAVE exited' + (exit.code !== undefined ? ' with code ' + exit.code : '') + (exit.text ? ' (' + exit.text + ')' : '') + '.');
+            },
+          },
+        });
+      } catch (e) {
+        console.error(e);
+        fail(String(e && e.message ? e.message : e));
+      }
+    })();
+  </script>
+</body>
+</html>

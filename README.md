@@ -15,9 +15,11 @@
 [![Downloads](https://img.shields.io/github/downloads/RobDeGeorge/OCTAVE/total?style=for-the-badge&color=2b8aff&label=downloads)](https://github.com/RobDeGeorge/OCTAVE/releases)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPLv3%2B-orange?style=for-the-badge)](LICENSE)
 
-**Windows · macOS · Linux · Raspberry Pi / Orange Pi · Android**
+**Windows · macOS · Linux · Raspberry Pi / Orange Pi · Android · your browser**
 
-### [Download](https://github.com/RobDeGeorge/OCTAVE/releases/latest) &nbsp;·&nbsp; [Wiki](https://robdegeorge.com/OCTAVE/) &nbsp;·&nbsp; [Build your own frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html)
+**Try it in your browser: https://robdegeorge.com/OCTAVE/** (the simulated car, no install, about 25 MB)
+
+### [Download](https://github.com/RobDeGeorge/OCTAVE/releases/latest) &nbsp;·&nbsp; [Wiki](https://robdegeorge.com/OCTAVE/wiki/) &nbsp;·&nbsp; [Build your own frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)
 
 </div>
 
@@ -126,7 +128,7 @@ with Client() as octave:
         print(event["values"])        # {'RPM': 2210, 'SPEED': 41}
 ```
 
-A stdlib-only [Python SDK](sdk/), a no-build [web client](sdk/web/index.html), the full [API reference](https://robdegeorge.com/OCTAVE/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html)**.
+A stdlib-only [Python SDK](sdk/), a no-build [web client](sdk/web/index.html), the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**.
 
 </td>
 </tr>
@@ -209,7 +211,7 @@ Until October 2026 OCTAVE also had a Python / PySide6 backend. It is frozen, wit
 <details>
 <summary><b>Dev tooling: how the clips above were made</b></summary>
 
-Every clip and screenshot in this README is scripted. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with the simulator and a local command server; a story script drives it scene by scene (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt, and writes WebP and PNG. The same channel is exposed as MCP tools, so a coding agent can drive the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; see the [Development guide](https://robdegeorge.com/OCTAVE/development.html).
+Every clip and screenshot in this README is scripted. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with the simulator and a local command server; a story script drives it scene by scene (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt, and writes WebP and PNG. The same channel is exposed as MCP tools, so a coding agent can drive the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; see the [Development guide](https://robdegeorge.com/OCTAVE/wiki/development.html).
 
 </details>
 
@@ -242,7 +244,7 @@ Every plan lives in [`TODO/`](TODO/).
 
 ## Documentation
 
-The **[wiki](https://robdegeorge.com/OCTAVE/)** covers the architecture, every manager and page, every setting, hardware setup and the build guides. The same pages ship in [`wiki/`](wiki/index.html) and inside the app. Building gauges: [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md). Building a frontend: [Writing a Frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html) and [`docs/api/`](docs/api/README.md).
+The **[wiki](https://robdegeorge.com/OCTAVE/wiki/)** covers the architecture, every manager and page, every setting, hardware setup and the build guides. The same pages ship in [`wiki/`](wiki/index.html) and inside the app. Building gauges: [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md). Building a frontend: [Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html) and [`docs/api/`](docs/api/README.md).
 
 ## Contributing
 

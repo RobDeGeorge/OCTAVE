@@ -3,7 +3,7 @@
 
 // BerryIMU v3 uses Linux I2C — excluded on mobile builds.
 // Android replacement (device sensors via QSensor) is Phase 2 work.
-#ifndef Q_OS_MOBILE
+#if !defined(Q_OS_MOBILE) || defined(OCTAVE_WASM)  // wasm: the no-I2C desktop path
 
 #include <QObject>
 #include <QSet>

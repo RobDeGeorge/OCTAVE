@@ -15,7 +15,7 @@
 
 #include "berryimumanager.h"
 
-#ifndef Q_OS_MOBILE
+#if !defined(Q_OS_MOBILE) || defined(OCTAVE_WASM)  // wasm: the no-I2C desktop path
 
 #include "settingsmanager.h"
 

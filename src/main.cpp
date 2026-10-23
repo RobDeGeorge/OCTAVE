@@ -49,6 +49,9 @@ extern "C" {
 // --dev / --profile: simulator, UI / perf actions, perf monitor (src/dev/)
 #include "dev/devruntime.h"
 #endif
+#ifdef OCTAVE_WASM
+#include "platform/wasm/webdemo.h"   // the browser demo's simulated car
+#endif
 
 namespace {
 
@@ -406,6 +409,11 @@ int main(int argc, char *argv[])
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
         qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON (the default for Debug); ignoring "
                  "(--service still starts the service)");
+#endif
+
+#ifdef OCTAVE_WASM
+    // ---- Browser demo: the simulated car on the real OBDManager ----
+    WebDemo webDemo(&core.obdManager, &core.berryIMU);
 #endif
 
     // ---- Service (makeService: off unless asked for) ----

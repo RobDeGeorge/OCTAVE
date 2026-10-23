@@ -61,7 +61,7 @@
           OCTAVE is a <strong>backend/frontend split</strong> joined by Qt's signals and slots. The
           <strong>C++ / Qt 6</strong> backend in <code>src/</code> &mdash; built into every shipped binary
           (Windows <code>.exe</code>, macOS <code>.dmg</code>, Linux x86_64 and aarch64 AppImages,
-          Android <code>.apk</code>) &mdash; owns all business logic, hardware I/O, network calls and data
+          Android <code>.apk</code>, and the WebAssembly demo at <code>robdegeorge.com/OCTAVE/</code>) &mdash; owns all business logic, hardware I/O, network calls and data
           processing; the QML frontend in <code>frontend/</code> owns rendering, animation and interaction.
         </p>
 
@@ -99,6 +99,11 @@
 └────────────────────────────────────────────────────────────────────────┘</div>
 
         <!-- Backend / Frontend Split -->
+        <div class="info-box info">
+          <div class="info-box-title">Platform note: the browser build</div>
+          The same tree compiles with Qt for WebAssembly (<code>EMSCRIPTEN</code> in CMake, <code>OCTAVE_WASM</code> + <code>Q_OS_MOBILE</code> in C++). A browser has no serial ports, Bluetooth, processes or persistent disk, so that build drops the OBD transports, TagLib and FFmpeg, swaps in inert stand-ins from <span class="file-path">src/platform/wasm/</span>, keeps the whole <span class="file-path">frontend/</span> tree in an in-memory filesystem, and drives the real <code>OBDManager</code> from the simulated car through <code>WebDemo</code>'s autopilot. Everything above the transports &mdash; managers, <code>paramStore</code>, dashboards, the black box (SQLite in memory), the 3D vehicle &mdash; is unchanged. Nothing persists across reloads and there is no service / command server. Details: <a href="building.html#wasm">Building: WebAssembly</a>.
+        </div>
+
         <h2 id="backend-frontend">Backend / Frontend Split</h2>
 
         <table>

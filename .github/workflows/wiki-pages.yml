@@ -1,16 +1,27 @@
-name: Wiki to GitHub Pages
+name: Site to GitHub Pages
 
-# Publishes wiki/ as the OCTAVE project site. Once the RobDeGeorge.github.io
-# user site has its custom domain, GitHub serves this at robdegeorge.com/OCTAVE/
-# (until then, robdegeorge.github.io/OCTAVE/). The wiki uses relative links only,
-# so it works under that subpath unchanged. No CNAME here: a project site
-# inherits the user site's domain. Pages must be switched on once with source
-# "GitHub Actions" (Settings -> Pages, or POST repos/RobDeGeorge/OCTAVE/pages build_type=workflow).
+# Publishes the OCTAVE project site at robdegeorge.com/OCTAVE/ (the project site
+# inherits the RobDeGeorge.github.io user site's custom domain; no CNAME here).
+# Layout of the deployed site:
+#   /OCTAVE/            the app, built for the browser with Qt for WebAssembly
+#                       (packaging/wasm/build.sh + packaging/wasm/index.html)
+#   /OCTAVE/wiki/       wiki/, minus the index builder scripts
+#   /OCTAVE/<page>.html redirect stubs to /OCTAVE/wiki/<page>.html, generated
+#                       here so the old wiki links keep working
+# The wiki uses relative links only, so it works under any subpath unchanged.
+# Pages must be switched on once with source "GitHub Actions" (Settings -> Pages,
+# or POST repos/RobDeGeorge/OCTAVE/pages build_type=workflow).
 
 on:
   push:
     branches: [main]
-    paths: ['wiki/**', '.github/workflows/wiki-pages.yml']
+    paths:
+      - 'src/**'
+      - 'frontend/**'
+      - 'CMakeLists.txt'
+      - 'packaging/wasm/**'
+      - 'wiki/**'
+      - '.github/workflows/wiki-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,19 +33,104 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  QT_VERSION: '6.12.0'
+  # Qt 6.12's QT_EMCC_RECOMMENDED_VERSION; the build warns on any other.
+  EMSDK_VERSION: '5.0.5'
+  QT_MODULES: 'qt5compat qtmultimedia qtquick3d qtquicktimeline qtwebsockets qtshadertools'
+
 jobs:
+  build-wasm:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build
+      # The desktop kit first: the wasm cross build runs its host tools (moc,
+      # qsb, balsam, qmlimportscanner) from here, so it needs the same modules.
+      - name: Install host Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          modules: ${{ env.QT_MODULES }}
+          dir: ${{ runner.temp }}/qt
+          cache: true
+          set-env: false
+      - name: Install Qt ${{ env.QT_VERSION }} for WebAssembly
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'all_os'
+          target: 'wasm'
+          arch: 'wasm_multithread'
+          modules: ${{ env.QT_MODULES }}
+          dir: ${{ runner.temp }}/qt
+          cache: true
+          set-env: false
+      - name: Install emsdk ${{ env.EMSDK_VERSION }}
+        uses: mymindstorm/setup-emsdk@v15
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: 'emsdk-cache'
+      - name: Build and stage
+        run: |
+          QT_HOST="$RUNNER_TEMP/qt/Qt/$QT_VERSION/gcc_64" \
+          QT_WASM="$RUNNER_TEMP/qt/Qt/$QT_VERSION/wasm_multithread" \
+          BUILD_DIR="$RUNNER_TEMP/build-wasm" \
+          OUT_DIR="$GITHUB_WORKSPACE/wasm-site" \
+          packaging/wasm/build.sh
+          du -sh wasm-site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: octave-wasm
+          path: wasm-site
+          if-no-files-found: error
+          retention-days: 3
+
   deploy:
+    needs: build-wasm
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Stage wiki (minus the index builder script)
+      - name: Stage the app at the site root
+        uses: actions/download-artifact@v4
+        with:
+          name: octave-wasm
+          path: _site
+      - name: Stage wiki under wiki/ (minus the index builder scripts)
         run: |
-          mkdir _site
-          rsync -a --exclude '*.py' --exclude '__pycache__' wiki/ _site/
+          mkdir -p _site/wiki
+          rsync -a --exclude '*.py' --exclude '__pycache__' wiki/ _site/wiki/
           touch _site/.nojekyll
+      - name: Redirect stubs for the old /OCTAVE/<page>.html wiki links
+        run: |
+          for src in wiki/*.html; do
+            page="$(basename "$src")"
+            [ "$page" = index.html ] && continue   # the root index.html is the app
+            cat > "_site/$page" <<HTML
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>OCTAVE wiki</title>
+            <meta http-equiv="refresh" content="0; url=wiki/$page">
+            <link rel="canonical" href="https://robdegeorge.com/OCTAVE/wiki/$page">
+            <script>location.replace('wiki/$page' + location.search + location.hash);</script>
+          </head>
+          <body><p><a href="wiki/$page">This page has moved to the wiki.</a></p></body>
+          </html>
+          HTML
+          done
+          ls -la _site | head -20
+          du -sh _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

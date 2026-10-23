@@ -92,7 +92,9 @@ private slots:
     void onNetworkNameCheckFinished();
     void onUpdateCheckReplyFinished();
     void clearNetworkName();
+#ifndef OCTAVE_WASM   // Qt's wasm QProcess is an empty stub
     void onSelfUpdateStepFinished(int exitCode, QProcess::ExitStatus exitStatus);
+#endif
 
 private:
     // Internal helpers

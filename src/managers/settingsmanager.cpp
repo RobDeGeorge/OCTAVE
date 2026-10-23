@@ -1743,10 +1743,15 @@ void SettingsManager::downloadThemeArtAsync(const QString &themeName, const QStr
         QDir().mkpath(artDir);
         QString dest = artDir + QStringLiteral("/theme_") + safeName + QStringLiteral(".jpg");
         // Use QProcess + curl as a portable download approach
+#if QT_CONFIG(process)
         QProcess proc;
         proc.start(QStringLiteral("curl"), {QStringLiteral("-sL"), QStringLiteral("-o"), dest, url});
         proc.waitForFinished(30000);
-        if (proc.exitCode() == 0 && QFile::exists(dest)) {
+        const bool downloaded = proc.exitCode() == 0;
+#else
+        const bool downloaded = false;   // no processes in the browser (wasm)
+#endif
+        if (downloaded && QFile::exists(dest)) {
             m_pendingThemeArtName = themeName;
             m_pendingThemeArtUrl  = QUrl::fromLocalFile(dest).toString();
             qCDebug(lcSettings) << "Downloaded theme art to:" << dest;
@@ -2482,6 +2487,7 @@ QString SettingsManager::getGitRepoDir() const
 
 QString SettingsManager::get_git_commit_hash()
 {
+#if QT_CONFIG(process)
     QProcess proc;
     proc.setWorkingDirectory(getGitRepoDir());
     proc.start(QStringLiteral("git"), {QStringLiteral("rev-parse"), QStringLiteral("--short"), QStringLiteral("HEAD")});
@@ -2490,6 +2496,7 @@ QString SettingsManager::get_git_commit_hash()
         if (!hash.isEmpty())
             return hash;
     }
+#endif
     // Packaged builds (APK, installers) have neither .git nor git: use the
     // value CMake baked in at configure time.
 #ifdef OCTAVE_GIT_COMMIT
@@ -2501,12 +2508,14 @@ QString SettingsManager::get_git_commit_hash()
 
 QString SettingsManager::get_git_commit_date()
 {
+    QString dateStr;
+#if QT_CONFIG(process)
     QProcess proc;
     proc.setWorkingDirectory(getGitRepoDir());
     proc.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%ci")});
-    QString dateStr;
     if (proc.waitForFinished(5000) && proc.exitCode() == 0)
         dateStr = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+#endif
 #ifdef OCTAVE_GIT_DATE
     if (dateStr.isEmpty())
         dateStr = QStringLiteral(OCTAVE_GIT_DATE);   // baked in by CMake for packaged builds
@@ -2521,10 +2530,12 @@ QString SettingsManager::get_git_commit_date()
 
 QString SettingsManager::get_git_commit_message()
 {
+#if QT_CONFIG(process)
     QProcess proc;
     proc.setWorkingDirectory(getGitRepoDir());
     proc.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%s")});
     if (proc.waitForFinished(5000) && proc.exitCode() == 0)
         return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+#endif
     return QString();
 }

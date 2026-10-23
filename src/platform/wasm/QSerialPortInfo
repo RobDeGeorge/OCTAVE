@@ -1,0 +1,24 @@
+#ifndef OCTAVE_WASM_QSERIALPORTINFO
+#define OCTAVE_WASM_QSERIALPORTINFO
+
+// WebAssembly build only: see QSerialPort in this directory. No ports, ever.
+
+#include <QList>
+#include <QString>
+
+class QSerialPortInfo
+{
+public:
+    static QList<QSerialPortInfo> availablePorts() { return {}; }
+    QString portName() const { return {}; }
+    QString systemLocation() const { return {}; }
+    QString description() const { return {}; }
+    QString manufacturer() const { return {}; }
+    QString serialNumber() const { return {}; }
+    bool hasVendorIdentifier() const { return false; }
+    quint16 vendorIdentifier() const { return 0; }
+    bool hasProductIdentifier() const { return false; }
+    quint16 productIdentifier() const { return 0; }
+};
+
+#endif

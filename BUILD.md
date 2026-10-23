@@ -1,15 +1,16 @@
 # OCTAVE Build Guide
 
-OCTAVE ships as a **C++ / Qt 6** application. Every distributed binary — `.exe`, `.dmg`, `.AppImage`, `.apk`, and (planned) `.ipa` — is built from `src/` via CMake. The Python / PySide6 backend it once had is frozen on the `python-final` branch.
+OCTAVE ships as a **C++ / Qt 6** application. Every distributed binary — `.exe`, `.dmg`, `.AppImage`, `.apk`, the browser build at robdegeorge.com/OCTAVE/, and (planned) `.ipa` — is built from `src/` via CMake. The Python / PySide6 backend it once had is frozen on the `python-final` branch.
 
 This guide covers:
 
 1. [Quick start](#quick-start)
 2. [Desktop builds](#desktop-builds-linux--macos--windows) (Linux / macOS / Windows)
 3. [Android build](#android-build) (full toolchain setup + APK)
-4. [iOS build](#ios-build) (planned, not yet wired)
-5. [Python helper tools](#python-helper-tools) (optional download helpers and dev scripts)
-6. [CI parity](#ci-parity) (how local commands map to GitHub Actions)
+4. [WebAssembly build](#webassembly-build) (the browser demo)
+5. [iOS build](#ios-build) (planned, not yet wired)
+6. [Python helper tools](#python-helper-tools) (optional download helpers and dev scripts)
+7. [CI parity](#ci-parity) (how local commands map to GitHub Actions)
 
 ---
 
@@ -329,6 +330,69 @@ adb devices
 
 ---
 
+## WebAssembly build
+
+**Status:** Shipped. The app runs in the browser at **https://robdegeorge.com/OCTAVE/** as a demo: the simulated car, every page, no hardware. `.github/workflows/wiki-pages.yml` builds and publishes it (with the wiki under `/OCTAVE/wiki/`) on every push to `main` that touches `src/`, `frontend/`, `CMakeLists.txt`, `packaging/wasm/` or `wiki/`.
+
+### Toolchain
+
+- **Qt 6.12.0 `wasm_multithread`** kit plus a matching desktop kit for the host tools (`moc`, `qsb`, `balsam`, `qmlimportscanner`), both with the modules `qt5compat qtmultimedia qtquick3d qtquicktimeline qtwebsockets qtshadertools`:
+
+```bash
+venv/bin/pip install aqtinstall
+aqt install-qt all_os wasm 6.12.0 wasm_multithread -O ~/Qt -m qt5compat qtmultimedia qtquick3d qtquicktimeline qtwebsockets qtshadertools
+aqt install-qt linux desktop 6.12.0 linux_gcc_64 -O ~/Qt -m qt5compat qtmultimedia qtquick3d qtquicktimeline qtwebsockets qtshadertools
+```
+
+- **emsdk 5.0.5** (`QT_EMCC_RECOMMENDED_VERSION` for Qt 6.12; the build warns on any other):
+
+```bash
+git clone https://github.com/emscripten-core/emsdk ~/emsdk
+~/emsdk/emsdk install 5.0.5 && ~/emsdk/emsdk activate 5.0.5
+```
+
+### Build
+
+`packaging/wasm/build.sh` runs the configure + build and, with `OUT_DIR`, stages the site:
+
+```bash
+QT_WASM=~/Qt/6.12.0/wasm_multithread QT_HOST=~/Qt/6.12.0/gcc_64 \
+OUT_DIR=/tmp/octave-site packaging/wasm/build.sh
+# -> build-wasm/octave.{js,wasm,data} + qtloader.js; /tmp/octave-site also gets
+#    packaging/wasm/index.html and coi-serviceworker.js
+```
+
+By hand, it is the usual cross-compile:
+
+```bash
+source ~/emsdk/emsdk_env.sh
+~/Qt/6.12.0/wasm_multithread/bin/qt-cmake -S . -B build-wasm -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DQT_HOST_PATH=~/Qt/6.12.0/gcc_64 \
+    -DOCTAVE_ENABLE_DOWNLOADS=OFF -DOCTAVE_BUILD_TESTS=OFF -DOCTAVE_DEV_TOOLS=OFF
+cmake --build build-wasm
+```
+
+### What the target changes
+
+Everything is gated on CMake's `EMSCRIPTEN`, which defines `OCTAVE_WASM` and `Q_OS_MOBILE`:
+
+- Qt SerialPort and Bluetooth, TagLib and FFmpeg are dropped. `src/platform/wasm/` holds stand-ins: a `QSerialPort` / `QSerialPortInfo` whose `open()` always fails, and inert `obdadapterfinder_wasm.cpp` / `networkmanager_wasm.cpp` that replace the real sources (`HEADER_FILE_ONLY` on the originals). `QProcess` users (the settings manager's git/curl, the OBD manager destructor) are behind `#if QT_CONFIG(process)`; the IMU manager and the dev IMU feed take their desktop (no I²C) branch.
+- `-sDISABLE_EXCEPTION_CATCHING=0`: Assimp's glTF1 probe throws on `.glb`, so exceptions stay on.
+- `frontend/` is staged by `packaging/wasm/stage_frontend.cmake` into `build-wasm/wasm_fs` (a build step with a stamp in `LINK_DEPENDS`, so a QML edit relinks) and preloaded at `/frontend` in the page's in-memory filesystem. That is `octave.data`. The README screenshots, `assets/-src` and the full-size `jeep_tj_2003.glb` are excluded.
+- `src/platform/wasm/webdemo.{h,cpp}` (`WebDemo`, built by `main.cpp` under `#ifdef OCTAVE_WASM`) points the real `OBDManager` at `src/dev`'s `CarSim` + `SimElm327` (port `sim://elm327`, realistic mode off), feeds the IMU through `DevImuFeed`, and runs an autopilot: idle with throttle blips, pull away to a 35–70 mph target, cruise, coast, brake to a stop.
+
+### What works, what does not
+
+Works in the browser: home, the OBD pages, every dashboard, the 3D Jeep, sensors, settings, trip recording (SQLite in memory). Not there: persistence across reloads (MEMFS), a music library (empty), hardware, the service / command server.
+
+Sizes: `octave.wasm` 48 MB and `octave.data` 29 MB raw; GitHub Pages serves both gzipped, about 25 MB over the wire.
+
+### Serving it locally
+
+Threaded WebAssembly needs cross-origin isolation (COOP/COEP headers). On the published site `packaging/wasm/coi-serviceworker.js` adds them; locally, use any static server that sends them (one-liner in `packaging/wasm/README.md`) and open `http://127.0.0.1:8080/`.
+
+---
+
 ## iOS build
 
 **Status:** Not yet wired. iOS is the planned 5th target. CMakeLists.txt does not currently set up iOS toolchain or Info.plist generation, and there is no iOS job in CI. Implementing it requires:
@@ -370,12 +434,13 @@ venv/bin/ruff check .
 | Linux x86_64 | `ubuntu-22.04` | `bash packaging/linux/build-appimage.sh` (CMake Release + `linuxdeploy` + `linuxdeploy-plugin-qt`) | `OCTAVE-<v>-linux-x86_64.AppImage` |
 | Linux aarch64 | `ubuntu-22.04-arm` | same script; Qt's GStreamer media plugin is dropped after the build (jammy lacks libgstphotography) | `OCTAVE-<v>-linux-aarch64.AppImage` |
 | Android | `ubuntu-22.04` | `qt-cmake -S . -B build-android …` then `cmake --build build-android --target apk`, signed with a per-run keystore (v1+v2+v3) | `OCTAVE-<v>-android-arm64-v8a.apk` |
+| WebAssembly | `ubuntu-22.04` (`wiki-pages.yml`, not the release matrix) | `packaging/wasm/build.sh` with Qt 6.12.0 `wasm_multithread` + emsdk 5.0.5, deployed to GitHub Pages | robdegeorge.com/OCTAVE/ |
 
 **Pinned versions** (matched locally for parity):
 
 | Tool | Version |
 |---|---|
-| Qt | 6.7.3 |
+| Qt | 6.7.3 (desktop / Android); 6.12.0 `wasm_multithread` + emsdk 5.0.5 for the browser build |
 | JDK | 17 |
 | Android NDK | 26.1.10909125 |
 | Android SDK platform | 33 (`platforms;android-33`; the phone-server job uses 36) |

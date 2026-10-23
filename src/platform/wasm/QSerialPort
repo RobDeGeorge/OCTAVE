@@ -1,0 +1,3 @@
+// WebAssembly build only: the stand-in lives in qserialport_wasm.h, where
+// AUTOMOC (which ignores extension-less headers) can see its Q_OBJECT.
+#include "qserialport_wasm.h"
