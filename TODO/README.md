@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-10-22 (diy-obd-adapter.md added from the OBD adapter brainstorm)
+**Last updated:** 2026-10-23 (frontend-platform.md added: anyone can build an OCTAVE frontend)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -39,6 +39,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML so first launch doesn't stall | L | Win11 VM, Pi, S22 |
 | [user-primitives.md](user-primitives.md) | Save and share your own styled gauges and gauge groups | L (code widgets XL) | desktop |
 | [open-backend.md](open-backend.md) | The contract is done (2026-10-23); left: two small service follow-ups, the hardware checks noted along the way, and the core library / process split after v1.0 road time | S; library M; split L | desktop, Pi, phone, Android |
+| [frontend-platform.md](frontend-platform.md) | Anyone can build and install a frontend: an enforced API contract, a simulator in release builds, generated SDKs, installable frontends, per-device permissions, templates | M per step; 3 and 4 L | desktop, Pi |
 
 ## 4. New subsystems (XL)
 

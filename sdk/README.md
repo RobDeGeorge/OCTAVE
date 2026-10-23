@@ -58,11 +58,7 @@ client.params(['RPM', 'SPEED'], (values) => console.log(values))    // live read
 await client.stream('phoneMirrorManager', 'video', { onRecord: (r) => decoder.feed(r) })   // media records
 ```
 
-It reconnects with backoff and re-issues its subscriptions; `request(op, args)` covers any op. `frontends/glass` (a whole browser UI, Svelte) is built on it as a path dependency. `cd sdk/typescript && npm install && npm test` regenerates nothing but checks that the committed `src/types.ts` matches `docs/api` (so it goes stale loudly, like `tst_apidocs`), type-checks the facade, and runs the client against a fake service; `npm run generate` rewrites the types after `octave --dump-api docs/api`. Its README has the details and `examples/now_playing.mjs`.
-
-## Another whole frontend: `frontends/retro-cluster/`
-
-An experimental UI in Rust + egui, styled as an 80s fluorescent instrument cluster, built only on this API (see its README). Not built by CI.
+It reconnects with backoff and re-issues its subscriptions; `request(op, args)` covers any op. `cd sdk/typescript && npm install && npm test` regenerates nothing but checks that the committed `src/types.ts` matches `docs/api` (so it goes stale loudly, like `tst_apidocs`), type-checks the facade, and runs the client against a fake service; `npm run generate` rewrites the types after `octave --dump-api docs/api`. Its README has the details and `examples/now_playing.mjs`.
 
 ## Versioning
 

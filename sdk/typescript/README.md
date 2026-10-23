@@ -8,7 +8,7 @@ npm install && npm run build        # -> dist/ (ESM + .d.ts)
 npm test                            # types match docs/api, the facade type-checks, the client against a fake service
 ```
 
-Use it from a sibling project as a path dependency (`"octave-client": "file:../../sdk/typescript"`, as `frontends/glass` does) or copy `dist/`.
+Use it from a sibling project as a path dependency (`"octave-client": "file:../octave/sdk/typescript"`) or copy `dist/`.
 
 ## Use
 
@@ -33,7 +33,7 @@ await client.stream('phoneMirrorManager', 'video', { onRecord: (r) => decoder.fe
 
 `OctaveClient` has `request(op, args)` for any op, `get` / `set` / `call` / `rows` / `describe` (cached), `subscribe(object, {properties, signals, throttleMs}, handler)` with `property`, `signal`, `params` and `model` on top of it, `stream`, `on('status' | 'hello')`, `whenOnline`. Subscriptions survive a reconnect (they are issued again on the new connection, so the current values arrive again); a media stream ends with its connection and is opened again by the caller. Replies are matched by id; a request made while connecting waits for the link.
 
-Browsers may only connect from a page the service served (the Origin rule), so a web app is served by the app itself with `--web-root`, as `frontends/glass` is. Node sends no Origin and connects from anywhere the port is reachable.
+Browsers may only connect from a page the service served (the Origin rule), so a web app is served by the app itself with `--web-root`. Node sends no Origin and connects from anywhere the port is reachable.
 
 ## Types
 

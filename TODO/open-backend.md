@@ -7,7 +7,7 @@
 
 Rob, 2026-10-21: "I want other individuals to feel empowered to take this backend and create a frontend in whatever style or way they want, using whatever language or tool they want." A side benefit to confirm with someone who does licensing: a frontend in another process talking over a socket is generally not a derivative work, so the backend's GPL-3.0 stays on the backend.
 
-Where it is documented: `docs/api/` (the published API, its `README.md`: versioning, compatibility table, Streams, Pairing), `wiki/writing-a-frontend.html` (the walkthrough), `wiki/utilities.html#service-protocol` (how the server works), `frontends/README.md` and `frontends/PARITY.md` (the frontends and what each can do).
+Where it is documented: `docs/api/` (the published API, its `README.md`: versioning, compatibility table, Streams, Pairing), `wiki/writing-a-frontend.html` (the walkthrough), `wiki/utilities.html#service-protocol` (how the server works).
 
 ---
 
@@ -18,10 +18,10 @@ Where it is documented: `docs/api/` (the published API, its `README.md`: version
 - **2026-10-23 (overnight run, lanes A-D):**
   - Backend: `--headless --dev` (the simulated car with no UI), `--web-root` / `serviceWebRoot`, demand released when a client's connection closes, `clock.time`, `GET /art` (current, `?song=`, `?queue=`) with `nowPlaying.artRevision`, `audioAnalyzer.setDemand` for the levels, the widget catalog and the theme tables as data (`dashboardManager.widgetCatalog`, `themeCatalog` with `activeTheme`), `settingsManager.apply_settings` and the Now Playing presets in C++, `mediaManager.browse_music_folders`, `GET /export/trip|dashboard|logs`, freeze-frame values and plain-language DTC descriptions, `octave --help`, fixes from the frontend lanes (QVariant returns, `close()` state, subscribe ordering, `saveDashboard` without an id, `lastError`, `hello` with a rejected token).
   - Contract step 6, media streams: the `stream` op sends the phone's H.264 untouched (tapped before the in-app decoder) and Android Auto's frames as JPEG as binary records, with config events, keyframe joins and drop-to-keyframe; a dev-only `sim_video` source; checked end to end with WebCodecs in Chromium and once against a real phone over USB.
-  - Protocol 2, pairing: loopback stays open by default; everything else pairs with a 6-digit code from Settings > Device > Service, gets a token (stored hashed), and uses short-lived media tickets in URLs; revoking closes the device's connections. `frontends/retro-cluster` pairs too.
+  - Protocol 2, pairing: loopback stays open by default; everything else pairs with a 6-digit code from Settings > Device > Service, gets a token (stored hashed), and uses short-lived media tickets in URLs; revoking closes the device's connections.
   - SDKs: `sdk/python` (stdlib only; pairing, stream records), `sdk/web` (the reference page, pairing form, media tickets), `sdk/typescript` (lane B: typed, the types generated from `docs/api/` and checked in CI).
   - A security review of the service and its fixes: the line protocol only from `{` and HTTP GET only (a browser POST could run an op), `call` / `get` / `set` / `subscribe` limited to what `describe` lists, connection and line limits, write backpressure, an address required in every HTTP `Host`, and a batch of smaller hardening.
-  - Frontends (lanes B and C): `frontends/glass` (TypeScript + Svelte, web), `console` (Python + Textual), `sunlight` (Go + Gio), `arcade` (C + SDL2) and `retro-cluster` (Rust + egui), with `frontends/PARITY.md` mapping every QML feature to them.
+  - Frontends: five (TypeScript + Svelte, Python + Textual, Go + Gio, C + SDL2, Rust + egui) proved every QML feature is reachable over the API; they live on the `frontends-experiment` branch, not `main`.
   - A desktop load baseline (below) and the CMake plan for the core library (below), neither of which needs the car.
 
 ## Left: small follow-ups (desktop)
@@ -77,7 +77,7 @@ Constraints:
 
 - **Keep the car on a tag.** The Jeep runs a tagged release; nothing reaches the Pi except through the release-candidate path (CI dispatch, Dropbox `_OCTAVE_rc` staging, kora VMs, then the Pi). If a step needs a road test, cut an rc for it.
 - **One logical change per commit**, test first (`tests/cpp/`, a temp `XDG_CONFIG_HOME` for anything touching settings), wiki and `docs/api/` in the same commit, so `git bisect` can name a move.
-- **The regression harness:** `./build/octave --dev --profile` with the simulated car before and after, the screenshot stories, the perf MCP; `tools/stream/service_load.py` for the service; `frontends/check_all.sh` (one throwaway backend, every frontend's own checks) after any change to the service or `docs/api/`.
+- **The regression harness:** `./build/octave --dev --profile` with the simulated car before and after, the screenshot stories, the perf MCP; `tools/stream/service_load.py` for the service.
 
 ## Recommended order of operations
 
