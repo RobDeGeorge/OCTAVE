@@ -1,6 +1,7 @@
 // metadescribe.cpp
 
 #include "metadescribe.h"
+#include "memberscope.h"
 
 #include <QMetaEnum>
 #include <QMetaMethod>
@@ -11,14 +12,7 @@ namespace OctaveService {
 
 namespace {
 
-// The first meta-object in the chain that belongs to Qt itself (its class
-// name starts with "Q"): its members and everything above are not ours
-const QMetaObject *firstQtBase(const QMetaObject *mo)
-{
-    while (mo && !QByteArray(mo->className()).startsWith('Q'))
-        mo = mo->superClass();
-    return mo;
-}
+using MemberScope::firstQtBase;
 
 QString typeName(QMetaType type)
 {

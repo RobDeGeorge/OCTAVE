@@ -75,6 +75,12 @@ signals:
     void pinged(const QString &from, int count);
     void preferredChanged();
 
+private slots:
+    void secret() { secretCalls++; }
+
+public:
+    int secretCalls = 0;
+
 private:
     void hidden() {}
     int m_level = 3;
@@ -538,6 +544,38 @@ private slots:
         // Leading blank lines before '{' are still the line protocol
         QVERIFY(once(m_server->port(), "\n  \n" + body).contains(R"("ok":true)"));
         QCOMPARE(m_fixture.level(), 77);
+    }
+
+    void callReachesOnlyTheServiceMethods()
+    {
+        // H2: `call` used to match any method of the meta-object: QObject's
+        // deleteLater (a crash on a manager), destroyed, signals, private
+        // slots. Only the object's own public slots and Q_INVOKABLEs now.
+        m_registry->add("fixture", &m_fixture);
+        QPointer<Fixture> alive = &m_fixture;
+        for (const char *line : {R"({"op": "call", "object": "fixture", "method": "deleteLater"})",
+                                 R"({"op": "call", "object": "fixture", "method": "destroyed"})",
+                                 R"({"op": "call", "object": "fixture", "method": "levelChanged"})",
+                                 R"({"op": "call", "object": "fixture", "method": "pinged", "args": ["x", 1]})",
+                                 R"({"op": "call", "object": "fixture", "method": "objectNameChanged", "args": ["x"]})",
+                                 R"({"op": "call", "object": "fixture", "method": "hidden"})",
+                                 R"({"op": "call", "object": "fixture", "method": "secret"})"}) {
+            const QJsonObject r = send(line);
+            QVERIFY2(!r.value("ok").toBool() && r.value("error").toString().contains("no method"), line);
+        }
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QVERIFY(alive);
+        QCOMPARE(m_fixture.secretCalls, 0);   // a private slot never runs
+        // QObject's properties and signals are not offered either
+        QVERIFY(error(R"({"op": "get", "object": "fixture", "property": "objectName"})").contains("no property"));
+        QVERIFY(error(R"({"op": "set", "object": "fixture", "property": "objectName", "value": "x"})").contains("no property"));
+        QVERIFY(error(R"({"op": "subscribe", "object": "fixture", "signals": ["destroyed"]})").contains("no signal"));
+        QVERIFY(error(R"({"op": "subscribe", "object": "fixture", "properties": ["objectName"]})").contains("no property"));
+        // What describe lists still works
+        QCOMPARE(result(R"({"op": "call", "object": "fixture", "method": "greet", "args": ["rob"]})").toString(),
+                 QStringLiteral("hi rob"));
+        QVERIFY(result(R"({"op": "call", "object": "fixture", "method": "setMode", "args": ["Fast"]})").isNull());
+        QCOMPARE(m_fixture.mode(), Fixture::Mode::Fast);
     }
 
     void keyValueObjects()

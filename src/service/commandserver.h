@@ -224,7 +224,10 @@ bool convertTo(QVariant &value, QMetaType type);
 // Invoke a slot / Q_INVOKABLE by name, converting `args` to its parameter
 // types. Throws CommandError when there is no such method or a conversion
 // fails. GUI thread only for GUI objects.
-QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args = {});
+// `serviceOnly`: only what the service offers (memberscope.h: the object's
+// own public slots and Q_INVOKABLEs, never a signal or QObject's members);
+// the `call` op passes true, the dev tooling (QML functions) false
+QVariant invokeByName(QObject *obj, const char *method, const QVariantList &args = {}, bool serviceOnly = false);
 
 } // namespace OctaveService
 

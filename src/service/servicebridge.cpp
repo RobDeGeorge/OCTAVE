@@ -8,6 +8,7 @@
 #include "serviceregistry.h"
 #include "streamhub.h"
 #include "servicepairing.h"
+#include "memberscope.h"
 #include "staticfiles.h"
 
 #include <QAbstractItemModel>
@@ -174,8 +175,9 @@ QVariant modelSummary(QAbstractItemModel *model)
 
 QMetaProperty findProperty(QObject *o, const QString &name)
 {
+    // Only the object's own properties (memberscope.h): not objectName
     const int i = o->metaObject()->indexOfProperty(name.toUtf8().constData());
-    if (i < 0)
+    if (i < MemberScope::propertyStart(o->metaObject()))
         throw CommandError(QStringLiteral("%1 has no property %2")
                                .arg(QString::fromLatin1(o->metaObject()->className()), name));
     return o->metaObject()->property(i);
@@ -346,7 +348,7 @@ void ServiceBridge::install(CommandServer &server)
         return CommandServer::onGui([this, o, name, method, callArgs, connection]() -> QVariant {
             if (!o)
                 throw CommandError(QStringLiteral("object is gone"));
-            QVariant result = invokeByName(o, method.constData(), callArgs);
+            QVariant result = invokeByName(o, method.constData(), callArgs, true);
             if (connection)
                 noteClaim(name, o, method, callArgs, connection);
             return result;
@@ -510,8 +512,9 @@ QVariant ServiceBridge::subscribe(const QVariantMap &args)
         } else {
             for (const QString &sig : signalNames) {
                 QMetaMethod signal;
-                for (int i = 0; i < mo->methodCount(); ++i)
-                    if (mo->method(i).methodType() == QMetaMethod::Signal && mo->method(i).name() == sig.toUtf8())
+                for (int i = MemberScope::methodStart(mo); i < mo->methodCount(); ++i)
+                    if (mo->method(i).methodType() == QMetaMethod::Signal && mo->method(i).access() == QMetaMethod::Public
+                        && mo->method(i).name() == sig.toUtf8())
                         signal = mo->method(i);
                 if (!signal.isValid())
                     fail(QStringLiteral("%1 has no signal %2").arg(name, sig));
@@ -529,7 +532,7 @@ QVariant ServiceBridge::subscribe(const QVariantMap &args)
             }
             for (const QString &prop : propertyNames) {
                 const int pi = mo->indexOfProperty(prop.toUtf8().constData());
-                if (pi < 0)
+                if (pi < MemberScope::propertyStart(mo))
                     fail(QStringLiteral("%1 has no property %2").arg(name, prop));
                 const QMetaProperty p = mo->property(pi);
                 if (QAbstractItemModel *model = modelIn(p.read(o))) {
