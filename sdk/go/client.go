@@ -47,6 +47,10 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Op, e.Message)
 }
 
+// Int is a pointer to v, for the optional integer fields of the generated
+// argument structs (SubscribeArgs{ThrottleMs: octave.Int(100)}).
+func Int(v int) *int { return &v }
+
 // ErrClosed is returned once the connection is gone.
 var ErrClosed = errors.New("octave: connection closed")
 
@@ -327,14 +331,27 @@ func (c *Client) Unstream(stream int) error {
 }
 
 // Pair becomes a paired device with the code the head unit shows and
-// returns the token to keep (WithToken next time).
-func (c *Client) Pair(code, name string) (string, error) {
+// returns the token to keep (WithToken next time). `scopes` asks for less
+// than full access ("media", "vehicle", ...; docs/api/README.md, Scopes);
+// none means full. What was granted is in Scopes() afterwards.
+func (c *Client) Pair(code, name string, scopes ...string) (string, error) {
 	var r PairReply
-	if err := c.Request("pair", PairArgs{Code: code, Name: name}, &r); err != nil {
+	if err := c.Request("pair", PairArgs{Code: code, Name: name, Scopes: scopes}, &r); err != nil {
 		return "", err
 	}
 	c.Hello.Auth = "trusted"
+	c.Hello.Scopes = r.Scopes
 	return r.Token, nil
+}
+
+// Scopes is what this connection may change: the scopes hello or Pair
+// reported, or ["full"] on a protocol 1 server (which has no scopes), or
+// nothing while untrusted.
+func (c *Client) Scopes() []string {
+	if len(c.Hello.Scopes) > 0 || !c.Trusted() {
+		return c.Hello.Scopes
+	}
+	return []string{"full"}
 }
 
 // Unpair forgets this connection's own device.
