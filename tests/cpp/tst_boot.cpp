@@ -4,7 +4,9 @@
 // other test passed). With the dev tooling built, `--dev --profile` must boot
 // too and answer on its command server, and `--service` must serve the
 // service protocol in any build without the dev-only actions; `--headless`
-// must bring the managers and the service up with no QML at all.
+// must bring the managers and the service up with no QML at all, and with
+// the dev tooling `--headless --dev` must connect the real OBDManager to the
+// simulated car and take the sim_* actions.
 
 #include <QElapsedTimer>
 #include <QProcess>
@@ -97,6 +99,49 @@ private slots:
         QVERIFY2(out.contains("Smoke test: headless core up"), qPrintable(out.right(3000)));
         QVERIFY2(!out.contains("Main.qml"), qPrintable(out.right(3000)));   // no engine, no UI
         QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
+    }
+
+    void headlessDevRunsTheSimulatedCar()
+    {
+#ifndef OCTAVE_DEV_TOOLS
+        QSKIP("built without OCTAVE_DEV_TOOLS");
+#else
+        QTemporaryDir tmp;
+        const quint16 port = quint16(20004 + QCoreApplication::applicationPid() % 20000);
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--headless", "--dev", "--service", QString::number(port)});
+        QVERIFY(app.waitForStarted(10000));
+
+        const QByteArray actions = request(app, port, R"({"action": "list_actions"})");
+        QVERIFY2(actions.contains("\"sim_throttle\"") && actions.contains("\"sim_status\""), actions.constData());
+        // The UI / perf actions need the engine: never under --headless
+        for (const char *ui : {"\"click\"", "\"screenshot\"", "\"navigate\""})
+            QVERIFY2(!actions.contains(ui), actions.constData());
+
+        // The real OBDManager reaches the simulated adapter
+        QByteArray connected;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 30000 && app.state() == QProcess::Running) {
+            connected = request(app, port, R"({"op": "get", "object": "obdManager", "property": "connected"})");
+            if (connected.contains(R"("result":true)"))
+                break;
+            QTest::qWait(500);
+        }
+        QVERIFY2(connected.contains(R"("result":true)"), qPrintable(connected + app.readAll().right(3000)));
+        const QByteArray throttle = request(app, port, R"({"action": "sim_throttle", "args": {"value": 60}})");
+        QVERIFY2(throttle.contains(R"("queued":"sim_throttle")"), throttle.constData());
+        const QByteArray status = request(app, port, R"({"action": "sim_status"})");
+        QVERIFY2(status.startsWith(R"({"ok":true)") && status.contains("\"imu\""), status.constData());
+
+        app.terminate();   // SIGTERM: the normal clean shutdown
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(!out.contains("Main.qml"), qPrintable(out.right(3000)));
+        QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
+#endif
     }
 
     void noServiceUnlessAsked()

@@ -13,6 +13,9 @@
 //                              it, src/service/serviceoptions.h)
 //   octave --dev --profile     both, plus the sim_* actions (what the
 //                              screenshot stories and MCP tools launch)
+//   octave --headless --dev    the simulated car (and IMU motion) with no QML
+//                              engine; the sim_* actions on the service, for
+//                              developing another frontend (startHeadless)
 //   --command-port N           listen somewhere other than 9876
 //
 // See wiki/development.html.
@@ -68,10 +71,15 @@ public:
     // After Main.qml loaded: the overlay, the perf monitor, and (with
     // --profile) its actions on `server`, before main.cpp starts it
     void afterLoad(CommandServer *server);
+    // --headless (no engine, `m_app.engine` unused): with --dev the
+    // simulated car, the IMU feed on, and the sim_* actions on `server`,
+    // before main.cpp starts it. --profile needs the UI and is ignored.
+    void startHeadless(CommandServer *server);
     // From aboutToQuit, before the managers clean up
     void shutdown();
 
 private:
+    void installSim();
     void registerSimActions();
 
     AppObjects m_app;

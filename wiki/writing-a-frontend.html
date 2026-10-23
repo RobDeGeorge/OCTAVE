@@ -98,6 +98,7 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
 
         <h2 id="headless">Being the Only UI</h2>
         <p><code>octave --headless</code> runs every manager and the service with no QML engine and no window (the offscreen Qt platform), using about a fifth less memory than the full app. Music, OBD polling, the black box, the knob, gestures and the IMU all keep working; your frontend is the screen. It needs the service, so it exits if the service can't start. <code>hello</code> reports <code>"headless": true</code>.</p>
+        <p>In a developer build (<code>OCTAVE_DEV_TOOLS</code>, the default for Debug) <code>octave --headless --dev</code> adds the simulated car behind the real <code>OBDManager</code> and simulated IMU motion, so OBD values, the G-force and the compass move with no adapter and no QML UI. Drive it with the dev-only <code>sim_*</code> actions on the same port, for example <code>{"action":"sim_throttle","args":{"value":80}}</code> or <code>{"action":"sim_scenario","args":{"name":"overheat"}}</code> (<a href="development.html">Development</a>); never send them from a shipped frontend.</p>
         <p>The SDK's <code>launch_headless()</code> starts one with a throwaway config, the easiest way to test a frontend or a script: <span class="file-path">sdk/python/tests/test_client.py</span> does exactly that.</p>
 
         <h2 id="rules">Versioning and Security</h2>

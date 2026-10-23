@@ -170,8 +170,10 @@ int dumpApi(QGuiApplication &app, const QString &dir)
 // Android Auto) has nowhere to go and is not decoded for anyone.
 int runHeadless(QGuiApplication &app, bool smokeTest)
 {
+#ifndef OCTAVE_DEV_TOOLS
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
-        qWarning("--dev / --profile need the QML UI; ignored with --headless");
+        qWarning("--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON; ignored with --headless");
+#endif
 
     // A stalled event loop still gets logged (octave.ui_watchdog)
     UiWatchdog uiWatchdog;
@@ -185,6 +187,14 @@ int runHeadless(QGuiApplication &app, bool smokeTest)
     std::unique_ptr<QQuickImageProvider> dhuFrames(core.androidAutoManager.frameProvider());
 
     Service service = makeService(app.arguments(), core, true);
+#ifdef OCTAVE_DEV_TOOLS
+    // --headless --dev: the simulated car and its sim_* actions, no UI
+    const QDir frontendDir = findFrontendDir();
+    OctaveDev::Runtime devRuntime(app.arguments(), {nullptr, &core.settingsManager, &core.mediaManager, &core.volumeController,
+                                                    &core.nowPlaying, &core.obdManager, &core.berryIMU,
+                                                    QDir(frontendDir.absoluteFilePath(QStringLiteral("..")))});
+    devRuntime.startHeadless(service.server.get());
+#endif
     if (!service.server || !service.server->start()) {
         qCritical("--headless: the service did not start, nothing could reach the app; exiting");
         core.shutdown();
