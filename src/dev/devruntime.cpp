@@ -61,24 +61,12 @@ void Runtime::beforeLoad()
                      "============================================================\n");
         std::fflush(stdout);
 
-        // The real OBDManager talks to a simulated ELM327: the protocol
-        // parsing, demand-driven polling, vehicle scan and VIN decode all run
-        // as they would in the car. The saved port setting is left alone.
-        m_sim = new CarSim(this);
-        const std::shared_ptr<CarState> state = m_sim->state();
-        OBDConnectionWorker::setCustomTransport(
-            [](const QString &port) { return port == QLatin1String(kSimPort); },
-            [state](const QString &, QObject *parent) -> QIODevice * { return new SimElm327Device(state, parent); });
-        if (m_app.obd)
-            m_app.obd->setPortOverride(QString::fromLatin1(kSimPort));
-
+        installSim();
         m_keyboard = new DevKeyboardController(m_sim, this);
         m_tools = new DevToolsManager(m_app.projectRoot, this);
         ctx->setContextProperty(QStringLiteral("devKeyboardController"), m_keyboard);
         ctx->setContextProperty(QStringLiteral("devToolsManager"), m_tools);
         ctx->setContextProperty(QStringLiteral("devMode"), true);
-        if (m_app.imu)
-            m_imuFeed = new DevImuFeed(m_app.imu, m_sim, this);
     }
 
     if (m_profile) {
@@ -130,6 +118,40 @@ void Runtime::afterLoad(CommandServer *server)
         m_collage->registerActions(*m_server);
         if (m_dev)
             registerSimActions();
+    }
+}
+
+void Runtime::installSim()
+{
+    // The real OBDManager talks to a simulated ELM327: the protocol
+    // parsing, demand-driven polling, vehicle scan and VIN decode all run
+    // as they would in the car. The saved port setting is left alone.
+    m_sim = new CarSim(this);
+    const std::shared_ptr<CarState> state = m_sim->state();
+    OBDConnectionWorker::setCustomTransport(
+        [](const QString &port) { return port == QLatin1String(kSimPort); },
+        [state](const QString &, QObject *parent) -> QIODevice * { return new SimElm327Device(state, parent); });
+    if (m_app.obd)
+        m_app.obd->setPortOverride(QString::fromLatin1(kSimPort));
+    if (m_app.imu)
+        m_imuFeed = new DevImuFeed(m_app.imu, m_sim, this);
+}
+
+void Runtime::startHeadless(CommandServer *server)
+{
+    if (m_profile)
+        qCWarning(lcDev) << "--profile needs the QML UI; ignored with --headless (--dev still runs the simulated car)";
+    if (!m_dev)
+        return;
+    installSim();
+    // No overlay to switch it on from, and a headless frontend wants the
+    // G-force and compass to move: on from the start (sim_imu turns it off)
+    if (m_imuFeed)
+        m_imuFeed->setEnabled(true);
+    qCInfo(lcDev) << "Headless dev: simulated car on" << kSimPort;
+    if (server) {
+        m_server = server;
+        registerSimActions();
     }
 }
 
