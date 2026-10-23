@@ -86,8 +86,9 @@ frontend/
     CompassGauge.qml             self-binding HEADING compass card
   dashboards/
     DashboardRenderer.qml        spec -> absolutely positioned Loaders
-    WidgetCatalog.qml            singleton: type -> url, palette meta, supportedKinds, label/range/color flags,
-                                 editableProps, colorSwatches
+    widget-catalog.json          the catalog data: palette meta, spans, supportedKinds, label/range/color flags,
+                                 editableProps, colorSwatches (dashboardManager.widgetCatalog)
+    WidgetCatalog.qml            singleton: that data + type -> url
     presets/                     sport, minimal, fullgrid, performance, tj-wrangler (.json)
     widgets/
       NowPlayingWidget.qml       self-binding media card
@@ -562,11 +563,17 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
 
         <h2 id="widget-catalog">WidgetCatalog</h2>
         <p>
-          <span class="file-path">frontend/dashboards/WidgetCatalog.qml</span> is a singleton holding the ordered
-          <code>widgets</code> array plus <code>metaFor(type)</code>, <code>urlFor(type)</code> and <code>isKnownType(type)</code>.
-          It is the single whitelist the renderer, the palette, the PID picker and the properties panel all consult, so
-          "what can render" and "what can be placed" cannot drift. URLs are <code>Qt.resolvedUrl("../gauges/X.qml")</code>
-          or <code>"widgets/X.qml"</code>, resolved relative to the catalog's own location.
+          The catalog's data lives in <span class="file-path">frontend/dashboards/widget-catalog.json</span>
+          (<code>{schema, widgets, colorSwatches}</code>), read by <code>DashboardManager</code> and served as
+          <code>dashboardManager.widgetCatalog</code>, so every frontend gets the same widget list, and published as
+          <span class="file-path">docs/api/widget-catalog.json</span>. <code>normalizeSpec</code> uses it to hold a known
+          widget's <code>editableProps</code> to their kind (a wrong type is dropped; numbers clamped to <code>min</code> /
+          <code>max</code>, ints rounded). <span class="file-path">frontend/dashboards/WidgetCatalog.qml</span> is a singleton
+          that adds each type's QML url (its <code>urls</code> map: <code>Qt.resolvedUrl("../gauges/X.qml")</code> or
+          <code>"widgets/X.qml"</code>) and offers the ordered <code>widgets</code> array (a type needs both an entry and a
+          url), <code>colorSwatches</code>, <code>metaFor(type)</code>, <code>urlFor(type)</code> and
+          <code>isKnownType(type)</code>. It is the single whitelist the renderer, the palette, the PID picker and the
+          properties panel all consult, so "what can render" and "what can be placed" cannot drift.
         </p>
         <p>Each entry declares, besides <code>type</code> / <code>url</code> / <code>displayName</code> / <code>glyph</code> / default span / <code>supportedKinds</code>:</p>
         <table>

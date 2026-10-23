@@ -53,6 +53,11 @@ bool writeApiDocs(const ServiceRegistry &registry, const QDir &dir, QString *err
         if (!writeJson(dir, QStringLiteral("parameters.json"), catalog->property("parameters"), error))
             return false;
     }
+    // The dashboard widget types, next to dashboard-spec.schema.json
+    if (const QObject *dashboards = registry.object(QStringLiteral("dashboardManager"))) {
+        if (!writeJson(dir, QStringLiteral("widget-catalog.json"), dashboards->property("widgetCatalog"), error))
+            return false;
+    }
 
     return writeJson(dir, QStringLiteral("index.json"),
                      QVariantMap{{QStringLiteral("protocolVersion"), kProtocolVersion},

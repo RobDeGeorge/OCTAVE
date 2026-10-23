@@ -182,7 +182,7 @@ QVariant DashboardManager::loadDashboard(const QString &id)
     if (raw.isEmpty() || raw.value(QStringLiteral("schema"), 1).toDouble() > kSupportedSchema)
         return raw;
     QString error;
-    const QVariantMap spec = normalizeSpec(raw, SpecUse::Load, &error);
+    const QVariantMap spec = normalizeSpec(raw, SpecUse::Load, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         qCWarning(lcDashboards) << "loadDashboard:" << id << error;
         return QVariantMap{};
@@ -349,7 +349,7 @@ bool DashboardManager::writeSpec(const QString &absolutePath, const QVariantMap 
 QString DashboardManager::saveDashboard(const QVariantMap &raw)
 {
     QString error;
-    const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error);
+    const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         qCWarning(lcDashboards) << "saveDashboard:" << error;
         return {};
@@ -559,7 +559,7 @@ QString DashboardManager::importDashboardFromText(const QString &json)
 QString DashboardManager::importSpec(const QVariantMap &raw)
 {
     QString error;
-    QVariantMap spec = normalizeSpec(raw, SpecUse::Import, &error);
+    QVariantMap spec = normalizeSpec(raw, SpecUse::Import, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         setShareError(error);
         return {};
@@ -576,8 +576,62 @@ QString DashboardManager::importSpec(const QVariantMap &raw)
     return saved;
 }
 
-QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error)
+void DashboardManager::setWidgetCatalogFile(const QString &absolutePath)
 {
+    QFile f(absolutePath);
+    QJsonParseError parseError{};
+    const QJsonDocument doc = f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll(), &parseError) : QJsonDocument();
+    if (!doc.isObject()) {
+        qCWarning(lcDashboards) << "No widget catalog at" << absolutePath << parseError.errorString();
+        m_widgetCatalog.clear();
+        return;
+    }
+    QVariantMap catalog = doc.object().toVariantMap();
+    catalog.remove(QStringLiteral("_comment"));
+    m_widgetCatalog = catalog;
+}
+
+namespace {
+// A known widget's editable prop held to its catalog kind; false = drop it
+bool editableValue(const QVariantMap &def, QVariant &v)
+{
+    const QString kind = def.value(QStringLiteral("kind")).toString();
+    const bool number = v.typeId() == QMetaType::Int || v.typeId() == QMetaType::LongLong || v.typeId() == QMetaType::Double;
+    if (kind == QLatin1String("bool"))
+        return v.typeId() == QMetaType::Bool;
+    if (kind == QLatin1String("string"))
+        return v.typeId() == QMetaType::QString;
+    if (kind == QLatin1String("enum"))
+        return v.typeId() == QMetaType::QString && def.value(QStringLiteral("options")).toStringList().contains(v.toString());
+    if (kind == QLatin1String("int") || kind == QLatin1String("real")) {
+        if (!number)
+            return false;
+        double d = v.toDouble();
+        if (def.contains(QStringLiteral("min")))
+            d = qMax(d, def.value(QStringLiteral("min")).toDouble());
+        if (def.contains(QStringLiteral("max")))
+            d = qMin(d, def.value(QStringLiteral("max")).toDouble());
+        if (kind == QLatin1String("int"))
+            v = qRound64(d);
+        else if (d != v.toDouble())
+            v = d;
+        return true;
+    }
+    return true;   // a kind this build does not know: leave it
+}
+} // namespace
+
+QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error, const QVariantMap &catalog)
+{
+    // type -> {prop key -> its editableProps entry}
+    QHash<QString, QHash<QString, QVariantMap>> editable;
+    for (const QVariant &w : catalog.value(QStringLiteral("widgets")).toList()) {
+        const QVariantMap widget = w.toMap();
+        auto &props = editable[widget.value(QStringLiteral("type")).toString()];
+        for (const QVariant &p : widget.value(QStringLiteral("editableProps")).toList())
+            props.insert(p.toMap().value(QStringLiteral("key")).toString(), p.toMap());
+    }
+
     auto fail = [error](const QString &msg) { if (error) *error = msg; return QVariantMap{}; };
 
     // JSON numbers only (no bools, no numeric strings).
@@ -685,9 +739,12 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
         // objects or arrays have no meaning to any widget — drop them.
         QVariantMap props;
         const QVariantMap rawProps = c.value(QStringLiteral("props")).toMap();
+        const QHash<QString, QVariantMap> known = editable.value(type);
         for (auto it = rawProps.constBegin(); it != rawProps.constEnd(); ++it) {
             if (it.key().size() > 64) continue;
-            const QVariant &v = it.value();
+            QVariant v = it.value();
+            if (const auto def = known.constFind(it.key()); def != known.constEnd() && !editableValue(*def, v))
+                continue;
             switch (v.typeId()) {
             case QMetaType::Bool:
             case QMetaType::Int:
@@ -714,7 +771,7 @@ QVariantMap DashboardManager::normalizedSpec(const QVariantMap &spec) const
     QVariantMap withId = spec;
     if (withId.value(QStringLiteral("id")).toString().isEmpty())
         withId.insert(QStringLiteral("id"), QStringLiteral("draft"));
-    const QVariantMap out = normalizeSpec(withId, SpecUse::Load, nullptr);
+    const QVariantMap out = normalizeSpec(withId, SpecUse::Load, nullptr, m_widgetCatalog);
     if (out.isEmpty())
         return {};
     QVariantMap result = out;

@@ -43,6 +43,12 @@ class DashboardManager : public QObject
     Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
     // kSupportedSchema, for DashboardRenderer's "needs a newer OCTAVE" placeholder
     Q_PROPERTY(int supportedSchema READ supportedSchema CONSTANT)
+    // The widget types a dashboard can use (frontend/dashboards/
+    // widget-catalog.json, published as docs/api/widget-catalog.json):
+    // {schema, widgets: [{type, displayName, glyph, defaultColSpan,
+    // defaultRowSpan, supportedKinds, labelProps, rangeProps, colorProps,
+    // editableProps}], colorSwatches}. Empty if the file is missing.
+    Q_PROPERTY(QVariantMap widgetCatalog READ widgetCatalog CONSTANT)
 
 public:
     explicit DashboardManager(QObject *parent = nullptr);
@@ -52,6 +58,10 @@ public:
     // an initial scan.
     void setPresetsDir(const QString &absolutePath);
     void setUserDir(const QString &absolutePath);
+    // Before setUserDir() (the scan normalises with it); main.cpp passes
+    // frontend/dashboards/widget-catalog.json
+    void setWidgetCatalogFile(const QString &absolutePath);
+    QVariantMap widgetCatalog() const { return m_widgetCatalog; }
 
     // Merged list: each entry is { id, label, builtIn, path }. Sorted so
     // built-ins come first (in file-name order), then user dashboards.
@@ -151,7 +161,12 @@ private:
     // the caps above, a cell off the grid moved back in (shrunk only if wider
     // than the grid), props scalar, and no two cells overlapping (in file
     // order the earlier wins; a later one shrinks toward 1x1, else is
-    // dropped). Unknown widget types and paramIds are kept: the QML
+    // dropped). With a widget catalog, a known type's editableProps are
+    // held to their kind: a bool must be a bool, an int / real a number
+    // (clamped to min / max, an int rounded), an enum one of its options,
+    // a string a string; anything else is dropped (the widget's default).
+    // Other props (title, unit, min, max, colours) are left as they are.
+    // Unknown widget types and paramIds are kept: the QML
     // WidgetCatalog knows the types, the renderer skips or leaves them
     // unbound, and a newer build may know them. Import drops the id (the
     // caller makes a new one) and refuses a bad schema or no cell list; save
@@ -159,10 +174,12 @@ private:
     // schema is refused (loadDashboard passes such a file through untouched).
     // Returns an empty map (and sets *error) when the data isn't usable.
     enum class SpecUse { Import, Save, Load };
-    static QVariantMap normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error);
+    static QVariantMap normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error,
+                                     const QVariantMap &catalog = {});
     QString importSpec(const QVariantMap &raw);
 
     QString m_presetsDir;
+    QVariantMap m_widgetCatalog;
     QString m_userDir;
     QVariantList m_dashboards;
 

@@ -12,6 +12,7 @@
 #include <QSet>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QRegularExpression>
 #include <QTest>
 
 #include <memory>
@@ -33,6 +34,7 @@ private slots:
         qputenv("XDG_DOWNLOAD_DIR", (m_tmp->path() + "/dl").toUtf8());
         m_dm = std::make_unique<DashboardManager>();
         m_dm->setPresetsDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
+        m_dm->setWidgetCatalogFile(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/widget-catalog.json"));
         m_dm->setUserDir(m_tmp->path() + "/dashboards");
     }
 
@@ -208,6 +210,75 @@ private slots:
                 QJsonObject::fromVariantMap(m_dm->loadDashboard(raw.value("id").toString()).toMap());
             QVERIFY2(loaded == raw, qPrintable(name));
         }
+    }
+
+    void widgetCatalogIsData()
+    {
+        const QVariantMap catalog = m_dm->widgetCatalog();
+        QCOMPARE(catalog.value("schema").toInt(), 1);
+        QVERIFY(!catalog.contains("_comment"));
+        QStringList types;
+        for (const QVariant &w : catalog.value("widgets").toList()) {
+            const QVariantMap m = w.toMap();
+            types << m.value("type").toString();
+            for (const char *key : {"displayName", "glyph", "defaultColSpan", "defaultRowSpan", "supportedKinds",
+                                    "labelProps", "rangeProps", "colorProps", "editableProps"})
+                QVERIFY2(m.contains(key), qPrintable(m.value("type").toString() + ": " + key));
+            QVERIFY(!m.contains("url"));   // QML's business
+        }
+        QCOMPARE(types.first(), QStringLiteral("CircularGauge"));   // palette order
+        QVERIFY(types.contains("MediaControlsWidget"));
+        QCOMPARE(catalog.value("colorSwatches").toList().size(), 8);
+
+        // Every type has a QML url and every url a catalog entry
+        QFile qml(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/WidgetCatalog.qml"));
+        QVERIFY(qml.open(QIODevice::ReadOnly));
+        const QString source = QString::fromUtf8(qml.readAll());
+        QRegularExpression urlEntry(QStringLiteral("^\\s*\"(\\w+)\":\\s*Qt\\.resolvedUrl"), QRegularExpression::MultilineOption);
+        QStringList withUrl;
+        for (auto it = urlEntry.globalMatch(source); it.hasNext();)
+            withUrl << it.next().captured(1);
+        QCOMPARE(withUrl, types);
+
+        // A missing file is an empty catalog, not a crash
+        DashboardManager none;
+        none.setWidgetCatalogFile(m_tmp->path() + "/nope.json");
+        QVERIFY(none.widgetCatalog().isEmpty());
+    }
+
+    void editablePropsFollowTheirKind()
+    {
+        const QVariantMap spec = saveAndLoad(R"json({"gridColumns": 12, "gridRows": 6, "cells": [
+            {"type": "CircularGauge", "col": 0, "row": 0, "colSpan": 4, "rowSpan": 4, "props": {
+                "showNeedle": "yes", "showTicks": false, "decimals": 2.6, "majorTickCount": 99,
+                "sweepAngle": 10, "redlineStart": 5500, "title": "Boost", "min": -5, "fillColor": "red"}},
+            {"type": "BarGauge", "col": 4, "row": 0, "colSpan": 3, "rowSpan": 2, "props": {
+                "orientation": "diagonal", "showValue": 1}},
+            {"type": "BarGauge", "col": 7, "row": 0, "colSpan": 3, "rowSpan": 2, "props": {"orientation": "vertical"}},
+            {"type": "WarningLight", "col": 0, "row": 4, "colSpan": 2, "rowSpan": 2, "props": {"label": 7, "pulse": true}},
+            {"type": "FutureGauge", "col": 4, "row": 4, "colSpan": 2, "rowSpan": 2, "props": {"decimals": "x"}}]})json");
+        const QVariantList cells = spec.value("cells").toList();
+        QCOMPARE(cells.size(), 5);
+        const QVariantMap circ = cells.at(0).toMap().value("props").toMap();
+        QVERIFY(!circ.contains("showNeedle"));                       // not a bool
+        QCOMPARE(circ.value("showTicks"), QVariant(false));
+        QCOMPARE(circ.value("decimals").toInt(), 3);                 // int: rounded...
+        QCOMPARE(circ.value("decimals").toDouble(), 3.0);
+        QCOMPARE(circ.value("majorTickCount").toInt(), 20);          // ...and clamped
+        QCOMPARE(circ.value("sweepAngle").toDouble(), 30.0);         // real: clamped
+        QCOMPARE(circ.value("redlineStart").toDouble(), 5500.0);     // no bounds
+        QCOMPARE(circ.value("title").toString(), QStringLiteral("Boost"));   // not curated: as before
+        QCOMPARE(circ.value("min").toDouble(), -5.0);
+        QCOMPARE(circ.value("fillColor").toString(), QStringLiteral("red"));
+        const QVariantMap bar = cells.at(1).toMap().value("props").toMap();
+        QVERIFY(!bar.contains("orientation"));                       // not an option
+        QVERIFY(!bar.contains("showValue"));                         // a number is not a bool
+        QCOMPARE(cells.at(2).toMap().value("props").toMap().value("orientation").toString(), QStringLiteral("vertical"));
+        const QVariantMap light = cells.at(3).toMap().value("props").toMap();
+        QVERIFY(!light.contains("label"));                           // a string prop needs a string
+        QCOMPARE(light.value("pulse"), QVariant(true));
+        // A type this build doesn't know keeps its props (a newer build may)
+        QCOMPARE(cells.at(4).toMap().value("props").toMap().value("decimals").toString(), QStringLiteral("x"));
     }
 
     void offGridCellsMoveBeforeShrinking()

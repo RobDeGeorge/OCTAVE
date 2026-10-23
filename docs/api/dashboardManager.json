@@ -254,6 +254,13 @@
             "readable": true,
             "type": "int",
             "writable": false
+        },
+        {
+            "constant": true,
+            "name": "widgetCatalog",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
         }
     ],
     "signals": [

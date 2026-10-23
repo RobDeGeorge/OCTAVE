@@ -347,7 +347,10 @@ min / max overrides; empty = follow the PID; warns when min ≥ max) → **Color
 Editor sources live in `frontend/dashboards/editor/` (`DashboardEditor`,
 `EditorCanvas`, `PalettePopup`, `PIDPicker`, `PropertiesPanel`); the widget
 set, palette metadata, and curated editable props all come from the
-`WidgetCatalog` singleton (`frontend/dashboards/WidgetCatalog.qml`).
+widget catalog: the data in `frontend/dashboards/widget-catalog.json`
+(served as `dashboardManager.widgetCatalog`, published as
+`docs/api/widget-catalog.json`), which the `WidgetCatalog` singleton
+(`frontend/dashboards/WidgetCatalog.qml`) pairs with each type's QML url.
 
 **PID picker and the vehicle gate.** With no vehicle scanned this session the
 picker lists every PID. Once a connected vehicle has answered the
@@ -386,8 +389,9 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   - Schema: missing = 1. A newer schema is refused by save and import, and `loadDashboard` passes such a file through untouched so the renderer can show its placeholder; the editor won't open it.
   - `saveDashboard` needs a label and a file-safe id (`[A-Za-z0-9_-]`, ≤ 64; new ids are slugs from `uniqueIdForLabel`). A file with no `cells` loads as an empty dashboard.
   - Grid placement (`src/util/dashboardgrid.{h,cpp}`) is the same code in the editor: `dashboardManager.canPlace(cells, cols, rows, col, row, colSpan, rowSpan, exceptIndex)` for drag / resize, `dashboardManager.fitAt(cells, cols, rows, col, row, colSpan, rowSpan)` for the span a new widget shrinks to. The rescued editor draft goes through `dashboardManager.normalizedSpec(spec)`.
+  - A known widget's `editableProps` are held to their catalog `kind`: a `bool` must be a JSON bool, an `int` / `real` a number (clamped to `min` / `max`, an `int` rounded), an `enum` one of its `options`, a `string` a string; anything else is dropped, so the widget shows its default. Other props (title, unit, min, max, colours, keys the catalog doesn't curate) pass as before.
   - Every shipped preset already satisfies these rules (`presetsAreAlreadyNormal` in `tests/cpp/tst_dashboardmanager.cpp`).
-- **Validation in QML.** `DashboardRenderer` still checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()` (the catalog is QML), `console.warn`s failures with the dashboard id and never crashes the view.
+- **Validation in QML.** `DashboardRenderer` still checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`, `console.warn`s failures with the dashboard id and never crashes the view.
 - **Import.** `importDashboard` / `importDashboardFromClipboard` /
   `importDashboardFromText` apply the rules above and also refuse a spec
   with a bad `schema` or no `cells` list, and input over 512 KB. The id is
@@ -627,10 +631,14 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
    Use `Rectangle` + `transformOrigin` + `rotation` for small marks.
 5. Declare `octaveSupportedKinds` (array of PID `kind` strings, or `["*"]`)
    near the top — the editor's PID picker filters on it.
-6. Register the widget in `frontend/dashboards/WidgetCatalog.qml`. The
-   renderer, palette, and properties panel all read from the catalog — a
-   widget missing there won't render or be placeable. Each entry declares:
-   - `type`, `url`, `displayName`, `glyph`, `defaultColSpan` / `defaultRowSpan`
+6. Register the widget in the catalog: its data in
+   `frontend/dashboards/widget-catalog.json` (`widgets`, in palette order)
+   and its QML url in the `urls` map of `frontend/dashboards/WidgetCatalog.qml`
+   (a type needs both). The renderer, palette, properties panel,
+   `normalizeSpec` and every service client read the catalog — a widget
+   missing there won't render or be placeable. Then regenerate
+   `docs/api/` (`./build/octave --dump-api docs/api`). Each entry declares:
+   - `type`, `displayName`, `glyph`, `defaultColSpan` / `defaultRowSpan`
    - `supportedKinds` — must mirror step 5 (`[]` = self-binding, no PID picker)
    - `labelProps` — `true` if the widget has `title` + `unit` string props
      that default to the PID's metadata (enables the Title / Unit overrides)
@@ -701,9 +709,11 @@ frontend/
 │   │   ├── NowPlayingWidget.qml    art + title + artist + progress (local/phone)
 │   │   └── MediaControlsWidget.qml prev / play-pause / next transport
 │   ├── DashboardRenderer.qml  JSON spec → grid of widget instances
-│   ├── WidgetCatalog.qml      singleton: type → url + palette metadata +
-│   │                          supportedKinds + label/range/color flags +
-│   │                          editableProps + colorSwatches
+│   ├── widget-catalog.json    the catalog data: palette metadata, spans,
+│   │                          supportedKinds, label/range/color flags,
+│   │                          editableProps, colorSwatches
+│   ├── WidgetCatalog.qml      singleton: that data (dashboardManager.
+│   │                          widgetCatalog) + each type's url
 │   ├── editor/                Phase 3 in-app editor ("create-a-park")
 │   │   ├── DashboardEditor.qml   full-screen page; owns the working spec
 │   │   ├── EditorCanvas.qml      tap-to-place targets, drag-to-move, corner resize grip

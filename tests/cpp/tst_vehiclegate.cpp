@@ -14,6 +14,7 @@
 
 #include <memory>
 
+#include "managers/dashboardmanager.h"
 #include "managers/parametercatalog.h"
 #include "managers/parameterstore.h"
 
@@ -112,6 +113,9 @@ private slots:
         engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
         ParameterStore store;
         engine.rootContext()->setContextProperty("paramStore", &store);
+        DashboardManager dashboards;   // the widget catalog, as AppCore loads it
+        dashboards.setWidgetCatalogFile(kFrontend + "/dashboards/widget-catalog.json");
+        engine.rootContext()->setContextProperty("dashboardManager", &dashboards);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
@@ -163,6 +167,9 @@ private slots:
         engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
         ParameterStore store;
         engine.rootContext()->setContextProperty("paramStore", &store);
+        DashboardManager dashboards;   // the widget catalog, as AppCore loads it
+        dashboards.setWidgetCatalogFile(kFrontend + "/dashboards/widget-catalog.json");
+        engine.rootContext()->setContextProperty("dashboardManager", &dashboards);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
@@ -209,6 +216,9 @@ private slots:
         engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
         ParameterStore store;
         engine.rootContext()->setContextProperty("paramStore", &store);
+        DashboardManager dashboards;   // the widget catalog, as AppCore loads it
+        dashboards.setWidgetCatalogFile(kFrontend + "/dashboards/widget-catalog.json");
+        engine.rootContext()->setContextProperty("dashboardManager", &dashboards);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
@@ -249,6 +259,9 @@ private slots:
         engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
         ParameterStore store;
         engine.rootContext()->setContextProperty("paramStore", &store);
+        DashboardManager dashboards;   // the widget catalog, as AppCore loads it
+        dashboards.setWidgetCatalogFile(kFrontend + "/dashboards/widget-catalog.json");
+        engine.rootContext()->setContextProperty("dashboardManager", &dashboards);
         QQmlComponent comp(&engine);
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         std::unique_ptr<QObject> root(comp.create());
