@@ -201,6 +201,8 @@ func (c *Client) Hello() (string, error) {
 type HelloReply struct {
 	Version string
 	Trusted bool // protocol 1 has no pairing: always true there
+	// TokenRejected: the token sent was revoked or unknown (drop it, pair again)
+	TokenRejected bool
 }
 
 // HelloToken says hello with a paired device's token ("" for none).
@@ -216,6 +218,7 @@ func (c *Client) HelloToken(token string) (HelloReply, error) {
 	var h struct {
 		ProtocolVersion int    `json:"protocolVersion"`
 		Auth            string `json:"auth"`
+		TokenRejected   bool   `json:"tokenRejected"`
 		App             struct {
 			Version string `json:"version"`
 		} `json:"app"`
@@ -223,7 +226,7 @@ func (c *Client) HelloToken(token string) (HelloReply, error) {
 	if err := json.Unmarshal(raw, &h); err != nil {
 		return HelloReply{}, err
 	}
-	reply := HelloReply{Version: h.App.Version, Trusted: h.Auth == "" || h.Auth == "trusted"}
+	reply := HelloReply{Version: h.App.Version, Trusted: h.Auth == "" || h.Auth == "trusted", TokenRejected: h.TokenRejected}
 	if !slices.Contains(ProtocolVersions, h.ProtocolVersion) {
 		return reply, fmt.Errorf("the app speaks protocol %d, sunlight knows %v", h.ProtocolVersion, ProtocolVersions)
 	}

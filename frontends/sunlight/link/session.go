@@ -84,6 +84,9 @@ func (s *Session) Run(stop <-chan struct{}) {
 			c.Close()
 			continue
 		}
+		if err == nil && hello.TokenRejected && s.Token != "" {
+			s.setToken("")
+		}
 		if err == nil && !hello.Trusted {
 			// another device (or loopback closed): wait until the user pairs on this connection
 			s.mu.Lock()

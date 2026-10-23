@@ -496,3 +496,8 @@ async def test_pairing_over_the_network(tmp_path):
     with Client(PAIR_HOST, PORT, token=token) as paired:
         assert paired.server["auth"] == "trusted"
         paired.request("unpair")   # leave no paired device behind
+    # the token is void now: the next start drops it and asks to pair again
+    app = OctaveConsole(PAIR_HOST, PORT, start_tab="live", token_file=str(token_file))
+    async with app.run_test(size=SIZE) as pilot:
+        assert await wait_for(pilot, lambda: screen_name(app) == "PairScreen")
+        assert f"{PAIR_HOST}:{PORT}" not in json.loads(token_file.read_text())

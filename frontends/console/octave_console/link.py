@@ -179,6 +179,9 @@ class Link:
                 self._stop.wait(1.0)
                 continue
             try:
+                if client.server.get("tokenRejected") and self.token:   # revoked or unknown: forget it
+                    self.token = None
+                    self.tokens.put(self.address, None)
                 if client.server.get("auth", "trusted") != "trusted":
                     # not trusted (another device, or loopback closed): wait for the user to pair
                     self.client = client
