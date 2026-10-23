@@ -11,6 +11,8 @@
 # with ffmpeg (tagged, with covers) when ffmpeg is there. Nothing touches your
 # own config, the network beyond package installs, or real hardware.
 #
+# glass is built first and served by the backend (--web-root) for its e2e.
+#
 # Environment: OCTAVE_BIN (the app), CONSOLE_PY (a python with the console's
 # requirements; default: frontends/console/.venv, then python3), and the
 # usual go / cargo / npm / cmake on PATH. A missing tool is a SKIP, not a FAIL.
@@ -27,7 +29,7 @@ while [ $# -gt 0 ]; do
         --display) display=$2; shift 2 ;;
         --only) only=",$2,"; shift 2 ;;
         --keep) keep=1; shift ;;
-        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+        -h|--help) sed -n "2,19p" "$0"; exit 0 ;;
         *) echo "unknown option $1" >&2; exit 2 ;;
     esac
 done
@@ -72,12 +74,47 @@ fi
 tracks=$(find "$work/media" -name '*.mp3' | wc -l)
 printf '{"mediaFolder": "%s"}\n' "$work/media" > "$work/cfg/OCTAVE/settingsConfigure.json"
 
+# ── the checks (helpers) ─────────────────────────────────────────────────────────────
+names=(); results=(); times=(); notes=()
+record() { names+=("$1"); results+=("$2"); times+=("$3"); notes+=("$4"); }
+wanted() { [ -z "$only" ] || [[ $only == *",$1,"* ]]; }
+
+run() {   # run NAME NOTE COMMAND...: PASS / FAIL by exit status, output in logs/NAME.log
+    local name=$1 note=$2; shift 2
+    local log="$work/logs/$name.log" start=$SECONDS
+    echo "... $name"
+    if ( "$@" ) > "$log" 2>&1; then   # a subshell: the checks cd
+        record "$name" PASS $((SECONDS - start)) "$note"
+    else
+        record "$name" FAIL $((SECONDS - start)) "$note; see $log"
+        tail -15 "$log" | sed 's/^/    /'
+    fi
+}
+skip() { record "$1" SKIP 0 "$2"; echo "... $1 skipped: $2"; }
+
+# glass is built before the backend starts, so the backend can serve that build
+# (--web-root) and the e2e drives the real page
+web_root=()
+glass_built=0
+if wanted glass && command -v npm >/dev/null; then
+    glass_build() {
+        cd "$here/glass" || return 1
+        [ -d node_modules ] || npm ci --no-audit --no-fund || return 1
+        npm run check && npm run build
+    }
+    run glass-build "npm run check, npm run build" glass_build
+    if [ "${results[-1]}" = PASS ]; then
+        glass_built=1
+        web_root=(--web-root "$here/glass/dist")
+    fi
+fi
+
 # ── the backend ────────────────────────────────────────────────────────────
 # The binary is run exactly once, below, and always with the temp config:
 # an OCTAVE started without XDG_CONFIG_HOME opens the real user's settings,
 # black box and phone pairing.
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-env XDG_CONFIG_HOME="$work/cfg" QT_QPA_PLATFORM=offscreen "$bin" --headless --dev --service "$port" \
+env XDG_CONFIG_HOME="$work/cfg" QT_QPA_PLATFORM=offscreen "$bin" --headless --dev --service "$port" "${web_root[@]}" \
     > "$work/logs/backend.log" 2>&1 &
 backend_pid=$!
 up=0
@@ -100,24 +137,6 @@ if [ $up -eq 0 ]; then
 fi
 echo "OCTAVE headless on 127.0.0.1:$port, $tracks test track(s), work dir $work"
 sleep 2   # let the simulated car connect
-
-# ── the checks ─────────────────────────────────────────────────────────────
-names=(); results=(); times=(); notes=()
-record() { names+=("$1"); results+=("$2"); times+=("$3"); notes+=("$4"); }
-wanted() { [ -z "$only" ] || [[ $only == *",$1,"* ]]; }
-
-run() {   # run NAME NOTE COMMAND...: PASS / FAIL by exit status, output in logs/NAME.log
-    local name=$1 note=$2; shift 2
-    local log="$work/logs/$name.log" start=$SECONDS
-    echo "... $name"
-    if "$@" > "$log" 2>&1; then
-        record "$name" PASS $((SECONDS - start)) "$note"
-    else
-        record "$name" FAIL $((SECONDS - start)) "$note; see $log"
-        tail -15 "$log" | sed 's/^/    /'
-    fi
-}
-skip() { record "$1" SKIP 0 "$2"; echo "... $1 skipped: $2"; }
 
 export OCTAVE_HOST=127.0.0.1 OCTAVE_PORT=$port
 
@@ -161,24 +180,20 @@ if wanted sunlight; then
     fi
 fi
 
-# glass: type check and build, and its end-to-end tests when it has them
+# glass: its end-to-end tests against the build the backend serves
 if wanted glass; then
-    if command -v npm >/dev/null; then
-        glass_tests() {
-            cd "$here/glass" || return 1
-            [ -d node_modules ] || npm ci --no-audit --no-fund || return 1
-            npm run check && npm run build || return 1
-            if node -e 'process.exit(require("./package.json").scripts?.e2e ? 0 : 1)'; then
-                OCTAVE_URL="http://127.0.0.1:$port/" npm run e2e
-            fi
-        }
-        if node -e 'process.exit(require(process.argv[1]).scripts?.e2e ? 0 : 1)' "$here/glass/package.json" 2>/dev/null; then
-            run glass "check, build, e2e" glass_tests
-        else
-            run glass "check, build (no e2e script yet)" glass_tests
-        fi
-    else
+    if ! command -v npm >/dev/null; then
         skip glass "no npm"
+    elif [ $glass_built -eq 0 ]; then
+        skip glass-e2e "the build failed (see glass-build)"
+    elif ! node -e 'process.exit(require(process.argv[1]).scripts?.e2e ? 0 : 1)' "$here/glass/package.json"; then
+        skip glass-e2e "no e2e script"
+    else
+        glass_e2e() {
+            # it exits 0 with a note when it finds nothing to test: here the build is served, so that is a failure
+            cd "$here/glass" && npm run e2e && ! grep -qi "nothing to test" "$work/logs/glass-e2e.log"
+        }
+        run glass-e2e "npm run e2e on the served build" glass_e2e
     fi
 fi
 
