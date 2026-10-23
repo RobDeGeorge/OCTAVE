@@ -8,6 +8,7 @@
 // the dev tooling `--headless --dev` must connect the real OBDManager to the
 // simulated car and take the sim_* actions.
 
+#include <QDir>
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QTcpServer>
@@ -143,6 +144,33 @@ private slots:
         QVERIFY2(!out.contains("Main.qml"), qPrintable(out.right(3000)));
         QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
 #endif
+    }
+
+    void helpAndVersionExitBeforeAnything()
+    {
+        // No manager, no config read, no log file: --help on someone's
+        // real config must not start the app
+        for (const QStringList &args : {QStringList{"--help"}, QStringList{"-h"}, QStringList{"--version"},
+                                        QStringList{"--headless", "--help"}}) {
+            QTemporaryDir tmp;
+            QProcess app;
+            app.setProcessEnvironment(env(tmp));
+            QElapsedTimer t;
+            t.start();
+            app.start(kApp, args);
+            QVERIFY2(app.waitForFinished(5000), qPrintable(args.join(' ')));
+            QVERIFY2(t.elapsed() < 3000, qPrintable(QString::number(t.elapsed())));
+            QCOMPARE(app.exitStatus(), QProcess::NormalExit);
+            QCOMPARE(app.exitCode(), 0);
+            const QString out = QString::fromUtf8(app.readAllStandardOutput());
+            QVERIFY(out.startsWith("OCTAVE "));
+            if (args.contains("--version"))
+                QCOMPARE(out.count('\n'), 1);
+            else
+                for (const char *flag : {"--service", "--service-bind", "--headless", "--web-root", "--dump-api", "--command-port"})
+                    QVERIFY2(out.contains(flag), flag);
+            QVERIFY2(QDir(tmp.path()).isEmpty(), qPrintable(QDir(tmp.path()).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden).join(", ")));
+        }
     }
 
     void noServiceUnlessAsked()

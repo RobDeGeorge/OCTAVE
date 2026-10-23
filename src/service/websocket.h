@@ -63,7 +63,7 @@ QByteArray webRootCsp(const QByteArray &host);
 // A plain HTTP reply (the reference page, 403, 404). nosniff and
 // no-store on every reply.
 QByteArray httpResponse(int status, const QByteArray &reason, const QByteArray &contentType, const QByteArray &body,
-                        const QByteArray &csp = kInlinePageCsp);
+                        const QByteArray &csp = kInlinePageCsp, const QByteArray &extraHeaders = {});
 
 enum Opcode : quint8 { Continuation = 0x0, Text = 0x1, Binary = 0x2, Close = 0x8, Ping = 0x9, Pong = 0xA };
 

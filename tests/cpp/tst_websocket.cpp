@@ -256,6 +256,11 @@ private slots:
             seen = target;
             return StaticFiles::Reply{200, "OK", "image/png", "\x89PNG"};
         });
+        server.addRoute("/export/x", [](const QByteArray &) {
+            StaticFiles::Reply r{200, "OK", "text/csv", "a,b\n"};
+            r.headers = "Content-Disposition: attachment; filename=\"x.csv\"\r\n";
+            return r;
+        });
         QVERIFY(server.start());
         const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
         QByteArray reply = once(server.port(), "GET /art?rev=7 HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
@@ -264,6 +269,9 @@ private slots:
         QVERIFY(reply.contains("X-Content-Type-Options: nosniff"));
         QCOMPARE(calls, 1);
         QCOMPARE(seen, QByteArray("/art?rev=7"));   // the handler reads its own query
+        reply = once(server.port(), "GET /export/x HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.contains("\r\nContent-Disposition: attachment; filename=\"x.csv\"\r\nConnection: close\r\n\r\na,b\n"),
+                 reply.constData());
         // Exact paths only
         QVERIFY(once(server.port(), "GET /art/x HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 404"));
         // An <img> on another site sends no Origin; its Sec-Fetch-Site gives it away

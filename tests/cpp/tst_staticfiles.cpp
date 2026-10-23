@@ -179,6 +179,45 @@ private slots:
         QVERIFY(StaticFiles::insideDir(m_root + "/nope", m_root).isEmpty());
     }
 
+    void downloadsAreAttachments()
+    {
+        QDir t(m_tmp.path());
+        QVERIFY(t.mkpath("export"));
+        write("export/OCTAVE-trip-1.csv", "t,rpm\n");
+        write("export/odd name\";x.log", "line\n");
+        StaticFiles::Reply r = StaticFiles::serveDownload(t.filePath("export/OCTAVE-trip-1.csv"));
+        QCOMPARE(r.status, 200);
+        QCOMPARE(r.contentType, QByteArray("text/csv; charset=utf-8"));
+        QCOMPARE(r.headers, QByteArray("Content-Disposition: attachment; filename=\"OCTAVE-trip-1.csv\"\r\n"));
+        QCOMPARE(r.body, QByteArray("t,rpm\n"));
+        // A name that could break the header is sanitised
+        r = StaticFiles::serveDownload(t.filePath("export/odd name\";x.log"));
+        QCOMPARE(r.headers, QByteArray("Content-Disposition: attachment; filename=\"odd_name__x.log\"\r\n"));
+        QCOMPARE(StaticFiles::serveDownload(QString()).status, 404);   // nothing exported yet
+        QCOMPARE(StaticFiles::serveDownload(t.filePath("export")).status, 404);
+        QCOMPARE(StaticFiles::serveDownload(t.filePath("export/OCTAVE-trip-1.csv"), 3).status, 413);
+    }
+
+    void exportFoldersListAndServeOnlyTheirOwnFiles()
+    {
+        QDir t(m_tmp.path());
+        QVERIFY(t.mkpath("logs/sub"));
+        write("logs/octave-cpp.log", "hello\n");
+        write("logs/device-info.txt", "pi\n");
+        write("logs/.secret", "x");
+        const QString dir = t.filePath("logs");
+        StaticFiles::Reply r = StaticFiles::serveFromFolder(dir, QString());
+        QCOMPARE(r.status, 200);
+        QCOMPARE(r.body, QByteArray(R"(["device-info.txt","octave-cpp.log"])"));   // no dotfile, no folder
+        r = StaticFiles::serveFromFolder(dir, "octave-cpp.log");
+        QCOMPARE(r.status, 200);
+        QCOMPARE(r.body, QByteArray("hello\n"));
+        QVERIFY(r.headers.startsWith("Content-Disposition: attachment"));
+        for (const char *bad : {"../outside/secret.txt", ".secret", "sub", "sub/x", "/etc/passwd", "nope.log"})
+            QCOMPARE(StaticFiles::serveFromFolder(dir, QString::fromLatin1(bad)).status, 404);
+        QCOMPARE(StaticFiles::serveFromFolder(QString(), QString()).status, 404);
+    }
+
     void rootMustExist()
     {
         QCOMPARE(StaticFiles::serve(m_tmp.filePath("missing"), "/").status, 404);

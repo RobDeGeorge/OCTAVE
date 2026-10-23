@@ -4,6 +4,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QStringList>
 #include <QUrl>
 
@@ -126,6 +128,49 @@ QString insideDir(const QString &localPath, const QString &dir)
     if (file.isEmpty() || root.isEmpty())
         return {};
     return file.startsWith(root + QLatin1Char('/')) ? file : QString();
+}
+
+Reply serveDownload(const QString &localPath, qint64 maxBytes)
+{
+    const QFileInfo info(localPath);
+    if (localPath.isEmpty() || !info.isFile())
+        return reply(404, "Not Found", "nothing exported\n");
+    if (info.size() > maxBytes)
+        return reply(413, "Content Too Large", "export too large\n");
+    QFile f(info.absoluteFilePath());
+    if (!f.open(QIODevice::ReadOnly))
+        return reply(404, "Not Found", "nothing exported\n");
+    QByteArray name = info.fileName().toUtf8();
+    for (char &c : name)
+        if (!(QChar::isLetterOrNumber(uchar(c)) && uchar(c) < 0x80) && c != '.' && c != '-' && c != '_')
+            c = '_';
+    QByteArray type = contentTypeFor(info.fileName());
+    const QString suffix = info.suffix().toLower();
+    if (suffix == QLatin1String("csv"))
+        type = "text/csv; charset=utf-8";
+    else if (suffix == QLatin1String("log"))
+        type = "text/plain; charset=utf-8";
+    Reply r{200, "OK", type, f.readAll()};
+    r.headers = "Content-Disposition: attachment; filename=\"" + name + "\"\r\n";
+    return r;
+}
+
+Reply serveFromFolder(const QString &dir, const QString &name, qint64 maxBytes)
+{
+    const QFileInfo d(dir);
+    if (dir.isEmpty() || !d.isDir())
+        return reply(404, "Not Found", "nothing exported\n");
+    const QStringList files = QDir(dir).entryList(QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
+    if (name.isNull()) {
+        const QByteArray json = QJsonDocument(QJsonArray::fromStringList(files)).toJson(QJsonDocument::Compact);
+        return Reply{200, "OK", "application/json", json};
+    }
+    if (!files.contains(name) || name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')))
+        return reply(404, "Not Found", "no such file\n");
+    const QString path = QDir(dir).filePath(name);
+    if (insideDir(path, dir).isEmpty())
+        return reply(403, "Forbidden", "outside the export\n");
+    return serveDownload(path, maxBytes);
 }
 
 Reply serveImage(const QString &localPath)

@@ -132,6 +132,12 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
         <h3>Album art</h3>
         <p><code>nowPlaying.artUrl</code> is a file on the head unit; fetch the picture itself from <code>GET http://host:9876/art</code> (local and phone art alike, typed by its bytes: JPEG, PNG, GIF, WebP or BMP; 404 when there is none). Subscribe to <code>nowPlaying.artRevision</code>, which goes up by one on every new cover, and use it as your cache key: <code>&lt;img src="/art?rev=12"&gt;</code> from a <code>--web-root</code> page, or refetch when it changes. For a list, <code>/art?song=&lt;file name&gt;</code> (URL-encoded, a song in the library, as the playlist APIs name it) gives that song's cover and <code>/art?queue=&lt;id&gt;</code> a phone queue item's (<code>phoneMirrorManager.mediaQueue</code> ids). The request only names a song or an item; the app looks the file up itself and serves nothing outside its own art folders.</p>
 
+        <h3>Exports</h3>
+        <p>An export writes to the head unit's Downloads folder; a remote client then fetches it over HTTP. Call <code>tripRecorder.exportTrip(id)</code> and, after its <code>exportFinished</code>, download <code>GET /export/trip</code> (the CSV; <code>?format=json</code> for the JSON); <code>dashboardManager.exportDashboard(id)</code> then <code>GET /export/dashboard</code>; <code>diagnosticsManager.exportLogs()</code> then <code>GET /export/logs</code> (the list of files) and <code>/export/logs?file=octave-cpp.log</code>. Only the last export of each kind is served, never a path you name.</p>
+
+        <h3>Head-unit only, by design</h3>
+        <p>A few things act on the head unit's own desktop and have no service API: copying a dashboard to the clipboard (<code>copyDashboardToClipboard</code>, <code>importDashboardFromClipboard</code>: use <code>importDashboardFromText</code> and <code>/export/dashboard</code> instead), opening the log folder in a file manager (<code>openLogFolder</code>: use <code>/export/logs</code>), and the window's size and state. A remote client has its own clipboard and window.</p>
+
         <h2 id="limits">What Is Not Available Yet</h2>
         <ul>
           <li><strong>Video</strong>: the phone mirror picture and Android Auto frames go straight into the bundled UI. You can start and stop mirroring and read its state, but not show the picture. Media streams are contract step 6 in <span class="file-path">TODO/open-backend.md</span>.</li>

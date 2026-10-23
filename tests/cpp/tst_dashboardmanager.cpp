@@ -345,6 +345,18 @@ private slots:
         QCOMPARE(m_dm->saveDashboard(spec), QString());                       // still needs a name
     }
 
+    void exportRecordsItsPath()
+    {
+        QVERIFY(m_dm->lastExportPath().isEmpty());
+        QSignalSpy changed(m_dm.get(), &DashboardManager::lastExportPathChanged);
+        const QString path = m_dm->exportDashboard("minimal");
+        QVERIFY(!path.isEmpty());
+        QCOMPARE(m_dm->lastExportPath(), path);   // what GET /export/dashboard serves
+        QCOMPARE(changed.size(), 1);
+        QVERIFY(m_dm->exportDashboard("nope").isEmpty());
+        QCOMPARE(m_dm->lastExportPath(), path);   // a failed export leaves it
+    }
+
     void failuresSayWhy()
     {
         QSignalSpy changed(m_dm.get(), &DashboardManager::lastErrorChanged);

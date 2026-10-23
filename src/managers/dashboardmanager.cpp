@@ -526,6 +526,8 @@ QString DashboardManager::exportDashboard(const QString &id)
         return {};
     }
     qCInfo(lcDashboards) << "Exported dashboard" << id << "to" << path;
+    m_lastExportPath = path;
+    emit lastExportPathChanged();
     setShareError({});
     return path;
 }

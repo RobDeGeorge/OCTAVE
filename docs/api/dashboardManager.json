@@ -250,6 +250,14 @@
         },
         {
             "constant": false,
+            "name": "lastExportPath",
+            "notify": "lastExportPathChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "hiddenBuiltInCount",
             "notify": "dashboardsChanged",
             "readable": true,
@@ -284,6 +292,11 @@
         },
         {
             "name": "lastErrorChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastExportPathChanged",
             "params": [
             ]
         }
