@@ -9,13 +9,13 @@ Turn the service on first. It is off by default, and listens on 127.0.0.1:9876:
 ./build/octave --headless         # no UI: the managers and the service only
 ```
 
-(Or set `"serviceEnabled": true` in `settingsConfigure.json`. To reach it from another machine add `--service-bind 0.0.0.0`; there is no authentication, so only on a network you trust.)
+(Or turn on Settings > Device > Service. To reach it from another machine add `--service-bind 0.0.0.0`: clients there must pair first, with the code that card shows; programs on the head unit itself need nothing. Traffic is not encrypted, so only on a network you control.)
 
 ## Browser: `web/`
 
 `web/index.html` is a reference client in plain JavaScript (no build, no libraries): live gauges, now playing with transport controls, volume, and an API explorer. The gauges show native units (`parameters.json`), not the user's display units. The app serves it at **http://127.0.0.1:9876/** and the page talks back over a WebSocket on the same port. One JSON request, reply or event per text frame, the same messages as the line protocol.
 
-A browser page from anywhere else can't connect. The app refuses a WebSocket whose `Origin` isn't its own page, and refuses a host given by name rather than by address (`src/service/websocket.h`). Scripts send no `Origin` and are not affected. So open the page by address (`http://192.168.x.y:9876/`), not by a name such as `octave.local`: names are refused on purpose, since a website could point one at the car. With `--service-bind` beyond loopback the page goes to the whole network as well, as a control panel with no login.
+A browser page from anywhere else can't connect. The app refuses a WebSocket whose `Origin` isn't its own page, and refuses a host given by name rather than by address (`src/service/websocket.h`). Scripts send no `Origin` and are not affected. So open the page by address (`http://192.168.x.y:9876/`), not by a name such as `octave.local`: names are refused on purpose, since a website could point one at the car. With `--service-bind` beyond loopback the page shows a pairing form until you enter the code from Settings > Device > Service; it keeps the token in the browser and loads covers with short-lived media tickets.
 
 ## Python: `python/`
 
@@ -37,7 +37,9 @@ with launch_headless() as app, Client(port=app.port) as octave:   # or Client() 
 
 Examples: `python/examples/live_gauges.py` (readings with titles and units) and `python/examples/now_playing.py` (follow the track; `next`, `play`, `volume 40`, `mute`).
 
-Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app. ctest runs it as `sdk_python`.
+Over the network: `token = Client(host).pair("123456", "My script")` once, then `Client(host, token=token)`. Video: `octave.stream("phoneMirrorManager", "video")`, after which `events()` also yields `{"event": "record", "stream", "flags", "pts", "key", "config", "data": bytes}` (H.264 Annex-B access units, every keyframe with its SPS / PPS; `docs/api/README.md`, "Streams"); `unstream(id)` stops it.
+
+Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app (the stream test uses the dev-only `sim_video` and skips without the dev tools). ctest runs it as `sdk_python`.
 
 ## Another whole frontend: `frontends/retro-cluster/`
 
@@ -45,4 +47,4 @@ An experimental UI in Rust + egui, styled as an 80s fluorescent instrument clust
 
 ## Versioning
 
-Both clients speak protocol version 1. The Python `Client` asks `hello` on connect and raises `OctaveError` on another version (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.
+Both clients know protocol versions 1 and 2. The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.

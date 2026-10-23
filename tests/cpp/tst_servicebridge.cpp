@@ -475,7 +475,15 @@ private slots:
         QCOMPARE(b.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), false);
         QCOMPARE(b.send(QStringLiteral(R"({"op": "hello", "token": "%1"})").arg(token).toUtf8())
                      .value("result").toObject().value("auth").toString(), QStringLiteral("trusted"));
-        QVERIFY(b.send(R"({"op": "hello", "token": "nope"})").value("error").toString().contains("unknown token"));
+        // A wrong token still gets an answer: untrusted, tokenRejected (and
+        // it drops the connection's earlier token)
+        const QJsonObject rejected = b.send(R"({"op": "hello", "token": "nope"})");
+        QCOMPARE(rejected.value("ok").toBool(), true);
+        QCOMPARE(rejected.value("result").toObject().value("auth").toString(), QStringLiteral("untrusted"));
+        QCOMPARE(rejected.value("result").toObject().value("tokenRejected").toBool(), true);
+        QCOMPARE(b.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), false);
+        QVERIFY(!b.send(QStringLiteral(R"({"op": "hello", "token": "%1"})").arg(token).toUtf8())
+                     .value("result").toObject().contains("tokenRejected"));
         QCOMPARE(b.send(R"({"op": "subscribe", "object": "fixture", "properties": ["level"]})").value("ok").toBool(), true);
 
         // HTTP: /art needs a ticket or the bearer token; never the token in the URL
