@@ -42,12 +42,23 @@ type State struct {
 	catalog   map[string]Param
 	props     map[string]map[string]json.RawMessage
 	clock     string
+	dtcs      []DTC
+	dtcKnown  bool
+	mil       bool
+	clearMsg  string
+	details   map[int64]json.RawMessage // trip id -> detailReady's detail
+}
+
+// DTC is one stored trouble code.
+type DTC struct {
+	Code        string `json:"code"`
+	Description string `json:"description"`
 }
 
 // NewState returns an empty state.
 func NewState() *State {
 	return &State{params: map[string]float64{}, history: map[string][]float64{}, catalog: map[string]Param{},
-		props: map[string]map[string]json.RawMessage{}}
+		props: map[string]map[string]json.RawMessage{}, details: map[int64]json.RawMessage{}}
 }
 
 // Apply folds one event in.
@@ -88,6 +99,34 @@ func (s *State) Apply(m Message) {
 	case "signal":
 		if m.Object == "clock" && m.Name == "timeChanged" && len(m.Args) > 0 {
 			_ = json.Unmarshal(m.Args[0], &s.clock)
+		}
+		if len(m.Args) == 0 {
+			break
+		}
+		switch m.Name {
+		case "dtcCodesChanged":
+			var codes []DTC
+			if json.Unmarshal(m.Args[0], &codes) == nil {
+				s.dtcs, s.dtcKnown = codes, true
+			}
+		case "milStatusChanged":
+			_ = json.Unmarshal(m.Args[0], &s.mil)
+		case "dtcClearResult":
+			var ok bool
+			_ = json.Unmarshal(m.Args[0], &ok)
+			msg := ""
+			if len(m.Args) > 1 {
+				_ = json.Unmarshal(m.Args[1], &msg)
+			}
+			if msg == "" {
+				msg = map[bool]string{true: "CODES CLEARED", false: "CLEAR FAILED"}[ok]
+			}
+			s.clearMsg = msg
+		case "detailReady":
+			var id int64
+			if len(m.Args) > 1 && json.Unmarshal(m.Args[0], &id) == nil {
+				s.details[id] = m.Args[1]
+			}
 		}
 	}
 }
@@ -182,4 +221,33 @@ func (s *State) Bool(object, name string) bool {
 	var v bool
 	s.Prop(object, name, &v)
 	return v
+}
+
+// DTCs returns the stored trouble codes, whether they are known yet, and the MIL.
+func (s *State) DTCs() ([]DTC, bool, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]DTC(nil), s.dtcs...), s.dtcKnown, s.mil
+}
+
+// SetMIL records the lamp read with get_mil_status.
+func (s *State) SetMIL(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mil = on
+}
+
+// ClearMessage is the last dtcClearResult, in words.
+func (s *State) ClearMessage() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.clearMsg
+}
+
+// Detail decodes a trip's detail (from detailReady) into out; false if none yet.
+func (s *State) Detail(id int64, out any) bool {
+	s.mu.RLock()
+	raw, ok := s.details[id]
+	s.mu.RUnlock()
+	return ok && json.Unmarshal(raw, out) == nil
 }

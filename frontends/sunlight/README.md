@@ -12,14 +12,14 @@ It renders the user's dashboards straight from their `schema: 1` JSON, with its 
 ./build/octave --dev --service           # or: the simulated car, for trying it at a desk
 
 cd frontends/sunlight
-go run -tags novulkan .                  # --host H --port P --fullscreen --night --page drive|dash|media --dash ID
+go run -tags novulkan .                  # --host H --port P --fullscreen --night --page drive|dash|media|dtc|trips --dash ID
 ```
 
 Start it before or after OCTAVE: until the service answers, the top bar shows NO SIGNAL in orange and it retries every second. Needs Go 1.24 or newer. Gio builds against the Wayland, X11, EGL and xkbcommon dev packages (Debian / Raspberry Pi OS: `libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libxfixes-dev`). The `novulkan` tag drops Gio's optional Vulkan renderer, so the Vulkan headers are not needed; it draws with OpenGL ES either way.
 
 | Key | Does |
 |---|---|
-| 1 / 2 / 3 | DRIVE / DASH / MEDIA |
+| 1 to 5 | DRIVE / DASH / MEDIA / DTC / TRIPS |
 | Space | play / pause |
 | Left / Right | previous / next track |
 | Up / Down (or + / -) | volume by 5 |
@@ -37,6 +37,9 @@ Every key has a touch target on screen; the buttons are at least 64 dp tall with
 - **DASH**: the dashboards from `dashboardManager.dashboards`, one at a time (PREV / NEXT), each loaded with `loadDashboard` and laid out on its grid. It has its own drawing of every widget in the catalog: `CircularGauge` and `ArcGauge` (arc, ticks, needle, redline; a wide arc cell puts the readout beside the arc), `BarGauge` (horizontal or vertical, `warnAbove` mark), `LinearGauge` (zero-centred fill for trims), `DigitalReadout` (`padDigits`), `SparklineGauge` (`autoScale`, `fillBelow`), `WarningLight` (`triggerAbove` / `triggerBelow`, `label`, `pulse`), `GForceGauge`, `CompassGauge`, `NowPlayingWidget` and `MediaControlsWidget` (live transport buttons). A type it does not know gets a crossed placeholder with its name, as in OCTAVE. Colour props are ignored on purpose: sunlight has two inks and one accent.
 - **MEDIA**: the cover from `GET /art`, title, artist, album and source; a position bar you tap to seek; PREV, PLAY / PAUSE, NEXT, SHUFFLE; VOL - / VOL + / MUTE and a volume bar you tap to set.
 
+- **DTC**: the check-engine lamp (the one box the accent fills), the number of stored codes, the codes as giant tiles with their descriptions, READ, and CLEAR behind a second tap: the first tap turns it orange (TAP AGAIN: CLEAR) for four seconds, and only a tap inside that window clears. The ECU's answer to a clear stays on screen. Opening the page reads the car.
+- **TRIPS**: the black box's trips, newest first, six to a page (the open one marked REC with its live time), and the selected trip's summary from `requestDetail`: distance, time, top speed, top RPM, the hottest coolant and oil, the voltage range, fuel used and the sample count, in the user's units (distance follows the speed unit).
+
 The top bar holds the page tabs, the OBD state and car, the REC lamp with the trip timer, the app version, the clock and the NIGHT / DAY switch.
 
 ## What it uses from the API
@@ -51,7 +54,9 @@ The top bar holds the page tabs, the OBD state and car, the REC lamp with the tr
 | `GET /art` | the current cover, fetched again when `artRevision` changes (404: no cover) |
 | `volumeController` | `percent`, `muted` (set), `effectivelyMuted`, `applyVolume` |
 | `shiftLightManager` | `maxRpm`, `flags`, `lit` for the shift bar |
-| `tripRecorder`, `clock` | the REC lamp and trip timer, `clock.time` |
+| `obdManager` (codes) | `read_dtc`, `clear_dtc`, `get_mil_status`, and the `dtcCodesChanged` / `milStatusChanged` / `dtcClearResult` signals |
+| `tripRecorder` | `trips`, the current trip, `requestDetail` (answered by `detailReady`) |
+| `clock` | `clock.time` |
 
 `link/` is the client (about 600 lines): `link.go` the connection (request / reply matching by id, events on a channel), `state.go` what the UI reads (values, display conversion, history for sparklines, properties), `session.go` the reconnecting session, subscriptions and demand. `dash/` parses and normalises a spec the way the schema documents it (defaults, clamping, cells moved back onto the grid, overlaps shrunk or dropped) and lays the cells out. `ui.go` holds the drawing primitives, `gauges.go` the widgets, `main.go` the pages.
 
@@ -63,7 +68,7 @@ go vet -tags novulkan ./... && go test -tags novulkan ./...
 python3 verify_controls.py --display :83 --port 9876 --bin ./sunlight    # on an X display such as Xvfb :83
 ```
 
-`go test` covers protocol parsing, state folding (display units, history, link loss), request / reply matching around interleaved events against a fake service, spec normalisation and layout, and parses every built-in preset without losing or overlapping a cell. `verify_controls.py` taps the MEDIA page's touch targets through XTEST and reads each result back through the Python SDK (volume up / down, the volume bar, mute, play, next, seek, shuffle), putting volume, mute and shuffle back afterwards.
+`go test` covers protocol parsing, state folding (display units, history, link loss), request / reply matching around interleaved events against a fake service, spec normalisation and layout, and parses every built-in preset without losing or overlapping a cell. `verify_controls.py` taps the touch targets through XTEST and reads each result back through the Python SDK: on MEDIA volume up / down, the volume bar, mute, play, next, seek and shuffle (put back afterwards); on DTC that opening the page reads the codes, that one tap on CLEAR only arms it and that a second clears them (so run it against the simulated car); on TRIPS that tapping a trip asks for its summary.
 
 ## Known gaps
 

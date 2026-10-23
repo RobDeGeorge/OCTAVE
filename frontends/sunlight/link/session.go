@@ -21,13 +21,16 @@ type subscription struct {
 var subscriptions = []subscription{
 	{"paramStore", nil, nil, 50},
 	{"parameterCatalog", []string{"displayParameters"}, nil, 0},
-	{"obdManager", []string{"connected", "connectionState", "vehicleMake", "vehicleModelYear", "vehicleSupportedParameters"}, nil, 0},
+	{"obdManager", []string{"connected", "connectionState", "vehicleMake", "vehicleModelYear", "vehicleSupportedParameters"},
+		[]string{"dtcCodesChanged", "milStatusChanged", "dtcClearResult"}, 0},
 	{"nowPlaying", []string{"source", "playing", "hasTrack", "title", "artist", "album", "artUrl", "artRevision", "durationMs", "positionMs",
 		"canSeek", "canShuffle", "shuffled"}, nil, 200},
 	{"volumeController", []string{"percent", "muted", "effectivelyMuted"}, nil, 0},
 	{"shiftLightManager", []string{"enabled", "maxRpm", "flags", "active", "activeFlag", "lit"}, nil, 0},
-	{"tripRecorder", []string{"recording", "currentTripElapsedS"}, nil, 0},
+	{"tripRecorder", []string{"recording", "currentTripId", "currentTripElapsedS", "currentSampleCount", "trips"},
+		[]string{"detailReady"}, 0},
 	{"dashboardManager", []string{"dashboards"}, nil, 0},
+	{"settingsManager", []string{"gaugeSpeedUnit"}, nil, 0},
 	{"clock", []string{"time"}, nil, 0},
 }
 

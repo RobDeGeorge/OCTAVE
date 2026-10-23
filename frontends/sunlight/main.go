@@ -37,9 +37,11 @@ const (
 	pageDrive page = iota
 	pageDash
 	pageMedia
+	pageDTC
+	pageTrips
 )
 
-var pageNames = []string{"DRIVE", "DASH", "MEDIA"}
+var pageNames = []string{"DRIVE", "DASH", "MEDIA", "DTC", "TRIPS"}
 
 // The parameters the DRIVE page shows.
 var driveIDs = []string{"SPEED", "RPM", "COOLANT_TEMP", "FUEL_LEVEL", "CONTROL_MODULE_VOLTAGE"}
@@ -60,12 +62,15 @@ type App struct {
 	nightMode  bool
 	fullscreen bool
 
-	tabs                               [3]widget.Clickable
+	tabs                               [5]widget.Clickable
 	nightBtn                           widget.Clickable
 	dashPrev, dashNext                 widget.Clickable
 	prevBtn, playBtn, nextBtn, shufBtn widget.Clickable
 	volDown, volUp, muteBtn            widget.Clickable
 	seekTap, volTap                    gesture.Click
+
+	dtc   dtcUI
+	trips tripsUI
 
 	dashIndex int
 	dashWant  string // --dash, until the list arrives
@@ -85,14 +90,14 @@ func main() {
 	port := flag.Int("port", 9876, "OCTAVE service port")
 	full := flag.Bool("fullscreen", false, "start fullscreen")
 	nightMode := flag.Bool("night", false, "start in night mode (white on black)")
-	start := flag.String("page", "drive", "drive, dash or media")
+	start := flag.String("page", "drive", "drive, dash, media, dtc or trips")
 	dashID := flag.String("dash", "", "dashboard id to open on the DASH page")
 	flag.Parse()
 
 	a := &App{addr: net.JoinHostPort(*host, strconv.Itoa(*port)), nightMode: *nightMode, fullscreen: *full,
 		dashWant: *dashID, specs: map[string]*dash.Spec{}, loading: map[string]bool{}, cells: map[int]*cellUI{}}
 	for i, n := range pageNames {
-		if n == map[string]string{"drive": "DRIVE", "dash": "DASH", "media": "MEDIA"}[*start] {
+		if n == upper(*start) {
 			a.page = page(i)
 		}
 	}
@@ -171,7 +176,7 @@ func (a *App) keys(gtx C) {
 			a.session.GoSet("volumeController", "muted", !st.Bool("volumeController", "muted"))
 		case e.Name == "N":
 			a.nightMode = !a.nightMode
-		case e.Name == "1" || e.Name == "2" || e.Name == "3":
+		case len(e.Name) == 1 && e.Name[0] >= '1' && int(e.Name[0]-'1') < len(pageNames):
 			a.page = page(e.Name[0] - '1')
 		case e.Name == "[":
 			a.dashIndex--
@@ -208,6 +213,12 @@ func (a *App) frame(gtx C) {
 	case pageMedia:
 		a.session.Demand(nil)
 		a.media(p, body)
+	case pageDTC:
+		a.session.Demand(nil)
+		a.dtcPage(p, body)
+	case pageTrips:
+		a.session.Demand(nil)
+		a.tripsPage(p, body)
 	}
 	// the flashing shift light needs frames even without new data
 	if a.page != pageMedia && a.session.State.Bool("shiftLightManager", "lit") {
@@ -219,7 +230,7 @@ func (a *App) topBar(p *Painter, r image.Rectangle) {
 	pal := p.pal
 	st := a.session.State
 	gap := p.Rule() * 2
-	tabW := min(r.Dx()/7, p.px(170))
+	tabW := min(r.Dx()/9, p.px(150))
 	for i, name := range pageNames {
 		tr := image.Rect(r.Min.X+i*(tabW+gap), r.Min.Y, r.Min.X+i*(tabW+gap)+tabW, r.Max.Y)
 		if p.Button(tr, &a.tabs[i], name, a.page == page(i)) {
@@ -232,7 +243,7 @@ func (a *App) topBar(p *Painter, r image.Rectangle) {
 	}
 	clockR := image.Rect(nightR.Min.X-gap-tabW, r.Min.Y, nightR.Min.X-gap, r.Max.Y)
 	p.Text(clockR.Inset(p.Rule()*2), st.Clock(), monoBold, 0, Right, pal.Ink)
-	mid := image.Rect(r.Min.X+3*(tabW+gap)+gap, r.Min.Y, clockR.Min.X-gap, r.Max.Y)
+	mid := image.Rect(r.Min.X+len(pageNames)*(tabW+gap)+gap, r.Min.Y, clockR.Min.X-gap, r.Max.Y)
 	connected, status, version := st.Link()
 	rows := split(mid, 2, 0, true)
 	if !connected {
