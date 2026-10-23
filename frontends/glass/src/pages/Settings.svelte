@@ -13,6 +13,8 @@
   import DeviceBits from '../ui/DeviceBits.svelte'
   import ThemePicker from '../ui/ThemePicker.svelte'
   import Presets from '../ui/Presets.svelte'
+  import FolderBrowser from '../ui/FolderBrowser.svelte'
+  let browsing = $state(false)
   import Icon from '../ui/Icon.svelte'
 
   let { arg = '' }: { arg?: string } = $props()
@@ -67,7 +69,10 @@
         {#each group.sections as s}
           <section class="glass panel">
             <h2>{s.title}</h2>
-            {#if s.special === 'homeParams'}
+            {#if s.special === 'mediaFolder'}
+              {#each s.items as item}<SettingRow {item} value={$values[item.prop]} options={optionsFor(item)} />{/each}
+              <div class="sub"><button class="btn" onclick={() => (browsing = true)}><Icon name="folder" />Browse the head unit</button></div>
+            {:else if s.special === 'homeParams'}
               {#each s.items as item}<SettingRow {item} value={$values[item.prop]} options={optionsFor(item)} />{/each}
               <div class="sub"><HomeParams /></div>
             {:else}
@@ -93,6 +98,8 @@
     </div>
   </div>
 </div>
+
+{#if browsing}<FolderBrowser current={String($values.mediaFolder ?? '')} onclose={() => (browsing = false)} />{/if}
 
 <style>
   .layout { display: grid; grid-template-columns: 220px 1fr; gap: var(--gap); align-items: start; }

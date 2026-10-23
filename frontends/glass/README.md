@@ -25,6 +25,15 @@ OCTAVE_PORT=9876 npm run dev                    # http://127.0.0.1:5173/, OCTAVE
 npm run check                                   # svelte-check + tsc, must be clean
 ```
 
+End to end, against a live OCTAVE that serves the build (CI has no backend, so this is a local check):
+
+```bash
+./build/octave --dev --service --web-root frontends/glass/dist     # the simulated car, page at :9876
+OCTAVE_PORT=9876 npm run e2e                                       # OCTAVE_HOST, CHROME to override
+```
+
+`e2e/run.mjs` (plain Node 22+, a headless Chromium over the DevTools protocol, no extra packages) loads every page and fails on any console error, then drives the controls and reads the result back through the service's own TCP port: play / pause, next, the volume slider, mute, a settings toggle, a theme pick, a trouble-code read and a confirmed clear on the simulated car, and a dashboard made in the editor (place, drag with real pointer events, resize, save, the saved spec compared with the canvas, delete). It restores what it changed, and exits 0 with a note when no service answers or the page served is not this build.
+
 The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backoff up to 8 s) and re-issues every subscription on the new connection. Add `?theme=dark` or `?theme=light` to the URL to force a theme; the rail button cycles auto / dark / light and remembers the choice in the browser.
 
 ## Pages
