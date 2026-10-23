@@ -3,7 +3,7 @@
   // JPEG per record, painted on a canvas with letterboxing.
   import { onMount } from 'svelte'
   import { octave } from '../lib/octave'
-  import type { MediaRecord } from '../lib/stream'
+  import type { MediaRecord } from 'octave-client'
   let { showStats = false }: { showStats?: boolean } = $props()
   let canvas = $state<HTMLCanvasElement | null>(null)
   let frames = $state(0)

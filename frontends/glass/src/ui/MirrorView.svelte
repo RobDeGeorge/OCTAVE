@@ -5,7 +5,7 @@
   import { octave } from '../lib/octave'
   import { act } from '../lib/stores'
   import type { FedUnit } from '../lib/videodecoder'
-  import type { MediaRecord } from '../lib/stream'
+  import type { MediaRecord } from 'octave-client'
   import VideoPlayer from './VideoPlayer.svelte'
 
   let { touch = true, showStats = false }: { touch?: boolean; showStats?: boolean } = $props()

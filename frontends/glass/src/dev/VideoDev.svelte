@@ -2,7 +2,7 @@
   import VideoPlayer from '../ui/VideoPlayer.svelte'
   import { groupAccessUnits, type AccessUnit } from '../lib/h264'
   import type { FedUnit, Stats } from '../lib/videodecoder'
-  import { buildRecord, parseRecord, F_KEY } from '../lib/stream'
+  import { buildRecord, parseRecord, F_KEY } from 'octave-client'
 
   let units: AccessUnit[] = []   // not reactive on purpose: a plain array read by the ticker
   let count = $state(0)
