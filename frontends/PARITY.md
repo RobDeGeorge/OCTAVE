@@ -57,7 +57,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Live values of every PID, demand-driven | `paramStore`, `parameterCatalog.displayParameters`, `obdManager.setParameterDemand` | Yes | Yes | Yes | Yes | Partial | sunlight: DRIVE's five and the open dashboard's PIDs |
 | Home OBD cards: choose, order | `settingsManager.homeOBDParameters`, `add_home_obd_parameter`, `remove_home_obd_parameter`, `move_home_obd_parameter` | Yes | Yes | Yes | No | No | console: settings table (list as JSON) |
 | Trouble codes: read, clear, MIL | `obdManager.read_dtc`, `clear_dtc`, `get_dtc_codes`, `dtcCodesChanged`, `milStatusChanged` | Yes | Yes | Yes | Yes | Yes | |
-| Freeze frame | `obdManager.read_freeze_frame`, `freezeFrameChanged` | Yes | Yes | Yes | Yes | No | the backend returns only the storing code, no frame values (on lane A's optional list) |
+| Freeze frame | `obdManager.read_freeze_frame`, `freezeFrameChanged` | Yes | Yes | Yes | Yes | No | the frame's PID values since svc/9 |
 | Diagnostic mode, status, current codes | `obdManager.enter_diagnostic_mode`, `exit_diagnostic_mode`, `read_status`, `read_current_dtc` | Yes | Yes | Yes | No | No | |
 | Units (°F / °C, mph / km/h) | `settingsManager.gaugeTempUnit`, `gaugeSpeedUnit`, `displayParameters` | Yes | Yes | Yes | Yes | Yes | all follow the setting; QML, glass and the console can change it |
 | OBD settings (fast mode, reconnect attempts, card style, fuel tank, timeout) | `settingsManager.save_obd_*`, `save_fuel_tank_capacity` | Yes | Yes | Yes | No | No | console: settings table |

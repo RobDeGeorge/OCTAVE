@@ -52,7 +52,7 @@ Pane keys are shown in the footer while the pane has focus:
 ## Panes
 
 - **Live**: every PID the vehicle reports (plus any other reading that arrives, such as the IMU), in the user's display units, sortable by any column. Only the rows on screen and the pinned ones are registered as OBD demand, so scrolling changes what the car is polled for; leaving the pane sends an empty demand.
-- **OBD**: connection state, detail, progress, vehicle, VIN, supported PID count and MIL; connect / reconnect / disconnect / scan the vehicle; the serial and simulated ports from `obdManager` and the Bluetooth devices from `obdAdapterFinder` in one table; trouble codes with read and a confirmed clear; the freeze frame; the connection log, live.
+- **OBD**: connection state, detail, progress, vehicle, VIN, supported PID count and MIL; connect / reconnect / disconnect / scan the vehicle; the serial and simulated ports from `obdManager` and the Bluetooth devices from `obdAdapterFinder` in one table; trouble codes with their descriptions, read and a confirmed clear; the freeze frame with its values in the user's units; the connection log, live.
 - **Trips**: the black box's trips, newest first (the open trip shows its live duration and sample count), details on demand, export, delete, end the current trip; recording state and storage in the side panel.
 - **Settings**: every `settingsManager` property, read from `describe` at run time, so new settings appear without a console change. Labels, options and ranges come from `get_settings_registry`. A write goes through the property's save slot (the registry's `saveSlot`, else `save_<snake_name>`, else `save_setting(key, value)`), and the table shows the value read back from the property event.
 - **Downloads**: search, results and the queue mirrored from the two list models (`rows` once, then `model` events: reset, insert, update, remove), with pause, resume, cancel and clearing. Says so when the build has downloads compiled out.
@@ -102,6 +102,5 @@ Textual pilot tests against a running service: they press the keys and read the 
 ## Known gaps
 
 - No phone-mirror picture: the H.264 stream is measured, not decoded (a terminal has no use for a decoder); Android Auto gets a coarse half-block preview.
-- The freeze frame shows what `get_freeze_frame` returns, which today is the code that stored it, not the frame's PID values.
 - Covers are 32 x 16 half-block pixels: recognisable, not pretty. The media bar has no room for one.
 - Downloads were only tried with no search results (no network in the test setup).

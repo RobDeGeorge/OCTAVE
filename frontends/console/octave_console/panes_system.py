@@ -84,9 +84,9 @@ class PhonePane(Pane):
                     yield Button("Back", id="pm-back", compact=True)
                     yield Button("Apps", id="pm-apps", compact=True)
                     yield Button("Wireless…", id="pm-wireless", compact=True)
-                    yield Button("Forget wireless", id="pm-forget", compact=True)
+                    yield Button("Forget Wi-Fi", id="pm-forget", compact=True)
                     yield Button("QR pairing", id="pm-qr", compact=True)
-                    yield Button("Install help", id="pm-help", compact=True)
+                    yield Button("Help", id="pm-help", compact=True)
                 yield Static(id="phone-qr")
             with Vertical(id="phone-right"):
                 yield Label("Phone media", classes="section")

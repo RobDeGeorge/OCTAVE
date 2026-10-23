@@ -259,3 +259,16 @@ Confirm, EditValue {
     height: auto;
     max-height: 14;
 }
+
+#phone-left .buttons, #sys-left .buttons {
+    overflow-x: hidden;
+}
+
+#phone-right, #car-right, #sys-right {
+    padding-left: 1;
+}
+
+#freeze {
+    max-height: 16;
+    overflow-y: auto;
+}

@@ -492,6 +492,7 @@ async def test_pairing_over_the_network(tmp_path):
         await pilot.press(*str(code), "enter")
         assert await wait_for(pilot, lambda: app.connected and app.query_one("#pane-live").order, timeout=10)
         assert stat.S_IMODE(os.stat(token_file).st_mode) == 0o600
+        assert app.server.get("app", {}).get("version")   # the trusted hello, not the untrusted one
         token = json.loads(token_file.read_text())[f"{PAIR_HOST}:{PORT}"]
     with Client(PAIR_HOST, PORT, token=token) as paired:
         assert paired.server["auth"] == "trusted"

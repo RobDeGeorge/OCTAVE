@@ -74,12 +74,12 @@ def main():
     args = ap.parse_args()
 
     env = {k: v for k, v in os.environ.items() if k != "WAYLAND_DISPLAY"} | {"DISPLAY": args.display}
-    proc = subprocess.Popen([args.bin, "--port", str(args.port), "--page", "media"], env=env,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     failures = []
-    with Client(port=args.port) as sdk:
+    with Client(port=args.port) as sdk:   # connect first: no sunlight window is left behind if this fails
         saved = {k: sdk.get("volumeController", k) for k in ("percent", "muted")}
         saved_shuffle = sdk.get("nowPlaying", "shuffled")
+        proc = subprocess.Popen([args.bin, "--port", str(args.port), "--page", "media"], env=env,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             time.sleep(3)   # window up, linked
             tap = Clicker(args.display)
