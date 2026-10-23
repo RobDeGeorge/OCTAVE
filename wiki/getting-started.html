@@ -354,6 +354,7 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
             <tr><td><code>--debug</code></td><td>DEBUG-level output and the extra rotating debug log <code>octave-cpp-debug.log</code> in the config directory's <code>logs/</code> folder; without it, debug messages are filtered at the source.</td></tr>
             <tr><td><code>--smoke</code></td><td>Load <code>Main.qml</code>, run 5&nbsp;s (startup work, page pre-building), then exit 0. A build that cannot start exits non-zero or never starts; CI and the <code>tst_boot</code> test use it.</td></tr>
             <tr><td><code>--sim</code></td><td>A simulated car behind the real OBD stack, IMU motion and three test tracks, driven by the <code>sim</code> service object, on a throwaway config deleted at exit (unless <code>--config</code>). Any build; with <code>--headless</code>, what a frontend author starts from (<a href="writing-a-frontend.html#start">Writing a Frontend</a>).</td></tr>
+            <tr><td><code>--qml</code></td><td>The built-in QML UI for this run, even when an installed exec frontend is the screen (<a href="writing-a-frontend.html#install">Installing Your Frontend</a>).</td></tr>
             <tr><td><code>--config DIR</code></td><td>Keep settings, trips, dashboards and logs in DIR instead of the OS config folder.</td></tr>
             <tr><td><code>--dev</code></td><td><code>--sim</code> on your usual config, plus the dev overlay (<a href="#dev-mode">Developer Mode</a>). Needs an <code>OCTAVE_DEV_TOOLS</code> build.</td></tr>
             <tr><td><code>--profile</code></td><td>Perf monitor and command server on <code>127.0.0.1:9876</code>. Needs an <code>OCTAVE_DEV_TOOLS</code> build.</td></tr>
@@ -449,7 +450,7 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
 │   ├── JeepVehicle.qml  JeepHinge.qml  JeepLamp.qml  JeepLink.qml  JeepSteering.js
 │   ├── gauges/          <span class="cmt"># gauge primitives</span>
 │   ├── dashboards/      <span class="cmt"># DashboardRenderer, WidgetCatalog, presets/*.json, editor/, widgets/</span>
-│   ├── settings/        <span class="cmt"># settings pages and components (DeviceSettingsPage has Service and Diagnostics)</span>
+│   ├── settings/        <span class="cmt"># settings pages and components (DeviceSettingsPage has Service, Frontends and Diagnostics)</span>
 │   ├── shaders/         <span class="cmt"># .qsb shaders (compiled into the binary as resources)</span>
 │   └── assets/          <span class="cmt"># icons, fonts, jeep_tj_2003.glb + jeep_tj/ part GLBs, readme media</span>
 ├── <span class="prop">tests/</span>

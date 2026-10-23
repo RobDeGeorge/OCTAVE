@@ -298,6 +298,8 @@ qt_add_executable(octave
     src/managers/frontendmanifest.cpp
     src/managers/frontendmanager.h
     src/managers/frontendmanager.cpp
+    src/managers/frontendsupervisor.h
+    src/managers/frontendsupervisor.cpp
     # The simulator (--sim, the `sim` object, the browser demo): in every
     # build, inert unless started
     src/sim/simulator.h

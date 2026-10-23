@@ -25,6 +25,7 @@ Added (some landed while 1 was current, but none was released under 1):
 - Object `sim` (experimental, not covered by the version): the simulated car of `--sim`, in every build. Flags `--sim` and `--config DIR`.
 - Limits per connection ([README.md](README.md#limits-per-connection)): past 400 ops at once or 200 a second an op is answered `{"ok": false, "code": "rateLimited", "retryAfterMs": N}` (dev actions are not counted); a connection that leaves 4 MB unread for 15 s is closed; new connections past 20 a second from one network address (100 from this device) are closed at once. `rateLimited` and `retryAfterMs` are new in error replies.
 - Object `frontendManager`: installed frontends (`octave-frontend.json`), install from a folder or zip, remove, the active screen.
+- Object `frontendManager`: installed frontends (`octave-frontend.json`), install from a folder or zip, remove, the active screen. An active exec frontend runs with a session token of its manifest's scopes, and loopback trust is off for that run; flag `--qml`.
 
 ## Protocol 1
 

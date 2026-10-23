@@ -68,11 +68,13 @@ public:
     QString forcedQmlReason() const;
     QString lastError() const { return m_lastError; }
 
-    // The id installed, or "" (lastError says why)
+    // The id installed, or "" (lastError says why). A path, or the file://
+    // URL a QML picker gives
     Q_INVOKABLE QString installFromFolder(const QString &path);
     Q_INVOKABLE QString installFromZip(const QString &path);
     Q_INVOKABLE bool remove(const QString &id);
-    // "" = the built-in QML UI. From the next start
+    // "" = the built-in QML UI. From the next start; choosing a frontend
+    // also deletes USE_QML
     Q_INVOKABLE bool setActive(const QString &id);
     // Delete USE_QML, so the active exec frontend starts again next time
     Q_INVOKABLE void clearForcedQml();

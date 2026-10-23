@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Dialogs
 import ".." as App
 
 Flickable {
@@ -33,6 +34,42 @@ Flickable {
     // Pairing codes, paired devices and the service switch: head unit only
     // (src/service/servicepairing.h; not reachable over the service)
     readonly property var _pairing: typeof servicePairing !== "undefined" ? servicePairing : null
+    // Installed frontends: other screens for OCTAVE (src/managers/frontendmanager.h)
+    readonly property var _frontends: typeof frontendManager !== "undefined" ? frontendManager : null
+    property string frontendStatus: ""
+
+    function frontendName(id) {
+        if (!id) return "Built-in"
+        const list = _frontends ? _frontends.frontends : []
+        for (let i = 0; i < list.length; ++i)
+            if (list[i].id === id) return list[i].name || id
+        return id
+    }
+    // What a manifest's scopes let it do, in words (src/service/servicescopes.h)
+    function scopeWords(scopes) {
+        const words = { media: "music and volume", vehicle: "the car", phone: "the phone", settings: "settings",
+                      files: "files", system: "system", full: "everything" }
+        const changes = (scopes || []).filter(function(s) { return s !== "read" })
+        if (changes.indexOf("full") >= 0) return "can change everything"
+        if (!changes.length) return "can only read"
+        return "can change " + changes.map(function(s) { return words[s] || s }).join(", ")
+    }
+    function finishFrontendInstall(id) {
+        if (!_frontends) return
+        frontendStatus = id ? "Installed " + frontendName(id) + "." : _frontends.lastError
+    }
+
+    FolderDialog {
+        id: frontendFolderDialog
+        title: "Install a frontend from a folder"
+        onAccepted: pageRoot.finishFrontendInstall(pageRoot._frontends.installFromFolder(selectedFolder.toString()))
+    }
+    FileDialog {
+        id: frontendZipDialog
+        title: "Install a frontend from a zip"
+        nameFilters: ["Frontends (*.zip)", "All files (*)"]
+        onAccepted: pageRoot.finishFrontendInstall(pageRoot._frontends.installFromZip(selectedFile.toString()))
+    }
 
     property var tileModel: [
         { cardId: "device_name", title: "Device", component: deviceContent,
@@ -49,6 +86,12 @@ Flickable {
               var n = sp.devices.length
               return { state: (sp.serviceEnabled ? "On" : "Off") + (n ? " \u2022 " + n + " paired" : ""),
                        status: sp.serviceEnabled ? App.Style.statusConnected : App.Style.statusDisconnected }
+          } },
+        { cardId: "device_frontends", title: "Frontends", component: frontendsContent,
+          summary: function() {
+              var f = pageRoot._frontends
+              if (!f) return {}
+              return { state: f.forcedQml ? "Built-in (forced)" : pageRoot.frontendName(f.activeId) }
           } },
         { cardId: "device_diagnostics", title: "Diagnostics", component: diagnosticsContent,
           summary: function() {
@@ -313,6 +356,152 @@ Flickable {
                             tooltipText: "Forget this device; it is disconnected at once"
                             height: pageRoot.dp(28)
                             onClicked: pageRoot._pairing.revoke(modelData.id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: frontendsContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+            readonly property var fm: pageRoot._frontends
+
+            SettingDescription {
+                text: "Other screens for OCTAVE, made by anyone with the service API. A web frontend is served to "
+                      + "browsers; a program frontend replaces this screen. The choice takes effect at the next start. "
+                      + "To get this screen back: start with --qml, or put a file named USE_QML in the frontends folder."
+            }
+
+            Text {
+                objectName: "frontendForcedQml"
+                visible: !!fm && fm.forcedQml
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                text: fm && fm.forcedQml ? "Showing the built-in screen instead of " + pageRoot.frontendName(fm.activeId)
+                                           + (fm.forcedQmlReason ? ": " + fm.forcedQmlReason : ".") : ""
+                color: App.Style.statusDisconnected
+                font.pixelSize: App.Spacing.overallText * 0.85
+                font.family: App.Style.fontFamily
+            }
+            SettingsButton {
+                visible: !!fm && fm.forcedQml && fm.activeId !== ""
+                text: "Try it again at the next start"
+                height: pageRoot.dp(30)
+                onClicked: fm.clearForcedQml()
+            }
+            Text {
+                visible: !!fm && !fm.forcedQml && fm.activeId !== fm.runningId
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: fm ? "Showing " + pageRoot.frontendName(fm.runningId) + " now; " + pageRoot.frontendName(fm.activeId)
+                           + " from the next start." : ""
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.8
+                font.family: App.Style.fontFamily
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.overallSpacing
+                visible: !!fm
+                SettingsButton {
+                    objectName: "installFrontendFolder"
+                    text: "Install from folder"
+                    height: pageRoot.dp(30)
+                    onClicked: frontendFolderDialog.open()
+                }
+                SettingsButton {
+                    objectName: "installFrontendZip"
+                    text: "Install from zip"
+                    height: pageRoot.dp(30)
+                    onClicked: frontendZipDialog.open()
+                }
+                Item { Layout.fillWidth: true }
+            }
+            Text {
+                objectName: "frontendStatus"
+                visible: pageRoot.frontendStatus !== ""
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                text: pageRoot.frontendStatus
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.overallText * 0.8
+                font.family: App.Style.fontFamily
+            }
+
+            SettingCategory {
+                title: "Screens"
+                visible: !!fm
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.overallSpacing
+                    Text {
+                        Layout.fillWidth: true
+                        text: "Built-in  \u2022  this screen"
+                        color: App.Style.primaryTextColor
+                        font.pixelSize: App.Spacing.overallText * 0.85
+                        font.family: App.Style.fontFamily
+                    }
+                    SettingsButton {
+                        objectName: "useBuiltInFrontend"
+                        text: fm && fm.activeId === "" ? "In use" : "Use"
+                        enabled: !!fm && fm.activeId !== ""
+                        height: pageRoot.dp(28)
+                        onClicked: if (!fm.setActive("")) pageRoot.frontendStatus = fm.lastError
+                    }
+                }
+
+                Repeater {
+                    model: fm ? fm.frontends : []
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: App.Spacing.overallSpacing
+                            Text {
+                                Layout.fillWidth: true
+                                textFormat: Text.PlainText   // from the frontend's manifest
+                                text: (modelData.name || modelData.id) + (modelData.version ? " " + modelData.version : "")
+                                      + "  \u2022  " + (modelData.kind === "web" ? "web" : "program")
+                                      + "  \u2022  " + pageRoot.scopeWords(modelData.scopes)
+                                color: App.Style.primaryTextColor
+                                font.pixelSize: App.Spacing.overallText * 0.85
+                                font.family: App.Style.fontFamily
+                                elide: Text.ElideRight
+                            }
+                            SettingsButton {
+                                objectName: "useFrontend_" + modelData.id
+                                text: modelData.active ? "In use" : "Use"
+                                enabled: !modelData.active && modelData.compatible
+                                tooltipText: modelData.compatible ? "Make this the screen from the next start" : modelData.problem
+                                height: pageRoot.dp(28)
+                                onClicked: if (!fm.setActive(modelData.id)) pageRoot.frontendStatus = fm.lastError
+                            }
+                            SettingsButton {
+                                objectName: "removeFrontend_" + modelData.id
+                                text: "Remove"
+                                enabled: modelData.id !== fm.runningId
+                                height: pageRoot.dp(28)
+                                onClicked: if (!fm.remove(modelData.id)) pageRoot.frontendStatus = fm.lastError
+                            }
+                        }
+                        Text {
+                            visible: !modelData.compatible || !!modelData.description
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            textFormat: Text.PlainText
+                            text: modelData.compatible ? (modelData.description || "") : "Can't be used: " + modelData.problem
+                            color: modelData.compatible ? App.Style.secondaryTextColor : App.Style.statusDisconnected
+                            font.pixelSize: App.Spacing.overallText * 0.75
+                            font.family: App.Style.fontFamily
                         }
                     }
                 }
