@@ -197,8 +197,11 @@ class OctaveConsole(App):
         self.link.stop()
 
     def refresh_bars(self):
-        self.query_one(StatusLine).show(self)
-        self.query_one(MediaBar).show(self)
+        try:
+            self.query_one(StatusLine).show(self)
+            self.query_one(MediaBar).show(self)
+        except NoMatches:   # quitting: the bars are gone already
+            pass
 
     def active_pane(self):
         active = self.query_one(TabbedContent).active

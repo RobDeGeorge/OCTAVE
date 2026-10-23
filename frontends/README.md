@@ -27,6 +27,16 @@ Then start the frontend (see its README); they all default to `127.0.0.1:9876`. 
 ./build/octave --headless --dev --web-root frontends/glass/dist     # then open http://127.0.0.1:9876/
 ```
 
+## Checking them all
+
+```bash
+frontends/check_all.sh                        # OCTAVE_BIN, else ./build/octave (a dev-tools build)
+frontends/check_all.sh --display :83          # also tap sunlight's controls on an X display (Xvfb :83 -screen 0 1280x800x24 &)
+frontends/check_all.sh --only console,glass   # a subset; --keep keeps the temp dir and logs
+```
+
+It starts one throwaway OCTAVE (`--headless --dev` on a free loopback port, a temp `XDG_CONFIG_HOME`, three short tagged test tracks with covers made with ffmpeg when it is installed), runs each frontend's own checks against it, prints a pass / fail table and stops the backend. The checks: the console's live pilot tests (`CONSOLE_PY` names a python with its requirements; by default `frontends/console/.venv`, then `python3`), sunlight's `go vet` / `go test` and, with `--display`, `verify_controls.py`, glass's type check and build (and `npm run e2e` once it has one; `npm ci` first if `node_modules` is missing), retro-cluster's `cargo clippy -D warnings`, and the arcade's warning-free CMake build. A missing tool shows as SKIP. On a failure the logs are kept and the table names them; the exit status is 1.
+
 ## Writing another
 
 Start with `wiki/writing-a-frontend.html`. The smallest complete client is `retro-cluster/src/link.rs` (one file); `sdk/python` and `sdk/web` are the reference clients.
