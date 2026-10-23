@@ -1,6 +1,7 @@
 #include "frontendmanager.h"
 
 #include "../service/protocol.h"
+#include "../util/pathurl.h"
 
 #include <QDirIterator>
 #include <QFile>
@@ -32,7 +33,13 @@ QString readSmall(const QString &path, qint64 max = 4096)
 struct ZipEntry {
     QString name;
     quint32 unixMode = 0;   // 0 when not made on Unix
+    quint32 compressed = 0;
+    quint32 uncompressed = 0;
 };
+
+// No entry is inflated whose directory sizes are over these (QZipReader
+// inflates a whole entry in memory; TODO/frontend-platform.md step 4)
+constexpr qint64 kMaxCompressedEntry = 64LL * 1024 * 1024;
 
 QList<ZipEntry> zipDirectory(const QString &path, QString *error)
 {
@@ -85,10 +92,21 @@ QList<ZipEntry> zipDirectory(const QString &path, QString *error)
         ZipEntry e;
         e.name = (flags & 0x800) ? QString::fromUtf8(raw) : QString::fromLatin1(raw);
         e.unixMode = host == 3 ? external >> 16 : 0;
+        e.compressed = u32(cd, at + 20);
+        e.uncompressed = u32(cd, at + 24);
         out.append(e);
         at += 46 + nameLen + extraLen + commentLen;
     }
     return out;
+}
+
+// A path, or a file:// / Android tree URL from a QML picker
+QString pickedPath(const QString &pathOrUrl, bool folder)
+{
+    if (!pathOrUrl.contains(QLatin1String("://")))
+        return pathOrUrl;
+    const QUrl url(pathOrUrl);
+    return folder ? PathUrl::folderPath(url) : (url.isLocalFile() ? PathUrl::folderPath(url) : QString());
 }
 
 bool writeSmall(const QString &path, const QString &text)
@@ -223,8 +241,9 @@ QString FrontendManager::newStaging() const
     return QDir(m_root).filePath(QStringLiteral(".staging-%1").arg(QRandomGenerator::global()->generate(), 8, 16, QLatin1Char('0')));
 }
 
-QString FrontendManager::installFromFolder(const QString &path)
+QString FrontendManager::installFromFolder(const QString &pathOrUrl)
 {
+    const QString path = pickedPath(pathOrUrl, true);
     if (m_root.isEmpty())
         return fail(QStringLiteral("no frontends folder"));
     const QFileInfo source(path);
@@ -278,8 +297,9 @@ QString FrontendManager::installFromFolder(const QString &path)
     return finishInstall(staging);
 }
 
-QString FrontendManager::installFromZip(const QString &path)
+QString FrontendManager::installFromZip(const QString &pathOrUrl)
 {
+    const QString path = pickedPath(pathOrUrl, false);
     if (m_root.isEmpty())
         return fail(QStringLiteral("no frontends folder"));
     const QFileInfo source(path);
@@ -304,6 +324,9 @@ QString FrontendManager::installFromZip(const QString &path)
             return fail(QStringLiteral("%1 points outside the frontend; refused").arg(e.name));
         if ((e.unixMode & 0170000) == 0120000)
             return fail(QStringLiteral("%1 is a symbolic link; frontends can't hold links").arg(e.name));
+        if (qint64(e.uncompressed) > kMaxBytes || qint64(e.compressed) > kMaxCompressedEntry)
+            return fail(QStringLiteral("%1 is too big (over %2 MB unpacked or %3 MB packed)")
+                            .arg(e.name).arg(kMaxBytes / (1024 * 1024)).arg(kMaxCompressedEntry / (1024 * 1024)));
         modes.insert(name, e.unixMode);
     }
     const QList<QZipReader::FileInfo> entries = zip.fileInfoList();

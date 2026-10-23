@@ -312,6 +312,40 @@ private slots:
         QVERIFY2(fm.lastError().contains("symbolic link"), qPrintable(fm.lastError()));
     }
 
+    // Sizes the zip's directory gives are checked before anything is inflated
+    void zipWithAHugeDeclaredEntryIsRefused()
+    {
+        QTemporaryDir tmp;
+        FrontendManager fm;
+        fm.setRoot(tmp.filePath("frontends"));
+        const QString zipPath = tmp.filePath("huge.zip");
+        {
+            QZipWriter z(zipPath);
+            z.addFile("octave-frontend.json", json(webManifest()));
+            z.addFile("dist/index.html", "x");
+            z.close();
+        }
+        // Claim 3 GB unpacked for index.html in the central directory
+        QFile f(zipPath);
+        QVERIFY(f.open(QIODevice::ReadWrite));
+        QByteArray b = f.readAll();
+        int at = 0;
+        while ((at = b.indexOf(QByteArray("PK\x01\x02", 4), at)) >= 0) {
+            const int nameLen = quint8(b[at + 28]) | quint8(b[at + 29]) << 8;
+            if (b.mid(at + 46, nameLen) == "dist/index.html") {
+                const quint32 big = 3000u * 1024 * 1024;
+                for (int i = 0; i < 4; ++i)
+                    b[at + 24 + i] = char((big >> (8 * i)) & 0xFF);
+            }
+            at += 46;
+        }
+        f.seek(0);
+        f.write(b);
+        f.close();
+        QVERIFY(fm.installFromZip(zipPath).isEmpty());
+        QVERIFY2(fm.lastError().contains("too big"), qPrintable(fm.lastError()));
+    }
+
     void notAZip()
     {
         QTemporaryDir tmp;

@@ -68,7 +68,8 @@ public:
     QString forcedQmlReason() const;
     QString lastError() const { return m_lastError; }
 
-    // The id installed, or "" (lastError says why)
+    // The id installed, or "" (lastError says why). A path, or the file://
+    // URL a QML picker gives
     Q_INVOKABLE QString installFromFolder(const QString &path);
     Q_INVOKABLE QString installFromZip(const QString &path);
     Q_INVOKABLE bool remove(const QString &id);

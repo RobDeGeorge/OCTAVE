@@ -285,6 +285,7 @@ out["settings"] = rpc({"op": "call", "object": "settingsManager", "method": "sav
 out["system"] = rpc({"op": "call", "object": "frontendManager", "method": "setActive", "args": [""]})
 out["notoken"] = session()({"op": "get", "object": "volumeController", "property": "percent"})
 json.dump(out, open(os.path.join(os.environ["OCTAVE_FRONTEND_DIR"], "result.json"), "w"))
+time.sleep(4)   # the simulated car records a trip meanwhile
 )");
         script.close();
         QFile active(config + "/frontends/ACTIVE");
@@ -295,13 +296,16 @@ json.dump(out, open(os.path.join(os.environ["OCTAVE_FRONTEND_DIR"], "result.json
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
-        app.start(kApp, {"--config", config, "--service", QString::number(freePort())});
+        app.start(kApp, {"--config", config, "--sim", "--service", QString::number(freePort())});
         QVERIFY(app.waitForStarted(10000));
         QVERIFY2(finished(app), "did not exit within 60 s");   // the frontend's exit 0 ends it
         const QString out = QString::fromUtf8(app.readAll());
         QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
         QVERIFY2(out.contains("is the screen; loopback trust is off"), qPrintable(out.right(3000)));
         QVERIFY2(!out.contains("Main.qml"), qPrintable(out.right(3000)));
+        // A normal quit: the black box closes the trip the simulated car made
+        QVERIFY2(QRegularExpression("Trip \\d+ started").match(out).hasMatch(), qPrintable(out.right(3000)));
+        QVERIFY2(out.contains("ending ("), qPrintable(out.right(3000)));
         QFile r(fe + "/result.json");
         QVERIFY2(r.open(QIODevice::ReadOnly), qPrintable(out.right(3000)));
         const QJsonObject res = QJsonDocument::fromJson(r.readAll()).object();
