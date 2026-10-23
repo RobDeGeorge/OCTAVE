@@ -26,7 +26,6 @@ Where it is documented: `docs/api/` (the published API, its `README.md`: version
 
 ## Left: small follow-ups (desktop)
 
-- **A test for write backpressure (M5).** The limit is in; its test also passes with the limit off, because the blocking flush already throttles a fully stalled reader. The real case is a slow reader: read at a fixed slow rate while publishing faster, and check what is in flight stays bounded. **Effort:** S.
 - **Leftovers noted during the rule moves:** Trip History shows the recorded units, not the gauge units (convert its series through `toDisplay` if wanted); the Sensors page keeps its own `sensorTempUnit` (default °F), so the IMU temperature can read °F there and °C on a dashboard; the persisted `supportedOBDParameters` holds the raw scan without aliases while `vehicleSupportedParameters` has them; `OBDManager::obdParameterChanged` and the 84 typed per-PID signals have no listener left; the gesture worker's flag table is a second spelling of the gesture names; a file QAudioDecoder rejects waits out the 30 s watchdog instead of failing at the error. Each **Effort:** S.
 - **`tst_conformance` gap:** a QML alias (`property var sm: settingsManager`) escapes it; none exist today.
 
@@ -82,10 +81,9 @@ Constraints:
 
 ## Recommended order of operations
 
-1. The M5 slow-reader test (S, desktop).
-2. The hardware checks above, as the devices are at hand.
-3. After v1.0 has road time: CMake plan step 1 with a CI dispatch for every platform, then steps 2 and 3, then the Pi unit and a road test.
-4. Step 4 (`--connect`) only if the measurements say the split is worth it.
+1. The hardware checks above, as the devices are at hand.
+2. After v1.0 has road time: CMake plan step 1 with a CI dispatch for every platform, then steps 2 and 3, then the Pi unit and a road test.
+3. Step 4 (`--connect`) only if the measurements say the split is worth it.
 
 Related: `TODO/octave-companion-app.md` item 2 (phone data link) and `TODO/user-primitives.md` (data-only widget presets) should use this service rather than their own sockets. The three XL plans in `TODO/README.md` share the "pull the H.264 decoder out of `scrcpyclient.cpp`" prerequisite.
 

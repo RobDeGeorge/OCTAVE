@@ -623,6 +623,57 @@ private slots:
                                   !hub.wanted("fixture.video")), 3000);
     }
 
+    void aSlowReaderKeepsTheBacklogBounded()
+    {
+        // M5, the case the stalled-reader test can't show: a client that
+        // reads, but slower than the stream. Unbounded, everything it
+        // hasn't read yet piles up in the server's socket buffer; bounded,
+        // the queue drops and the backlog stays near maxUnsentBytes
+        CommandServer::Limits limits = m_server->limits();
+        limits.maxUnsentBytes = 256 * 1024;
+        m_server->setLimits(limits);
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QTcpSocket raw;
+        raw.setSocketOption(QAbstractSocket::ReceiveBufferSizeSocketOption, 64 * 1024);
+        raw.setReadBufferSize(64 * 1024);   // Qt's own buffer too: the backlog must be the server's
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 1})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT(hub.wanted("fixture.video"), 3000);
+        hub.publishH264("fixture.video", QByteArray::fromHex("000000016742c01e0000000168ce3c80"), 0, false, true);
+        const QByteArray frame = QByteArray("\x00\x00\x00\x01\x65", 5) + QByteArray(100 * 1024, '\x02');
+        QByteArray in;
+        qint64 offered = 0;
+        QElapsedTimer t;
+        t.start();
+        int i = 0;
+        while (t.elapsed() < 3000) {   // ~10 MB/s offered, ~200 KB/s read
+            hub.publishH264("fixture.video", frame, i * 10000, i % 10 == 0, false);
+            offered += frame.size();
+            ++i;
+            if (raw.waitForReadyRead(10))
+                in += raw.read(2 * 1024);
+        }
+        // What the server still owes the client once the stream stops
+        qint64 backlog = 0;
+        QElapsedTimer drain;
+        drain.start();
+        while (drain.elapsed() < 10000) {
+            if (raw.waitForReadyRead(300))
+                backlog += raw.readAll().size();
+            else
+                break;
+        }
+        QVERIFY2(offered > 20 * 1024 * 1024, qPrintable(QString::number(offered)));
+        QVERIFY2(backlog < 8 * 1024 * 1024, qPrintable(QStringLiteral("backlog %1 bytes of %2 offered").arg(backlog).arg(offered)));
+        QVERIFY(in.contains("streamDropped") || backlog > 0);
+        raw.abort();
+        QTRY_VERIFY_WITH_TIMEOUT((hub.publishH264("fixture.video", QByteArray::fromHex("0000000165"), 0, true, false),
+                                  !hub.wanted("fixture.video")), 3000);
+    }
+
     void keyValueObjects()
     {
         // paramStore is a QQmlPropertyMap: keys, not declared properties
