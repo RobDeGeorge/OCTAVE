@@ -33,14 +33,47 @@
 #include <QStringList>
 #include <QVariant>
 
+#include <QMutex>
+
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <stdexcept>
+#include <vector>
 
 class QThread;
 
 namespace OctaveService {
 
 class CommandTcpServer;
+
+// One client connection, for ops that send it more than their reply (the
+// service protocol's subscriptions). Events are queued from any thread and
+// written by the connection's own thread between requests; a client that
+// stops reading loses the oldest events (a {"event": "dropped"} line says
+// how many) instead of growing the queue without bound.
+class Connection
+{
+public:
+    static constexpr int kMaxQueuedEvents = 1000;
+
+    ~Connection();
+    void push(const QByteArray &jsonLine);   // thread-safe
+    QList<QByteArray> takeAll();             // thread-safe
+    // Run on the GUI thread when the client goes (subscriptions use it)
+    void onClose(std::function<void()> cleanup);
+    void close();
+    bool isClosed() const;
+    int nextId() { return ++m_lastId; }
+
+private:
+    mutable QMutex m_lock;
+    QList<QByteArray> m_queue;
+    int m_dropped = 0;
+    bool m_closed = false;
+    std::atomic<int> m_lastId{0};
+    std::vector<std::function<void()>> m_cleanups;
+};
 
 // Thrown by handlers; becomes {"ok": false, "error": what()}
 class CommandError : public std::runtime_error
@@ -76,6 +109,9 @@ public:
     static QVariant onGui(std::function<QVariant()> fn, int timeoutMs = 30000);
     // Queue `fn` on the GUI thread and return at once.
     static void postGui(std::function<void()> fn);
+    // The connection whose request is being handled (connection thread
+    // only; null outside a request)
+    static std::shared_ptr<Connection> currentConnection();
 
     // Called from connection threads
     QByteArray handleLine(const QByteArray &line);

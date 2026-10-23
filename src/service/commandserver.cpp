@@ -27,6 +27,11 @@ Q_LOGGING_CATEGORY(lcCommand, "octave.service")
 
 namespace OctaveService {
 
+namespace {
+// The connection a request on this (connection) thread came in on
+thread_local std::shared_ptr<Connection> t_connection;
+}
+
 // ---------------------------------------------------------------------------
 // Listener (own thread) + one thread per client connection
 // ---------------------------------------------------------------------------
@@ -80,24 +85,33 @@ private:
         if (!sock.setSocketDescriptor(fd))
             return;
         qCInfo(lcCommand) << "command client connected:" << sock.peerAddress().toString() << sock.peerPort();
+        auto connection = std::make_shared<Connection>();
+        t_connection = connection;
         QByteArray buf;
         while (!m_stopping && sock.state() == QAbstractSocket::ConnectedState) {
-            if (!sock.waitForReadyRead(200)) {
-                if (sock.state() != QAbstractSocket::ConnectedState)
-                    break;
-                continue;
+            // Short waits: queued events go out within ~20 ms. Data that
+            // waitForBytesWritten() already pulled in counts too (else a
+            // pipelined request would sit there until the next one came)
+            if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20)) {
+                buf += sock.readAll();
+                int nl;
+                while ((nl = buf.indexOf('\n')) >= 0) {
+                    const QByteArray line = buf.left(nl).trimmed();
+                    buf.remove(0, nl + 1);
+                    if (line.isEmpty())
+                        continue;
+                    sock.write(m_owner->handleLine(line));
+                }
+            } else if (sock.state() != QAbstractSocket::ConnectedState) {
+                break;
             }
-            buf += sock.readAll();
-            int nl;
-            while ((nl = buf.indexOf('\n')) >= 0) {
-                const QByteArray line = buf.left(nl).trimmed();
-                buf.remove(0, nl + 1);
-                if (line.isEmpty())
-                    continue;
-                sock.write(m_owner->handleLine(line));
+            for (const QByteArray &event : connection->takeAll())
+                sock.write(event);
+            if (sock.bytesToWrite() > 0)
                 sock.waitForBytesWritten(10000);
-            }
         }
+        connection->close();   // its subscriptions go (on the GUI thread)
+        t_connection.reset();
     }
 
     CommandServer *m_owner;
@@ -105,6 +119,79 @@ private:
     QMutex m_lock;
     QList<QThread *> m_clients;
 };
+
+// ---------------------------------------------------------------------------
+// Connection
+// ---------------------------------------------------------------------------
+
+Connection::~Connection()
+{
+    close();
+}
+
+void Connection::push(const QByteArray &jsonLine)
+{
+    QMutexLocker l(&m_lock);
+    if (m_closed)
+        return;
+    m_queue.append(jsonLine);
+    while (m_queue.size() > kMaxQueuedEvents) {
+        m_queue.removeFirst();
+        ++m_dropped;
+    }
+}
+
+QList<QByteArray> Connection::takeAll()
+{
+    QMutexLocker l(&m_lock);
+    QList<QByteArray> out;
+    if (m_dropped > 0) {
+        out.append(QJsonDocument(QJsonObject{{QStringLiteral("event"), QStringLiteral("dropped")},
+                                             {QStringLiteral("count"), m_dropped}})
+                       .toJson(QJsonDocument::Compact) + '\n');
+        m_dropped = 0;
+    }
+    out.append(m_queue);
+    m_queue.clear();
+    return out;
+}
+
+void Connection::onClose(std::function<void()> cleanup)
+{
+    QMutexLocker l(&m_lock);
+    if (m_closed) {
+        l.unlock();
+        CommandServer::postGui(std::move(cleanup));
+        return;
+    }
+    m_cleanups.push_back(std::move(cleanup));
+}
+
+void Connection::close()
+{
+    std::vector<std::function<void()>> cleanups;
+    {
+        QMutexLocker l(&m_lock);
+        if (m_closed)
+            return;
+        m_closed = true;
+        m_queue.clear();
+        cleanups.swap(m_cleanups);
+    }
+    for (auto &c : cleanups)
+        CommandServer::postGui(std::move(c));
+}
+
+bool Connection::isClosed() const
+{
+    QMutexLocker l(&m_lock);
+    return m_closed;
+}
+
+std::shared_ptr<Connection> CommandServer::currentConnection()
+{
+    return t_connection;
+}
 
 // ---------------------------------------------------------------------------
 // CommandServer
