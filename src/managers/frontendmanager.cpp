@@ -211,6 +211,8 @@ QVariantList FrontendManager::frontends() const
 
 QVariantMap FrontendManager::manifestOf(const QString &id) const
 {
+    if (!FrontendManifest::validId(id))
+        return {};
     for (const QVariant &v : frontends()) {
         if (v.toMap().value(QStringLiteral("id")).toString() == id)
             return v.toMap();
@@ -223,7 +225,7 @@ QString FrontendManager::activeId() const
     if (m_root.isEmpty())
         return {};
     const QString id = readSmall(QDir(m_root).filePath(kActiveFile));
-    return QDir(QDir(m_root).filePath(id)).exists() && !id.isEmpty() ? id : QString();
+    return FrontendManifest::validId(id) && QDir(QDir(m_root).filePath(id)).exists() ? id : QString();
 }
 
 bool FrontendManager::forcedQml() const
@@ -453,8 +455,7 @@ QString FrontendManager::finishInstall(const QString &staging)
 
 bool FrontendManager::remove(const QString &id)
 {
-    if (id.isEmpty() || !FrontendManifest::safeRelativePath(id) || id.contains(QLatin1Char('/'))
-        || id.startsWith(QLatin1Char('.')) || !QDir(QDir(m_root).filePath(id)).exists())
+    if (!FrontendManifest::validId(id) || !QDir(QDir(m_root).filePath(id)).exists())
         return refuse(QStringLiteral("no frontend %1").arg(id));
     if (id == m_runningId)
         return refuse(QStringLiteral("%1 is running; switch to another screen and restart before removing it").arg(id));
@@ -478,8 +479,7 @@ bool FrontendManager::setActive(const QString &id)
         QFile::remove(QDir(m_root).filePath(kActiveFile));
     } else {
         QStringList errors;
-        const FrontendManifest m = (id.startsWith(QLatin1Char('.')) || id.contains(QLatin1Char('/')))
-                                       ? FrontendManifest() : load(m_root, id, &errors);
+        const FrontendManifest m = FrontendManifest::validId(id) ? load(m_root, id, &errors) : FrontendManifest();
         if (m.id.isEmpty())
             return refuse(QStringLiteral("can't use %1: %2").arg(id, errors.isEmpty() ? QStringLiteral("not installed") : errors.join(QStringLiteral("; "))));
         if (const QString problem = problemWith(m); !problem.isEmpty())
@@ -506,7 +506,7 @@ FrontendManager::Boot FrontendManager::bootChoice(const QString &root, bool qmlF
 {
     Boot boot;
     const QString id = readSmall(QDir(root).filePath(kActiveFile));
-    if (id.isEmpty() || id.startsWith(QLatin1Char('.')) || id.contains(QLatin1Char('/')))
+    if (!FrontendManifest::validId(id))   // ACTIVE is a plain folder name or nothing: never a path
         return boot;
     QStringList errors;
     const FrontendManifest m = load(root, id, &errors);

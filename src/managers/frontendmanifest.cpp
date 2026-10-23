@@ -34,6 +34,12 @@ bool FrontendManifest::safeRelativePath(const QString &path)
     return true;
 }
 
+bool FrontendManifest::validId(const QString &id)
+{
+    static const QRegularExpression idShape(QStringLiteral("^[a-z0-9][a-z0-9._-]{1,63}$"));
+    return idShape.match(id).hasMatch() && !id.contains(QLatin1String(".."));
+}
+
 FrontendManifest FrontendManifest::parse(const QByteArray &json, QStringList *errors)
 {
     FrontendManifest m;
@@ -66,8 +72,7 @@ FrontendManifest FrontendManifest::parse(const QByteArray &json, QStringList *er
     };
 
     m.id = text("id", 64, true);
-    static const QRegularExpression idShape(QStringLiteral("^[a-z0-9][a-z0-9._-]{1,63}$"));
-    if (!m.id.isEmpty() && (!idShape.match(m.id).hasMatch() || m.id.contains(QLatin1String(".."))))
+    if (!m.id.isEmpty() && !validId(m.id))
         errs << QStringLiteral("\"id\" must be lower case letters, digits, '.', '_' or '-' (2 to 64), starting with a letter or digit");
     m.name = text("name", 64, true);
     m.version = text("version", 32, true);

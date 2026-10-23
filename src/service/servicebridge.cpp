@@ -380,8 +380,9 @@ void ServiceBridge::install(CommandServer &server)
     // When pairing lands this needs an authorised client like every op.
     server.registerOp(QStringLiteral("stream"), [this](const QVariantMap &args) -> QVariant {
         const QString objectName = args.value(QStringLiteral("object")).toString();
-        // An unknown object is an error, as for any op; the phone's screen
-        // needs the phone permission, any other stream only read
+        // An unknown object is an error, as for any op. A stream whose owner
+        // is in the phone scope (the phone mirror, Android Auto: a phone's
+        // screen either way) needs that permission; any other stream only read
         const QObject *streamOwner = object(objectName);
         if (streamOwner && memberScope(streamOwner->metaObject(), QString()) == QLatin1String("phone"))
             requireScope(streamOwner, objectName, QString());

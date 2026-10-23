@@ -366,6 +366,20 @@ private slots:
         QCOMPARE(FrontendManager::bootChoice(root, false).kind, FrontendManager::Boot::Qml);
         QVERIFY(!fm.setActive("nope"));
         QVERIFY(!fm.setActive("../x"));
+        // An id is a plain folder name as the manifest rules shape it: never a
+        // path, on any platform (ACTIVE on disk is held to the same rule)
+        for (const char *bad : {"..\\x", "..", "A", "a/b", ".hidden", "a..b", "x;rm"}) {
+            QVERIFY2(!fm.setActive(QLatin1String(bad)), bad);
+            QVERIFY2(!fm.remove(QLatin1String(bad)), bad);
+            QVERIFY2(fm.manifestOf(QLatin1String(bad)).isEmpty(), bad);
+            QFile active(QDir(root).filePath("ACTIVE"));
+            QVERIFY(active.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            active.write(bad);
+            active.close();
+            QVERIFY2(fm.activeId().isEmpty(), bad);
+            QCOMPARE(FrontendManager::bootChoice(root, false).kind, FrontendManager::Boot::Qml);
+        }
+        QFile::remove(QDir(root).filePath("ACTIVE"));
         QVERIFY(!fm.installFromFolder(makeWebFolder(tmp, webManifest())).isEmpty());
         QSignalSpy active(&fm, &FrontendManager::activeChanged);
         QVERIFY(fm.setActive("com.example.dash"));
