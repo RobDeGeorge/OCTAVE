@@ -8,6 +8,9 @@ Additions do not bump the version; they are listed under the version that was cu
 
 2026-10-23. Pairing.
 
+Behaviour (no protocol change):
+- `pair` guesses are limited per address, not across addresses: a code is no longer void after 20 wrong tries in all, and the one-attempt-a-second interval is per address, so other clients' wrong codes neither void the owner's code nor delay their attempt. New: at most 10 attempts a second across every address but loopback ("too many pairing attempts"); loopback is never throttled.
+
 Breaking:
 - Over the network (`--service-bind`), every op but `hello` and `pair`, and `/art` / `/export/...`, answer `{"ok": false, "code": "unauthorised"}` (HTTP 401) until the client pairs. On the device itself nothing changes while `serviceLoopbackOpen` is true (the default).
 

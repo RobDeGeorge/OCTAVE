@@ -8,11 +8,17 @@
 // ?ticket=, or Authorization: Bearer <token> for non-browser clients).
 //
 // Pairing: the head unit shows a 6-digit code (Settings > Service), valid
-// for kCodeLifetimeMs, single use, void after kMaxTries wrong attempts, and
-// at most one attempt a second across all clients; an address with
-// kMaxFailuresPerPeer wrong codes is refused until the app restarts, and
-// every refusal is logged with the address (never the code). A right code
-// buys a
+// for kCodeLifetimeMs and single use. Guesses are limited per address (an
+// IPv6 /64 counts as one): one attempt a second, and kMaxFailuresPerPeer
+// wrong codes refuse the address until the app restarts; so no number of
+// wrong guesses from elsewhere voids the owner's code or holds up their
+// attempt. Across every address but this device's own, at most
+// kMaxAttemptsPerSecond attempts a second, so a guesser spread over many
+// addresses still sees at most kMaxAttemptsPerSecond * kCodeLifetimeMs /
+// 1000 of the 10^6 codes while one shows (1200: about 0.1 %). Loopback is
+// never throttled: it is trusted anyway, and a local runaway must not lock
+// the network out. Every refusal is logged with the address (never the
+// code). A right code buys a
 // token (32 random bytes, hex); only its SHA-256 is kept, in the settings
 // file key serviceTokens (file-only: no save_* slot, apply_settings or
 // reset reaches it), with a name and dates. Revoking a token from Settings
@@ -66,10 +72,10 @@ class ServicePairing : public QObject
 
 public:
     static constexpr int kCodeLifetimeMs = 120000;
-    static constexpr int kMaxTries = 20;               // wrong tries, all addresses, before a code is void
     static constexpr int kMaxTickets = 256;
-    static constexpr int kAttemptIntervalMs = 1000;
-    static constexpr int kMaxFailuresPerPeer = 10;     // per address (an IPv6 /64), until restart
+    static constexpr int kAttemptIntervalMs = 1000;    // between attempts from one address
+    static constexpr int kMaxFailuresPerPeer = 10;     // wrong codes per address (an IPv6 /64), until restart
+    static constexpr int kMaxAttemptsPerSecond = 10;   // across every address but loopback
     static constexpr qint64 kTicketLifetimeMs = 10 * 60 * 1000;
 
     explicit ServicePairing(SettingsManager *settings, QObject *parent = nullptr);
@@ -145,9 +151,11 @@ private:
     QList<Device> m_devices;
     QString m_code;
     QElapsedTimer m_codeAge;
-    int m_tries = 0;
-    QElapsedTimer m_lastAttempt;
+    QElapsedTimer m_clock;                       // for the attempt times below
+    QHash<QString, qint64> m_lastAttemptByPeer;  // peer key -> m_clock ms of its last counted attempt
     QHash<QString, int> m_failuresByPeer;
+    qint64 m_windowStart = 0;                    // the global ceiling's current second
+    int m_windowAttempts = 0;
     struct Ticket {
         QString tokenId;
         qint64 expires = 0;

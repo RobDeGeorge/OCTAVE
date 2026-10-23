@@ -491,9 +491,10 @@
     ],
     "limits": {
       "codeLifetimeSeconds": 120,
-      "codeMaxWrongTries": 20,
-      "attemptIntervalSeconds": 1,
+      "attemptIntervalSecondsPerAddress": 1,
       "maxFailuresPerAddress": 10,
+      "maxAttemptsPerSecondAllAddresses": 10,
+      "loopbackThrottled": false,
       "ticketLifetimeSeconds": 600,
       "maxTickets": 256
     },
