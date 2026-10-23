@@ -39,6 +39,10 @@ Examples: `python/examples/live_gauges.py` (readings with titles and units) and 
 
 Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app. ctest runs it as `sdk_python`.
 
+## Another whole frontend: `frontends/retro-cluster/`
+
+An experimental UI in Rust + egui, styled as an 80s fluorescent instrument cluster, built only on this API (see its README). Not built by CI.
+
 ## Versioning
 
 Both clients speak protocol version 1. The Python `Client` asks `hello` on connect and raises `OctaveError` on another version (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.

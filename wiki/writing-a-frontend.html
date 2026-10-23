@@ -34,7 +34,7 @@
 
         <h2 id="what-you-get">What You Get</h2>
         <p>Every manager the bundled UI uses: settings, media and now playing, volume, OBD and the live value of every PID and IMU reading, the black box, the shift light, phone mirroring control, downloads, dashboards. Each one's properties, methods and signals are listed with their types in the generated <a href="api-reference.html">Service API Reference</a> (<span class="file-path">docs/api/</span>); what they mean is in <a href="signals-slots-reference.html">Signals &amp; Slots API</a>. <code>tst_conformance</code> guarantees the bundled UI uses nothing outside that list, so whatever it can do, your frontend can too.</p>
-        <p>Two working clients come with the repo: <span class="file-path">sdk/web/index.html</span> (plain JavaScript, about 250 lines) and <span class="file-path">sdk/python/octave_client</span> (stdlib only). Read one of them next to this page.</p>
+        <p>Two working clients come with the repo: <span class="file-path">sdk/web/index.html</span> (plain JavaScript, about 250 lines) and <span class="file-path">sdk/python/octave_client</span> (stdlib only). Read one of them next to this page. For a whole UI in another language, see <span class="file-path">frontends/retro-cluster/</span>: an experimental Rust + egui instrument cluster (live gauges, every PID, the tape deck and volume) whose protocol client is one file, <span class="file-path">src/link.rs</span>.</p>
 
         <h2 id="start">1. Start the Service</h2>
         <p>It is off by default. Any of these turns it on, listening on <code>127.0.0.1:9876</code>:</p>
