@@ -221,6 +221,8 @@ if(OCTAVE_ENABLE_DOWNLOADS)
 endif()
 octave_add_test(tst_apidocs DEFINES ${_apidocs_defines})
 add_dependencies(tst_apidocs octave)
+# Everything the QML UI reaches is a published service member (step 7)
+octave_add_test(tst_conformance)
 octave_add_test(tst_websocket
     SOURCES service/commandserver.h service/commandserver.cpp service/websocket.h service/websocket.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
