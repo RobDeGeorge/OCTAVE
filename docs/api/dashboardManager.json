@@ -242,6 +242,14 @@
         },
         {
             "constant": false,
+            "name": "lastError",
+            "notify": "lastErrorChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "hiddenBuiltInCount",
             "notify": "dashboardsChanged",
             "readable": true,
@@ -271,6 +279,11 @@
         },
         {
             "name": "lastShareErrorChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastErrorChanged",
             "params": [
             ]
         }

@@ -174,19 +174,28 @@ QVariant DashboardManager::loadDashboard(const QString &id)
     QVariantMap entry = findEntry(id);
     if (entry.isEmpty()) {
         qCWarning(lcDashboards) << "loadDashboard: unknown id" << id;
+        setError(QStringLiteral("No dashboard with id %1").arg(id));
         return QVariantMap{};
     }
     const QVariantMap raw = readFullSpec(entry.value(QStringLiteral("path")).toString());
+    if (raw.isEmpty()) {
+        setError(QStringLiteral("Dashboard %1 could not be read").arg(id));
+        return raw;
+    }
     // A newer schema goes through untouched: the renderer shows its "needs a
     // newer OCTAVE" placeholder for it
-    if (raw.isEmpty() || raw.value(QStringLiteral("schema"), 1).toDouble() > kSupportedSchema)
+    if (raw.value(QStringLiteral("schema"), 1).toDouble() > kSupportedSchema) {
+        setError(QStringLiteral("This dashboard needs a newer version of OCTAVE"));
         return raw;
+    }
     QString error;
     const QVariantMap spec = normalizeSpec(raw, SpecUse::Load, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         qCWarning(lcDashboards) << "loadDashboard:" << id << error;
+        setError(error);
         return QVariantMap{};
     }
+    setError({});
     return spec;
 }
 
@@ -360,11 +369,13 @@ QString DashboardManager::saveDashboard(const QVariantMap &rawIn)
     const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error, m_widgetCatalog);
     if (spec.isEmpty()) {
         qCWarning(lcDashboards) << "saveDashboard:" << error;
+        setError(error);
         return {};
     }
     const QString id = spec.value(QStringLiteral("id")).toString();
     if (m_userDir.isEmpty()) {
         qCWarning(lcDashboards) << "User dashboards dir not configured";
+        setError(QStringLiteral("No place to save dashboards"));
         return {};
     }
 
@@ -372,17 +383,23 @@ QString DashboardManager::saveDashboard(const QVariantMap &rawIn)
     if (m_builtInIds.contains(id)) {
         qCWarning(lcDashboards)
             << "Cannot save: id" << id << "collides with a built-in preset";
+        setError(QStringLiteral("%1 is a built-in dashboard").arg(id));
         return {};
     }
     if (id == QLatin1String(kParameterCardsId)) {
         qCWarning(lcDashboards) << "Cannot save: id" << id << "is the Parameter Cards entry";
+        setError(QStringLiteral("%1 is the Parameter Cards entry").arg(id));
         return {};
     }
 
     const QString path = m_userDir + QDir::separator() + id + QStringLiteral(".json");
-    if (!writeSpec(path, spec)) return {};
+    if (!writeSpec(path, spec)) {
+        setError(QStringLiteral("Could not write %1").arg(path));
+        return {};
+    }
 
     rescanAll();
+    setError({});
     return id;
 }
 
@@ -477,6 +494,13 @@ constexpr int kMaxCells = 256;
 constexpr int kMaxGrid = 48;
 constexpr int kMaxLabelLength = 80;
 constexpr int kMaxPropString = 200;
+}
+
+void DashboardManager::setError(const QString &message)
+{
+    if (m_lastError == message) return;
+    m_lastError = message;
+    emit lastErrorChanged();
 }
 
 void DashboardManager::setShareError(const QString &message)

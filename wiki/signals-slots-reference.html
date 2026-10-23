@@ -1515,6 +1515,7 @@
           <tbody>
             <tr><td><code>dashboards</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Merged headers <code>[{id, label, builtIn, path}, &hellip;]</code>, built-ins first</td></tr>
             <tr><td><code>lastShareError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastShareErrorChanged</code></td><td>Reason the last export/import failed; <code>""</code> after a success</td></tr>
+            <tr><td><code>lastError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorChanged</code></td><td>Why the last <code>loadDashboard</code> / <code>saveDashboard</code> failed (unknown id, unreadable file, newer schema, no name, a built-in id...); <code>""</code> after one that worked. The calls' return values are unchanged</td></tr>
             <tr><td><code>hiddenBuiltInCount</code></td><td><code>int</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Built-in presets the user deleted (hidden); shows the chooser's "Restore defaults" button</td></tr>
             <tr><td><code>supportedSchema</code></td><td><code>int</code></td><td>constant</td><td>&mdash;</td><td>Highest dashboard <code>schema</code> this build reads (<code>kSupportedSchema</code>, 1); DashboardRenderer shows a "needs a newer OCTAVE" message for newer specs</td></tr>
           </tbody>

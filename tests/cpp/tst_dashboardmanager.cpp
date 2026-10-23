@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QRegularExpression>
@@ -342,6 +343,20 @@ private slots:
         spec.insert("id", "");
         spec.insert("label", "  ");
         QCOMPARE(m_dm->saveDashboard(spec), QString());                       // still needs a name
+    }
+
+    void failuresSayWhy()
+    {
+        QSignalSpy changed(m_dm.get(), &DashboardManager::lastErrorChanged);
+        QVERIFY(m_dm->loadDashboard("no-such").toMap().isEmpty());   // the return as before
+        QVERIFY(m_dm->lastError().contains("no-such"));
+        QCOMPARE(m_dm->saveDashboard({{"id", "minimal"}, {"label", "M"}}), QString());
+        QVERIFY(m_dm->lastError().contains("built-in"));
+        QCOMPARE(m_dm->saveDashboard({{"id", "x"}, {"label", ""}}), QString());
+        QCOMPARE(m_dm->lastError(), QStringLiteral("Dashboard has no name"));
+        QVERIFY(!m_dm->loadDashboard("minimal").toMap().isEmpty());
+        QCOMPARE(m_dm->lastError(), QString());   // cleared by one that worked
+        QVERIFY(changed.size() >= 4);
     }
 
     void saveRefusesAPathAsId()
