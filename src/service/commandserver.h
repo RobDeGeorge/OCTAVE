@@ -76,6 +76,7 @@ public:
         bool binary = false;   // a stream record (else a JSON line)
     };
 
+    Connection();
     ~Connection();
     void push(const QByteArray &jsonLine);   // thread-safe
     // A stream record; false when it would pass the caps, in which case
@@ -88,6 +89,13 @@ public:
     void close();
     bool isClosed() const;
     int nextId() { return ++m_lastId; }
+
+    // Readable when something was queued (Unix: a pipe the connection
+    // thread polls with its socket, so an event goes out at once instead
+    // of at the next 20 ms poll); -1 where there is none. drainWake()
+    // empties it.
+    int wakeFd() const { return m_wake[0]; }
+    void drainWake();
 
     // Who is on the other end (set by the connection's own thread; read by
     // the trust check and by a revoke on the GUI thread)
@@ -105,6 +113,9 @@ private:
     int m_records = 0;
     int m_dropped = 0;
     bool m_closed = false;
+    int m_wake[2] = {-1, -1};
+    std::atomic<bool> m_wakePending{false};
+    void wake();
     bool m_peerLoopback = false;
     QString m_peerAddress, m_tokenId;
     std::atomic<int> m_lastId{0};

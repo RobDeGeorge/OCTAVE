@@ -26,6 +26,11 @@
 #include <QtEndian>
 
 #include <atomic>
+#if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
+#endif
 #include <cstdio>
 #include <memory>
 
@@ -182,7 +187,7 @@ private:
             return false;
         // Data that waitForBytesWritten() already pulled in counts too (else
         // a pipelined request would sit there until the next one came)
-        if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20)) {
+        if (sock.bytesAvailable() > 0 || waitForInput(sock)) {
             buf += sock.readAll();
             t_lastHeard.start();
         }
@@ -191,6 +196,27 @@ private:
             && t_lastHeard.elapsed() > m_owner->limits().untrustedIdleMs && !m_owner->trusted(*c))
             return false;
         return sock.state() == QAbstractSocket::ConnectedState || sock.bytesAvailable() > 0;
+    }
+
+    // Up to 20 ms for the client's bytes; on Unix also woken at once when
+    // the connection queues an event (its wake pipe), so events don't wait
+    // for the poll. True when the socket has data
+    static bool waitForInput(QTcpSocket &sock)
+    {
+#if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
+        const auto c = t_connection;
+        const int wakeFd = c ? c->wakeFd() : -1;
+        if (wakeFd >= 0 && sock.socketDescriptor() >= 0) {
+            pollfd fds[2] = {{int(sock.socketDescriptor()), POLLIN, 0}, {wakeFd, POLLIN, 0}};
+            if (::poll(fds, 2, 20) <= 0)
+                return false;
+            if (fds[1].revents & POLLIN)
+                c->drainWake();
+            // Let Qt read what arrived (and notice a close)
+            return (fds[0].revents & (POLLIN | POLLHUP | POLLERR)) && sock.waitForReadyRead(0);
+        }
+#endif
+        return sock.waitForReadyRead(20);
     }
 
     static void flush(QTcpSocket &sock)
@@ -394,9 +420,51 @@ private:
 // Connection
 // ---------------------------------------------------------------------------
 
+Connection::Connection()
+{
+#if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
+    if (::pipe(m_wake) == 0) {
+        for (int fd : m_wake) {
+            ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL) | O_NONBLOCK);
+            ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+        }
+    } else {
+        m_wake[0] = m_wake[1] = -1;
+    }
+#endif
+}
+
 Connection::~Connection()
 {
     close();
+#if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
+    for (int fd : m_wake)
+        if (fd >= 0)
+            ::close(fd);
+#endif
+}
+
+void Connection::wake()
+{
+#if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
+    // One byte per batch: the thread drains it and takes everything queued
+    if (m_wake[1] >= 0 && !m_wakePending.exchange(true)) {
+        const char b = 1;
+        (void)::write(m_wake[1], &b, 1);
+    }
+#endif
+}
+
+void Connection::drainWake()
+{
+#if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
+    if (m_wake[0] < 0)
+        return;
+    m_wakePending.store(false);
+    char sink[64];
+    while (::read(m_wake[0], sink, sizeof sink) > 0) {
+    }
+#endif
 }
 
 void Connection::push(const QByteArray &jsonLine)
@@ -405,6 +473,7 @@ void Connection::push(const QByteArray &jsonLine)
     if (m_closed)
         return;
     m_queue.append(Item{jsonLine, false});
+    wake();
     while (m_queue.size() - m_records > kMaxQueuedEvents) {
         for (int i = 0; i < m_queue.size(); ++i) {
             if (!m_queue.at(i).binary) {
@@ -428,6 +497,7 @@ bool Connection::pushRecord(const QByteArray &record)
         return false;
     }
     m_queue.append(Item{record, true});
+    wake();
     ++m_records;
     m_recordBytes += record.size();
     return true;
