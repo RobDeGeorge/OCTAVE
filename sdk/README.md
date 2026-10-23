@@ -43,7 +43,7 @@ Tests: `python -m unittest discover -s sdk/python/tests` runs the client against
 
 ## TypeScript: `typescript/`
 
-`typescript/` is an npm package (`octave-client`: ESM, no dependencies, browsers and Node 22+) with the same client as a library plus types generated from `docs/api/`, so `obj(client, "volumeController").call("applyVolume", 40)` type-checks and `call("applyVolume", "loud")` does not:
+`typescript/` is an npm package (`octave-client`: ESM, no dependencies, browsers and Node 22+) with the same client as a library on top of code generated from `docs/api/`: the envelope (ops, replies, events, errors) from `protocol.json` and every object's members from the object files, with `@deprecated` / `@experimental` JSDoc where the API says so. `obj(client, "volumeController").call("applyVolume", 40)` type-checks and `call("applyVolume", "loud")` does not, as does `request("get", { object, property })` against a missing `object`:
 
 ```ts
 import { OctaveClient, obj } from 'octave-client'
@@ -58,7 +58,7 @@ client.params(['RPM', 'SPEED'], (values) => console.log(values))    // live read
 await client.stream('phoneMirrorManager', 'video', { onRecord: (r) => decoder.feed(r) })   // media records
 ```
 
-It reconnects with backoff and re-issues its subscriptions; `request(op, args)` covers any op. `cd sdk/typescript && npm install && npm test` regenerates nothing but checks that the committed `src/types.ts` matches `docs/api` (so it goes stale loudly, like `tst_apidocs`), type-checks the facade, and runs the client against a fake service; `npm run generate` rewrites the types after `octave --dump-api docs/api`. Its README has the details and `examples/now_playing.mjs`.
+It reconnects with backoff and re-issues its subscriptions; `request(op, args)` covers any op. `cd sdk/typescript && npm install && npm test` regenerates nothing but checks that the committed `src/protocol.ts` and `src/types.ts` match `docs/api` (so they go stale loudly, like `tst_apidocs`), type-checks the facade, and runs the client against a fake service; `npm run generate` rewrites both after `octave --dump-api docs/api` or an edit to `protocol.json`. Its README has the details and `examples/now_playing.mjs`.
 
 ## Versioning
 

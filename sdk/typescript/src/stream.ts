@@ -4,8 +4,9 @@
 // 1 keyframe, 2 config, 4 jpeg, 8 discontinuity. A video payload is one
 // Annex-B access unit with SPS / PPS inline on keyframes; a JPEG record is
 // a whole JPEG.
-export const F_KEY = 1, F_CONFIG = 2, F_JPEG = 4, F_DISCONTINUITY = 8
-export const RECORD_HEADER = 12
+import { F_KEY, F_CONFIG, F_JPEG, F_DISCONTINUITY, RECORD_HEADER, type StreamInfo } from './protocol.js'
+export { F_KEY, F_CONFIG, F_JPEG, F_DISCONTINUITY, RECORD_HEADER }
+export type { StreamInfo }
 
 export interface MediaRecord {
   stream: number
@@ -40,8 +41,6 @@ export function buildRecord(stream: number, flags: number, pts: number, payload:
   return out
 }
 
-/** What the `stream` op replies, and what a `streamConfig` event carries. */
-export interface StreamInfo { stream: number; codec?: string; width?: number; height?: number; format?: string }
 export interface StreamHandlers {
   onRecord: (r: MediaRecord) => void
   onConfig?: (info: StreamInfo) => void

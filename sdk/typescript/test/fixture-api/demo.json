@@ -1,0 +1,64 @@
+{
+ "object": "demo",
+ "class": "Demo",
+ "properties": [
+  {
+   "name": "level",
+   "type": "int",
+   "readable": true,
+   "writable": false,
+   "constant": false,
+   "notify": "levelChanged",
+   "stability": "experimental"
+  },
+  {
+   "name": "name",
+   "type": "QString",
+   "readable": true,
+   "writable": true,
+   "constant": false,
+   "deprecated": "use title; goes in protocol 3"
+  }
+ ],
+ "methods": [
+  {
+   "name": "go",
+   "kind": "slot",
+   "params": [
+    {
+     "name": "speed",
+     "type": "int"
+    }
+   ],
+   "returns": "",
+   "deprecated": "use run(speed, mode); goes in protocol 3"
+  },
+  {
+   "name": "run",
+   "kind": "invokable",
+   "params": [
+    {
+     "name": "speed",
+     "type": "int"
+    },
+    {
+     "name": "mode",
+     "type": "QString"
+    }
+   ],
+   "returns": "bool"
+  }
+ ],
+ "signals": [
+  {
+   "name": "levelChanged",
+   "params": [
+    {
+     "name": "level",
+     "type": "int"
+    }
+   ],
+   "stability": "experimental"
+  }
+ ]
+}
