@@ -1,5 +1,5 @@
-#ifndef OCTAVE_DEV_SIMELM327_H
-#define OCTAVE_DEV_SIMELM327_H
+#ifndef OCTAVE_SIM_SIMELM327_H
+#define OCTAVE_SIM_SIMELM327_H
 
 // A simulated ELM327 adapter: a QIODevice the real OBDConnectionWorker talks
 // to exactly as it would a serial port. It answers the AT init sequence,
@@ -8,11 +8,11 @@
 // DTCs, the Mode 02 freeze-frame DTC and the Mode 09 VIN (CAN multi-frame).
 //
 // Every PID in ELM327Protocol's tables is reported as supported, so no
-// dashboard widget is gated out in dev mode. Modelled PIDs follow the
+// dashboard widget is gated out in a simulated run. Modelled PIDs follow the
 // simulation; the rest hold plausible fixed values.
 //
 // Lives on the OBD worker thread; registered for port "sim://elm327" by
-// OctaveDev::Runtime through OBDConnectionWorker::setCustomTransport().
+// the Simulator (simulator.h) through OBDConnectionWorker::setCustomTransport().
 
 #include <QElapsedTimer>
 #include <QIODevice>
@@ -20,7 +20,7 @@
 
 #include <memory>
 
-namespace OctaveDev {
+namespace OctaveSim {
 
 class CarState;
 
@@ -66,6 +66,6 @@ private:
     bool m_probed = false;   // a PID has been answered since the last ATZ
 };
 
-} // namespace OctaveDev
+} // namespace OctaveSim
 
-#endif // OCTAVE_DEV_SIMELM327_H
+#endif // OCTAVE_SIM_SIMELM327_H

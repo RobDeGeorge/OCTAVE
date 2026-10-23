@@ -2,7 +2,7 @@
 // as OBD adapters, list order, the hand-off to OBDManager after pairing
 // (connect_direct + a named saved-adapter chip, then the outcome read from
 // connectionStatusChanged) and staying inert without BlueZ. The hand-off runs against the real
-// OBDManager talking to the simulated ELM327 (needs OCTAVE_DEV_TOOLS).
+// OBDManager talking to the simulated ELM327 (src/sim/).
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -10,8 +10,8 @@
 
 #include <memory>
 
-#include "dev/carsim.h"
-#include "dev/simelm327.h"
+#include "sim/carsim.h"
+#include "sim/simelm327.h"
 #include "managers/obdadapterfinder.h"
 #include "managers/obdmanager.h"
 #include "managers/settingsmanager.h"
@@ -33,13 +33,13 @@ private slots:
         qputenv("APPDATA", (m_tmp.path() + "/appdata").toUtf8());
 
         // connect_direct() goes to the simulated adapter, never a radio
-        m_sim = std::make_unique<OctaveDev::CarSim>();
+        m_sim = std::make_unique<OctaveSim::CarSim>();
         m_sim->setRealisticMode(false);
-        const std::shared_ptr<OctaveDev::CarState> state = m_sim->state();
+        const std::shared_ptr<OctaveSim::CarState> state = m_sim->state();
         OBDConnectionWorker::setCustomTransport(
-            [](const QString &port) { return port == QLatin1String(OctaveDev::kSimPort); },
+            [](const QString &port) { return port == QLatin1String(OctaveSim::kSimPort); },
             [state](const QString &, QObject *parent) -> QIODevice * {
-                return new OctaveDev::SimElm327Device(state, parent);
+                return new OctaveSim::SimElm327Device(state, parent);
             });
     }
 
@@ -83,7 +83,7 @@ private slots:
     {
         SettingsManager settings;
         OBDManager obd(&settings);
-        obd.setPortOverride(QString::fromLatin1(OctaveDev::kSimPort));
+        obd.setPortOverride(QString::fromLatin1(OctaveSim::kSimPort));
         OBDAdapterFinder f(&obd, &settings);
         f.m_busyName = QStringLiteral("NEXAS23082749");
         f.setBusy(kMac);
@@ -193,7 +193,7 @@ private:
     }
 
     QTemporaryDir m_tmp;
-    std::unique_ptr<OctaveDev::CarSim> m_sim;
+    std::unique_ptr<OctaveSim::CarSim> m_sim;
 };
 
 QTEST_MAIN(TstObdAdapterFinder)

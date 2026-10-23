@@ -1,4 +1,4 @@
-#include "devimufeed.h"
+#include "imufeed.h"
 
 #include "carsim.h"
 #include "../managers/berryimumanager.h"
@@ -9,19 +9,19 @@
 #if defined(Q_OS_MOBILE) && !defined(OCTAVE_WASM)   // wasm runs the desktop IMU manager
 
 // The QtSensors-backed mobile manager has no I2C worker to stand in for
-namespace OctaveDev {
-DevImuFeed::DevImuFeed(BerryIMUManager *imu, CarSim *sim, QObject *parent)
+namespace OctaveSim {
+ImuFeed::ImuFeed(BerryIMUManager *imu, CarSim *sim, QObject *parent)
     : QObject(parent), m_imu(imu), m_sim(sim) {}
-void DevImuFeed::setEnabled(bool) {}
-QVariantMap DevImuFeed::status() const { return {{QStringLiteral("on"), false}}; }
-void DevImuFeed::tick() {}
-} // namespace OctaveDev
+void ImuFeed::setEnabled(bool) {}
+QVariantMap ImuFeed::status() const { return {{QStringLiteral("on"), false}}; }
+void ImuFeed::tick() {}
+} // namespace OctaveSim
 
 #else
 
 // Friend of BerryIMUManager (see berryimumanager.h); global namespace so the
 // friend declaration there matches.
-class DevImuAccess
+class SimImuAccess
 {
 public:
     static void take(BerryIMUManager *imu)
@@ -41,7 +41,7 @@ public:
     }
 };
 
-namespace OctaveDev {
+namespace OctaveSim {
 
 namespace {
 constexpr double kMphToMs = 0.44704;
@@ -51,30 +51,30 @@ double deg(double rad) { return rad * 180.0 / kPi; }
 double rad(double deg) { return deg * kPi / 180.0; }
 } // namespace
 
-DevImuFeed::DevImuFeed(BerryIMUManager *imu, CarSim *sim, QObject *parent)
+ImuFeed::ImuFeed(BerryIMUManager *imu, CarSim *sim, QObject *parent)
     : QObject(parent)
     , m_imu(imu)
     , m_sim(sim)
 {
     m_timer.setInterval(1000 / kRateHz);
-    connect(&m_timer, &QTimer::timeout, this, &DevImuFeed::tick);
+    connect(&m_timer, &QTimer::timeout, this, &ImuFeed::tick);
 }
 
-void DevImuFeed::setEnabled(bool on)
+void ImuFeed::setEnabled(bool on)
 {
     if (on && !running()) {
-        ::DevImuAccess::take(m_imu);
+        ::SimImuAccess::take(m_imu);
         m_clock.start();
         m_last = 0;
         m_speedMs = m_sim->state()->values().speedMph * kMphToMs;
         m_timer.start();
     } else if (!on && running()) {
         m_timer.stop();
-        ::DevImuAccess::release(m_imu);
+        ::SimImuAccess::release(m_imu);
     }
 }
 
-QVariantMap DevImuFeed::status() const
+QVariantMap ImuFeed::status() const
 {
     auto r = [](double v, int places) { const double f = std::pow(10.0, places); return std::round(v * f) / f; };
     return {
@@ -86,7 +86,7 @@ QVariantMap DevImuFeed::status() const
     };
 }
 
-void DevImuFeed::tick()
+void ImuFeed::tick()
 {
     const double t = m_clock.elapsed() / 1000.0;
     const double dt = std::max(1e-3, t - m_last);
@@ -126,6 +126,6 @@ void DevImuFeed::tick()
     }
 }
 
-} // namespace OctaveDev
+} // namespace OctaveSim
 
 #endif // Q_OS_MOBILE

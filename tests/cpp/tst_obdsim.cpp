@@ -1,8 +1,8 @@
-// The real OBDManager against the simulated ELM327 (src/dev/simelm327.cpp):
+// The real OBDManager against the simulated ELM327 (src/sim/simelm327.cpp):
 // connect, VIN decode, vehicle scan, demand-driven polling of single and
 // multi-value PIDs, trouble codes, and a lost link that reconnects. The
-// whole shipped OBD stack runs; only the adapter is simulated. Needs
-// OCTAVE_DEV_TOOLS (the simulator lives in src/dev/).
+// whole shipped OBD stack runs; only the adapter is simulated (src/sim/,
+// built in every configuration).
 //
 // The slots share one manager and run in declaration order.
 
@@ -13,12 +13,12 @@
 #include <algorithm>
 #include <memory>
 
-#include "dev/carsim.h"
-#include "dev/simelm327.h"
+#include "sim/carsim.h"
+#include "sim/simelm327.h"
 #include "managers/obdmanager.h"
 #include "managers/settingsmanager.h"
 
-using namespace OctaveDev;
+using namespace OctaveSim;
 
 class TstObdSim : public QObject
 {

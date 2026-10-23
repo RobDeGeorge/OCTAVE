@@ -174,7 +174,7 @@ endif()
 option(OCTAVE_ENABLE_DOWNLOADS "Enable music download feature (disable for app store builds)" ON)
 
 # ---- Developer tooling (src/dev/) ----
-# `octave --dev` (simulated car over a fake ELM327, dev overlay) and
+# `octave --dev` (the --sim simulator of src/sim/ plus the dev overlay) and
 # `octave --profile` (perf monitor + JSON command server on 127.0.0.1:9876,
 # which the dev/ MCP servers and screenshot scripts drive). Both are inactive
 # without their flag. Default ON only for desktop Debug builds; anything else
@@ -290,6 +290,18 @@ qt_add_executable(octave
     src/managers/tripstore.cpp
     src/managers/triprecorder.h
     src/managers/triprecorder.cpp
+    # The simulator (--sim, the `sim` object, the browser demo): in every
+    # build, inert unless started
+    src/sim/simulator.h
+    src/sim/simulator.cpp
+    src/sim/simconfig.h
+    src/sim/simconfig.cpp
+    src/sim/carsim.h
+    src/sim/carsim.cpp
+    src/sim/simelm327.h
+    src/sim/simelm327.cpp
+    src/sim/imufeed.h
+    src/sim/imufeed.cpp
     src/phone_mirror/scrcpyclient.h
     src/phone_mirror/adaptivebitrate.h
     src/phone_mirror/scrcpyclient.cpp
@@ -365,15 +377,9 @@ if(EMSCRIPTEN)
         src/platform/wasm/QSerialPortInfo
         src/platform/wasm/obdadapterfinder_wasm.cpp
         src/platform/wasm/networkmanager_wasm.cpp
-        # the demo car: the dev tooling's simulator, driven by an autopilot
+        # the demo car: the --sim simulator (src/sim/), driven by an autopilot
         src/platform/wasm/webdemo.h
         src/platform/wasm/webdemo.cpp
-        src/dev/carsim.h
-        src/dev/carsim.cpp
-        src/dev/simelm327.h
-        src/dev/simelm327.cpp
-        src/dev/devimufeed.h
-        src/dev/devimufeed.cpp
     )
     set_source_files_properties(src/managers/obdadapterfinder.cpp src/managers/networkmanager.cpp
                                 PROPERTIES HEADER_FILE_ONLY ON)
@@ -454,12 +460,8 @@ if(OCTAVE_DEV_TOOLS)
         src/dev/uidriver.cpp
         src/dev/perfmonitor.h
         src/dev/perfmonitor.cpp
-        src/dev/carsim.h
-        src/dev/carsim.cpp
-        src/dev/simelm327.h
-        src/dev/simelm327.cpp
-        src/dev/devimufeed.h
-        src/dev/devimufeed.cpp
+        src/dev/devkeyboard.h
+        src/dev/devkeyboard.cpp
         src/dev/devtoolsmanager.h
         src/dev/devtoolsmanager.cpp
         src/dev/collagebridge.h
@@ -499,6 +501,16 @@ qt_add_resources(octave "web_client"
     BASE "${CMAKE_SOURCE_DIR}/sdk/web"
     FILES "${CMAKE_SOURCE_DIR}/sdk/web/index.html"
 )
+
+# ---- The simulator's test video (sim.setVideo), 140 KB ----
+# Not in the browser build: no service there to stream it to
+if(NOT EMSCRIPTEN)
+    qt_add_resources(octave "sim_video"
+        PREFIX "/sim"
+        BASE "${CMAKE_SOURCE_DIR}/tests/data"
+        FILES "${CMAKE_SOURCE_DIR}/tests/data/stream-test.h264"
+    )
+endif()
 
 # ---- Bundled phone server (OCTAVE's fork of the scrcpy server, Apache-2.0) ----
 # Source in phone_server/; prebuilt jar in tools/phone-server/ (rebuilt and

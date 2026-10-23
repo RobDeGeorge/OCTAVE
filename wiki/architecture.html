@@ -679,7 +679,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           property, turns the service's command server on (<code>127.0.0.1:9876</code>, <code>--command-port N</code>
           to move it; <a href="#service">The Service</a>) and adds the UI-driving actions to it (navigate, click, drag,
           capture, record), which run on the GUI thread. Both are stopped first on <code>aboutToQuit</code> and the
-          report is written to the log. Dev mode (<code>--dev</code>) adds a simulated car and its <code>sim_*</code> actions.
+          report is written to the log. <code>--sim</code> (any build; implied by dev mode, <code>--dev</code>) adds a simulated car behind the real OBD stack, driven by the experimental <code>sim</code> object (<span class="file-path">src/sim/</span>); dev builds also take the <code>sim_*</code> actions.
         </p>
         <ul>
           <li><code>OctaveDev::Runtime</code> is created in <code>main.cpp</code> after the managers; the simulated car talks

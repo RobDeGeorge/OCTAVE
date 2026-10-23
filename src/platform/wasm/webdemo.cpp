@@ -1,15 +1,13 @@
 #include "webdemo.h"
 
-#include "../../dev/carsim.h"
-#include "../../dev/devimufeed.h"
-#include "../../dev/simelm327.h"
-#include "../../managers/obdmanager.h"
+#include "../../sim/carsim.h"
+#include "../../sim/simulator.h"
 
 #include <QRandomGenerator>
 
 #include <algorithm>
 
-using namespace OctaveDev;
+using namespace OctaveSim;
 
 namespace {
 constexpr int kTickMs = 100;
@@ -17,23 +15,14 @@ constexpr int kTickMs = 100;
 int between(int lo, int hi) { return QRandomGenerator::global()->bounded(lo, hi + 1); }
 }
 
-WebDemo::WebDemo(OBDManager *obd, BerryIMUManager *imu, QObject *parent)
+WebDemo::WebDemo(Simulator *sim, OBDManager *obd, BerryIMUManager *imu, QObject *parent)
     : QObject(parent)
 {
-    m_sim = new CarSim(this);
+    sim->start(obd, imu, nullptr, true);
+    m_sim = sim->car();
     // A browser has nothing to wait for on the link, so no Bluetooth-style
     // latency or NO DATA: the gauges move from the first frame
     m_sim->setRealisticMode(false);
-    const std::shared_ptr<CarState> state = m_sim->state();
-    OBDConnectionWorker::setCustomTransport(
-        [](const QString &port) { return port == QLatin1String(kSimPort); },
-        [state](const QString &, QObject *p) -> QIODevice * { return new SimElm327Device(state, p); });
-    if (obd)
-        obd->setPortOverride(QString::fromLatin1(kSimPort));
-    if (imu) {
-        m_imuFeed = new DevImuFeed(imu, m_sim, this);
-        m_imuFeed->setEnabled(true);
-    }
 
     connect(&m_autopilot, &QTimer::timeout, this, &WebDemo::drive);
     m_autopilot.start(kTickMs);

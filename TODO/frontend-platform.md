@@ -11,7 +11,7 @@ The open backend is done (`TODO/open-backend.md`): every manager is served over 
 
 What stops an outside developer today, in order of how much it hurts:
 
-1. The simulated car (`--dev`) exists only in builds with `OCTAVE_DEV_TOOLS` (`CMakeLists.txt:189`, default ON only for Debug), so a frontend author must compile OCTAVE and Qt from source.
+1. (Done, step 2.) The simulated car existed only in developer builds, so a frontend author had to compile OCTAVE and Qt from source.
 2. (Done, step 1.) The versioning rule was not enforced.
 3. Only the TypeScript SDK is generated; the envelope (ops, errors, events, streams) is described in prose, so a new language means reading `sdk/python` and porting by hand.
 4. There is no way to install a frontend: `--web-root` / `serviceWebRoot` takes one folder, a native frontend is a separate program the user starts themselves, and nothing restarts it.
@@ -25,11 +25,9 @@ What stops an outside developer today, in order of how much it hurts:
 **Done (2026-10-23):** `tools/api/check_compat.py` in CI (`lint`), stability / deprecation annotations (`Q_CLASSINFO`, `src/service/metadescribe.h`) in `describe`, `docs/api/` and the API reference, `docs/api/CHANGELOG.md`. **Left:** surface `deprecated` / `experimental` in the generated SDK types (JSDoc `@deprecated` in `sdk/typescript`; folded into step 3).
 
 ### 2. A downloadable simulator
-**Effort:** M. **Device:** desktop, then the release CI matrix.
-- Split what `--dev` needs for a frontend author (the simulated car `src/dev/carsim` + `simelm327`, `devimufeed`, the `sim_*` actions, `sim_pairing_code`) from the UI-driving tooling (`uidriver`, `perfmonitor`, the dev overlay), and build the first part in every configuration as `--sim`, inert unless asked for.
-- `octave --headless --sim` in the release AppImage / exe / dmg gives a car, test media, and the service with no window, on a throwaway config unless told otherwise (so trying it never touches a real install: see the isolation rules in `TODO/open-backend.md`).
-- Document it as the first step of `wiki/writing-a-frontend.html`.
-- Keep the wasm browser build's `webdemo` on the same simulator.
+**Done (2026-10-23):** `src/sim/` (the simulated car, ELM327, IMU motion, a compiled-in test video, pairing codes) is built in every configuration and served as the experimental `sim` object; `octave --headless --sim` runs it on a throwaway config seeded with test tracks, `--config DIR` keeps one; `--dev` implies `--sim` on the usual config and keeps the `sim_*` actions as aliases; the browser demo runs on the same simulator. Checked in a Release `-DOCTAVE_DEV_TOOLS=OFF` build (`tst_boot` `headlessSimRunsInEveryBuild`). First step of `wiki/writing-a-frontend.html`. **Left:**
+- **Effort:** S. **Device:** the release CI matrix. Run each packaged artifact with `--headless --sim --smoke` next to the existing `--smoke` step (`.github/workflows/build.yml`: the Windows step near line 307, and the AppImage / dmg jobs), so a release whose simulator does not start fails. Not tried yet: only the Linux desktop build was run.
+- **Effort:** S. **Device:** desktop. Surface `sim` as experimental in the generated SDK types (folded into step 3 with the step 1 leftover).
 
 ### 3. One machine-readable protocol spec, SDKs generated from it
 **Effort:** L. **Device:** desktop.

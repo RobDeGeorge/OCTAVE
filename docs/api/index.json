@@ -21,6 +21,7 @@
         "phoneMirrorManager": "PhoneMirrorManager",
         "settingsManager": "SettingsManager",
         "shiftLightManager": "ShiftLightManager",
+        "sim": "Simulator",
         "themeCatalog": "ThemeCatalog",
         "tripRecorder": "TripRecorder",
         "units": "Units",

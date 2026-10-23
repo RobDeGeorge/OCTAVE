@@ -20,7 +20,7 @@
           <h3>Table of Contents</h3>
           <ul class="toc-list">
             <li><a href="#what-you-get">What You Get</a></li>
-            <li><a href="#start">1. Start the Service</a></li>
+            <li><a href="#start">1. Get OCTAVE and a Simulated Car</a></li>
             <li><a href="#connect">2. Connect</a></li>
             <li><a href="#discover">3. Discover</a></li>
             <li><a href="#read">4. Read and Subscribe</a></li>
@@ -38,12 +38,17 @@
         <p>Three working clients come with the repo: <span class="file-path">sdk/web/index.html</span> (plain JavaScript, about 250 lines), <span class="file-path">sdk/python/octave_client</span> (stdlib only) and <span class="file-path">sdk/typescript</span> (an npm package for browsers and Node; its envelope is generated from <span class="file-path">docs/api/protocol.json</span> and its object types from the object files, so a wrong call fails to compile and a deprecated member shows as such in the editor). Read one of them next to this page.</p>
         <p>Five whole frontends written to prove the API (TypeScript + Svelte, Python + Textual, Go + Gio, Rust + egui, C + SDL2, together reaching every feature of the bundled UI) are kept on the <code>frontends-experiment</code> branch as worked examples; they are not part of <code>main</code>.</p>
 
-        <h2 id="start">1. Start the Service</h2>
-        <p>It is off by default. Any of these turns it on, listening on <code>127.0.0.1:9876</code>:</p>
-        <pre><code>./build/octave --service              <span class="cmt"># the normal UI, plus the service</span>
-./build/octave --service 9900         <span class="cmt"># another port</span>
-./build/octave --headless             <span class="cmt"># no UI at all: your frontend is the screen</span></code></pre>
-        <p>Or set <code>"serviceEnabled": true</code> in <code>settingsConfigure.json</code> (<a href="settings-reference.html">Settings Reference</a>) to have it at every start. For a phone or a second screen on the car's network add <code>--service-bind 0.0.0.0</code>; read <a href="#rules">Versioning and Security</a> first. A developer build's <code>--dev --profile</code> also starts it, with a simulated car that makes the OBD values move.</p>
+        <h2 id="start">1. Get OCTAVE and a Simulated Car</h2>
+        <p>You don't need to build OCTAVE, or own the car. Download a release for your machine from <a href="https://github.com/RobDeGeorge/OCTAVE/releases">GitHub Releases</a> (one where <code>octave --help</code> lists <code>--sim</code>) and start it with no window and a simulated car:</p>
+        <pre><code>./OCTAVE-*-linux-x86_64.AppImage --headless --sim                 <span class="cmt"># Linux (chmod +x it first)</span>
+/Applications/OCTAVE.app/Contents/MacOS/octave --headless --sim   <span class="cmt"># macOS, from the .dmg</span>
+"C:\Program Files\OCTAVE\OCTAVE.exe" --headless --sim           <span class="cmt"># Windows, after the installer</span></code></pre>
+        <p>That serves every object on <code>127.0.0.1:9876</code> with the real OBD stack connected to a simulated ELM327 adapter (every PID supported, a VIN, trouble codes), IMU readings that move with it, and three short test tracks to play. It runs on a throwaway config that is deleted when it exits, so it never touches an OCTAVE you use; <code>--config DIR</code> keeps one in <code>DIR</code> instead. Drive the car from your frontend or a script with the <code>sim</code> object, for example <code>{"op":"call","object":"sim","method":"setThrottle","args":[60]}</code>; its methods (pedals, gears, scenarios, link faults, the IMU, a test video, pairing codes) are listed in <span class="file-path">docs/api/README.md</span>, "Simulator". <code>sim</code> is experimental and exists for development: <code>sim.active</code> is false on a real head unit, where every control does nothing. Leave out <code>--headless</code> to see the same car in the bundled UI next to yours.</p>
+        <p>On a real head unit the service is off by default. Any of these turns it on, listening on <code>127.0.0.1:9876</code>:</p>
+        <pre><code>octave --service              <span class="cmt"># the normal UI, plus the service</span>
+octave --service 9900         <span class="cmt"># another port</span>
+octave --headless             <span class="cmt"># no UI at all: your frontend is the screen</span></code></pre>
+        <p>Or set <code>"serviceEnabled": true</code> in <code>settingsConfigure.json</code> (<a href="settings-reference.html">Settings Reference</a>) to have it at every start. For a phone or a second screen on the car's network add <code>--service-bind 0.0.0.0</code>; read <a href="#rules">Versioning and Security</a> first.</p>
 
         <h2 id="connect">2. Connect</h2>
         <p>Two transports on the same port carry the same JSON messages:</p>
@@ -89,7 +94,7 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
         <h2 id="first">Your First Frontend in 60 Lines</h2>
         <p>Everything above, in one page on the TypeScript SDK (<span class="file-path">sdk/typescript</span>): it connects to the app that serves it, pairs when the browser is not on the head unit, shows two live readings, the track with transport, and the cover. The whole thing is <span class="file-path">sdk/typescript/examples/first-frontend/</span>: <span class="file-path">index.html</span> (a status line, a pair form, two gauges, a now-playing row) and this <span class="file-path">app.js</span>, no framework and no bundler.</p>
         <pre><code>cd sdk/typescript &amp;&amp; npm install &amp;&amp; examples/first-frontend/build.sh      <span class="cmt"># builds the SDK, copies it to lib/</span>
-./build/octave --dev --service --web-root sdk/typescript/examples/first-frontend   <span class="cmt"># a simulated car; open http://127.0.0.1:9876/</span></code></pre>
+octave --headless --sim --web-root sdk/typescript/examples/first-frontend   <span class="cmt"># a simulated car; open http://127.0.0.1:9876/</span></code></pre>
         <pre><code>// A first OCTAVE frontend with the TypeScript SDK, in 60 lines: connect, pair
 // when this browser is not on the head unit, two live gauges, a now-playing
 // line with transport, the cover. Build the SDK, then serve this folder from
@@ -150,7 +155,7 @@ client.connect()
           <li><strong>Now playing.</strong> One subscription to <code>nowPlaying</code>'s properties: the current values arrive at once, then every change. The buttons call <code>togglePlay</code>, <code>next</code>, <code>previous</code> through the typed facade (<code>obj(client, 'nowPlaying')</code>): a method that does not exist does not compile.</li>
           <li><strong>The cover.</strong> <code>GET /art?rev=N</code> with <code>nowPlaying.artRevision</code> as the cache key; over the network the URL also carries a short-lived ticket from <code>mediaTicket</code>, never the token.</li>
         </ul>
-        <p>Run against a developer build with <code>--dev --service-bind 0.0.0.0</code> and opened by the machine's LAN address, the page showed the pair form, took a code from <code>sim_pairing_code</code>, and then read the simulated car and the cover like a page on the head unit.</p>
+        <p>Run with <code>--headless --sim --service-bind 0.0.0.0</code> and opened by the machine's LAN address, the page shows the pair form; a code from <code>sim.pairingCode()</code> over loopback pairs it, and then it reads the simulated car and the cover like a page on the head unit.</p>
 
         <h2 id="recipes">Recipes</h2>
         <table>
@@ -168,7 +173,7 @@ client.connect()
 
         <h2 id="headless">Being the Only UI</h2>
         <p><code>octave --headless</code> runs every manager and the service with no QML engine and no window (the offscreen Qt platform), using about a fifth less memory than the full app. Music, OBD polling, the black box, the knob, gestures and the IMU all keep working; your frontend is the screen. It needs the service, so it exits if the service can't start. <code>hello</code> reports <code>"headless": true</code>.</p>
-        <p>In a developer build (<code>OCTAVE_DEV_TOOLS</code>, the default for Debug) <code>octave --headless --dev</code> adds the simulated car behind the real <code>OBDManager</code> and simulated IMU motion, so OBD values, the G-force and the compass move with no adapter and no QML UI. Drive it with the dev-only <code>sim_*</code> actions on the same port, for example <code>{"action":"sim_throttle","args":{"value":80}}</code> or <code>{"action":"sim_scenario","args":{"name":"overheat"}}</code> (<a href="development.html">Development</a>); never send them from a shipped frontend.</p>
+        <p><code>octave --headless --sim</code> (<a href="#start">step 1</a>, any build) adds the simulated car behind the real <code>OBDManager</code> and simulated IMU motion, so OBD values, the G-force and the compass move with no adapter and no QML UI. Drive it with the <code>sim</code> object on the same port, for example <code>{"op":"call","object":"sim","method":"setThrottle","args":[80]}</code> or <code>{"op":"call","object":"sim","method":"scenario","args":["hot"]}</code>.</p>
         <p>The SDK's <code>launch_headless()</code> starts one with a throwaway config, the easiest way to test a frontend or a script: <span class="file-path">sdk/python/tests/test_client.py</span> does exactly that.</p>
 
         <h2 id="rules">Versioning and Security</h2>
@@ -178,7 +183,8 @@ client.connect()
           <li><strong>Permissions.</strong> Ask only for what your frontend changes: <code>{"op":"pair",...,"scopes":["media"]}</code>. Every paired device can read; changing a member needs its <code>scope</code> (listed on every method and writable property in <code>describe</code> and the <a href="api-reference.html">API reference</a>: <code>media</code>, <code>vehicle</code>, <code>phone</code>, <code>settings</code>, <code>files</code>, <code>system</code>, <code>full</code>), otherwise it answers <code>"code": "forbidden"</code>. Without <code>scopes</code> you get <code>full</code>. The user sees each device's access in Settings and can make it read only. Details: <span class="file-path">docs/api/README.md</span>, "Permissions".</li>
           <li><strong>The network.</strong> Bind beyond loopback (<code>--service-bind</code>) only on a network you control: pairing keeps strangers out, but traffic is not encrypted.</li>
           <li><strong>Browsers</strong> are held to the app's own page, opened by IP address (<a href="utilities.html#service-protocol">the Origin rule</a>), so a website open on the same machine can't drive the car.</li>
-          <li><strong>Dev-only actions</strong> (<code>navigate</code>, <code>click</code>, <code>screenshot</code>, <code>sim_*</code>) exist only in developer builds with <code>--profile</code>, aren't versioned, and drive the bundled UI rather than the managers. Don't build on them.</li>
+          <li><strong>Experimental objects and members</strong> (marked <code>"stability": "experimental"</code>, such as <code>sim</code>) aren't covered by the version and may change in any release.</li>
+          <li><strong>Dev-only actions</strong> (<code>navigate</code>, <code>click</code>, <code>screenshot</code>, <code>sim_*</code>) exist only in developer builds with <code>--dev</code> / <code>--profile</code>, aren't versioned, and drive the bundled UI rather than the managers. Don't build on them.</li>
         </ul>
 
         <h3>Changing settings</h3>
@@ -197,7 +203,7 @@ client.connect()
         <p><code>nowPlaying.artUrl</code> is a file on the head unit; fetch the picture itself from <code>GET http://host:9876/art</code> (local and phone art alike, typed by its bytes: JPEG, PNG, GIF, WebP or BMP; 404 when there is none). Subscribe to <code>nowPlaying.artRevision</code>, which goes up by one on every new cover, and use it as your cache key: <code>&lt;img src="/art?rev=12"&gt;</code> from a <code>--web-root</code> page, or refetch when it changes. For a list, <code>/art?song=&lt;file name&gt;</code> (URL-encoded, a song in the library, as the playlist APIs name it) gives that song's cover and <code>/art?queue=&lt;id&gt;</code> a phone queue item's (<code>phoneMirrorManager.mediaQueue</code> ids). The request only names a song or an item; the app looks the file up itself and serves nothing outside its own art folders.</p>
 
         <h3>Video: the phone mirror and Android Auto</h3>
-        <p>Send <code>{"op":"stream","object":"phoneMirrorManager","name":"video"}</code> (or <code>androidAutoManager</code> / <code>frames</code> for JPEG). The reply gives your stream id; then binary records arrive on the same connection: H.264 access units in Annex-B, every keyframe carrying its SPS and PPS, with a <code>streamConfig</code> event (codec string, width, height) whenever those change. A browser decodes them with WebCodecs: <code>decoder.configure({codec})</code>, then one <code>EncodedVideoChunk</code> per record. Touch goes back through <code>phoneMirrorManager.injectTouch(pointerId, action, relX, relY)</code>, with 0 to 1 coordinates over the picture. The record layout, the join and drop rules and a phone-free test source (<code>sim_video</code> in a developer build) are in <span class="file-path">docs/api/README.md</span>, "Streams".</p>
+        <p>Send <code>{"op":"stream","object":"phoneMirrorManager","name":"video"}</code> (or <code>androidAutoManager</code> / <code>frames</code> for JPEG). The reply gives your stream id; then binary records arrive on the same connection: H.264 access units in Annex-B, every keyframe carrying its SPS and PPS, with a <code>streamConfig</code> event (codec string, width, height) whenever those change. A browser decodes them with WebCodecs: <code>decoder.configure({codec})</code>, then one <code>EncodedVideoChunk</code> per record. Touch goes back through <code>phoneMirrorManager.injectTouch(pointerId, action, relX, relY)</code>, with 0 to 1 coordinates over the picture. The record layout, the join and drop rules and a phone-free test source (<code>sim.setVideo(true)</code> under <code>--sim</code>) are in <span class="file-path">docs/api/README.md</span>, "Streams".</p>
 
         <h3>Exports</h3>
         <p>An export writes to the head unit's Downloads folder; a remote client then fetches it over HTTP. Call <code>tripRecorder.exportTrip(id)</code> and, after its <code>exportFinished</code>, download <code>GET /export/trip</code> (the CSV; <code>?format=json</code> for the JSON); <code>dashboardManager.exportDashboard(id)</code> then <code>GET /export/dashboard</code>; <code>diagnosticsManager.exportLogs()</code> then <code>GET /export/logs</code> (the list of files) and <code>/export/logs?file=octave-cpp.log</code>. Only the last export of each kind is served, never a path you name.</p>

@@ -1,13 +1,14 @@
-#ifndef OCTAVE_DEV_DEVIMUFEED_H
-#define OCTAVE_DEV_DEVIMUFEED_H
+#ifndef OCTAVE_SIM_IMUFEED_H
+#define OCTAVE_SIM_IMUFEED_H
 
-// Synthetic IMU motion for dev mode. Drives the
+// Synthetic IMU motion for the simulator (simulator.h). Drives the
 // REAL berryIMU manager's signals from a GUI-thread timer so QML sees exactly
 // what it would from hardware: a winding road tied to the simulated speed,
 // lateral G from speed x turn rate, longitudinal G from the change in speed,
 // body roll and pitch, and hills for altitude.
 //
-// Opt-in (sim_imu {"on": true}), so a dev run on a Pi with a real IMU is never
+// On from the start with --sim and --headless; a GUI --dev run leaves it to
+// sim.setImu(true) (sim_imu), so a dev run on a Pi with a real IMU is never
 // masked. Turning it on stops the I2C worker; turning it off restarts it.
 
 #include <QElapsedTimer>
@@ -17,16 +18,16 @@
 
 class BerryIMUManager;
 
-namespace OctaveDev {
+namespace OctaveSim {
 
 class CarSim;
 
-class DevImuFeed : public QObject
+class ImuFeed : public QObject
 {
     Q_OBJECT
 
 public:
-    DevImuFeed(BerryIMUManager *imu, CarSim *sim, QObject *parent = nullptr);
+    ImuFeed(BerryIMUManager *imu, CarSim *sim, QObject *parent = nullptr);
 
     bool running() const { return m_timer.isActive(); }
     void setEnabled(bool on);
@@ -50,6 +51,6 @@ private:
     double m_latG = 0;
 };
 
-} // namespace OctaveDev
+} // namespace OctaveSim
 
-#endif // OCTAVE_DEV_DEVIMUFEED_H
+#endif // OCTAVE_SIM_IMUFEED_H

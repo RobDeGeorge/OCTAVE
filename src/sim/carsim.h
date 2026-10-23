@@ -1,8 +1,8 @@
-#ifndef OCTAVE_DEV_CARSIM_H
-#define OCTAVE_DEV_CARSIM_H
+#ifndef OCTAVE_SIM_CARSIM_H
+#define OCTAVE_SIM_CARSIM_H
 
-// Simulated car for `octave --dev`. Dev mode keeps the real OBDManager and
-// points it at a simulated ELM327 adapter (simelm327.h), so the real protocol parsing, demand-driven polling,
+// Simulated car for `octave --sim` (and `--dev`, the browser demo). The
+// simulator (simulator.h) keeps the real OBDManager and points it at a simulated ELM327 adapter (simelm327.h), so the real protocol parsing, demand-driven polling,
 // vehicle scan and VIN decode all run against this model.
 //
 // CarSim lives on the GUI thread and steps the physics at 60 Hz. The adapter
@@ -13,14 +13,13 @@
 #include <QElapsedTimer>
 #include <QMutex>
 #include <QObject>
-#include <QSet>
 #include <QStringList>
 #include <QTimer>
 #include <QVariantMap>
 
 #include <memory>
 
-namespace OctaveDev {
+namespace OctaveSim {
 
 // Everything the adapter reports. Copied out whole under the mutex.
 struct CarValues {
@@ -140,27 +139,6 @@ private:
     double m_oilBase = 95.0;
 };
 
-// Routes the dev overlay's key events into the simulator (W/S throttle and
-// brake while held, Space rev, E engine, Q/R shift, 1-6 gear, F1-F4 scenarios).
-// QML context property `devKeyboardController`.
-class DevKeyboardController : public QObject
-{
-    Q_OBJECT
+} // namespace OctaveSim
 
-public:
-    explicit DevKeyboardController(CarSim *sim, QObject *parent = nullptr)
-        : QObject(parent), m_sim(sim) {}
-
-    Q_INVOKABLE void handle_key(int key, bool pressed);
-
-private:
-    void onPressed(int key);
-    void updateContinuous();
-
-    CarSim *m_sim;
-    QSet<int> m_held;
-};
-
-} // namespace OctaveDev
-
-#endif // OCTAVE_DEV_CARSIM_H
+#endif // OCTAVE_SIM_CARSIM_H

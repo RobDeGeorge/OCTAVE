@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace OctaveDev {
+namespace OctaveSim {
 
 namespace {
 
@@ -464,4 +464,4 @@ QByteArray SimElm327Device::mode01(int pid)
     return QByteArray();
 }
 
-} // namespace OctaveDev
+} // namespace OctaveSim

@@ -186,8 +186,11 @@ class SettingsManager : public QObject
 public:
     explicit SettingsManager(QObject *parent = nullptr);
 
-    // Returns the OS-specific app data directory path
+    // Returns the OS-specific app data directory path (or the override)
     static QString getAppDataDir();
+    // Use `dir` instead of the OS folder for settings, trips, dashboards and
+    // logs (`--config DIR`, the --sim throwaway). Before anything reads it
+    static void setAppDataDirOverride(const QString &dir);
 
     // ======================================================================
     // Property getters
