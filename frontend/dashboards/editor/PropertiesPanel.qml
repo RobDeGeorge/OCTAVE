@@ -43,14 +43,22 @@ Rectangle {
     // gauge default recorded in the catalog.
     function propValue(key, def) {
         if (cell && cell.props && cell.props[key] !== undefined)
-            return cell.props[key]
+            return shown(key, cell.props[key])
         return def
     }
+
+    // Range props are stored in the PID's own unit and edited in the gauges'
+    // (a °F user types °F; the spec keeps °C)
+    function _isUnitKey(key) {
+        return !!cell && !!cell.paramId && App.WidgetCatalog.paramUnitProps(cell.type).indexOf(key) !== -1
+    }
+    function shown(key, v) { return _isUnitKey(key) ? App.OBDParameterModel.toDisplay(cell.paramId, v) : v }
+    function stored(key, v) { return _isUnitKey(key) ? App.OBDParameterModel.fromDisplay(cell.paramId, v) : v }
 
     // Metadata of the bound PID (title/unit/min/max), or null.
     readonly property var pidMeta: {
         if (!cell || !cell.paramId) return null
-        var all = App.OBDParameterModel.allParameters
+        var all = App.OBDParameterModel.displayParameters   // in the gauges' units
         for (var i = 0; i < all.length; i++)
             if (all[i].id === cell.paramId) return all[i]
         return null
@@ -64,9 +72,9 @@ Rectangle {
     // Min/max as they will render (override, else PID default) — drives the
     // "min must be below max" warning.
     readonly property real _effMin: (cell && cell.props && cell.props.min !== undefined)
-                                    ? cell.props.min : (pidMeta ? pidMeta.min : 0)
+                                    ? shown("min", cell.props.min) : (pidMeta ? pidMeta.min : 0)
     readonly property real _effMax: (cell && cell.props && cell.props.max !== undefined)
-                                    ? cell.props.max : (pidMeta ? pidMeta.max : 100)
+                                    ? shown("max", cell.props.max) : (pidMeta ? pidMeta.max : 100)
 
     // Current override color ("" = theme), read from the first color prop.
     readonly property string currentColor: {
@@ -211,7 +219,7 @@ Rectangle {
 
             function _currentText() {
                 var v = (panel.cell && panel.cell.props) ? panel.cell.props[of.key] : undefined
-                return (v === undefined || v === null) ? "" : String(v)
+                return (v === undefined || v === null) ? "" : String(panel.shown(of.key, v))
             }
             text: _currentText()
             // Typing breaks the binding; re-sync when the selection changes.
@@ -226,7 +234,7 @@ Rectangle {
                 }
                 if (of.numeric) {
                     var num = parseFloat(t)
-                    if (!isNaN(num)) panel.editorPage.setCellProp(panel.cellIndex, of.key, num)
+                    if (!isNaN(num)) panel.editorPage.setCellProp(panel.cellIndex, of.key, panel.stored(of.key, num))
                     else text = _currentText()
                 } else {
                     panel.editorPage.setCellProp(panel.cellIndex, of.key, t)
@@ -499,7 +507,7 @@ Rectangle {
                             }
                             var v = panel.parseOption(modelData, t)
                             if (v !== undefined) {
-                                panel.editorPage.setCellProp(panel.cellIndex, modelData.key, v)
+                                panel.editorPage.setCellProp(panel.cellIndex, modelData.key, panel.stored(modelData.key, v))
                                 text = String(v)     // show the clamped value
                             } else {
                                 text = _currentText()

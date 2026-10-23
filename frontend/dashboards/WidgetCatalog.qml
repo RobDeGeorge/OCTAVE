@@ -38,6 +38,8 @@ QtObject {
     //                    Unset = the theme color, so dashboards keep following
     //                    EnvironmentTheme unless the user picks a color.
     //   editableProps:   widget-specific props the properties panel exposes.
+    //                    "paramUnit": true marks a threshold in the bound PID's
+    //                    unit (see paramUnitProps).
     //                    Each: { key, label, kind, def[, min, max][, options] }
     //                    where kind ∈ "bool" | "real" | "int" | "string" | "enum".
     //                    `def` is the gauge's actual default (null for
@@ -59,7 +61,7 @@ QtObject {
                 { "key": "showNeedle",         "label": "Needle",          "kind": "bool", "def": false },
                 { "key": "showTicks",          "label": "Ticks",           "kind": "bool", "def": true },
                 { "key": "showCenterReadout",  "label": "Readout",         "kind": "bool", "def": true },
-                { "key": "redlineStart",       "label": "Redline start",   "kind": "real", "def": null },
+                { "key": "redlineStart",       "label": "Redline start",   "kind": "real", "def": null, "paramUnit": true },
                 { "key": "decimals",           "label": "Decimals",        "kind": "int",  "def": 0, "min": 0, "max": 4 },
                 { "key": "majorTickCount",     "label": "Major ticks",     "kind": "int",  "def": 9, "min": 2, "max": 20 },
                 { "key": "minorTicksPerMajor", "label": "Minor per major", "kind": "int",  "def": 5, "min": 0, "max": 10 },
@@ -80,7 +82,7 @@ QtObject {
                 { "key": "showNeedle",         "label": "Needle",          "kind": "bool", "def": false },
                 { "key": "showTicks",          "label": "Ticks",           "kind": "bool", "def": true },
                 { "key": "showReadout",        "label": "Readout",         "kind": "bool", "def": true },
-                { "key": "redlineStart",       "label": "Redline start",   "kind": "real", "def": null },
+                { "key": "redlineStart",       "label": "Redline start",   "kind": "real", "def": null, "paramUnit": true },
                 { "key": "decimals",           "label": "Decimals",        "kind": "int",  "def": 0, "min": 0, "max": 4 },
                 { "key": "majorTickCount",     "label": "Major ticks",     "kind": "int",  "def": 5, "min": 2, "max": 20 },
                 { "key": "minorTicksPerMajor", "label": "Minor per major", "kind": "int",  "def": 4, "min": 0, "max": 10 }
@@ -98,7 +100,7 @@ QtObject {
             "editableProps": [
                 { "key": "orientation", "label": "Orientation", "kind": "enum", "def": "horizontal",
                   "options": ["horizontal", "vertical"] },
-                { "key": "warnAbove",   "label": "Warn above",  "kind": "real", "def": null },
+                { "key": "warnAbove",   "label": "Warn above",  "kind": "real", "def": null, "paramUnit": true },
                 { "key": "showLabel",   "label": "Label",       "kind": "bool", "def": true },
                 { "key": "showValue",   "label": "Value",       "kind": "bool", "def": true },
                 { "key": "decimals",    "label": "Decimals",    "kind": "int",  "def": 0, "min": 0, "max": 4 }
@@ -166,8 +168,8 @@ QtObject {
             "colorProps": ["activeColor"],
             "editableProps": [
                 { "key": "label",        "label": "Light text",    "kind": "string", "def": "" },
-                { "key": "triggerAbove", "label": "Trigger above", "kind": "real",   "def": null },
-                { "key": "triggerBelow", "label": "Trigger below", "kind": "real",   "def": null },
+                { "key": "triggerAbove", "label": "Trigger above", "kind": "real",   "def": null, "paramUnit": true },
+                { "key": "triggerBelow", "label": "Trigger below", "kind": "real",   "def": null, "paramUnit": true },
                 { "key": "pulse",        "label": "Pulse",         "kind": "bool",   "def": false }
             ]
         },
@@ -251,6 +253,20 @@ QtObject {
     }
 
     // True if `typeName` is a supported primitive (whitelist check).
+    // Props of `typeName` whose values are in the bound PID's unit: min / max
+    // (rangeProps) and the editableProps marked paramUnit. Specs store them in
+    // the PID's own unit; the renderer, the editor canvas and the properties
+    // panel convert to the gauges' unit (OBDParameterModel.toDisplay).
+    function paramUnitProps(typeName) {
+        var m = metaFor(typeName)
+        if (!m) return []
+        var keys = m.rangeProps ? ["min", "max"] : []
+        var ed = m.editableProps || []
+        for (var i = 0; i < ed.length; i++)
+            if (ed[i].paramUnit === true) keys.push(ed[i].key)
+        return keys
+    }
+
     function isKnownType(typeName) {
         return metaFor(typeName) !== null
     }

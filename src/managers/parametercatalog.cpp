@@ -256,3 +256,56 @@ QVariantMap ParameterCatalog::info(const QString &id) const
     const Parameter *p = find(id);
     return p ? toVariant(*p) : QVariantMap();
 }
+
+// ── Display units ────────────────────────────────────────────────────
+
+void ParameterCatalog::setDisplayUnits(const QString &temp, const QString &speed, const QString &altitude)
+{
+    if (temp == m_tempUnit && speed == m_speedUnit && altitude == m_altitudeUnit)
+        return;
+    m_tempUnit = temp;
+    m_speedUnit = speed;
+    m_altitudeUnit = altitude;
+    emit displayParametersChanged();
+}
+
+ParameterCatalog::Conversion ParameterCatalog::conversionFor(const Parameter &p) const
+{
+    // Every temperature row is °C, SPEED is MPH, ALTITUDE metres
+    if (p.kind == QLatin1String("temperature") && m_tempUnit == QLatin1String("F"))
+        return {9.0 / 5.0, 32.0, QStringLiteral("°F")};
+    if (p.id == QLatin1String("SPEED") && m_speedUnit == QLatin1String("km/h"))
+        return {1.609344, 0.0, QStringLiteral("km/h")};
+    if (p.id == QLatin1String("ALTITUDE") && m_altitudeUnit == QLatin1String("ft"))
+        return {3.28084, 0.0, QStringLiteral("ft")};
+    return {};
+}
+
+QVariantList ParameterCatalog::displayParameters() const
+{
+    QVariantList list;
+    for (const Parameter &p : all()) {
+        QVariantMap row = toVariant(p);
+        const Conversion c = conversionFor(p);
+        if (!c.unit.isEmpty()) {
+            row.insert(QStringLiteral("unit"), c.unit);
+            row.insert(QStringLiteral("min"), p.min * c.scale + c.offset);
+            row.insert(QStringLiteral("max"), p.max * c.scale + c.offset);
+        }
+        row.insert(QStringLiteral("displayScale"), c.scale);
+        row.insert(QStringLiteral("displayOffset"), c.offset);
+        list.append(row);
+    }
+    return list;
+}
+
+QVariant ParameterCatalog::toDisplay(const QString &id, const QVariant &value) const
+{
+    const Parameter *p = find(id);
+    bool ok = false;
+    const double v = value.toDouble(&ok);
+    if (!p || !value.isValid() || !ok)
+        return value;
+    const Conversion c = conversionFor(*p);
+    return c.unit.isEmpty() ? value : QVariant(v * c.scale + c.offset);
+}

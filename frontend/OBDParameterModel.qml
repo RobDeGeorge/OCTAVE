@@ -21,6 +21,24 @@ QtObject {
     readonly property var allParameters:
         (typeof parameterCatalog !== "undefined" && parameterCatalog) ? parameterCatalog.parameters : []
 
+    // The same rows in the units the gauges show (gaugeTempUnit,
+    // gaugeSpeedUnit, sensorAltitudeUnit; ParameterCatalog converts). Gauges
+    // read these through getParamInfo() and liveValue(); allParameters stays
+    // in each parameter's own unit (Trip History, the PID lists).
+    readonly property var displayParameters:
+        (typeof parameterCatalog !== "undefined" && parameterCatalog) ? parameterCatalog.displayParameters : []
+    // id -> [scale, offset] for the rows that convert; reassigned when a unit
+    // setting changes, so every liveValue() binding re-evaluates
+    readonly property var _conversion: {
+        var m = {};
+        for (var i = 0; i < displayParameters.length; i++) {
+            var p = displayParameters[i];
+            if (p.displayScale !== 1 || p.displayOffset !== 0)
+                m[p.id] = [p.displayScale, p.displayOffset];
+        }
+        return m;
+    }
+
     // id -> parameter, for the per-id helpers below
     readonly property var _byId: {
         var m = {};
@@ -42,8 +60,8 @@ QtObject {
     // Home cards show the short title where there is one ("SPD", "CLT")
     property var parameterInfo: {
         var info = {};
-        for (var i = 0; i < allParameters.length; i++) {
-            var p = allParameters[i];
+        for (var i = 0; i < displayParameters.length; i++) {
+            var p = displayParameters[i];
             info[p.id] = {
                 title: p.shortTitle || p.title,
                 unit: p.unit,
@@ -64,10 +82,34 @@ QtObject {
     // undefined until the first reading (readouts show "--"), and at
     // shutdown, when the store goes before the engine.
     readonly property var _store: (typeof paramStore !== "undefined" && paramStore) ? paramStore : null
+    // Values are in the display unit (see displayParameters); the store
+    // keeps the parameter's own.
     function liveValue(paramId) {
-        if (simulationActive)
-            return _simValues[paramId];
-        return _store ? _store[paramId] : undefined;
+        return toDisplay(paramId, rawValue(paramId));
+    }
+
+    // The same reading in the parameter's own unit (MPH, °C, m), for code
+    // that needs the native value whatever the gauges show (the 3D Jeep's
+    // wheel speed)
+    function rawValue(paramId) {
+        return simulationActive ? _simValues[paramId] : (_store ? _store[paramId] : undefined);
+    }
+
+    // A value of paramId from its own unit to the gauges' and back (the
+    // dashboard renderer and editor convert range props with these)
+    function toDisplay(paramId, v) {
+        var c = _conversion[paramId];
+        return (c && typeof v === "number") ? v * c[0] + c[1] : v;
+    }
+    function fromDisplay(paramId, v) {
+        var c = _conversion[paramId];
+        return (c && typeof v === "number") ? Math.round((v - c[1]) / c[0] * 1e6) / 1e6 : v;
+    }
+
+    // A parameter's own unit (what the store and the black box hold)
+    function nativeUnit(paramId) {
+        var p = _byId[paramId];
+        return p ? p.unit : "";
     }
 
     function getParamValue(paramId) {
@@ -181,10 +223,11 @@ QtObject {
 
     // Parameters a live vehicle can actually feed: the scanned OBD set in
     // allParameters order, without aliases (IGNITION_TIMING would be a second
-    // Timing Advance card). Empty until a vehicle has been scanned.
+    // Timing Advance card), in display units (the Parameter Cards show unit,
+    // min and max next to liveValue). Empty until a vehicle has been scanned.
     readonly property var vehicleParameters: {
         if (!vehicleKnown) return [];
-        return allParameters.filter(function(p) {
+        return displayParameters.filter(function(p) {
             return !root.isSensorParameter(p.id) && !p.aliasOf && root._supportedSet[p.id] === true;
         });
     }

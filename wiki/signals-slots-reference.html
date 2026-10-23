@@ -150,6 +150,7 @@
             <tr><td><code>obdSavedAdapters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>obdSavedAdaptersChanged</code></td><td>Remembered <code>{name, mac}</code> adapters (stored as a JSON string), most recent first &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdFastMode</code></td><td><code>bool</code></td><td>read-only</td><td><code>obdFastModeChanged</code></td><td>Adapter fast-mode option, applied at the next connection; on-screen demand independently selects the PIDs &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>obdCardStyleCircular</code></td><td><code>bool</code></td><td>read-only</td><td><code>obdCardStyleCircularChanged</code></td><td>Circular gauges instead of square cards on the OBD parameter grid (default false)</td></tr>
+            <tr><td><code>gaugeTempUnit</code>, <code>gaugeSpeedUnit</code></td><td><code>QString</code></td><td>read-only</td><td><code>gaugeTempUnitChanged</code>, <code>gaugeSpeedUnitChanged</code></td><td>Units the gauges and dashboards show: <code>"C"</code> | <code>"F"</code> (default C), <code>"mph"</code> | <code>"km/h"</code> (default mph); <code>ParameterCatalog</code> converts</td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td><code>int</code></td><td>read-only</td><td><code>obdAutoReconnectAttemptsChanged</code></td><td>Max automatic reconnect attempts before giving up &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>fuelTankCapacity</code></td><td><code>float</code></td><td>read-only</td><td><code>fuelTankCapacityChanged</code></td><td>Legacy tank-capacity setting in gallons; no current consumer uses it &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>homeOBDParameters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>homeOBDParametersChanged</code></td><td>Ordered list of PID ids shown on the home screen &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -242,6 +243,7 @@
             <tr><td><code>remove_obd_saved_adapter(QString mac)</code></td><td><code>void</code></td><td>Drop the entry with this MAC from <code>obdSavedAdapters</code></td></tr>
             <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td><code>void</code></td><td>Save <code>obdFastMode</code>, then emit <code>obdFastModeChanged</code></td></tr>
             <tr><td><code>save_obd_card_style_circular(bool circular)</code></td><td><code>void</code></td><td>Save <code>obdCardStyleCircular</code>, then emit <code>obdCardStyleCircularChanged</code></td></tr>
+            <tr><td><code>save_gauge_temp_unit(QString unit)</code>, <code>save_gauge_speed_unit(QString unit)</code></td><td><code>void</code></td><td>Save a gauge unit (other values ignored), then emit its notify</td></tr>
             <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td><code>void</code></td><td>Save <code>obdAutoReconnectAttempts</code>, then emit <code>obdAutoReconnectAttemptsChanged</code></td></tr>
             <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td><code>void</code></td><td>Save <code>fuelTankCapacity</code>, then emit <code>fuelTankCapacityChanged</code></td></tr>
             <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td><code>void</code></td><td>Legacy per-PID enable flag, kept for settings-file compatibility; writes are debounced (800 ms) then <code>obdParametersChanged</code> fires. No longer drives polling (see <code>obdManager.setParameterDemand</code>)</td></tr>
@@ -908,6 +910,7 @@
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>parameters</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td>Every parameter, in display order, as <code>{id, title, shortTitle, unit, min, max, kind, decimals, source, aliasOf}</code>. <code>kind</code> is <code>percentage</code> | <code>temperature</code> | <code>voltage</code> | <code>pressure</code> | <code>bidirectional</code> | <code>numeric</code> (what <code>WidgetCatalog</code> matches widgets on); <code>decimals</code> is 0 or 1 for text readouts; <code>source</code> is <code>"obd"</code> or <code>"imu"</code>; <code>shortTitle</code> may be empty</td></tr>
+            <tr><td><code>displayParameters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>displayParametersChanged</code></td><td>The same rows in the gauges' units (<code>setDisplayUnits</code>): unit, min and max converted, plus <code>displayScale</code> / <code>displayOffset</code> (value = raw &times; scale + offset; 1 / 0 when unchanged). Temperatures (every kind <code>temperature</code> row) by <code>gaugeTempUnit</code>, SPEED by <code>gaugeSpeedUnit</code>, ALTITUDE by <code>sensorAltitudeUnit</code>; OBDParameterModel serves gauges from it. <code>parameters</code> stays in each parameter's own unit</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -916,6 +919,8 @@
           <tbody>
             <tr><td><code>info(QString id)</code></td><td><code>QVariantMap</code></td><td>One entry as in <code>parameters</code> (hash lookup); empty map for an unknown id</td></tr>
             <tr><td><code>contains(QString id)</code></td><td><code>bool</code></td><td>Whether the id is in the catalog</td></tr>
+            <tr><td><code>toDisplay(QString id, QVariant value)</code></td><td><code>QVariant</code></td><td>A value in the gauges' units (the reference OBDParameterModel's scale/offset follow); invalid or non-numeric values and unknown ids pass through</td></tr>
+            <tr><td><code>setDisplayUnits(QString temp, QString speed, QString altitude)</code></td><td><code>void</code></td><td>C++ only: <code>main.cpp</code> feeds SettingsManager's units; emits <code>displayParametersChanged</code> on a change</td></tr>
           </tbody>
         </table>
 

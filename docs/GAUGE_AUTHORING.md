@@ -32,6 +32,19 @@ Every gauge primitive takes a `paramId` and handles the rest — title, unit,
 min, max, and current value all come from the model. You can override any
 of them per-gauge if needed.
 
+**Units.** Gauges show the units the user picked: temperatures in °C or °F
+(`gaugeTempUnit`), SPEED in MPH or km/h (`gaugeSpeedUnit`), ALTITUDE in m or
+ft (`sensorAltitudeUnit`); the defaults are each parameter's own unit.
+`ParameterCatalog` converts (`displayParameters`, `toDisplay`), and
+`OBDParameterModel` serves the result: `liveValue(id)`, `getParamInfo(id)`,
+`displayParameters` and `vehicleParameters` are in display units, while
+`allParameters` and `nativeUnit(id)` are each parameter's own (what the store,
+the black box and Trip History hold). A unit change re-evaluates every
+reader at once. A primitive that looks up its PID's unit / min / max reads
+`displayParameters`; `toDisplay(id, v)` / `fromDisplay(id, v)` convert one
+value, and `rawValue(id)` is the native-unit read for code that needs it
+whatever the gauges show (the 3D Jeep's wheel speed wants MPH).
+
 ---
 
 ## 2. Quick start: one gauge, ten seconds
@@ -385,10 +398,19 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 
 ### 5.5 Vehicle gate and polling demand
 
+- **Range props are in the PID's own unit.** A spec's `min`, `max` (for
+  widgets with `rangeProps`) and the thresholds a widget's `editableProps`
+  mark `"paramUnit": true` (`redlineStart`, `warnAbove`, `triggerAbove`,
+  `triggerBelow`) are written in the parameter's catalog unit (°C, MPH, m),
+  whatever the user's display units. `WidgetCatalog.paramUnitProps(type)`
+  lists them; `DashboardRenderer` and the editor canvas bind them through
+  `OBDParameterModel.toDisplay`, and the properties panel shows and stores
+  them converted, so `sport.json`'s `warnAbove: 105` on coolant means 221 °F
+  for a °F user. A new threshold prop in parameter units needs the flag.
 - **Gate.** `OBDParameterModel` mirrors `obdManager.vehicleSupportedParameters`
   / `vehicleScanComplete` — this session's scan only, cleared on disconnect —
   as `vehicleKnown`, `vehicleSupportedParameters`, `vehicleParameters` (the
-  supported OBD params in `allParameters` order) and `isSupported(id)`.
+  supported OBD params in `allParameters` order, display units) and `isSupported(id)`.
   BerryIMU ids (`sensorParameters`, `isSensorParameter(id)`) are never gated.
   When `vehicleKnown` is true, `DashboardRenderer` hides a cell bound to an
   unsupported PID behind a placeholder (`objectName: dashUnsupported_<i>`).

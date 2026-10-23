@@ -111,7 +111,9 @@ Item {
         return t
     }
     function paramTitle(id) { return _fullTitles[id] || App.OBDParameterModel.getParamInfo(id).title || id }
-    function paramUnit(id) { return App.OBDParameterModel.getParamInfo(id).unit || "" }
+    // The recorded unit, not the gauges' display unit: the store, the CSV
+    // and this page's chart and stats hold the parameter's own values
+    function paramUnit(id) { return App.OBDParameterModel.nativeUnit(id) }
     function paramDecimals(id) { return App.OBDParameterModel.decimalsFor ? App.OBDParameterModel.decimalsFor(id) : 1 }
 
     function selectTrip(item) {

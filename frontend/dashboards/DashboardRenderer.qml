@@ -79,6 +79,10 @@ Item {
         return App.WidgetCatalog.urlFor(typeName)
     }
 
+    function _unitBinding(paramId, v) {
+        return Qt.binding(function() { return App.OBDParameterModel.toDisplay(paramId, v) })
+    }
+
     function _coerce(v) {
         if (v === "NaN") return NaN
         return v
@@ -193,11 +197,19 @@ Item {
                     }
 
                     // Apply per-cell props. Silently skip unknown keys.
+                    // Range props (min, max, thresholds) are in the PID's own
+                    // unit in the spec: bound through the gauges' unit, so
+                    // they follow a unit setting change too
                     var props = modelData.props || {}
+                    var unitKeys = modelData.paramId ? App.WidgetCatalog.paramUnitProps(modelData.type) : []
                     for (var key in props) {
                         if (!props.hasOwnProperty(key)) continue
                         if (item[key] === undefined) continue
-                        item[key] = root._coerce(props[key])
+                        var v = root._coerce(props[key])
+                        if (unitKeys.indexOf(key) !== -1)
+                            item[key] = root._unitBinding(modelData.paramId, v)
+                        else
+                            item[key] = v
                     }
                 }
 

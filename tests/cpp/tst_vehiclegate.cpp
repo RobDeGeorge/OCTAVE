@@ -87,6 +87,12 @@ Item {
     function evals(which) { return _evals[which] }
     function push(id, value) { paramStore.ingest(id, value) }   // as obdManager.parameterSampled does
     function setDemo(on) { App.OBDParameterModel.simulationActive = on }
+    readonly property var coolantLive: App.OBDParameterModel.liveValue("COOLANT_TEMP")
+    function unitOf(id) { return App.OBDParameterModel.getParamInfo(id).unit }
+    function nativeUnit(id) { return App.OBDParameterModel.nativeUnit(id) }
+    function unitProps(type) { return App.WidgetCatalog.paramUnitProps(type) }
+    function fromDisplay(id, v) { return App.OBDParameterModel.fromDisplay(id, v) }
+    function rawValue(id) { return App.OBDParameterModel.rawValue(id) }
 }
 )qml";
 } // namespace
@@ -188,6 +194,46 @@ private slots:
         QMetaObject::invokeMethod(m_root, "setDemo", Q_ARG(QVariant, false));
         QVERIFY(!m_root->property("speedLive").isValid());
         QCOMPARE(m_root->property("rpmLive").toInt(), 3100);
+        m_root = nullptr;
+    }
+
+    void gaugesFollowTheUnitSetting()
+    {
+        // Gauges read display units; a unit change re-evaluates every
+        // reader at once, with no new sample (a parked car, the editor demo)
+        QQmlEngine engine;
+        engine.addImportPath(kFrontend);
+        FakeObd obd;
+        engine.rootContext()->setContextProperty("obdManager", &obd);
+        ParameterCatalog catalog;
+        engine.rootContext()->setContextProperty("parameterCatalog", &catalog);
+        ParameterStore store;
+        engine.rootContext()->setContextProperty("paramStore", &store);
+        QQmlComponent comp(&engine);
+        comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
+        std::unique_ptr<QObject> root(comp.create());
+        QVERIFY2(root, qPrintable(comp.errorString()));
+        m_root = root.get();
+
+        QMetaObject::invokeMethod(m_root, "push", Q_ARG(QVariant, "COOLANT_TEMP"), Q_ARG(QVariant, 100));
+        QTRY_COMPARE(m_root->property("coolantLive").toDouble(), 100.0);
+        QCOMPARE(call("unitOf", "COOLANT_TEMP").toString(), QStringLiteral("°C"));
+
+        catalog.setDisplayUnits("F", "mph", "m");
+        QCOMPARE(m_root->property("coolantLive").toDouble(), 212.0);
+        QCOMPARE(call("unitOf", "COOLANT_TEMP").toString(), QStringLiteral("°F"));
+        QCOMPARE(call("nativeUnit", "COOLANT_TEMP").toString(), QStringLiteral("°C"));   // Trip History's
+        QCOMPARE(call("rawValue", "COOLANT_TEMP").toDouble(), 100.0);   // the native read stays put
+        QVariant stored;
+        QVERIFY(QMetaObject::invokeMethod(m_root, "fromDisplay", Q_RETURN_ARG(QVariant, stored),
+                                          Q_ARG(QVariant, "COOLANT_TEMP"), Q_ARG(QVariant, 221)));
+        QCOMPARE(stored.toDouble(), 105.0);   // what the editor stores for a typed 221 °F
+
+        // Range props are converted for these widgets (sport.json's 105 °C)
+        QVERIFY(call("unitProps", "BarGauge").toStringList().contains("warnAbove"));
+        QVERIFY(call("unitProps", "CircularGauge").toStringList().contains("redlineStart"));
+        QVERIFY(call("unitProps", "WarningLight").toStringList().contains("triggerBelow"));
+        QVERIFY(!call("unitProps", "CircularGauge").toStringList().contains("startAngle"));
         m_root = nullptr;
     }
 

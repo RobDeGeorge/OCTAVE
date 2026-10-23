@@ -154,6 +154,8 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("obdSavedAdapters")]     = QStringLiteral("[]");
     d[QStringLiteral("obdFastMode")]          = true;
     d[QStringLiteral("obdCardStyleCircular")] = false;
+    d[QStringLiteral("gaugeTempUnit")]        = QStringLiteral("C");
+    d[QStringLiteral("gaugeSpeedUnit")]       = QStringLiteral("mph");
     d[QStringLiteral("obdAutoReconnectAttempts")] = 0;
     d[QStringLiteral("bottomBarOrientation")]  = QStringLiteral("bottom");
     d[QStringLiteral("showBottomBarMediaControls")] = true;
@@ -465,6 +467,10 @@ void SettingsManager::populateMembers()
     if (m_obdSavedAdapters.isEmpty()) m_obdSavedAdapters = QStringLiteral("[]");
     m_obdFastMode       = s(QStringLiteral("obdFastMode")).toBool();
     m_obdCardStyleCircular = s(QStringLiteral("obdCardStyleCircular")).toBool();
+    m_gaugeTempUnit = s(QStringLiteral("gaugeTempUnit")).toString() == QLatin1String("F")
+                          ? QStringLiteral("F") : QStringLiteral("C");
+    m_gaugeSpeedUnit = s(QStringLiteral("gaugeSpeedUnit")).toString() == QLatin1String("km/h")
+                           ? QStringLiteral("km/h") : QStringLiteral("mph");
     m_obdAutoReconnectAttempts = s(QStringLiteral("obdAutoReconnectAttempts")).toInt();
 
     // Media folder: default to the OS-standard music location if empty.
@@ -1474,6 +1480,24 @@ void SettingsManager::save_obd_card_style_circular(bool circular)
     emit obdCardStyleCircularChanged(circular);
 }
 
+void SettingsManager::save_gauge_temp_unit(const QString &unit)
+{
+    if ((unit != QLatin1String("C") && unit != QLatin1String("F")) || unit == m_gaugeTempUnit)
+        return;
+    m_gaugeTempUnit = unit;
+    updateSetting(QStringLiteral("gaugeTempUnit"), unit);
+    emit gaugeTempUnitChanged();
+}
+
+void SettingsManager::save_gauge_speed_unit(const QString &unit)
+{
+    if ((unit != QLatin1String("mph") && unit != QLatin1String("km/h")) || unit == m_gaugeSpeedUnit)
+        return;
+    m_gaugeSpeedUnit = unit;
+    updateSetting(QStringLiteral("gaugeSpeedUnit"), unit);
+    emit gaugeSpeedUnitChanged();
+}
+
 void SettingsManager::save_obd_auto_reconnect_attempts(int attempts)
 {
     qCDebug(lcSettings) << "Saving OBD auto-reconnect attempts:" << attempts;
@@ -2302,6 +2326,8 @@ void SettingsManager::reset_to_defaults()
     emit obdSavedAdaptersChanged();
     emit obdFastModeChanged(m_obdFastMode);
     emit obdCardStyleCircularChanged(m_obdCardStyleCircular);
+    emit gaugeTempUnitChanged();
+    emit gaugeSpeedUnitChanged();
     emit obdAutoReconnectAttemptsChanged(m_obdAutoReconnectAttempts);
     emit obdParametersChanged();
     emit homeOBDParametersChanged();

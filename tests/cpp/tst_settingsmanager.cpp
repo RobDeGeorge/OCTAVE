@@ -165,6 +165,8 @@ private slots:
             first.save_custom_theme(QStringLiteral("Mine"), QVariantMap{{"accent", "#ff0000"}});
             first.save_gesture_action(QStringLiteral("up"), QStringLiteral("volume_up"));
             first.save_scrcpy_bit_rate_wifi(6);
+            first.save_gauge_temp_unit(QStringLiteral("F"));
+            first.save_gauge_speed_unit(QStringLiteral("km/h"));
             first.save_settings_section_visibility(QStringLiteral("obd"), false);
             first.save_playback_state(QStringLiteral("a.mp3"), 1234, QStringLiteral("Road"));
             first.flushPendingSave();

@@ -11,6 +11,8 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QSet>
+#include <QSignalSpy>
+#include <cmath>
 #include <QTest>
 #include <QUrl>
 
@@ -100,6 +102,57 @@ private slots:
         }
         QVERIFY2(missing.isEmpty(), qPrintable("not in GAUGE_AUTHORING.md (run scripts/gen_gauge_param_docs.py): "
                                                + missing.join(", ")));
+    }
+
+    void displayUnitsDefaultToTheCatalogs()
+    {
+        // The defaults change nothing: every row's display unit, range and
+        // values are its own
+        ParameterCatalog c;
+        const QVariantList rows = c.displayParameters();
+        QCOMPARE(rows.size(), ParameterCatalog::all().size());
+        for (int i = 0; i < rows.size(); ++i) {
+            const QVariantMap r = rows.at(i).toMap();
+            const ParameterCatalog::Parameter &p = ParameterCatalog::all().at(i);
+            QCOMPARE(r.value("unit").toString(), p.unit);
+            QCOMPARE(r.value("min").toDouble(), p.min);
+            QCOMPARE(r.value("displayScale").toDouble(), 1.0);
+            QCOMPARE(r.value("displayOffset").toDouble(), 0.0);
+        }
+        QCOMPARE(c.toDisplay("COOLANT_TEMP", 90).toDouble(), 90.0);
+    }
+
+    void displayUnitsConvertTemperaturesSpeedAndAltitude()
+    {
+        ParameterCatalog c;
+        QSignalSpy changed(&c, &ParameterCatalog::displayParametersChanged);
+        c.setDisplayUnits("F", "km/h", "ft");
+        QCOMPARE(changed.count(), 1);
+        c.setDisplayUnits("F", "km/h", "ft");
+        QCOMPARE(changed.count(), 1);
+
+        auto row = [&](const QString &id) {
+            for (const QVariant &v : c.displayParameters())
+                if (v.toMap().value("id") == id)
+                    return v.toMap();
+            return QVariantMap();
+        };
+        // Every temperature row, OBD or IMU
+        QCOMPARE(row("COOLANT_TEMP").value("unit").toString(), QStringLiteral("°F"));
+        QCOMPARE(row("COOLANT_TEMP").value("max").toDouble(), 248.0);   // 120 °C
+        QCOMPARE(row("BARO_TEMP").value("unit").toString(), QStringLiteral("°F"));
+        QCOMPARE(c.toDisplay("COOLANT_TEMP", 100).toDouble(), 212.0);
+        QCOMPARE(row("SPEED").value("unit").toString(), QStringLiteral("km/h"));
+        QVERIFY(std::abs(c.toDisplay("SPEED", 60).toDouble() - 96.56064) < 1e-9);
+        QCOMPARE(row("ALTITUDE").value("unit").toString(), QStringLiteral("ft"));
+        // Everything else untouched; the raw table too
+        QCOMPARE(row("RPM").value("displayScale").toDouble(), 1.0);
+        QCOMPARE(c.toDisplay("RPM", 3000).toDouble(), 3000.0);
+        QCOMPARE(ParameterCatalog::find("COOLANT_TEMP")->unit, QStringLiteral("°C"));
+        QCOMPARE(c.info("COOLANT_TEMP").value("unit").toString(), QStringLiteral("°C"));
+        // Not a number, unknown id: passed through
+        QVERIFY(!c.toDisplay("COOLANT_TEMP", QVariant()).isValid());
+        QCOMPARE(c.toDisplay("NOPE", 5).toInt(), 5);
     }
 
     void invokablesForQml()

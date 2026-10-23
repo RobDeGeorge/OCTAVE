@@ -252,6 +252,16 @@ int main(int argc, char *argv[])
     // reading, for every frontend (OBDParameterModel reads it)
     ParameterCatalog parameterCatalog;
     ctx->setContextProperty("parameterCatalog", &parameterCatalog);
+    // Gauges show the units the settings ask for (the Sensors page keeps
+    // its own temperature unit)
+    auto applyGaugeUnits = [&] {
+        parameterCatalog.setDisplayUnits(settingsManager.gaugeTempUnit(), settingsManager.gaugeSpeedUnit(),
+                                         settingsManager.sensorAltitudeUnit());
+    };
+    applyGaugeUnits();
+    QObject::connect(&settingsManager, &SettingsManager::gaugeTempUnitChanged, &parameterCatalog, applyGaugeUnits);
+    QObject::connect(&settingsManager, &SettingsManager::gaugeSpeedUnitChanged, &parameterCatalog, applyGaugeUnits);
+    QObject::connect(&settingsManager, &SettingsManager::sensorAltitudeUnitChanged, &parameterCatalog, applyGaugeUnits);
 
     // OBD Manager — vehicle diagnostics via ELM327
     OBDManager obdManager(&settingsManager);

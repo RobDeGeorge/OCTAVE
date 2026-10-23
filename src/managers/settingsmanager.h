@@ -85,6 +85,11 @@ class SettingsManager : public QObject
     Q_PROPERTY(QVariantList obdSavedAdapters READ obdSavedAdapters NOTIFY obdSavedAdaptersChanged)
     Q_PROPERTY(bool obdFastMode READ obdFastMode NOTIFY obdFastModeChanged)
     Q_PROPERTY(bool obdCardStyleCircular READ obdCardStyleCircular NOTIFY obdCardStyleCircularChanged)
+    // Units the OBD gauges and dashboards show (ParameterCatalog converts):
+    // temperatures "C" | "F", speed "mph" | "km/h". Altitude follows
+    // sensorAltitudeUnit. The Sensors page keeps sensorTempUnit.
+    Q_PROPERTY(QString gaugeTempUnit READ gaugeTempUnit NOTIFY gaugeTempUnitChanged)
+    Q_PROPERTY(QString gaugeSpeedUnit READ gaugeSpeedUnit NOTIFY gaugeSpeedUnitChanged)
     Q_PROPERTY(int obdAutoReconnectAttempts READ obdAutoReconnectAttempts NOTIFY obdAutoReconnectAttemptsChanged)
     Q_PROPERTY(float fuelTankCapacity READ fuelTankCapacity NOTIFY fuelTankCapacityChanged)
     // Black box (TripRecorder): record every drive, also sweep PIDs that are
@@ -216,6 +221,8 @@ public:
     QVariantList obdSavedAdapters() const;
     bool obdFastMode() const;
     bool obdCardStyleCircular() const;
+    QString gaugeTempUnit() const { return m_gaugeTempUnit; }
+    QString gaugeSpeedUnit() const { return m_gaugeSpeedUnit; }
     int obdAutoReconnectAttempts() const;
     float fuelTankCapacity() const;
     bool blackBoxEnabled() const;
@@ -332,6 +339,8 @@ signals:
     void obdSavedAdaptersChanged();
     void obdFastModeChanged(bool value);
     void obdCardStyleCircularChanged(bool value);
+    void gaugeTempUnitChanged();
+    void gaugeSpeedUnitChanged();
     void obdAutoReconnectAttemptsChanged(int value);
     void fuelTankCapacityChanged(float value);
     void blackBoxEnabledChanged(bool value);
@@ -458,6 +467,8 @@ public slots:
     void remove_obd_saved_adapter(const QString &mac);
     void save_obd_fast_mode(bool enabled);
     void save_obd_card_style_circular(bool circular);
+    void save_gauge_temp_unit(const QString &unit);    // ignored unless "C" or "F"
+    void save_gauge_speed_unit(const QString &unit);   // ignored unless "mph" or "km/h"
     void save_obd_auto_reconnect_attempts(int attempts);
     void save_fuel_tank_capacity(float capacity);
     void save_black_box_enabled(bool enabled);
@@ -667,6 +678,8 @@ private:
     QString m_obdSavedAdapters = QStringLiteral("[]");
     bool m_obdFastMode = true;
     bool m_obdCardStyleCircular = false;
+    QString m_gaugeTempUnit = QStringLiteral("C");
+    QString m_gaugeSpeedUnit = QStringLiteral("mph");
     int m_obdAutoReconnectAttempts = 0;
     QString m_mediaFolder;
     float m_fuelTankCapacity = 15.0f;

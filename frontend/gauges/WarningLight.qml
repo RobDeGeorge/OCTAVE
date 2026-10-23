@@ -35,7 +35,7 @@ Item {
 
     readonly property var _pInfo: {
         if (!paramId) return null
-        var all = App.OBDParameterModel.allParameters
+        var all = App.OBDParameterModel.displayParameters   // in the gauges' units
         for (var i = 0; i < all.length; i++) {
             if (all[i].id === paramId) return all[i]
         }

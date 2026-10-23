@@ -26,6 +26,12 @@ class ParameterCatalog : public QObject
     // Every parameter as {id, title, shortTitle, unit, min, max, kind,
     // decimals, source, aliasOf}, in display order
     Q_PROPERTY(QVariantList parameters READ parameters CONSTANT)
+    // The same rows in the units the gauges show (setDisplayUnits): unit,
+    // min and max converted, plus displayScale / displayOffset so a value
+    // converts as raw * displayScale + displayOffset (1 / 0 when unchanged).
+    // `parameters`, all() and find() stay in each parameter's own unit (the
+    // black box, the poller, Trip History).
+    Q_PROPERTY(QVariantList displayParameters READ displayParameters NOTIFY displayParametersChanged)
 
 public:
     enum class Source { Obd, Imu };
@@ -55,12 +61,36 @@ public:
     static QStringList obdIds();                        // polled OBD ids (no aliases)
 
     QVariantList parameters() const;
+    QVariantList displayParameters() const;
+
+    // Unit preferences (main.cpp feeds SettingsManager's): temperatures
+    // ("C" | "F", every kind "temperature" row), SPEED ("mph" | "km/h"),
+    // ALTITUDE ("m" | "ft"). The defaults leave every row unchanged.
+    void setDisplayUnits(const QString &temp, const QString &speed, const QString &altitude);
+    // A value of `id` in display units (the reference QML's scale/offset follow)
+    Q_INVOKABLE QVariant toDisplay(const QString &id, const QVariant &value) const;
+
+    struct Conversion {
+        double scale = 1.0;
+        double offset = 0.0;
+        QString unit;   // empty: the parameter's own
+    };
+    Conversion conversionFor(const Parameter &p) const;
+
 
     Q_INVOKABLE bool contains(const QString &id) const;
     // One parameter as in `parameters`; empty map for an unknown id
     Q_INVOKABLE QVariantMap info(const QString &id) const;
 
     static QVariantMap toVariant(const Parameter &p);
+
+signals:
+    void displayParametersChanged();
+
+private:
+    QString m_tempUnit = QStringLiteral("C");
+    QString m_speedUnit = QStringLiteral("mph");
+    QString m_altitudeUnit = QStringLiteral("m");
 };
 
 #endif // PARAMETERCATALOG_H

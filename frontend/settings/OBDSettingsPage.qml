@@ -1034,6 +1034,44 @@ Item {
                 }
             }
 
+            // Units the gauges and dashboards show (the Sensors page has its own)
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.rowSpacing
+
+                SettingsToggle {
+                    objectName: "gaugeTempFToggle"
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: "Temperatures in °F"
+                    checked: settingsManager ? settingsManager.gaugeTempUnit === "F" : false
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+                    onToggled: function(checked) {
+                        if (settingsManager) settingsManager.save_gauge_temp_unit(checked ? "F" : "C")
+                    }
+                }
+
+                SettingsToggle {
+                    objectName: "gaugeSpeedKmhToggle"
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: "Speed in km/h"
+                    checked: settingsManager ? settingsManager.gaugeSpeedUnit === "km/h" : false
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+                    onToggled: function(checked) {
+                        if (settingsManager) settingsManager.save_gauge_speed_unit(checked ? "km/h" : "mph")
+                    }
+                }
+
+                SettingDescription {
+                    text: "Units on the OBD cards and dashboards. Trip History keeps the recorded units; altitude follows the Sensors setting."
+                }
+            }
+
             SettingsDivider {}
 
             // ── Parameter count ──────────────────────────────────

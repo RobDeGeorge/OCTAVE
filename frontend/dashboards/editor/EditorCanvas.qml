@@ -96,6 +96,10 @@ Item {
     property int dragRowSpan: 1
     property bool dragValid: false
 
+    function _unitBinding(paramId, v) {
+        return Qt.binding(function() { return App.OBDParameterModel.toDisplay(paramId, v) })
+    }
+
     function _coerce(v) {
         if (v === "NaN") return NaN
         return v
@@ -213,11 +217,19 @@ Item {
                             && item.paramId !== undefined
                             && App.OBDParameterModel.hasParameter(modelData.paramId))
                         item.paramId = modelData.paramId
+                    // Range props (min, max, thresholds) are in the PID's own
+                    // unit in the spec: bound through the gauges' unit, so
+                    // they follow a unit setting change too
                     var props = modelData.props || {}
+                    var unitKeys = modelData.paramId ? App.WidgetCatalog.paramUnitProps(modelData.type) : []
                     for (var key in props) {
                         if (!props.hasOwnProperty(key)) continue
                         if (item[key] === undefined) continue
-                        item[key] = canvas._coerce(props[key])
+                        var v = canvas._coerce(props[key])
+                        if (unitKeys.indexOf(key) !== -1)
+                            item[key] = canvas._unitBinding(modelData.paramId, v)
+                        else
+                            item[key] = v
                     }
                 }
             }

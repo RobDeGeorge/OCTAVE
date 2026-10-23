@@ -2,7 +2,7 @@
 
 **Goal:** make the C++ managers a documented, language-neutral service so that anyone can write an OCTAVE frontend in whatever language or toolkit they like, with the QML UI in `frontend/` becoming the reference client rather than the only one.
 
-**Status:** in progress (audit done 2026-10-21; #1–#9, #11 and #12 moved 2026-10-22)
+**Status:** in progress (audit done 2026-10-21; #1–#12 moved 2026-10-22)
 **Last updated:** 2026-10-22
 
 This absorbed the earlier `backend-service-split.md` plan (2026-10-18), which was about running the managers as a separate process so a UI crash never stops the music. That benefit falls out of `--headless` once the contract exists, so the two plans are one; the process-specific constraints are in "Running the core as its own process" below.
@@ -57,11 +57,12 @@ Done: #12 pollers. `AudioAnalyzer` drives itself (`setViewActive` from the page;
 
 Done: #9 JSON strings in QML (four commits). ESP32 `availablePorts` carries `{port, label, description, isEsp32S3}` (get_ports_with_descriptions gone); `obdSavedAdapters` is a list of `{name, mac}`; `albumArtColors` is the palette object and `customThemeData` every custom theme (get_custom_theme gone, save_custom_theme takes an object); `DownloadManager` publishes `searchResults` and `downloadQueue` as `VariantListModel`s (`src/util/variantlistmodel`), so a status change is one row update (searchResults(QString), downloadStatusChanged, download_song and get_download_queue gone; `download(songId, name)` uses the hit's row; `clear_finished_downloads()`). The settings file keeps every format byte for byte (tests pin it). From the octave-f4 audit. Not exercised in the app: an actual download through the new queue model (the search was; a download writes into the music library); it is pinned by `tst_downloadmanager`.
 
+Done: #10 smaller duplicates (seven commits, from the octave-f4 audit). The gesture vocabulary is one table (`src/managers/gesturevocabulary.h`); the OBD connection log is `obdManager.connectionLog` (60 lines, both pages); `obdManager.connectionState` (Q_ENUM, `import OCTAVE.OBD`) replaces four text classifiers and fixes the Android BLE spinner; `src/util/units` (`units`) holds time formatting, compass points and conversions; IMU pages register with `berryIMU.setDemand` (`ImuDemand.qml`) instead of Main.qml's page list; gauges follow `gaugeTempUnit` / `gaugeSpeedUnit` / `sensorAltitudeUnit` (defaults unchanged: °C, MPH, m) through `ParameterCatalog.displayParameters`, with spec range props kept in each PID's own unit and converted by the renderer and editor. Still open: Trip History shows the recorded units, not the gauge units (convert its series and stats through `toDisplay` if wanted); the Sensors page keeps its own `sensorTempUnit` (default °F), so the IMU's temperature can read °F there and °C on a dashboard; the gesture worker's flag table is a second spelling of the gesture names (nothing ties it to the vocabulary). On the Pi: the IMU rate with the new demand, and the BLE connect states on Android.
+
 ### Tables duplicated between QML and C++
 
 | # | Item | Where today | Target | Effort |
 |---|---|---|---|---|
-| 10 | **Smaller duplicates.** Gesture names and action list (`AccessoriesSettingsPage.qml:36-46`, `gesturemanager.cpp:147`, `settingsmanager.cpp:294`); IMU id list (`Main.qml:971` vs `obdmanager.cpp:781`); connection-log ring buffer capped at 40 in `OBDHome.qml:49-51` and 60 in `OBDSettingsPage.qml:34-36`; OBD status classified by `indexOf("Connecting")` in `OBDSettingsPage.qml:54-60` and `widgets/OBDWidget.qml:384-390` with an 18-entry colour table keyed on exact strings; time formatting four ways (`MainMenu.qml:107`, `MediaRoom.qml:261`, `MusicDeviceScene.qml:37`, `DownloadPage.qml:958`) while `MediaManager::_format_duration` goes unused; heading-to-cardinal three times; mph→km/h in `CarMenu.qml:69`, °F and feet in `SensorMenu.qml:52-59`. | as listed | `GestureManager` exposes names/actions; `BerryIMUManager` takes consumer demand like OBD; `Q_PROPERTY(QStringList connectionLog)` on `OBDManager`; `Q_ENUM ConnectionState` on `OBDManager`; a `src/util/units.{h,cpp}` singleton (`cardinal`, `kphFromMph`, `fahrenheit`, `feet`, `mmss`) and a unit preference the catalog in #7 applies. | S each |
 
 ### Managers that leave their own job to the page
 
@@ -119,7 +120,7 @@ Never as one large update. Every item above can land as its own small change tha
 1. ~~The S items #1, #2, #4, #11~~ (all done 2026-10-22).
 2. ~~#7 and #8~~ (done 2026-10-22; Pi CPU comparison still to run).
 3. ~~#5 and #6~~ (done 2026-10-22; hardware checks listed in the Done notes).
-4. #10, #13 as they come up (#3, #9 and #12 done 2026-10-22); none blocks the bridge.
+4. #13 as it comes up (#3, #9, #10 and #12 done 2026-10-22); none blocks the bridge.
 5. Contract steps 1–5, then 7 and 8.
 6. Contract step 6 (media streams) last, after a prototype.
 
