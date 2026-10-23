@@ -54,7 +54,7 @@ type Event =
   | ({ event: 'model'; sub: number; object: string; name: string } & ModelChange)
   | { event: 'dropped'; count: number }
 
-interface Pending { resolve: (v: Json) => void; reject: (e: Error) => void }
+interface Pending { resolve: (v: Json) => void; reject: (e: Error) => void; sub?: Sub }
 
 /** What one `subscribe` to the service looks like, kept so it can be replayed. */
 interface Sub {
@@ -87,7 +87,6 @@ export class Octave {
   private nextId = 1
   private pending = new Map<number, Pending>()
   private subs = new Set<Sub>()
-  private early: Event[] = []
   private describeCache = new Map<string, Promise<Description>>()
   private backoff = 500
   private retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -137,7 +136,6 @@ export class Octave {
       for (const p of this.pending.values()) p.reject(new OctaveError('connection closed'))
       this.pending.clear()
       for (const sub of this.subs) sub.id = 0
-      this.early = []
       this.describeCache.clear()
       this.status.set('offline')
       if (!this.closed) this.scheduleRetry()
@@ -166,15 +164,16 @@ export class Octave {
         console.warn(`octave: ${e.count} events dropped`)
         return
       }
-      let handled = false
-      for (const sub of this.subs) if (sub.id === e.sub) { sub.onEvent(e); handled = true }
-      // The current values can arrive before the subscribe reply names the id
-      if (!handled) this.early.push(e)
+      for (const sub of this.subs) if (sub.id === e.sub) sub.onEvent(e)
       return
     }
     const p = this.pending.get(msg.id as number)
     if (!p) return
     this.pending.delete(msg.id as number)
+    // A subscribe reply names its id: record it here, synchronously, since the
+    // subscription's first events are already in the next frames and a
+    // promise .then would run after they had been dispatched.
+    if (msg.ok && p.sub) p.sub.id = (msg.result as { sub: number }).sub
     if (msg.ok) p.resolve(msg.result as Json)
     else p.reject(new OctaveError(String(msg.error ?? 'unknown error')))
   }
@@ -197,14 +196,14 @@ export class Octave {
     return this.send0(op, args)
   }
 
-  private send0(op: string, args: Record<string, unknown>): Promise<Json> {
+  private send0(op: string, args: Record<string, unknown>, sub?: Sub): Promise<Json> {
     const ws = this.ws
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       return Promise.reject(new OctaveError('not connected'))
     }
     const id = this.nextId++
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      this.pending.set(id, { resolve, reject, sub })
       ws.send(JSON.stringify({ op, id, ...args }))
     })
   }
@@ -242,13 +241,7 @@ export class Octave {
     if (sub.properties) args.properties = sub.properties
     if (sub.signals) args.signals = sub.signals
     if (sub.throttleMs) args.throttleMs = sub.throttleMs
-    this.request('subscribe', args)
-      .then((r) => {
-        sub.id = (r as { sub: number }).sub
-        const mine = this.early.filter((e) => e.event !== 'dropped' && e.sub === sub.id)
-        this.early = this.early.filter((e) => !mine.includes(e))
-        for (const e of mine) sub.onEvent(e)
-      })
+    this.send0('subscribe', args, sub)
       .catch((e) => console.warn(`octave: subscribe ${sub.object} failed:`, e.message))
   }
 
