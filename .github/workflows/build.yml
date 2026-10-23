@@ -208,6 +208,22 @@ jobs:
           pip install -r requirements.txt
           python -m pytest -q
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: frontends/sunlight/go.sum
+
+      - name: sunlight (Go + Gio)
+        working-directory: frontends/sunlight
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
+            libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libxfixes-dev
+          go vet -tags novulkan ./...
+          go test -tags novulkan ./...
+          go build -tags novulkan -o /dev/null .
+
   # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)
   # ---------------------------------------------------------------------------
