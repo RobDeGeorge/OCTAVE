@@ -1,5 +1,8 @@
 """OCTAVE console: an operator's terminal UI over the service API."""
 
+import os
+import time
+import urllib.request
 from functools import partial
 
 from rich.text import Text
@@ -11,6 +14,7 @@ from textual.css.query import NoMatches
 from textual.widgets import Footer, Static, TabbedContent, TabPane
 
 from .link import Link, Linked, OctaveError, OctaveEvent, Unlinked
+from .screens import EditValue
 from .panes import DownloadsPane, ExplorerPane, LivePane, ObdPane, SettingsPane, TripsPane, fmt_duration
 from .panes_car import CarPane
 from .panes_dash import DashboardsPane
@@ -293,6 +297,42 @@ class OctaveConsole(App):
 
     def invoke(self, obj, method, *args, done=None, failed=None, note=None, quiet=False):
         self.req("call", object=obj, method=method, args=list(args), done=done, failed=failed, note=note, quiet=quiet)
+
+    def download_export(self, kind):
+        """Fetch the head unit's last export of `kind` (trip, dashboard, logs)
+        over GET /export/<kind> and save it where the user says, here."""
+        host, port = self.link.host, self.link.port
+
+        def fetch(_link):
+            try:
+                with urllib.request.urlopen(f"http://{host}:{port}/export/{kind}", timeout=10) as r:
+                    return r.read(), r.headers.get("Content-Type", "")
+            except Exception as e:
+                return None, str(e)
+
+        def got(result):
+            data, ctype = result
+            if data is None:
+                self.notify(f"No {kind} export to download (export one first): {ctype}", severity="warning")
+                return
+            ext = next((e for t, e in (("json", ".json"), ("csv", ".csv"), ("zip", ".zip"), ("gzip", ".gz"),
+                                        ("text", ".txt")) if t in ctype), ".bin")
+            default = os.path.join(os.getcwd(), f"OCTAVE-{kind}-{time.strftime('%Y%m%d-%H%M%S')}{ext}")
+
+            def answered(path):
+                if not path:
+                    return
+                path = os.path.expanduser(path.strip())
+                try:
+                    with open(path, "wb") as f:
+                        f.write(data)
+                except OSError as e:
+                    self.notify(f"Could not write {path}: {e}", severity="error")
+                    return
+                self.notify(f"Saved {len(data)} bytes to {path}")
+            self.push_screen(EditValue(f"Save the {kind} export ({len(data)} bytes, {ctype or 'unknown type'}) to",
+                                       default, "a path on this computer"), answered)
+        self.blocking(fetch, got)
 
     def status_note(self, text):
         self.note = text

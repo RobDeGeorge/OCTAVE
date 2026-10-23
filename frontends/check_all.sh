@@ -114,7 +114,9 @@ fi
 # an OCTAVE started without XDG_CONFIG_HOME opens the real user's settings,
 # black box and phone pairing.
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-env XDG_CONFIG_HOME="$work/cfg" QT_QPA_PLATFORM=offscreen "$bin" --headless --dev --service "$port" "${web_root[@]}" \
+# HOME too: the export slots write to the Downloads folder, which follows HOME, not XDG_CONFIG_HOME
+mkdir -p "$work/home"
+env HOME="$work/home" XDG_CONFIG_HOME="$work/cfg" QT_QPA_PLATFORM=offscreen "$bin" --headless --dev --service "$port" "${web_root[@]}" \
     > "$work/logs/backend.log" 2>&1 &
 backend_pid=$!
 up=0
@@ -138,7 +140,8 @@ fi
 echo "OCTAVE headless on 127.0.0.1:$port, $tracks test track(s), work dir $work"
 sleep 2   # let the simulated car connect
 
-export OCTAVE_HOST=127.0.0.1 OCTAVE_PORT=$port
+# the backend's HOME is ours, so tests may make it write exports
+export OCTAVE_HOST=127.0.0.1 OCTAVE_PORT=$port OCTAVE_EXPORT_OK=1
 
 # console: the live pilot tests; a run where every live test skipped is a failure
 if wanted console; then

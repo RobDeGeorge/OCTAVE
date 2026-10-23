@@ -46,6 +46,7 @@ class DashboardsPane(Pane):
         Binding("i", "import_text", "Import"),
         Binding("o", "export", "Export"),
         Binding("R", "restore", "Restore built-ins"),
+        Binding("w", "download", "Download export"),
     ]
 
     def __init__(self, **kw):
@@ -159,6 +160,9 @@ class DashboardsPane(Pane):
             if yes:
                 self.app.invoke("dashboardManager", "deleteDashboard", d["id"], note=f"deleted {d['id']}")
         self.app.push_screen(Confirm(what), answered)
+
+    def action_download(self):
+        self.app.download_export("dashboard")
 
     def action_restore(self):
         self.app.invoke("dashboardManager", "restoreBuiltInDashboards", note="built-ins restored")

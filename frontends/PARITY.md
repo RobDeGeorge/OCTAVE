@@ -133,6 +133,6 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 All of these are backend items, none frontend work:
 
 - The phone mirror picture and Android Auto frames: lane A 12 (contract step 6).
-- Downloading files the app exports (trip CSV, log bundle, dashboard file): `GET /export/trip|dashboard|logs` landed (GET /export/..., lane A 9c, landed); no frontend offers it yet. The contents are reachable anyway (`requestSeries`, `recentLogLines`, `loadDashboard`).
+- Downloading files the app exports (trip CSV, log bundle, dashboard file): `GET /export/trip|dashboard|logs` landed (lane A 9c); no frontend offers it yet. The contents are reachable anyway (`requestSeries`, `recentLogLines`, `loadDashboard`).
 
 Head-unit-local by design (no gap): the clipboard actions, opening a folder in the head unit's file manager, window size and position.

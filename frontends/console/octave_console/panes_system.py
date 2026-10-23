@@ -201,6 +201,7 @@ class SystemPane(Pane):
                 with Horizontal(classes="buttons"):
                     yield Button("Refresh log", id="diag-log", compact=True)
                     yield Button("Export logs", id="diag-export", compact=True)
+                    yield Button("Download export…", id="diag-download", compact=True)
                 yield RichLog(id="sys-log", max_lines=2000, wrap=False)
 
     def on_mount(self):
@@ -273,6 +274,8 @@ class SystemPane(Pane):
             self.action_logs()
         elif bid == "diag-export":
             self.action_export_logs()
+        elif bid == "diag-download":
+            self.app.download_export("logs")
         elif bid and bid.startswith("lic-"):
             name = bid[4:]
             self.app.invoke("diagnosticsManager", "licenseText", name,

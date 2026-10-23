@@ -419,3 +419,33 @@ async def test_imu_readings_and_tare(sdk):
         await pilot.click("#imu-reset")
         assert await wait_for(pilot, lambda: app.note == "IMU tare reset")
         shot(app, "car-imu")
+
+
+@live
+async def test_download_last_export(sdk, tmp_path):
+    """GET /export/logs to a local file. The backend writes exports to its HOME's
+    Downloads, so a new export is made only when OCTAVE_EXPORT_OK=1 says that
+    HOME is a throwaway (check_all.sh sets it); otherwise only the 'nothing to
+    download' path is checked, if nothing was exported yet."""
+    import os
+    import urllib.request
+    exists = True
+    try:
+        urllib.request.urlopen(f"http://{HOST}:{PORT}/export/logs", timeout=3)
+    except Exception:
+        exists = False
+    app = OctaveConsole(HOST, PORT, start_tab="system")
+    async with app.run_test(size=SIZE) as pilot:
+        await linked(pilot, app)
+        if not exists and os.environ.get("OCTAVE_EXPORT_OK") != "1":
+            await pilot.click("#diag-download")
+            assert await wait_for(pilot, lambda: any("No logs export" in str(n.message) for n in app._notifications))
+            return
+        if not exists:
+            sdk.call("diagnosticsManager", "exportLogs")
+        await pilot.click("#diag-download")
+        assert await wait_for(pilot, lambda: screen_name(app) == "EditValue")
+        target = tmp_path / "logs-export"
+        app.screen.query_one("Input").value = str(target)
+        await pilot.press("enter")
+        assert await wait_for(pilot, lambda: target.exists() and target.stat().st_size > 0)

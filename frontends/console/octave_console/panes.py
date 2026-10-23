@@ -515,6 +515,7 @@ class TripsPane(Pane):
         Binding("E", "end_trip", "End trip now"),
         Binding("g", "refresh", "Refresh"),
         Binding("c", "chart", "Chart a value"),
+        Binding("w", "download", "Download export"),
         Binding("C", "clear_history", "Clear history"),
     ]
 
@@ -612,6 +613,9 @@ class TripsPane(Pane):
         self.query_one("#trip-chart-label", Static).update(
             f"[b]{row.get('title', pid)}[/b] trip {tid}: {len(values)} points {span}"
             + (f"  min {fmt_number(min(values), dec)} max {fmt_number(max(values), dec)} {row.get('unit', '')}" if values else ""))
+
+    def action_download(self):
+        self.app.download_export("trip")
 
     def action_chart(self):
         tid = self.selected()
