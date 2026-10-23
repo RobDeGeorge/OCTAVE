@@ -22,6 +22,7 @@
 #include <QThread>
 #include <QUrl>
 #include <QVarLengthArray>
+#include <QtEndian>
 
 #include <atomic>
 #include <cstdio>
@@ -140,9 +141,17 @@ private:
             }
             // Events only after the replies: a subscribe's reply (its sub
             // id) always precedes that subscription's first event. Only this
-            // thread writes to the socket, so the order holds
-            for (const QByteArray &event : connection.takeAll())
-                sock.write(event);
+            // thread writes to the socket, so the order holds. A stream
+            // record goes out as 0xFF, u32 length, the record: a JSON line
+            // never starts with 0xFF
+            for (const Connection::Item &item : connection.takeAll()) {
+                if (item.binary) {
+                    char head[5] = {char(0xFF)};
+                    qToBigEndian<quint32>(quint32(item.bytes.size()), head + 1);
+                    sock.write(head, 5);
+                }
+                sock.write(item.bytes);
+            }
             flush(sock);
         } while (pump(sock, buf));
     }
@@ -252,9 +261,14 @@ private:
                 flush(sock);
                 return;
             }
-            // As for lines: replies first, then the events queued meanwhile
-            for (const QByteArray &event : connection.takeAll())
-                sendText(event);
+            // As for lines: replies first, then the events queued meanwhile;
+            // a stream record is one binary frame
+            for (const Connection::Item &item : connection.takeAll()) {
+                if (item.binary)
+                    sock.write(Ws::encodeFrame(Ws::Binary, item.bytes));
+                else
+                    sendText(item.bytes);
+            }
             flush(sock);
         } while (pump(sock, incoming));
     }
@@ -279,25 +293,49 @@ void Connection::push(const QByteArray &jsonLine)
     QMutexLocker l(&m_lock);
     if (m_closed)
         return;
-    m_queue.append(jsonLine);
-    while (m_queue.size() > kMaxQueuedEvents) {
-        m_queue.removeFirst();
+    m_queue.append(Item{jsonLine, false});
+    while (m_queue.size() - m_records > kMaxQueuedEvents) {
+        for (int i = 0; i < m_queue.size(); ++i) {
+            if (!m_queue.at(i).binary) {
+                m_queue.removeAt(i);
+                break;
+            }
+        }
         ++m_dropped;
     }
 }
 
-QList<QByteArray> Connection::takeAll()
+bool Connection::pushRecord(const QByteArray &record)
 {
     QMutexLocker l(&m_lock);
-    QList<QByteArray> out;
+    if (m_closed)
+        return false;
+    if (m_records + 1 > kMaxQueuedRecords || m_recordBytes + record.size() > kMaxQueuedRecordBytes) {
+        m_queue.removeIf([](const Item &i) { return i.binary; });
+        m_records = 0;
+        m_recordBytes = 0;
+        return false;
+    }
+    m_queue.append(Item{record, true});
+    ++m_records;
+    m_recordBytes += record.size();
+    return true;
+}
+
+QList<Connection::Item> Connection::takeAll()
+{
+    QMutexLocker l(&m_lock);
+    QList<Item> out;
     if (m_dropped > 0) {
-        out.append(QJsonDocument(QJsonObject{{QStringLiteral("event"), QStringLiteral("dropped")},
-                                             {QStringLiteral("count"), m_dropped}})
-                       .toJson(QJsonDocument::Compact) + '\n');
+        out.append(Item{QJsonDocument(QJsonObject{{QStringLiteral("event"), QStringLiteral("dropped")},
+                                                  {QStringLiteral("count"), m_dropped}})
+                            .toJson(QJsonDocument::Compact) + '\n', false});
         m_dropped = 0;
     }
     out.append(m_queue);
     m_queue.clear();
+    m_records = 0;
+    m_recordBytes = 0;
     return out;
 }
 

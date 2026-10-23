@@ -15,6 +15,38 @@ What a frontend, a script or another program can read and drive in OCTAVE, witho
 
 The generated files come from the meta-objects of the desktop build (Linux, downloads on). Mobile builds stub some managers and `OCTAVE_ENABLE_DOWNLOADS=OFF` stubs `downloadManager`; a client finds out at run time with `describe`.
 
+## Streams
+
+Video goes to clients as binary records on the same connection (`src/service/streamhub.h`). Additive: a new op, no version bump.
+
+| Stream | Ask with | Payload |
+|---|---|---|
+| The phone mirror picture | `{"op":"stream","object":"phoneMirrorManager","name":"video"}` | H.264 as the phone sends it (no re-encode), one Annex-B access unit per record |
+| Android Auto | `{"op":"stream","object":"androidAutoManager","name":"frames"}` | one JPEG per record, at most 15 a second, encoded only while someone watches |
+
+The reply is `{"stream": S}` plus `format` (`annexb` / `jpeg`) and, for H.264 once known, `codec` (`avc1.PPCCLL`, from the SPS), `width`, `height`. A `{"event":"streamConfig","stream":S,"codec","width","height","format"}` event comes on every change of the parameter sets (the phone rotating, a new session), before the records that use them. `{"op":"unstream","stream":S}` stops one; a closed connection ends all of its streams.
+
+**Record**: one binary WebSocket frame, or on the line protocol `0xFF`, a big-endian u32 length, then the record (a JSON line never starts with `0xFF`):
+
+| Bytes | Field |
+|---|---|
+| 0 | version, 1 |
+| 1 | stream id `S` |
+| 2 | flags: 1 key, 2 config (SPS / PPS inline before the IDR), 4 JPEG, 8 discontinuity |
+| 3 | reserved, 0 |
+| 4-11 | presentation time, microseconds, big-endian u64 (the phone's clock; JPEG: wall clock) |
+| 12- | payload |
+
+Every keyframe record carries the current SPS and PPS first, so a decoder can start at any keyframe. In a browser: `new VideoDecoder({...}).configure({codec})` with no `description` (Annex-B mode), then `decode(new EncodedVideoChunk({type: flags & 1 ? "key" : "delta", timestamp, data: payload}))`; reconfigure on `streamConfig`.
+
+**Joining and falling behind.** A new subscriber gets nothing until the next keyframe (its first record has the discontinuity flag); the app asks the phone for one at once, at most once a second across all clients. A client that stops reading has its queue capped (2 MB or 90 records): when it overflows every queued record is dropped, a `{"event":"streamDropped","stream":S,"count":N}` says so, and the stream resumes at the next keyframe.
+
+**Touch.** `phoneMirrorManager.injectTouch(pointerId, action, relX, relY)`: `action` 0 down, 1 up, 2 move; `relX` / `relY` from 0 to 1 across the picture as decoded (the current `streamConfig` width and height), origin top left. Use one `pointerId` per finger.
+
+**Developing without a phone.** In a developer build, `octave --headless --dev --service` and the dev-only action `{"action":"sim_video","args":{"on":true}}` loop `tests/data/stream-test.h264` (640x360 for 2 s, then 1280x720, 30 fps; made by `tools/stream/make_test_h264.sh`) into the phone stream, so the config change is exercised. Never send dev actions from a shipped frontend.
+
+**Security.** A read under the same rules as every op (loopback by default, the browser Origin rule). The phone screen is sensitive: when pairing lands, `stream` will need an authorised client like every other op.
+
 ## Regenerating
 
 ```bash

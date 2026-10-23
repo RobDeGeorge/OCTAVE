@@ -63,10 +63,25 @@ QImage DhuFrameProvider::requestImage(const QString &id,
     return placeholder;
 }
 
+static std::function<void(const QImage &)> &frameTap()
+{
+    static std::function<void(const QImage &)> tap;
+    return tap;
+}
+
+void DhuFrameProvider::setFrameTap(std::function<void(const QImage &)> tap)
+{
+    frameTap() = std::move(tap);
+}
+
 void DhuFrameProvider::updateFrame(const QImage &image)
 {
-    QMutexLocker lock(&m_mutex);
-    m_currentImage = image;
+    {
+        QMutexLocker lock(&m_mutex);
+        m_currentImage = image;
+    }
+    if (frameTap())
+        frameTap()(image);
 }
 
 // =====================================================================

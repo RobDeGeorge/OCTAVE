@@ -11,6 +11,7 @@
 #include <QTcpSocket>
 #include <QTest>
 #include <QThread>
+#include <QtEndian>
 
 #include <memory>
 
@@ -19,6 +20,7 @@
 #include "service/protocol.h"
 #include "service/servicebridge.h"
 #include "service/serviceregistry.h"
+#include "service/streamhub.h"
 
 using namespace OctaveService;
 
@@ -343,6 +345,72 @@ private slots:
         m_socket->abort();
         QTRY_VERIFY_WITH_TIMEOUT(demand.ids.isEmpty(), 3000);
         QCOMPARE(demand.releases, 5);   // shared and mine
+    }
+
+    void streamsSendBinaryRecords()
+    {
+        // `stream`: the reply, a streamConfig event, then records framed as
+        // 0xFF + u32 length on the line protocol
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QVERIFY(error(R"({"op": "stream", "object": "fixture", "name": "nope"})").contains("has no stream"));
+        QVERIFY(error(R"({"op": "stream", "object": "ghost", "name": "video"})").contains("ghost"));
+
+        QTcpSocket raw;
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 5})" "\n");
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (!in.contains('\n') && t.elapsed() < 3000) {
+            QCoreApplication::processEvents();
+            if (raw.waitForReadyRead(10))
+                in += raw.readAll();
+        }
+        const QJsonObject reply = QJsonDocument::fromJson(in.left(in.indexOf('\n'))).object();
+        QVERIFY2(reply.value("ok").toBool(), in.constData());
+        const int id = reply.value("result").toObject().value("stream").toInt();
+        QCOMPARE(id, 1);
+        in.remove(0, in.indexOf('\n') + 1);
+
+        // Parameter sets (only their NAL types matter here), a keyframe, a delta
+        const QByteArray sps = QByteArray::fromHex("000000016742c01e"), pps = QByteArray::fromHex("0000000168ce3c80");
+        hub.publishH264("fixture.video", sps + pps, 0, false, true);
+        hub.publishH264("fixture.video", QByteArray::fromHex("0000000165888040"), 1000, true, false);
+        hub.publishH264("fixture.video", QByteArray::fromHex("00000001419a"), 34333, false, false);
+        t.restart();
+        while (in.count(char(0xFF)) < 2 && t.elapsed() < 3000) {
+            QCoreApplication::processEvents();
+            if (raw.waitForReadyRead(10))
+                in += raw.readAll();
+        }
+        const int nl = in.indexOf('\n');
+        QVERIFY(nl > 0);
+        const QJsonObject config = QJsonDocument::fromJson(in.left(nl)).object();
+        QCOMPARE(config.value("event").toString(), QStringLiteral("streamConfig"));
+        QCOMPARE(config.value("stream").toInt(), id);
+        QByteArray rest = in.mid(nl + 1);
+        QList<QByteArray> recs;
+        while (rest.size() >= 5 && quint8(rest.at(0)) == 0xFF) {
+            const quint32 n = qFromBigEndian<quint32>(rest.constData() + 1);
+            recs.append(rest.mid(5, int(n)));
+            rest.remove(0, 5 + int(n));
+        }
+        QCOMPARE(recs.size(), 2);
+        QCOMPARE(quint8(recs.at(0).at(0)), quint8(1));    // version
+        QCOMPARE(quint8(recs.at(0).at(1)), quint8(id));
+        QCOMPARE(quint8(recs.at(0).at(2)), quint8(StreamHub::Key | StreamHub::Config | StreamHub::Discontinuity));
+        QCOMPARE(qFromBigEndian<quint64>(recs.at(0).constData() + 4), quint64(1000));
+        QVERIFY(recs.at(0).mid(12).startsWith(QByteArray::fromHex("0000000167")));   // SPS first
+        QCOMPARE(quint8(recs.at(1).at(2)), quint8(0));
+        QCOMPARE(recs.at(1).mid(12), QByteArray::fromHex("00000001419a"));
+
+        // Closing the connection ends the stream
+        raw.abort();
+        QTRY_VERIFY_WITH_TIMEOUT((hub.publishH264("fixture.video", QByteArray::fromHex("0000000165"), 0, true, false),
+                                  !hub.wanted("fixture.video")), 3000);
     }
 
     void keyValueObjects()

@@ -228,6 +228,8 @@ qt_add_executable(octave
     src/service/websocket.cpp
     src/service/staticfiles.h
     src/service/staticfiles.cpp
+    src/service/streamhub.h
+    src/service/streamhub.cpp
     src/service/metadescribe.h
     src/service/metadescribe.cpp
     src/util/units.cpp

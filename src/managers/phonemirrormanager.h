@@ -153,6 +153,9 @@ public:
     // GET /art?queue=<id>: the art file of that queue item, only if it is
     // in the queue art folder; "" otherwise
     QString queueArtFile(qint64 id) const;
+    // A service stream client joined: ask the phone for a keyframe (GUI
+    // thread; nothing without a session)
+    void requestVideoKeyframe();
     qint64 mediaQueueActiveId() const { return m_mediaQueueActiveId; }
     QString mediaQueueTitle() const { return m_mediaQueueTitle; }
     QString deviceState() const { return m_deviceState; }
@@ -589,6 +592,8 @@ public:
     QString sessionState() const { return QStringLiteral("idle"); }
     void setViewActive(bool) {}
     QVariantList mediaQueue() const { return {}; }
+    QString queueArtFile(qint64) const { return {}; }
+    void requestVideoKeyframe() {}
     qint64 mediaQueueActiveId() const { return -1; }
     QString mediaQueueTitle() const { return {}; }
     bool audioActive() const { return false; }

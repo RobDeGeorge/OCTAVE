@@ -132,6 +132,9 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
         <h3>Album art</h3>
         <p><code>nowPlaying.artUrl</code> is a file on the head unit; fetch the picture itself from <code>GET http://host:9876/art</code> (local and phone art alike, typed by its bytes: JPEG, PNG, GIF, WebP or BMP; 404 when there is none). Subscribe to <code>nowPlaying.artRevision</code>, which goes up by one on every new cover, and use it as your cache key: <code>&lt;img src="/art?rev=12"&gt;</code> from a <code>--web-root</code> page, or refetch when it changes. For a list, <code>/art?song=&lt;file name&gt;</code> (URL-encoded, a song in the library, as the playlist APIs name it) gives that song's cover and <code>/art?queue=&lt;id&gt;</code> a phone queue item's (<code>phoneMirrorManager.mediaQueue</code> ids). The request only names a song or an item; the app looks the file up itself and serves nothing outside its own art folders.</p>
 
+        <h3>Video: the phone mirror and Android Auto</h3>
+        <p>Send <code>{"op":"stream","object":"phoneMirrorManager","name":"video"}</code> (or <code>androidAutoManager</code> / <code>frames</code> for JPEG). The reply gives your stream id; then binary records arrive on the same connection: H.264 access units in Annex-B, every keyframe carrying its SPS and PPS, with a <code>streamConfig</code> event (codec string, width, height) whenever those change. A browser decodes them with WebCodecs: <code>decoder.configure({codec})</code>, then one <code>EncodedVideoChunk</code> per record. Touch goes back through <code>phoneMirrorManager.injectTouch(pointerId, action, relX, relY)</code>, with 0 to 1 coordinates over the picture. The record layout, the join and drop rules and a phone-free test source (<code>sim_video</code> in a developer build) are in <span class="file-path">docs/api/README.md</span>, "Streams".</p>
+
         <h3>Exports</h3>
         <p>An export writes to the head unit's Downloads folder; a remote client then fetches it over HTTP. Call <code>tripRecorder.exportTrip(id)</code> and, after its <code>exportFinished</code>, download <code>GET /export/trip</code> (the CSV; <code>?format=json</code> for the JSON); <code>dashboardManager.exportDashboard(id)</code> then <code>GET /export/dashboard</code>; <code>diagnosticsManager.exportLogs()</code> then <code>GET /export/logs</code> (the list of files) and <code>/export/logs?file=octave-cpp.log</code>. Only the last export of each kind is served, never a path you name.</p>
 
@@ -140,7 +143,6 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
 
         <h2 id="limits">What Is Not Available Yet</h2>
         <ul>
-          <li><strong>Video</strong>: the phone mirror picture and Android Auto frames go straight into the bundled UI. You can start and stop mirroring and read its state, but not show the picture. Media streams are contract step 6 in <span class="file-path">TODO/open-backend.md</span>.</li>
         </ul>
 
         <div class="related-pages">
