@@ -170,6 +170,32 @@ jobs:
           path: build-phone-server/octave-phone-server
           retention-days: 30
 
+  # The other frontends (frontends/, each a client of the service API):
+  # they must build and pass their own checks. Not shipped; the QML UI is.
+  frontends:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: retro-cluster (Rust + egui)
+        working-directory: frontends/retro-cluster
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          cargo +stable clippy --release --locked -- -D warnings
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: glass (TypeScript + Svelte)
+        working-directory: frontends/glass
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+          npm run build
+
   # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)
   # ---------------------------------------------------------------------------
