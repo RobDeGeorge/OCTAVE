@@ -91,6 +91,7 @@ build/octave --headless                  <span class="cmt"># the managers + the 
 build/octave --headless --web-root dist  <span class="cmt"># serve your built web frontend at http://127.0.0.1:9876/</span>
 build/octave --headless --dev --service  <span class="cmt"># then {"action":"sim_video","args":{"on":true}}: tests/data/stream-test.h264 into the phone video stream; {"action":"sim_pairing_code"}: a pairing code without the Settings page</span>
 build/octave --headless --dev            <span class="cmt"># + the simulated car, IMU motion and the sim_* actions on the service (no UI / perf actions)</span>
+python3 tools/stream/service_load.py build/octave 19818 /tmp/load/cfg ~/Music   <span class="cmt"># service load: CPU, RSS, event latency with 5 clients (TODO/open-backend.md has the baseline)</span>
 build/octave --help                      <span class="cmt"># every flag (and --version); exits before any manager, config or log file</span>
 build/octave --dump-api docs/api         <span class="cmt"># regenerate the published API (then: python wiki/build_api_reference.py)</span></code></pre>
         <p>A build without the option (Release, or no build type) ignores <code>--dev</code> / <code>--profile</code> with a warning; <code>--service</code> works in every build (<a href="utilities.html#service-protocol">service protocol</a>). Use a sandboxed config when a run should not touch your settings: <code>XDG_CONFIG_HOME=/tmp/octave-dev build/octave --dev</code> (the story and collage tools do this with their own profile directory).</p>

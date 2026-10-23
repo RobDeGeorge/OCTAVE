@@ -88,7 +88,20 @@ Once the prerequisites are in, the backend is property-and-slot shaped end to en
 7. **Conformance test.** Keep the QML UI in-process for latency, but add a test that everything QML touches is reachable through the bridge, so the reference UI cannot quietly use a private path. **Effort:** M. Done 2026-10-22: `tst_conformance` (source-level: context properties must be service objects or on its QML-only list; every `object.member` and `Connections` handler in the QML must be in `docs/api/`). It found nothing to fix: the 990 uses all resolve. A QML alias (`property var sm: settingsManager`) escapes it; none exist today.
 8. **Wiki and CLAUDE.md.** `architecture.html`, `development.html`, `building.html`, the generated reference page, and a new "Writing a frontend" page. **Effort:** S. Done 2026-10-22: `wiki/writing-a-frontend.html` (start, connect, discover, read, control, recipes, headless, versioning and security, what is missing), `architecture.html` (startup sequence rewritten for AppCore, a section on the service), `building.html` (what CI's ctest now checks), CLAUDE.md (a Service API section).
 
-## Running the core as its own process
+## Service load baseline (desktop, 2026-10-23)
+
+To compare on the Orange Pi. One `octave --headless --dev` (Debug build of night/backend at 2ccf54b, AMD Ryzen 7 9700X, Arch Linux), the simulated car, a local track playing; the script is `tools/stream/service_load.py`.
+
+| | Backend CPU (of one core) | Backend RSS |
+|---|---|---|
+| 60 s, no clients | 0.7 % | 400 MB |
+| 120 s, 5 clients (below) | 1.2 % | 415 MB |
+
+Clients: `paramStore` every one of the 129 ids with `setParameterDemand` on all, `throttleMs` 40 (15.9 events/s); `nowPlaying` six properties (20.1/s); `audioAnalyzer.levels` with `setDemand` (3.5/s, only on change); `sim_video` over WebSocket and over TCP (30.3 records/s each, no drops). Event latency, as the excess over the fastest delivery seen (the server's `t` is its own monotonic clock): p50 10 ms, p95 19 ms, p99 20 ms, max 21 ms, the same for every subscription. That is the connection thread's 20 ms read poll (`pump()`, `waitForReadyRead(20)`): an event waits for the next wake-up. Waking the thread when something is queued (an eventfd / self-pipe the poll also watches) would take it to ~0; worth doing before the Pi numbers, **Effort:** S.
+
+Not covered: the test video is 300 kbit/s, a phone sends 8-16 Mbit/s, so on the Pi measure with the real phone stream; RSS is a Debug build's.
+
+
 
 Once `--headless` exists (contract step 2), the QML UI can run as a client of it on desktop and the Pi. The payoff is in-car reliability: a UI crash or freeze no longer stops music, OBD polling or the volume knob; the UI reconnects and the core keeps its state. Constraints that survive from the old plan:
 
