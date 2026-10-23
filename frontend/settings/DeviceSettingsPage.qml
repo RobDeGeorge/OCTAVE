@@ -30,6 +30,9 @@ Flickable {
     property bool renderCards: true
 
     readonly property var _diag: typeof diagnosticsManager !== "undefined" ? diagnosticsManager : null
+    // Pairing codes, paired devices and the service switch: head unit only
+    // (src/service/servicepairing.h; not reachable over the service)
+    readonly property var _pairing: typeof servicePairing !== "undefined" ? servicePairing : null
 
     property var tileModel: [
         { cardId: "device_name", title: "Device", component: deviceContent,
@@ -38,6 +41,14 @@ Flickable {
               var on = !!(networkManager && networkManager.isConnected)
               return { state: settingsManager ? (settingsManager.deviceName || "OCTAVE") : "OCTAVE",
                        status: on ? App.Style.statusConnected : App.Style.statusDisconnected }
+          } },
+        { cardId: "device_service", title: "Service", component: serviceContent,
+          summary: function() {
+              var sp = pageRoot._pairing
+              if (!sp) return {}
+              var n = sp.devices.length
+              return { state: (sp.serviceEnabled ? "On" : "Off") + (n ? " \u2022 " + n + " paired" : ""),
+                       status: sp.serviceEnabled ? App.Style.statusConnected : App.Style.statusDisconnected }
           } },
         { cardId: "device_diagnostics", title: "Diagnostics", component: diagnosticsContent,
           summary: function() {
@@ -183,6 +194,117 @@ Flickable {
     }
 
     // Read and get the logs out without a laptop
+    Component {
+        id: serviceContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+
+            SettingDescription {
+                text: "Lets other programs on this device, and devices you pair on your network, read and control OCTAVE "
+                      + "(the service protocol: other dashboards, phones, scripts). Anything paired can change settings, "
+                      + "play music and see the mirrored phone. Changes to the switch take effect at the next start."
+            }
+
+            SettingsToggle {
+                objectName: "serviceEnabledToggle"
+                compact: true
+                Layout.fillWidth: false
+                Layout.alignment: Qt.AlignLeft
+                visible: !!pageRoot._pairing
+                text: "Service"
+                checked: pageRoot._pairing ? pageRoot._pairing.serviceEnabled : false
+                activeColor: App.Style.accent
+                inactiveColor: App.Style.hoverColor
+                onToggled: function(on) { if (pageRoot._pairing) pageRoot._pairing.setServiceEnabled(on) }
+            }
+
+            SettingCategory {
+                title: "Pair a device"
+                visible: !!pageRoot._pairing
+
+                SettingDescription {
+                    text: pageRoot._pairing && !pageRoot._pairing.loopbackOpen
+                          ? "Every client must pair, including programs on this device."
+                          : "Programs on this device need no pairing; a device on your network enters this code once."
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.overallSpacing
+                    readonly property bool showing: !!pageRoot._pairing && pageRoot._pairing.pairingCode !== ""
+
+                    SettingsButton {
+                        objectName: "pairDeviceButton"
+                        text: parent.showing ? "New code" : "Show a code"
+                        height: pageRoot.dp(30)
+                        onClicked: pageRoot._pairing.startPairing()
+                    }
+                    Text {
+                        objectName: "pairingCode"
+                        visible: parent.showing
+                        text: parent.showing ? pageRoot._pairing.pairingCode.substr(0, 3) + " " + pageRoot._pairing.pairingCode.substr(3) : ""
+                        color: App.Style.accent
+                        font.pixelSize: App.Spacing.overallText * 1.8
+                        font.family: "monospace"
+                        font.bold: true
+                    }
+                    Text {
+                        visible: parent.showing
+                        text: parent.showing ? pageRoot._pairing.pairingSecondsLeft + " s" : ""
+                        color: App.Style.secondaryTextColor
+                        font.pixelSize: App.Spacing.overallText * 0.8
+                        font.family: App.Style.fontFamily
+                    }
+                    SettingsButton {
+                        visible: parent.showing
+                        text: "Cancel"
+                        height: pageRoot.dp(30)
+                        onClicked: pageRoot._pairing.cancelPairing()
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+            }
+
+            SettingCategory {
+                title: "Paired devices"
+                visible: !!pageRoot._pairing
+
+                Text {
+                    visible: !!pageRoot._pairing && pageRoot._pairing.devices.length === 0
+                    text: "None yet."
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.8
+                    font.family: App.Style.fontFamily
+                }
+
+                Repeater {
+                    model: pageRoot._pairing ? pageRoot._pairing.devices : []
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.overallSpacing
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.name + "  \u2022  last used "
+                                  + (modelData.lastUsed ? new Date(modelData.lastUsed).toLocaleString(Qt.locale(), Locale.ShortFormat) : "never")
+                            color: App.Style.primaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.85
+                            font.family: App.Style.fontFamily
+                            elide: Text.ElideRight
+                        }
+                        SettingsButton {
+                            objectName: "revoke_" + modelData.id
+                            text: "Revoke"
+                            tooltipText: "Forget this device; it is disconnected at once"
+                            height: pageRoot.dp(28)
+                            onClicked: pageRoot._pairing.revoke(modelData.id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Component {
         id: diagnosticsContent
         ColumnLayout {

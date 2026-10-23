@@ -558,7 +558,8 @@ QByteArray CommandServer::handleLine(const QByteArray &line)
         if (cmd.contains(QStringLiteral("id")))
             reply[QStringLiteral("id")] = cmd.value(QStringLiteral("id"));
         // Trust is checked as each op runs, so a revoke takes effect at once
-        if (m_trusted && !m_openOps.contains(name)) {
+        // Only the op form is ever exempt: {"action": "hello"} is checked
+        if (m_trusted && !(isOp && m_openOps.contains(name))) {
             const std::shared_ptr<Connection> c = currentConnection();
             if (!c || !m_trusted(*c)) {
                 reply[QStringLiteral("ok")] = false;

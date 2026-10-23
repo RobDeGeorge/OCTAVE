@@ -454,6 +454,9 @@ private slots:
         QCOMPARE(refused.value("ok").toBool(), false);
         QCOMPARE(refused.value("code").toString(), QStringLiteral("unauthorised"));
         QCOMPARE(a.send(R"({"action": "ping"})").value("code").toString(), QStringLiteral("unauthorised"));
+        // The exemption is for the ops only, never an action of that name
+        QCOMPARE(a.send(R"({"action": "hello"})").value("code").toString(), QStringLiteral("unauthorised"));
+        QCOMPARE(a.send(R"({"action": "pair"})").value("code").toString(), QStringLiteral("unauthorised"));
         QCOMPARE(a.send(R"({"op": "stream", "object": "fixture", "name": "video"})").value("code").toString(),
                  QStringLiteral("unauthorised"));
         QCOMPARE(a.send(R"({"op": "mediaTicket"})").value("code").toString(), QStringLiteral("unauthorised"));
