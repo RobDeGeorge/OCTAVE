@@ -7,6 +7,7 @@
 #include "protocol.h"
 #include "serviceregistry.h"
 
+#include <QAbstractItemModel>
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -86,7 +87,8 @@ public:
         fields.insert(QStringLiteral("object"), m_object);
         if (!name.isEmpty())
             fields.insert(QStringLiteral("name"), name);
-        if (m_throttleMs <= 0 || now) {
+        // List changes are a sequence (an insert then an update of it): never coalesced
+        if (m_throttleMs <= 0 || now || kind == QLatin1String("model")) {
             push(fields);
             return;
         }
@@ -134,6 +136,37 @@ private:
 QJsonValue toJson(const QVariant &v)
 {
     return QJsonValue::fromVariant(jsonSafe(v));
+}
+
+// The model a property holds, or null
+QAbstractItemModel *modelIn(const QVariant &value)
+{
+    return (value.metaType().flags() & QMetaType::PointerToQObject)
+        ? qobject_cast<QAbstractItemModel *>(value.value<QObject *>()) : nullptr;
+}
+
+QJsonArray modelRows(QAbstractItemModel *model, int first, int last)
+{
+    QJsonArray rows;
+    const QHash<int, QByteArray> roles = model->roleNames();
+    for (int r = qMax(0, first); r <= last && r < model->rowCount(); ++r) {
+        QJsonObject row;
+        const QModelIndex index = model->index(r, 0);
+        for (auto it = roles.constBegin(); it != roles.constEnd(); ++it)
+            row.insert(QString::fromUtf8(it.value()), QJsonValue::fromVariant(jsonSafe(model->data(index, it.key()))));
+        rows.append(row);
+    }
+    return rows;
+}
+
+QVariant modelSummary(QAbstractItemModel *model)
+{
+    QStringList roles;
+    for (const QByteArray &r : model->roleNames())
+        roles.append(QString::fromUtf8(r));
+    roles.sort();
+    return QVariantMap{{QStringLiteral("model"), true}, {QStringLiteral("count"), model->rowCount()},
+                       {QStringLiteral("roles"), roles}};
 }
 
 QMetaProperty findProperty(QObject *o, const QString &name)
@@ -194,7 +227,26 @@ void ServiceBridge::install(CommandServer &server)
             }
             if (property.isEmpty())
                 throw CommandError(QStringLiteral("get needs a property"));
-            return findProperty(o, property).read(o);
+            const QVariant v = findProperty(o, property).read(o);
+            if (QAbstractItemModel *model = modelIn(v))
+                return modelSummary(model);
+            return v;
+        }, timeoutOf(args));
+    });
+
+    server.registerOp(QStringLiteral("rows"), [this](const QVariantMap &args) {
+        QPointer<QObject> o = object(args.value(QStringLiteral("object")).toString());
+        const QString property = args.value(QStringLiteral("property")).toString();
+        const int from = qMax(0, args.value(QStringLiteral("from"), 0).toInt());
+        const int count = args.value(QStringLiteral("count"), -1).toInt();
+        return CommandServer::onGui([o, property, from, count]() -> QVariant {
+            if (!o)
+                throw CommandError(QStringLiteral("object is gone"));
+            QAbstractItemModel *model = modelIn(findProperty(o, property).read(o));
+            if (!model)
+                throw CommandError(QStringLiteral("%1 is not a list model").arg(property));
+            const int last = count < 0 ? model->rowCount() - 1 : from + count - 1;
+            return modelRows(model, from, last).toVariantList();
         }, timeoutOf(args));
     });
 
@@ -317,6 +369,36 @@ QVariant ServiceBridge::subscribe(const QVariantMap &args)
                 if (pi < 0)
                     fail(QStringLiteral("%1 has no property %2").arg(name, prop));
                 const QMetaProperty p = mo->property(pi);
+                if (QAbstractItemModel *model = modelIn(p.read(o))) {
+                    // A list: its row changes, starting with all of it
+                    QPointer<QAbstractItemModel> m = model;
+                    auto send = [sub, prop](const QString &change, int first, int last, const QJsonArray *rows,
+                                            bool now = false) {
+                        QJsonObject f{{QStringLiteral("change"), change}, {QStringLiteral("first"), first},
+                                      {QStringLiteral("last"), last}};
+                        if (rows)
+                            f.insert(QStringLiteral("rows"), *rows);
+                        sub->send(QStringLiteral("model"), prop, f, now);
+                    };
+                    QObject::connect(model, &QAbstractItemModel::modelReset, sub, [m, send] {
+                        const QJsonArray rows = modelRows(m, 0, m->rowCount() - 1);
+                        send(QStringLiteral("reset"), 0, m->rowCount() - 1, &rows);
+                    });
+                    QObject::connect(model, &QAbstractItemModel::rowsInserted, sub, [m, send](const QModelIndex &, int first, int last) {
+                        const QJsonArray rows = modelRows(m, first, last);
+                        send(QStringLiteral("insert"), first, last, &rows);
+                    });
+                    QObject::connect(model, &QAbstractItemModel::rowsRemoved, sub, [send](const QModelIndex &, int first, int last) {
+                        send(QStringLiteral("remove"), first, last, nullptr);
+                    });
+                    QObject::connect(model, &QAbstractItemModel::dataChanged, sub, [m, send](const QModelIndex &tl, const QModelIndex &br) {
+                        const QJsonArray rows = modelRows(m, tl.row(), br.row());
+                        send(QStringLiteral("update"), tl.row(), br.row(), &rows);
+                    });
+                    const QJsonArray all = modelRows(model, 0, model->rowCount() - 1);
+                    send(QStringLiteral("reset"), 0, model->rowCount() - 1, &all, true);
+                    continue;
+                }
                 QPointer<QObject> target = o;
                 auto read = [sub, target, p, prop](bool now) {
                     if (target)

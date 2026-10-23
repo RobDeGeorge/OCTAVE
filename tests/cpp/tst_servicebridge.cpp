@@ -15,6 +15,7 @@
 #include <memory>
 
 #include "service/commandserver.h"
+#include "util/variantlistmodel.h"
 #include "service/protocol.h"
 #include "service/servicebridge.h"
 #include "service/serviceregistry.h"
@@ -38,6 +39,7 @@ class Fixture : public QObject
     Q_PROPERTY(Mode mode READ mode NOTIFY modeChanged)
     Q_PROPERTY(QString label READ label CONSTANT)
     Q_PROPERTY(Mode preferred READ preferred WRITE setPreferred NOTIFY preferredChanged)
+    Q_PROPERTY(QAbstractListModel *queue READ queue CONSTANT)
 
 public:
     enum class Mode { Off, Slow, Fast };
@@ -48,6 +50,8 @@ public:
     Mode mode() const { return m_mode; }
     QString label() const { return QStringLiteral("fixture"); }
     Mode preferred() const { return m_preferred; }
+    QAbstractListModel *queue() const { return m_queue; }
+    VariantListModel *m_queue = new VariantListModel({"songId", "status"}, this);
     void setPreferred(Mode m) { if (m != m_preferred) { m_preferred = m; emit preferredChanged(); } }
 
     Q_INVOKABLE QString greet(const QString &who) const { return QStringLiteral("hi ") + who; }
@@ -138,7 +142,7 @@ private slots:
         QStringList props;
         for (const QJsonValue &p : d.value("properties").toArray())
             props << p.toObject().value("name").toString();
-        QCOMPARE(props, (QStringList{"level", "mode", "label", "preferred"}));   // no objectName (QObject's)
+        QCOMPARE(props, (QStringList{"level", "mode", "label", "preferred", "queue"}));   // no objectName (QObject's)
         const QJsonObject level = d.value("properties").toArray().at(0).toObject();
         QCOMPARE(level.value("type").toString(), QStringLiteral("int"));
         QCOMPARE(level.value("writable").toBool(), true);
@@ -337,6 +341,37 @@ private slots:
                     ids.insert(m_lines.takeAt(i).value("id").toInt());
         }
         QCOMPARE(ids, (QSet<int>{1, 2, 3}));
+    }
+
+    void listModels()
+    {
+        m_registry->add("fixture", &m_fixture);
+        m_fixture.m_queue->reset({{{"songId", "a"}, {"status", "complete"}}});
+        const QVariantMap summary = result(R"({"op": "get", "object": "fixture", "property": "queue"})").toMap();
+        QCOMPARE(summary.value("model").toBool(), true);
+        QCOMPARE(summary.value("count").toInt(), 1);
+        QCOMPARE(summary.value("roles").toStringList(), (QStringList{"songId", "status"}));
+        const QVariantList rows = result(R"({"op": "rows", "object": "fixture", "property": "queue"})").toList();
+        QCOMPARE(rows.size(), 1);
+        QCOMPARE(rows.first().toMap().value("status").toString(), QStringLiteral("complete"));
+        QVERIFY(error(R"({"op": "rows", "object": "fixture", "property": "level"})").contains("not a list model"));
+
+        result(R"({"op": "subscribe", "object": "fixture", "properties": ["queue"], "throttleMs": 500})");
+        QTRY_COMPARE_WITH_TIMEOUT(collect().size(), 1, 2000);
+        QCOMPARE(m_events.first().value("change").toString(), QStringLiteral("reset"));
+        QCOMPARE(m_events.first().value("rows").toArray().size(), 1);
+        m_events.clear();
+        m_fixture.m_queue->append({{"songId", "b"}, {"status", "downloading"}});
+        m_fixture.m_queue->setValue(1, "status", "complete");
+        m_fixture.m_queue->remove(0);
+        // In order, none coalesced despite the throttle
+        QTRY_COMPARE_WITH_TIMEOUT(collect().size(), 3, 2000);
+        QCOMPARE(m_events.at(0).value("change").toString(), QStringLiteral("insert"));
+        QCOMPARE(m_events.at(0).value("rows").toArray().at(0).toObject().value("songId").toString(), QStringLiteral("b"));
+        QCOMPARE(m_events.at(1).value("change").toString(), QStringLiteral("update"));
+        QCOMPARE(m_events.at(1).value("first").toInt(), 1);
+        QCOMPARE(m_events.at(2).value("change").toString(), QStringLiteral("remove"));
+        QCOMPARE(m_events.at(2).value("first").toInt(), 0);
     }
 
     void registryForgetsDeletedObjects()

@@ -24,6 +24,15 @@
 //       params event) per interval, the latest value winning; `t` is when
 //       the event is sent (a throttled one: the flush), in monotonic ms
 //   unsubscribe {sub}. A connection's subscriptions end with it.
+// List models (a property holding a QAbstractItemModel, e.g. the download
+// queue): get gives {model: true, count, roles}; rows {object, property,
+// from?, count?} the rows as {role: value} maps; subscribing to the
+// property sends {"event": "model", ..., name, change: "reset" | "insert" |
+// "remove" | "update", first, last, rows?} (rows for reset / insert /
+// update), starting with a reset of every row. List events ignore
+// throttleMs: they are a sequence a client replays. Moves and layout
+// changes are not forwarded (VariantListModel never emits them; a model
+// that does needs them added), and an update resends whole rows.
 // Everything that touches an object runs on its (GUI) thread.
 
 #ifndef OCTAVE_SERVICE_SERVICEBRIDGE_H
