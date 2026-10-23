@@ -31,17 +31,17 @@ SUBSCRIPTIONS = [
                     "connectionLog", "availableAdapters", "vin", "vehicleMake", "vehicleModelYear",
                     "vehicleSupportedParameters", "vehicleScanComplete"],
      ["dtcCodesChanged", "freezeFrameChanged", "dtcClearResult", "milStatusChanged", "connectionLogLineAppended",
-      "scanProgressChanged"], 0),
+      "scanProgressChanged", "scanOutputChanged", "dtcCountChanged"], 0),
     ("obdAdapterFinder", ["supported", "bluetoothOn", "scanning", "devices", "busyAddress", "status",
                           "statusIsError"], None, 0),
     ("tripRecorder", ["enabled", "recording", "currentTripId", "currentTripElapsedS", "currentSampleCount", "trips",
-                      "storageBytes", "lastExportPath", "lastError"], ["detailReady", "exportFinished"], 0),
+                      "storageBytes", "lastExportPath", "lastError"], ["detailReady", "exportFinished", "seriesReady"], 0),
     ("nowPlaying", ["source", "playing", "hasTrack", "title", "artist", "album", "durationMs", "positionMs",
                     "canSeek", "canShuffle", "shuffled"], None, 250),
     ("volumeController", ["percent", "muted", "effectivelyMuted"], None, 0),
     ("downloadManager", ["isSearching", "activeDownloads", "downloadPath", "downloadsAvailable", "searchResults",
                          "downloadQueue"], ["statusMessage", "searchError", "downloadError"], 0),
-    ("clock", None, ["timeChanged"], 0),
+    ("clock", ["time"], None, 0),
 ]
 
 
