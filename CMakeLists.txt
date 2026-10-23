@@ -198,6 +198,7 @@ qt_add_executable(octave
     src/util/units.h
     src/util/fontcatalog.h
     src/util/fontcatalog.cpp
+    src/util/pathurl.h
     src/util/units.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp

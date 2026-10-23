@@ -2,6 +2,7 @@
 
 #include "dashboardmanager.h"
 #include "../util/dashboardgrid.h"
+#include "../util/pathurl.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -516,9 +517,7 @@ QString DashboardManager::importDashboard(const QString &fileOrUrl)
 {
     // file:// → local path; content:// (Android picker) and plain paths are
     // handed to QFile as-is (Qt's Android file engine opens content URIs).
-    const QUrl url(fileOrUrl);
-    const QString path = url.isLocalFile() ? url.toLocalFile() : fileOrUrl;
-    QFile f(path);
+    QFile f(PathUrl::openablePath(fileOrUrl));
     if (!f.open(QIODevice::ReadOnly)) {
         setShareError(QStringLiteral("Could not open the file"));
         return {};

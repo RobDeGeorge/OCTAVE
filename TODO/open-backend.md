@@ -2,7 +2,7 @@
 
 **Goal:** make the C++ managers a documented, language-neutral service so that anyone can write an OCTAVE frontend in whatever language or toolkit they like, with the QML UI in `frontend/` becoming the reference client rather than the only one.
 
-**Status:** in progress (audit done 2026-10-21; #1–#12 moved 2026-10-22)
+**Status:** in progress (audit done 2026-10-21; #1–#13 moved 2026-10-22; the QML-rules prerequisite is done)
 **Last updated:** 2026-10-22
 
 This absorbed the earlier `backend-service-split.md` plan (2026-10-18), which was about running the managers as a separate process so a UI crash never stops the music. That benefit falls out of `--headless` once the contract exists, so the two plans are one; the process-specific constraints are in "Running the core as its own process" below.
@@ -59,16 +59,13 @@ Done: #9 JSON strings in QML (four commits). ESP32 `availablePorts` carries `{po
 
 Done: #10 smaller duplicates (seven commits, from the octave-f4 audit). The gesture vocabulary is one table (`src/managers/gesturevocabulary.h`); the OBD connection log is `obdManager.connectionLog` (60 lines, both pages); `obdManager.connectionState` (Q_ENUM, `import OCTAVE.OBD`) replaces four text classifiers and fixes the Android BLE spinner; `src/util/units` (`units`) holds time formatting, compass points and conversions; IMU pages register with `berryIMU.setDemand` (`ImuDemand.qml`) instead of Main.qml's page list; gauges follow `gaugeTempUnit` / `gaugeSpeedUnit` / `sensorAltitudeUnit` (defaults unchanged: °C, MPH, m) through `ParameterCatalog.displayParameters`, with spec range props kept in each PID's own unit and converted by the renderer and editor. Still open: Trip History shows the recorded units, not the gauge units (convert its series and stats through `toDisplay` if wanted); the Sensors page keeps its own `sensorTempUnit` (default °F), so the IMU's temperature can read °F there and °C on a dashboard; the gesture worker's flag table is a second spelling of the gesture names (nothing ties it to the vocabulary). On the Pi: the IMU rate with the new demand, and the BLE connect states on Android.
 
+Done: #13 platform and persistence work in pages (six commits, from the octave-f4 audit). Home cards: `add/remove/move_home_obd_parameter` with the cap and dedupe in SettingsManager (a drop moves and shifts, the user's call). Fonts: `FontCatalog` (`fontCatalog`) registers the bundled fonts at startup. Phone audio: `scrcpyAudioGainDb` / `scrcpyAudioDuckLevelDb` and the `_db` savers. Window size: Main.qml is the one writer (desktop only), the savers clamp to 400-7680 x 300-4320. Music folder: `save_media_folder_url` through `src/util/pathurl.h` (SD cards map to `/storage/<volume>`; an unusable folder is refused with a message). Settings writes were already batched (500 ms, flushed at quit), so nothing changed there. Still to check on devices: on Android, an SD-card folder from the picker (is `/storage/<volume>` readable under All Files Access? If not, persist the tree grant with takePersistableUriPermission and scan through the content URI, a bigger change for its own TODO row), that the picker returns the externalstorage provider for internal and SD trees (an OEM file manager's own provider is now refused with a message rather than giving an empty library), and that `QDir` lists `assets:/frontend/assets/fonts`; on the Pi or Windows, the window size restores after a resize and a restart.
+
 ### Tables duplicated between QML and C++
 
 | # | Item | Where today | Target | Effort |
 |---|---|---|---|---|
 
-### Managers that leave their own job to the page
-
-| # | Item | Where today | Target | Effort |
-|---|---|---|---|---|
-| 13 | **Platform and persistence work in pages.** Android `content://` tree URIs and Windows drive letters decoded by hand in `settings/MediaSettingsPage.qml:52-82` while `dashboardmanager.cpp:498` has its own file-URL conversion; linear↔dB for phone audio gain in `AccessoriesSettingsPage.qml:2042-2053, 2111-2122`; screen size saved on every resize from both `Main.qml:1283-1295` and `DisplaySettingsPage.qml:196-269` with range limits only in a QML validator; font discovery via `FolderListModel` + dynamic `FontLoader`s (`Main.qml:1101-1226`); home-grid add/remove/move and the cap of 8 in `OBDSettingsPage.qml:1159-1172, 1503-1537` duplicating `settingsmanager.cpp:1413`. | as listed | `SettingsManager::save_media_folder_url(QUrl)`; dB properties; clamp in `save_screen_*`; `QFontDatabase` at startup; `add/remove/move_home_obd_parameter` slots. | S each |
 
 ### Data that is QML today but is really a resource
 
@@ -120,7 +117,7 @@ Never as one large update. Every item above can land as its own small change tha
 1. ~~The S items #1, #2, #4, #11~~ (all done 2026-10-22).
 2. ~~#7 and #8~~ (done 2026-10-22; Pi CPU comparison still to run).
 3. ~~#5 and #6~~ (done 2026-10-22; hardware checks listed in the Done notes).
-4. #13 as it comes up (#3, #9, #10 and #12 done 2026-10-22); none blocks the bridge.
+4. ~~#3, #9, #10, #12, #13~~ (done 2026-10-22).
 5. Contract steps 1–5, then 7 and 8.
 6. Contract step 6 (media streams) last, after a prototype.
 

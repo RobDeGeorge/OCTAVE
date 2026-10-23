@@ -45,39 +45,17 @@ Flickable {
         function onAlbumCountChanged(count) { pageRoot._albumCount = count }
     }
 
-    // Folder dialog for selecting music library folder.
-    // On Android, this opens Storage Access Framework — the selectedFolder is
-    // a content:// tree URI, not a filesystem path. We decode the SAF URI for
-    // external primary storage back to a /storage/emulated/0/... path.
+    // Folder dialog for selecting music library folder. The manager turns
+    // what it returns into a path (src/util/pathurl.h): a file:// URL on
+    // desktop, an Android content:// tree for internal storage or an SD card.
+    property string folderError: ""
     FolderDialog {
         id: folderDialog
         title: "Select Music Library Folder"
         onAccepted: {
-            var path = selectedFolder.toString()
-
-            if (path.startsWith("content://")) {
-                var treeIdx = path.indexOf("/tree/")
-                if (treeIdx >= 0) {
-                    var encoded = path.substring(treeIdx + 6)
-                    var decoded = decodeURIComponent(encoded)
-                    if (decoded.indexOf("primary:") === 0) {
-                        path = "/storage/emulated/0/" + decoded.substring(8)
-                    } else {
-                        path = decoded
-                    }
-                }
-            } else if (path.startsWith("file:///")) {
-                var afterScheme = path.substring(8)
-                if (afterScheme.length > 1 && afterScheme.charAt(1) === ':') {
-                    path = afterScheme
-                } else {
-                    path = path.substring(7)
-                }
-            }
-
-            if (settingsManager) {
-                settingsManager.save_media_folder(path)
-            }
+            if (!settingsManager) return
+            pageRoot.folderError = settingsManager.save_media_folder_url(selectedFolder)
+                ? "" : "That folder can't be used as the music library: pick one on the device's storage or SD card."
         }
     }
 
@@ -127,6 +105,7 @@ Flickable {
                             onEditingFinished: {
                                 if (text.trim() !== "" && settingsManager) {
                                     settingsManager.save_media_folder(text)
+                                    pageRoot.folderError = ""
                                 }
                             }
                         }
@@ -152,6 +131,13 @@ Flickable {
                                 if (mediaManager) mediaManager.strip_filenames()
                             }
                         }
+                    }
+
+                    // Why a picked folder wasn't taken (instead of an empty library)
+                    SettingDescription {
+                        visible: pageRoot.folderError !== ""
+                        text: pageRoot.folderError
+                        color: App.Style.statusDanger
                     }
                 }
             }

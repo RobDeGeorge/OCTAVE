@@ -204,3 +204,4 @@ octave_add_test(tst_audioanalyzer SOURCES managers/audioanalyzer.h managers/audi
 octave_add_test(tst_qmlmodules SOURCES util/qmlmodules.h util/qmlmodules.cpp LIBS Qt6::Qml)
 octave_add_test(tst_units SOURCES util/units.h util/units.cpp)
 octave_add_test(tst_fontcatalog SOURCES util/fontcatalog.h util/fontcatalog.cpp LIBS Qt6::Gui)
+octave_add_test(tst_pathurl)

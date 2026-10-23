@@ -212,6 +212,19 @@ private slots:
         QCOMPARE(sm.m_settings.value("screenHeight").toInt(), SettingsManager::kMaxScreenHeight);
     }
 
+    void pickedMusicFolderBecomesAPath()
+    {
+        // The Media page hands over what FolderDialog returns
+        SettingsManager sm;
+        QVERIFY(sm.save_media_folder_url(QUrl("file:///home/rob/My%20Music")));
+        QCOMPARE(sm.mediaFolder(), QStringLiteral("/home/rob/My Music"));
+        QVERIFY(sm.save_media_folder_url(QUrl("content://com.android.externalstorage.documents/tree/1234-5678%3AMusic")));
+        QCOMPARE(sm.mediaFolder(), QStringLiteral("/storage/1234-5678/Music"));
+        // Not a path: refused, the folder stays
+        QVERIFY(!sm.save_media_folder_url(QUrl("content://com.google.android.apps.docs.storage/tree/abc")));
+        QCOMPARE(sm.mediaFolder(), QStringLiteral("/storage/1234-5678/Music"));
+    }
+
     void everySettingSurvivesARestart()
     {
         QJsonObject saved;

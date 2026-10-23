@@ -457,6 +457,11 @@ public slots:
     void save_start_volume(float volume);
     void setCurrentVolume(int volume);
     void save_media_folder(const QString &folderPath);
+    // A folder from a picker (FolderDialog.selectedFolder): a file:// URL, or
+    // an Android external-storage content:// tree mapped to its /storage
+    // path (src/util/pathurl.h). False, and nothing saved, when it can't be
+    // a path the library can scan (another provider, a web URL).
+    Q_INVOKABLE bool save_media_folder_url(const QUrl &url);
     void save_auto_play_on_startup(bool enabled);
     void save_persist_shuffle_state(bool enabled);
     void save_last_shuffle_state(bool enabled);

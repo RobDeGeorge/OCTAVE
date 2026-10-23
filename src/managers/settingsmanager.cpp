@@ -3,6 +3,7 @@
 #include "settingsmanager.h"
 #include "gesturevocabulary.h"
 #include "../util/units.h"
+#include "../util/pathurl.h"
 #include "volumecontroller.h"
 #include "../util/perfscope.h"
 
@@ -1219,6 +1220,17 @@ void SettingsManager::setCurrentVolume(int volume)
         m_currentVolume = volume;
         emit currentVolumeChanged(volume);
     }
+}
+
+bool SettingsManager::save_media_folder_url(const QUrl &url)
+{
+    const QString path = PathUrl::folderPath(url);
+    if (path.isEmpty()) {
+        qCWarning(lcSettings) << "Media folder not usable as a path:" << url.toString();
+        return false;
+    }
+    save_media_folder(path);
+    return true;
 }
 
 void SettingsManager::save_media_folder(const QString &folderPath)
