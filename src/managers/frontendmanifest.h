@@ -62,6 +62,10 @@ struct FrontendManifest {
     // A relative path that stays inside its folder: no "..", no absolute or
     // drive paths, no backslashes, no empty or "." parts
     static bool safeRelativePath(const QString &path);
+    // An id as the manifest rules allow ([a-z0-9][a-z0-9._-]{1,63}, no
+    // ".."): what ACTIVE, setActive and remove may name, so no id ever
+    // reaches a path join as anything but a plain folder name
+    static bool validId(const QString &id);
 
     // For lists and the service: {id, name, version, description, kind,
     // protocol, scopes, command}

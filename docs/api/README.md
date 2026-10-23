@@ -54,7 +54,7 @@ Every keyframe record carries the current SPS and PPS first, so a decoder can st
 
 **Developing without a phone.** `octave --headless --sim` (any build) and `sim.setVideo(true)` loop a test clip (`tests/data/stream-test.h264`, compiled in: 640x360 for 2 s, then 1280x720, 30 fps; made by `tools/stream/make_test_h264.sh`) into the phone stream, so the config change is exercised. See [Simulator](#simulator).
 
-**Security.** A read under the same rules as every op (loopback by default, the browser Origin rule). The phone screen is sensitive: when pairing lands, `stream` will need an authorised client like every other op.
+**Security.** `stream` needs a trusted connection like every op ("Pairing" below), and both streams show a phone's screen, so both need the `phone` permission ("Permissions"); a device paired for less gets `forbidden`.
 
 ## Regenerating
 
@@ -91,7 +91,7 @@ Not covered by the version: the `sim` object (experimental, see [Simulator](#sim
 Who may use the service (`src/service/servicepairing.h`). A connection is **trusted** when its peer is on this device and the setting `serviceLoopbackOpen` is true (the default), or when it has presented a paired device's token. Every op and action except `hello` and `pair` needs trust, checked as each op runs; an untrusted connection gets `{"ok": false, "error": "not paired: ...", "code": "unauthorised"}`. The page and `--web-root` files are public (they carry the pairing form); `/art` and `/export/...` need trust: a media ticket (`?ticket=`) from a browser, or `Authorization: Bearer <token>`.
 
 1. The user opens OCTAVE's Settings > Service > Pair a device: a 6-digit code shows for 2 minutes.
-2. The client sends `{"op":"pair","code":"123456","name":"Kitchen tablet"}` and gets `{"token": "<64 hex>"}`; that connection is trusted at once. Store the token.
+2. The client sends `{"op":"pair","code":"123456","name":"Kitchen tablet","scopes":["media"]}` and gets `{"token": "<64 hex>", "scopes": ["read", "media"]}`; that connection is trusted at once. Store the token. Without `scopes` the device gets `full` ("Permissions" below).
 3. Later connections send `{"op":"hello","token":"..."}` first; `hello` answers `"auth": "trusted"`. An unknown or revoked token is not an error: `hello` answers `"auth": "untrusted", "tokenRejected": true` (and drops any token the connection had), so show your pairing screen.
 4. For images and downloads, a trusted connection asks `{"op":"mediaTicket"}` → `{ticket, expiresIn: 600}` and uses `/art?ticket=...`; never put the token in a URL.
 5. `{"op":"unpair"}` forgets the caller's own device.
@@ -102,7 +102,7 @@ Limits: the code is single use and void after 20 wrong tries in all; one `pair` 
 
 ### Permissions
 
-A paired device holds **scopes** (`src/service/servicescopes.h`), asked for in `pair`: `{"op":"pair","code":"123456","name":"Dash","scopes":["media"]}`. Without `scopes` it gets `full`, as every device did before scopes existed. Every paired device can **read**: `get`, `subscribe`, `rows`, `describe`, `/art`, and every stream but the phone's screen. Changing anything needs the member's scope, which `describe` and each file here list as `"scope"` on every method and writable property:
+A paired device holds **scopes** (`src/service/servicescopes.h`), asked for in `pair`: `{"op":"pair","code":"123456","name":"Dash","scopes":["media"]}`. Without `scopes` it gets `full`, as every device did before scopes existed. Every paired device can **read**: `get`, `subscribe`, `rows`, `describe` and `/art`; the two video streams show a phone's screen and need `phone`. Changing anything needs the member's scope, which `describe` and each file here list as `"scope"` on every method and writable property:
 
 | Scope | What it lets a device change |
 |---|---|
@@ -117,7 +117,7 @@ A paired device holds **scopes** (`src/service/servicescopes.h`), asked for in `
 
 `pair` answers `{token, scopes}` with what was granted (`read` is always included); a trusted `hello` reports `scopes` too (the head unit's own screen, on loopback, has `full`). An unknown scope fails `pair` without using up the code. A member the device may not change answers `{"ok": false, "code": "forbidden", "error": "mediaManager.delete_song needs the files permission; this device has read, media"}`; a route answers 401. Settings > Device > Paired devices shows each device's access and can make it read only (or give it full access) at once, on its open connections too. Narrowing a member's scope later is a breaking change (`tools/api/check_compat.py` catches it); widening it, or making it `read`, is not.
 
-`serviceLoopbackOpen` trusts every process on the device, including a local reverse proxy: behind a proxy, set it to false in `settingsConfigure.json`. While an installed exec frontend is the screen (`frontendManager`, [wiki/writing-a-frontend.html#install](../../wiki/writing-a-frontend.html#install)), loopback trust is off for that run: the frontend gets a session token (`OCTAVE_TOKEN` in its environment, kept in memory, revoked when it ends) holding only the scopes its manifest asks for, and every other local program needs a token too. While an installed web frontend is served at `GET /`, a browser on the device (a loopback request carrying `Origin` or `Sec-Fetch-Site`) holds that frontend's manifest scopes instead of loopback's full trust, unless it presents a token; programs keep full trust. `octave --pair-code` (same user, same `--config`) prints a code from the running instance for pairing them, over a local socket that only that user can open and that has no other op (`src/service/adminchannel.h`).
+`serviceLoopbackOpen` trusts every process on the device, including a local reverse proxy: behind a proxy, set it to false in `settingsConfigure.json`. While an installed exec frontend is the screen (`frontendManager`, [wiki/writing-a-frontend.html#install](../../wiki/writing-a-frontend.html#install)), loopback trust is off for that run: the frontend gets a session token (`OCTAVE_TOKEN` in its environment, kept in memory, revoked when it ends) holding only the scopes its manifest asks for, and every other local program needs a token too. While an installed web frontend is served at `GET /`, a browser on the device (a loopback request carrying `Origin` or `Sec-Fetch-Site`) holds that frontend's manifest scopes instead of loopback's full trust, unless it presents a token; programs keep full trust. `octave --pair-code` (same user, same `--config`) prints a code from the running instance for pairing them, over a local socket that only that user can open and that has no other op (`src/service/adminchannel.h`). That holds the frontend to its scopes on the socket; it is not a sandbox: the program runs as OCTAVE's own user, so it can still read the config folder (the frontends folder included) and its token is in its process environment, which its child processes inherit. Install only frontends you trust.
 
 ## Simulator
 

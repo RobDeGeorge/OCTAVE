@@ -5,7 +5,7 @@ The smallest OCTAVE frontend in Python: two live readings, the track with play /
 ## Run
 
 ```bash
-./build/octave --headless --sim            # a simulated car, no window (any build; or --service with the UI)
+octave --headless --sim                    # the release download (or ./build/octave): a simulated car, no window; or --service with the UI
 python templates/hello-car-python/hello_car.py
 ```
 

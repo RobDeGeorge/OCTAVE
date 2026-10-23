@@ -59,6 +59,7 @@ func main() {
 	c.Subscribe(octave.SubscribeArgs{Object: "nowPlaying", Properties: []string{"hasTrack", "title", "playing", "artRevision"}, ThrottleMs: octave.Int(250)})
 
 	player := octave.NewNowPlaying(c)
+	pressed := false
 	if *check == 0 {
 		fmt.Println("Enter toggles play / pause, Ctrl-C quits.")
 		go func() {
@@ -66,8 +67,6 @@ func main() {
 				player.TogglePlay()
 			}
 		}()
-	} else {
-		player.TogglePlay() // nothing loaded yet starts the first track
 	}
 
 	values := map[string]*float64{}
@@ -104,6 +103,10 @@ loop:
 				if p.Name == "artRevision" && track["hasTrack"] == true {
 					cover = fetchCover(c, addr, p.Value)
 				}
+				if *check > 0 && p.Name == "playing" && p.Value == false && !pressed {
+					pressed = true
+					player.TogglePlay() // press Play once (nothing loaded yet starts the first track)
+				}
 			default:
 				continue
 			}
@@ -117,7 +120,8 @@ loop:
 			if track["hasTrack"] == true {
 				state = map[bool]string{true: "playing", false: "paused"}[track["playing"] == true]
 			}
-			line := fmt.Sprintf("%-32s | %s: %v", strings.Join(readings, "  "), state, track["title"])
+			title, _ := track["title"].(string)
+			line := fmt.Sprintf("%-32s | %s: %s", strings.Join(readings, "  "), state, title)
 			if cover != "" {
 				line += "  cover: " + cover
 			}
