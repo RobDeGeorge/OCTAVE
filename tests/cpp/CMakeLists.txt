@@ -225,3 +225,12 @@ octave_add_test(tst_websocket
     SOURCES service/commandserver.h service/commandserver.cpp service/websocket.h service/websocket.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 
+# The Python SDK (sdk/python) against a real `octave --headless`
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME sdk_python
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/sdk/python/tests")
+    set_tests_properties(sdk_python PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 180)
+endif()
