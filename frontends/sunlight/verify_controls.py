@@ -7,7 +7,9 @@ own client.
 
 Needs a running OCTAVE service with music to play (octave --dev --profile or
 --headless --dev against a test library) and libXtst. Changes volume, mute,
-shuffle and playback; it puts volume, mute and shuffle back afterwards."""
+shuffle and playback, and puts volume, mute and shuffle back afterwards. On
+the DTC page it reads the codes and clears them through the two-tap confirm:
+use the simulated car, whose codes come back on its next start."""
 
 import argparse
 import ctypes
@@ -26,7 +28,12 @@ TARGETS = {
     "prev": (163, 605), "play": (480, 605), "next": (797, 605), "shuffle": (1115, 605),
     "vol_down": (100, 732), "vol_up": (290, 732), "mute": (1180, 732), "vol_bar": (735, 732),
     "seek": (640, 519),
-    "tab_drive": (95, 40), "tab_dash": (275, 40), "tab_media": (455, 40),
+    # the top bar: DRIVE DASH MEDIA DTC TRIPS
+    "tab_drive": (80, 40), "tab_dash": (230, 40), "tab_media": (380, 40), "tab_dtc": (530, 40), "tab_trips": (680, 40),
+    # DTC page
+    "dtc_read": (216, 740), "dtc_clear": (639, 740),
+    # TRIPS page: the first (newest) trip
+    "trip_first": (293, 141),
 }
 
 
@@ -108,6 +115,37 @@ def main():
             shuffled = sdk.get("nowPlaying", "shuffled")
             check("SHUFFLE toggles shuffle", "shuffle", lambda: sdk.get("nowPlaying", "shuffled") != shuffled)
             tap.click(*TARGETS["play"])   # leave it paused
+
+            # DTC: opening the page reads the codes; CLEAR needs a second tap within 4 s
+            tap.click(*TARGETS["tab_dtc"])
+            if wait(lambda: sdk.call("obdManager", "get_dtc_codes"), timeout=6):
+                print("ok   opening the DTC page reads the stored codes")
+                tap.click(*TARGETS["dtc_clear"])
+                time.sleep(1.0)
+                ok = bool(sdk.call("obdManager", "get_dtc_codes"))
+                print(f"{'ok  ' if ok else 'FAIL'} one tap on CLEAR only arms it")
+                if not ok:
+                    failures.append("one tap on CLEAR only arms it")
+                check("a second tap clears the codes", "dtc_clear", lambda: not sdk.call("obdManager", "get_dtc_codes"))
+            else:
+                tap.click(*TARGETS["dtc_read"])
+                print("skip the car has no stored codes to read and clear (cleared earlier?)")
+
+            # TRIPS: tapping a trip asks for its summary
+            trips = sorted(sdk.get("tripRecorder", "trips"), key=lambda t: t.get("startIso", ""), reverse=True)
+            if trips:
+                sub = sdk.subscribe("tripRecorder", signals=["detailReady"])
+                tap.click(*TARGETS["tab_trips"])
+                time.sleep(1.0)
+                for _ in sdk.events(timeout=0.2):   # drop the page's own first request
+                    pass
+                tap.click(*TARGETS["trip_first"])
+                got = [e for e in sdk.events(timeout=4) if e.get("name") == "detailReady"]
+                ok = any(e["args"][0] == trips[0]["id"] for e in got)
+                print(f"{'ok  ' if ok else 'FAIL'} tapping the newest trip loads its summary")
+                if not ok:
+                    failures.append("tapping the newest trip loads its summary")
+                sdk.unsubscribe(sub)
         finally:
             sdk.call("volumeController", "applyVolume", saved["percent"])
             sdk.set("volumeController", "muted", saved["muted"])

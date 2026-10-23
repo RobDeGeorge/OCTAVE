@@ -165,3 +165,31 @@ func TestClientFailsPendingOnClose(t *testing.T) {
 		t.Fatal("events channel left open")
 	}
 }
+
+func TestStateDTCsAndTripDetails(t *testing.T) {
+	s := NewState()
+	if _, known, _ := s.DTCs(); known {
+		t.Fatal("codes known before any read")
+	}
+	apply(t, s, `{"event":"signal","object":"obdManager","name":"dtcCodesChanged","args":[[{"code":"P0300","description":"Misfire"},{"code":"P0420","description":""}]]}`)
+	apply(t, s, `{"event":"signal","object":"obdManager","name":"milStatusChanged","args":[true]}`)
+	codes, known, mil := s.DTCs()
+	if !known || !mil || len(codes) != 2 || codes[0].Code != "P0300" || codes[0].Description != "Misfire" {
+		t.Fatalf("dtcs: %+v %v %v", codes, known, mil)
+	}
+	apply(t, s, `{"event":"signal","object":"obdManager","name":"dtcClearResult","args":[true,""]}`)
+	if s.ClearMessage() != "CODES CLEARED" {
+		t.Fatalf("clear message: %q", s.ClearMessage())
+	}
+	apply(t, s, `{"event":"signal","object":"tripRecorder","name":"detailReady","args":[1792743146937,{"distanceMiles":1.5,"maxSpeed":41}]}`)
+	var d struct {
+		DistanceMiles float64 `json:"distanceMiles"`
+		MaxSpeed      float64 `json:"maxSpeed"`
+	}
+	if !s.Detail(1792743146937, &d) || d.DistanceMiles != 1.5 || d.MaxSpeed != 41 {
+		t.Fatalf("detail: %+v", d)
+	}
+	if s.Detail(42, &d) {
+		t.Fatal("detail for an unknown trip")
+	}
+}

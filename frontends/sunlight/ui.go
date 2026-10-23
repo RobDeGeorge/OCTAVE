@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"time"
 	"unicode/utf8"
 
 	"gioui.org/f32"
@@ -255,3 +256,23 @@ func clipRect(ops *op.Ops, r image.Rectangle) clip.Stack { return clip.Rect(r).P
 func affine(origin image.Point, scale float32) f32.Affine2D {
 	return f32.AffineId().Scale(f32.Point{}, f32.Pt(scale, scale)).Offset(pt(origin))
 }
+
+// ButtonColors is Button for a button already painted (the armed CLEAR):
+// when hot it keeps that fill and writes in paper; otherwise it is Button.
+func (p *Painter) ButtonColors(r image.Rectangle, clk *widget.Clickable, label string, hot bool) bool {
+	if !hot {
+		return p.Button(r, clk, label, false)
+	}
+	clicked := clk.Clicked(p.gtx)
+	p.Box(r, p.pal.Ink)
+	p.Text(r.Inset(p.Rule()*3), label, sansBold, p.px(34), Center, p.pal.Paper)
+	gtx := p.gtx
+	gtx.Constraints = layout.Exact(r.Size())
+	st := op.Offset(r.Min).Push(gtx.Ops)
+	clk.Layout(gtx, func(gtx C) layout.Dimensions { return layout.Dimensions{Size: r.Size()} })
+	st.Pop()
+	return clicked
+}
+
+// invalidateAt asks for a frame at t (a button's armed state running out).
+func invalidateAt(t time.Time) op.InvalidateCmd { return op.InvalidateCmd{At: t} }
