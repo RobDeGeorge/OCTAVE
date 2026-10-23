@@ -9,7 +9,7 @@ const client = new OctaveClient({ token: localStorage.getItem('token') ?? undefi
 const obd = obj(client, 'obdManager')
 const now = obj(client, 'nowPlaying')
 
-client.on('status', (s) => { $('status').textContent = s === 'online' ? `OCTAVE ${client.hello?.app.version}` : s })
+client.on('status', (s) => { $('status').textContent = s === 'online' ? `OCTAVE ${client.hello?.app?.version ?? ''}` : s })
 client.on('hello', (h) => {
   // Protocol 2: over the network we must pair once; on the head unit nothing to do.
   if (h.tokenRejected) localStorage.removeItem('token')

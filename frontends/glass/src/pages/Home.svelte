@@ -69,7 +69,7 @@
   .chip.good { color: var(--good); }
   .chip.bad { color: var(--bad); }
   .chip.lit { background: var(--warn); color: #000; }
-  .reddot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); animation: blink 1.2s infinite; }
+  .reddot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); animation: blink 1.2s steps(2, jump-none) infinite; }
   @keyframes blink { 50% { opacity: .3; } }
   .gauges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
   .gauge { aspect-ratio: 1 / 1; padding: 14px; display: block; }

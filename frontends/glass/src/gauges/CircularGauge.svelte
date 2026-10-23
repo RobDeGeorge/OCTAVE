@@ -48,7 +48,7 @@
   .fill { stroke: var(--c); } .fill.hot { stroke: var(--bad); }
   .minor { stroke: var(--ink-3); stroke-width: .8; } .major { stroke: var(--ink-2); stroke-width: 1.4; }
   .tl { fill: var(--ink-3); font-size: 5px; font-weight: 600; }
-  .needle { stroke: var(--n); stroke-width: 2.2; stroke-linecap: round; transition: x2 .1s linear, y2 .1s linear; } .needle.hot { stroke: var(--bad); }
+  .needle { stroke: var(--n); stroke-width: 2.2; stroke-linecap: round; } .needle.hot { stroke: var(--bad); }
   .hub { fill: var(--n); }
   .value { fill: var(--ink); font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
   .unit { fill: var(--ink-2); font-size: 6px; font-weight: 600; }

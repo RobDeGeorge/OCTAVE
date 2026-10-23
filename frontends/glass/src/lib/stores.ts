@@ -26,7 +26,7 @@ export const position: Readable<number> = readable(0, (set) => {
     if (!playing) return
     const p = base + (Date.now() - at)
     set(duration > 0 ? Math.min(p, duration) : p)
-  }, 100)
+  }, 250)   /* 4 Hz is plenty for a seek bar, and each tick repaints a frosted panel */
   return () => { unsub(); clearInterval(t) }
 })
 

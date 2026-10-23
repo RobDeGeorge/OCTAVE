@@ -161,7 +161,7 @@
   .trip.on .muted { color: inherit; opacity: .7; }
   .t1 { font-weight: 600; display: flex; gap: 10px; align-items: center; }
   .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; text-transform: lowercase; color: var(--bad); }
-  .reddot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); animation: blink 1.2s infinite; }
+  .reddot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); animation: blink 1.2s steps(2, jump-none) infinite; }
   @keyframes blink { 50% { opacity: .3; } }
   .wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   .detail { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
