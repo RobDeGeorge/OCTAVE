@@ -12,7 +12,7 @@ The open backend is done (`TODO/open-backend.md`): every manager is served over 
 What stops an outside developer today, in order of how much it hurts:
 
 1. The simulated car (`--dev`) exists only in builds with `OCTAVE_DEV_TOOLS` (`CMakeLists.txt:189`, default ON only for Debug), so a frontend author must compile OCTAVE and Qt from source.
-2. The versioning rule is written down (`docs/api/README.md` "Versioning") but nothing enforces it: a renamed property regenerates `docs/api/` and passes CI without a `kProtocolVersion` bump. Nothing marks a member as experimental, and nothing tells a developer what changed between releases.
+2. (Done, step 1.) The versioning rule was not enforced.
 3. Only the TypeScript SDK is generated; the envelope (ops, errors, events, streams) is described in prose, so a new language means reading `sdk/python` and porting by hand.
 4. There is no way to install a frontend: `--web-root` / `serviceWebRoot` takes one folder, a native frontend is a separate program the user starts themselves, and nothing restarts it.
 5. A paired device gets full control. A dashboard someone downloaded can change settings, delete trips and start downloads.
@@ -22,11 +22,7 @@ What stops an outside developer today, in order of how much it hurts:
 ## Steps
 
 ### 1. The contract: stability you can build on
-**Effort:** M. **Device:** desktop.
-- A compatibility check in CI: diff the generated `docs/api/` against the last release tag (or `main` for a PR) and fail when something was removed, renamed, or changed type unless `kProtocolVersion` went up in the same change. Additions pass. A small Python script under `tools/api/` run by the `lint` job (or a ctest), reading the JSON files directly.
-- Stability per member: `stable` (covered by the version) or `experimental` (may change in any release, the check skips it). Generated into `docs/api/*.json` from one table in C++ (next to `src/service/metadescribe` / `apidump`), shown in `wiki/api-reference.html`, and `describe` returns it.
-- Deprecation: a member can be marked deprecated with a replacement and the version it will go away in; it stays for at least one protocol version. `docs/api/README.md` states the policy.
-- `docs/api/CHANGELOG.md`: what each protocol version and each release added, deprecated or broke; the compatibility script can print a draft.
+**Done (2026-10-23):** `tools/api/check_compat.py` in CI (`lint`), stability / deprecation annotations (`Q_CLASSINFO`, `src/service/metadescribe.h`) in `describe`, `docs/api/` and the API reference, `docs/api/CHANGELOG.md`. **Left:** surface `deprecated` / `experimental` in the generated SDK types (JSDoc `@deprecated` in `sdk/typescript`; folded into step 3).
 
 ### 2. A downloadable simulator
 **Effort:** M. **Device:** desktop, then the release CI matrix.

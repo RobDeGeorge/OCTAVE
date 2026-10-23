@@ -64,8 +64,16 @@ Compatibility so far:
 
 | Version | Since | Notes |
 |---|---|---|
-| 1 | 2026-10-22 | `hello`, `describe`, `get`, `set`, `call`, `subscribe` / `unsubscribe`, `rows`; list-model events. Transports: JSON lines over TCP, and WebSocket text frames on the same port (a transport, not a protocol change). Later additions without a bump: `stream` / `unstream` and binary records, `GET /art`, `/export/...` |
+| 1 | 2026-10-22 | `hello`, `describe`, `get`, `set`, `call`, `subscribe` / `unsubscribe`, `rows`; list-model events. Transports: JSON lines over TCP, and WebSocket text frames on the same port (a transport, not a protocol change). |
 | 2 | 2026-10-23 | Pairing ("Pairing" below): `pair`, `unpair`, `mediaTicket`; `hello` takes a `token` and reports `auth` and `loopbackOpen`. **What breaks for a v1 client:** nothing on this device while `serviceLoopbackOpen` is true (the default), except that a strict client sees `protocolVersion` 2; over the network (`--service-bind`) every op but `hello` and `pair`, and `/art` / `/export`, now answer `{"ok": false, "code": "unauthorised"}` (HTTP 401) until it pairs |
+
+### Stability and deprecation
+
+Every member is **stable** unless marked: covered by the version, so it changes only with a bump. A member (or a whole object) marked `"stability": "experimental"` in its file here and in `describe` may change or go in any release; build on it knowing that. A member marked `"deprecated": "<what to use instead, and when it goes>"` still works; it is kept for at least one protocol version after the one that deprecates it, and its removal is a breaking change like any other. Both are declared in the C++ class next to the members (`Q_CLASSINFO("octave.experimental", "...")`, `Q_CLASSINFO("octave.deprecated.<member>", "...")`, see `src/service/metadescribe.h`); `--dump-api` refuses an annotation that names a member the class doesn't have.
+
+### Enforced
+
+`tools/api/check_compat.py` compares this directory with the base of a change (CI's `lint` job: the PR's base branch, or the commit before a push) and fails when a stable member, a parameter id or a parameter's unit is removed or changed without `kProtocolVersion` going up, or when the new version's section in [CHANGELOG.md](CHANGELOG.md) does not name each break as `object.member`. `python tools/api/check_compat.py --draft` lists every change, breaking and additive, for the changelog. What it does not see: the meaning of a value, the ops and their arguments (`src/service/servicebridge.cpp`), the stream record format and the HTTP routes; those still need a reviewer and a changelog line.
 
 Not covered by the version: the dev-only `action` vocabulary (`navigate`, `click`, `screenshot`, `sim_*`, ...), which exists only with `--profile` in a developer build and may change at any time.
 

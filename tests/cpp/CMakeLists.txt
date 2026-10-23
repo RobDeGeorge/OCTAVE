@@ -257,4 +257,7 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(sdk_python PROPERTIES
         ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
         TIMEOUT 180)
+    # tools/api/check_compat.py (CI's API compatibility gate) sorts changes right
+    add_test(NAME api_compat
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tools/api/tests")
 endif()

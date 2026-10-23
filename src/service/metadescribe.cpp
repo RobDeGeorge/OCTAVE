@@ -3,10 +3,13 @@
 #include "metadescribe.h"
 #include "memberscope.h"
 
+#include <QHash>
+#include <QMetaClassInfo>
 #include <QMetaEnum>
 #include <QMetaMethod>
 #include <QMetaObject>
 #include <QMetaProperty>
+#include <QSet>
 
 namespace OctaveService {
 
@@ -45,7 +48,78 @@ QVariantMap describeMethod(const QMetaMethod &m)
     return out;
 }
 
+constexpr char kExperimentalKey[] = "octave.experimental";
+constexpr char kDeprecatedPrefix[] = "octave.deprecated.";
+
+// The API annotations the app's own classes declare (Q_CLASSINFO, see the header)
+struct Annotations
+{
+    bool objectExperimental = false;
+    QSet<QString> experimental;
+    QHash<QString, QString> deprecated;
+};
+
+Annotations annotationsOf(const QMetaObject *mo)
+{
+    Annotations a;
+    const QMetaObject *qtBase = firstQtBase(mo);
+    for (int i = qtBase ? qtBase->classInfoCount() : 0; i < mo->classInfoCount(); ++i) {
+        const QMetaClassInfo info = mo->classInfo(i);
+        const QByteArray key(info.name());
+        if (key == kExperimentalKey) {
+            for (const QString &name : QString::fromUtf8(info.value()).split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+                if (name == QLatin1String("*"))
+                    a.objectExperimental = true;
+                else
+                    a.experimental.insert(name);
+            }
+        } else if (key.startsWith(kDeprecatedPrefix)) {
+            a.deprecated.insert(QString::fromUtf8(key.mid(int(sizeof(kDeprecatedPrefix)) - 1)),
+                                QString::fromUtf8(info.value()));
+        }
+    }
+    return a;
+}
+
+void annotate(QVariantList &members, const Annotations &a)
+{
+    for (QVariant &member : members) {
+        QVariantMap m = member.toMap();
+        const QString name = m.value(QStringLiteral("name")).toString();
+        if (a.experimental.contains(name))
+            m.insert(QStringLiteral("stability"), QStringLiteral("experimental"));
+        if (a.deprecated.contains(name))
+            m.insert(QStringLiteral("deprecated"), a.deprecated.value(name));
+        member = m;
+    }
+}
+
 } // namespace
+
+QStringList annotationErrors(const QMetaObject *mo)
+{
+    if (!mo)
+        return {};
+    const Annotations a = annotationsOf(mo);
+    QSet<QString> members;
+    const QVariantMap d = describeMetaObject(mo);
+    for (const char *list : {"properties", "methods", "signals"})
+        for (const QVariant &m : d.value(QString::fromLatin1(list)).toList())
+            members.insert(m.toMap().value(QStringLiteral("name")).toString());
+    QStringList errors;
+    QStringList named(a.experimental.cbegin(), a.experimental.cend());
+    named += a.deprecated.keys();
+    for (const QString &name : std::as_const(named))
+        if (!members.contains(name))
+            errors.append(QStringLiteral("%1: annotation names %2, which it does not offer").arg(
+                QString::fromLatin1(mo->className()), name));
+    for (auto it = a.deprecated.cbegin(); it != a.deprecated.cend(); ++it)
+        if (it.value().trimmed().isEmpty())
+            errors.append(QStringLiteral("%1: %2 is deprecated without saying what to use instead").arg(
+                QString::fromLatin1(mo->className()), it.key()));
+    errors.sort();
+    return errors;
+}
 
 QVariantMap describeMetaObject(const QMetaObject *mo)
 {
@@ -85,12 +159,19 @@ QVariantMap describeMetaObject(const QMetaObject *mo)
     for (int i = qtBase ? qtBase->enumeratorCount() : 0; i < mo->enumeratorCount(); ++i)
         enums.insert(QString::fromLatin1(mo->enumerator(i).name()), enumKeys(mo->enumerator(i)));
 
+    const Annotations a = annotationsOf(mo);
+    annotate(properties, a);
+    annotate(methods, a);
+    annotate(signalList, a);
+
     QVariantMap out{{QStringLiteral("class"), QString::fromLatin1(mo->className())},
                     {QStringLiteral("properties"), properties},
                     {QStringLiteral("methods"), methods},
                     {QStringLiteral("signals"), signalList}};
     if (!enums.isEmpty())
         out.insert(QStringLiteral("enums"), enums);
+    if (a.objectExperimental)
+        out.insert(QStringLiteral("stability"), QStringLiteral("experimental"));
     return out;
 }
 

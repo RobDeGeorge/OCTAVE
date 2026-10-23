@@ -42,6 +42,10 @@ bool writeApiDocs(const ServiceRegistry &registry, const QDir &dir, QString *err
         const QObject *object = registry.object(name);
         if (!object)
             continue;
+        if (const QStringList bad = annotationErrors(object->metaObject()); !bad.isEmpty()) {
+            *error = bad.join(QLatin1Char('\n'));
+            return false;
+        }
         QVariantMap described = describeObject(object);
         described.insert(QStringLiteral("object"), name);
         if (!writeJson(dir, name + QStringLiteral(".json"), described, error))

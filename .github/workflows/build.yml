@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the API compatibility check reads docs/api/ at the base
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,6 +40,20 @@ jobs:
           python scripts/gen_gauge_param_docs.py
           git diff --exit-code docs/GAUGE_AUTHORING.md || {
             echo "::error::Run python scripts/gen_gauge_param_docs.py and commit docs/GAUGE_AUTHORING.md"; exit 1; }
+
+      # docs/api/ (the published service API) breaks only with a protocol
+      # bump and a docs/api/CHANGELOG.md entry: against the PR's base, or
+      # the commit before a push
+      - name: Service API compatibility
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"
+          else base="HEAD~1"; fi
+          python tools/api/check_compat.py --base "$base" --draft
 
   # ---------------------------------------------------------------------------
   # C++ compile check — runs on EVERY push/PR so a C++ break can't land on

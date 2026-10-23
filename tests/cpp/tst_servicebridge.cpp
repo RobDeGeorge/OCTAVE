@@ -22,6 +22,7 @@
 #include "service/commandserver.h"
 #include "util/variantlistmodel.h"
 #include "service/protocol.h"
+#include "service/metadescribe.h"
 #include "service/servicebridge.h"
 #include "service/serviceregistry.h"
 #include "service/streamhub.h"
@@ -133,6 +134,42 @@ public:
     }
 };
 
+// API annotations (metadescribe.h): experimental and deprecated members
+class Annotated : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.experimental", "draft probe")
+    Q_CLASSINFO("octave.deprecated.oldLevel", "use level; goes in protocol 9")
+    Q_PROPERTY(int level READ level CONSTANT)
+    Q_PROPERTY(int oldLevel READ level CONSTANT)
+    Q_PROPERTY(int draft READ level CONSTANT)
+
+public:
+    int level() const { return 3; }
+    Q_INVOKABLE int probe() const { return 1; }
+    Q_INVOKABLE int probe(int v) const { return v; }
+
+signals:
+    void ready();
+};
+
+class WholeDraft : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.experimental", "*")
+public:
+    Q_INVOKABLE void go() {}
+};
+
+class Mislabelled : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.experimental", "nosuch")
+    Q_CLASSINFO("octave.deprecated.go", " ")
+public:
+    Q_INVOKABLE void go() {}
+};
+
 class TstServiceBridge : public QObject
 {
     Q_OBJECT
@@ -230,6 +267,41 @@ private slots:
         QCOMPARE(all.value("protocolVersion").toInt(), kProtocolVersion);
         QVERIFY(all.value("objects").toObject().contains("fixture"));
         QVERIFY(send(R"({"op": "describe", "object": "nope"})").value("error").toString().contains("Unknown object"));
+    }
+
+    void annotationsMarkStabilityAndDeprecation()
+    {
+        Annotated annotated;
+        m_registry->add("annotated", &annotated);
+        const QJsonObject d = send(R"({"op": "describe", "object": "annotated"})").value("result").toObject();
+        QVERIFY(!d.contains("stability"));
+        QHash<QString, QJsonObject> props;
+        for (const QJsonValue &p : d.value("properties").toArray())
+            props.insert(p.toObject().value("name").toString(), p.toObject());
+        QVERIFY(!props.value("level").contains("stability"));   // stable unless marked
+        QVERIFY(!props.value("level").contains("deprecated"));
+        QCOMPARE(props.value("draft").value("stability").toString(), QStringLiteral("experimental"));
+        QCOMPARE(props.value("oldLevel").value("deprecated").toString(), QStringLiteral("use level; goes in protocol 9"));
+        int probes = 0;
+        for (const QJsonValue &m : d.value("methods").toArray())
+            if (m.toObject().value("name").toString() == "probe") {
+                ++probes;   // a name covers every overload
+                QCOMPARE(m.toObject().value("stability").toString(), QStringLiteral("experimental"));
+            }
+        QCOMPARE(probes, 2);
+        QVERIFY(!d.value("signals").toArray().at(0).toObject().contains("stability"));
+        QVERIFY(annotationErrors(annotated.metaObject()).isEmpty());
+
+        WholeDraft whole;
+        QCOMPARE(describeObject(&whole).value("stability").toString(), QStringLiteral("experimental"));
+        QVERIFY(annotationErrors(whole.metaObject()).isEmpty());
+
+        // A typo, and a deprecation that says nothing, are caught (--dump-api refuses them)
+        Mislabelled bad;
+        const QStringList errors = annotationErrors(bad.metaObject());
+        QCOMPARE(errors.size(), 2);
+        QVERIFY(errors.join('\n').contains("nosuch"));
+        QVERIFY(errors.join('\n').contains("without saying what to use"));
     }
 
     void enumsConvertByNameOrNumber()
