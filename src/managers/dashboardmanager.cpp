@@ -346,8 +346,16 @@ bool DashboardManager::writeSpec(const QString &absolutePath, const QVariantMap 
 // Mutations
 // ---------------------------------------------------------------------------
 
-QString DashboardManager::saveDashboard(const QVariantMap &raw)
+QString DashboardManager::saveDashboard(const QVariantMap &rawIn)
 {
+    // A new dashboard from a client that has no id yet: the one the editor
+    // would give it (uniqueIdForLabel), so a save is one call
+    QVariantMap raw = rawIn;
+    if (raw.value(QStringLiteral("id")).toString().isEmpty()) {
+        const QString label = raw.value(QStringLiteral("label")).toString().simplified();
+        if (!label.isEmpty())
+            raw.insert(QStringLiteral("id"), uniqueIdForLabel(label));
+    }
     QString error;
     const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error, m_widgetCatalog);
     if (spec.isEmpty()) {

@@ -330,6 +330,20 @@ private slots:
         QCOMPARE(cell.value("props").toMap(), (QVariantMap{{"d", "NaN"}}));
     }
 
+    void saveWithoutAnIdMakesOne()
+    {
+        // A client's new dashboard in one call: the editor's own id rule
+        QVariantMap spec{{"label", "Trail Rig"}, {"cells", QVariantList{}}};
+        QCOMPARE(m_dm->saveDashboard(spec), QStringLiteral("trail-rig"));
+        QCOMPARE(m_dm->saveDashboard(spec), QStringLiteral("trail-rig-2"));   // never overwrites
+        QCOMPARE(m_dm->loadDashboard("trail-rig-2").toMap().value("label").toString(), QStringLiteral("Trail Rig"));
+        spec.insert("label", "Minimal");
+        QCOMPARE(m_dm->saveDashboard(spec), QStringLiteral("minimal-2"));     // not the built-in
+        spec.insert("id", "");
+        spec.insert("label", "  ");
+        QCOMPARE(m_dm->saveDashboard(spec), QString());                       // still needs a name
+    }
+
     void saveRefusesAPathAsId()
     {
         for (const char *id : {"../escape", "a/b", ".hidden", "x y"})

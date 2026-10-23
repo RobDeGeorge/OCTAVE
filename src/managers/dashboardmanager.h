@@ -109,9 +109,11 @@ public:
 
 public slots:
     // Writes a user dashboard JSON file, normalised first (normalizeSpec).
-    // `spec` must include at least `id` and `label`. Returns the saved id on
-    // success, empty string on failure (no id or label, id collision with a
-    // built-in or kParameterCardsId, newer schema, I/O error, etc.).
+    // `spec` must include a `label`; with no `id` it gets
+    // uniqueIdForLabel(label), a new dashboard (an existing id overwrites
+    // that user dashboard). Returns the saved id on success, empty string
+    // on failure (no label, id collision with a built-in or
+    // kParameterCardsId, newer schema, I/O error, etc.).
     QString saveDashboard(const QVariantMap &spec);
 
     // Deletes a user dashboard file, or hides a built-in preset (persisted
