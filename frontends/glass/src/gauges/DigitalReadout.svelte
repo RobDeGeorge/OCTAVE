@@ -17,6 +17,6 @@
 <style>
   .dr { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; container-type: size; }
   .t { font-size: 14px; color: var(--ink-2); font-weight: 600; }
-  .v { font-size: min(calc(var(--s) * 18px), 70cqh); font-weight: 700; letter-spacing: -.04em; line-height: 1; color: var(--c); }
+  .v { font-size: min(calc(var(--s) * 18px), 70cqh, 34cqw); font-weight: 700; letter-spacing: -.04em; line-height: 1; color: var(--c); }
   .u { font-size: .3em; color: var(--ink-2); margin-left: .15em; letter-spacing: 0; font-weight: 600; }
 </style>

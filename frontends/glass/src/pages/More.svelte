@@ -86,7 +86,7 @@
           <input class="field" placeholder="Search for music" bind:value={query} aria-label="Search" onkeydown={(e) => e.key === 'Enter' && search()} />
           <button class="btn primary" disabled={Boolean($dl.isSearching) || !query.trim()} onclick={search}><Icon name="search" />{$dl.isSearching ? 'Searching…' : 'Search'}</button>
         </div>
-        <div class="row"><div class="label"><span>Save into</span><span class="small">{$dl.downloadPath}</span></div>
+        <div class="row target"><div class="label"><span>Save into</span><span class="small">{$dl.downloadPath}</span></div>
           <select class="field sel" aria-label="Playlist" value={target} onchange={(e) => { target = (e.target as HTMLSelectElement).value; act(octave.call('downloadManager', 'set_download_playlist', target)) }}>
             {#each playlists as p}<option value={p}>{p}</option>{/each}
             {#if target && !playlists.includes(target)}<option value={target}>{target}</option>{/if}
@@ -245,5 +245,5 @@
   .qr { font-family: ui-monospace, monospace; line-height: 1; font-size: 10px; background: #fff; color: #000; padding: 12px; border-radius: 12px; display: inline-block; }
   .bad { color: var(--bad); }
   .screen { height: 420px; }
-  @media (max-width: 760px) { .screen { height: 60vh; } }
+  @media (max-width: 760px) { .screen { height: 60vh; } .target { flex-direction: column; align-items: stretch; } .target .sel { max-width: none; } }
 </style>
