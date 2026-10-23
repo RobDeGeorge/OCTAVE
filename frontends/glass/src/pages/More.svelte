@@ -5,6 +5,8 @@
   import Icon from '../ui/Icon.svelte'
   import Modal from '../ui/Modal.svelte'
   import Toggle from '../ui/Toggle.svelte'
+  import MirrorView from '../ui/MirrorView.svelte'
+  import JpegView from '../ui/JpegView.svelte'
 
   let { arg = '' }: { arg?: string } = $props()
   type Tab = 'downloads' | 'phone' | 'diagnostics'
@@ -147,7 +149,8 @@
         {#if $ph.mirrorNotice}<div class="row"><span class="small">{$ph.mirrorNotice}</span><button class="btn" onclick={() => act(octave.call('phoneMirrorManager', 'dismissNotice'))}>Dismiss</button></div>{/if}
         {#if $ph.lastErrorKind}<p class="small bad">Last error: {$ph.lastErrorKind}</p>{/if}
         {#if $ph.isRunning}
-          <p class="small muted">The picture goes to the head unit's screen only; video is not on the service yet. {$ph.frameWidth}×{$ph.frameHeight}{$ph.currentBitRate ? `, ${$ph.currentBitRate} Mb/s` : ''}{$ph.audioActive ? ', audio' : ''}{$ph.phoneAsleep ? ', phone asleep' : ''}{$ph.phoneInUse ? ', phone in use' : ''}</p>
+          <div class="screen"><MirrorView showStats /></div>
+          <p class="small muted">Touch the picture to use the phone. {$ph.frameWidth}×{$ph.frameHeight}{$ph.currentBitRate ? `, ${$ph.currentBitRate} Mb/s` : ''}{$ph.audioActive ? ', audio' : ''}{$ph.phoneAsleep ? ', phone asleep' : ''}{$ph.phoneInUse ? ', phone in use' : ''}</p>
           <div class="acts wrap">
             <button class="btn" onclick={() => act(octave.call('phoneMirrorManager', 'pressHome'))}>Home</button>
             <button class="btn" onclick={() => act(octave.call('phoneMirrorManager', 'pressBack'))}>Back</button>
@@ -194,6 +197,7 @@
       <div class="glass panel span-5 col">
         <div class="bar"><h2>Android Auto</h2><Toggle on={$aaOn} label="Android Auto" onchange={(v) => act(octave.call('settingsManager', 'save_android_auto_enabled', v))} /></div>
         <p class="small muted">{$aa.isDhuInstalled ? `Desktop Head Unit at ${$aa.dhuPath}` : 'The Desktop Head Unit is not installed.'}{$aa.isDhuEmbedded ? ' · running' : ''}</p>
+        {#if $aa.isDhuEmbedded}<div class="screen"><JpegView showStats /></div>{/if}
         <div class="acts wrap">
           <button class="btn primary" disabled={!$aaOn || !$aa.isDhuInstalled} onclick={() => act(octave.call('androidAutoManager', 'launchDhuSeamless'))}>Launch</button>
           <button class="btn" disabled={!$aa.isDhuEmbedded} onclick={() => act(octave.call('androidAutoManager', 'closeDhu'))}>Close</button>
@@ -240,4 +244,6 @@
   .log { margin: 0; max-height: 420px; overflow: auto; background: var(--control); border-radius: var(--radius-s); padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
   .qr { font-family: ui-monospace, monospace; line-height: 1; font-size: 10px; background: #fff; color: #000; padding: 12px; border-radius: 12px; display: inline-block; }
   .bad { color: var(--bad); }
+  .screen { height: 420px; }
+  @media (max-width: 760px) { .screen { height: 60vh; } }
 </style>

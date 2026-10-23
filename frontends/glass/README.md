@@ -68,6 +68,17 @@ The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backo
 
 `src/lib/octave.ts` is the whole client (about 300 lines, one WebSocket): request / reply by id, `describe` cache, and subscriptions as Svelte stores (`prop`, `props`, `params`, `model`, `signal`) that replay on reconnect. `src/lib/stores.ts` holds the stores pages share. `src/gauges/` holds the dashboard primitives and the renderer, `src/lib/widgets.ts` the widget catalog: read from `dashboardManager.widgetCatalog` when the app serves it, with a built-in copy of the same data for an older app.
 
+## Video (in progress)
+
+`src/lib/videodecoder.ts` is a WebCodecs H.264 player for Annex-B access units: it configures from the SPS (codec string and picture size parsed in `src/lib/h264.ts`), starts at a keyframe, reconfigures when the SPS changes, drops to the next keyframe when it falls behind, and paints on a canvas with letterboxing. `src/ui/VideoPlayer.svelte` wraps it with a touch layer that maps a finger on the picture to frame-relative 0..1 coordinates (what `phoneMirrorManager.injectTouch` takes); the page decides where touches go. Until the service streams the mirror, the player is exercised on a dev page:
+
+```bash
+dev/make_test_video.sh                      # dev/test.h264: two resolutions back to back, baseline, a keyframe every 30 frames
+npm run dev                                 # then open http://127.0.0.1:5173/dev/video.html
+```
+
+The page plays the file in a loop through a fake source, with buttons to stall the feed and burst frames (the player must drop to a keyframe) and a log of touches (never sent anywhere). WebCodecs needs a secure origin: `127.0.0.1` / `localhost` or https.
+
 ## Known gaps
 
 - No phone-mirror video: media streams are not on the service yet (`TODO/open-backend.md`, step 6).
