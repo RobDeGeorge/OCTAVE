@@ -6,6 +6,7 @@ import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
 import "." as App
 import "dashboards" as Dashboards
+import OCTAVE.OBD 1.0
 
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -859,7 +860,7 @@ Item {
                 }
 
                 readonly property bool _connecting: typeof obdManager !== "undefined" && obdManager
-                                                    && obdManager.connectionStatus === "Connecting"
+                                                    && obdManager.connectionState === OBDManager.Connecting
 
                 Text {
                     id: obdConnectLabel

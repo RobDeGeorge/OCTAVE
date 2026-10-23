@@ -53,6 +53,46 @@ private slots:
         qputenv("APPDATA", (m_tmp.path() + "/appdata").toUtf8());
     }
 
+    // ── Connection state: the status text classified once ───────────
+    void connectionStateClassifiesEveryStatus_data()
+    {
+        // Every string obdmanager.cpp emits on connectionStatusChanged
+        using S = OBDManager::ConnectionState;
+        QTest::addColumn<QString>("status");
+        QTest::addColumn<int>("state");
+        const QList<QPair<const char *, S>> rows{
+            {"Disconnected", S::Disconnected},
+            {"Connecting", S::Connecting},           {"Reconnecting", S::Connecting},
+            {"Stale Connection", S::Connecting},     {"Connecting BLE...", S::Connecting},
+            {"Discovering services...", S::Connecting}, {"Initializing ELM327...", S::Connecting},
+            {"Querying PIDs...", S::Connecting},
+            {"Connected", S::Connected},
+            {"No Vehicle", S::NoVehicle},
+            {"Device Not Found", S::Failed},         {"Connection Failed", S::Failed},
+            {"Error", S::Failed},                    {"No MAC Address", S::Failed},
+            {"BLE connect failed", S::Failed},       {"BLE error", S::Failed},
+            {"something new", S::Failed},            {"", S::Disconnected},
+        };
+        for (const auto &r : rows)
+            QTest::newRow(r.first) << QString::fromLatin1(r.first) << int(r.second);
+    }
+
+    void connectionStateClassifiesEveryStatus()
+    {
+        QFETCH(QString, status);
+        QFETCH(int, state);
+        QCOMPARE(int(OBDManager::stateFor(status)), state);
+    }
+
+    void connectionStateFollowsTheStatus()
+    {
+        OBDManager obd;
+        QCOMPARE(obd.connectionState(), OBDManager::ConnectionState::Disconnected);
+        emit obd.connectionStatusChanged(QStringLiteral("Discovering services..."));
+        QCOMPARE(obd.property("connectionState").value<OBDManager::ConnectionState>(),
+                 OBDManager::ConnectionState::Connecting);
+    }
+
     // ── Connection log: one buffer for every page ───────────────────
     void connectionLogKeepsTheLastLines()
     {

@@ -42,6 +42,10 @@ class OBDManager : public QObject
     // Expose connection state as QML-readable properties
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectionStatusChanged)
     Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
+    // connectionStatus classified (stateFor): what a frontend colours and
+    // animates by; the text stays the label. QML: import OCTAVE.OBD 1.0 for
+    // OBDManager.Connecting etc.
+    Q_PROPERTY(ConnectionState connectionState READ connectionState NOTIFY connectionStatusChanged)
     // Last detail message / progress percent, so the OBD settings connection
     // card can bind declaratively instead of tracking the signals by hand.
     Q_PROPERTY(QString connectionDetail READ connectionDetail NOTIFY connectionStatusDetailChanged)
@@ -223,6 +227,15 @@ signals:
     void connectionLogChanged();
 
 public:
+    // Disconnected: no link, or it went away; Connecting: any step toward a
+    // link, reconnects and a stale link about to be retried included;
+    // Connected; NoVehicle: the adapter answers but the vehicle doesn't
+    // (ignition off); Failed: the attempt ended in an error
+    enum class ConnectionState { Disconnected, Connecting, Connected, NoVehicle, Failed };
+    Q_ENUM(ConnectionState)
+    static ConnectionState stateFor(const QString &status);
+    ConnectionState connectionState() const { return stateFor(m_connectionStatus); }
+
     explicit OBDManager(SettingsManager *settingsManager = nullptr,
                         QObject *parent = nullptr);
     ~OBDManager() override;

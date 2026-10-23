@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "." as App
+import OCTAVE.OBD 1.0
 
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -28,6 +29,8 @@ Item {
     property string connectionStatus: "Disconnected"
     property string connectionDetail: ""
     property bool connected: obdManager ? obdManager.is_connected() : false
+    // Every step toward a link (the BLE ones included), from the manager's state
+    readonly property bool connecting: !!obdManager && obdManager.connectionState === OBDManager.Connecting
 
     // Connection log shown beneath the status row (the manager keeps the last
     // 60 lines). Most useful on Android where the BLE state machine has many
@@ -84,11 +87,11 @@ Item {
                         height: width
                         radius: width / 2
                         color: obdHome.connected ? "#00FF00"
-                             : obdHome.connectionStatus === "Connecting" ? "#FFAA00"
+                             : obdHome.connecting ? "#FFAA00"
                              : "#FF4444"
 
                         SequentialAnimation on opacity {
-                            running: obdHome.connectionStatus === "Connecting" && obdHome.visible  // visible includes hidden pages/sections
+                            running: obdHome.connecting && obdHome.visible  // visible includes hidden pages/sections
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.3; duration: 600 }
                             NumberAnimation { to: 1.0; duration: 600 }

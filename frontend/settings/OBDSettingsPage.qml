@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import ".." as App
+import OCTAVE.OBD 1.0
 
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -40,20 +41,28 @@ Item {
     // page (the Sidebar layout); the stacked cards are then never built.
     property bool renderCards: true
 
-    // Collapses the manager's status text to one word for the tile.
-    function _shortStatus(status) {
-        status = String(status || "")
-        if (status.indexOf("Connecting") !== -1) return "Connecting"
-        if (status.indexOf("Connected") !== -1 && status.indexOf("Not") === -1
-                && status.indexOf("Dis") === -1) return "Connected"
+    // The manager's connection state as one word for the tile
+    function _shortStatus(state) {
+        if (state === OBDManager.Connecting) return "Connecting"
+        if (state === OBDManager.Connected) return "Connected"
         return "Offline"
+    }
+    // One colour per connection state
+    function _stateColor(state) {
+        switch (state) {
+        case OBDManager.Connected: return App.Style.accent
+        case OBDManager.Connecting: return App.Style.statusWarning
+        case OBDManager.NoVehicle: return App.Style.statusInfo
+        case OBDManager.Disconnected: return App.Style.statusDisconnected
+        default: return App.Style.statusError
+        }
     }
 
     property var tileModel: [
         { cardId: "obd_connection", title: "Connection", component: connectionContent,
           summary: function() {
               if (!obdManager) return {}
-              var brief = pageRoot._shortStatus(obdManager.connectionStatus)
+              var brief = pageRoot._shortStatus(obdManager.connectionState)
               var vehicle = obdManager.vehicleModelYear > 0
                   ? obdManager.vehicleModelYear + " " + obdManager.vehicleMake : obdManager.vehicleMake
               return { state: brief === "Connected" && vehicle ? vehicle : brief,
@@ -259,40 +268,14 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: dp(40)
 
-                // Keyed on the connectionStatusChanged vocabulary, which both
-                // backends also return from get_connection_status().
-                property var statusColors: {
-                    "Connected": App.Style.accent,
-                    "Connecting": App.Style.statusWarning,
-                    "Reconnecting": App.Style.statusWarning,
-                    "Device Not Found": App.Style.statusError,
-                    "Connection Failed": App.Style.statusError,
-                    "Error": App.Style.statusError,
-                    "Disconnected": App.Style.statusDisconnected,
-                    "Device Lost": App.Style.statusWarning,
-                    "Stale Connection": App.Style.statusWarning,
-                    "No Vehicle": App.Style.statusInfo,
-                    // Android BLE (C++ only) intermediate states
-                    "No MAC Address": App.Style.statusError,
-                    "Connecting BLE...": App.Style.statusWarning,
-                    "Discovering services...": App.Style.statusWarning,
-                    "Initializing ELM327...": App.Style.statusWarning,
-                    "Querying PIDs...": App.Style.statusWarning,
-                    "BLE connect failed": App.Style.statusError,
-                    "BLE error": App.Style.statusError,
-                    "Bluetooth permission denied": App.Style.statusError
-                }
-
-                // Last status string; refreshed from onConnectionStatusChanged
-                // below so the colour and label re-evaluate on every change.
-                property string status: obdManager ? obdManager.get_connection_status() : "Disconnected"
-
-                // Default to error color if status not in our map
-                color: statusColors[status] || App.Style.statusError
+                // The text is the label; the state picks the colour
+                readonly property string status: obdManager ? obdManager.connectionStatus : "Disconnected"
+                readonly property int connState: obdManager ? obdManager.connectionState : OBDManager.Disconnected
+                color: pageRoot._stateColor(connState)
                 radius: 4
 
                 // Properties for animations
-                property bool connecting: status === "Connecting"
+                property bool connecting: connState === OBDManager.Connecting
                 property real pulseOpacity: 0.7
                 property real connectionProgress: obdManager ?
                     (obdManager.connectionProgress || 0) : 0
@@ -465,10 +448,6 @@ Item {
                 // Connections to OBD manager
                 Connections {
                     target: obdManager
-
-                    function onConnectionStatusChanged(status) {
-                        connectionStatusRect.status = status
-                    }
 
                     function onConnectionProgressChanged(progress) {
                         connectionStatusRect.connectionProgress = progress

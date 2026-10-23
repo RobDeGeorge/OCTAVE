@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import "../.." as App
 import ".."
+import OCTAVE.OBD 1.0
 
 Item {
     id: widgetRoot
@@ -9,23 +10,12 @@ Item {
 
     signal navigateToSubSection(string subSection)
 
-    property string obdStatus: obdManager ? obdManager.get_connection_status() : "N/A"
-    property color obdStatusColor: {
-        if (obdStatus.indexOf("Connected") !== -1)
-            return App.Style.statusConnected
-        if (obdStatus.indexOf("Connecting") !== -1)
-            return App.Style.statusWarning
-        return App.Style.statusDisconnected
-    }
+    readonly property string obdStatus: obdManager ? obdManager.connectionStatus : "N/A"
+    readonly property int obdState: obdManager ? obdManager.connectionState : OBDManager.Disconnected
+    property color obdStatusColor: obdState === OBDManager.Connected ? App.Style.statusConnected
+                                 : obdState === OBDManager.Connecting ? App.Style.statusWarning
+                                 : App.Style.statusDisconnected
     property bool obdConnected: obdManager ? obdManager.is_connected() : false
-
-    // Live status updates
-    Connections {
-        target: obdManager ? obdManager : null
-        function onConnectionStatusChanged() {
-            widgetRoot.obdStatus = obdManager.get_connection_status()
-        }
-    }
 
     GridLayout {
         anchors.fill: parent

@@ -3128,3 +3128,27 @@ void OBDManager::clearConnectionLog()
     m_connectionLog.clear();
     emit connectionLogChanged();
 }
+
+OBDManager::ConnectionState OBDManager::stateFor(const QString &status)
+{
+    // Every string connectionStatusChanged carries (tst_obdmanager lists them)
+    static const QHash<QString, ConnectionState> table{
+        {QStringLiteral("Disconnected"), ConnectionState::Disconnected},
+        {QStringLiteral("Connecting"), ConnectionState::Connecting},
+        {QStringLiteral("Reconnecting"), ConnectionState::Connecting},
+        {QStringLiteral("Stale Connection"), ConnectionState::Connecting},
+        {QStringLiteral("Connecting BLE..."), ConnectionState::Connecting},
+        {QStringLiteral("Discovering services..."), ConnectionState::Connecting},
+        {QStringLiteral("Initializing ELM327..."), ConnectionState::Connecting},
+        {QStringLiteral("Querying PIDs..."), ConnectionState::Connecting},
+        {QStringLiteral("Connected"), ConnectionState::Connected},
+        {QStringLiteral("No Vehicle"), ConnectionState::NoVehicle},
+        {QStringLiteral("Device Not Found"), ConnectionState::Failed},
+        {QStringLiteral("Connection Failed"), ConnectionState::Failed},
+        {QStringLiteral("Error"), ConnectionState::Failed},
+        {QStringLiteral("No MAC Address"), ConnectionState::Failed},
+        {QStringLiteral("BLE connect failed"), ConnectionState::Failed},
+        {QStringLiteral("BLE error"), ConnectionState::Failed},
+    };
+    return table.value(status, status.isEmpty() ? ConnectionState::Disconnected : ConnectionState::Failed);
+}

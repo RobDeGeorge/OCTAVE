@@ -387,6 +387,9 @@ int main(int argc, char *argv[])
 
     // Register custom QML types for video embedding (stub types on mobile)
     qmlRegisterType<EmbeddedDhuItem>("OCTAVE.AndroidAuto", 1, 0, "EmbeddedDhuItem");
+    // OBDManager.ConnectionState values for QML (OBDManager.Connecting, ...)
+    qmlRegisterUncreatableType<OBDManager>("OCTAVE.OBD", 1, 0, "OBDManager",
+                                           QStringLiteral("use the obdManager context property"));
 
     // Download Manager — music search & download via yt-dlp
     DownloadManager downloadManager;
