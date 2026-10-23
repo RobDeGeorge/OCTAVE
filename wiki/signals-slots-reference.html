@@ -455,7 +455,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>timeChanged(QString timeStr)</code></td><td>New formatted time text. Evaluated every second by a QTimer, emitted only when the text changes (once a minute without seconds). Honours <code>settingsManager.clockFormat24Hour</code> / <code>clockShowSeconds</code>; emits <code>""</code> once when <code>showClock</code> turns off</td></tr>
+            <tr><td><code>timeChanged(QString timeStr)</code></td><td>New formatted time text. Evaluated every second by a QTimer, emitted only when the text changes (once a minute without seconds). Honours <code>settingsManager.clockFormat24Hour</code> / <code>clockShowSeconds</code>; emits <code>""</code> once when <code>showClock</code> turns off. The same text is readable as the <code>time</code> property, which this signal notifies</td></tr>
           </tbody>
         </table>
 
