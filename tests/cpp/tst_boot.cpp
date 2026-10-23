@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLocalSocket>
 #include <QStandardPaths>
 #include <QElapsedTimer>
 #include <QProcess>
@@ -418,6 +419,83 @@ time.sleep(4)   # the simulated car records a trip meanwhile
         QVERIFY2(out.contains("Frontend org.test.web 1 (web) is the active screen"), qPrintable(out.right(3000)));
     }
 
+    // `octave --pair-code`: a code from the running instance of the same
+    // config, from a second process; nothing running is exit 1, and another
+    // config's instance is never the one asked
+    void pairCodeFromTheRunningInstance()
+    {
+#ifdef Q_OS_ANDROID
+        QSKIP("desktop only");
+#else
+        QTemporaryDir tmp;
+        const QString a = tmp.filePath("a"), b = tmp.filePath("b");
+        auto runPairCode = [&](const QString &config, QString *out) {
+            QProcess p;
+            p.setProcessEnvironment(env(tmp));
+            p.start(kApp, {"--pair-code", "--config", config});
+            if (!p.waitForFinished(30000))
+                return -2;
+            *out = QString::fromUtf8(p.readAllStandardOutput() + p.readAllStandardError());
+            return p.exitCode();
+        };
+        QString out;
+        QCOMPARE(runPairCode(a, &out), 1);   // nothing running
+        QVERIFY2(out.contains("no running OCTAVE"), qPrintable(out));
+
+        QProcess appA, appB;
+        for (QProcess *app : {&appA, &appB}) {
+            app->setProcessEnvironment(env(tmp));
+            app->setProcessChannelMode(QProcess::MergedChannels);
+        }
+        const quint16 portA = freePort();
+        appA.start(kApp, {"--headless", "--sim", "--config", a, "--service", QString::number(portA)});
+        QVERIFY(appA.waitForStarted(10000));
+        QVERIFY(!request(appA, portA, R"({"op": "hello"})").isEmpty());   // up
+        const quint16 portB = freePort();
+        appB.start(kApp, {"--headless", "--config", b, "--service", QString::number(portB)});
+        QVERIFY(appB.waitForStarted(10000));
+        QVERIFY(!request(appB, portB, R"({"op": "hello"})").isEmpty());
+
+        QCOMPARE(runPairCode(b, &out), 0);
+        QVERIFY2(QRegularExpression(R"(^\{"code": "\d{6}", "secondsLeft": \d+\}\s*$)").match(out).hasMatch(), qPrintable(out));
+        auto logOf = [](const QString &config) {
+            QFile f(config + "/logs/octave-cpp.log");
+            return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+        };
+        QTRY_VERIFY(logOf(b).contains("pairing code shown for octave --pair-code"));
+        QVERIFY(!logOf(a).contains("pairing code shown"));   // A was not asked
+        // The code is B's: it pairs a device there
+        const QString code = QRegularExpression(R"re("code": "(\d{6})")re").match(out).captured(1);
+        const QByteArray paired = request(appB, portB, QStringLiteral(R"({"op": "pair", "code": "%1", "name": "test"})").arg(code).toUtf8());
+        QVERIFY2(paired.contains(R"("token")"), paired.constData());
+
+        // The channel: the user's own socket, and one op only
+        const QRegularExpressionMatch where = QRegularExpression("admin channel \\(octave --pair-code\\) on (\\S+)").match(logOf(a));
+        QVERIFY2(where.hasMatch(), qPrintable(logOf(a).right(2000)));
+#ifdef Q_OS_UNIX
+        const QFileInfo sock(where.captured(1));
+        QVERIFY(sock.exists());
+        QCOMPARE(sock.permissions() & (QFile::ReadGroup | QFile::WriteGroup | QFile::ReadOther | QFile::WriteOther),
+                 QFile::Permissions());
+#endif
+        QLocalSocket s;
+        s.connectToServer(where.captured(1));
+        QVERIFY(s.waitForConnected(3000));
+        s.write("{\"op\":\"shutdown\"}\n");
+        QVERIFY(s.waitForReadyRead(3000));
+        QVERIFY(s.readAll().contains("only pairCode"));
+
+        for (QProcess *app : {&appA, &appB}) {
+            app->terminate();
+            QVERIFY(finished(*app));
+        }
+#ifdef Q_OS_UNIX
+        QVERIFY(!QFileInfo::exists(where.captured(1)));   // removed at exit
+#endif
+        QCOMPARE(runPairCode(a, &out), 1);
+#endif
+    }
+
     void helpAndVersionExitBeforeAnything()
     {
         // No manager, no config read, no log file: --help on someone's
@@ -439,7 +517,7 @@ time.sleep(4)   # the simulated car records a trip meanwhile
             if (args.contains("--version"))
                 QCOMPARE(out.count('\n'), 1);
             else
-                for (const char *flag : {"--service", "--service-bind", "--headless", "--sim", "--config", "--web-root", "--dump-api", "--command-port"})
+                for (const char *flag : {"--service", "--service-bind", "--headless", "--sim", "--config", "--pair-code", "--web-root", "--dump-api", "--command-port"})
                     QVERIFY2(out.contains(flag), flag);
             QVERIFY2(QDir(tmp.path()).isEmpty(), qPrintable(QDir(tmp.path()).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden).join(", ")));
         }

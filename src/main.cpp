@@ -48,6 +48,7 @@ extern "C" {
 #include "service/apidump.h"
 #include "service/serviceoptions.h"
 #include "service/streamhub.h"
+#include "service/adminchannel.h"
 #include "sim/simconfig.h"
 #include "managers/frontendsupervisor.h"
 #ifndef Q_OS_MOBILE
@@ -365,6 +366,9 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
         return 1;
     }
     qInfo("Headless: %d objects served on port %u", int(core.registry.names().size()), service.server->port());
+    // `octave --pair-code` from this user on this machine
+    OctaveService::AdminChannel admin(&core.servicePairing);
+    admin.listen(SettingsManager::getAppDataDir());
 
     // The installed exec frontend as the screen. Exit code 0 quits OCTAVE;
     // repeated crashes write USE_QML and start OCTAVE again on the QML UI
@@ -440,6 +444,7 @@ constexpr Flag kFlags[] = {
     {"--web-root", "DIR", "serve DIR (a built web frontend with index.html) at GET / instead of the reference client"},
     {"--headless", "", "every manager and the service, no QML engine and no window"},
     {"--qml", "", "the built-in QML UI for this run, even when an installed exec frontend is the screen"},
+    {"--pair-code", "", "print a pairing code from the running OCTAVE (same user, same --config) and exit; 1 if none runs"},
     {"--sim", "", "a simulated car, IMU motion and test tracks (the `sim` object drives them), on a throwaway config unless --config"},
     {"--config", "DIR", "keep settings, trips, dashboards and logs in DIR instead of the OS config folder"},
     {"--dump-api", "DIR", "write the published API (docs/api) to DIR and exit"},
@@ -528,6 +533,25 @@ int main(int argc, char *argv[])
         else if (std::strcmp(argv[i], "--sim") == 0)
             sim = true;
     }
+
+#ifndef Q_OS_MOBILE
+    // --pair-code: ask the running instance for this config (adminchannel.h)
+    // for a pairing code, before any config, log or throwaway folder exists
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--pair-code") != 0)
+            continue;
+        QCoreApplication app(argc, argv);
+        const QString dir = configDir.isEmpty() ? SettingsManager::getAppDataDir() : QDir(configDir).absolutePath();
+        const QVariantMap r = OctaveService::AdminChannel::requestPairCode(dir);
+        if (!r.value(QStringLiteral("ok")).toBool()) {
+            std::fprintf(stderr, "octave: %s\n", qPrintable(r.value(QStringLiteral("error")).toString()));
+            return 1;
+        }
+        std::printf("{\"code\": \"%s\", \"secondsLeft\": %d}\n", qPrintable(r.value(QStringLiteral("code")).toString()),
+                    r.value(QStringLiteral("secondsLeft")).toInt());
+        return 0;
+    }
+#endif
 
     // --dump-api builds every manager: keep its settings, trip database and
     // logs out of the real config (set before the logger picks its folder)
@@ -768,8 +792,15 @@ int main(int argc, char *argv[])
 #ifdef OCTAVE_DEV_TOOLS
     devRuntime.afterLoad(service.server.get());   // its UI / perf / sim actions, with --profile
 #endif
-    if (service.server)
-        service.server->start();
+    const bool serving = service.server && service.server->start();
+#ifndef Q_OS_MOBILE
+    // `octave --pair-code` from this user on this machine, while the service is up
+    OctaveService::AdminChannel admin(&core.servicePairing);
+    if (serving)
+        admin.listen(SettingsManager::getAppDataDir());
+#else
+    Q_UNUSED(serving);
+#endif
     if (smokeTest) {
         qInfo("Smoke test: Main.qml loaded, exiting in 5 s");
         // CI greps this line: release builds must ship the phone-mirror decoder + adb
