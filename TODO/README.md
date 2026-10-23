@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-10-21 (arm64-qt-ffmpeg-lgpl.md added; open-backend.md added from the frontend logic audit and absorbs backend-service-split.md)
+**Last updated:** 2026-10-22 (diy-obd-adapter.md added from the OBD adapter brainstorm)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -47,5 +47,6 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [phone-mirror-android-host.md](phone-mirror-android-host.md) | OCTAVE on an Android tablet mirrors a phone | XL | tablet + phone |
 | [android-auto-native-receiver.md](android-auto-native-receiver.md) | Android Auto straight into OCTAVE over USB, no DHU | XL | AA phone, Pi |
 | [carlinkit-dongle-port.md](carlinkit-dongle-port.md) | CarPlay / wireless Android Auto through a Carlinkit dongle | XL | $60 dongle, iPhone |
+| [diy-obd-adapter.md](diy-obd-adapter.md) | Our own all-protocol Bluetooth OBD adapter (STM32G474 + ESP32) with native fast mode, store-and-forward, optional sensor pod | M bench steps, then L–XL hardware | Nucleo + ECU sim, Jeep |
 
 Shared prerequisite for the last three and for phone-mirror item 6 (hardware decode): pull the H.264 decoder out of `src/phone_mirror/scrcpyclient.cpp` into its own class.
