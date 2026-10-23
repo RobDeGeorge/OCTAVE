@@ -132,6 +132,8 @@ pub struct State {
     /// ART_DOTS x ART_DOTS luminance; None when there is no cover
     pub art_revision: i64,
     pub art: Option<(i64, Vec<u8>)>,
+    /// audioAnalyzer.levels: one bar per band, 0..8
+    pub levels: Vec<u8>,
     pub last_error: Option<String>,
     /// When the last event arrived, for the RX lamp.
     pub last_rx: Option<Instant>,
@@ -174,6 +176,7 @@ impl State {
             export_path: None,
             art_revision: -1,
             art: None,
+            levels: Vec::new(),
             last_error: None,
             last_rx: None,
             dropped: 0,
@@ -287,6 +290,9 @@ impl State {
             ("parameterCatalog", "displayParameters") => self.load_catalog(v),
             ("clock", "time") => self.clock = Some(s()),
             ("tripRecorder", "trips") => self.trips = trip_list(v),
+            ("audioAnalyzer", "levels") => {
+                self.levels = v.as_array().map(|a| a.iter().map(|x| x.as_u64().unwrap_or(0).min(8) as u8).collect()).unwrap_or_default();
+            }
             _ => {}
         }
     }
@@ -369,6 +375,8 @@ pub enum Cmd {
     Call(&'static str, &'static str, Vec<Value>),
     /// The PIDs the current page shows (obdManager.setParameterDemand).
     Demand(Vec<String>),
+    /// Whether the spectrum bars are on screen (audioAnalyzer.setDemand).
+    Bars(bool),
 }
 
 pub struct Link {
@@ -395,6 +403,10 @@ impl Link {
     pub fn demand(&self, ids: Vec<String>) {
         let _ = self.tx.send(Cmd::Demand(ids));
     }
+
+    pub fn bars(&self, wanted: bool) {
+        let _ = self.tx.send(Cmd::Bars(wanted));
+    }
 }
 
 impl Drop for Link {
@@ -411,12 +423,14 @@ fn resolve(address: &str) -> Option<SocketAddr> {
 
 fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Arc<dyn Fn() + Send + Sync>) {
     let mut demand: Vec<String> = Vec::new();
+    let mut bars = false;
     loop {
         let stream = resolve(&address).and_then(|a| TcpStream::connect_timeout(&a, Duration::from_secs(1)).ok());
         let Some(mut stream) = stream else {
             // Keep the demand current while offline, so the reconnect sends the latest
             match rx.recv_timeout(Duration::from_millis(1000)) {
                 Ok(Cmd::Demand(ids)) => demand = ids,
+                Ok(Cmd::Bars(on)) => bars = on,
                 Ok(Cmd::Call(..)) | Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return,
             }
@@ -464,6 +478,10 @@ fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Ar
             ok &= send(&mut stream, msg, format!("obdManager.{method}"));
         }
         ok &= send(&mut stream, demand_msg(&demand), "demand".into());
+        // A closed connection released it on the app's side: ask again
+        if bars {
+            ok &= send(&mut stream, bars_msg(true), "bars".into());
+        }
 
         while ok && alive.load(Ordering::Relaxed) {
             match rx.recv_timeout(Duration::from_millis(200)) {
@@ -474,6 +492,10 @@ fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Ar
                 Ok(Cmd::Demand(ids)) => {
                     demand = ids;
                     ok = send(&mut stream, demand_msg(&demand), "demand".into());
+                }
+                Ok(Cmd::Bars(on)) => {
+                    bars = on;
+                    ok = send(&mut stream, bars_msg(on), "bars".into());
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => {
@@ -528,6 +550,10 @@ fn fetch_art(address: &str) -> Option<Vec<u8>> {
     Some(small.into_raw())
 }
 
+fn bars_msg(on: bool) -> Value {
+    json!({"op": "call", "object": "audioAnalyzer", "method": "setDemand", "args": [DEMAND_CONSUMER, on]})
+}
+
 fn demand_msg(ids: &[String]) -> Value {
     json!({"op": "call", "object": "obdManager", "method": "setParameterDemand", "args": [DEMAND_CONSUMER, ids]})
 }
@@ -551,6 +577,7 @@ fn subscriptions() -> Vec<(&'static str, Vec<&'static str>, u64)> {
         ),
         ("shiftLightManager", vec!["lit", "active"], 0),
         ("tripRecorder", vec!["recording", "currentTripElapsedS", "trips"], 0),
+        ("audioAnalyzer", vec!["levels"], 40),
         // `time` is a property on newer backends; an older one refuses this
         // one subscription, and the timeChanged signal below still arrives
         ("clock", vec!["time"], 0),

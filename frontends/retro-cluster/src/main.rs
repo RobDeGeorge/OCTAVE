@@ -46,6 +46,7 @@ enum Page {
     Diag,
     Codes,
     Trips,
+    Audio,
 }
 
 /// Page-local state the draw code reads and changes.
@@ -80,12 +81,13 @@ fn parse_args() -> Args {
                     Some("diag") => Page::Diag,
                     Some("dtc") => Page::Codes,
                     Some("trips") => Page::Trips,
+                    Some("audio") => Page::Audio,
                     _ => Page::Drive,
                 }
             }
             "--theme" => a.theme = it.next().and_then(|t| t.parse().ok()).unwrap_or(0) % PALETTES.len(),
             "-h" | "--help" => {
-                println!("retro-cluster [--host 127.0.0.1] [--port 9876] [--fullscreen] [--theme 0|1|2] [--page drive|diag|dtc|trips]");
+                println!("retro-cluster [--host 127.0.0.1] [--port 9876] [--fullscreen] [--theme 0|1|2] [--page drive|diag|dtc|trips|audio]");
                 println!("keys: Space play/pause  Left/Right prev/next  +/- volume  M mute");
                 println!("      Tab page  T theme  F11 fullscreen  Ctrl+Q quit");
                 std::process::exit(0);
@@ -128,6 +130,8 @@ struct Cluster {
     speed_smooth: f64,
     pages: PageState,
     sent_demand: Option<Vec<String>>,
+    sent_bars: Option<bool>,
+    peaks: Vec<f32>,
     fullscreen: bool,
 }
 
@@ -145,6 +149,8 @@ impl Cluster {
             speed_smooth: 0.0,
             pages: PageState::default(),
             sent_demand: None,
+            sent_bars: None,
+            peaks: Vec::new(),
             fullscreen: args.fullscreen,
         }
     }
@@ -162,8 +168,14 @@ impl Cluster {
                 all.into_iter().skip(self.pages.diag_page * per).take(per).collect()
             }
             // Trouble codes and trips poll nothing; keep the speed for the header
-            Page::Codes | Page::Trips => vec!["SPEED".to_string(), "RPM".to_string()],
+            Page::Codes | Page::Trips | Page::Audio => vec!["SPEED".to_string(), "RPM".to_string()],
         };
+        // The analyzer runs only while some frontend shows its bars
+        let bars = self.page == Page::Audio;
+        if self.sent_bars != Some(bars) {
+            self.link.bars(bars);
+            self.sent_bars = Some(bars);
+        }
         if self.sent_demand.as_ref() != Some(&want) {
             self.link.demand(want.clone());
             self.sent_demand = Some(want);
@@ -197,7 +209,8 @@ impl Cluster {
                     Page::Drive => Page::Diag,
                     Page::Diag => Page::Codes,
                     Page::Codes => Page::Trips,
-                    Page::Trips => Page::Drive,
+                    Page::Trips => Page::Audio,
+                    Page::Audio => Page::Drive,
                 };
             }
             if i.key_pressed(Key::T) {
@@ -285,6 +298,7 @@ impl eframe::App for Cluster {
             }
             Page::Codes => ctx.codes(&mut self.pages, &mut actions),
             Page::Trips => ctx.trips(&mut self.pages, &mut actions),
+            Page::Audio => ctx.audio(&mut self.peaks, dt as f32),
         }
         ctx.deck(&mut actions);
         if !online && self_test.is_none() {
@@ -369,15 +383,21 @@ impl Draw<'_> {
         self.label(36.0, 16.0, 4.0, "OCTAVE", pal.lit);
         self.label(38.0, 50.0, 1.7, "RETRO CLUSTER", self.dim());
 
-        let tabs = [("DRIVE", Page::Drive, 92.0), ("DIAG", Page::Diag, 80.0), ("DTC", Page::Codes, 72.0), ("TRIPS", Page::Trips, 88.0)];
-        let mut x = 210.0;
+        let tabs = [
+            ("DRIVE", Page::Drive, 84.0),
+            ("DIAG", Page::Diag, 72.0),
+            ("DTC", Page::Codes, 64.0),
+            ("TRIPS", Page::Trips, 80.0),
+            ("AUDIO", Page::Audio, 80.0),
+        ];
+        let mut x = 196.0;
         for (name, p, w) in tabs {
             if self.key(name, x, 12.0, w, 46.0, name, page == p) {
                 actions.push(Action::Page(p));
             }
-            x += w + 8.0;
+            x += w + 6.0;
         }
-        if self.key("theme", x, 12.0, 92.0, 46.0, pal.name, false) {
+        if self.key("theme", x, 12.0, 84.0, 46.0, pal.name, false) {
             actions.push(Action::Theme);
         }
 
@@ -751,6 +771,71 @@ impl Draw<'_> {
             let name = path.rsplit('/').next().unwrap_or(path);
             let text: String = format!("SAVED {name}").chars().take(60).collect();
             self.label(x, 540.0, 1.4, &text, self.dim());
+        }
+    }
+
+    /// The car-stereo display: the cover large, and a spectrum analyzer
+    /// with falling peak dots, from audioAnalyzer.levels.
+    fn audio(&mut self, peaks: &mut Vec<f32>, dt: f32) {
+        let pal = self.pal;
+        let s = self.s;
+        let frame = self.cv.r(30.0, 78.0, 1220.0, 492.0);
+        vfd::window(self.painter, frame, &pal);
+
+        let art = s.art.as_ref().filter(|(rev, _)| *rev == s.art_revision).map(|(_, d)| d.as_slice());
+        vfd::dither_art(self.painter, self.cv.r(56.0, 104.0, 440.0, 440.0), link::ART_DOTS as usize, art, &pal);
+
+        // 48 columns from the 96 bands (the louder of each pair), 8 segments each
+        let cols = 48usize;
+        let levels: Vec<f32> = if let Some(f) = self.self_test {
+            (0..cols).map(|_| (f * 8.0) as f32).collect()
+        } else if s.levels.is_empty() {
+            vec![0.0; cols]
+        } else {
+            let per = (s.levels.len() / cols).max(1);
+            (0..cols).map(|c| s.levels.iter().skip(c * per).take(per).copied().max().unwrap_or(0) as f32).collect()
+        };
+        peaks.resize(cols, 0.0);
+        let (x0, x1, top, bottom) = (530.0f32, 1226.0f32, 120.0f32, 440.0f32);
+        let pitch = (x1 - x0) / cols as f32;
+        let seg_h = (bottom - top) / 8.0;
+        for (c, &level) in levels.iter().enumerate() {
+            // Peaks fall at two segments a second after holding
+            peaks[c] = if level >= peaks[c] { level } else { (peaks[c] - dt * 2.0).max(level) };
+            for seg in 0..8 {
+                let y = bottom - (seg as f32 + 1.0) * seg_h;
+                let r = self.cv.r(x0 + c as f32 * pitch, y + seg_h * 0.18, pitch * 0.72, seg_h * 0.72);
+                let color = if seg >= 7 { pal.hot } else if seg >= 5 { pal.warn } else { pal.lit };
+                let lit = (seg as f32) < level;
+                let peak = peaks[c] >= 1.0 && seg == (peaks[c].ceil() as usize).saturating_sub(1).min(7) && !lit;
+                if lit || peak {
+                    self.painter.rect_filled(r.expand(self.cv.s(1.5)), 2.0, color.gamma_multiply(0.14));
+                    self.painter.rect_filled(r, 1.0, color);
+                } else {
+                    self.painter.rect_filled(r, 1.0, pal.ghost);
+                }
+            }
+        }
+        let freqs = ["60", "250", "1K", "4K", "16K"];
+        for (i, f) in freqs.iter().enumerate() {
+            let x = x0 + (x1 - x0) * (i as f32 + 0.5) / freqs.len() as f32;
+            vfd::text_center(self.painter, self.cv.p(x, 458.0), self.cv.s(1.8), f, self.dim());
+        }
+        let np = &s.now;
+        let title: String = if np.has_track { np.title.chars().take(26).collect() } else { "NO TRACK".into() };
+        self.label(530.0, 484.0, 3.2, &title, pal.lit);
+        let sub: String = [np.artist.as_str(), np.album.as_str()]
+            .iter()
+            .filter(|t| !t.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join("  -  ")
+            .chars()
+            .take(52)
+            .collect();
+        self.label(530.0, 520.0, 2.0, &sub, self.dim());
+        if s.levels.is_empty() && self.online && self.self_test.is_none() {
+            self.label(530.0, 96.0, 1.6, "NO LEVELS FROM THE ANALYZER (NOTHING PLAYING?)", pal.ghost);
         }
     }
 

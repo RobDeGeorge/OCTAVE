@@ -23,7 +23,7 @@ Start the cluster before or after OCTAVE: until the service answers it shows NO 
 | Left / Right | previous / next track |
 | + / - (or Up / Down) | volume by 5 |
 | M | mute |
-| Tab | next page (DRIVE, DIAG, DTC, TRIPS) |
+| Tab | next page (DRIVE, DIAG, DTC, TRIPS, AUDIO) |
 | T | theme (amber, P1 green, VFD cyan) |
 | F11 | fullscreen |
 | Ctrl+Q | quit |
@@ -36,6 +36,7 @@ All the keys are on screen too, for the touch panel. Tap the tape (the progress 
 - **DIAG**: every PID the vehicle reports, live, three columns of fifteen per page.
 - **DTC**: the check-engine lamp, the stored trouble codes, the freeze frame, read buttons, and a clear that needs a second press within 4 s.
 - **TRIPS**: the black box's recorded drives (newest first) and the selected drive's summary in the user's units; export a drive, or end the one being recorded.
+- **AUDIO**: a car-stereo display: the cover as a large dot matrix and a 48-band spectrum analyzer with falling peak dots, from `audioAnalyzer.levels`. The analyzer runs only while this page is on screen (`audioAnalyzer.setDemand`).
 
 ## What it uses from the API
 
@@ -47,7 +48,8 @@ All the keys are on screen too, for the touch panel. Tap the tape (the progress 
 | `nowPlaying` | track, position, source, `togglePlay` / `next` / `previous` / `seek` / `toggleShuffle`; `artRevision`, and the cover from `GET /art` when it changes |
 | `volumeController` | `percent`, `muted`, `applyVolume`, `toggleMute` |
 | `tripRecorder` | `trips`, `requestDetail` / `detailReady`, `exportTrip` / `exportFinished`, `endTripNow`, the REC lamp and the trip timer |
-| `shiftLightManager`, `clock` | the SHIFT lamp, the clock text |
+| `audioAnalyzer` | `setDemand("retro-cluster", on)` while AUDIO shows, `levels` (40 ms throttle) |
+| `shiftLightManager`, `clock` | the SHIFT lamp, the clock text (`clock.time`) |
 
 `src/link.rs` is the whole client (about 450 lines, `std::net` plus `serde_json`): a thread connects, subscribes, folds events into a `State` the UI reads, and reconnects. `src/vfd.rs` holds the drawing primitives, `src/main.rs` the layout, on a 1280x800 canvas scaled to the window.
 
