@@ -19,7 +19,9 @@ export class Octave {
   readonly hello: Writable<Hello | null> = writable(null)
 
   constructor(url: string = defaultUrl()) {
-    this.client = new OctaveClient({ url, checkVersion: false })
+    let token: string | undefined
+    try { token = localStorage.getItem('glass.token') || undefined } catch { /* private window */ }
+    this.client = new OctaveClient({ url, checkVersion: false, token })
     this.client.on('status', (s) => this.status.set(s))
     this.client.on('hello', (h) => {
       this.hello.set(h)

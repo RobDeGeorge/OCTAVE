@@ -1,6 +1,7 @@
 // Stores every page shares: one subscription each, however many pages use them.
 import { derived, readable, writable, type Readable } from 'svelte/store'
 import { octave, type Json } from './octave'
+import { mediaUrl, ticket } from './media'
 
 export interface NowPlaying {
   source: string; playing: boolean; hasTrack: boolean
@@ -67,7 +68,7 @@ export function fmt(info: ParamInfo | undefined, native: number | undefined): st
 }
 
 /** The current cover, served by the app at GET /art; the revision busts the cache. '' when there is none. */
-export const artSrc: Readable<string> = derived(nowPlaying, (np) => (np.hasTrack && np.artRevision > 0 ? `${import.meta.env.BASE_URL}art?rev=${np.artRevision}` : ''))
+export const artSrc: Readable<string> = derived([nowPlaying, ticket], ([np, t]) => (np.hasTrack && np.artRevision > 0 ? mediaUrl('/art', t ? { rev: np.artRevision } : { rev: np.artRevision }) : ''))
 
 export const albumColors = octave.prop<Record<string, Json>>('settingsManager', 'albumArtColors', {})
 

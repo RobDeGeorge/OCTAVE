@@ -3,6 +3,7 @@
   import { octave, type Json } from '../lib/octave'
   import { act, toast } from '../lib/stores'
   import { go } from '../lib/router'
+  import { mediaUrl } from '../lib/media'
   import Icon from '../ui/Icon.svelte'
   import Modal from '../ui/Modal.svelte'
   import Toggle from '../ui/Toggle.svelte'
@@ -63,6 +64,10 @@
   interface D { logDir: string; appVersion: string; backendName: string; deviceInfo: string; lastExportPath: string; canOpenFolder: boolean; [k: string]: Json }
   const diag = octave.props<D>('diagnosticsManager', ['logDir', 'appVersion', 'backendName', 'deviceInfo', 'lastExportPath', 'canOpenFolder'], { logDir: '', appVersion: '', backendName: '', deviceInfo: '', lastExportPath: '', canOpenFolder: false })
   let logText = $state('')
+  let logFiles = $state<string[]>([])
+  async function listExport() {
+    try { const r = await fetch(mediaUrl('/export/logs')); const j = await r.json(); logFiles = Array.isArray(j) ? j.map((f: { name?: string } | string) => (typeof f === 'string' ? f : f.name ?? '')).filter(Boolean) : (j.files ?? []) } catch { logFiles = [] }
+  }
   let license = $state<{ name: string; text: string } | null>(null)
   async function loadLog() { logText = await octave.call<string>('diagnosticsManager', 'recentLogLines', 200).catch(() => '') }
   $effect(() => { if (tab === 'diagnostics') loadLog() })
@@ -214,12 +219,17 @@
       <p class="small muted">{$diag.deviceInfo}</p>
       <p class="small muted num">Logs in {$diag.logDir}</p>
       <div class="acts wrap">
-        <button class="btn primary" onclick={async () => { const p = await act(octave.call<string>('diagnosticsManager', 'exportLogs')); if (p) toast(`Exported to ${p}`) }}><Icon name="share" />Export logs</button>
+        <button class="btn primary" onclick={async () => { const p = await act(octave.call<string>('diagnosticsManager', 'exportLogs')); if (p) { toast(`Exported on the head unit: ${p.split('/').pop()}`); listExport() } }}><Icon name="share" />Export logs</button>
         <button class="btn" onclick={() => act(octave.call('diagnosticsManager', 'copyLogsToClipboard', 500), 'Copied on the head unit')}>Copy to clipboard</button>
         {#if $diag.canOpenFolder}<button class="btn" onclick={() => act(octave.call('diagnosticsManager', 'openLogFolder'))}><Icon name="folder" />Open folder</button>{/if}
         <button class="btn icon" aria-label="Refresh" onclick={loadLog}><Icon name="refresh" /></button>
       </div>
       {#if $diag.lastExportPath}<p class="small muted num">Last export: {$diag.lastExportPath}</p>{/if}
+      {#if logFiles.length}
+        <div class="acts wrap">
+          {#each logFiles as f}<a class="btn" href={mediaUrl('/export/logs', { file: f })} download={f}><Icon name="download" />{f}</a>{/each}
+        </div>
+      {/if}
       <pre class="log small">{logText || 'No log lines.'}</pre>
     </div>
   {/if}
@@ -246,6 +256,7 @@
   .log { margin: 0; max-height: 420px; overflow: auto; background: var(--control); border-radius: var(--radius-s); padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
   .qr { font-family: ui-monospace, monospace; line-height: 1; font-size: 10px; background: #fff; color: #000; padding: 12px; border-radius: 12px; display: inline-block; }
   .bad { color: var(--bad); }
+  a.btn { text-decoration: none; }
   .link { color: var(--accent); font-weight: 600; text-decoration: underline; }
   .screen { height: 420px; }
   @media (max-width: 760px) { .screen { height: 60vh; } .target { flex-direction: column; align-items: stretch; } .target .sel { max-width: none; } }

@@ -7,11 +7,20 @@ import { parseRecord, type StreamHandlers, type StreamInfo } from './stream.js'
 
 /** The protocol version this client was written against (docs/api/README.md). */
 export const PROTOCOL_VERSION = 1
+/** The versions this client accepts: 1, and 2 (pairing; everything else is additive). */
+export const PROTOCOL_VERSIONS = [1, 2]
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
 export type Status = 'connecting' | 'online' | 'offline' | 'mismatch'
 
-export interface Hello { protocolVersion: number; app: { version: string; build: string; headless: boolean }; objects: string[] }
+export interface Hello {
+  protocolVersion: number
+  app: { version: string; build: string; headless: boolean }
+  objects: string[]
+  /** Protocol 2: whether this connection may use the service, and whether loopback is open without pairing. */
+  auth?: 'trusted' | 'untrusted'
+  loopbackOpen?: boolean
+}
 export interface PropertyMeta { name: string; type: string; readable: boolean; writable: boolean; constant?: boolean; notify?: string; enum?: string[] }
 export interface ParamMeta { name: string; type: string }
 export interface MethodMeta { name: string; kind: string; params: ParamMeta[]; returns?: string }
@@ -45,6 +54,8 @@ export interface ClientOptions {
   /** Reconnect backoff bounds in ms. */
   minBackoffMs?: number
   maxBackoffMs?: number
+  /** A paired device's token (protocol 2), sent with hello on every connection. */
+  token?: string
 }
 
 export function defaultUrl(): string {
@@ -56,7 +67,8 @@ export function defaultUrl(): string {
 /** One connection to OCTAVE. */
 export class OctaveClient {
   readonly url: string
-  private opts: Required<Omit<ClientOptions, 'url'>>
+  private opts: Required<Omit<ClientOptions, 'url' | 'token'>>
+  private token: string | undefined
   private ws: WebSocket | null = null
   private _status: Status = 'offline'
   private _hello: Hello | null = null
@@ -73,10 +85,29 @@ export class OctaveClient {
   constructor(options: ClientOptions = {}) {
     this.url = options.url ?? defaultUrl()
     this.opts = { checkVersion: options.checkVersion ?? true, minBackoffMs: options.minBackoffMs ?? 500, maxBackoffMs: options.maxBackoffMs ?? 8000 }
+    this.token = options.token
     this.backoff = this.opts.minBackoffMs
   }
 
   get status(): Status { return this._status }
+  /** True when the current connection may use the service (protocol 1, or protocol 2 trusted). */
+  get trusted(): boolean { return this._status === 'online' && (this._hello?.auth ?? 'trusted') === 'trusted' }
+
+  /** Use this token from the next connection on (protocol 2). Pass undefined to forget it. */
+  setToken(token: string | undefined): void { this.token = token }
+
+  /** Pair this device with a code from the head unit's Settings; the token is
+   *  kept for later connections and returned so the caller can store it. */
+  async pair(code: string, name: string): Promise<string> {
+    const r = (await this.send0('pair', { code, name })) as { token: string }
+    this.token = r.token
+    if (this._hello) this._hello.auth = 'trusted'
+    return r.token
+  }
+  /** Forget this device on the head unit, and the token here. */
+  async unpair(): Promise<void> { await this.request('unpair', {}); this.token = undefined }
+  /** A short-lived ticket for /art and /export URLs (never put the token in a URL). */
+  mediaTicket(): Promise<{ ticket: string; expiresIn: number }> { return this.request('mediaTicket', {}) as unknown as Promise<{ ticket: string; expiresIn: number }> }
   /** The last `hello` reply, once online. */
   get hello(): Hello | null { return this._hello }
 
@@ -129,10 +160,10 @@ export class OctaveClient {
     ws.onopen = async () => {
       this.backoff = this.opts.minBackoffMs
       try {
-        const hello = (await this.send0('hello', {})) as unknown as Hello
+        const hello = (await this.send0('hello', this.token ? { token: this.token } : {})) as unknown as Hello
         this._hello = hello
         for (const f of this.listeners.hello) f(hello)
-        if (this.opts.checkVersion && hello.protocolVersion !== PROTOCOL_VERSION) { this.setStatus('mismatch'); return }
+        if (this.opts.checkVersion && !PROTOCOL_VERSIONS.includes(hello.protocolVersion)) { this.setStatus('mismatch'); return }
         this.setStatus('online')
         for (const sub of this.subs) this.issue(sub)
       } catch {

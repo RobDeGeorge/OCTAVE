@@ -5,6 +5,8 @@
   import NowPlayingCard from '../ui/NowPlayingCard.svelte'
   import Modal from '../ui/Modal.svelte'
   import Icon from '../ui/Icon.svelte'
+  import Art from '../ui/Art.svelte'
+  import { mediaUrl, ticket } from '../lib/media'
 
   interface Song { file: string; title: string; artist: string; album: string; duration: string }
 
@@ -108,6 +110,7 @@
         <li class:now={s.file === currentFile}>
           <button class="play" onclick={() => act(octave.call('mediaManager', 'play_file', s.file))}>
             <span class="mark">{#if s.file === currentFile}<Icon name={$nowPlaying.playing ? 'pause' : 'play'} size={20} />{/if}</span>
+            {#key $ticket}<Art title={s.title} artist={s.artist} url={mediaUrl('/art', { song: s.file })} size={48} />{/key}
             <span class="t">
               <span class="title">{s.title}</span>
               <span class="sub muted small">{[s.artist, s.album].filter(Boolean).join(' – ')}</span>
