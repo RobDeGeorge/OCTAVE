@@ -6,6 +6,7 @@
 #include "metadescribe.h"
 #include "protocol.h"
 #include "serviceregistry.h"
+#include "streamhub.h"
 
 #include <QAbstractItemModel>
 #include <QElapsedTimer>
@@ -289,6 +290,35 @@ void ServiceBridge::install(CommandServer &server)
     });
 
     server.registerOp(QStringLiteral("subscribe"), [this](const QVariantMap &args) { return subscribe(args); });
+
+    // Media streams (streamhub.h): binary records on this connection.
+    // When pairing lands this needs an authorised client like every op.
+    server.registerOp(QStringLiteral("stream"), [this](const QVariantMap &args) -> QVariant {
+        const QString objectName = args.value(QStringLiteral("object")).toString();
+        object(objectName);   // an unknown object is an error, as for any op
+        const QString name = objectName + QLatin1Char('.') + args.value(QStringLiteral("name")).toString();
+        std::shared_ptr<Connection> connection = CommandServer::currentConnection();
+        if (!connection)
+            throw CommandError(QStringLiteral("stream needs a connection"));
+        StreamHub &hub = StreamHub::instance();
+        const int id = hub.subscribe(name, connection);
+        if (id == 0)
+            throw CommandError(hub.names().contains(name) ? QStringLiteral("too many streams on this connection")
+                                                          : QStringLiteral("%1 has no stream %2")
+                                                                .arg(objectName, args.value(QStringLiteral("name")).toString()));
+        const Connection *key = connection.get();
+        connection->onClose([key] { StreamHub::instance().unsubscribeAll(key); });
+        QVariantMap reply = hub.info(name);
+        reply.insert(QStringLiteral("stream"), id);
+        return reply;
+    });
+    server.registerOp(QStringLiteral("unstream"), [](const QVariantMap &args) -> QVariant {
+        std::shared_ptr<Connection> connection = CommandServer::currentConnection();
+        if (!connection)
+            throw CommandError(QStringLiteral("unstream needs a connection"));
+        StreamHub::instance().unsubscribe(connection, args.value(QStringLiteral("stream")).toInt());
+        return true;
+    });
     server.registerOp(QStringLiteral("unsubscribe"), [this](const QVariantMap &args) { return unsubscribe(args); });
 
     // Meta-objects are static data: no GUI-thread hop needed

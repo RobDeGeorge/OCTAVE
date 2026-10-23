@@ -61,15 +61,28 @@ class CommandTcpServer;
 // service protocol's subscriptions). Events are queued from any thread and
 // written by the connection's own thread between requests; a client that
 // stops reading loses the oldest events (a {"event": "dropped"} line says
-// how many) instead of growing the queue without bound.
+// how many) instead of growing the queue without bound. Media stream
+// records (streamhub.h) share the queue, so a streamConfig event and the
+// records after it keep their order; they are capped separately, by bytes.
 class Connection
 {
 public:
     static constexpr int kMaxQueuedEvents = 1000;
+    static constexpr qint64 kMaxQueuedRecordBytes = 2 * 1024 * 1024;
+    static constexpr int kMaxQueuedRecords = 90;
+
+    struct Item {
+        QByteArray bytes;
+        bool binary = false;   // a stream record (else a JSON line)
+    };
 
     ~Connection();
     void push(const QByteArray &jsonLine);   // thread-safe
-    QList<QByteArray> takeAll();             // thread-safe
+    // A stream record; false when it would pass the caps, in which case
+    // every queued record is dropped too (the stream restarts at a
+    // keyframe). Thread-safe
+    bool pushRecord(const QByteArray &record);
+    QList<Item> takeAll();                   // thread-safe
     // Run on the GUI thread when the client goes (subscriptions use it)
     void onClose(std::function<void()> cleanup);
     void close();
@@ -78,7 +91,9 @@ public:
 
 private:
     mutable QMutex m_lock;
-    QList<QByteArray> m_queue;
+    QList<Item> m_queue;
+    qint64 m_recordBytes = 0;
+    int m_records = 0;
     int m_dropped = 0;
     bool m_closed = false;
     std::atomic<int> m_lastId{0};

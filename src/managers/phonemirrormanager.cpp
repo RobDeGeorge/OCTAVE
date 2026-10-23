@@ -1555,6 +1555,12 @@ void PhoneMirrorManager::onMediaQueueArt(const QString &key, const QByteArray &j
     m_queueArtTimer.start();
 }
 
+void PhoneMirrorManager::requestVideoKeyframe()
+{
+    if (m_client && m_client->isRunning())
+        m_client->requestKeyframe();
+}
+
 QString PhoneMirrorManager::queueArtFile(qint64 id) const
 {
     for (const QVariant &v : m_mediaQueue) {

@@ -17,6 +17,7 @@
 #ifndef Q_OS_MOBILE
 
 #include <QObject>
+#include <functional>
 #include <QProcess>
 #include <QString>
 #include <QTimer>
@@ -41,6 +42,9 @@ public:
                         const QSize &requestedSize) override;
 
     void updateFrame(const QImage &image);
+    // Every frame also goes to `tap` (the service's "androidAutoManager.
+    // frames" stream, set once at startup; unset = nothing extra)
+    static void setFrameTap(std::function<void(const QImage &)> tap);
 
 private:
     QImage  m_currentImage;

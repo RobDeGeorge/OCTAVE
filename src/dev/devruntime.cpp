@@ -3,6 +3,7 @@
 #include "carsim.h"
 #include "collagebridge.h"
 #include "../service/commandserver.h"
+#include "../service/streamhub.h"
 #include "coreactions.h"
 #include "devimufeed.h"
 #include "devtoolsmanager.h"
@@ -13,6 +14,8 @@
 #include "../managers/obdmanager.h"
 
 #include <QDateTime>
+#include <QFile>
+#include <QTimer>
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
@@ -155,6 +158,54 @@ void Runtime::startHeadless(CommandServer *server)
     }
 }
 
+void Runtime::setVideoSim(bool on)
+{
+    if (!on) {
+        if (m_videoTimer)
+            m_videoTimer->stop();
+        qCInfo(lcDev) << "sim_video off";
+        return;
+    }
+    if (m_videoUnits.isEmpty()) {
+        QFile f(m_app.projectRoot.filePath(QStringLiteral("tests/data/stream-test.h264")));
+        if (!f.open(QIODevice::ReadOnly)) {
+            qCWarning(lcDev) << "sim_video: no" << f.fileName() << "(tools/stream/make_test_h264.sh makes it)";
+            return;
+        }
+        m_videoUnits = OctaveService::H264::accessUnits(f.readAll());
+    }
+    if (!m_videoTimer) {
+        m_videoTimer = new QTimer(this);
+        m_videoTimer->setTimerType(Qt::PreciseTimer);
+        m_videoTimer->setInterval(33);
+        connect(m_videoTimer, &QTimer::timeout, this, &Runtime::videoSimTick);
+    }
+    m_videoTimer->start();
+    qCInfo(lcDev) << "sim_video on:" << m_videoUnits.size() << "frames looped into phoneMirrorManager.video";
+}
+
+void Runtime::videoSimTick()
+{
+    if (m_videoUnits.isEmpty())
+        return;
+    // As ScrcpyClient hands them over: parameter sets as a config packet,
+    // then the picture with its key flag
+    const QByteArray &unit = m_videoUnits.at(int(m_videoFrame % m_videoUnits.size()));
+    QByteArray config, picture;
+    bool key = false;
+    for (const QByteArray &nal : OctaveService::H264::nalUnits(unit)) {
+        const int type = quint8(nal.at(0)) & 0x1F;
+        (type == 7 || type == 8 ? config : picture) += QByteArray("\x00\x00\x00\x01", 4) + nal;
+        key = key || type == 5;
+    }
+    auto &hub = OctaveService::StreamHub::instance();
+    const QString name = QStringLiteral("phoneMirrorManager.video");
+    if (!config.isEmpty())
+        hub.publishH264(name, config, 0, false, true);
+    hub.publishH264(name, picture, m_videoFrame * 1000000 / 30, key, false);
+    ++m_videoFrame;
+}
+
 void Runtime::shutdown()
 {
     if (m_perf)
@@ -230,6 +281,13 @@ void Runtime::registerSimActions()
         CommandServer::postGui([imu, on] { if (imu) imu->setEnabled(on); });
         return QVariantMap{{QStringLiteral("queued"), QStringLiteral("sim_imu")}};
     });
+    // The phone's picture without a phone: a test H.264 file (two
+    // resolutions, so clients see a config change) into the same stream
+    m_server->registerAction("sim_video", [this](const QVariantMap &a) -> QVariant {
+        const bool on = a.value(QStringLiteral("on"), true).toBool();
+        CommandServer::postGui([this, on] { setVideoSim(on); });
+        return QVariantMap{{QStringLiteral("queued"), QStringLiteral("sim_video")}};
+    });
     m_server->registerAction("sim_status", [sim, imu](const QVariantMap &) {
         return CommandServer::onGui([sim, imu] {
             QVariantMap st = sim ? sim->status() : QVariantMap();
@@ -240,7 +298,7 @@ void Runtime::registerSimActions()
     });
     std::fprintf(stdout, "[DEV] Simulator actions on the command server: sim_throttle, sim_brake, sim_rev, sim_engine, "
                          "sim_gear, sim_upshift, sim_downshift, sim_speed, sim_rpm, sim_scenario, sim_realistic, "
-                         "sim_dropouts, sim_dropout_now, sim_failure_rate, sim_link, sim_status, sim_imu\n");
+                         "sim_dropouts, sim_dropout_now, sim_failure_rate, sim_link, sim_status, sim_imu, sim_video\n");
     std::fflush(stdout);
 }
 

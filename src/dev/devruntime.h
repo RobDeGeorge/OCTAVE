@@ -29,6 +29,7 @@ class BerryIMUManager;
 class OBDManager;
 class QQmlApplicationEngine;
 class QQuickItem;
+class QTimer;
 
 namespace OctaveDev {
 
@@ -81,6 +82,10 @@ public:
 private:
     void installSim();
     void registerSimActions();
+    // sim_video: tests/data/stream-test.h264 looped into the
+    // phoneMirrorManager.video stream at 30 fps, as the phone would send it
+    void setVideoSim(bool on);
+    void videoSimTick();
 
     AppObjects m_app;
     bool m_dev = false;
@@ -95,6 +100,9 @@ private:
     CollageBridge *m_collage = nullptr;
     CommandServer *m_server = nullptr;   // main.cpp's
     QPointer<QQuickItem> m_overlay;
+    QTimer *m_videoTimer = nullptr;
+    QList<QByteArray> m_videoUnits;
+    qint64 m_videoFrame = 0;
 };
 
 } // namespace OctaveDev
