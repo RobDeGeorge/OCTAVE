@@ -10,7 +10,7 @@ export interface Item {
   /** For 'number' and 'slider': the save slot takes this type. */
   float?: boolean
 }
-export interface Section { title: string; items: Item[]; special?: 'themes' | 'shiftlight' | 'homeParams' | 'gestures' | 'esp32' | 'imu' | 'network' | 'power' | 'about' | 'mediaFolder' }
+export interface Section { title: string; items: Item[]; special?: 'presets' | 'themes' | 'shiftlight' | 'homeParams' | 'gestures' | 'esp32' | 'imu' | 'network' | 'power' | 'about' | 'mediaFolder' }
 export interface Group { id: string; title: string; icon: string; sections: Section[] }
 
 const opts = (...pairs: [string | number | boolean, string][]) => pairs.map(([value, label]) => ({ value, label }))
@@ -49,7 +49,7 @@ export const groups: Group[] = [
       { prop: 'returnToLibraryAfterSelection', slot: 'save_return_to_library_after_selection', label: 'Back to the library after choosing', kind: 'toggle' },
       { prop: 'textScrollSpeed', slot: 'save_text_scroll_speed', label: 'Text scroll speed', kind: 'slider', min: 1000, max: 10000, step: 500, unit: 'ms' },
     ] },
-    { title: 'Now playing', items: [
+    { title: 'Now playing', special: 'presets', items: [
       { prop: 'backgroundBlurRadius', slot: 'save_background_blur_radius', label: 'Album art blur', kind: 'slider', min: 0, max: 100, step: 1 },
       { prop: 'backgroundOverlayOpacity', slot: 'save_background_overlay_opacity', label: 'Dark overlay', kind: 'slider', min: 0, max: 100, step: 1, unit: '%' },
       { prop: 'roundedAlbumArt', slot: 'save_rounded_album_art', label: 'Rounded album art', kind: 'toggle' },

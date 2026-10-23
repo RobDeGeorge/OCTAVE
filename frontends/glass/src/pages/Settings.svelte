@@ -12,6 +12,7 @@
   import Imu from '../ui/Imu.svelte'
   import DeviceBits from '../ui/DeviceBits.svelte'
   import ThemePicker from '../ui/ThemePicker.svelte'
+  import Presets from '../ui/Presets.svelte'
   import Icon from '../ui/Icon.svelte'
 
   let { arg = '' }: { arg?: string } = $props()
@@ -70,6 +71,7 @@
               {#each s.items as item}<SettingRow {item} value={$values[item.prop]} options={optionsFor(item)} />{/each}
               <div class="sub"><HomeParams /></div>
             {:else}
+              {#if s.special === 'presets'}<Presets values={$values} />{/if}
               {#each s.items as item}<SettingRow {item} value={$values[item.prop]} options={optionsFor(item)} />{/each}
               {#if s.special === 'themes'}<div class="sub"><ThemePicker /></div>
               {:else if s.special === 'shiftlight'}<ShiftLightEditor />
