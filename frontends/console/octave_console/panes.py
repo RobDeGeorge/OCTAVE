@@ -404,13 +404,25 @@ class ObdPane(Pane):
         self.query_one("#dtcs").border_title = f"{len(codes or [])} code(s)"
 
     def show_freeze(self, frame):
+        """The stored frame: the code that stored it, then its values in the user's units."""
         if not frame:
-            text = "Freeze frame: none stored"
-        else:
-            text = "Freeze frame\n" + "\n".join(
-                "  " + ("  ".join(str(v) for v in row.values() if v not in ("", None)) if isinstance(row, dict) else str(row))
-                for row in frame)
-        self.query_one("#freeze", Static).update(text)
+            self.query_one("#freeze", Static).update("Freeze frame: none stored")
+            return
+        catalog = {r["id"]: r for r in self.app.state_of("parameterCatalog", "displayParameters", []) or []}
+        lines = ["Freeze frame"]
+        for row in frame:
+            if not isinstance(row, dict):
+                lines.append(f"  {row}")
+                continue
+            lines.append(f"  [b]{row.get('code', '?')}[/b]  {row.get('description') or ''}")
+            values = row.get("values") or {}
+            for pid in sorted(values, key=lambda p: catalog.get(p, {}).get("title", p)):
+                info = catalog.get(pid, {})
+                v = values[pid]
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    v = fmt_number(v * info.get("displayScale", 1) + info.get("displayOffset", 0), info.get("decimals", 1))
+                lines.append(f"    {info.get('title', pid):<24} {v:>9} {info.get('unit', '')}")
+        self.query_one("#freeze", Static).update("\n".join(lines))
 
     def linked(self):
         def got(codes):

@@ -267,3 +267,8 @@ Confirm, EditValue {
 #phone-right, #car-right, #sys-right {
     padding-left: 1;
 }
+
+#freeze {
+    max-height: 16;
+    overflow-y: auto;
+}
