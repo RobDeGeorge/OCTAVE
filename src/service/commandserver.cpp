@@ -22,6 +22,7 @@
 #include <QThread>
 #include <QUrl>
 #include <QVarLengthArray>
+#include <QtEndian>
 
 #include <atomic>
 #include <cstdio>
@@ -90,7 +91,9 @@ private:
             return;
         qCInfo(lcCommand) << "command client connected:" << sock.peerAddress().toString() << sock.peerPort();
         auto connection = std::make_shared<Connection>();
+        connection->setPeer(sock.peerAddress().isLoopback(), sock.peerAddress().toString());
         t_connection = connection;
+        m_owner->trackConnection(connection);
 
         // The first byte says which protocol: a JSON line starts with '{',
         // HTTP (a WebSocket upgrade or the reference page) with "GET"
@@ -113,6 +116,9 @@ private:
     bool pump(QTcpSocket &sock, QByteArray &buf)
     {
         if (m_stopping || sock.state() != QAbstractSocket::ConnectedState)
+            return false;
+        // Closed from elsewhere (its device revoked): drop the socket
+        if (const auto c = t_connection; c && c->isClosed())
             return false;
         // Data that waitForBytesWritten() already pulled in counts too (else
         // a pipelined request would sit there until the next one came)
@@ -140,9 +146,17 @@ private:
             }
             // Events only after the replies: a subscribe's reply (its sub
             // id) always precedes that subscription's first event. Only this
-            // thread writes to the socket, so the order holds
-            for (const QByteArray &event : connection.takeAll())
-                sock.write(event);
+            // thread writes to the socket, so the order holds. A stream
+            // record goes out as 0xFF, u32 length, the record: a JSON line
+            // never starts with 0xFF
+            for (const Connection::Item &item : connection.takeAll()) {
+                if (item.binary) {
+                    char head[5] = {char(0xFF)};
+                    qToBigEndian<quint32>(quint32(item.bytes.size()), head + 1);
+                    sock.write(head, 5);
+                }
+                sock.write(item.bytes);
+            }
             flush(sock);
         } while (pump(sock, buf));
     }
@@ -180,6 +194,12 @@ private:
         }
         if (!Ws::isUpgrade(request) && request.method == "GET") {
             if (const CommandServer::Route route = m_owner->route(StaticFiles::pathOf(request.path))) {
+                if (!m_owner->httpTrusted(connection, request.headers, request.path)) {
+                    sock.write(Ws::httpResponse(401, "Unauthorized", "text/plain", "pair first; use a media ticket\n",
+                                                Ws::webRootCsp(request.headers.value("host"))));
+                    flush(sock);
+                    return;
+                }
                 StaticFiles::Reply r;
                 try {
                     r = route(request.path);
@@ -252,9 +272,14 @@ private:
                 flush(sock);
                 return;
             }
-            // As for lines: replies first, then the events queued meanwhile
-            for (const QByteArray &event : connection.takeAll())
-                sendText(event);
+            // As for lines: replies first, then the events queued meanwhile;
+            // a stream record is one binary frame
+            for (const Connection::Item &item : connection.takeAll()) {
+                if (item.binary)
+                    sock.write(Ws::encodeFrame(Ws::Binary, item.bytes));
+                else
+                    sendText(item.bytes);
+            }
             flush(sock);
         } while (pump(sock, incoming));
     }
@@ -279,25 +304,49 @@ void Connection::push(const QByteArray &jsonLine)
     QMutexLocker l(&m_lock);
     if (m_closed)
         return;
-    m_queue.append(jsonLine);
-    while (m_queue.size() > kMaxQueuedEvents) {
-        m_queue.removeFirst();
+    m_queue.append(Item{jsonLine, false});
+    while (m_queue.size() - m_records > kMaxQueuedEvents) {
+        for (int i = 0; i < m_queue.size(); ++i) {
+            if (!m_queue.at(i).binary) {
+                m_queue.removeAt(i);
+                break;
+            }
+        }
         ++m_dropped;
     }
 }
 
-QList<QByteArray> Connection::takeAll()
+bool Connection::pushRecord(const QByteArray &record)
 {
     QMutexLocker l(&m_lock);
-    QList<QByteArray> out;
+    if (m_closed)
+        return false;
+    if (m_records + 1 > kMaxQueuedRecords || m_recordBytes + record.size() > kMaxQueuedRecordBytes) {
+        m_queue.removeIf([](const Item &i) { return i.binary; });
+        m_records = 0;
+        m_recordBytes = 0;
+        return false;
+    }
+    m_queue.append(Item{record, true});
+    ++m_records;
+    m_recordBytes += record.size();
+    return true;
+}
+
+QList<Connection::Item> Connection::takeAll()
+{
+    QMutexLocker l(&m_lock);
+    QList<Item> out;
     if (m_dropped > 0) {
-        out.append(QJsonDocument(QJsonObject{{QStringLiteral("event"), QStringLiteral("dropped")},
-                                             {QStringLiteral("count"), m_dropped}})
-                       .toJson(QJsonDocument::Compact) + '\n');
+        out.append(Item{QJsonDocument(QJsonObject{{QStringLiteral("event"), QStringLiteral("dropped")},
+                                                  {QStringLiteral("count"), m_dropped}})
+                            .toJson(QJsonDocument::Compact) + '\n', false});
         m_dropped = 0;
     }
     out.append(m_queue);
     m_queue.clear();
+    m_records = 0;
+    m_recordBytes = 0;
     return out;
 }
 
@@ -325,6 +374,65 @@ void Connection::close()
     }
     for (auto &c : cleanups)
         CommandServer::postGui(std::move(c));
+}
+
+void Connection::setPeer(bool loopback, const QString &address)
+{
+    QMutexLocker l(&m_lock);
+    m_peerLoopback = loopback;
+    m_peerAddress = address;
+}
+
+bool Connection::peerLoopback() const
+{
+    QMutexLocker l(&m_lock);
+    return m_peerLoopback;
+}
+
+QString Connection::peerAddress() const
+{
+    QMutexLocker l(&m_lock);
+    return m_peerAddress;
+}
+
+void Connection::setTokenId(const QString &id)
+{
+    QMutexLocker l(&m_lock);
+    m_tokenId = id;
+}
+
+QString Connection::tokenId() const
+{
+    QMutexLocker l(&m_lock);
+    return m_tokenId;
+}
+
+void CommandServer::trackConnection(const std::shared_ptr<Connection> &c)
+{
+    QMutexLocker l(&m_connectionsLock);
+    m_connections.removeIf([](const std::weak_ptr<Connection> &w) { return w.expired(); });
+    m_connections.append(c);
+}
+
+bool CommandServer::httpTrusted(const Connection &c, const QHash<QByteArray, QByteArray> &headers,
+                                const QByteArray &target) const
+{
+    return !m_httpTrusted || m_httpTrusted(c, headers, target);
+}
+
+void CommandServer::closeConnectionsOf(const QString &tokenId)
+{
+    if (tokenId.isEmpty())
+        return;
+    QList<std::shared_ptr<Connection>> doomed;
+    {
+        QMutexLocker l(&m_connectionsLock);
+        for (const auto &w : std::as_const(m_connections))
+            if (auto c = w.lock(); c && c->tokenId() == tokenId)
+                doomed.append(c);
+    }
+    for (const auto &c : doomed)
+        c->close();   // its cleanups (subscriptions, streams, demand) run; its thread drops the socket
 }
 
 bool Connection::isClosed() const
@@ -449,6 +557,16 @@ QByteArray CommandServer::handleLine(const QByteArray &line)
         const QString name = cmd.value(isOp ? QStringLiteral("op") : QStringLiteral("action")).toString();
         if (cmd.contains(QStringLiteral("id")))
             reply[QStringLiteral("id")] = cmd.value(QStringLiteral("id"));
+        // Trust is checked as each op runs, so a revoke takes effect at once
+        if (m_trusted && !m_openOps.contains(name)) {
+            const std::shared_ptr<Connection> c = currentConnection();
+            if (!c || !m_trusted(*c)) {
+                reply[QStringLiteral("ok")] = false;
+                reply[QStringLiteral("error")] = QStringLiteral("not paired: pair with the code shown in OCTAVE's Settings");
+                reply[QStringLiteral("code")] = QStringLiteral("unauthorised");
+                return QJsonDocument(reply).toJson(QJsonDocument::Compact) + '\n';
+            }
+        }
         try {
             QVariant result;
             if (isOp) {

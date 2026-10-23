@@ -36,6 +36,7 @@ const QHash<QString, QString> kQmlOnly = {
     {"wikiViewerAvailable", "whether this build embeds a web view"},
     {"wikiHomeUrl", "where the embedded web view finds the wiki"},
     {"assetStore", "file:// URLs for QML's own asset loaders"},
+    {"servicePairing", "pairing codes, paired devices, the service switch: head-unit only by design"},
     {"devMode", "dev tooling (--dev), not in release builds"},
     {"devKeyboardController", "dev tooling (--dev), not in release builds"},
     {"devToolsManager", "dev tooling (--dev), not in release builds"},

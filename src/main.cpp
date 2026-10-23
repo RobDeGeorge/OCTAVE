@@ -16,6 +16,10 @@
 #include <QTimer>
 #include <QPointer>
 #include <QUrl>
+#include <QBuffer>
+#include <QDateTime>
+#include <QElapsedTimer>
+#include <QImage>
 #include <QtQml/qqml.h>
 #ifdef OCTAVE_HAVE_WEBENGINE
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
@@ -40,6 +44,10 @@ extern "C" {
 #include "service/servicebridge.h"
 #include "service/apidump.h"
 #include "service/serviceoptions.h"
+#include "service/streamhub.h"
+#ifndef Q_OS_MOBILE
+#include "phone_mirror/scrcpyclient.h"
+#endif
 
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MOBILE)
 #include <QSocketNotifier>
@@ -175,6 +183,45 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
             return OctaveService::StaticFiles::serveFromFolder(
                 lastExport(diagnostics.data()), OctaveService::StaticFiles::queryValue(target, QStringLiteral("file")));
         });
+        // Media streams (src/service/streamhub.h): the phone's H.264 as it
+        // arrives and Android Auto's frames as JPEG, to `stream` clients
+#ifndef Q_OS_MOBILE
+        {
+            using OctaveService::StreamHub;
+            QPointer<PhoneMirrorManager> phoneForKeys = &core.phoneMirrorManager;
+            StreamHub::instance().declare(QStringLiteral("phoneMirrorManager.video"), [phoneForKeys]() {
+                QMetaObject::invokeMethod(phoneForKeys, [phoneForKeys] {
+                    if (phoneForKeys)
+                        phoneForKeys->requestVideoKeyframe();
+                }, Qt::QueuedConnection);
+            });
+            ScrcpyClient::setVideoTap({
+                [] { return StreamHub::instance().wanted(QStringLiteral("phoneMirrorManager.video")); },
+                [](const QByteArray &annexB, qint64 ptsUs, bool key, bool config) {
+                    StreamHub::instance().publishH264(QStringLiteral("phoneMirrorManager.video"), annexB, ptsUs, key, config);
+                }});
+            StreamHub::instance().declare(QStringLiteral("androidAutoManager.frames"));
+            DhuFrameProvider::setFrameTap([](const QImage &image) {
+                // Encoded only while someone watches, at most 15 frames a second
+                static QElapsedTimer last;
+                if (image.isNull() || !StreamHub::instance().wanted(QStringLiteral("androidAutoManager.frames"))
+                    || (last.isValid() && last.elapsed() < 66))
+                    return;
+                last.start();
+                QByteArray jpeg;
+                QBuffer buffer(&jpeg);
+                buffer.open(QIODevice::WriteOnly);
+                image.save(&buffer, "JPEG", 75);
+                StreamHub::instance().publishJpeg(QStringLiteral("androidAutoManager.frames"), jpeg,
+                                                  QDateTime::currentMSecsSinceEpoch() * 1000);
+            });
+        }
+#endif
+        // Protocol v2: pairing (servicepairing.h); a revoked device's
+        // connections close
+        service.bridge->setPairing(&core.servicePairing);
+        QObject::connect(&core.servicePairing, &ServicePairing::revoked, service.server.get(),
+                         [server = service.server.get()](const QString &id) { server->closeConnectionsOf(id); });
         // A client that goes without saying so leaves no demand behind
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setParameterDemand"), QStringList());
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setBackgroundDemand"), QStringList());
@@ -507,6 +554,9 @@ int main(int argc, char *argv[])
     // Assimp importer) must open themselves — extracted from the APK on Android.
     AssetStore assetStore(frontendDir.absoluteFilePath(QStringLiteral("assets")));
     ctx->setContextProperty("assetStore", &assetStore);
+    // Settings > Service: pairing codes, paired devices, the service switch
+    // (QML only: never a service object)
+    ctx->setContextProperty("servicePairing", &core.servicePairing);
 
     // Optional QML modules, checked without loading them: CarMenu's 3D view
     // needs QtQuick3D (SensorHome greys its card without it); the music

@@ -168,6 +168,8 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("blackBoxMaxMB")]         = 500;
     d[QStringLiteral("serviceEnabled")]        = false;   // the service at every start (src/service/serviceoptions.h)
     d[QStringLiteral("serviceWebRoot")]        = QString();   // a frontend served at GET / ("" = the reference client)
+    d[QStringLiteral("serviceLoopbackOpen")]   = true;    // programs on this device need no pairing (ServicePairing)
+    d[QStringLiteral("serviceTokens")]         = QJsonArray();   // paired devices: [{id, name, hash, created, lastUsed}]
 
     // OBD parameters
     QJsonObject obdParams;
@@ -2185,8 +2187,16 @@ void SettingsManager::toggle_pin_setting(const QString &settingId)
 // --- Generic setting access ---
 const QStringList &SettingsManager::fileOnlyKeys()
 {
-    static const QStringList keys = {QStringLiteral("serviceEnabled"), QStringLiteral("serviceWebRoot")};
+    static const QStringList keys = {QStringLiteral("serviceEnabled"), QStringLiteral("serviceWebRoot"),
+                                     QStringLiteral("serviceLoopbackOpen"), QStringLiteral("serviceTokens")};
     return keys;
+}
+
+void SettingsManager::saveFileOnlySetting(const QString &key, const QVariant &value)
+{
+    if (!fileOnlyKeys().contains(key))
+        return;
+    updateSetting(key, value);
 }
 
 QVariantList SettingsManager::nowPlayingPresets()

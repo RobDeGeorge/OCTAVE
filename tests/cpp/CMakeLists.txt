@@ -216,6 +216,8 @@ octave_add_test(tst_servicebridge
             service/serviceregistry.h service/serviceregistry.cpp service/servicebridge.h service/servicebridge.cpp
             service/metadescribe.h service/metadescribe.cpp
             service/websocket.h service/websocket.cpp service/staticfiles.h service/staticfiles.cpp
+            service/streamhub.h service/streamhub.cpp service/servicepairing.h service/servicepairing.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
             util/variantlistmodel.h util/variantlistmodel.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 octave_add_test(tst_serviceoptions SOURCES service/serviceoptions.h service/serviceoptions.cpp LIBS Qt6::Network)
@@ -235,6 +237,16 @@ octave_add_test(tst_websocket
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 # --web-root: what a frontend directory serves, and what it refuses
 octave_add_test(tst_staticfiles SOURCES service/staticfiles.h service/staticfiles.cpp)
+# Protocol v2 pairing: codes, limits, hashed tokens, revoke, media tickets
+octave_add_test(tst_servicepairing
+    SOURCES service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui)
+set_tests_properties(tst_servicepairing PROPERTIES TIMEOUT 120)
+# Media streams: the H.264 helpers and the hub's join / drop / config rules
+octave_add_test(tst_streamhub
+    SOURCES service/streamhub.h service/streamhub.cpp service/commandserver.h service/commandserver.cpp
+            service/websocket.h service/websocket.cpp service/staticfiles.h service/staticfiles.cpp
+    LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 
 # The Python SDK (sdk/python) against a real `octave --headless`
 find_package(Python3 COMPONENTS Interpreter)

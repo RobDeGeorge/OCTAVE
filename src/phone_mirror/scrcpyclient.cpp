@@ -124,6 +124,14 @@ static bool isBlackFrame(const AVFrame *f, bool lenient)
 
 // Frame header flags (app/src/demuxer.c)
 constexpr quint64 kFlagConfig = quint64(1) << 63;
+constexpr quint64 kFlagKeyFrame = quint64(1) << 62;
+constexpr quint8 kMsgResetVideo = 17;   // ControlMessage.TYPE_RESET_VIDEO
+
+ScrcpyClient::VideoTap &videoTap()
+{
+    static ScrcpyClient::VideoTap tap;
+    return tap;
+}
 constexpr quint64 kPtsMask = (quint64(1) << 62) - 1;   // below the config / key-frame flags
 
 // Audio stream (phone_server/.../audio/AudioConfig.java, device/Streamer.java)
@@ -419,6 +427,16 @@ void ScrcpyClient::mediaCommand(int action, qint64 argument)
     msg[1] = char(action);
     qToBigEndian<qint64>(argument, msg.data() + 2);
     sendControl(msg);
+}
+
+void ScrcpyClient::setVideoTap(VideoTap tap)
+{
+    videoTap() = std::move(tap);
+}
+
+void ScrcpyClient::requestKeyframe()
+{
+    sendControl(QByteArray(1, char(kMsgResetVideo)));
 }
 
 void ScrcpyClient::sendBitRate(int bps)
@@ -786,8 +804,13 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0, const std::function<v
             break;
         if (ptsFlags & kFlagConfig) {
             pendingConfig = data;          // SPS/PPS: prepend to the next packet
+            if (videoTap().publish)
+                videoTap().publish(data, 0, false, true);
             continue;
         }
+        // Service stream clients get the packet as it came, before decoding
+        if (videoTap().publish && videoTap().wanted && videoTap().wanted())
+            videoTap().publish(data, qint64(ptsFlags & kPtsMask), (ptsFlags & kFlagKeyFrame) != 0, false);
         if (!rateAnnounced) {
             rateAnnounced = true;
             const int bps = abr ? abr->takeInitial() : m_startBitRate;

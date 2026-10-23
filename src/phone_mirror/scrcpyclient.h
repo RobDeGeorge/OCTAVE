@@ -40,6 +40,20 @@ class ScrcpyClient : public QObject
 {
     Q_OBJECT
 public:
+    // The H.264 as it arrives, for the service's media streams
+    // (src/service/streamhub.h), set once at startup before any session:
+    // `publish(annexB, ptsUs, key, config)` gets every config (SPS/PPS)
+    // packet and, while `wanted()`, every picture, on the video thread.
+    // Unset in tests and builds without the service: nothing is copied.
+    struct VideoTap {
+        std::function<bool()> wanted;
+        std::function<void(const QByteArray &, qint64, bool, bool)> publish;
+    };
+    static void setVideoTap(VideoTap tap);
+    // Ask the phone's encoder for a keyframe (RESET_VIDEO), for a stream
+    // client joining; thread-safe
+    void requestKeyframe();
+
     // OCTAVE's fork of the scrcpy server (phone_server/, org.octave.phoneserver);
     // the version string must match the jar's BuildConfig exactly.
     static constexpr const char *kServerVersion = "3.3.4-octave";

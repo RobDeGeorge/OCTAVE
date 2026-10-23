@@ -36,6 +36,7 @@
 #include "managers/phonemirrormanager.h"
 #include "managers/nowplaying.h"
 #include "managers/themecatalog.h"
+#include "service/servicepairing.h"
 #include "managers/downloadmanager.h"
 #include "managers/dashboardmanager.h"
 #include "util/fontcatalog.h"
@@ -83,6 +84,8 @@ public:
     DownloadManager downloadManager;
     FontCatalog fontCatalog;
     ThemeCatalog themeCatalog;
+    // Pairing and the service switch (not a service object: QML only)
+    ServicePairing servicePairing;
     DashboardManager dashboardManager;
 
 private:
