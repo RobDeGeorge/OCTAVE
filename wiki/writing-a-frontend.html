@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Writing a Frontend - OCTAVE Wiki</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wiki-layout">
+    <div class="content">
+      <div class="content-inner">
+        <div class="page-header">
+          <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Writing a Frontend</div>
+          <h1 class="page-title">Writing a Frontend</h1>
+          <p class="page-subtitle">Build your own OCTAVE screen, remote or script in any language: start the service, connect, discover, read, subscribe, control. The QML UI is one client of this API; yours can be another.</p>
+        </div>
+
+        <nav class="toc">
+          <h3>Table of Contents</h3>
+          <ul class="toc-list">
+            <li><a href="#what-you-get">What You Get</a></li>
+            <li><a href="#start">1. Start the Service</a></li>
+            <li><a href="#connect">2. Connect</a></li>
+            <li><a href="#discover">3. Discover</a></li>
+            <li><a href="#read">4. Read and Subscribe</a></li>
+            <li><a href="#control">5. Control</a></li>
+            <li><a href="#recipes">Recipes</a></li>
+            <li><a href="#headless">Being the Only UI</a></li>
+            <li><a href="#rules">Versioning and Security</a></li>
+            <li><a href="#limits">What Is Not Available Yet</a></li>
+          </ul>
+        </nav>
+
+        <h2 id="what-you-get">What You Get</h2>
+        <p>Every manager the bundled UI uses: settings, media and now playing, volume, OBD and the live value of every PID and IMU reading, the black box, the shift light, phone mirroring control, downloads, dashboards. Each one's properties, methods and signals are listed with their types in the generated <a href="api-reference.html">Service API Reference</a> (<span class="file-path">docs/api/</span>); what they mean is in <a href="signals-slots-reference.html">Signals &amp; Slots API</a>. <code>tst_conformance</code> guarantees the bundled UI uses nothing outside that list, so whatever it can do, your frontend can too.</p>
+        <p>Two working clients come with the repo: <span class="file-path">sdk/web/index.html</span> (plain JavaScript, about 250 lines) and <span class="file-path">sdk/python/octave_client</span> (stdlib only). Read one of them next to this page.</p>
+
+        <h2 id="start">1. Start the Service</h2>
+        <p>It is off by default. Any of these turns it on, listening on <code>127.0.0.1:9876</code>:</p>
+        <pre><code>./build/octave --service              <span class="cmt"># the normal UI, plus the service</span>
+./build/octave --service 9900         <span class="cmt"># another port</span>
+./build/octave --headless             <span class="cmt"># no UI at all: your frontend is the screen</span></code></pre>
+        <p>Or set <code>"serviceEnabled": true</code> in <code>settingsConfigure.json</code> (<a href="settings-reference.html">Settings Reference</a>) to have it at every start. For a phone or a second screen on the car's network add <code>--service-bind 0.0.0.0</code>; read <a href="#rules">Versioning and Security</a> first. A developer build's <code>--dev --profile</code> also starts it, with a simulated car that makes the OBD values move.</p>
+
+        <h2 id="connect">2. Connect</h2>
+        <p>Two transports on the same port carry the same JSON messages:</p>
+        <ul>
+          <li><strong>TCP, one JSON object per line</strong>, for any language with sockets. Requests carry <code>op</code> and an optional <code>id</code>, which the reply echoes so you can send several at once.</li>
+          <li><strong>WebSocket</strong> (<code>ws://host:9876/</code>), one object per text frame, for browsers. A browser may only connect from the service's own page, i.e. served by the app at <code>http://host:9876/</code> and opened by IP address. To host your own page there, replace <span class="file-path">sdk/web/index.html</span> (it is embedded in the binary). Non-browser WebSocket clients send no <code>Origin</code> and are not restricted.</li>
+        </ul>
+        <pre><code><span class="cmt"># a whole session by hand</span>
+$ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","property":"percent","id":2}\n' | nc -q1 127.0.0.1 9876
+{"id":1,"ok":true,"result":{"app":{"build":"release","headless":false,"version":"1.0.0"},"objects":["settingsManager",...],"protocolVersion":1}}
+{"id":2,"ok":true,"result":32}</code></pre>
+        <p>Every reply has <code>ok</code>; a failure has <code>"ok": false</code> and an <code>error</code> string. Anything with an <code>event</code> key is not a reply but a subscription event, and can arrive between replies.</p>
+
+        <h2 id="discover">3. Discover</h2>
+        <ul>
+          <li><code>hello</code>: the protocol version (check it), the app version, whether it is headless, and the object names.</li>
+          <li><code>describe {object}</code>: that object's properties (type, writable, notify signal, enum keys), methods (parameter types, return type) and signals. <code>describe</code> with no object returns all of them (about 110&nbsp;KB). It is the same data as <span class="file-path">docs/api/&lt;object&gt;.json</span>, so you can code against the files and check them at run time.</li>
+          <li><span class="file-path">docs/api/parameters.json</span> (or <code>get parameterCatalog parameters</code>): every OBD PID and IMU reading with its title, native unit, range and decimals.</li>
+        </ul>
+
+        <h2 id="read">4. Read and Subscribe</h2>
+        <pre><code>{"op":"get","object":"nowPlaying","property":"title","id":3}
+{"op":"subscribe","object":"nowPlaying","properties":["title","artist","playing","positionMs"],"throttleMs":250,"id":4}
+<span class="cmt">&larr; {"id":4,"ok":true,"result":{"sub":1}}</span>
+<span class="cmt">&larr; {"event":"property","sub":1,"object":"nowPlaying","name":"title","value":"Dream On","t":12345}</span>   <span class="cmt"># the current value at once, then each change</span></code></pre>
+        <ul>
+          <li><strong>Properties</strong>: a <code>property</code> event with the value at once and on every change. <code>throttleMs</code> caps it at one event per property per interval, carrying the latest value.</li>
+          <li><strong>Signals</strong>: <code>"signals": ["trackChanged"]</code> gives <code>signal</code> events with the arguments.</li>
+          <li><strong>Live OBD and IMU values</strong>: subscribe to <code>paramStore</code> with the ids you show as <code>properties</code>. You get <code>params</code> events, <code>{"values": {"RPM": 2210, "SPEED": 41}}</code>, in the native unit. OCTAVE only polls the car for what someone shows: call <code>obdManager.setParameterDemand("my-frontend", ["RPM","SPEED"])</code> for the ids on your screen, and an empty list when they leave it.</li>
+          <li><strong>Lists</strong> (search results, the download queue): <code>get</code> gives a summary, <code>rows</code> the rows, and a subscription sends <code>model</code> events (reset, insert, update, remove) to replay in order.</li>
+        </ul>
+        <p>A connection's subscriptions end with it. If you stop reading, the oldest events are dropped and a <code>{"event":"dropped","count":N}</code> says how many.</p>
+
+        <h2 id="control">5. Control</h2>
+        <pre><code>{"op":"call","object":"nowPlaying","method":"next","id":5}
+{"op":"call","object":"volumeController","method":"applyVolume","args":[40],"id":6}
+{"op":"set","object":"volumeController","property":"muted","value":true,"id":7}
+{"op":"call","object":"settingsManager","method":"save_show_clock","args":[false],"id":8}</code></pre>
+        <p>Most state is read-only and changes through a method, the same one the touch screen calls: settings through their <code>save_*</code> slots, media through <code>nowPlaying</code>, volume through <code>volumeController</code>. Arguments are converted to the declared types (an enum by name or number), and overloads are told apart by argument count. Methods run on the app's GUI thread, so a slow one holds the bundled UI just as a tap would.</p>
+
+        <h2 id="recipes">Recipes</h2>
+        <table>
+          <thead><tr><th>To</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Show what is playing, with controls</td><td><code>nowPlaying</code>: <code>title</code> / <code>artist</code> / <code>album</code> / <code>playing</code> / <code>positionMs</code> / <code>durationMs</code> / <code>source</code>; <code>togglePlay</code>, <code>next</code>, <code>previous</code>, <code>seek(ms)</code>. It covers the phone (while mirroring) and the local player alike.</td></tr>
+            <tr><td>Volume and mute</td><td><code>volumeController</code>: <code>percent</code>, <code>muted</code>, <code>applyVolume(0..100)</code>. Never call the media manager's own setters: VolumeController routes to every output and applies the curve.</td></tr>
+            <tr><td>Gauges in the user's units</td><td><code>parameterCatalog.displayParameters</code> (titles, units and ranges after the user's °F / km/h choice) and <code>parameterCatalog.toDisplay(id, value)</code>; <code>settingsManager.gaugeTempUnit</code> / <code>gaugeSpeedUnit</code>.</td></tr>
+            <tr><td>Connect to the car</td><td><code>obdManager</code>: <code>connectionState</code> (enum <code>ConnectionState</code>), <code>connectionLog</code>, the connect methods; Bluetooth adapters through <code>obdAdapterFinder</code>.</td></tr>
+            <tr><td>Past drives</td><td><code>tripRecorder</code> (the black box): <code>trips</code> (the list), <code>requestDetail(id)</code> and <code>requestSeries(...)</code> (four overloads, by argument count; the results arrive as signals), <code>exportTrip</code>; <code>recording</code> / <code>currentTripId</code> for the drive in progress.</td></tr>
+            <tr><td>Dashboards</td><td><code>dashboardManager</code>: <code>dashboards</code> (the list), <code>loadDashboard</code>, <code>saveDashboard</code>, <code>importDashboard</code> / <code>importDashboardFromText</code>, <code>exportDashboard</code>. Files follow <span class="file-path">docs/api/dashboard-spec.schema.json</span>.</td></tr>
+            <tr><td>Anything else</td><td>Look it up in the <a href="api-reference.html">API reference</a>, then grep the QML for how the bundled UI uses it.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="headless">Being the Only UI</h2>
+        <p><code>octave --headless</code> runs every manager and the service with no QML engine and no window (the offscreen Qt platform), using about a fifth less memory than the full app. Music, OBD polling, the black box, the knob, gestures and the IMU all keep working; your frontend is the screen. It needs the service, so it exits if the service can't start. <code>hello</code> reports <code>"headless": true</code>.</p>
+        <p>The SDK's <code>launch_headless()</code> starts one with a throwaway config, the easiest way to test a frontend or a script: <span class="file-path">sdk/python/tests/test_client.py</span> does exactly that.</p>
+
+        <h2 id="rules">Versioning and Security</h2>
+        <ul>
+          <li><strong>Versioning.</strong> Pin to <code>protocolVersion</code> 1. It changes only on a breaking change (something removed, renamed or retyped). Additions don't change it, so ignore fields, objects and events you don't know. The rule and the history are in <span class="file-path">docs/api/README.md</span>.</li>
+          <li><strong>No authentication.</strong> Anything that can reach the port can drive the app. On loopback that means programs on the head unit itself. With <code>--service-bind</code> it means everyone on the network, including the web page the app serves. Bind beyond loopback only on a network you control.</li>
+          <li><strong>Browsers</strong> are held to the app's own page, opened by IP address (<a href="utilities.html#service-protocol">the Origin rule</a>), so a website open on the same machine can't drive the car.</li>
+          <li><strong>Dev-only actions</strong> (<code>navigate</code>, <code>click</code>, <code>screenshot</code>, <code>sim_*</code>) exist only in developer builds with <code>--profile</code>, aren't versioned, and drive the bundled UI rather than the managers. Don't build on them.</li>
+        </ul>
+
+        <h2 id="limits">What Is Not Available Yet</h2>
+        <ul>
+          <li><strong>Video</strong>: the phone mirror picture and Android Auto frames go straight into the bundled UI. You can start and stop mirroring and read its state, but not show the picture. Media streams are contract step 6 in <span class="file-path">TODO/open-backend.md</span>.</li>
+          <li><strong>The waveform's audio levels</strong>: also step 6.</li>
+          <li><strong>Album art</strong> for local tracks is a path on the head unit (<code>nowPlaying.artUrl</code>), which a remote client can't load.</li>
+        </ul>
+
+        <div class="related-pages">
+          <h3>Related Pages</h3>
+          <a href="api-reference.html" class="related-link">Service API Reference</a>
+          <a href="utilities.html#service-protocol" class="related-link">Service protocol</a>
+          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
+          <a href="architecture.html#service" class="related-link">Architecture: The Service</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="search-index.js"></script>
+  <script src="search.js"></script>
+  <script src="nav.js"></script>
+</body>
+</html>

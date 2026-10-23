@@ -44,6 +44,7 @@
         { href: "settings-reference.html", label: "Settings Reference" },
         { href: "signals-slots-reference.html", label: "Signals & Slots API" },
         { href: "api-reference.html", label: "Service API Reference" },
+        { href: "writing-a-frontend.html", label: "Writing a Frontend" },
         { href: "hardware-setup.html", label: "Hardware Setup" },
         { href: "building.html", label: "Building & CI/CD" },
         { href: "development.html", label: "Development" },

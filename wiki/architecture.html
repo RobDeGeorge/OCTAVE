@@ -47,6 +47,7 @@
             <li><a href="#dashboards">Dashboards: JSON Specs + DashboardManager</a></li>
             <li><a href="#vehicle-3d">The 3D Vehicle (CarMenu)</a></li>
             <li><a href="#logging">Logging, Crash Handlers and Diagnostics</a></li>
+            <li><a href="#service">The Service: Other Frontends</a></li>
             <li><a href="#dev-tooling">Profiling and the Command Server</a></li>
             <li><a href="#signal-wiring">Signal Wiring Graph</a></li>
             <li><a href="#cleanup">Shutdown &amp; Cleanup</a></li>
@@ -295,29 +296,22 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
         <!-- Startup Sequence -->
         <h2 id="startup">Application Startup Sequence</h2>
         <p>
-          <span class="file-path">src/main.cpp</span> runs logging first, then settings, then everything that depends
-          on settings, then <code>Main.qml</code>, then the cross-manager signal wiring:
+          <span class="file-path">src/main.cpp</span> runs logging first, then the managers (<code>AppCore</code>), then the
+          engine-only setup, the service and <code>Main.qml</code>:
         </p>
 
         <h3 id="startup-cpp"><span class="file-path">src/main.cpp</span></h3>
         <ol class="steps">
-          <li><strong>Logging + crash handlers first</strong> &mdash; <code>argv</code> is scanned for <code>--debug</code> (and <code>--smoke</code>, which exits 0 five seconds after <code>Main.qml</code> loads; CI uses it to launch the packaged Windows build) and <code>OctaveLog::install(debug)</code> runs <em>before</em> <code>QGuiApplication</code> exists, so anything a manager constructor logs (and any crash) reaches the files.</li>
-          <li><strong>QGuiApplication</strong> &mdash; organization/application name <code>OCTAVE</code>; <code>QQuickStyle::setStyle("Basic")</code> so sliders are fully customisable.</li>
-          <li><strong>Auto-scale</strong> &mdash; <code>screenAutoScale = min(width, height) / 720</code>, clamped to 0.4&ndash;3.0. It scales off the <em>shorter</em> edge because Android reports the natural (portrait) size even when the app is locked landscape; using height alone gave a ~3&times; factor there.</li>
-          <li><strong>Scalar context properties</strong> &mdash; <code>screenAutoScale</code>, <code>isAndroid</code>.</li>
-          <li><strong>Phase 1</strong> &mdash; <code>SettingsManager</code> (everything depends on it), <code>UiWatchdog</code> started, <code>DiagnosticsManager</code>, <code>Clock</code>, <code>NetworkManager</code>, <code>VolumeController</code>.</li>
-          <li><strong>Phase 2</strong> &mdash; <code>MediaManager</code>, <code>AudioAnalyzer</code>. On Android the youtubedl-android bridge is initialised off-thread with <code>QtConcurrent::run</code> (first launch extracts Python + yt-dlp + ffmpeg, 10&ndash;20&nbsp;s) and runtime permissions (<code>READ_MEDIA_AUDIO</code>, <code>BLUETOOTH_CONNECT</code>, <code>BLUETOOTH_SCAN</code>, &hellip;) are requested; a granted audio permission triggers a library scan.</li>
-          <li><strong>Phase 3</strong> &mdash; empty (the "Online Features" header is left over; <code>DownloadManager</code> is created in Phase 5).</li>
-          <li><strong>Phase 4</strong> &mdash; <code>OBDManager</code>, <code>ShiftLightManager</code> (fed by its <code>rpmChanged</code>), <code>OBDAdapterFinder</code>, <code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>.</li>
-          <li><strong>Phase 5</strong> &mdash; <code>AndroidAutoManager</code> + the <code>dhuframe</code> image provider, <code>PhoneMirrorManager</code> with its settings wiring (audio enable/gain, ducking &rarr; <code>MediaManager::setDucking</code>, phone-screen-off), <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;</code>, <code>DownloadManager</code> (+ <code>downloadComplete</code> &rarr; <code>scan_library(false)</code>).</li>
-          <li><strong>Volume fan-out</strong> &mdash; <code>VolumeController::volumeApplied</code> &rarr; <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop only; the ESP32 manager rate-limits itself). Then <code>applyVolume(settingsManager.currentVolume())</code> restores the saved volume.</li>
-          <li><strong>QML import path</strong> &mdash; <code>assets:/frontend</code> on Android; on desktop <code>frontend/</code> next to the binary, or one directory up (so <code>build/octave</code> finds the checkout's <code>frontend/</code>).</li>
-          <li><strong><code>assetStore</code></strong> (<span class="file-path">src/util/assetstore.{h,cpp}</span>) &mdash; <code>localUrl(relativePath)</code> returns a <code>file://</code> URL for a file under <span class="file-path">frontend/assets/</span>. Needed because Quick3D's <code>RuntimeLoader</code> hands the path to Assimp, which cannot read <code>assets:/</code> files inside an Android APK ("IO Error: File not found" in v0.9.2); on Android the file is extracted once into the app data directory (<code>asset-cache/</code>, re-extracted when its size changes after an update), on desktop the path is simply resolved. <code>MusicDeviceScene.qml</code> (<code>modelUrl()</code>) and <code>JeepHinge.qml</code> load every <code>.glb</code> through it; Qt's own loaders (images, HDR light probes, fonts) keep using <code>assets:/</code> directly.</li>
-          <li><strong>Offline wiki</strong> &mdash; registers <code>wikiViewerAvailable</code> and <code>wikiHomeUrl</code>. Desktop WebEngine builds prefer the local wiki, then <code>qrc:/wiki/index.html</code>; Android WebView reads <code>file:///android_asset/wiki/index.html</code>. Without the relevant Qt module the reader is unavailable.</li>
-          <li><strong>Phase 6</strong> &mdash; <code>DashboardManager</code> with <code>setPresetsDir(frontend/dashboards/presets)</code> and <code>setUserDir(&lt;appdata&gt;/dashboards)</code>.</li>
-          <li><strong>Developer tooling</strong> (<code>OCTAVE_DEV_TOOLS</code> builds only) &mdash; <code>OctaveDev::Runtime::beforeLoad()</code> reads <code>--dev</code> / <code>--profile</code> / <code>--command-port</code>; without them it does nothing. A build without the option warns and ignores the flags. See <a href="#dev-tooling">Profiling and the Command Server</a>.</li>
-          <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created; then <code>Runtime::afterLoad()</code> (dev overlay, perf monitor, command server) and <code>setQuitOnLastWindowClosed(true)</code>.</li>
-          <li><strong>Hardware wiring</strong> &mdash; gesture actions &rarr; media / volume (track actions go to the phone while <code>phoneMirrorManager.mediaActive()</code>); ESP32 <code>volumeChangeRequested(float)</code> through a fractional accumulator; <code>muteToggleRequested</code>; on desktop the ESP32 LED colour sync (<code>albumArtColorsChanged</code> in theme mode, <code>esp32LedStaticColorChanged</code> in static mode, <code>esp32LedColorModeChanged</code> re-sends the current colour, cyan <code>(0, 255, 255)</code> when a colour is missing or unparsable) and, 500&nbsp;ms after the knob reports "Connected", a push of the current volume, mute state and colour.</li>
+          <li><strong>Logging + crash handlers first</strong> &mdash; <code>argv</code> is scanned for <code>--debug</code>, <code>--smoke</code> (exit 0 five seconds after start; CI launches packaged builds with it), <code>--headless</code> and <code>--dump-api DIR</code>, and <code>OctaveLog::install(debug)</code> runs <em>before</em> <code>QGuiApplication</code> exists, so anything a manager constructor logs (and any crash) reaches the files. <code>--dump-api</code> first points the config at a temp dir so its logs land there.</li>
+          <li><strong>Other modes</strong> &mdash; <code>--dump-api</code> builds an <code>AppCore</code>, writes <span class="file-path">docs/api/</span> and exits; <code>--headless</code> (desktop) skips WebEngine, builds an <code>AppCore</code> on the offscreen platform and serves it (<a href="#service">The Service</a>). The rest of this list is the normal UI run.</li>
+          <li><strong>QGuiApplication</strong> &mdash; organization/application name <code>OCTAVE</code>; <code>QQuickStyle::setStyle("Basic")</code> so sliders are fully customisable. <code>Units</code> is created before the engine (bindings that format times run while the engine tears down).</li>
+          <li><strong>Auto-scale and scalar context properties</strong> &mdash; <code>screenAutoScale = min(width, height) / 720</code>, clamped to 0.4&ndash;3.0 (the shorter edge, because Android reports the natural portrait size even when locked landscape); <code>isAndroid</code>.</li>
+          <li><strong><code>frontend/</code></strong> &mdash; <code>assets:/frontend</code> on Android; on desktop <code>frontend/</code> next to the binary, or one directory up (so <code>build/octave</code> finds the checkout's).</li>
+          <li><strong><code>UiWatchdog</code></strong> started, then <strong><code>AppCore</code></strong> (<span class="file-path">src/appcore.{h,cpp}</span>): every manager as a member, constructed in dependency order (settings, diagnostics, clock, network, volume; media, analyzer; the PID catalog, OBD, shift light, adapter finder, trip recorder, ESP32, IMU, value store, gestures; Android Auto, phone mirror, now playing, downloads; fonts, dashboards) and wired by its <code>wire*()</code> helpers (<a href="#signal-wiring">Signal Wiring Graph</a>). On Android the constructor also starts the youtubedl-android bridge off-thread and requests the runtime permissions; a granted audio permission triggers a library scan. Each manager is entered in the service registry; <code>core.exposeTo(ctx)</code> makes them all context properties.</li>
+          <li><strong>Engine-only setup</strong> &mdash; the <code>dhuframe</code> image provider, <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;</code> and the <code>OCTAVE.OBD</code> enum type, the QML import path, <code>assetStore</code> (<span class="file-path">src/util/assetstore.{h,cpp}</span>: <code>file://</code> URLs for <span class="file-path">frontend/assets/</span> files that Quick3D's Assimp importer must open itself, extracted once from the APK on Android), the <code>hasQuick3D</code> / <code>hasQuick3DAssetUtils</code> probes, and the offline wiki (<code>wikiViewerAvailable</code>, <code>wikiHomeUrl</code>: the local wiki, else <code>qrc:/wiki/index.html</code>, or the APK's assets on Android).</li>
+          <li><strong>Developer tooling</strong> (<code>OCTAVE_DEV_TOOLS</code> builds only) &mdash; <code>OctaveDev::Runtime::beforeLoad()</code> reads <code>--dev</code> / <code>--profile</code>; without them it does nothing. A build without the option warns and ignores the flags.</li>
+          <li><strong>The service</strong> &mdash; <code>makeService()</code> creates the command server and the service bridge when asked for (<a href="#service">The Service</a>); not started yet.</li>
+          <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created; then <code>Runtime::afterLoad(server)</code> (dev overlay, perf monitor, and with <code>--profile</code> its actions on the server), the server starts, and <code>setQuitOnLastWindowClosed(true)</code>.</li>
           <li><strong>Signals</strong> &mdash; on Unix desktop, <code>SIGTERM</code>/<code>SIGINT</code> are turned into <code>QCoreApplication::quit()</code> with the self-pipe trick (<code>socketpair</code> + <code>QSocketNotifier</code>) so the <code>aboutToQuit</code> cleanup still runs under systemd or Ctrl-C.</li>
           <li><strong><code>app.exec()</code></strong>.</li>
         </ol>
@@ -652,6 +646,23 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         </p>
 
         <!-- Dev tooling -->
+        <h2 id="service">The Service: Other Frontends</h2>
+        <p>
+          The QML UI is the reference frontend, not the only possible one. Every manager is published over the
+          <a href="utilities.html#service-protocol">service protocol</a> (<span class="file-path">src/service/</span>): JSON
+          over TCP, or WebSocket frames on the same port, with <code>hello</code>, <code>describe</code>, <code>get</code>,
+          <code>set</code>, <code>call</code>, <code>subscribe</code> and <code>rows</code>. The objects are the same ones QML sees, because
+          <code>AppCore</code>'s registry feeds both, and the published list (<span class="file-path">docs/api/</span>,
+          <a href="api-reference.html">Service API Reference</a>) is generated from the meta-objects and checked by
+          <code>tst_apidocs</code>. <code>tst_conformance</code> checks that the QML uses nothing the service doesn't publish.
+        </p>
+        <ul>
+          <li><strong>Off unless asked for</strong>: <code>--service [PORT]</code>, the <code>serviceEnabled</code> setting, <code>--headless</code>, or <code>--profile</code> in a developer build; loopback only unless <code>--service-bind</code>. There is no authentication.</li>
+          <li><strong><code>--headless</code></strong>: the managers and the service with no QML engine and no window (about a fifth less memory on the desktop). Another program is the UI.</li>
+          <li><strong>Clients</strong>: <span class="file-path">sdk/python</span> (stdlib only) and <span class="file-path">sdk/web</span> (plain JavaScript, served by the app at <code>http://127.0.0.1:9876/</code>). <a href="writing-a-frontend.html">Writing a Frontend</a> is the walkthrough.</li>
+          <li><strong>Not over the socket yet</strong>: video (phone mirror H.264, Android Auto frames) and the analyzer's audio levels. Those are contract step 6 in <span class="file-path">TODO/open-backend.md</span>.</li>
+        </ul>
+
         <h2 id="dev-tooling">Profiling and the Command Server</h2>
         <p>
           Developer tooling lives in <span class="file-path">src/dev/</span>, compiled in only with the
@@ -659,10 +670,10 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           flags. <code>--profile</code> creates a
           <code>PerfMonitor</code> (event-loop latency, a thread-wake jitter probe, per-label timings, CPU / memory)
           writing CSV and log files to <code>dev/perf/logs/</code>, registers it as the <code>perfMonitor</code> context
-          property, and starts a command server: a TCP server on <code>127.0.0.1:9876</code> (<code>--command-port N</code>
-          to move it) that accepts newline-delimited JSON actions and runs the UI-driving ones (navigate, click, drag,
-          capture, record) on the GUI thread. Both are stopped first on <code>aboutToQuit</code> and the report is
-          written to the log. Dev mode (<code>--dev</code>) adds a simulated car.
+          property, turns the service's command server on (<code>127.0.0.1:9876</code>, <code>--command-port N</code>
+          to move it; <a href="#service">The Service</a>) and adds the UI-driving actions to it (navigate, click, drag,
+          capture, record), which run on the GUI thread. Both are stopped first on <code>aboutToQuit</code> and the
+          report is written to the log. Dev mode (<code>--dev</code>) adds a simulated car and its <code>sim_*</code> actions.
         </p>
         <ul>
           <li><code>OctaveDev::Runtime</code> is created in <code>main.cpp</code> after the managers; the simulated car talks
