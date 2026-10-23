@@ -211,6 +211,8 @@ qt_add_executable(octave
     src/util/fontcatalog.h
     src/util/fontcatalog.cpp
     src/util/pathurl.h
+    src/util/folderbrowser.h
+    src/util/folderbrowser.cpp
     src/service/commandserver.h
     src/service/commandserver.cpp
     src/service/protocol.h
