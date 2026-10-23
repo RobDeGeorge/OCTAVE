@@ -1,6 +1,6 @@
 # Console (experimental)
 
-An operator console for OCTAVE in the terminal, written to prove the open backend: **Python + Textual** instead of C++ / QML, dense and keyboard-first instead of touch-first. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol version 1) through the repo's own Python SDK (`sdk/python/octave_client`, imported from the tree, not copied). The QML UI in `frontend/` stays the default; this one is a side experiment and is not built by CI or shipped.
+An operator console for OCTAVE in the terminal, written to prove the open backend: **Python + Textual** instead of C++ / QML, dense and keyboard-first instead of touch-first. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol version 1) through the repo's own Python SDK (`sdk/python/octave_client`, imported from the tree, not copied). The QML UI in `frontend/` stays the default; this one is a side experiment and is not shipped; CI runs its offline tests.
 
 It covers the operator side of the app: every live PID, the OBD connection and trouble codes, the black box, every setting, downloads, and an explorer for the API itself, with a now-playing bar that is always on screen.
 

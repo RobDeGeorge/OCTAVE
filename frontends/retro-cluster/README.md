@@ -1,6 +1,6 @@
 # Retro Cluster (experimental)
 
-A second OCTAVE frontend, written to prove the open backend: **Rust + egui** instead of C++ / QML, painted as a mid-80s vacuum-fluorescent instrument cluster instead of the bundled UI's look. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol version 1). The QML UI in `frontend/` stays the default; this one is a side experiment and is not built by CI or shipped.
+A second OCTAVE frontend, written to prove the open backend: **Rust + egui** instead of C++ / QML, painted as a mid-80s vacuum-fluorescent instrument cluster instead of the bundled UI's look. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol version 1). The QML UI in `frontend/` stays the default; this one is a side experiment and is not shipped; CI only checks that it builds (`cargo clippy -D warnings`).
 
 Everything on screen is drawn from shapes: a 5x7 dot-matrix font, slanted seven-segment digits with ghosted unlit segments, segment ladders and a sweep tachometer. There are no font or image files.
 
