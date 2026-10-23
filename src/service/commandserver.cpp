@@ -95,17 +95,26 @@ private:
         t_connection = connection;
         m_owner->trackConnection(connection);
 
-        // The first byte says which protocol: a JSON line starts with '{',
-        // HTTP (a WebSocket upgrade or the reference page) with "GET"
+        // The first non-blank byte says which protocol: only '{' is the
+        // JSON-lines protocol. Anything else is HTTP, which answers GET (a
+        // WebSocket upgrade, the page, the routes) and nothing else: a
+        // browser's cross-site no-cors POST must never reach the line
+        // protocol, whose body line would run as a trusted local op
         QByteArray buf;
-        while (buf.isEmpty() && !m_stopping && sock.state() == QAbstractSocket::ConnectedState) {
+        auto firstByte = [&buf]() -> int {
+            for (char c : std::as_const(buf))
+                if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
+                    return uchar(c);
+            return -1;
+        };
+        while (firstByte() < 0 && !m_stopping && sock.state() == QAbstractSocket::ConnectedState) {
             if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(20))
                 buf += sock.readAll();
         }
-        if (buf.startsWith('G'))
-            serveHttp(sock, buf, *connection);
-        else
+        if (firstByte() == '{')
             serveLines(sock, buf, *connection);
+        else if (firstByte() >= 0)
+            serveHttp(sock, buf, *connection);
 
         connection->close();   // its subscriptions go (on the GUI thread)
         t_connection.reset();
@@ -142,6 +151,13 @@ private:
                 buf.remove(0, nl + 1);
                 if (line.isEmpty())
                     continue;
+                // Every line is a JSON object; anything else (HTTP that got
+                // here, garbage) ends the connection after its error reply
+                if (!line.startsWith('{')) {
+                    sock.write(m_owner->handleLine(line));
+                    flush(sock);
+                    return;
+                }
                 sock.write(m_owner->handleLine(line));
             }
             // Events only after the replies: a subscribe's reply (its sub
@@ -173,6 +189,12 @@ private:
             request = Ws::parseRequest(buf, &headLength);
         if (!request.valid) {
             sock.write(Ws::httpResponse(400, "Bad Request", "text/plain", "bad request\n"));
+            flush(sock);
+            return;
+        }
+        // GET only (the page, the routes, the WebSocket upgrade)
+        if (request.method != "GET") {
+            sock.write(Ws::httpResponse(405, "Method Not Allowed", "text/plain", "GET only\n"));
             flush(sock);
             return;
         }
